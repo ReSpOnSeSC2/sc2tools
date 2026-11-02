@@ -4,19 +4,18 @@ State lives in a single JSON file inside the per-user state dir. We
 write atomically (write->fsync->rename) to match the project's wider
 data-write protocol.
 
-Forward-compatibility note: ``load_state`` ignores unknown JSON keys,
-so a user who downgrades the agent after a state file is written by a
-newer version doesn't lose their pairing - they just lose the new
-preferences until they re-upgrade.
+Credentials are runtime-only fields. A versioned selector in agent.json
+chooses immutable encrypted generations. Ordinary loads are read-only and
+ordinary saves preserve selected credentials; legacy migration is explicit
+and requires the acquired instance guard. Older binaries do not understand
+the selector, so downgrade/recovery requires a complete backup or re-pairing.
 """
 
 from __future__ import annotations
 
-import json
 import base64
 import binascii
 import os
-import tempfile
 import time
 import threading
 from dataclasses import dataclass, field, asdict, replace
@@ -33,13 +32,31 @@ COMPANION_SKINS = frozenset({"default", "protoss", "terran", "zerg"})
 # Keep snapshot + fsync + replace in one process-wide critical section so the
 # last state mutation to call save_state is also the last durable write.
 _STATE_SAVE_LOCK = threading.RLock()
+UNCHANGED = object()
+
+
+@dataclass(frozen=True, repr=False)
+class _CredentialContext:
+    mode: str
+    raw: object
+    snapshot: object
+    storage: object
+    crypto: object
+    directory: Path
+
+
+@dataclass(frozen=True, repr=False)
+class _PendingCredentials:
+    device: object
+    obs: object
+    prepared: object
 
 
 @dataclass
 class AgentState:
     """Mutable per-installation state."""
 
-    device_token: Optional[str] = None
+    device_token: Optional[str] = field(default=None, repr=False)
     user_id: Optional[str] = None
     paired_at: Optional[str] = None
     uploaded: Dict[str, str] = field(default_factory=dict)
@@ -248,18 +265,13 @@ class AgentState:
     protocol was removed from OBS in 28.0 and authenticates
     differently."""
 
-    obs_password: Optional[str] = None
+    obs_password: Optional[str] = field(default=None, repr=False)
     """obs-websocket server password.
 
-    Stored here rather than in ``.env`` because the agent is a GUI
-    app and its users do not hand-edit dotfiles. This follows the
-    precedent already set by ``device_token`` above — a live bearer
-    credential in the same file — rather than ADR 0013, which governs
-    the legacy product's config files. See
-    ``docs/adr/0021-obs-credential-storage.md``. The key is redacted
-    from Sentry by ``crash_reporter._is_pii_key``, and
-    ``SC2TOOLS_OBS_PASSWORD`` overrides it for anyone who would rather
-    keep it in the environment."""
+    Runtime only: central state snapshots never serialize this value.
+    The installation-local encrypted slot is independent of cloud relinking.
+    ``SC2TOOLS_OBS_PASSWORD`` remains a runtime override and is never migrated.
+    The historical plaintext ADR 0021 needs superseding at activation."""
 
     obs_scene_map: Dict[str, str] = field(default_factory=dict)
     """Live-bridge phase → OBS scene name.
@@ -360,23 +372,88 @@ def count_synced(state: AgentState) -> int:
     return 0
 
 
-def load_state(state_dir: Path) -> AgentState:
-    """Read state from disk; return defaults on first run.
+def _credential_backends(state_dir, storage=None, crypto=None, *, create=False):
+    from .agent_credentials_windows import CurrentUserCrypto, WindowsCredentialStorage
+    if storage is None:
+        storage = WindowsCredentialStorage(state_dir)
+        if create:
+            storage.ensure_state_directory()
+    return storage, CurrentUserCrypto() if crypto is None else crypto
 
-    Robust to:
-      * a missing file (first run),
-      * a corrupted JSON blob (returns defaults rather than crashing),
-      * unknown keys (forward compatibility - silently dropped).
-    """
-    path = state_dir / STATE_FILENAME
-    if not path.exists():
-        return AgentState()
+
+def _state_directory(value):
+    from .agent_credentials import CredentialStorageError
+    if type(value) not in (str, type(Path())):
+        raise CredentialStorageError("unsafe_path")
+    return Path(os.path.abspath(os.fspath(value)))
+
+
+def _context_from_snapshot(directory, snapshot, storage, crypto):
+    from .agent_credentials import _document
+    mode = snapshot.status
+    if mode == "unreadable" and snapshot.raw is not None:
+        try:
+            document = _document(snapshot.raw)
+        except Exception:
+            document = None
+        if document is not None and "credentials" not in document:
+            mode = "legacy"
+    return _CredentialContext(mode, snapshot.raw, snapshot, storage, crypto, directory)
+
+
+def _read_context(state_dir, storage=None, crypto=None):
+    from .agent_credentials import CredentialStorageError, _document, load_credentials
+    directory = _state_directory(state_dir)
+    if storage is not None:
+        storage, crypto = _credential_backends(directory, storage, crypto)
+        return _context_from_snapshot(directory, load_credentials(storage, crypto), storage, crypto)
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return AgentState()
-    if not isinstance(raw, dict):
-        return AgentState()
+        encoded = (directory / STATE_FILENAME).read_bytes()
+    except FileNotFoundError:
+        return _CredentialContext("missing", None, None, None, None, directory)
+    except OSError:
+        return _CredentialContext("unreadable", None, None, None, None, directory)
+    try:
+        document = _document(encoded)
+    except CredentialStorageError:
+        return _CredentialContext("unreadable", encoded, None, None, None, directory)
+    if "credentials" not in document:
+        return _CredentialContext("legacy", encoded, None, None, None, directory)
+    try:
+        storage, crypto = _credential_backends(directory, storage, crypto)
+        snapshot = load_credentials(storage, crypto)
+    except CredentialStorageError:
+        return _CredentialContext("unreadable", encoded, None, None, None, directory)
+    return _context_from_snapshot(directory, snapshot, storage, crypto)
+
+
+def _from_context(context):
+    from .agent_credentials import CredentialStorageError, _document
+    try:
+        raw = _document(context.raw) if context.raw is not None else {}
+    except CredentialStorageError:
+        raw = {}
+    try:
+        state = _state_from_raw(raw)
+    except (ValueError, TypeError, OverflowError):
+        state = AgentState()
+        context = replace(context, mode="unreadable")
+    state._credential_context = context
+    if context.mode == "selected":
+        state.device_token = context.snapshot.device.value
+        state.obs_password = context.snapshot.obs.value
+    else:
+        state.device_token = state.obs_password = None
+    return state
+
+
+def load_state(state_dir: Path, *, storage=None, crypto=None) -> AgentState:
+    """Read only. Preserve provenance so corrupt/legacy data cannot be overwritten."""
+    with _STATE_SAVE_LOCK:
+        return _from_context(_read_context(state_dir, storage, crypto))
+
+
+def _state_from_raw(raw):
     legacy_single = _coerce_str(raw.get("replay_folder_override"))
     folders_raw = raw.get("replay_folders_override")
     folders = _coerce_str_list(folders_raw)
@@ -499,27 +576,320 @@ def load_state(state_dir: Path) -> AgentState:
     )
 
 
-def save_state(state_dir: Path, state: AgentState) -> None:
-    """Serialize writers, then atomically write tmp -> fsync -> rename."""
+def _secure_context(state_dir, state, storage=None, crypto=None):
+    from .agent_credentials import CredentialStorageError, load_credentials
+    directory = _state_directory(state_dir)
+    context = getattr(state, "_credential_context", None)
+    if context is not None and (type(context) is not _CredentialContext or context.directory != directory):
+        raise CredentialStorageError("conflict")
+    if context is None:
+        context = _read_context(directory, storage, crypto)
+    if context.mode in ("legacy", "unreadable"):
+        raise CredentialStorageError("invalid_pointer")
+    if storage is not None and context.storage is not None and storage is not context.storage:
+        raise CredentialStorageError("conflict")
+    if crypto is not None and context.crypto is not None and crypto is not context.crypto:
+        raise CredentialStorageError("conflict")
+    if context.snapshot is None or context.storage is None:
+        storage, crypto = _credential_backends(directory, storage, crypto, create=context.mode == "missing")
+        context = _context_from_snapshot(directory, load_credentials(storage, crypto), storage, crypto)
+    if context.mode not in ("missing", "selected"):
+        raise CredentialStorageError("invalid_pointer")
+    return _retired_context(context) if getattr(state, "_credential_retired", False) is True else context
+
+
+def _retired_context(context):
+    from .agent_credentials import CredentialSnapshot, LoadedSlot
+    if (type(context.snapshot) is not CredentialSnapshot or context.snapshot.selection is None
+        or context.snapshot.device.reference is None
+        or context.snapshot.device.reference.generation is None):
+        return context
+    slot = LoadedSlot(context.snapshot.device.reference, "unreadable", code="unavailable")
+    return replace(context, snapshot=replace(context.snapshot, device=slot))
+
+
+def _runtime_secret(value):
+    from .agent_credentials import CredentialStorageError
+    if value is not None and type(value) is not str:
+        raise CredentialStorageError("invalid_intent")
+    return None if value == "" else value
+
+
+def _compatible_runtime(state, context):
+    from .agent_credentials import CredentialStorageError, _document
+    if context.mode != "selected":
+        return
+    for field_name, slot in (("device_token", "device"), ("obs_password", "obs")):
+        if _runtime_secret(getattr(state, field_name)) != getattr(context.snapshot, slot).value:
+            raise CredentialStorageError("invalid_intent")
+    document = _document(context.raw)
+    if any(value is not None and type(value) is not str for value in (state.user_id, state.paired_at)):
+        raise CredentialStorageError("invalid_intent")
+    if state.user_id != document.get("user_id") or state.paired_at != document.get("paired_at"):
+        raise CredentialStorageError("invalid_intent")
+
+
+def _state_projection(state, context, device_owner=UNCHANGED):
+    from .agent_credentials import CredentialStorageError, _document, _encode, _owner
+    document = _document(context.raw) if context.raw is not None else {}
+    for key in ("credentials", "device_token", "obs_password"):
+        document.pop(key, None)
+    if any(value is not None and type(value) is not str for value in (state.user_id, state.paired_at)):
+        raise CredentialStorageError("invalid_intent")
+    document.update(_snapshot(state))
+    if device_owner is not UNCHANGED:
+        if type(device_owner) is not tuple or len(device_owner) != 2:
+            raise CredentialStorageError("invalid_intent")
+        document["user_id"], document["paired_at"] = device_owner
+        _owner(document)
+    return _encode(document)
+
+
+def credential_revision(state, slot):
+    """Pure private admission metadata; never read a file or expose a reference."""
+    from .agent_credentials import CredentialStorageError
+    if type(slot) is not str or slot not in ("device", "obs"):
+        raise CredentialStorageError("invalid_intent")
+    context = getattr(state, "_credential_context", None)
+    if context is None:
+        return 0
+    if type(context) is not _CredentialContext:
+        raise CredentialStorageError("invalid_pointer")
+    if context.mode == "missing":
+        return 0
+    if context.mode != "selected":
+        raise CredentialStorageError("invalid_pointer")
+    return getattr(context.snapshot.selection, slot).revision
+
+
+def credential_status(state, slot):
+    from .agent_credentials import CredentialStorageError
+    if type(slot) is not str or slot not in ("device", "obs"):
+        raise CredentialStorageError("invalid_intent")
+    context = getattr(state, "_credential_context", None)
+    if slot == "device" and getattr(state, "_credential_retired", False) is True:
+        return "retired"
+    if context is None:
+        return "missing"
+    if type(context) is not _CredentialContext:
+        raise CredentialStorageError("invalid_pointer")
+    return getattr(context.snapshot, slot).status if context.mode == "selected" else context.mode
+
+
+def credential_scope(state):
+    """Private primitive lifetime metadata; no paths, refs, values or callbacks."""
+    context = getattr(state, "_credential_context", None)
+    selected = type(context) is _CredentialContext and context.mode == "selected"
+    return (context.mode if type(context) is _CredentialContext else "missing",
+        context.snapshot.store_id if selected else None,
+        credential_revision(state, "device") if selected else None, credential_status(state, "device"),
+        credential_revision(state, "obs") if selected else None, credential_status(state, "obs"))
+
+
+def mark_device_retired(state, *, durable=False):
+    """Retain the opaque old selector after failed revoked CLEAR, without revival.
+
+    The runtime owner separately retires its epoch and all authenticated clients.
+    A failed clear cannot be promised to survive a restart.
+    """
+    from .agent_credentials import CredentialStorageError
     with _STATE_SAVE_LOCK:
-        state_dir.mkdir(parents=True, exist_ok=True)
-        payload = _snapshot(state)
-        target = state_dir / STATE_FILENAME
-        fd, tmp_path = tempfile.mkstemp(
-            prefix="agent.", suffix=".tmp", dir=str(state_dir),
-        )
+        if type(durable) is not bool:
+            raise CredentialStorageError("invalid_intent")
+        context = getattr(state, "_credential_context", None)
+        if durable and (type(context) is not _CredentialContext or context.mode != "selected"
+            or context.snapshot.device.reference.generation is not None):
+            raise CredentialStorageError("conflict")
+        state.device_token = None
+        state._credential_retired = not durable
+        if type(context) is _CredentialContext:
+            state._credential_context = _retired_context(context)
+
+
+def _intent(value):
+    from .agent_credentials import CredentialIntent
+    value = _runtime_secret(value)
+    return CredentialIntent("clear") if value is None else CredentialIntent("set", value)
+
+
+def _check_credential_admission(state, context, device, obs, device_revision, obs_revision, owner_epoch, device_owner):
+    from .agent_credentials import CredentialIntent, CredentialStorageError
+    for slot, intent, expected in (("device", device, device_revision), ("obs", obs, obs_revision)):
+        if type(intent) is not CredentialIntent:
+            raise CredentialStorageError("invalid_intent")
+        if intent.operation != "keep":
+            if type(expected) is not int or expected != getattr(context.snapshot.selection, slot).revision:
+                raise CredentialStorageError("conflict")
+    if device.operation != "keep":
+        if owner_epoch is UNCHANGED or owner_epoch is None or getattr(state, "_owner_epoch", None) is not owner_epoch:
+            raise CredentialStorageError("conflict")
+    if device.operation == "set":
+        if type(device_owner) is not tuple or len(device_owner) != 2:
+            raise CredentialStorageError("invalid_intent")
+    elif device_owner is not UNCHANGED:
+        raise CredentialStorageError("invalid_intent")
+
+
+def _committed_snapshot(context, committed, device, obs):
+    from .agent_credentials import CredentialSnapshot, LoadedSlot
+    slots = []
+    for slot, intent in (("device", device), ("obs", obs)):
+        reference = getattr(committed.selection, slot)
+        old = getattr(context.snapshot, slot)
+        if reference.generation is None:
+            slots.append(LoadedSlot(reference, "cleared"))
+        elif intent.operation == "set":
+            slots.append(LoadedSlot(reference, "available", intent.value))
+        else:
+            slots.append(LoadedSlot(reference, old.status, old.value, old.code))
+    return CredentialSnapshot("selected", committed.selection, *slots, committed.document,
+        store_id=context.snapshot.store_id)
+
+
+def _prepare_state_transaction(context, state, projected, device, obs):
+    from .agent_credentials import _document, _encode, _same_owner, prepare_transaction
+    pending = getattr(state, "_credential_pending", None)
+    if (type(pending) is _PendingCredentials and pending.device == device and pending.obs == obs
+        and pending.prepared.expected == context.raw and pending.prepared.store_id == context.snapshot.store_id):
+        original = _document(pending.prepared.document)
+        current = _document(projected)
+        if _same_owner(original, current):
+            current["credentials"] = original["credentials"]
+            prepared = replace(pending.prepared, document=_encode(current))
+            state._credential_pending = _PendingCredentials(device, obs, prepared)
+            return prepared
+    prepared = prepare_transaction(context.snapshot, projected, crypto=context.crypto, device=device, obs=obs)
+    state._credential_pending = _PendingCredentials(device, obs, prepared)
+    return prepared
+
+
+def _commit_state(context, state, device, obs, device_owner=UNCHANGED):
+    from .agent_credentials import CredentialStorageError, commit_transaction
+    _compatible_runtime(state, context)
+    if context.mode == "missing":
+        device = _intent(state.device_token) if device.operation == "keep" else device
+        obs = _intent(state.obs_password) if obs.operation == "keep" else obs
+    projected = _state_projection(state, context, device_owner)
+    prepared = _prepare_state_transaction(context, state, projected, device, obs)
+    try:
+        committed = commit_transaction(context.storage, context.crypto, prepared)
+    except CredentialStorageError as exc:
+        if exc.code == "indeterminate":
+            state._credential_context = replace(context, mode="unreadable")
+        raise
+    snapshot = _committed_snapshot(context, committed, device, obs)
+    state._credential_context = replace(context, mode="selected", raw=committed.document, snapshot=snapshot)
+    state._credential_pending = None
+    if device.operation != "keep":
+        state._credential_retired = False
+    state.device_token = None if getattr(state, "_credential_retired", False) is True else snapshot.device.value
+    state.obs_password = snapshot.obs.value
+    if device_owner is not UNCHANGED:
+        state.user_id, state.paired_at = device_owner
+
+
+def save_state(state_dir: Path, state: AgentState, *, storage=None, crypto=None) -> None:
+    """Serialize opaque KEEP; only an actually absent target admits initial fields."""
+    from .agent_credentials import KEEP
+    with _STATE_SAVE_LOCK:
+        context = _secure_context(state_dir, state, storage, crypto)
+        _commit_state(context, state, KEEP, KEEP)
+
+
+def commit_state_credentials(state_dir, state, *, device=UNCHANGED, obs=UNCHANGED,
+                             expected_device_revision=None, expected_obs_revision=None,
+                             expected_owner_epoch=UNCHANGED, device_owner=UNCHANGED,
+                             storage=None, crypto=None):
+    """Stage candidate owner/credentials without provisional shared publication."""
+    from .agent_credentials import KEEP
+    device = KEEP if device is UNCHANGED else device
+    obs = KEEP if obs is UNCHANGED else obs
+    with _STATE_SAVE_LOCK:
+        context = _secure_context(state_dir, state, storage, crypto)
+        _check_credential_admission(state, context, device, obs, expected_device_revision,
+            expected_obs_revision, expected_owner_epoch, device_owner)
+        _commit_state(context, state, device, obs, device_owner)
+
+
+def _require_instance(instance_lock, directory, lease=UNCHANGED):
+    from .agent_credentials import CredentialStorageError
+    from .instance_lock import AgentInstanceLock
+    if type(instance_lock) is not AgentInstanceLock or instance_lock.acquired is not True:
+        raise CredentialStorageError("conflict")
+    guarded = instance_lock.state_directory
+    if type(guarded) is not type(Path()) or guarded != directory:
+        raise CredentialStorageError("conflict")
+    current = instance_lock.acquisition_token
+    if current is None or lease is not UNCHANGED and current is not lease:
+        raise CredentialStorageError("conflict")
+    return current
+
+
+class _InstanceStorage:
+    """Narrow migration IO lease; never used by ordinary readers/writers."""
+    def __init__(self, storage, instance_lock, directory, lease):
+        self.storage, self.instance_lock, self.directory = storage, instance_lock, directory
+        self.lease = lease
+
+    def _run(self, method, *args):
+        _require_instance(self.instance_lock, self.directory, self.lease)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump(payload, fh, indent=2, sort_keys=True)
-                fh.flush()
-                os.fsync(fh.fileno())
-            _replace_state_file(tmp_path, target)
+            result = getattr(self.storage, method)(*args)
         except Exception:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+            _require_instance(self.instance_lock, self.directory, self.lease)
             raise
+        _require_instance(self.instance_lock, self.directory, self.lease)
+        return result
+
+    def identity(self): return self._run("identity")
+    def read_pointer(self): return self._run("read_pointer")
+    def read_generation(self, name): return self._run("read_generation", name)
+    def create_generation(self, name, data): return self._run("create_generation", name, data)
+    def replace_pointer(self, expected, data): return self._run("replace_pointer", expected, data)
+    def capacity(self): return self._run("capacity")
+
+
+def migrate_legacy_state(state_dir, instance_lock, *, storage=None, crypto=None):
+    """Explicit post-instance migration before any credential consumer exists."""
+    from .agent_credentials import (CredentialIntent, CredentialStorageError, PreparedTransaction, _document, _encode,
+        load_credentials, prepare_legacy_transaction, prepare_transaction, commit_transaction)
+    directory = _state_directory(state_dir)
+    guard_directory = directory.resolve()
+    lease = _require_instance(instance_lock, guard_directory)
+    with _STATE_SAVE_LOCK:
+        _require_instance(instance_lock, guard_directory, lease)
+        storage, crypto = _credential_backends(directory, storage, crypto, create=True)
+        _require_instance(instance_lock, guard_directory, lease)
+        owned = _InstanceStorage(storage, instance_lock, guard_directory, lease)
+        snapshot = load_credentials(owned, crypto)
+        _require_instance(instance_lock, guard_directory, lease)
+        pending = getattr(instance_lock, "_credential_migration_pending", None)
+        if (type(pending) is PreparedTransaction and (snapshot.raw is not None or snapshot.status == "missing")
+            and pending.expected == snapshot.raw and pending.store_id == snapshot.store_id):
+            prepared = pending
+        elif snapshot.status == "missing":
+            projected = _encode(_snapshot(AgentState()))
+            prepared = prepare_transaction(snapshot, projected, crypto=crypto,
+                device=CredentialIntent("clear"), obs=CredentialIntent("clear"))
+        elif snapshot.status == "selected":
+            document = _document(snapshot.raw)
+            if not any(key in document for key in ("device_token", "obs_password")):
+                instance_lock._credential_migration_pending = None
+                return _from_context(_context_from_snapshot(directory, snapshot, storage, crypto))
+            document.pop("credentials")
+            document.pop("device_token", None)
+            document.pop("obs_password", None)
+            prepared = prepare_transaction(snapshot, _encode(document), crypto=crypto)
+        elif snapshot.raw is not None:
+            prepared = prepare_legacy_transaction(snapshot, crypto=crypto)
+        else:
+            raise CredentialStorageError("invalid_pointer")
+        _require_instance(instance_lock, guard_directory, lease)
+        instance_lock._credential_migration_pending = prepared
+        commit_transaction(owned, crypto, prepared)
+        _require_instance(instance_lock, guard_directory, lease)
+        instance_lock._credential_migration_pending = None
+        return _from_context(_context_from_snapshot(directory, load_credentials(owned, crypto), storage, crypto))
 
 
 def _replace_state_file(source, target) -> None:
@@ -558,6 +928,8 @@ def _snapshot(state: AgentState) -> dict:
     """
     stable = replace(
         state,
+        device_token=None,
+        obs_password=None,
         window_geometry=_coerce_geometry(state.window_geometry),
         window_information_layout=_coerce_information_layout(state.window_information_layout),
         window_page=_coerce_window_page(state.window_page),
@@ -584,7 +956,10 @@ def _snapshot(state: AgentState) -> dict:
             if state.build_checkin_prefs is not None else None
         ),
     )
-    return asdict(stable)
+    snapshot = asdict(stable)
+    snapshot.pop("device_token")
+    snapshot.pop("obs_password")
+    return snapshot
 
 
 def _coerce_timestamp(value):

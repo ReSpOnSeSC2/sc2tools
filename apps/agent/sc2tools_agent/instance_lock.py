@@ -24,21 +24,37 @@ class AgentInstanceLock:
         self._state_dir = Path(state_dir).resolve()
         self._windows_handle: Optional[int] = None
         self._posix_file: Optional[IO[str]] = None
+        self._acquisition_token = None
 
     def acquire(self) -> bool:
         """Return ``False`` when another main agent already owns the lock."""
         if self.acquired:
             return True
         if os.name == "nt":
-            return self._acquire_windows()
-        return self._acquire_posix()
+            acquired = self._acquire_windows()
+        else:
+            acquired = self._acquire_posix()
+        if acquired:
+            self._acquisition_token = object()
+        return acquired
 
     @property
     def acquired(self) -> bool:
         return self._windows_handle is not None or self._posix_file is not None
 
+    @property
+    def state_directory(self) -> Path:
+        """Resolved directory identity protected by this instance guard."""
+        return self._state_dir
+
+    @property
+    def acquisition_token(self):
+        """Opaque continuous-acquisition identity; release retires it first."""
+        return self._acquisition_token if self.acquired else None
+
     def release(self) -> None:
         """Release the lock. Safe to call more than once."""
+        self._acquisition_token = None
         if self._windows_handle is not None:
             _close_windows_handle(self._windows_handle)
             self._windows_handle = None

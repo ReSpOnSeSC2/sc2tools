@@ -29,8 +29,20 @@ from sc2tools_agent.runner import (
 )
 from sc2tools_agent.state import AgentState
 from sc2tools_agent.ui import SettingsPayload
+from tests.test_agent_state_credentials import synthetic_state_io
 
 _LOG = logging.getLogger("test_runner_obs_settings")
+
+
+@pytest.fixture(autouse=True)
+def owned_secure_state_io(tmp_path, synthetic_state_io, monkeypatch):
+    """Direct helper tests persist real owned-temp bytes through synthetic crypto."""
+    original = _apply_obs_settings
+    directories = {}
+    def apply(state, payload, cell, log):
+        _owner, directory = directories.setdefault(id(state), (state, tmp_path / str(len(directories))))
+        return original(state, payload, cell, log, state_dir=directory)
+    monkeypatch.setitem(globals(), "_apply_obs_settings", apply)
 
 
 class FakeController:
@@ -880,8 +892,9 @@ def test_obs_connect_isolates_independent_startup_repair_failures(
             "chat",
             "broll",
         ]
-        assert "obs_vertical_chat_alert_auto_repair_failed" in caplog.text
-        assert "obs_manual_override_auto_repair_failed" in caplog.text
+        assert "obs_vertical_chat_alert_auto_repair_unavailable" in caplog.text
+        assert "obs_manual_override_auto_repair_unavailable" in caplog.text
+        assert "vertical unavailable" not in caplog.text and "manual unavailable" not in caplog.text
         assert ProbeClient.instances[0].shutdown_called is False
         assert ProbeClient.instances[1].shutdown_called is True
     finally:
@@ -896,14 +909,16 @@ def test_obs_connect_repair_uses_the_reconfigured_endpoint() -> None:
         def subscribe(self, cb: Any) -> None:
             pass
 
+    state = AgentState(obs_scene_switch_enabled=True)
     client, ctrl = _build_obs_switcher(
-        state=AgentState(obs_scene_switch_enabled=True),
+        state=state,
         bridge=SimpleNamespace(bus=_Bus()),
         log=_LOG,
     )
     assert client is not None
     try:
-        client.reconfigure(host="10.0.0.8", port=4466, password="new")
+        _apply_obs_settings(state, SettingsPayload(obs_host="10.0.0.8", obs_port=4466, obs_password="new"),
+            _cell(ctrl, client), _LOG)
         client.kwargs["on_connected"]()
 
         repair_client = ProbeClient.instances[1]
@@ -946,7 +961,7 @@ def test_changing_the_host_triggers_a_reconnect() -> None:
         _LOG,
     )
     assert client.reconfigures == [
-        {"host": "192.168.0.4", "port": 4455, "password": None},
+        {"host": "192.168.0.4", "port": 4455, "password": ""},
     ]
 
 
@@ -1047,6 +1062,7 @@ class ProbeClient:
     def __init__(self, **kw: Any) -> None:
         self.kwargs = kw
         self.shutdown_called = False
+        self._connection_scope = object()
         self.started = False
         ProbeClient.instances.append(self)
 
@@ -1059,9 +1075,16 @@ class ProbeClient:
         )
 
     def reconfigure(self, **kw: Any) -> None:
+        self._connection_scope = object()
         self.kwargs.update(
             {key: value for key, value in kw.items() if value is not None},
         )
+
+    def connection_scope(self):
+        return self._connection_scope if not self.shutdown_called else None
+
+    def is_connection_current(self, scope):
+        return scope is not None and scope is self._connection_scope and not self.shutdown_called
 
     def start(self) -> None:
         # The late-build path in _apply_obs_settings starts the client
@@ -1196,6 +1219,7 @@ class ProbeClient:
 
     def shutdown(self) -> None:
         self.shutdown_called = True
+        self._connection_scope = None
 
 
 @pytest.fixture(autouse=True)
@@ -1284,7 +1308,8 @@ def test_probe_reports_obs_not_running() -> None:
         host="127.0.0.1", port=4455, password="", log=_LOG,
     )
     assert result["ok"] is False
-    assert "WebSocket server is enabled" in result["message"]
+    assert "WebSocket server settings" in result["message"]
+    assert ProbeClient.instances[0].shutdown_called is True
 
 
 # ---------------- Build scenes ----------------

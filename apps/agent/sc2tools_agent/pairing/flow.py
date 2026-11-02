@@ -7,7 +7,7 @@ import random
 import socket
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Callable, Optional
@@ -15,7 +15,8 @@ from typing import Callable, Optional
 from .. import __version__
 from ..api_client import ApiClient
 from ..config import AgentConfig
-from ..state import AgentState, _STATE_SAVE_LOCK, save_state
+from ..state import AgentState, _STATE_SAVE_LOCK, commit_state_credentials, credential_revision
+from ..agent_credentials import CredentialIntent, CredentialStorageError
 
 log = logging.getLogger(__name__)
 POLL_INTERVAL_SEC = 3.0
@@ -41,14 +42,40 @@ class PairingUiState:
     code: str = ""
     expires_at: Optional[datetime] = None
     retry_in: float = 0
+    owner_epoch: object = field(default=None, repr=False, compare=False)
+
+
+@dataclass(frozen=True, repr=False)
+class _PairingScope:
+    epoch: object
+    revision: int
+    refresh: object
+
+
+@dataclass(frozen=True, repr=False)
+class _PairingCode:
+    value: str
+    expires_at: datetime
+    scope: _PairingScope
+
+
+@dataclass(frozen=True, repr=False)
+class _ApprovedCandidate:
+    token: str
+    user_id: str
+    paired_at: str
+    scope: _PairingScope
+    clear_cache: bool
 
 
 class PairingControls:
     def __init__(self) -> None:
         self.retry_now = threading.Event()
         self.new_code = threading.Event()
+        self._refresh_token = object()
 
     def request_new_code(self) -> None:
+        self._refresh_token = object()
         self.new_code.set()
         self.retry_now.set()
 
@@ -61,6 +88,61 @@ class PairingControls:
                 return
 
 
+def _capture_scope(state, controls):
+    with _STATE_SAVE_LOCK:
+        if state.is_paired:
+            return None
+        if getattr(state, "_owner_epoch", None) is None:
+            state._owner_epoch = object()
+        return _PairingScope(state._owner_epoch, credential_revision(state, "device"), controls._refresh_token)
+
+
+def _current(state, scope, controls, stop_event, *, paired=False):
+    with _STATE_SAVE_LOCK:
+        try:
+            return (not stop_event.is_set() and not controls.new_code.is_set()
+                and controls._refresh_token is scope.refresh and getattr(state, "_owner_epoch", None) is scope.epoch
+                and credential_revision(state, "device") == scope.revision and state.is_paired is paired)
+        except CredentialStorageError:
+            return False
+
+
+def _publish(callback, value, state, scope, controls, stop_event, *, paired=False):
+    if not _current(state, scope, controls, stop_event, paired=paired):
+        return False
+    try:
+        callback(value)
+    except Exception:
+        log.warning("pairing_ui_unavailable")
+    return _current(state, scope, controls, stop_event, paired=paired)
+
+
+def _response(value):
+    if type(value) is not dict or any(type(key) is not str for key in value):
+        raise ValueError("invalid_pairing_response")
+    return value
+
+
+def _approved(result, scope, state, controls, stop_event, paired_at):
+    token, user_id = result.get("deviceToken"), result.get("userId")
+    CredentialIntent("set", token)  # Exact bounded primitive validation, without string coercion.
+    if (type(user_id) is not str or not user_id or len(user_id) > 512
+        or any(ord(char) < 32 or 0xD800 <= ord(char) <= 0xDFFF for char in user_id)):
+        raise ValueError("invalid_pairing_account")
+    with _STATE_SAVE_LOCK:
+        if not _current(state, scope, controls, stop_event):
+            return None
+        retirement = object()
+        state._owner_epoch = retirement
+        state._owned_toons = None
+        return _ApprovedCandidate(token, user_id, paired_at,
+            _PairingScope(retirement, scope.revision, scope.refresh), state.user_id != user_id)
+
+
+def _delay(failures, jitter):
+    return min(60.0, 2 ** min(failures, 6)) * jitter(0.8, 1.0)
+
+
 def ensure_paired(*, cfg: AgentConfig, state: AgentState, api: ApiClient,
                   on_code: Callable[[str], None], stop_event: threading.Event,
                   on_state: Optional[Callable[[PairingUiState], None]] = None,
@@ -68,73 +150,130 @@ def ensure_paired(*, cfg: AgentConfig, state: AgentState, api: ApiClient,
                   now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
                   jitter: Callable[[float, float], float] = random.uniform) -> bool:
     """Wait until paired or stopped. Network failures never close the app."""
-    if state.is_paired:
-        return True
+    with _STATE_SAVE_LOCK:
+        if state.is_paired:
+            return True
     controls = controls or PairingControls()
     emit = on_state or (lambda _state: None)
-    code = ""
-    expires_at = None
+    lease, candidate = None, None
+    cache_cleared = False
     failures = 0
     while not stop_event.is_set():
-        refresh = controls.new_code.is_set()
-        controls.new_code.clear()
-        expiring = expires_at is not None and (expires_at - now()).total_seconds() < 60
-        if not code or refresh or expiring:
-            previous_expiry = expires_at
-            code = ""
-            emit(PairingUiState("requesting"))
-            try:
-                result = api.start_pairing()
-                code = result.get("code")
-                expires_at = _parse_iso(result.get("expiresAt"))
-                if not isinstance(code, str) or not code or expires_at is None or expires_at <= now():
-                    raise ValueError("pairing response has no current code")
-                failures = 0
-                on_code(code)
-                emit(PairingUiState("showing", code, expires_at))
-            except Exception as exc:
-                log.warning("pairing_start_failed: %s", exc)
-                code = ""
-                failures += 1
-                delay = min(60.0, 2 ** min(failures, 6)) * jitter(0.8, 1.0)
-                kind = "expired" if previous_expiry is not None else "unreachable"
-                emit(PairingUiState(kind, retry_in=delay))
-                controls.wait(delay, stop_event)
+        if controls.new_code.is_set():
+            controls.new_code.clear()
+            lease = candidate = None
+            cache_cleared = False
+        if candidate is not None:
+            scope = candidate.scope
+            if not _current(state, scope, controls, stop_event):
+                lease = candidate = None
+                cache_cleared = False
                 continue
-        try:
-            result = api.poll_pairing(code)
-            if result.get("status") == "ready":
-                token, user_id = result.get("deviceToken"), result.get("userId")
-                if not token or not user_id:
-                    raise ValueError("pairing ready response has no token or account")
+            try:
                 with _STATE_SAVE_LOCK:
-                    previous = state.device_token, state.user_id, state.paired_at
-                    state._owner_epoch = object()
-                    state._owned_toons = None
-                    if state.user_id != str(user_id):
+                    if not _current(state, scope, controls, stop_event):
+                        continue
+                    if candidate.clear_cache and not cache_cleared:
                         from ..player_handle import write_cache
                         write_cache(cfg.state_dir, None)
-                    state.device_token, state.user_id = str(token), str(user_id)
-                    state.paired_at = now().isoformat()
-                    try:
-                        save_state(cfg.state_dir, state)
-                    except Exception:
-                        state.device_token, state.user_id, state.paired_at = previous
-                        raise
-                emit(PairingUiState("paired"))
-                return True
-            if result.get("status") == "expired":
-                code = ""
+                        cache_cleared = True
+                    if not _current(state, scope, controls, stop_event):
+                        continue
+                    commit_state_credentials(cfg.state_dir, state,
+                        device=CredentialIntent("set", candidate.token), expected_device_revision=scope.revision,
+                        expected_owner_epoch=scope.epoch, device_owner=(candidate.user_id, candidate.paired_at))
+                committed = _PairingScope(scope.epoch, scope.revision + 1, scope.refresh)
+                return _publish(emit, PairingUiState("paired", owner_epoch=scope.epoch), state,
+                    committed, controls, stop_event, paired=True)
+            except CredentialStorageError as exc:
+                log.warning("pairing_credentials_save_failed code=%s", exc.code)
+                if exc.code in ("indeterminate", "conflict", "invalid_pointer"):
+                    return False
+            except Exception:
+                log.warning("pairing_credentials_save_failed code=unavailable")
+            if _current(state, scope, controls, stop_event):
+                failures += 1
+                delay = _delay(failures, jitter)
+                _publish(emit, PairingUiState("unreachable", retry_in=delay, owner_epoch=scope.epoch),
+                    state, scope, controls, stop_event)
+                controls.wait(delay, stop_event)
+            continue
+        if lease is not None and not _current(state, lease.scope, controls, stop_event):
+            lease = None
+        previous_expiry = lease.expires_at if lease is not None else None
+        if lease is not None and (lease.expires_at - now()).total_seconds() < 60:
+            lease = None
+        if lease is None:
+            try:
+                scope = _capture_scope(state, controls)
+            except CredentialStorageError:
+                log.warning("pairing_credentials_unavailable")
+                return False
+            if scope is None:
+                return False  # Another owner paired; this attempt cannot claim its activation.
+            if not _publish(emit, PairingUiState("requesting", owner_epoch=scope.epoch), state, scope, controls, stop_event):
+                continue
+            try:
+                result = api.start_pairing()
+                if not _current(state, scope, controls, stop_event):
+                    continue
+                result = _response(result)
+                code, expires_at = result.get("code"), _parse_iso(result.get("expiresAt"))
+                if type(code) is not str or not 0 < len(code) <= 64 or expires_at is None or expires_at <= now():
+                    raise ValueError("invalid_pairing_code")
+                lease = _PairingCode(code, expires_at, scope)
+                failures = 0
+                if not _publish(on_code, code, state, scope, controls, stop_event):
+                    lease = None
+                    continue
+                if not _publish(emit, PairingUiState("showing", code, expires_at, owner_epoch=scope.epoch),
+                    state, scope, controls, stop_event):
+                    lease = None
+                    continue
+            except Exception:
+                log.warning("pairing_start_failed code=unavailable")
+                lease = None
+                if _current(state, scope, controls, stop_event):
+                    failures += 1
+                    delay = _delay(failures, jitter)
+                    kind = "expired" if previous_expiry is not None else "unreachable"
+                    _publish(emit, PairingUiState(kind, retry_in=delay, owner_epoch=scope.epoch),
+                        state, scope, controls, stop_event)
+                    controls.wait(delay, stop_event)
+                continue
+        scope = lease.scope
+        try:
+            if not _current(state, scope, controls, stop_event):
+                lease = None
+                continue
+            result = api.poll_pairing(lease.value)
+            if not _current(state, scope, controls, stop_event) or lease.expires_at <= now():
+                lease = None
+                continue
+            result = _response(result)
+            status = result.get("status")
+            if type(status) is not str or status not in ("ready", "expired", "pending"):
+                raise ValueError("invalid_pairing_status")
+            if status == "ready":
+                candidate = _approved(result, scope, state, controls, stop_event, now().isoformat())
+                lease = None
+                cache_cleared = False
+                continue
+            if status == "expired":
+                lease = None
                 continue
             failures = 0
-            emit(PairingUiState("showing", code, expires_at))
+            _publish(emit, PairingUiState("showing", lease.value, lease.expires_at, owner_epoch=scope.epoch),
+                state, scope, controls, stop_event)
             delay = POLL_INTERVAL_SEC
-        except Exception as exc:
-            log.warning("pairing_poll_failed: %s", exc)
+        except Exception:
+            log.warning("pairing_poll_failed code=unavailable")
             failures += 1
-            delay = min(60.0, 2 ** min(failures, 6)) * jitter(0.8, 1.0)
-            emit(PairingUiState("unreachable", retry_in=delay))
-        controls.wait(delay, stop_event)
+            delay = _delay(failures, jitter)
+            _publish(emit, PairingUiState("unreachable", retry_in=delay, owner_epoch=scope.epoch),
+                state, scope, controls, stop_event)
+        if _current(state, scope, controls, stop_event):
+            controls.wait(delay, stop_event)
     return False
 
 
@@ -147,7 +286,7 @@ def pairing_metadata() -> dict:
 
 
 def _parse_iso(value: object) -> Optional[datetime]:
-    if not isinstance(value, str):
+    if type(value) is not str or not 0 < len(value) <= 64:
         return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))

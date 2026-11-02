@@ -26,7 +26,7 @@ Two execution modes
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 import logging
 import logging.handlers
 import os
@@ -92,7 +92,9 @@ from .replay_finder import (
     watched_replay_folders,
 )
 from .replay_pipeline import probe_analyzer
-from .state import AgentState, COMPANION_SKINS, _STATE_SAVE_LOCK, count_synced, load_state, save_state
+from .state import (AgentState, COMPANION_SKINS, _STATE_SAVE_LOCK, count_synced, load_state, save_state,
+    migrate_legacy_state, commit_state_credentials, credential_revision, credential_status)
+from .agent_credentials import CredentialIntent, CredentialStorageError
 from .sync_filter import SyncFilter
 from .ui import (
     ConsoleUI,
@@ -142,11 +144,38 @@ def run_agent(argv: Optional[List[str]] = None) -> int:
         return 0
 
     try:
+        try:
+            migrate_legacy_state(cfg.state_dir, instance_lock)
+        except Exception:
+            _secure_state_startup_failure(args)
+            return 1
         return _run_locked_agent(cfg, args, argv, relaunch=relaunch)
     finally:
         instance_lock.release()
         # Only now: a copy started while the lock was held would hand off to this one and exit.
         relaunch.start_if_requested()
+
+
+def _secure_state_startup_failure(args):
+    message = ("SC2 Tools could not open secure credential storage and did not start syncing. "
+        "Restart the app and try again. If this continues, use the desktop support guide.")
+    print(message, file=sys.stderr)
+    if args.no_gui or not can_use_gui():
+        return
+    try:
+        from .ui.gui import _qt
+        _core, _gui, widgets = _qt()
+        application = widgets.QApplication.instance() or widgets.QApplication([])
+        widgets.QMessageBox.critical(None, "SC2 Tools could not start", message)
+        del application
+    except Exception:
+        pass  # The fixed console message remains available without Qt.
+
+
+def _auth_epoch_current(state, expected, stop_event=None):
+    with _STATE_SAVE_LOCK:
+        return (expected is not None and getattr(state, "_owner_epoch", None) is expected
+            and (stop_event is None or not stop_event.is_set()))
 
 
 def _run_locked_agent(
@@ -429,7 +458,8 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
         )
 
     ui = _Multiplexer(console, tray, facts=StatusFacts(paired=state.is_paired,
-        paused=state.paused,folders=list(initial_replay_folders)))
+        paused=state.paused,folders=list(initial_replay_folders)),
+        auth_epoch_guard=lambda epoch: _auth_epoch_current(state, epoch, stop_event))
     recovery_cell.api, recovery_cell.ui = api, ui
     recovery_cell.support = _make_support_service(cfg, state, recovery_cell, stop_event, log_dir)
     support_lifetime.callback(recovery_cell.support.close)
@@ -462,7 +492,7 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
         if not paired:
             return 0  # ensure_paired returns only when stop was requested.
         api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
-        ui.on_paired(state.user_id or "")
+        ui.on_paired_current(state.user_id or "", getattr(state, "_owner_epoch", None))
 
     probe_ok, probe_diag = probe_analyzer()
     ui.on_analyzer_probe(probe_ok, probe_diag)
@@ -486,15 +516,12 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
     recovery_cell.recent_history = _start_desktop_history(cfg, state, ui)
     upload = UploadQueue(
         on_connection_state=ui.on_connection_state,
-        on_auth_failure=recovery.watchdog.failure,
-        on_auth_success=recovery.watchdog.success,
+        on_auth_outcome=recovery.queue_auth_outcome,
         cfg=cfg,
         state=state,
         api=api,
-        on_success=lambda p: (
-            ui.on_upload_success(p.name),
-            import_ctl.on_upload_success(p) if import_ctl else None,
-        ),
+        on_success=lambda p: ui.on_upload_success(p.name),
+        on_owned_outcome=lambda context, path, exc: import_ctl.on_owned_upload(context, path, exc) if import_ctl else None,
         on_failure=lambda p, exc: _desktop_upload_failed(ui, import_ctl, p, exc),
         on_support_error=lambda context, code: recovery_cell.support.record_upload_error(context, code) if recovery_cell.support else None,
         on_pending_changed=ui.on_pending,
@@ -513,10 +540,12 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
             tray, console, None, message, log,
         ),
         on_replay_skipped=lambda p, reason: _desktop_replay_skipped(ui, import_ctl, p, reason),
+        on_owned_skipped=lambda ticket, path, reason: import_ctl.on_owned_skipped(ticket, path, reason) if import_ctl else None,
         on_roots_changed=ui.on_folders,
         on_unresolved=lambda path, entries, *, ticket: _record_sync_unresolved(ui, state, path, entries, ticket),
     )
     import_ctl = ImportController(
+        owner_epoch=replay_ticket(state).epoch,
         api=api,
         watcher=watcher,
         full_resync=lambda: _handle_replay_archive_resync(
@@ -525,7 +554,7 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
         list_folders=lambda: [
             str(p) for p in _discover_replay_folders(cfg, state)
         ],
-        on_change=ui.on_import_progress,
+        on_change_current=ui.on_import_progress_current,
     )
 
     recovery_cell.tray, recovery_cell.console, recovery_cell.ui = tray, console, ui
@@ -534,8 +563,9 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
     updater = Updater(cfg=cfg,state=state,on_update_available=recovery_cell.update_scheduler.offer,
                       on_check=lambda release: _announce_updated_version(cfg,state,recovery_cell,release))
     recovery_cell.updater = updater
-    beat_ok, beat_failed = _health_heartbeat(ui, recovery.connected, recovery.watchdog.failure)
+    beat_ok, beat_failed = _health_heartbeat(ui, lambda: recovery.connected(auth=False), lambda _exc: None)
     heartbeat = Heartbeat(api, on_success=beat_ok, on_failure=beat_failed, state_dir=cfg.state_dir,
+                          auth_context=recovery.auth_context, on_auth_outcome=recovery.auth_outcome,
                           support_error_context=lambda captured: recovery_cell.support.capture_error(captured) if recovery_cell.support else None,
                           sync_provider=_sync_report_provider(ui, state, cfg),
                           on_overlay_tokens=_obs_token_rotation_controller(cfg, state, recovery_cell).heartbeat)
@@ -767,7 +797,9 @@ def _run_with_gui(
         obs_scene_switch_enabled=state.obs_scene_switch_enabled,
         obs_host=state.obs_host,
         obs_port=state.obs_port,
-        obs_password=state.obs_password,
+        obs_password=None,
+        obs_credential_revision=credential_revision(state, "obs"),
+        obs_credential_status=credential_status(state, "obs"),
         obs_scene_map=dict(state.obs_scene_map),
         obs_switch_debounce_sec=state.obs_switch_debounce_sec,
         obs_switch_on_replays=state.obs_switch_on_replays,
@@ -870,6 +902,9 @@ def _run_with_gui(
         initial_paired=state.is_paired,
         initial_user_id=state.user_id,
         initial_settings=initial_settings,
+        auth_epoch_guard=lambda epoch: _auth_epoch_current(state, epoch, stop_event),
+        initial_auth_epoch=replay_ticket(state).epoch,
+        obs_credential_provider=lambda: _obs_credential_metadata(state),
         # Authoritative synced total for the dashboard stat card —
         # counts dated entries in state.uploaded so the number survives
         # restarts instead of resetting to 0 every launch.
@@ -883,6 +918,8 @@ def _run_with_gui(
         on_obs_probe=lambda host, port, password: _handle_obs_probe(
             host=host, port=port, password=password, log=log,
         ),
+        on_obs_probe_candidate=lambda host, port, password, intent, revision: _test_obs_candidate(
+            state, host, port, password, intent, revision, log),
         on_obs_build=lambda request: _handle_obs_build(
             cfg=cfg, state=state, request=request, log=log,
         ),
@@ -952,7 +989,8 @@ def _run_with_gui(
     console = ConsoleUI()
     cell.console = console
 
-    multiplex = _Multiplexer(console, tray, gui)
+    multiplex = _Multiplexer(console, tray, gui,
+        auth_epoch_guard=lambda epoch: _auth_epoch_current(state, epoch, stop_event))
     cell.ui = multiplex
     cell.support = _make_support_service(cfg, state, cell, stop_event, log_dir)
     gui.set_support_service(cell.support)
@@ -1069,7 +1107,7 @@ def _gui_boot_worker(
             api = ApiClient(
                 base_url=cfg.api_base, device_token=state.device_token,
             )
-            ui.on_paired(state.user_id or "")
+            ui.on_paired_current(state.user_id or "", getattr(state, "_owner_epoch", None))
 
         probe_ok, probe_diag = probe_analyzer()
         ui.on_analyzer_probe(probe_ok, probe_diag)
@@ -1095,15 +1133,12 @@ def _gui_boot_worker(
         cell.recent_history = _start_desktop_history(cfg, state, ui)
         upload = UploadQueue(
             on_connection_state=ui.on_connection_state,
-            on_auth_failure=recovery.watchdog.failure,
-            on_auth_success=recovery.watchdog.success,
+            on_auth_outcome=recovery.queue_auth_outcome,
             cfg=cfg,
             state=state,
             api=api,
-            on_success=lambda p: (
-                ui.on_upload_success(p.name),
-                import_ctl.on_upload_success(p) if import_ctl else None,
-            ),
+            on_success=lambda p: ui.on_upload_success(p.name),
+            on_owned_outcome=lambda context, path, exc: import_ctl.on_owned_upload(context, path, exc) if import_ctl else None,
             on_failure=lambda p, exc: _desktop_upload_failed(ui, import_ctl, p, exc),
             on_support_error=lambda context, code: cell.support.record_upload_error(context, code) if cell.support else None,
             on_pending_changed=ui.on_pending,
@@ -1125,12 +1160,14 @@ def _gui_boot_worker(
                 cell.tray, cell.console, cell.gui, message, log,
             ),
             on_replay_skipped=lambda p, reason: _desktop_replay_skipped(ui, import_ctl, p, reason),
+            on_owned_skipped=lambda ticket, path, reason: import_ctl.on_owned_skipped(ticket, path, reason) if import_ctl else None,
             on_roots_changed=lambda folders: _show_replay_folders(
                 cell, folders,
             ),
             on_unresolved=lambda path, entries, *, ticket: _record_sync_unresolved(ui, state, path, entries, ticket),
         )
         import_ctl = ImportController(
+            owner_epoch=replay_ticket(state).epoch,
             api=api,
             watcher=watcher,
             full_resync=lambda: _handle_replay_archive_resync(
@@ -1139,7 +1176,7 @@ def _gui_boot_worker(
             list_folders=lambda: [
                 str(p) for p in _discover_replay_folders(cfg, state)
             ],
-            on_change=ui.on_import_progress,
+            on_change_current=ui.on_import_progress_current,
         )
         def _request_stop_for_update() -> None:
             # GUI mode shuts down by ending the Qt loop; the caller then
@@ -1152,8 +1189,9 @@ def _gui_boot_worker(
             stop_event,_request_stop_for_update,log)
         updater = Updater(cfg=cfg,state=state,on_update_available=cell.update_scheduler.offer,
                           on_check=lambda release: _announce_updated_version(cfg,state,cell,release))
-        beat_ok, beat_failed = _health_heartbeat(ui, recovery.connected, recovery.watchdog.failure)
+        beat_ok, beat_failed = _health_heartbeat(ui, lambda: recovery.connected(auth=False), lambda _exc: None)
         heartbeat = Heartbeat(api, on_success=beat_ok, on_failure=beat_failed, state_dir=cfg.state_dir,
+                              auth_context=recovery.auth_context, on_auth_outcome=recovery.auth_outcome,
                               support_error_context=lambda captured: cell.support.capture_error(captured) if cell.support else None,
                               sync_provider=_sync_report_provider(ui, state, cfg),
                               on_overlay_tokens=_obs_token_rotation_controller(cfg, state, cell).heartbeat)
@@ -1425,19 +1463,18 @@ def _desktop_upload_failed(ui, import_ctl, path, exc):
     ui.on_upload_failed(path.name, error)
     if ui._recent_history:
         ui._recent_history.problem(path, error)
-    import_ctl.on_upload_failure(path, exc)
 
 
 def _desktop_replay_skipped(ui, import_ctl, path, reason):
     if ui._recent_history:
         ui._recent_history.skipped(path, reason or "parse_failed")
-    import_ctl.on_replay_skipped(path, reason)
 
 
 def _health_heartbeat(ui, on_success, on_failure):
     """Run the recovery hooks first, then record the heartbeat for health.
 
-    The auth watchdog always sees a failure. A success hook that raises is
+    Authentication outcomes are delivered separately with their admitted scope.
+    A success hook that raises is
     reported by Heartbeat as a failure, so health records it the same way.
     """
     def success():
@@ -2019,12 +2056,6 @@ def _handle_save_settings(
         # poll (``_handle_update_available``'s consent gate), so no
         # restart is needed for the opt-in/opt-out to take effect.
         state.auto_update_enabled = bool(payload.auto_update_enabled)
-    _apply_obs_settings(state, payload, cell, log)
-    health = getattr(getattr(cell, "ui", None), "health", None)
-    if health:
-        client = getattr(cell, "obs_client", None)
-        health.set_obs(state.obs_scene_switch_enabled and not getattr(cell, "no_obs", False) and getattr(cell, "live_bridge", None) is not None,
-            connected=bool(client and client.is_connected), auth_failed=bool(client and client.auth_failed))
     if payload.autostart_enabled is not None:
         ok = autostart.set_enabled(bool(payload.autostart_enabled))
         if ok:
@@ -2110,7 +2141,7 @@ def _handle_save_settings(
     if payload.replay_capture_enabled is not None:
         state.replay_capture_enabled = payload.replay_capture_enabled is True
     try:
-        save_state(cfg.state_dir, state)
+        obs_activated = _apply_obs_settings(state, payload, cell, log, state_dir=cfg.state_dir)
     except Exception:
         # A failed opt-in save must not leave the running agent enabled.
         state.replay_capture_enabled = previous_capture_enabled
@@ -2132,6 +2163,8 @@ def _handle_save_settings(
     # the user gets confirmation that the filter actually took effect
     # — and how many in-flight uploads were dropped because of it.
     status_msg = "Saved."
+    if not obs_activated:
+        status_msg += " OBS could not reconnect. Use Test connection and retry."
     if filter_changed and filter_apply_summary is not None:
         n_drop = filter_apply_summary["dropped_queued"]
         n_clear = filter_apply_summary["cleared_filtered"]
@@ -2152,6 +2185,8 @@ def _handle_save_settings(
                 f"{'s' if n_clear != 1 else ''} will sync again",
             )
         status_msg = "Saved. " + "; ".join(bits) + "."
+        if not obs_activated:
+            status_msg += " OBS could not reconnect. Use Test connection and retry."
     if cell.gui is not None and hasattr(cell.gui, "show_settings_status"):
         try:
             cell.gui.show_settings_status(status_msg)
@@ -2159,6 +2194,10 @@ def _handle_save_settings(
             log.exception("show_settings_status_failed")
 
     if getattr(cell,"ui",None):
+        client = getattr(cell, "obs_client", None)
+        cell.ui.health.set_obs(state.obs_scene_switch_enabled and not getattr(cell, "no_obs", False)
+            and getattr(cell, "live_bridge", None) is not None,
+            connected=bool(client and client.is_connected), auth_failed=bool(client and client.auth_failed))
         active_filter=SyncFilter.from_state(preset=state.sync_filter_preset,since_iso=state.sync_filter_since,until_iso=state.sync_filter_until)
         cell.ui.on_filter_label(active_filter.short_label() if active_filter.is_active() else "")
         cell.ui.health.set_auto_update(state.auto_update_enabled)
@@ -2763,330 +2802,293 @@ def _effective_scene_map(state: AgentState) -> Dict[str, str]:
     return dict(DEFAULT_SCENE_MAP)
 
 
-def _apply_obs_settings(
-    state: AgentState,
-    payload: SettingsPayload,
-    cell,
-    log: logging.Logger,
-) -> None:
-    """Serialize OBS settings with the GUI boot worker's construction path."""
-    obs_lock = getattr(cell, "obs_lock", None)
-    if obs_lock is None:
-        _apply_obs_settings_unlocked(state, payload, cell, log)
-        return
-    with obs_lock:
-        _apply_obs_settings_unlocked(state, payload, cell, log)
+
+def _obs_intent(payload):
+    operation = getattr(payload, "obs_password_intent", None)
+    value = payload.obs_password
+    if value is not None and type(value) is not str:
+        raise CredentialStorageError("invalid_intent")
+    if operation is None:
+        operation = "keep" if value is None else "clear" if value == "" else "set"
+    if type(operation) is not str or operation not in ("keep", "set", "clear"):
+        raise CredentialStorageError("invalid_intent")
+    if operation != "set" and value not in (None, ""):
+        raise CredentialStorageError("invalid_intent")
+    return CredentialIntent(operation, value if operation == "set" else None)
 
 
-def _apply_obs_settings_unlocked(
-    state: AgentState,
-    payload: SettingsPayload,
-    cell,
-    log: logging.Logger,
-) -> None:
-    """Persist the Settings tab's OBS fields and hot-apply them.
+def _obs_credential_metadata(state):
+    with _STATE_SAVE_LOCK:
+        try:
+            revision, status = credential_revision(state, "obs"), credential_status(state, "obs")
+        except CredentialStorageError:
+            revision, status = None, "unreadable"
+    value = os.environ.get("SC2TOOLS_OBS_PASSWORD")
+    return revision, status, type(value) is str and len(value) > 0
 
-    Follows the ``upload.set_concurrency`` precedent: a Save click
-    takes effect on the running switcher rather than waiting for a
-    restart. Reconnecting is only done when the connection details
-    actually changed — a Save that only re-mapped a scene shouldn't
-    drop a healthy socket mid-stream.
-    """
-    previous_obs = {
-        "obs_scene_switch_enabled": state.obs_scene_switch_enabled,
-        "obs_host": state.obs_host,
-        "obs_port": state.obs_port,
-        "obs_password": state.obs_password,
-        "obs_scene_map": dict(state.obs_scene_map),
-        "obs_switch_debounce_sec": state.obs_switch_debounce_sec,
-        "obs_switch_on_replays": state.obs_switch_on_replays,
-        "obs_website_add_enabled": state.obs_website_add_enabled,
-    }
-    previous_enabled = bool(state.obs_scene_switch_enabled)
-    desired_enabled = (
-        bool(payload.obs_scene_switch_enabled)
-        if payload.obs_scene_switch_enabled is not None
-        else previous_enabled
-    )
-    master_changed = desired_enabled != previous_enabled
-    forced_no_obs = bool(getattr(cell, "no_obs", False))
-    if forced_no_obs and master_changed and desired_enabled:
-        raise RuntimeError(
-            "Could not enable automatic OBS scene switching while "
-            "--no-obs is active",
-        )
 
-    def restore_previous_obs_state() -> None:
-        for field_name, value in previous_obs.items():
-            setattr(
-                state,
-                field_name,
-                dict(value) if field_name == "obs_scene_map" else value,
-            )
-        socket = getattr(cell, "socket_client", None)
-        if socket is not None:
-            socket.publish_obs_capabilities()
+def _obs_credentials_available(state):
+    _revision, status, override = _obs_credential_metadata(state)
+    return override or status in ("available", "cleared", "missing")
 
-    conn_changed = False
-    if payload.obs_host is not None and payload.obs_host != state.obs_host:
-        state.obs_host = payload.obs_host
-        conn_changed = True
-    if payload.obs_port is not None and int(payload.obs_port) != state.obs_port:
+
+def _obs_revision_current(state, revision):
+    with _STATE_SAVE_LOCK:
+        try:
+            return credential_revision(state, "obs") == revision
+        except CredentialStorageError:
+            return False
+
+
+def _stage_obs_settings(state, payload, cell):
+    if (getattr(cell, "no_obs", False) and payload.obs_scene_switch_enabled is True
+        and state.obs_scene_switch_enabled is not True):
+        raise RuntimeError("Could not enable automatic OBS scene switching while --no-obs is active")
+    for name in ("obs_scene_switch_enabled", "obs_host", "obs_website_add_enabled", "obs_switch_on_replays"):
+        value = getattr(payload, name)
+        if value is not None:
+            setattr(state, name, value)
+    if payload.obs_port is not None:
         state.obs_port = int(payload.obs_port)
-        conn_changed = True
-    if payload.obs_password is not None:
-        # Empty string clears a saved password rather than meaning
-        # "no change" — otherwise there'd be no way to remove one
-        # without hand-editing agent.json.
-        new_password = payload.obs_password or None
-        if new_password != state.obs_password:
-            state.obs_password = new_password
-            conn_changed = True
     if payload.obs_scene_map is not None:
-        state.obs_scene_map = {
-            str(k): str(v) for k, v in dict(payload.obs_scene_map).items()
-        }
+        state.obs_scene_map = {str(key): str(value) for key, value in dict(payload.obs_scene_map).items()}
     if payload.obs_switch_debounce_sec is not None:
-        state.obs_switch_debounce_sec = max(
-            0.0, float(payload.obs_switch_debounce_sec),
-        )
-    if payload.obs_website_add_enabled is not None:
-        state.obs_website_add_enabled = payload.obs_website_add_enabled is True
-        socket = getattr(cell, "socket_client", None)
-        if socket is not None:
-            socket.publish_obs_capabilities()
-    if payload.obs_switch_on_replays is not None:
-        state.obs_switch_on_replays = bool(payload.obs_switch_on_replays)
+        state.obs_switch_debounce_sec = max(0.0, float(payload.obs_switch_debounce_sec))
 
-    controller = getattr(cell, "obs_scene", None)
-    client = getattr(cell, "obs_client", None)
+
+def _stop_obs_runtime(cell, controller, client, log):
+    for owner, method, arguments in ((controller, "set_config", {"enabled": False}),
+        (controller, "shutdown", {}), (client, "shutdown", {})):
+        callback = getattr(owner, method, None) if owner is not None else None
+        if callable(callback):
+            try:
+                callback(**arguments)
+            except Exception:
+                log.warning("obs_runtime_cleanup_unavailable")
+    if getattr(cell, "obs_scene", None) is controller:
+        cell.obs_scene = None
+    if getattr(cell, "obs_client", None) is client:
+        cell.obs_client = None
+
+
+def _activate_obs_settings(state, cell, log, previous_connection, revision):
+    # All OBS, socket and health callbacks run after the durable state lock.
+    controller, client = getattr(cell, "obs_scene", None), getattr(cell, "obs_client", None)
+    if not _obs_revision_current(state, revision):
+        return False
+    if getattr(cell, "no_obs", False) or not _obs_credentials_available(state):
+        if controller is not None or client is not None:
+            _stop_obs_runtime(cell, controller, client, log)
+        return not state.obs_scene_switch_enabled or bool(getattr(cell, "no_obs", False))
+    connection = _effective_obs_connection(state, log)
     if controller is None:
-        # Nothing running yet — the feature was off at boot. If the
-        # user just switched it ON, build and start the switcher now:
-        # "Save, queue a game, nothing happened" was the old behaviour,
-        # because the enable used to silently require an agent restart.
-        if not desired_enabled:
-            state.obs_scene_switch_enabled = False
-            return
-        if forced_no_obs:
-            # A persisted preference may remain on while this particular run
-            # was explicitly launched without OBS. Never let a later Settings
-            # save bypass that command-line safety boundary.
-            log.info("obs_scene_switch_disabled_via_flag")
-            return
+        if not state.obs_scene_switch_enabled:
+            return True
         bridge = getattr(cell, "live_bridge", None)
         if bridge is None:
-            # --no-live, or the bridge failed to boot: no phase events
-            # exist to react to, so a restart (with live enabled) is
-            # genuinely required.
-            state.obs_scene_switch_enabled = desired_enabled
             log.info("obs_settings_saved_restart_required=true")
-            return
-        # _build_obs_switcher reads the shared state gate. This assignment is
-        # provisional until construction and both runtime starts succeed.
-        state.obs_scene_switch_enabled = desired_enabled
+            return True
         try:
-            client, controller = _build_obs_switcher(
-                state=state,
-                bridge=bridge,
-                log=log,
-                no_obs=forced_no_obs,
-                health=getattr(getattr(cell, "ui", None), "health", None),
-            )
-        except Exception as exc:  # noqa: BLE001
-            log.exception("obs_switcher_late_build_failed")
-            if master_changed:
-                restore_previous_obs_state()
-                raise RuntimeError(
-                    "Could not enable automatic OBS scene switching",
-                ) from exc
-            return
-        if controller is None:
-            if master_changed:
-                restore_previous_obs_state()
-                raise RuntimeError(
-                    "Could not enable automatic OBS scene switching",
-                )
-            return
-        try:
+            client, controller = _build_obs_switcher(state=state, bridge=bridge, log=log,
+                no_obs=getattr(cell, "no_obs", False), health=getattr(getattr(cell, "ui", None), "health", None))
+            if controller is None:
+                return False
+            if not _obs_revision_current(state, revision):
+                _stop_obs_runtime(cell, controller, client, log)
+                return False
             if client is not None:
                 client.start()
+            if not _obs_revision_current(state, revision):
+                _stop_obs_runtime(cell, controller, client, log)
+                return False
             controller.start()
-        except Exception as exc:  # noqa: BLE001
-            log.exception("obs_switcher_late_start_failed")
-            try:
-                controller.set_config(enabled=False)
-                controller.shutdown()
-            except Exception:  # noqa: BLE001
-                log.exception("obs_switcher_late_start_cleanup_failed")
-            if client is not None:
-                try:
-                    client.shutdown()
-                except Exception:  # noqa: BLE001
-                    log.exception("obs_client_late_start_cleanup_failed")
-            if master_changed:
-                restore_previous_obs_state()
-                raise RuntimeError(
-                    "Could not enable automatic OBS scene switching",
-                ) from exc
-            return
-        cell.obs_client = client
-        cell.obs_scene = controller
-        log.info("obs_scene_switch_started_from_settings")
-        return
-
+            if not _obs_revision_current(state, revision):
+                _stop_obs_runtime(cell, controller, client, log)
+                return False
+        except Exception:
+            log.warning("obs_switcher_activation_unavailable")
+            _stop_obs_runtime(cell, controller, client, log)
+            return False
+        cell.obs_client, cell.obs_scene = client, controller
+        return True
     try:
-        controller.set_config(
-            scene_map=_effective_scene_map(state),
-            enabled=desired_enabled,
-            debounce_sec=state.obs_switch_debounce_sec,
-            switch_on_replays=state.obs_switch_on_replays,
-        )
-    except Exception as exc:  # noqa: BLE001
-        log.exception("obs_controller_reconfigure_failed")
-        if master_changed:
-            restore_previous_obs_state()
+        controller.set_config(scene_map=_effective_scene_map(state), enabled=state.obs_scene_switch_enabled,
+            debounce_sec=state.obs_switch_debounce_sec, switch_on_replays=state.obs_switch_on_replays)
+        if not _obs_revision_current(state, revision):
+            return False
+        if connection != previous_connection and client is not None:
+            host, port, password = connection
+            client.reconfigure(host=host, port=port, password=password if password is not None else "")
+        return _obs_revision_current(state, revision)
+    except Exception:
+        log.warning("obs_settings_activation_unavailable")
+        _stop_obs_runtime(cell, controller, client, log)
+        return False
+
+
+def _apply_obs_settings(state, payload, cell, log, *, state_dir):
+    """Commit credential intent/settings before touching shared OBS clients."""
+    intent = _obs_intent(payload)
+    obs_lock = getattr(cell, "obs_lock", None)
+    with (obs_lock if obs_lock is not None else nullcontext()):
+        previous_connection = _effective_obs_connection(state)
+        with _STATE_SAVE_LOCK:
+            names = ("obs_scene_switch_enabled", "obs_host", "obs_port", "obs_scene_map",
+                "obs_switch_debounce_sec", "obs_switch_on_replays", "obs_website_add_enabled")
+            previous = {name: dict(getattr(state, name)) if name == "obs_scene_map" else getattr(state, name) for name in names}
+            expected = getattr(payload, "obs_credential_revision", None)
+            if intent.operation != "keep" and expected is None and getattr(payload, "obs_password_intent", None) is None:
+                expected = credential_revision(state, "obs")  # Legacy trusted callers admit now; GUI always supplies its captured revision.
             try:
-                controller.set_config(
-                    scene_map=_effective_scene_map(state),
-                    enabled=previous_enabled,
-                    debounce_sec=state.obs_switch_debounce_sec,
-                    switch_on_replays=state.obs_switch_on_replays,
-                )
-            except Exception:  # noqa: BLE001
-                log.exception("obs_controller_toggle_rollback_failed")
-            action = "enable" if desired_enabled else "disable"
-            raise RuntimeError(
-                f"Could not {action} automatic OBS scene switching",
-            ) from exc
-    else:
-        state.obs_scene_switch_enabled = desired_enabled
-    if conn_changed and client is not None:
-        try:
-            client.reconfigure(
-                host=state.obs_host,
-                port=state.obs_port,
-                password=state.obs_password,
-            )
-            log.info(
-                "obs_reconnect_requested host=%s port=%s",
-                state.obs_host,
-                state.obs_port,
-            )
-        except Exception:  # noqa: BLE001
-            log.exception("obs_client_reconfigure_failed")
+                _stage_obs_settings(state, payload, cell)
+                if intent.operation == "keep":
+                    save_state(state_dir, state)
+                else:
+                    commit_state_credentials(state_dir, state, obs=intent, expected_obs_revision=expected)
+            except Exception as error:
+                if not (type(error) is CredentialStorageError and error.code == "indeterminate"):
+                    for name, value in previous.items():
+                        setattr(state, name, value)
+                raise
+            revision = credential_revision(state, "obs")
+        result = _activate_obs_settings(state, cell, log, previous_connection, revision)
+        socket = getattr(cell, "socket_client", None)
+        if socket is not None and _obs_revision_current(state, revision):
+            try:
+                socket.publish_obs_capabilities()
+            except Exception:
+                log.warning("obs_capability_publication_unavailable")
+        service = getattr(cell, "stream_service", None)
+        reader = getattr(service, "reader", None) if service is not None else None
+        if reader is not None and previous_connection != _effective_obs_connection(state):
+            try:
+                reader.close()
+            except Exception:
+                log.warning("obs_output_reader_retirement_unavailable")
+        return result
+
+def _obs_candidate_connection(state, host, port, password, operation, revision):
+    """Resolve a private, disposable candidate; this never changes saved state."""
+    intent = CredentialIntent(operation, password if operation == "set" else None)
+    if type(host) is not str or type(port) is not int or not 1 <= port <= 65535:
+        raise CredentialStorageError("invalid_intent")
+    with _STATE_SAVE_LOCK:
+        if type(revision) is not int or credential_revision(state, "obs") != revision:
+            raise CredentialStorageError("conflict")
+        status = credential_status(state, "obs")
+        saved_password = state.obs_password
+    override = os.environ.get("SC2TOOLS_OBS_PASSWORD")
+    if intent.operation == "keep" and not override and status not in ("available", "cleared", "missing"):
+        raise CredentialStorageError("unavailable")
+    candidate = saved_password if intent.operation == "keep" else intent.value if intent.operation == "set" else ""
+    return host, port, override or candidate or ""
 
 
-def _handle_obs_probe(
-    *,
-    host: str,
-    port: int,
-    password: str,
-    log: logging.Logger,
-) -> dict:
-    """GUI "Test connection": connect once and report what we found.
+class _CurrentObsClient:
+    """Keep one explicitly approved desktop operation in its original scope."""
+    def __init__(self, client, current):
+        self._client, self._current = client, current
 
-    Deliberately synchronous and short-lived — it opens its own
-    throwaway client rather than borrowing the long-running one, so a
-    user typing a wrong password into the form can't knock the live
-    switcher off its connection.
-    """
-    from .live.obs_layout import (
-        discover_sources,
-        manual_override_scenes_needing_update,
-    )
+    def __getattr__(self, name):
+        if not self._current():
+            raise CredentialStorageError("conflict")
+        value = getattr(self._client, name)
+        if not callable(value):
+            return value
+        def invoke(*args, **kwargs):
+            if not self._current():
+                raise CredentialStorageError("conflict")
+            result = value(*args, **kwargs)
+            if not self._current():
+                raise CredentialStorageError("conflict")
+            return result
+        return invoke
 
-    client = ObsClient(
-        host=host,
-        port=port,
-        password=password or None,
-        subscribe_events=False,
-    )
+
+def _test_obs_candidate(state, host, port, password, operation, revision, log):
+    try:
+        host, port, effective = _obs_candidate_connection(state, host, port, password, operation, revision)
+    except CredentialStorageError:
+        return {"ok": False, "message": "OBS credentials changed or are unavailable. Re-enter the password and try again."}
+    return _handle_obs_probe(host=host, port=port, password=effective, log=log,
+        is_current=lambda: _obs_revision_current(state, revision))
+
+
+def _handle_obs_probe(*, host: str, port: int, password: str, log: logging.Logger,
+    is_current=lambda: True) -> dict:
+    """Test one disposable connection, closing it on every completion path."""
+    from .live.obs_layout import discover_sources, manual_override_scenes_needing_update
+    if not is_current():
+        return {"ok": False, "message": "OBS credentials changed. Test the connection again."}
+    raw_client = ObsClient(host=host, port=port, password=password or None, subscribe_events=False)
+    client = _CurrentObsClient(raw_client, is_current)
     try:
         client.connect_now()
-    except ObsAuthFailed:
-        return {
-            "ok": False,
-            "message": (
-                "OBS rejected the password. Copy it from OBS → Tools → "
-                "WebSocket Server Settings → Show Connect Info."
-            ),
-        }
-    except Exception as exc:  # noqa: BLE001
-        log.info("obs_probe_failed host=%s port=%s err=%s", host, port, exc)
-        return {
-            "ok": False,
-            "message": (
-                f"Could not reach OBS at {host}:{port}. Check that OBS is "
-                "running and the WebSocket server is enabled."
-            ),
-        }
-
-    try:
         version = client.get_version()
         scenes = client.refresh_scenes()
         sources = discover_sources(client)
-    except Exception as exc:  # noqa: BLE001
-        log.info("obs_probe_partial err=%s", exc)
-        client.shutdown()
-        return {"ok": False, "message": f"Connected, but OBS errored: {exc}"}
-
-    manual_update_scenes: list[str] = []
-    try:
-        manual_update_scenes = manual_override_scenes_needing_update(client)
-    except Exception as exc:  # noqa: BLE001
-        # Connection testing and source discovery remain useful even when an
-        # older OBS build cannot expose its scene-item inventory.
-        log.info("obs_manual_override_probe_failed err=%s", exc)
+        manual_update_scenes = []
+        try:
+            manual_update_scenes = manual_override_scenes_needing_update(client)
+        except CredentialStorageError:
+            raise
+        except Exception:
+            log.info("obs_manual_override_probe_unavailable")
+        if not is_current():
+            raise CredentialStorageError("conflict")
+        return {"ok": True,
+            "message": f"Connected to OBS {version.get('obs_version') or '?'} — {len(scenes)} scene(s) found."
+                + (" Your SC2 Tools scenes need a BRB / Starting Soon priority update; use Update my scenes below."
+                    if manual_update_scenes else ""),
+            "scenes": scenes, "webcams": sources.get("webcam", []), "games": sources.get("game", []),
+            "manual_override_update_scenes": manual_update_scenes,
+            "generated_update_scenes": [name for name in scenes if name in {SCENE_BETWEEN_GAMES, SCENE_IN_GAME}]}
+    except ObsAuthFailed:
+        return {"ok": False, "message": "OBS rejected the password. Check OBS → Tools → WebSocket Server Settings → Show Connect Info."}
+    except CredentialStorageError:
+        return {"ok": False, "message": "OBS credentials changed. Test the connection again."}
+    except Exception:
+        log.info("obs_probe_unavailable")
+        return {"ok": False, "message": "Could not complete the OBS connection test. Check OBS and its WebSocket server settings."}
     finally:
-        client.shutdown()
-
-    log.info(
-        "obs_probe_ok host=%s port=%s scenes=%d", host, port, len(scenes),
-    )
-    return {
-        "ok": True,
-        "message": (
-            f"Connected to OBS {version.get('obs_version') or '?'} — "
-            f"{len(scenes)} scene(s) found."
-            + (
-                " Your SC2 Tools scenes need a BRB / Starting Soon "
-                "priority update; use Update my scenes below."
-                if manual_update_scenes
-                else ""
-            )
-        ),
-        "scenes": scenes,
-        "webcams": sources.get("webcam", []),
-        "games": sources.get("game", []),
-        "manual_override_update_scenes": manual_update_scenes,
-        "generated_update_scenes": [name for name in scenes if name in {SCENE_BETWEEN_GAMES, SCENE_IN_GAME}],
-    }
+        try:
+            raw_client.shutdown()
+        except Exception:
+            log.warning("obs_probe_cleanup_unavailable")
 
 
 def _effective_obs_connection(state, log=None):
-    host = os.environ.get("SC2TOOLS_OBS_HOST", "").strip() or state.obs_host
+    with _STATE_SAVE_LOCK:
+        saved_host, saved_port, saved_password = state.obs_host, state.obs_port, state.obs_password
+    host = os.environ.get("SC2TOOLS_OBS_HOST", "").strip() or saved_host
     port_env = os.environ.get("SC2TOOLS_OBS_PORT", "").strip()
     try:
-        port = int(port_env) if port_env else int(state.obs_port)
+        port = int(port_env) if port_env else int(saved_port)
     except (TypeError, ValueError):
         if log is not None:
             log.warning("obs_port_invalid falling_back=4455")
         port = 4455
-    password = os.environ.get("SC2TOOLS_OBS_PASSWORD") or state.obs_password or None
+    password = os.environ.get("SC2TOOLS_OBS_PASSWORD") or saved_password or None
     return host, port, password
 
 
 def _obs_website_scope(cfg, state, cell):
-    if (state.obs_website_add_enabled is not True or getattr(cell, "no_obs", False)
-            or not state.device_token or not getattr(cell, "gui", None)):
+    with _STATE_SAVE_LOCK:
+        if (state.obs_website_add_enabled is not True or getattr(cell, "no_obs", False)
+                or not state.device_token or not getattr(cell, "gui", None)):
+            return None
+        token, epoch = state.device_token, getattr(state, "_owner_epoch", None)
+        revision = credential_revision(state, "obs")
+    if not _obs_credentials_available(state):
         return None
-    return (cfg.api_base, state.device_token, *_effective_obs_connection(state))
+    return (cfg.api_base, token, *_effective_obs_connection(state), revision, epoch)
 
 
 def _obs_website_controller(cfg, state, cell):
     from .live.obs_website_add import ObsWebsiteAdd
     def client_factory():
+        if not _obs_credentials_available(state):
+            raise CredentialStorageError("unavailable")
         host, port, password = _effective_obs_connection(state)
         return ObsClient(host=host, port=port, password=password, subscribe_events=False)
     return ObsWebsiteAdd(
@@ -3101,9 +3103,14 @@ def _obs_website_controller(cfg, state, cell):
 def _obs_token_rotation_controller(cfg, state, cell):
     from .live.obs_token_rotation import ObsTokenRotation
     def scope():
-        if state.obs_scene_switch_enabled is not True or cell.no_obs or not state.device_token:
+        with _STATE_SAVE_LOCK:
+            if state.obs_scene_switch_enabled is not True or cell.no_obs or not state.device_token:
+                return None
+            token, epoch = state.device_token, getattr(state, "_owner_epoch", None)
+            revision = credential_revision(state, "obs")
+        if not _obs_credentials_available(state):
             return None
-        return (cfg.api_base, state.device_token, *_effective_obs_connection(state))
+        return (cfg.api_base, token, *_effective_obs_connection(state), revision, epoch)
     with cell.obs_lock:
         if cell.obs_token_rotation is None:
             cell.obs_token_rotation = ObsTokenRotation(
@@ -3147,8 +3154,25 @@ def _handle_obs_build_locked(
         repair_chat_alert_audio_roles,
         repair_manual_scene_overrides,
     )
-
+    revision = request.get("credential_revision")
+    epoch = request.get("owner_epoch")
+    scoped = "credential_revision" in request
+    if scoped:
+        def current():
+            return _obs_revision_current(state, revision) and _auth_epoch_current(state, epoch)
+        try:
+            host, port, password = _obs_candidate_connection(state, request.get("host"), request.get("port"),
+                request.get("password"), request.get("password_intent"), revision)
+        except CredentialStorageError:
+            return {"ok": False, "message": "OBS credentials changed or are unavailable. Test the connection again."}
+        if not current():
+            return {"ok": False, "message": "The paired account changed. Test the connection again."}
+    else:  # Compatibility for trusted callers predating the private GUI contract.
+        current = lambda: True
+        host, port, password = str(request.get("host") or "127.0.0.1"), int(request.get("port") or 4455), request.get("password")
     token = _overlay_token_for_build(cfg, state, log)
+    if not current():
+        return {"ok": False, "message": "The paired account changed. Test the connection again."}
     if not token:
         return {
             "ok": False,
@@ -3158,18 +3182,15 @@ def _handle_obs_build_locked(
             ),
         }
 
-    client = ObsClient(
-        host=str(request.get("host") or "127.0.0.1"),
-        port=int(request.get("port") or 4455),
-        password=(request.get("password") or None),
+    raw_client = ObsClient(
+        host=host,
+        port=port,
+        password=password or None,
         subscribe_events=False,
     )
+    client = _CurrentObsClient(raw_client, current)
     try:
         client.connect_now()
-    except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "message": f"Could not reach OBS: {exc}"}
-
-    try:
         plan = plan_scenes(
             client,
             overlay_base_url=_dashboard_url_from_api(cfg.api_base),
@@ -3267,13 +3288,21 @@ def _handle_obs_build_locked(
             (chat_alert_audio_owners, chat_alert_role_updates,
              chat_alert_geometry_updates) = repair_chat_alert_audio_roles(client, browser_url=manual_url)
             audio_owner, audio_role_updates = repair_broll_audio_roles(client, browser_url=manual_url)
-    except SceneBuildError as exc:
-        return {"ok": False, "message": str(exc)}
-    except Exception as exc:  # noqa: BLE001
-        log.exception("obs_scene_build_failed")
-        return {"ok": False, "message": f"Build failed: {exc}"}
+    except SceneBuildError:
+        return {"ok": False, "message": "Could not safely build these scenes. Run Test connection, use Update my scenes, or explicitly choose Replace."}
+    except CredentialStorageError:
+        return {"ok": False, "message": "Settings or the paired account changed. Test the connection again."}
+    except Exception:  # noqa: BLE001
+        log.warning("obs_scene_build_unavailable")
+        return {"ok": False, "message": "Could not finish building OBS scenes. Check OBS and try again."}
     finally:
-        client.shutdown()
+        try:
+            raw_client.shutdown()
+        except Exception:
+            log.warning("obs_build_cleanup_unavailable")
+
+    if not current():
+        return {"ok": False, "message": "Settings or the paired account changed. Test the connection again."}
 
     log.info(
         "obs_scene_build_ok created=%s repaired=%s "
@@ -3324,7 +3353,7 @@ def _handle_obs_build_locked(
             outcome +
             next_step + " " + note
         ).strip(),
-        "scenes": client.scene_names or created,
+        "scenes": raw_client.scene_names or created,
     }
 
 
@@ -3337,16 +3366,24 @@ def _overlay_token_for_build(
     tokens — so this is a live lookup, and it failing is a normal
     "not paired yet" outcome rather than an error.
     """
-    if not state.device_token:
+    with _STATE_SAVE_LOCK:
+        token, epoch = state.device_token, getattr(state, "_owner_epoch", None)
+    if not token:
         return None
+    def current():
+        with _STATE_SAVE_LOCK:
+            return state.device_token == token and getattr(state, "_owner_epoch", None) is epoch
     try:
-        api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
-        getter = getattr(api, "get_overlay_token", None)
-        if getter is None:
+        if not current():
             return None
-        return getter() or None
-    except Exception as exc:  # noqa: BLE001
-        log.info("obs_overlay_token_lookup_failed err=%s", exc)
+        api = ApiClient(base_url=cfg.api_base, device_token=token, _auth_guard=current)
+        getter = getattr(api, "get_overlay_token", None)
+        if getter is None or not current():
+            return None
+        value = getter() or None
+        return value if current() else None
+    except Exception:  # noqa: BLE001
+        log.info("obs_overlay_token_lookup_unavailable")
         return None
 
 
@@ -3386,6 +3423,10 @@ def _build_obs_switcher(
         log.info("obs_scene_switch_skipped reason=live_bridge_disabled")
         return None, None
 
+    if not _obs_credentials_available(state):
+        log.warning("obs_credentials_unavailable")
+        return None, None
+
     host, port, password = _effective_obs_connection(state, log)
     scene_map = _effective_scene_map(state)
 
@@ -3402,7 +3443,7 @@ def _build_obs_switcher(
     )
     client: ObsClient
 
-    def _repair_generated_manual_covers_locked() -> None:
+    def _repair_generated_manual_covers_locked(scope, revision, epoch, connection) -> None:
         """Upgrade legacy generated layouts after each OBS connection.
 
         This callback is best-effort by design: scene switching must stay
@@ -3415,13 +3456,22 @@ def _build_obs_switcher(
         request connection keeps failures away from the switcher's long-lived
         request and event sockets.
         """
+        def current():
+            with _STATE_SAVE_LOCK:
+                admitted = (state.obs_scene_switch_enabled is True and credential_revision(state, "obs") == revision
+                    and getattr(state, "_owner_epoch", None) is epoch)
+            return (admitted and client.is_connection_current(scope)
+                and _effective_obs_connection(state) == connection)
         repair_host, repair_port, repair_password = client.connection_settings
-        repair_client = ObsClient(
+        if not current() or (repair_host, repair_port, repair_password or None) != connection:
+            return
+        raw_repair_client = ObsClient(
             host=repair_host,
             port=repair_port,
             password=repair_password,
             subscribe_events=False,
         )
+        repair_client = _CurrentObsClient(raw_repair_client, current)
         try:
             from .live.obs_layout import (
                 discover_manual_override_url,
@@ -3437,22 +3487,18 @@ def _build_obs_switcher(
             try:
                 if repair_vertical_scene_chat_alerts(repair_client):
                     log.info("obs_vertical_chat_alert_auto_repaired")
-            except Exception as exc:  # noqa: BLE001 - independent repair
-                log.warning(
-                    "obs_vertical_chat_alert_auto_repair_failed err=%s; "
-                    "will retry on next OBS connection",
-                    exc,
-                )
+            except CredentialStorageError:
+                raise
+            except Exception:  # noqa: BLE001 - independent repair
+                log.warning("obs_vertical_chat_alert_auto_repair_unavailable")
 
             manual_url = None
             try:
                 manual_url = discover_manual_override_url(repair_client)
-            except Exception as exc:  # noqa: BLE001 - independent discovery
-                log.warning(
-                    "obs_manual_override_url_discovery_failed err=%s; "
-                    "will retry on next OBS connection",
-                    exc,
-                )
+            except CredentialStorageError:
+                raise
+            except Exception:  # noqa: BLE001 - independent discovery
+                log.warning("obs_manual_override_url_discovery_unavailable")
 
             audio_identity_url = manual_url
             if audio_identity_url is None:
@@ -3460,12 +3506,10 @@ def _build_obs_switcher(
                     audio_identity_url = discover_widget_only_broll_url(
                         repair_client,
                     )
-                except Exception as exc:  # noqa: BLE001 - independent discovery
-                    log.warning(
-                        "obs_broll_url_discovery_failed err=%s; "
-                        "will retry on next OBS connection",
-                        exc,
-                    )
+                except CredentialStorageError:
+                    raise
+                except Exception:  # noqa: BLE001 - independent discovery
+                    log.warning("obs_broll_url_discovery_unavailable")
 
             manual_repaired: list[str] = []
             if manual_url is None:
@@ -3484,12 +3528,10 @@ def _build_obs_switcher(
                             "obs_manual_override_auto_repaired scenes=%r",
                             manual_repaired,
                         )
-                except Exception as exc:  # noqa: BLE001 - independent repair
-                    log.warning(
-                        "obs_manual_override_auto_repair_failed err=%s; "
-                        "will retry on next OBS connection",
-                        exc,
-                    )
+                except CredentialStorageError:
+                    raise
+                except Exception:  # noqa: BLE001 - independent repair
+                    log.warning("obs_manual_override_auto_repair_unavailable")
 
             if audio_identity_url is not None:
                 try:
@@ -3507,12 +3549,10 @@ def _build_obs_switcher(
                             audio_updates,
                             geometry_scenes,
                         )
-                except Exception as exc:  # noqa: BLE001 - independent repair
-                    log.warning(
-                        "obs_chat_alert_audio_roles_auto_repair_failed err=%s; "
-                        "will retry on next OBS connection",
-                        exc,
-                    )
+                except CredentialStorageError:
+                    raise
+                except Exception:  # noqa: BLE001 - independent repair
+                    log.warning("obs_chat_alert_audio_roles_auto_repair_unavailable")
 
             if audio_identity_url is not None:
                 try:
@@ -3527,30 +3567,35 @@ def _build_obs_switcher(
                             owner or "none",
                             updated,
                         )
-                except Exception as exc:  # noqa: BLE001 - independent repair
-                    log.warning(
-                        "obs_broll_audio_roles_auto_repair_failed err=%s; "
-                        "will retry on next OBS connection",
-                        exc,
-                    )
-        except Exception as exc:  # noqa: BLE001
-            log.warning(
-                "obs_startup_repair_failed err=%s; "
-                "will retry on next OBS connection",
-                exc,
-            )
+                except CredentialStorageError:
+                    raise
+                except Exception:  # noqa: BLE001 - independent repair
+                    log.warning("obs_broll_audio_roles_auto_repair_unavailable")
+        except CredentialStorageError:
+            log.info("obs_startup_repair_retired")
+        except Exception:  # noqa: BLE001
+            log.warning("obs_startup_repair_unavailable")
         finally:
-            repair_client.shutdown()
+            try:
+                raw_repair_client.shutdown()
+            except Exception:
+                log.warning("obs_startup_repair_cleanup_unavailable")
 
     def _repair_generated_manual_covers() -> None:
         # The token repair and explicit builder/Add paths share these inputs.
         # Inventory and writes must stay in one critical section so a stale
         # startup snapshot cannot restore an old bearer URL after rotation.
         from .live.obs_game_overlay import OBS_GAME_WRITE_LOCK
+        scope = client.connection_scope()
+        if scope is None:
+            return
+        with _STATE_SAVE_LOCK:
+            revision, epoch = credential_revision(state, "obs"), replay_ticket(state).epoch
+        connection = _effective_obs_connection(state)
         if not OBS_GAME_WRITE_LOCK.acquire(timeout=2.0):
             return  # Best effort; the next OBS connection retries startup repair.
         try:
-            _repair_generated_manual_covers_locked()
+            _repair_generated_manual_covers_locked(scope, revision, epoch, connection)
         finally:
             OBS_GAME_WRITE_LOCK.release()
 
@@ -3581,12 +3626,10 @@ def _build_stream_service(cfg, state, *, no_obs=False):
         from .streaming.service import StreamService
 
         def obs_settings():
-            port = os.environ.get("SC2TOOLS_OBS_PORT", "").strip()
-            return {
-                "host": os.environ.get("SC2TOOLS_OBS_HOST", "").strip() or state.obs_host,
-                "port": int(port) if port else int(state.obs_port),
-                "password": os.environ.get("SC2TOOLS_OBS_PASSWORD") or state.obs_password or None,
-            }
+            if not _obs_credentials_available(state):
+                raise CredentialStorageError("unavailable")
+            host, port, password = _effective_obs_connection(state)
+            return {"host": host, "port": port, "password": password}
 
         from .streaming.cloud_client import CloudStreamingClient
 
@@ -3727,7 +3770,7 @@ class _Multiplexer:
         console: ConsoleUI,
         tray: Optional[TrayUI] = None,
         gui: Optional[GuiUI] = None,
-        *, facts=None, health=None,
+        *, facts=None, health=None, auth_epoch_guard=None,
     ) -> None:
         self._status_lock = threading.RLock()
         initial_folders=getattr(gui,"_replay_folders",None)
@@ -3747,6 +3790,7 @@ class _Multiplexer:
         self._missing_folders = lambda: ()
         self._identity_refresh = lambda: None
         self._support = None
+        self._auth_epoch_guard = auth_epoch_guard
         self._sinks: List[Any] = [console]
         if tray:
             self._sinks.append(tray)
@@ -3826,25 +3870,59 @@ class _Multiplexer:
         self.health.set_filter_label(label)
 
     def on_pairing_state(self, state) -> None:
+        epoch = getattr(state, "owner_epoch", None)
+        if not self._epoch_current(epoch):
+            return
         if state.kind in ("requesting", "showing"):
             self._change_status(unlinked=False, paired=False)
+            if not self._epoch_current(epoch): return
             self.health.set_pairing(False)
         for sink in self._sinks:
+            if not self._epoch_current(epoch): return
             callback = getattr(sink, "on_pairing_state", None)
             if callback:
                 callback(state)
 
-    def on_unlinked(self) -> None:
-        if self._support:
+    def _epoch_current(self, epoch):
+        if self._auth_epoch_guard is None:
+            return True
+        try:
+            return self._auth_epoch_guard(epoch) is True
+        except Exception:
+            return False
+
+    def _invalidate_support_current(self, epoch):
+        if self._support is None:
+            return True
+        if epoch is None and self._auth_epoch_guard is None:
             self._support.invalidate()
+            return True
+        method = getattr(type(self._support), "invalidate_for_epoch", None)
+        return method(self._support, epoch) is True if callable(method) else self._epoch_current(epoch)
+
+    def on_unlinked(self) -> None:
+        if self._auth_epoch_guard is not None:
+            return  # Guarded producers must supply their admitted epoch.
+        self.on_unlinked_current(None)
+
+    def on_unlinked_current(self, epoch) -> None:
+        if not self._epoch_current(epoch) or not self._invalidate_support_current(epoch):
+            return
+        if not self._epoch_current(epoch): return
         self._change_status(unlinked=True, paired=False)
+        if not self._epoch_current(epoch): return
         self.health.set_pairing(False, unlinked=True)
         if self._recent_history:
+            if not self._epoch_current(epoch): return
             self._recent_history.refresh()
         for sink in self._sinks:
-            callback = getattr(sink, "on_unlinked", None)
-            if callback:
-                callback()
+            if not self._epoch_current(epoch): return
+            guarded = getattr(type(sink), "on_unlinked_current", None) if epoch is not None or self._auth_epoch_guard is not None else None
+            if callable(guarded):
+                guarded(sink, epoch)
+            else:
+                callback = getattr(sink, "on_unlinked", None)
+                if callback: callback()
 
     def on_connection_state(self, kind, since, next_retry_at, waiting_count) -> None:
         import time
@@ -3882,15 +3960,27 @@ class _Multiplexer:
             s.show_pairing_code(code)
 
     def on_paired(self, user_id: str) -> None:
-        if self._support:
-            self._support.invalidate()
+        if self._auth_epoch_guard is not None:
+            return
+        self.on_paired_current(user_id, None)
+
+    def on_paired_current(self, user_id: str, epoch) -> None:
+        if not self._epoch_current(epoch) or not self._invalidate_support_current(epoch):
+            return
+        if not self._epoch_current(epoch): return
         self._change_status(paired=True, unlinked=False)
+        if not self._epoch_current(epoch): return
         self.health.set_pairing(True)
+        if not self._epoch_current(epoch): return
         self.health.set_connection("online")  # a new link retires the old token's signed-out hold
         if self._recent_history:
+            if not self._epoch_current(epoch): return
             self._recent_history.refresh()
         for s in self._sinks:
-            s.on_paired(user_id)
+            if not self._epoch_current(epoch): return
+            guarded = getattr(type(s), "on_paired_current", None) if epoch is not None or self._auth_epoch_guard is not None else None
+            if callable(guarded): guarded(s, user_id, epoch)
+            else: s.on_paired(user_id)
 
     def on_status(self, status: str) -> None:
         for s in self._sinks:
@@ -3946,7 +4036,18 @@ class _Multiplexer:
             self.health.upload_succeeded(last.timestamp())
 
     def on_import_progress(self, snapshot):
+        if self._auth_epoch_guard is not None:
+            return
+        self.on_import_progress_current(snapshot, None)
+
+    def on_import_progress_current(self, snapshot, epoch):
         for sink in self._sinks:
+            if not self._epoch_current(epoch):
+                return
+            guarded = getattr(type(sink), "on_import_progress_current", None)
+            if callable(guarded):
+                guarded(sink, snapshot, epoch)
+                continue
             callback = getattr(sink, "on_import_progress", None)
             if callback:
                 callback(snapshot)

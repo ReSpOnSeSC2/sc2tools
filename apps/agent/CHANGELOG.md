@@ -5,6 +5,10 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 ## 0.24.8
 
 ### Changed
+- Protect the saved device token and OBS password with Windows user storage.
+  Migrate before starting sync, preserve unavailable saved credentials, and
+  require an explicit password replacement or removal in OBS Settings. Test
+  connection uses a separate client and leaves the saved settings unchanged.
 - Add Help system checks, Copy support info in Help, Activity log and the
   tray, and a reviewed local support bundle with redacted diagnostics and
   selected logs. Keep support tasks separate from replay sync and discard

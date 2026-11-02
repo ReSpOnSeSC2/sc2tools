@@ -362,6 +362,9 @@ class SocketClient:
             """
             if cb is None:
                 return
+            target = getattr(cb, "__self__", None)
+            if callable(getattr(type(target), "bind_authenticated", None)):
+                cb = target.bind_authenticated(cb, self._device_token)
 
             @sio.on(event)
             async def _handler(payload: Optional[Dict[str, Any]]) -> None:

@@ -33,6 +33,12 @@ from sc2tools_agent.health import HealthMonitor
 from sc2tools_agent.runner import _Multiplexer, _handle_save_settings
 from sc2tools_agent.state import AgentState, load_state, save_state
 from sc2tools_agent.ui import SettingsPayload
+from tests.test_agent_state_credentials import synthetic_state_io
+
+
+@pytest.fixture(autouse=True)
+def owned_secure_state_io(synthetic_state_io):
+    """Keep persistence assertions on real owned files with explicit synthetic crypto."""
 
 
 def _cfg(tmp_path: Path) -> AgentConfig:
@@ -280,7 +286,7 @@ def test_obs_master_toggle_persists_and_hot_disables_immediately(
     assert load_state(tmp_path).obs_scene_switch_enabled is False
 
 
-def test_failed_obs_disable_is_rolled_back_and_not_reported_as_saved(
+def test_failed_obs_disable_keeps_the_known_commit_and_reports_reconnect_warning(
     tmp_path: Path,
 ) -> None:
     class _Controller:
@@ -311,23 +317,22 @@ def test_failed_obs_disable_is_rolled_back_and_not_reported_as_saved(
     state = AgentState(obs_scene_switch_enabled=True)
     save_state(tmp_path, state)
 
-    with pytest.raises(RuntimeError, match="Could not disable"):
-        _handle_save_settings(
-            _cfg(tmp_path),
-            state,
-            SettingsPayload(obs_scene_switch_enabled=False),
-            cell,
-            logging.getLogger("test"),
-        )
+    _handle_save_settings(
+        _cfg(tmp_path), state, SettingsPayload(obs_scene_switch_enabled=False),
+        cell, logging.getLogger("test"),
+    )
 
-    # The controller rollback, shared state, durable restart value, and GUI
-    # acknowledgement all remain on the last successfully-applied value. The
-    # checkbox handler receives the exception and reverts its check state.
-    assert controller.attempts == [False, True]
+    # A runtime failure cannot roll back a known committed preference. The
+    # failed controller is retired, and restart sees the actual saved value.
+    assert controller.attempts == [False, False]
     assert controller.enabled is True
-    assert state.obs_scene_switch_enabled is True
-    assert load_state(tmp_path).obs_scene_switch_enabled is True
-    assert gui.statuses == []
+    assert cell.obs_scene is None and cell.obs_client is None
+    assert state.obs_scene_switch_enabled is False
+    assert load_state(tmp_path).obs_scene_switch_enabled is False
+    assert len(gui.statuses) == 1
+    assert gui.statuses[0].startswith("Saved.")
+    assert "OBS" in gui.statuses[0] and "reconnect" in gui.statuses[0]
+    assert "simulated controller failure" not in gui.statuses[0]
 
 
 def test_filter_unchanged_does_not_clear_or_resync(tmp_path: Path) -> None:

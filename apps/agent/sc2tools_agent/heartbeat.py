@@ -57,12 +57,16 @@ class Heartbeat:
         state_dir: Optional[Path] = None,
         sync_provider: Optional[Callable] = None,
         support_error_context: Optional[Callable] = None,
+        auth_context: Optional[Callable] = None,
+        on_auth_outcome: Optional[Callable] = None,
     ) -> None:
         self._on_success = on_success or (lambda: None)
         self._on_failure = on_failure or (lambda _exc: None)
         self._on_overlay_tokens = on_overlay_tokens
         self._sync_provider = sync_provider
         self._support_error_context = support_error_context
+        self._auth_context = auth_context
+        self._on_auth_outcome = on_auth_outcome
         self._sync_rejected_logged = False
         self._api = api
         if state_dir is not None:
@@ -106,6 +110,14 @@ class Heartbeat:
 
     def _send_one(self) -> None:
         api = self._api
+        auth_epoch = None
+        if self._auth_context is not None:
+            try:
+                auth_epoch = self._auth_context(api)
+            except Exception:
+                return
+            if auth_epoch is None:
+                return
         report_support_error = None
         if self._support_error_context is not None:
             try:
@@ -135,9 +147,13 @@ class Heartbeat:
             response = api._post("/v1/devices/heartbeat", auth=True, body=body)
             if api is not self._api:
                 return
+            if self._report_auth_outcome(api, auth_epoch, None) is False:
+                return
             self._on_success()
         except Exception as exc:  # noqa: BLE001
             if api is not self._api:
+                return
+            if self._report_auth_outcome(api, auth_epoch, exc) is False:
                 return
             if report_support_error is not None:
                 try:
@@ -159,3 +175,13 @@ class Heartbeat:
                 self._log.debug("overlay_token_advisory_failed type=%s", type(exc).__name__)
         if self._preset_policy is not None:
             self._preset_policy.refresh()
+
+    def _report_auth_outcome(self, api, epoch, exc):
+        if self._on_auth_outcome is not None and epoch is not None:
+            try:
+                if self._on_auth_outcome(api, epoch, exc) is False:
+                    return False
+            except Exception:
+                self._log.debug("heartbeat_auth_context_unavailable")
+                return False
+        return api is self._api

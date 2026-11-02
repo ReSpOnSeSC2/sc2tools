@@ -9,7 +9,7 @@ from sc2tools_agent.api_client import ApiClient, ApiError
 from sc2tools_agent.build_checkin.controller import BuildCheckinController
 from sc2tools_agent.build_checkin.models import CheckinPrefs
 from sc2tools_agent.build_checkin.records import CARD_DONE, CardOp, LiveGame, LiveOp, PostgameCard
-from sc2tools_agent.pairing.flow import ensure_paired
+from sc2tools_agent.pairing.flow import ensure_paired, PairingUiState
 from sc2tools_agent.pairing.recovery import RuntimeRecovery
 from sc2tools_agent.runner import _RuntimeCell, _handle_checkin_game_accepted
 from sc2tools_agent.session_stats import session_account_key
@@ -264,7 +264,10 @@ def test_linked_user_input_keeps_captured_api_if_owner_changes_after_admission()
 
 
 def test_pairing_publishes_credentials_and_save_as_one_short_transaction(tmp_path, monkeypatch):
+    from sc2tools_agent.state import commit_state_credentials as real_commit
+    from tests.test_agent_credentials import MemoryStorage, SyntheticCrypto
     state = AgentState()
+    storage, crypto = MemoryStorage(), SyntheticCrypto()
     entered, release, reader_started, observed = (threading.Event() for _ in range(4))
     stop = threading.Event()
     instant = datetime.now(timezone.utc)
@@ -278,12 +281,14 @@ def test_pairing_publishes_credentials_and_save_as_one_short_transaction(tmp_pat
             assert not _STATE_SAVE_LOCK._is_owned()
             return {"status": "ready", "deviceToken": "token-a", "userId": "owner-a"}
 
-    def save(directory, current):
+    def commit(directory, current, **intent):
         assert _STATE_SAVE_LOCK._is_owned()
+        assert (current.device_token, current.user_id, current.paired_at) == (None, None, None)
         entered.set()
         assert release.wait(3)
+        return real_commit(directory, current, storage=storage, crypto=crypto, **intent)
 
-    monkeypatch.setattr("sc2tools_agent.pairing.flow.save_state", save)
+    monkeypatch.setattr("sc2tools_agent.pairing.flow.commit_state_credentials", commit)
     paired = []
     worker = threading.Thread(target=lambda: paired.append(ensure_paired(cfg=_cfg(tmp_path), state=state,
         api=Api(), on_code=lambda code: None, stop_event=stop, now=lambda: instant)))
@@ -304,29 +309,41 @@ def test_pairing_publishes_credentials_and_save_as_one_short_transaction(tmp_pat
         assert not observed.wait(.05)
     finally:
         release.set()
-        stop.set()
         worker.join(3)
-        reader.join(3)
+        stop.set()
+        if worker.is_alive(): worker.join(3)
+        if reader.ident is not None: reader.join(3)
     assert paired == [True]
     assert values == [("token-a", "owner-a", instant.isoformat())]
+    assert storage.pointer is not None and b"token-a" not in storage.pointer
+    assert all(b"token-a" not in value for value in storage.generations.values())
 
 
 def test_failed_pairing_publication_restores_old_credentials(tmp_path, monkeypatch):
+    from sc2tools_agent.state import commit_state_credentials as real_commit
+    from tests.test_agent_credentials import MemoryStorage, SyntheticCrypto
     state = AgentState(user_id="previous-owner", paired_at="previous-pairing")
+    state._owner_epoch = previous_epoch = object()
+    storage, crypto = MemoryStorage(), SyntheticCrypto()
     stop = threading.Event()
     instant = datetime.now(timezone.utc)
     api = Mock()
     api.start_pairing.return_value = {"code": "123456", "expiresAt": (instant + timedelta(minutes=5)).isoformat()}
     api.poll_pairing.return_value = {"status": "ready", "deviceToken": "new-token", "userId": "new-owner"}
 
-    def save(directory, current):
+    def fail_pointer(_expected, _data):
         stop.set()
         raise OSError("fixture write failed")
 
-    monkeypatch.setattr("sc2tools_agent.pairing.flow.save_state", save)
+    storage.replace_pointer = fail_pointer
+    def commit(directory, current, **intent):
+        return real_commit(directory, current, storage=storage, crypto=crypto, **intent)
+    monkeypatch.setattr("sc2tools_agent.pairing.flow.commit_state_credentials", commit)
     assert not ensure_paired(cfg=_cfg(tmp_path), state=state, api=api,
         on_code=lambda code: None, stop_event=stop, now=lambda: instant)
     assert (state.device_token, state.user_id, state.paired_at) == (None, "previous-owner", "previous-pairing")
+    assert state._owner_epoch is not previous_epoch and state._owned_toons is None
+    assert storage.pointer is None and all(b"new-token" not in value for value in storage.generations.values())
 
 
 def test_recovery_publishes_api_replacements_under_lock_then_starts_transport_outside(tmp_path, monkeypatch):
@@ -346,6 +363,9 @@ def test_recovery_publishes_api_replacements_under_lock_then_starts_transport_ou
         assert not _STATE_SAVE_LOCK._is_owned()
         with _STATE_SAVE_LOCK:
             state.device_token = "new"
+            state._owner_epoch = object()
+            epoch = state._owner_epoch
+        kwargs["on_state"](PairingUiState("paired", owner_epoch=epoch))
         return True
 
     def rebuild(token):

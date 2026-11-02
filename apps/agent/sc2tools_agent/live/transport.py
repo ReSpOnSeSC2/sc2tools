@@ -46,6 +46,7 @@ from typing import Any, Callable, Dict, Optional
 import requests
 
 from .metrics import METRICS
+from ..state import _STATE_SAVE_LOCK
 
 _log = logging.getLogger("sc2tools_agent.live.transport")
 
@@ -106,6 +107,7 @@ class OverlayBackendTransport:
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._token = device_token
+        self._auth_generation = object()
         self._session = session or requests.Session()
         self._timeout = timeout_sec
         self._executor = ThreadPoolExecutor(
@@ -128,17 +130,30 @@ class OverlayBackendTransport:
         if not self._bucket.try_take():
             self.dropped_rate_limited += 1
             return
-        self._executor.submit(self._send, envelope)
+        with _STATE_SAVE_LOCK:
+            authentication = self._token, self._auth_generation
+        self._executor.submit(self._send, envelope, authentication)
+
+    def replace_auth(self, api):
+        with _STATE_SAVE_LOCK:
+            self._token = api.device_token
+            self._auth_generation = object()
 
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)
 
     # ------------------------------------------------------------------
-    def _send(self, envelope: Dict[str, Any]) -> None:
+    def _send(self, envelope: Dict[str, Any], authentication=None) -> None:
+        with _STATE_SAVE_LOCK:
+            if authentication is None:
+                authentication = self._token, self._auth_generation
+            token, generation = authentication
+            if generation is not self._auth_generation or token != self._token:
+                return
         url = f"{self._base_url}/api/agent/live"
         headers = {"content-type": "application/json"}
-        if self._token:
-            headers["x-sc2tools-agent-token"] = self._token
+        if token:
+            headers["x-sc2tools-agent-token"] = token
         started = time.monotonic()
         try:
             r = self._session.post(
@@ -196,6 +211,7 @@ class CloudTransport:
         max_workers: int = DEFAULT_MAX_WORKERS,
     ) -> None:
         self._api = api_client
+        self._auth_generation = object()
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers,
             thread_name_prefix="sc2tools-cloud-tx",
@@ -213,16 +229,29 @@ class CloudTransport:
         if not self._bucket.try_take():
             self.dropped_rate_limited += 1
             return
-        self._executor.submit(self._send, envelope)
+        with _STATE_SAVE_LOCK:
+            authentication = self._api, self._auth_generation
+        self._executor.submit(self._send, envelope, authentication)
+
+    def replace_auth(self, api):
+        with _STATE_SAVE_LOCK:
+            self._api = api
+            self._auth_generation = object()
 
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)
 
     # ------------------------------------------------------------------
-    def _send(self, envelope: Dict[str, Any]) -> None:
+    def _send(self, envelope: Dict[str, Any], authentication=None) -> None:
+        with _STATE_SAVE_LOCK:
+            if authentication is None:
+                authentication = self._api, self._auth_generation
+            api, generation = authentication
+            if generation is not self._auth_generation or api is not self._api:
+                return
         started = time.monotonic()
         try:
-            self._api.push_agent_live(envelope=envelope)
+            api.push_agent_live(envelope=envelope)
         except PermissionError:
             # Not paired yet — don't try to send. The bridge keeps
             # running locally; once pairing completes the agent reboots

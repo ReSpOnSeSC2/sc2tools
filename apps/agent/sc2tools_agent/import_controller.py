@@ -39,11 +39,14 @@ import logging
 import threading
 import time
 import copy
+from contextvars import ContextVar
+from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from .uploader.queue import TerminalUploadError
 from .import_progress import ImportRate
+from .state import _STATE_SAVE_LOCK
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +66,23 @@ _UNFINISHED_JOB_STATUSES = frozenset({"scanning", "running", "stalled"})
 _REPORT_INTERVAL_SEC = 2.0
 _MAX_SAMPLES = 25
 _INVENTORY_RETRY_SEC = 60.0
+_AUTH_OPERATION = ContextVar("import_auth_operation", default=None)
+
+
+def _auth_operation(method):
+    @wraps(method)
+    def scoped(self, *args, **kwargs):
+        admission = _AUTH_OPERATION.get()
+        if admission is None or admission[0] is not self:
+            admission = self._capture_auth()
+        if not self._auth_current(admission):
+            return
+        marker = _AUTH_OPERATION.set(admission)
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            _AUTH_OPERATION.reset(marker)
+    return scoped
 
 # Stall guard. ``total`` is a point-in-time estimate from
 # ``count_pending()``; files that settle_fail, get dropped by queue
@@ -92,12 +112,20 @@ class ImportController:
         full_resync: Optional[Callable[[], None]] = None,
         list_folders: Optional[Callable[[], List[str]]] = None,
         on_change: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_change_current=None,
+        owner_epoch=None,
     ) -> None:
         self._api = api
+        self._owner_epoch = owner_epoch
+        self._auth_generation = object()
+        self._job_auth = None
+        self._reporter_auth = None
+        self._local_auth = None
         self._watcher = watcher
         self._full_resync = full_resync
         self._list_folders = list_folders or (lambda: [])
         self._on_change = on_change or (lambda _snapshot: None)
+        self._on_change_current = on_change_current
         self._rate = ImportRate()
         self._paused = False
         self._connection_held = False
@@ -115,6 +143,53 @@ class ImportController:
         self._reporter: Optional[threading.Thread] = None
         self._stop = threading.Event()
 
+    def _capture_auth(self):
+        with _STATE_SAVE_LOCK:
+            return self, self._api, self._auth_generation, self._owner_epoch
+
+    def _auth_current(self, admission=None):
+        admission = admission or _AUTH_OPERATION.get()
+        with _STATE_SAVE_LOCK:
+            return (admission is None or admission[0] is self
+                and admission[1] is self._api and admission[2] is self._auth_generation)
+
+    def replace_api(self, api, *, owner_epoch=None):
+        # Called under STATE: metadata only, never take the controller lock.
+        with _STATE_SAVE_LOCK:
+            self._api = api
+            self._owner_epoch = owner_epoch
+            self._auth_generation = object()
+
+    def _origin_current(self, origin):
+        if origin is None:
+            return True  # Backward-compatible standalone observers.
+        api, epoch = origin
+        with _STATE_SAVE_LOCK:
+            return (epoch is not None and epoch is self._owner_epoch
+                and (api is None or api is self._api))
+
+    def on_owned_upload(self, context, path, exc):
+        origin = context.api, context.owner_epoch
+        if exc is None:
+            self.on_upload_success(path, _origin=origin)
+        else:
+            self.on_upload_failure(path, exc, _origin=origin)
+
+    def on_owned_skipped(self, ticket, path, reason):
+        self.on_replay_skipped(path, reason, _origin=(None, ticket.epoch))
+
+    def bind_authenticated(self, callback, token):
+        admission = self._capture_auth()
+        def invoke(payload):
+            if not token or getattr(admission[1], "device_token", None) != token or not self._auth_current(admission):
+                return
+            marker = _AUTH_OPERATION.set(admission)
+            try:
+                callback(payload)
+            finally:
+                _AUTH_OPERATION.reset(marker)
+        return invoke
+
     # ---------------- pipeline hooks ----------------
     # Chained by the runner into the existing UploadQueue / watcher
     # callbacks. No-ops while no job is active so steady-state play
@@ -123,22 +198,30 @@ class ImportController:
     def snapshot(self) -> Dict[str, Any]:
         """Cached counts only: never scans disk or waits for an API request."""
         with self._lock:
+            if self._local_auth is not None and not self._auth_current(self._local_auth):
+                return {"phase": "idle", "total": 0, "completed": 0, "errors": 0, "remaining": 0}
             return copy.deepcopy(self._local_snapshot)
 
+    @_auth_operation
     def set_hold(self, *, paused=None, connection=None):
         """Exclude deliberate/network holds from the local rate clock."""
         with self._lock:
+            if not self._auth_current():
+                return
             if paused is not None:
                 self._paused = bool(paused)
             if connection is not None:
                 self._connection_held = connection != "online"
-            snapshot = dict(self._local_snapshot)
+            snapshot = (dict(self._local_snapshot) if self._auth_current(self._local_auth)
+                else {"phase": "idle", "total": 0, "completed": 0, "errors": 0, "remaining": 0})
         # Canonical phases in the desktop cache differ from wire phases.
         snapshot["phase"] = {"scanning": "scan", "importing": "import"}.get(snapshot.get("phase"), snapshot.get("phase"))
         self._publish_local(snapshot)
 
     def _publish_local(self, body: Dict[str, Any]) -> None:
         with self._lock:
+            if not self._auth_current():
+                return
             snapshot = dict(body)
             snapshot["phase"] = "done" if body.get("done") else "scanning" if body.get("phase") == "scan" else "idle" if body.get("phase") == "idle" else "importing"
             if body.get("cancelled"):
@@ -148,19 +231,25 @@ class ImportController:
                                                active=snapshot["phase"] == "importing" and not body.get("stalled")
                                                and not self._paused and not self._connection_held))
             self._local_snapshot = snapshot
+            publication_auth = _AUTH_OPERATION.get() or self._capture_auth()
+            self._local_auth = publication_auth
         try:
-            self._on_change(copy.deepcopy(snapshot))
+            if self._auth_current(publication_auth):
+                if self._on_change_current is not None:
+                    self._on_change_current(copy.deepcopy(snapshot), publication_auth[3])
+                else:
+                    self._on_change(copy.deepcopy(snapshot))
         except Exception:
             log.debug("import_local_progress_callback_failed")
 
-    def on_upload_success(self, path: Path) -> None:  # noqa: ARG002
+    def on_upload_success(self, path: Path, *, _origin=None) -> None:  # noqa: ARG002
         with self._lock:
-            if self._job_id is None:
+            if self._job_id is None or not self._auth_current(self._job_auth) or not self._origin_current(_origin):
                 return
             self._completed += 1
             self._dirty = True
 
-    def on_upload_failure(self, path: Path, exc: Exception) -> None:
+    def on_upload_failure(self, path: Path, exc: Exception, *, _origin=None) -> None:
         # Only FINAL outcomes are accounted here. The queue fires this
         # hook for a transient whole-batch failure (read timeout, 5xx,
         # connection reset) too, but it re-enqueues those jobs — so the
@@ -175,7 +264,7 @@ class ImportController:
         code = getattr(exc, "import_error_code", "rejected_by_server")
         is_error = getattr(exc, "counts_as_error", True)
         with self._lock:
-            if self._job_id is None:
+            if self._job_id is None or not self._auth_current(self._job_auth) or not self._origin_current(_origin):
                 return
             if is_error:
                 self._errors += 1
@@ -190,10 +279,10 @@ class ImportController:
                 self._breakdown[code] = self._breakdown.get(code, 0) + 1
             self._dirty = True
 
-    def on_replay_skipped(self, path: Path, reason: Optional[str]) -> None:
+    def on_replay_skipped(self, path: Path, reason: Optional[str], *, _origin=None) -> None:
         code = reason or "parse_failed"
         with self._lock:
-            if self._job_id is None:
+            if self._job_id is None or not self._auth_current(self._job_auth) or not self._origin_current(_origin):
                 return
             if code in _BENIGN_REASONS:
                 self._completed += 1
@@ -205,6 +294,7 @@ class ImportController:
 
     # ---------------- socket event handlers ----------------
 
+    @_auth_operation
     def handle_scan_request(self, payload: Dict[str, Any]) -> None:
         """``import:scan_request`` — count candidates, report, done."""
         job_id = _job_id_of(payload)
@@ -229,6 +319,7 @@ class ImportController:
             "done": True,
         })
 
+    @_auth_operation
     def handle_start_request(self, payload: Dict[str, Any]) -> None:
         """``import:start_request`` — adopt the cloud-minted job.
 
@@ -247,6 +338,8 @@ class ImportController:
             except Exception:  # noqa: BLE001
                 log.exception("import_start_force_resync_failed")
         total = self._try_count_pending()
+        if not self._auth_current():
+            return
         if total is None:
             log.warning(
                 "import_start_inventory_unavailable jobId=%s force=%s",
@@ -291,6 +384,7 @@ class ImportController:
         except Exception:  # noqa: BLE001
             log.exception("import_start_sweep_failed")
 
+    @_auth_operation
     def handle_cancel_request(self, payload: Dict[str, Any]) -> None:
         """``import:cancel_request`` — stop tracking the job.
 
@@ -305,6 +399,7 @@ class ImportController:
         self._publish_local({**self.snapshot(), "cancelled": True})
         self._deactivate()
 
+    @_auth_operation
     def handle_pick_folder_request(self, payload: Dict[str, Any]) -> None:  # noqa: ARG002
         """``import:pick_folder_request`` — report the watched folders.
 
@@ -318,12 +413,15 @@ class ImportController:
         except Exception:  # noqa: BLE001
             log.exception("import_pick_folder_list_failed")
         try:
-            self._api.import_host_info({"replayFolders": folders})
+            admission = _AUTH_OPERATION.get()
+            if self._auth_current(admission):
+                admission[1].import_host_info({"replayFolders": folders})
         except Exception:  # noqa: BLE001
             log.exception("import_host_info_failed")
 
     # ---------------- auto backfill ----------------
 
+    @_auth_operation
     def maybe_start_auto_backfill(self, *, force_display=False) -> None:
         """Register the startup sweep as a visible job when it's big.
 
@@ -338,9 +436,11 @@ class ImportController:
         kept showing those files as remaining after they synced.
         """
         with self._lock:
-            if self._job_id is not None:
+            if self._job_id is not None and self._auth_current(self._job_auth):
                 return
         total = self._try_count_pending()
+        if not self._auth_current():
+            return
         if total is None:
             log.info("auto_backfill_not_registered reason=inventory_unavailable")
             return
@@ -356,7 +456,10 @@ class ImportController:
                 self._publish_local({"phase": "idle", "total": 0, "remaining": 0})
             return
         try:
-            out = self._api.import_agent_start({"total": total})
+            admission = _AUTH_OPERATION.get()
+            if not self._auth_current(admission):
+                return
+            out = admission[1].import_agent_start({"total": total})
         except Exception as exc:  # noqa: BLE001
             # Offline/older API must not strand the desktop card at its
             # initial inventory while normal background uploads continue.
@@ -366,6 +469,8 @@ class ImportController:
             elif force_display:
                 self._post_progress({"jobId": "local:offline", "phase": "import", "total": 0,
                                      "completed": 0, "errors": 0, "remaining": 0, "done": True})
+            return
+        if not self._auth_current():
             return
         job_id = out.get("jobId") if isinstance(out, dict) else None
         if not job_id:
@@ -417,7 +522,10 @@ class ImportController:
 
     def _unfinished_job_exists(self) -> bool:
         """Whether the cloud still shows a job in progress for this account."""
-        lookup = getattr(self._api, "import_status", None)
+        admission = _AUTH_OPERATION.get() or self._capture_auth()
+        if not self._auth_current(admission):
+            return False
+        lookup = getattr(admission[1], "import_status", None)
         if not callable(lookup):
             return False
         try:
@@ -426,7 +534,7 @@ class ImportController:
             log.info("import_status_unavailable: %s", exc)
             return False
         return (
-            isinstance(out, dict)
+            self._auth_current(admission) and isinstance(out, dict)
             and bool(out.get("jobId"))
             and out.get("status") in _UNFINISHED_JOB_STATUSES
         )
@@ -453,6 +561,10 @@ class ImportController:
         resume_from_stalled: bool = False,
     ) -> None:
         with self._lock:
+            if not self._auth_current():
+                return
+            admission = _AUTH_OPERATION.get() or self._capture_auth()
+            self._job_auth = admission
             self._job_id = job_id
             self._total = total
             self._completed = completed
@@ -466,9 +578,11 @@ class ImportController:
             local = self._snapshot_body(job_id, False)
         self._publish_local(local)
         self._stop.clear()
-        if self._reporter is None or not self._reporter.is_alive():
+        if (self._reporter is None or not self._reporter.is_alive()
+            or self._reporter_auth is None or self._reporter_auth[2] is not admission[2]):
+            self._reporter_auth = admission
             self._reporter = threading.Thread(
-                target=self._report_loop,
+                target=self._run_reporter, args=(admission,),
                 name="sc2tools-import-reporter",
                 daemon=True,
             )
@@ -476,6 +590,8 @@ class ImportController:
 
     def _deactivate(self) -> None:
         with self._lock:
+            if not self._auth_current():
+                return
             self._job_id = None
             self._resume_from_stalled = False
         self._stop.set()
@@ -485,6 +601,13 @@ class ImportController:
         thr = self._reporter
         if thr is not None:
             thr.join(timeout=3.0)
+
+    def _run_reporter(self, admission):
+        marker = _AUTH_OPERATION.set(admission)
+        try:
+            self._report_loop()
+        finally:
+            _AUTH_OPERATION.reset(marker)
 
     def _report_loop(self) -> None:
         last_processed = -1
@@ -496,6 +619,8 @@ class ImportController:
         completion_recount_after = 0.0
         while not self._stop.wait(_REPORT_INTERVAL_SEC):
             with self._lock:
+                if not self._auth_current():
+                    break
                 job_id = self._job_id
                 if job_id is None:
                     break
@@ -537,7 +662,7 @@ class ImportController:
                             dirty = True
                         else:
                             with self._lock:
-                                if self._job_id != job_id:
+                                if self._job_id != job_id or not self._auth_current():
                                     continue
                                 self._total = remaining
                                 self._resume_from_stalled = False
@@ -574,7 +699,7 @@ class ImportController:
                 elif remaining > 0:
                     completion_recount_after = 0.0
                     with self._lock:
-                        if self._job_id != job_id:
+                        if self._job_id != job_id or not self._auth_current():
                             continue
                         processed = self._completed + self._errors
                         self._total = max(
@@ -595,7 +720,7 @@ class ImportController:
                     # Refresh after the inventory walk so callbacks that
                     # landed during it are included in the final payload.
                     with self._lock:
-                        if self._job_id != job_id:
+                        if self._job_id != job_id or not self._auth_current():
                             continue
                         processed = self._completed + self._errors
                         body = self._snapshot_body(job_id, True)
@@ -694,17 +819,23 @@ class ImportController:
             body["done"] = True
         return body
 
+    @_auth_operation
     def _post_progress(self, body: Dict[str, Any]) -> None:
+        admission = _AUTH_OPERATION.get() or self._capture_auth()
+        if not self._auth_current(admission):
+            return
         self._publish_local(body)
         if str(body.get("jobId", "")).startswith("local:"):
             return  # Offline/manual desktop progress is never a cloud job ID.
         try:
-            self._api.import_progress(body)
+            if self._auth_current(admission):
+                admission[1].import_progress(body)
         except Exception as exc:  # noqa: BLE001
             # Reporting is best-effort: a flaky network must never
             # disturb the parse/upload pipeline it's narrating.
             log.debug("import_progress_post_failed: %s", exc)
 
+    @_auth_operation
     def _try_count_pending(self) -> Optional[int]:
         """Return the pending inventory, or ``None`` when it is unknown.
 
@@ -716,6 +847,8 @@ class ImportController:
         self._publish_local({**previous, "phase": "scan", "done": False, "inventoryKnown": False})
         try:
             remaining = max(0, int(self._watcher.count_pending()))
+            if not self._auth_current():
+                return None
             restored = {**previous, "phase": "import", "inventoryKnown": True, "inventoryCount": remaining}
             if not restored.get("jobId"):
                 restored.update(total=remaining, remaining=remaining)

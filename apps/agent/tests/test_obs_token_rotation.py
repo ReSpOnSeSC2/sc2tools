@@ -334,13 +334,17 @@ def test_runner_gate_is_independent_from_website_consent_and_honors_current_env_
     from sc2tools_agent.runner import _RuntimeCell, _obs_token_rotation_controller
     cfg = SimpleNamespace(api_base="https://api.invalid")
     state = AgentState(device_token="paired-A", obs_scene_switch_enabled=True, obs_website_add_enabled=False)
+    from sc2tools_agent.state import credential_revision
+    from sc2tools_agent.sync_retry import replay_ticket
+    epoch = replay_ticket(state).epoch
     cell = _RuntimeCell()
     monkeypatch.setenv("SC2TOOLS_OBS_HOST", "separate-pc")
     monkeypatch.setenv("SC2TOOLS_OBS_PORT", "4456")
     monkeypatch.setenv("SC2TOOLS_OBS_PASSWORD", "synthetic")
     ctl = _obs_token_rotation_controller(cfg, state, cell)
     assert ctl is _obs_token_rotation_controller(cfg, state, cell)
-    assert ctl.scope() == (cfg.api_base, "paired-A", "separate-pc", 4456, "synthetic")
+    assert ctl.scope() == (cfg.api_base, "paired-A", "separate-pc", 4456, "synthetic",
+        credential_revision(state, "obs"), epoch)
     cell.no_obs = True
     assert ctl.scope() is None
     cell.no_obs = False
@@ -363,10 +367,13 @@ def test_legacy_startup_repair_shares_the_same_write_lock(monkeypatch):
     lock.release.side_effect = lambda: held.__setitem__(0, False)
     monkeypatch.setattr(obs_game_overlay, "OBS_GAME_WRITE_LOCK", lock)
     def client_factory(**kwargs):
+        scope = object()
         def connect():
             assert held[0]  # Inventory/repair cannot precede this lock.
             raise OSError("synthetic unavailable")
-        client = SimpleNamespace(kwargs=kwargs, connection_settings=("host", 4455, None),
+        client = SimpleNamespace(kwargs=kwargs,
+            connection_settings=(kwargs["host"], kwargs["port"], kwargs["password"]),
+            connection_scope=lambda: scope, is_connection_current=lambda candidate: candidate is scope,
             connect_now=connect, shutdown=Mock())
         clients.append(client)
         return client

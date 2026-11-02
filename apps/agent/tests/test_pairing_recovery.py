@@ -8,7 +8,7 @@ import pytest
 
 from sc2tools_agent.api_client import ApiClient, DeviceUnauthorized
 from sc2tools_agent.auth_watchdog import AuthWatchdog
-from sc2tools_agent.pairing.flow import PairingControls, ensure_paired
+from sc2tools_agent.pairing.flow import PairingControls, PairingUiState, ensure_paired
 from sc2tools_agent.pairing.recovery import RuntimeRecovery
 from sc2tools_agent.runner import _RuntimeCell
 from sc2tools_agent.state import AgentState, load_state
@@ -149,8 +149,10 @@ def test_actual_recovery_holds_jobs_keeps_cursor_and_rebuilds_credentials(tmp_pa
     cell.heartbeat = SimpleNamespace(_api=cell.api)
     cell.import_ctl = SimpleNamespace(_api=cell.api)
     cell.socket_client = Mock()
+    anonymous_socket = Mock()
     new_socket = Mock()
-    cell.socket_client.with_device_token.return_value = new_socket
+    cell.socket_client.with_device_token.return_value = anonymous_socket
+    anonymous_socket.with_device_token.return_value = new_socket
     ui = Mock()
     recovery = RuntimeRecovery(cell=cell, cfg=_cfg(tmp_path), state=state, ui=ui,
                                stop_event=threading.Event())
@@ -160,6 +162,8 @@ def test_actual_recovery_holds_jobs_keeps_cursor_and_rebuilds_credentials(tmp_pa
     assert load_state(tmp_path).uploaded == state.uploaded
     def paired(**kwargs):
         kwargs["state"].device_token = "new"
+        kwargs["state"]._owner_epoch = object()
+        kwargs["on_state"](PairingUiState("paired", owner_epoch=kwargs["state"]._owner_epoch))
         return True
     monkeypatch.setattr("sc2tools_agent.pairing.recovery.ensure_paired", paired)
     monkeypatch.setattr(ApiClient, "get_profile", lambda *_args, **_kwargs: {"displayName": "Current owner"})
@@ -173,6 +177,7 @@ def test_actual_recovery_holds_jobs_keeps_cursor_and_rebuilds_credentials(tmp_pa
     assert cell.api.device_token == "new"
     assert cell.upload._api is cell.api and cell.heartbeat._api is cell.api
     assert cell.import_ctl._api is cell.api and cell.socket_client is new_socket
+    anonymous_socket.with_device_token.assert_called_once_with("new")
     assert cell.upload.pending_count() == 1 and not cell.upload.is_paused()
     assert not state.paused and state.uploaded == {"kept": "2026-01-01"}
     new_socket.start.assert_called_once()
