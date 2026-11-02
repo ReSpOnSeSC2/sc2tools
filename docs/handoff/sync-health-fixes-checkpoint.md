@@ -176,12 +176,23 @@ assertion failing; the root's compatibility fix then passed 20 focused local
 API tests. It preserves legacy metadata while requiring canonical IDs for
 retry support. These are **early phase results**, not final combined gates.
 
-Native source/test changes have had source AST/whitespace checks only. Final
-native reviewer/refuter passes, targeted tests, types/lint, both mutation
-phases, full agent/web suites, route budgets, build and combined-head CI
-remain pending. Official canonical metadata regeneration is still unrun;
-the root must regenerate exactly the two metadata outputs and prove all four
-games deep-equal before pinning final-head checks. No new dependency, flag,
+Final native source review and refuting verification are clear. The official
+engine/sample refresh passed at source commit `2cf55f4b`: all 40 canonical
+input paths, seven served assets and 49 byte pins were verified, and all four
+sample games were deeply identical. Only the two generated metadata outputs
+changed, committed as `37ef87aa`.
+
+The first targeted native run at `37ef87aa` passed 786 tests and failed four
+fixture assumptions: a synthetic expiry with a real clock, an intermediate
+recovery observation and two budget fixtures without ready owner identity.
+The reviewed test-only adapters preserve the expiry, ownership, recovery and
+terminal-rejection assertions. These early results are not a final gate pass.
+
+Required combined-head gates are targeted tests, API/web types and lint, both
+mutation phases, full agent/web suites, all 83 route budgets and CI. Exact-head
+results and immutable evidence are recorded in PR #866 and the roadmap delivery
+reconciliation; this source checkpoint does not substitute for those checks.
+No new dependency, flag,
 provider/infrastructure configuration, production read, agent/StarCraft
 launch, version bump, tag or release was performed.
 
@@ -201,7 +212,7 @@ checks. Native coverage is in `test_sync_retry`, `test_sync_retry_socket`,
 parser/capture/player-handle neighbours. Existing watcher fakes now honor
 guarded submission and declare a known synthetic profile; B1 identity facts
 tests distinguish legacy return hints from current-owner parse authority.
-No native runtime pass is claimed here yet.
+No signed native release or installed-agent acceptance is certified here.
 
 Preserve the 40 canonical input paths, seven served assets, four strict
 samples, 49 raw pins and 83 route budgets. Only the official two-output

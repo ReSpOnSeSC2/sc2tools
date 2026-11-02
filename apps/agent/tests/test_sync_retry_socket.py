@@ -208,6 +208,7 @@ def test_socket_registers_new_events_without_changing_legacy_full_resync():
     legacy, callback = Mock(), Mock(return_value=("accepted", 1))
     client = SocketClient(base_url="https://api.example", device_token="synthetic",
         on_recompute_games=Mock(), on_recompute_opp_build=Mock(), on_full_resync=legacy, on_sync_retry=callback)
+    client._sync_retry.clock = lambda: 1.0  # packet() uses the same deterministic epoch.
     client._sio = Socket(); client._wire_handlers()
     async def run():
         await events["connect"]()
