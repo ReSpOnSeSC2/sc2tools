@@ -15,7 +15,12 @@ from tests.test_watcher_pool import _cfg,_FakeUploadQueue
 def test_history_drain_holds_but_live_parse_lane_runs(tmp_path,monkeypatch):
     monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES","0")
     clock=[1000.0];gate=GameActivityGate(clock=lambda:clock[0]);gate.on_event("match_started")
-    watcher=module.ReplayWatcher(cfg=_cfg(tmp_path),state=AgentState(),upload=_FakeUploadQueue(),activity_gate=gate)
+    state=AgentState(user_id="owner",device_token="synthetic")
+    from sc2tools_agent.sync_retry import publish_owned_toons,replay_ticket
+    from sc2tools_agent.state import _STATE_SAVE_LOCK
+    with _STATE_SAVE_LOCK:
+        publish_owned_toons(state,{"displayName":"Synthetic owner"},replay_ticket(state))
+    watcher=module.ReplayWatcher(cfg=_cfg(tmp_path),state=state,upload=_FakeUploadQueue(),activity_gate=gate)
     path=tmp_path/"history.SC2Replay";path.write_bytes(b"fixture")
     watcher._history_backlog.append((path,time.time()))
     original=watcher._submit_parse
