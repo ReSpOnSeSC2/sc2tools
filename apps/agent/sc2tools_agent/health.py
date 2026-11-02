@@ -48,6 +48,7 @@ _CLOUD = {"offline": "Can't reach sc2tools.com", "server_busy": "sc2tools.com is
           "rate_limited": "sc2tools.com asked SC2 Tools to slow down",
           "signed_out": "sc2tools.com signed this PC out"}
 _IDENTITY = {"cloud": "Your player name comes from your sc2tools.com profile.",
+             "environment": "Your player name comes from your local configuration.",
              "cache": "Your player name is saved on this PC.",
              "auto_detect": "Your player name was found in your replays.",
              "settings": "Your player name is set in Settings."}

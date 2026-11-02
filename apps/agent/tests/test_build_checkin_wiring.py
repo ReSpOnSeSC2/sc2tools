@@ -200,7 +200,7 @@ def boot(monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "make_recompute_handlers", lambda **_: (Mock(), Mock(), Mock()))
     monkeypatch.setattr(runner, "probe_analyzer", lambda: (True, ""))
     monkeypatch.setattr(runner, "_discover_replay_folders", lambda *_: [])
-    monkeypatch.setattr(runner, "_ensure_player_handle", lambda *_: None)
+    monkeypatch.setattr(runner, "_ensure_player_handle", lambda *_, **_kwargs: None)
     monkeypatch.setattr(runner, "resolve_player_handle", lambda *_: None)
     monkeypatch.setattr(runner, "_surface_replay_archive_prompt", lambda *_: None)
 

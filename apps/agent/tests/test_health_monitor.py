@@ -553,7 +553,9 @@ def test_feature_facts_fill_the_footer_and_follow_settings(tmp_path):
     runner._handle_save_settings(_cfg(tmp_path), AgentState(), SettingsPayload(auto_update_enabled=True), cell,
                                  logging.getLogger("test"))
     scheduler.run()
-    assert [item.id for item in ui.health.snapshot().footer] == ["live"]
+    assert [item.id for item in ui.health.snapshot().footer] == ["live", "obs"]
+    assert [item.sentence for item in ui.health.snapshot().footer] == [
+        "Live game features are off.", "OBS scene switching is off."]
 
 
 def test_the_boot_error_path_reports_a_classified_failure(tmp_path, monkeypatch):
