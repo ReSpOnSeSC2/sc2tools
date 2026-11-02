@@ -49,6 +49,7 @@ from .crash_reporter import (
     shutdown as shutdown_crash_reporter,
 )
 from .heartbeat import Heartbeat
+from .sync_report import SyncReportTracker
 from .instance_lock import AgentInstanceLock
 from .live import EventBus, LiveBridge, LiveLifecycleEvent, PulseClient
 from .live.client_api import LiveClientPoller
@@ -407,7 +408,7 @@ def _run_headless(
             on_pause_for=lambda until: _handle_pause(cfg, state, upload, True, ui=ui, until=until),
             on_resync=lambda: _request_desktop_resync(cfg, state, recovery_cell),
             on_choose_folder=lambda picked: _handle_choose_folder(
-                cfg, state, picked, tray, log, upload=upload,
+                cfg, state, picked, tray, log, upload=upload, ui=ui,
             ),
             on_check_updates=lambda: _check_updates_with_notice(recovery_cell),
             on_install_update=lambda: recovery_cell.update_scheduler.tick(explicit=True) if recovery_cell.update_scheduler else None,
@@ -454,7 +455,7 @@ def _run_headless(
             probe_diag,
         )
 
-    _ensure_player_handle(api, cfg, state, initial_replay_folders, log)
+    _ensure_player_handle(api, cfg, state, initial_replay_folders, log, on_source=ui.health.set_identity)
 
     # Forward-declared so the upload/watcher callbacks (constructed
     # first) can late-bind it; assigned right after the watcher exists.
@@ -494,6 +495,7 @@ def _run_headless(
         ),
         on_replay_skipped=lambda p, reason: _desktop_replay_skipped(ui, import_ctl, p, reason),
         on_roots_changed=ui.on_folders,
+        on_unresolved=ui.sync_report.unresolved,
     )
     import_ctl = ImportController(
         api=api,
@@ -515,6 +517,7 @@ def _run_headless(
     recovery_cell.updater = updater
     beat_ok, beat_failed = _health_heartbeat(ui, recovery.connected, recovery.watchdog.failure)
     heartbeat = Heartbeat(api, on_success=beat_ok, on_failure=beat_failed, state_dir=cfg.state_dir,
+                          sync_provider=_sync_report_provider(ui, state, cfg),
                           on_overlay_tokens=_obs_token_rotation_controller(cfg, state, recovery_cell).heartbeat)
     recovery_cell.watcher = watcher
     recovery_cell.heartbeat = heartbeat
@@ -555,6 +558,7 @@ def _run_headless(
             obs_add_enabled_provider=lambda: bool(_obs_website_scope(cfg, state, recovery_cell)),
             overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
             session_enabled=state.companion_session_enabled,
+            on_connection=ui.health.set_socket,
         )
 
     live_transport: Optional[FanOutTransport] = None
@@ -567,6 +571,7 @@ def _run_headless(
             live_transport,
             live_metrics_logger,
         ) = _build_live_bridge(
+            on_contact=ui.health.live_contact,
             user_name_hint=resolve_player_handle(cfg.state_dir),
             state_dir=cfg.state_dir,
             replay_folders=initial_replay_folders,
@@ -580,7 +585,7 @@ def _run_headless(
     if live_bus is not None:
         live_bus.subscribe(activity_gate.on_event)
     obs_client, obs_scene = _build_obs_switcher(
-        state=state, bridge=live_bridge, log=log, no_obs=no_obs,
+        state=state, bridge=live_bridge, log=log, no_obs=no_obs, health=ui.health,
     )
     stream_service = _build_stream_service(cfg, state, no_obs=no_obs)
     recovery_cell.stream_service = stream_service
@@ -1044,7 +1049,7 @@ def _gui_boot_worker(
             )
 
         folders_for_detect = _discover_replay_folders(cfg, state)
-        _ensure_player_handle(api, cfg, state, folders_for_detect, log)
+        _ensure_player_handle(api, cfg, state, folders_for_detect, log, on_source=ui.health.set_identity)
 
         # Forward-declared so the upload/watcher callbacks (constructed
         # first) can late-bind it; assigned right after the watcher.
@@ -1090,6 +1095,7 @@ def _gui_boot_worker(
             on_roots_changed=lambda folders: _show_replay_folders(
                 cell, folders,
             ),
+            on_unresolved=ui.sync_report.unresolved,
         )
         import_ctl = ImportController(
             api=api,
@@ -1115,6 +1121,7 @@ def _gui_boot_worker(
                           on_check=lambda release: _announce_updated_version(cfg,state,cell,release))
         beat_ok, beat_failed = _health_heartbeat(ui, recovery.connected, recovery.watchdog.failure)
         heartbeat = Heartbeat(api, on_success=beat_ok, on_failure=beat_failed, state_dir=cfg.state_dir,
+                              sync_provider=_sync_report_provider(ui, state, cfg),
                               on_overlay_tokens=_obs_token_rotation_controller(cfg, state, cell).heartbeat)
 
         cell.upload = upload
@@ -1155,6 +1162,7 @@ def _gui_boot_worker(
                 obs_add_enabled_provider=lambda: bool(_obs_website_scope(cfg, state, cell)),
                 overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
                 session_enabled=state.companion_session_enabled,
+                on_connection=ui.health.set_socket,
                 on_build_intent_changed=lambda ping: (
                     cell.build_checkin.on_intent_changed(ping)
                     if getattr(cell, "build_checkin", None) else None
@@ -1174,6 +1182,7 @@ def _gui_boot_worker(
                 live_transport,
                 live_metrics_logger,
             ) = _build_live_bridge(
+                on_contact=ui.health.live_contact,
                 user_name_hint=resolve_player_handle(cfg.state_dir),
                 state_dir=cfg.state_dir,
                 replay_folders=folders_for_detect,
@@ -1231,6 +1240,7 @@ def _gui_boot_worker(
                     bridge=cell.live_bridge,
                     log=log,
                     no_obs=no_obs,
+                    health=ui.health,
                 )
             if cell.obs_scene is not None:
                 cell.obs_scene.set_config(
@@ -1411,12 +1421,46 @@ def _restart_agent(relaunch, request_stop):
     request_stop()
 
 
+def _sync_report_provider(ui, state, cfg):
+    """Capture mutable state under its lock; derive from private copies only."""
+    def missing():
+        configured = [*state.replay_folders_override]
+        if cfg.replay_folder:
+            configured.append(str(cfg.replay_folder))
+        return tuple(dict.fromkeys(str(path) for path in configured if not Path(path).is_dir()))
+
+    ui._missing_folders = missing
+    ui._identity_refresh = lambda: _reconcile_identity(ui, cfg.state_dir)
+    def current():
+        generation = ui.sync_report.generation()
+        with _STATE_SAVE_LOCK:
+            uploaded = dict(state.uploaded)
+            missing_paths = missing()
+        ui._identity_refresh()
+        ui.health.set_folders(ui.health.facts().folders, missing=missing_paths)
+        facts = ui.health.facts()
+        report = ui.sync_report.report(facts, uploaded, generation=generation)
+        # An explicit env root stays in the discovery list even while missing.
+        # Only existing directories can be watched; keep that list intact for UI.
+        report["foldersWatched"] = sum(Path(path).is_dir() for path in facts.folders or ())
+        return report
+    return current
+
+
+def _reconcile_identity(ui, state_dir):
+    """A parser's first toon-path repair can populate the cache after boot."""
+    if ui.health.facts().identity_source not in (None, "none"):
+        return
+    if read_player_handle_cache(state_dir):
+        ui.health.set_identity("cache")
+    elif resolve_player_handle(None):
+        ui.health.set_identity("environment")
+
+
 def _push_feature_facts(ui, state, no_live):
-    """Off features feed the health footer. Live contact isn't reported yet,
-    so only the off state of the live bridge is known here."""
+    """Feature gates feed the footer; continuing contact comes from the poller."""
     ui.health.set_auto_update(state.auto_update_enabled)
-    if no_live:
-        ui.health.set_live(False)
+    ui.health.set_live(not no_live)
 
 
 def _request_desktop_resync(cfg, state, cell):
@@ -1590,6 +1634,7 @@ def _handle_choose_folder(
     tray: Optional[TrayUI],
     log: logging.Logger,
     upload: Optional[UploadQueue] = None,
+    ui=None,
 ) -> None:
     """Tray / dashboard "Choose replay folder…" — adds one folder.
 
@@ -1627,6 +1672,8 @@ def _handle_choose_folder(
     log.info("replay_folder_added path=%s total=%d", picked, len(folders))
     if tray:
         tray.set_replay_folders(folders)
+    if ui:
+        ui.on_folders(folders)
     if upload:
         upload.request_full_resync()
 
@@ -1797,6 +1844,9 @@ def _handle_save_settings(
             write_player_handle_cache(
                 cfg.state_dir, payload.player_handle or None,
             )
+            health = getattr(getattr(cell, "ui", None), "health", None)
+            if health:
+                health.set_identity("settings" if payload.player_handle else "none")
         except OSError:
             log.exception("player_handle_cache_write_failed")
     if payload.parse_concurrency is not None:
@@ -1901,6 +1951,11 @@ def _handle_save_settings(
         # restart is needed for the opt-in/opt-out to take effect.
         state.auto_update_enabled = bool(payload.auto_update_enabled)
     _apply_obs_settings(state, payload, cell, log)
+    health = getattr(getattr(cell, "ui", None), "health", None)
+    if health:
+        client = getattr(cell, "obs_client", None)
+        health.set_obs(state.obs_scene_switch_enabled and not getattr(cell, "no_obs", False) and getattr(cell, "live_bridge", None) is not None,
+            connected=bool(client and client.is_connected), auth_failed=bool(client and client.auth_failed))
     if payload.autostart_enabled is not None:
         ok = autostart.set_enabled(bool(payload.autostart_enabled))
         if ok:
@@ -2117,6 +2172,7 @@ def _ensure_player_handle(
     state: AgentState,
     folders: List[Path],
     log: logging.Logger,
+    *, on_source=None,
 ) -> Optional[str]:
     """Resolve a usable player handle, persist it, and return it.
 
@@ -2148,12 +2204,14 @@ def _ensure_player_handle(
         log.exception("player_handle_refresh_unhandled")
         cloud_handle = None
     if cloud_handle:
+        _push_identity_source(on_source, "cloud")
         log.info("player_handle_resolved source=cloud")
         return cloud_handle
 
     # 2. Disk cache (cloud was empty / offline / unreachable).
     cached = read_player_handle_cache(cfg.state_dir)
     if cached:
+        _push_identity_source(on_source, "cache")
         log.info("player_handle_resolved source=cache value=%s", cached)
         return cached
 
@@ -2167,6 +2225,7 @@ def _ensure_player_handle(
         log.exception("player_handle_auto_detect_unhandled")
         detected = None
     if detected:
+        _push_identity_source(on_source, "auto_detect")
         try:
             write_player_handle_cache(cfg.state_dir, detected)
         except OSError:
@@ -2174,12 +2233,25 @@ def _ensure_player_handle(
         log.info("player_handle_resolved source=auto_detect value=%s", detected)
         return detected
 
+    fallback = resolve_player_handle(None)
+    if fallback:
+        _push_identity_source(on_source, "environment")
+        return fallback
     log.warning(
         "player_handle_unresolved — uploads will be skipped until the "
         "user sets battleTag in Settings → Profile or plays a game in "
         "a watched folder so auto-detect has something to scan.",
     )
+    _push_identity_source(on_source, "none")
     return None
+
+
+def _push_identity_source(callback, source):
+    if callback:
+        try:
+            callback(source)
+        except Exception:
+            pass  # Advisory status cannot interrupt identity resolution.
 
 
 def _discover_replay_folders(
@@ -2446,6 +2518,7 @@ def _build_live_bridge(
     device_token: Optional[str] = None,
     state_dir: Optional[Path] = None,
     replay_folders: Optional[List[Path]] = None,
+    on_contact=None,
 ) -> tuple[
     EventBus[LiveLifecycleEvent],
     LiveClientPoller,
@@ -2553,6 +2626,7 @@ def _build_live_bridge(
 
     poller = LiveClientPoller(
         bus=lifecycle_bus, user_name_hint=user_name_hint,
+        on_contact=on_contact,
     )
     if state_dir is not None or replay_name_hint:
         def _refresh_player_identity(event: LiveLifecycleEvent) -> None:
@@ -2731,6 +2805,7 @@ def _apply_obs_settings_unlocked(
                 bridge=bridge,
                 log=log,
                 no_obs=forced_no_obs,
+                health=getattr(getattr(cell, "ui", None), "health", None),
             )
         except Exception as exc:  # noqa: BLE001
             log.exception("obs_switcher_late_build_failed")
@@ -3195,6 +3270,7 @@ def _build_obs_switcher(
     bridge: Optional[LiveBridge],
     log: logging.Logger,
     no_obs: bool = False,
+    health=None,
 ) -> tuple[Optional[ObsClient], Optional[ObsSceneController]]:
     """Construct the OBS auto-scene-switcher and hang it off the bridge.
 
@@ -3212,6 +3288,8 @@ def _build_obs_switcher(
     variables win over the state file, so a power user can point a
     single install at a different OBS without touching the GUI.
     """
+    if health:
+        health.set_obs(not no_obs and state.obs_scene_switch_enabled and bridge is not None, connected=False)
     if no_obs:
         log.info("obs_scene_switch_disabled_via_flag")
         return None, None
@@ -3395,6 +3473,8 @@ def _build_obs_switcher(
         port=port,
         password=password,
         on_connected=_repair_generated_manual_covers,
+        on_state=(lambda connected, failed: health.set_obs(state.obs_scene_switch_enabled,
+            connected=connected, auth_failed=failed)) if health else None,
         on_program_scene_changed=controller.on_program_scene_changed,
     )
     controller.attach_client(client)
@@ -3532,6 +3612,9 @@ class _Multiplexer:
         self._import_ctl = None
         self._game_notifications = lambda: False
         self._notified_games = []
+        self.sync_report = SyncReportTracker()
+        self._missing_folders = lambda: ()
+        self._identity_refresh = lambda: None
         self._sinks: List[Any] = [console]
         if tray:
             self._sinks.append(tray)
@@ -3552,6 +3635,7 @@ class _Multiplexer:
             self.health.set_folders(seeded.folders)
 
     def refresh_status(self):
+        self._identity_refresh()
         self._change_status()
         self.health.refresh()
 
@@ -3603,7 +3687,7 @@ class _Multiplexer:
             callback=getattr(sink,"set_replay_folders",None)
             if callback: callback(folders)
         self._change_status(folders=list(folders))
-        self.health.set_folders(folders)
+        self.health.set_folders(folders, missing=self._missing_folders())
 
     def on_filter_label(self, label):
         self._change_status(filter_label=label)
@@ -3630,6 +3714,9 @@ class _Multiplexer:
 
     def on_connection_state(self, kind, since, next_retry_at, waiting_count) -> None:
         import time
+        self.sync_report.connection(kind)
+        if kind != "online":
+            self.health.set_transport_error(kind)
         if self._import_ctl:
             self._import_ctl.set_hold(connection=kind)
         if kind == "online":
@@ -3674,6 +3761,8 @@ class _Multiplexer:
             s.on_status(status)
 
     def on_upload_success(self, name: str) -> None:
+        self.sync_report.upload_succeeded()
+        self._identity_refresh()
         self._change_status(last_upload_at=time.time())
         self.health.upload_succeeded()
         if self._offline_since:
@@ -3728,6 +3817,7 @@ class _Multiplexer:
 
     def on_upload_failed(self, name: str, reason) -> None:
         if getattr(reason, "counts_as_error", True):
+            self.sync_report.upload_failed(getattr(reason, "kind", "unknown"), transient=getattr(reason, "transient", False))
             with self._status_lock:
                 self._status_facts.terminal_failure_times.append(time.time())
             self._change_status(latest_failure_title=reason if isinstance(reason,str) else reason.title)
@@ -3736,6 +3826,7 @@ class _Multiplexer:
             s.on_upload_failed(name, reason)
 
     def on_pending(self, count: int) -> None:
+        self.sync_report.pending(count)
         old=self._status_facts.connection
         self._change_status(pending_count=count, connection=ConnectionFacts(old.kind,count,old.next_retry_at))
         self.health.set_pending(count)

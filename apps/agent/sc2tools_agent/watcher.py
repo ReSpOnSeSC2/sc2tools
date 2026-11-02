@@ -85,6 +85,7 @@ from .replay_pipeline import (
     SKIP_FILE_UNSTABLE,
     AnalyzerImportError,
     parse_replay_for_cloud_ex,
+    capture_unresolved_candidates,
 )
 from .game_activity import GameActivityGate, background_workers, lower_worker_priority as _lower_worker_priority, on_battery
 from .state import AgentState, save_state
@@ -312,6 +313,12 @@ def _install_worker_log_handler(state_dir_str: str) -> None:
     setattr(root, "_sc2tools_worker_handler", True)
 
 
+def _parse_with_candidates(parser, *args, **kwargs):
+    with capture_unresolved_candidates() as candidates:
+        game, reason = parser(*args, **kwargs)
+    return game, reason, candidates
+
+
 def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
     """Top-level worker function — runs in the parse pool.
 
@@ -384,7 +391,7 @@ def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
     if not _wait_for_file_ready(path, SETTLE_TIMEOUT_SEC):
         return ("settle_failed", path_str, None)
     try:
-        game, reason = _parse_ex(
+        game, reason, candidates = _parse_with_candidates(_parse_ex,
             path,
             state_dir=state_dir,
             resolve_pulse=False,
@@ -405,7 +412,8 @@ def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
         # Carry the skip-reason code over the IPC boundary so the
         # parent can persist it (``skipped:<reason>``) and report it
         # to the import-progress UI.
-        return ("skipped", path_str, reason)
+        payload = {"reason": reason, "unresolved": candidates} if reason == "player_unresolved" and candidates else reason
+        return ("skipped", path_str, payload)
     return ("game", path_str, game)
 
 
@@ -422,6 +430,7 @@ class ReplayWatcher:
         on_capture_notice: Optional[Callable[[str], None]] = None,
         activity_gate=None,
         on_roots_changed: Optional[Callable[[list[Path]], None]] = None,
+        on_unresolved: Optional[Callable] = None,
     ) -> None:
         self._activity_gate = activity_gate or GameActivityGate(enabled=False)
         self._cfg = cfg
@@ -432,6 +441,7 @@ class ReplayWatcher:
         # the cloud's import-progress breakdown; everything else can leave
         # it unset.
         self._on_replay_skipped = on_replay_skipped
+        self._on_unresolved = on_unresolved
         self._on_capture_notice = on_capture_notice
         # Told the new folder list whenever a sweep starts or stops
         # watching a folder, so the tray and dashboard list stay current.
@@ -701,6 +711,14 @@ class ReplayWatcher:
                     continue
                 count += 1
         return count
+
+    def _notify_unresolved(self, path, candidates):
+        callback = getattr(self, "_on_unresolved", None)
+        if callback:
+            try:
+                callback(path, candidates)
+            except Exception:
+                log.debug("unresolved_candidates_callback_failed")
 
     def _notify_skipped(self, path: Path, reason: Optional[str]) -> None:
         """Invoke the optional skip observer; never let it break parsing."""
@@ -1388,11 +1406,13 @@ class ReplayWatcher:
                 # next sweep doesn't re-attempt. The reason code rides
                 # along after a colon; readers prefix-match on
                 # "skipped" so pre-reason entries stay compatible.
-                reason = payload if isinstance(payload, str) else None
+                reason = payload.get("reason") if isinstance(payload, dict) else payload if isinstance(payload, str) else None
                 self._state.uploaded[path_str] = (
                     f"skipped:{reason}" if reason else "skipped"
                 )
                 self._notify_skipped(path, reason)
+                if reason == "player_unresolved" and isinstance(payload, dict):
+                    self._notify_unresolved(path, payload.get("unresolved", ()))
                 if self._analyzer_unavailable:
                     log.info("analyzer_recovered")
                     self._analyzer_unavailable = False
@@ -1609,7 +1629,7 @@ class ReplayWatcher:
                 return
             self._clear_settle_failure(path)
             try:
-                game, skip_reason = parse_replay_for_cloud_ex(
+                game, skip_reason, candidates = _parse_with_candidates(parse_replay_for_cloud_ex,
                     path,
                     state_dir=self._cfg.state_dir,
                     # Fresh games benefit from immediate opponent identity.
@@ -1664,6 +1684,8 @@ class ReplayWatcher:
                     f"skipped:{skip_reason}" if skip_reason else "skipped"
                 )
                 self._notify_skipped(path, skip_reason)
+                if skip_reason == "player_unresolved":
+                    self._notify_unresolved(path, candidates)
                 return
             # Post-parse date-range check (authoritative; the mtime
             # pre-filter only catches the obvious cases). Marking

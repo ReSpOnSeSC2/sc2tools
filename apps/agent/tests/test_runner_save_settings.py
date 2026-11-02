@@ -232,7 +232,7 @@ def test_gui_boot_wires_capture_notice_to_runtime_cell(tmp_path: Path, monkeypat
         monkeypatch.setattr(runner, name, Mock())
     monkeypatch.setattr(runner, "probe_analyzer", lambda: (True, ""))
     monkeypatch.setattr(runner, "_discover_replay_folders", lambda *_: [])
-    monkeypatch.setattr(runner, "_ensure_player_handle", lambda *_: None)
+    monkeypatch.setattr(runner, "_ensure_player_handle", lambda *_, **_kwargs: None)
     monkeypatch.setattr(runner, "make_recompute_handlers", register)
     cell = runner._RuntimeCell()
     cell.tray, cell.console, cell.gui = Mock(), Mock(), Mock()
