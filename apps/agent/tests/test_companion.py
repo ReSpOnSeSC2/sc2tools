@@ -8,7 +8,9 @@ import pytest
 import requests
 
 from sc2tools_agent.companion import CompanionClient, CompanionError, DEFAULT_PREFERENCES
-from sc2tools_agent.state import AgentState, load_state, save_state
+from sc2tools_agent.state import AgentState, load_state, save_state, migrate_legacy_state
+from sc2tools_agent.instance_lock import AgentInstanceLock
+from .test_agent_state_credentials import synthetic_state_io
 
 
 def response(payload, status=200):
@@ -260,15 +262,29 @@ def test_overlay_preferences_persist_without_repairing_or_network(tmp_path):
     assert loaded.uploaded == state.uploaded
 
 
-def test_preferences_reject_invalid_switches_and_handle_old_states(tmp_path):
-    (tmp_path / "agent.json").write_text(json.dumps({
+def test_preferences_reject_invalid_switches_and_handle_old_states(tmp_path, synthetic_state_io):
+    target = tmp_path / "agent.json"
+    target.write_text(json.dumps({
         "device_token": "old-token", "companion_preferences": {
             "overlaysEnabled": "false", "opponentOverlay": False, "unknown": True,
         },
     }), encoding="utf-8")
+    original = target.read_bytes()
+    loaded = load_state(tmp_path)
+    assert loaded.companion_preferences == {"opponentOverlay": False}
+    assert loaded.device_token is None and target.read_bytes() == original
+    guard = AgentInstanceLock(tmp_path)
+    assert guard.acquire()
+    try:
+        migrated = migrate_legacy_state(tmp_path, guard)
+    finally:
+        guard.release()
+    assert migrated.companion_preferences == {"opponentOverlay": False}
     loaded = load_state(tmp_path)
     assert loaded.companion_preferences == {"opponentOverlay": False}
     assert loaded.device_token == "old-token"
+    assert "device_token" not in json.loads(target.read_bytes())
+    assert b"old-token" not in target.read_bytes()
     client = CompanionClient(lambda: ("https://api.example.test", "token"))
     for updates in ({"overlaysEnabled": "false"}, {"scoutingReadAloud": "true"}, {"unknown": True}):
         with pytest.raises(CompanionError):

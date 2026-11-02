@@ -6,7 +6,12 @@ import json
 import pytest
 
 from sc2tools_agent import runner
-from sc2tools_agent.state import AgentState, COMPANION_SKINS, load_state, save_state
+from sc2tools_agent.state import (AgentState, COMPANION_SKINS, _STATE_SAVE_LOCK, load_state, save_state,
+    migrate_legacy_state, commit_state_credentials, credential_revision)
+from sc2tools_agent.agent_credentials import CredentialIntent
+from sc2tools_agent.instance_lock import AgentInstanceLock
+from sc2tools_agent.sync_retry import replay_ticket
+from .test_agent_state_credentials import synthetic_state_io
 from .test_build_checkin_ui_runner import gui_run
 
 
@@ -35,11 +40,24 @@ def test_appearance_roundtrip_never_changes_pairing_or_other_preferences(tmp_pat
 
 
 @pytest.mark.parametrize("value", [None, True, False, 0, 1, [], {}, "", "PROTOSS", " zerg", "custom"])
-def test_invalid_skin_falls_back_without_losing_pairing(tmp_path, value):
-    (tmp_path / "agent.json").write_text(json.dumps({"device_token": "keep", "companion_skin": value}), encoding="utf-8")
+def test_invalid_skin_falls_back_without_losing_pairing(tmp_path, value, synthetic_state_io):
+    target = tmp_path / "agent.json"
+    target.write_text(json.dumps({"device_token": "keep", "companion_skin": value}), encoding="utf-8")
+    original = target.read_bytes()
+    loaded = load_state(tmp_path)
+    assert loaded.companion_skin == "default"
+    assert loaded.device_token is None and target.read_bytes() == original
+    guard = AgentInstanceLock(tmp_path)
+    assert guard.acquire()
+    try:
+        migrated = migrate_legacy_state(tmp_path, guard)
+    finally:
+        guard.release()
+    assert migrated.companion_skin == "default" and migrated.device_token == "keep"
     loaded = load_state(tmp_path)
     assert loaded.companion_skin == "default"
     assert loaded.device_token == "keep"
+    assert "device_token" not in json.loads(target.read_bytes()) and b'"keep"' not in target.read_bytes()
 
 
 @pytest.mark.parametrize("value", [None, 0, 1, "false", "true", [], {}])
@@ -48,13 +66,16 @@ def test_animation_preference_requires_a_real_boolean(tmp_path, value):
     assert load_state(tmp_path).companion_animations is True
 
 
-def test_save_sanitizes_invalid_appearance_without_mutating_shared_state(tmp_path):
+def test_save_sanitizes_invalid_appearance_without_mutating_shared_state(tmp_path, synthetic_state_io):
     state = AgentState(companion_skin={"invalid": True}, companion_animations="false", device_token="keep")
     save_state(tmp_path, state)
     raw = json.loads((tmp_path / "agent.json").read_text(encoding="utf-8"))
     assert raw["companion_skin"] == "default" and raw["companion_animations"] is True
     assert state.companion_skin == {"invalid": True} and state.companion_animations == "false"
-    assert raw["device_token"] == "keep"
+    assert "device_token" not in raw and "obs_password" not in raw
+    assert raw["credentials"]["device"]["generation"] is not None
+    assert load_state(tmp_path).device_token == "keep" and state.device_token == "keep"
+    assert b'"keep"' not in (tmp_path / "agent.json").read_bytes()
 
 
 @pytest.mark.parametrize("error", [OSError("read-only state"), RuntimeError("serialization failed")])
@@ -86,9 +107,22 @@ def test_invalid_runner_appearance_never_mutates_or_saves(tmp_path, monkeypatch,
     assert asdict(state) == before and saved == []
 
 
-def test_runner_forwards_saved_appearance_and_persists_gui_callback(gui_run, tmp_path):
-    save_state(tmp_path, AgentState(device_token="keep", companion_skin="protoss", companion_animations=False,
-                                    companion_preferences={"opponentOverlay": True}, window_information_layout="standard"))
+def test_runner_forwards_saved_appearance_and_persists_gui_callback(tmp_path, synthetic_state_io, request):
+    # Set up the unchanged GUI fixture only after this test's finite IO seam.
+    gui_run = request.getfixturevalue("gui_run")
+    state = load_state(tmp_path)
+    assert state.device_token == "t"
+    old_epoch = replay_ticket(state).epoch
+    with _STATE_SAVE_LOCK:
+        state._owner_epoch = epoch = object()
+        commit_state_credentials(tmp_path, state, device=CredentialIntent("set", "keep"),
+            expected_device_revision=credential_revision(state, "device"), expected_owner_epoch=epoch,
+            device_owner=(state.user_id, state.paired_at))
+    assert epoch is not old_epoch and load_state(tmp_path).device_token == "keep"
+    state.companion_skin, state.companion_animations = "protoss", False
+    state.companion_preferences = {"opponentOverlay": True}
+    state.window_information_layout = "standard"
+    save_state(tmp_path, state)
     gui_kwargs, tray_kwargs = gui_run(no_live=True)
     assert gui_kwargs["window_skin"] == "protoss"
     assert gui_kwargs["window_animations"] is False
@@ -98,3 +132,5 @@ def test_runner_forwards_saved_appearance_and_persists_gui_callback(gui_run, tmp
     assert loaded.device_token == "keep"
     assert loaded.companion_preferences == {"opponentOverlay": True}
     assert loaded.window_information_layout == "standard"
+    raw = (tmp_path / "agent.json").read_bytes()
+    assert "device_token" not in json.loads(raw) and b'"keep"' not in raw

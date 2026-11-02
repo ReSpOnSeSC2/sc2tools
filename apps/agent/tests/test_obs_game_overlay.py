@@ -6,7 +6,11 @@ from sc2tools_agent.live.obs_game_overlay import add_missing_game_sources
 from sc2tools_agent.live.obs_layout import plan_scenes, build_scenes, _manual_override_url_from_overlay_url, _strict_browser_url_key
 from sc2tools_agent.live.obs_scene import SCENE_IN_GAME
 from sc2tools_agent.live.obs_website_add import ObsWebsiteAdd
-from sc2tools_agent.state import AgentState, load_state, save_state
+from sc2tools_agent.state import AgentState, load_state, save_state, migrate_legacy_state, credential_revision
+from sc2tools_agent.agent_credentials import CredentialStorageError
+from sc2tools_agent.instance_lock import AgentInstanceLock
+from sc2tools_agent.sync_retry import replay_ticket
+from .test_agent_state_credentials import synthetic_state_io
 from tests.test_live_obs_layout import FakeObs
 
 
@@ -222,11 +226,25 @@ def test_new_source_stays_disabled_if_scope_changes_during_geometry_setup(bounda
     assert obs.enabled_updates == []
 
 
-def test_opt_in_state_is_strict_and_default_off(tmp_path):
+def test_opt_in_state_is_strict_and_default_off(tmp_path, synthetic_state_io):
     assert AgentState().obs_website_add_enabled is False
-    (tmp_path / "agent.json").write_text(json.dumps({"obs_website_add_enabled": "true"}))
+    target = tmp_path / "agent.json"
+    target.write_text(json.dumps({"obs_website_add_enabled": "true"}))
+    original = target.read_bytes()
     assert load_state(tmp_path).obs_website_add_enabled is False
-    save_state(tmp_path, AgentState(obs_website_add_enabled=True))
+    assert target.read_bytes() == original
+    with pytest.raises(CredentialStorageError, match="^invalid_pointer$"):
+        save_state(tmp_path, AgentState(obs_website_add_enabled=True))
+    assert target.read_bytes() == original
+    guard = AgentInstanceLock(tmp_path)
+    assert guard.acquire()
+    try:
+        state = migrate_legacy_state(tmp_path, guard)
+    finally:
+        guard.release()
+    assert state.obs_website_add_enabled is False
+    state.obs_website_add_enabled = True
+    save_state(tmp_path, state)
     assert load_state(tmp_path).obs_website_add_enabled is True
 
 
@@ -238,10 +256,15 @@ def test_website_add_uses_the_same_environment_connection_precedence_as_switchin
     monkeypatch.setenv("SC2TOOLS_OBS_HOST", " synthetic-stream-pc ")
     monkeypatch.setenv("SC2TOOLS_OBS_PORT", "4456")
     monkeypatch.setenv("SC2TOOLS_OBS_PASSWORD", "synthetic-env-password")
-    assert runner._obs_website_scope(cfg, state, cell)[2:] == ("synthetic-stream-pc", 4456, "synthetic-env-password")
+    epoch = replay_ticket(state).epoch
+    assert runner._obs_website_scope(cfg, state, cell) == (
+        cfg.api_base, "paired-A", "synthetic-stream-pc", 4456, "synthetic-env-password",
+        credential_revision(state, "obs"), epoch,
+    )
     calls = []
     monkeypatch.setattr(runner, "ObsClient", lambda **kwargs: calls.append(kwargs))
     runner._obs_website_controller(cfg, state, cell).client_factory()
     assert calls == [{"host": "synthetic-stream-pc", "port": 4456, "password": "synthetic-env-password", "subscribe_events": False}]
+    assert state.obs_password == "saved-password"
     monkeypatch.setenv("SC2TOOLS_OBS_PORT", "invalid")
     assert runner._effective_obs_connection(state)[1] == 4455
