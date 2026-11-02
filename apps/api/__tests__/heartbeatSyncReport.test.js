@@ -74,6 +74,15 @@ test("an oversize or malformed sync block is dropped while the heartbeat still s
   expect(row).toMatchObject({ sync: { pending: 9 }, syncReportedAt: old });
 });
 
+test("a delayed heartbeat never rolls a newer stored report back", async () => {
+  const newer = new Date(Date.now() + 3600000);
+  const device = await pairedDevice({ sync: { pending: 9 }, syncReportedAt: newer });
+  const hb = await device.heartbeat({ hostname: "LATE", sync: { pending: 1 } });
+  expect(hb.status).toBe(200);
+  expect(hb.body.syncAccepted).toBe(true); // valid, but older than what is stored
+  expect(await device.row()).toMatchObject({ hostname: "LATE", sync: { pending: 9 }, syncReportedAt: newer });
+});
+
 test("a heartbeat without sync keeps the old write and response, and leaves a stored report alone", async () => {
   const device = await pairedDevice();
   const hb = await device.heartbeat({ version: "0.24.0", os: "Windows" });
