@@ -34,7 +34,7 @@ test.each([undefined, "bad", "A".repeat(24)])("legacy/malformed stable device ID
   const f = fixture({ deviceToken: "synthetic-device", syncRetryVersion: 1 }, { userId: "owner", deviceId });
   await f.connect();
   expect(f.socket.data).toMatchObject({ userId: "owner", kind: "device", syncRetryVersion: 0 });
-  expect(f.socket.data.deviceId).toBeUndefined();
+  expect(f.socket.data.deviceId).toBe(deviceId);
   expect(f.socket.join).toHaveBeenCalledWith("user:owner");
   expect(f.socket.emit).toHaveBeenCalledWith("device:hello", { ok: true });
   expect(f.socket.emit).not.toHaveBeenCalledWith("sync:retry-ready", expect.anything());

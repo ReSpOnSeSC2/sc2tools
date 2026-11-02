@@ -10,7 +10,8 @@ function initializeDeviceSocket(socket, hit) {
   const deviceId = typeof hit.deviceId === "string" && DEVICE_ID.test(hit.deviceId) ? hit.deviceId : undefined;
   socket.data.userId = hit.userId;
   socket.data.kind = "device";
-  socket.data.deviceId = deviceId;
+  // Preserve authenticated legacy metadata; only canonical IDs enable retry.
+  socket.data.deviceId = hit.deviceId;
   socket.data.syncRetryVersion = deviceId && socket.handshake.auth.syncRetryVersion === 1 ? 1 : 0;
   socket.data.obsAddSource = {
     supported: socket.handshake.auth.obsAddSource?.supported === true,
