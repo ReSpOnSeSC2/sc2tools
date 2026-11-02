@@ -1427,7 +1427,7 @@ def _request_desktop_resync(cfg, state, cell):
     def run():
         try:
             _handle_replay_archive_resync(cfg, state, cell.upload)
-            if cell.ui:
+            if cell.ui and cell.upload is not None and _replay_archive_ack_allowed(state):
                 cell.ui.health.set_archive_status(0, 0)  # the asked-for full Re-sync has started
             if cell.watcher:
                 cell.watcher.request_immediate_sweep()

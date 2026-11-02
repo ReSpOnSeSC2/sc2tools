@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from typing import Any, Optional
 from unittest.mock import Mock
 
+import pytest
+
 from sc2tools_agent import runner
 from sc2tools_agent.health import HealthMonitor
 from sc2tools_agent.runner import (
@@ -140,6 +142,7 @@ def test_starting_the_full_resync_clears_the_health_archive_row(
     cfg = SimpleNamespace(state_dir=tmp_path, api_base="https://api.test")
     started = threading.Event()
     cell = _cell_asking_for_resync(Mock())
+    cell.upload = Mock()
     assert _archive_rows(cell)[0].sentence.startswith("12 of your 300 saved games")
     cell.import_ctl = SimpleNamespace(
         maybe_start_auto_backfill=lambda **_kwargs: started.set(),
@@ -159,4 +162,25 @@ def test_starting_the_full_resync_clears_the_health_archive_row(
     )
     runner._request_desktop_resync(cfg, AgentState(), cell)
     assert failed.wait(2)
+    assert cell.ui.health.facts().archive_missing == 12 and _archive_rows(cell)
+
+
+@pytest.mark.parametrize("state,has_queue", [
+    (AgentState(), False),
+    (AgentState(sync_filter_preset="current_season"), True),
+    (AgentState(sync_filter_preset="custom", sync_filter_since="2026-08-01"), True),
+    (AgentState(paused=True), True),
+])
+def test_incomplete_resync_keeps_the_health_archive_row(tmp_path, state, has_queue) -> None:
+    cfg = SimpleNamespace(state_dir=tmp_path, api_base="https://api.test")
+    cell = _cell_asking_for_resync(Mock())
+    cell.upload = Mock() if has_queue else None
+    finished = threading.Event()
+    cell.import_ctl = SimpleNamespace(
+        maybe_start_auto_backfill=lambda **_kwargs: finished.set(),
+    )
+
+    runner._request_desktop_resync(cfg, state, cell)
+
+    assert finished.wait(2)
     assert cell.ui.health.facts().archive_missing == 12 and _archive_rows(cell)

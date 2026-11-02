@@ -4,6 +4,13 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## 0.24.8
 
+### Changed
+- Explain desktop sync health in one dashboard card, with a next step for
+  each problem, help links and Restart agent for startup failures. Keep its
+  action buttons steady as live counts change.
+- Match the tray dot to the dashboard: green, amber, red or grey when paused.
+  Show disabled features in the card's grey footer.
+
 ### Fixed
 - Use the opponent's current regional season and active race when selecting
   MMR. Prefer recent activity over a higher older team, and refresh season

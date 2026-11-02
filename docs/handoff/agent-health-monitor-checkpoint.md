@@ -250,7 +250,9 @@ stacked on `claude/agent-health-monitor`. Nothing is committed yet.
   it calls the tray and the window directly, as before.
 - Starting a full Re-sync clears the archive row. Once
   `_handle_replay_archive_resync` succeeds, `_request_desktop_resync` calls
-  `health.set_archive_status(0, 0)`. A Re-sync that fails to start keeps it.
+  `health.set_archive_status(0, 0)` only with a live upload queue and a
+  running All-time sweep. A filtered, paused or unavailable-queue Re-sync,
+  or one that fails to start, keeps it.
 - The tray follows the same snapshot (see Tray below).
 
 ### Action map
@@ -322,7 +324,8 @@ row offers Link PC. The A1 rule table above still shows the old `link_pc`.
   missing added folders and the transport error kind.
 - Copy details still reads the log on the Qt thread, as before.
 - Slice B (the heartbeat `sync` block, API and web) hasn't started.
-- Changelogs are untouched.
+- The unpublished 0.24.8 changelogs describe the health card and tray changes.
+  No tag, native build or release was created.
 
 ### A2 verification
 
@@ -340,7 +343,18 @@ From `apps/agent`, with `-q -p no:cacheprovider`, after the review fixes:
 - Card neighbours (`test_gui_update_card_layout`, `test_gui_capture_consent`,
   `test_service_notices`, `test_gui_shared_agent_menu`): 12 passed.
 
-No web test pins the `desktop-app-status` text. A local script checked the
-rewritten article against the `articles.test.ts` rules: closed markup, unique
-anchors, rectangular tables and links that resolve. Vitest was not run, and
-neither was `agentLinks.test.ts`. The full agent suite and builds were not run.
+The independent verifier found that a filtered or unavailable-queue Re-sync
+could clear the archive row without starting a full backup. The fix checks
+for a live queue and an unpaused All-time filter; four regression cases keep
+the warning for absent queues, season/custom filters and paused sync.
+
+After that fix, the targeted agent command above passed 159 tests. The web
+help gate (`lib/help app/help components/help`, one fork) passed 23 files and
+161 tests, including `agentLinks.test.ts` and the article markup/link checks.
+Nine deliberate mutations were caught, including the new incomplete-sweep
+guard, the six reviewed fixes, newest-snapshot delivery and restart ordering.
+The mutation runner restored each source byte-for-byte. Local records are
+under `.cache/agent-health-a2-20261102/` (`targeted-01`, `web-help-01` and
+`mutation-01`); records are created exclusively and never overwritten.
+
+The full agent suite and exact-head CI still need to finish before delivery.
