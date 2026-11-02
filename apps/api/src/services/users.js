@@ -13,6 +13,7 @@ const { PLAYER_SLUG_RE, PLAYER_UUID_RE, createPlayerSlug } = require("../util/pu
 const { ACTIVATION_QUERY_MAX_TIME_MS, activationTimestamp, activationUnavailable } = require("./activation");
 const { readyStatsFromOwnerRow, OWNER_STATS_PROJECTION } = require("./maintainedGameStatsRead");
 const { ingestRejectionUpdate, ingestStatsDto } = require("./ingestRejections");
+const { appendPulseId } = require("./appendPulseId");
 
 const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
 const REPLAY_SHARE_SLUG_MAX_LENGTH = 64;
@@ -779,29 +780,7 @@ class UsersService {
    * @returns {Promise<boolean>} true when the array changed.
    */
   async addPulseId(userId, pulseId) {
-    if (typeof pulseId !== "string") return false;
-    const trimmed = pulseId.trim();
-    if (!trimmed || trimmed.length > 64) return false;
-    const doc = await this.db.users.findOne(
-      { userId },
-      { projection: { _id: 0, pulseIds: 1, pulseId: 1 } },
-    );
-    if (!doc) return false;
-    const current = normalisePulseIdList(
-      Array.isArray(doc.pulseIds)
-        ? doc.pulseIds
-        : typeof doc.pulseId === "string"
-          ? [doc.pulseId]
-          : [],
-    );
-    if (current.includes(trimmed)) return false;
-    if (current.length >= 20) return false;
-    const next = current.concat(trimmed);
-    /** @type {Record<string, any>} */
-    const set = { pulseIds: next, pulseId: next[0] };
-    stampVersion(set, COLLECTIONS.USERS);
-    await this.db.users.updateOne({ userId }, { $set: set });
-    return true;
+    return (await appendPulseId(this.db.users, userId, pulseId)).code === "added";
   }
 
   /**

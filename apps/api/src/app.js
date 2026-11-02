@@ -21,6 +21,7 @@ const {
   buildReplayIngestAdmission,
 } = require("./middleware/replayIngestAdmission");
 const { captureSignedWebhookRawBody } = require("./middleware/jsonBody");
+const { buildSyncActionJsonParser } = require("./middleware/syncActionJson");
 const { sanitiseRequestForLog, sanitiseResponseForLog } = require("./middleware/requestLogging");
 const { privateSearchNoStore, buildPrivateSearchJsonParser,
   privateSearchErrorBoundary, isPrivateSearchRequest } = require("./middleware/privateSearchBoundary");
@@ -210,6 +211,7 @@ const { buildReplayFilesRouter } = require("./routes/replayFiles");
 const { buildPlaybackArtifactsRouter } = require("./routes/playbackArtifacts");
 const { buildBotLabRouter } = require("./routes/botLab");
 const { buildObsSourcesRouter } = require("./routes/obsSources");
+const { buildSyncHealthActionsRouter } = require("./routes/syncHealthActions");
 const {
   buildInfrastructureCostsRouter,
 } = require("./routes/infrastructureCosts");
@@ -1218,11 +1220,8 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
     }
   } });
   const coachingJson = express.json({ limit: COACHING_JSON_LIMIT });
-  const ordinaryJson = express.json({
-    limit: DEFAULT_JSON_LIMIT,
-    verify: captureSignedWebhookRawBody,
-  });
-  app.use(buildPrivateSearchJsonParser());
+  const ordinaryJson = express.json({ limit: DEFAULT_JSON_LIMIT, verify: captureSignedWebhookRawBody });
+  app.use(buildPrivateSearchJsonParser(), buildSyncActionJsonParser());
   app.use((req, res, next) => {
     if (isPrivateSearchRequest(req) && req.method !== "POST") { next(); return; }
     const parser = isLargeAuthenticatedJson(req)
@@ -1421,9 +1420,8 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use("/v1/bot-lab", buildBotLabRouter({ auth, io: deps.io, isAdmin,
     enabled: process.env.BOT_LAB_ENABLED === "true" }));
   app.use("/v1/devices/obs", buildObsSourcesRouter({ auth, io: deps.io }));
-  app.use(SERVICE.ROUTE_PREFIX, buildPlaybackArtifactsRouter({
-    playbackArtifacts: services.playbackArtifacts, auth,
-  }));
+  app.use("/v1/me/sync-health", buildSyncHealthActionsRouter({ auth, users: deps.db.users, pairings: services.pairings, io: deps.io }));
+  app.use(SERVICE.ROUTE_PREFIX, buildPlaybackArtifactsRouter({ playbackArtifacts: services.playbackArtifacts, auth }));
   app.use(SERVICE.ROUTE_PREFIX, buildSessionsRouter({ sessionHistory: services.sessionHistory, auth }));
   // Email allowlist — the deterministic admin path. Lower-cased at load;
   // an empty set disables it. ``isAdminEmail`` is what the /v1/me route
