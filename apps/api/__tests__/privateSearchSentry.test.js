@@ -51,6 +51,37 @@ test("never keeps the device heartbeat body, whose sync report carries players' 
   expect(options.beforeSend(other).request.data).toEqual({ keep: true });
 });
 
+test.each(["/v1/me/sync-health/identity", "/V1/ME/SYNC-HEALTH/IDENTITY/?ignored=1", "https://api.example/v1/me/sync-health/retry?ignored=1"])("sync action %s never captures private JSON before parsing or in either Sentry request copy", path => {
+  process.env.SENTRY_DSN = "https://example.invalid/fixture";
+  const sentry = load(); expect(sentry.init()).toBe(true);
+  const options = mockSdk.init.mock.calls.at(-1)[0]; options.integrations([]);
+  const http = mockSdk.httpIntegration.mock.calls.at(-1)[0];
+  expect(http.ignoreIncomingRequestBody(path)).toBe(true);
+  expect(http.ignoreIncomingRequests(path)).toBe(false);
+  for (const hook of [options.beforeSend, options.beforeSendTransaction]) {
+    const body = { toonHandle: "1-S2-1-424242", name: "PrivateDisplay" };
+    const malformed = '{"toonHandle":"1-S2-1-424242",broken';
+    const event = { request: { url: path, method: "POST", data: body },
+      sdkProcessingMetadata: { normalizedRequest: { url: path, method: "POST", data: malformed } } };
+    expect(hook(event)).toBe(event);
+    expect(event.request).toEqual({ url: path, method: "POST" });
+    expect(event.sdkProcessingMetadata.normalizedRequest).toEqual({ url: path, method: "POST" });
+    expect(JSON.stringify(event)).not.toMatch(/1-S2-1-424242|PrivateDisplay|toonHandle/);
+    for (const copyWithUrl of ["request", "normalizedRequest"]) {
+      const request = { data: body, ...(copyWithUrl === "request" ? { url: path } : {}) };
+      const normalizedRequest = { data: malformed, ...(copyWithUrl === "normalizedRequest" ? { url: path } : {}) };
+      const partial = { request, sdkProcessingMetadata: { normalizedRequest } };
+      expect(hook(partial)).toBe(partial);
+      expect(request.data).toBeUndefined(); expect(normalizedRequest.data).toBeUndefined();
+    }
+  }
+  for (const other of ["/v1/me/sync-health", "/v1/me/sync-health/identity-extra", "/v1/me/sync-health/retry/other", "/v1/me/profile"]) {
+    expect(http.ignoreIncomingRequestBody(other)).toBe(false);
+    const ordinary = { request: { url: other, data: { keep: true } } };
+    expect(options.beforeSend(ordinary).request.data).toEqual({ keep: true });
+  }
+});
+
 test("disabled SDK remains a no-op and still continues private requests", () => {
   delete process.env.SENTRY_DSN;
   const sentry = load(), next = jest.fn();

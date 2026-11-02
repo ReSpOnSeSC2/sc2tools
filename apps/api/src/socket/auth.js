@@ -1,4 +1,5 @@
 "use strict";
+const { initializeDeviceSocket, announceDeviceReady } = require("./deviceCapabilities");
 
 const { verifyToken } = require("@clerk/backend");
 const { sha256 } = require("../util/hash");
@@ -167,14 +168,7 @@ function attachSocketAuth(io, opts) {
           next(new Error("invalid_device_token"));
           return;
         }
-        socket.data.userId = hit.userId;
-        socket.data.kind = "device";
-        // Stable pairing identity survives reconnects; never expose bearer hashes.
-        socket.data.deviceId = hit.deviceId;
-        socket.data.obsAddSource = {
-          supported: socket.handshake.auth.obsAddSource?.supported === true,
-          enabled: socket.handshake.auth.obsAddSource?.enabled === true,
-        };
+        initializeDeviceSocket(socket, hit);
         next();
         return;
       }
@@ -480,7 +474,7 @@ function attachSocketAuth(io, opts) {
       });
       // The agent emits this once per startup so the cloud can mark
       // the device as "online" and surface that in the dashboard.
-      socket.emit("device:hello", { ok: true });
+      announceDeviceReady(socket);
       return;
     }
     const cid = socket.data.clerkUserId;
