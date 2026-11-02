@@ -114,14 +114,14 @@ class RuntimeRecovery:
                     for service in (self.cell.heartbeat, self.cell.import_ctl, self.cell.build_checkin):
                         if service:
                             service._api = api
+                    if self.cell.upload:
+                        self.cell.upload.replace_api(api)
                     self._replace_transport(self.cell.live_transport, api)
                     socket_client = self.cell.socket_client
                     if socket_client:
                         socket_client = socket_client.with_device_token(self.state.device_token)
                         self.cell.socket_client = socket_client
                     session_enabled = self.state.companion_session_enabled
-                if self.cell.upload:
-                    self.cell.upload.replace_api(api)
                 from ..player_handle import refresh_from_cloud
                 refresh_from_cloud(api, self.cfg.state_dir,
                     interactive=True,
