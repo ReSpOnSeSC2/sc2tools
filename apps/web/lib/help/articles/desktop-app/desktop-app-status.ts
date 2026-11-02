@@ -7,7 +7,7 @@ const article: HelpArticle = {
   "category": "desktop-app",
   "audience": "all",
   "order": 6,
-  "updated": "2026-10-23",
+  "updated": "2026-11-01",
   "keywords": [
     "status",
     "badge",
@@ -65,7 +65,7 @@ const article: HelpArticle = {
         ],
         [
           "Paused",
-          "New replays wait until you resume, or until the displayed time. Amber dot.",
+          "New replays wait until you resume, or until the displayed time. Grey dot.",
           "Resume."
         ],
         [
