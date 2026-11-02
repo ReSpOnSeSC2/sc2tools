@@ -23,6 +23,8 @@ import {
   type SyncReport,
 } from "@/lib/syncHealth";
 import { SyncHealthSkeleton } from "./SyncHealthSection";
+import { SyncHealthActionButton, SyncHealthActionsProvider } from "./SyncHealthActions";
+import { canRetrySyncReason } from "@/lib/syncHealthActions";
 
 const TONE_TEXT = { error: "text-danger", warn: "text-warning", info: "text-text-muted", ok: "text-success" } as const;
 
@@ -40,7 +42,7 @@ export function SyncHealthCard() {
   const data = health.data;
   const items = syncHealthItems(data);
   const status = syncHealthStatus(data, items);
-  return <Card title={status.title} headingLevel={2}>
+  return <SyncHealthActionsProvider><Card title={status.title} headingLevel={2}>
     <p className="mb-3 text-caption text-text-muted">Sync health · <LazyHelpLink slug={SYNC_HEALTH_HELP.helpSlug} anchor={SYNC_HEALTH_HELP.anchor}>What these rows mean</LazyHelpLink></p>
     {status.sentence ? <div className="mb-3 flex flex-wrap items-center gap-3">
       <p className={`flex min-w-0 items-start gap-2 break-words text-caption ${status.tone === "ok" ? TONE_TEXT.ok : "text-text"}`}>
@@ -59,7 +61,7 @@ export function SyncHealthCard() {
       <span className="text-caption text-text-muted">Checked {fmtAgo(data.checkedAt)}</span>
     </div>
     <LazyReportIssueModal open={reporting} onClose={() => setReporting(false)} prefill={syncReportPrefill(data)} />
-  </Card>;
+  </Card></SyncHealthActionsProvider>;
 }
 
 function SyncHealthRowItem({ item, names, onReport }: { item: SyncHealthItem; names?: SyncReport["unresolvedNames"]; onReport: () => void }) {
@@ -73,6 +75,8 @@ function SyncHealthRowItem({ item, names, onReport }: { item: SyncHealthItem; na
       </div>
       {names?.length ? <UnresolvedNames names={names} /> : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {item.code === "replays_skipped_unresolved" && item.deviceId ? <SyncHealthActionButton
+          action={{ kind: "retry", deviceId: item.deviceId, reason: "player_unresolved" }} contextLabel={`unrecognized players on ${item.pc ?? "your PC"}`} /> : null}
         <SyncFixAction fix={item.fix} onReport={onReport} />
         <LazyHelpLink slug={item.helpSlug} anchor={item.anchor} className="text-caption">Learn more<span className="sr-only"> about {item.title.toLowerCase()}</span></LazyHelpLink>
       </div>
@@ -93,8 +97,9 @@ function SyncFixAction({ fix, onReport }: { fix: SyncFix | null; onReport: () =>
 function UnresolvedNames({ names }: { names: NonNullable<SyncReport["unresolvedNames"]> }) {
   return <div className="rounded-lg border border-border bg-bg-elevated px-3 py-2">
     <p className="text-caption text-text-muted">Players in these replays. Only you see this list. If one of them is you, add that account to your profile.</p>
-    <ul className="mt-1 space-y-0.5">{names.map((entry) => <li key={entry.toonHandle} className="break-all text-caption text-text">
+    <ul className="mt-1 space-y-2">{names.map((entry) => <li key={entry.toonHandle} className="break-all text-caption text-text">
       <span className="font-semibold">{entry.name}</span> · <span className="font-mono">{entry.toonHandle}</span> · {entry.count.toLocaleString("en-US")} {entry.count === 1 ? "replay" : "replays"}
+      <SyncHealthActionButton action={{ kind: "identity", toonHandle: entry.toonHandle }} contextLabel={entry.name} />
     </li>)}</ul>
   </div>;
 }
@@ -109,6 +114,7 @@ function OtherSkippedReplays({ data }: { data: SyncHealthResponse }) {
       <p className="break-all font-semibold">{pc}</p>
       <ul className="mt-1 space-y-1">{skips.map((skip) => <li key={skip.code} className="break-words">
         <span className="font-medium">{skip.count.toLocaleString("en-US")}</span> · {skip.text}
+        {canRetrySyncReason(skip.code) ? <SyncHealthActionButton action={{ kind: "retry", deviceId, reason: skip.code }} contextLabel={`${skip.text} on ${pc}`} /> : null}
       </li>)}</ul>
     </div>)}
   </details>;

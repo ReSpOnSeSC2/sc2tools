@@ -541,7 +541,7 @@ class UploadQueue:
         # clamped to whatever the halving converged on.
         self._batch_ceiling = new_size
 
-    def submit(self, job: UploadJob) -> bool:
+    def submit(self, job: UploadJob, *, current_guard=None) -> bool:
         """Enqueue a job. Returns False if uploaded or already pending.
 
         Backpressure (added v0.5.8): when process-mode parse pools
@@ -568,7 +568,9 @@ class UploadQueue:
         until the job's pending reservation ends, including through retries.
         """
         path_key = str(job.file_path)
-        with self._lock:
+        with self._lock, _STATE_SAVE_LOCK:
+            if current_guard is not None and current_guard() is False:
+                return False
             if path_key in self._state.uploaded:
                 log.debug("dedupe_skip_uploaded %s", job.file_path.name)
                 return False
@@ -576,8 +578,7 @@ class UploadQueue:
                 log.debug("dedupe_skip_pending %s", job.file_path.name)
                 return False
             self._pending_paths.add(path_key)
-            with _STATE_SAVE_LOCK:
-                self._pending_owners[path_key] = self._owner_identity(self._upload_context())
+            self._pending_owners[path_key] = self._owner_identity(self._upload_context())
         with self._archive_lock:
             self._archive_idle_since = None
         self._archive_wake.set()
@@ -1168,25 +1169,49 @@ class UploadQueue:
         from ..recent_games import RETRYABLE_SKIPS
         if reason is not None and reason not in RETRYABLE_SKIPS:
             raise ValueError("This skip reason cannot be retried.")
+        return self._retry_cursor(paths, reason=reason)
+
+    def retry_sync_reason(self, reason, *, current_guard):
+        from ..sync_retry import RETRY_REASONS
+        if reason not in RETRY_REASONS:
+            raise ValueError("This skip reason cannot be retried.")
+        return self._retry_cursor(reason=reason, current_guard=current_guard)
+
+    def _retry_cursor(self, paths=(), *, reason=None, current_guard=None):
         selected = {str(path) for path in paths}
         if reason is None and not selected:
             return []
-        with self._lock:
-            chosen = {}
-            for path, marker in self._state.uploaded.items():
-                wanted = "filtered" if reason == "filtered" else "skipped:" + str(reason)
-                if reason == "filtered":
-                    matches = marker in {"filtered", "skipped:filtered"}
-                else:
-                    matches = marker == wanted if reason else path in selected
-                if matches and path not in self._pending_paths and Path(path).is_file():
-                    chosen[path] = marker
+        with _STATE_SAVE_LOCK:
+            snapshot = tuple(self._state.uploaded.items())
+        candidates = {}
+        for path, marker in snapshot:
+            if current_guard is not None and current_guard() is False:
+                from ..sync_retry import RetryStopped
+                raise RetryStopped()
+            wanted = "filtered" if reason == "filtered" else "skipped:" + str(reason)
+            if reason == "filtered":
+                matches = marker in {"filtered", "skipped:filtered"}
+            else:
+                matches = marker == wanted if reason else path in selected
+            if matches and Path(path).is_file():
+                candidates[path] = marker
+        # Filesystem work above may block. The no-I/O guard and current marker
+        # comparison below are atomic with all marker writers and submission.
+        with self._lock, _STATE_SAVE_LOCK:
+            if current_guard is not None and current_guard() is False:
+                from ..sync_retry import RetryStopped
+                raise RetryStopped()
+            chosen = {path: marker for path, marker in candidates.items()
+                      if path not in self._pending_paths and self._state.uploaded.get(path) == marker}
             for path in chosen:
                 del self._state.uploaded[path]
             if chosen:
                 try:
+                    if current_guard is not None and current_guard() is False:
+                        from ..sync_retry import RetryStopped
+                        raise RetryStopped()
                     save_state(self._cfg.state_dir, self._state)
-                except OSError:
+                except BaseException:
                     self._state.uploaded.update(chosen)
                     raise
         self.retry_now()
@@ -1308,7 +1333,7 @@ class UploadQueue:
             label = sync_filter.short_label()
             err = _FilteredOutError(f"Outside sync window {label}")
             try:
-                with self._lock:
+                with self._lock, _STATE_SAVE_LOCK:
                     for job in dropped_jobs:
                         self._state.uploaded[str(job.file_path)] = "filtered"
                     save_state(self._cfg.state_dir, self._state)

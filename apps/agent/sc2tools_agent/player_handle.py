@@ -57,7 +57,20 @@ def read_cache(state_dir: Path) -> Optional[str]:
     return None
 
 
-def write_cache(state_dir: Path, handle: Optional[str]) -> None:
+def read_settings_hint(state_dir: Path, owner) -> Optional[str]:
+    """Legacy flat caches have no owner/provenance and gain no authority."""
+    try:
+        raw = json.loads(cache_path(state_dir).read_text(encoding="utf-8"))
+        if (isinstance(raw, dict) and isinstance(owner, str) and owner
+                and raw.get("owner") == owner and raw.get("source") == "settings"
+                and isinstance(raw.get("handle"), str) and raw["handle"].strip()):
+            return raw["handle"].strip()[:64]
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def write_cache(state_dir: Path, handle: Optional[str], *, owner=None, source=None) -> None:
     """Atomic write of the resolved handle. ``None`` clears the cache."""
     state_dir = Path(state_dir)
     state_dir.mkdir(parents=True, exist_ok=True)
@@ -73,7 +86,10 @@ def write_cache(state_dir: Path, handle: Optional[str]) -> None:
     )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump({"handle": handle}, fh, indent=2, sort_keys=True)
+            payload = {"handle": handle}
+            if source == "settings" and isinstance(owner, str) and owner:
+                payload.update(owner=owner, source="settings")
+            json.dump(payload, fh, indent=2, sort_keys=True)
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp_path, target)
@@ -87,6 +103,7 @@ def write_cache(state_dir: Path, handle: Optional[str]) -> None:
 
 def refresh_from_cloud(
     api: "ApiClient", state_dir: Path,
+    *, current_guard=None, on_profile=None, interactive=False, owner=None,
 ) -> Optional[str]:
     """Pull the latest profile and write the cache. Returns the handle
     that was cached (or None if the cloud has nothing for this user).
@@ -96,16 +113,23 @@ def refresh_from_cloud(
     the cache.
     """
     try:
-        profile = api.get_profile()
+        profile = api.get_profile(interactive=True) if interactive else api.get_profile()
     except Exception as exc:  # noqa: BLE001
-        log.info("player_handle_refresh_failed: %s", exc)
+        log.info("player_handle_refresh_failed type=%s", type(exc).__name__)
         return None
-    handle = _pick_handle_from_profile(profile)
-    if handle:
-        try:
-            write_cache(state_dir, handle)
-        except OSError as exc:
-            log.warning("player_handle_cache_write_failed: %s", exc)
+    from .state import _STATE_SAVE_LOCK
+    with _STATE_SAVE_LOCK:
+        if current_guard is not None and not current_guard():
+            return None
+        explicit = read_settings_hint(state_dir, owner)
+        if on_profile is not None:
+            on_profile({**profile, "displayName": explicit} if explicit and isinstance(profile, dict) else profile)
+        handle = explicit or _pick_handle_from_profile(profile)
+        if handle and not explicit:
+            try:
+                write_cache(state_dir, handle)
+            except OSError:
+                log.warning("player_handle_cache_write_failed")
     return handle
 
 

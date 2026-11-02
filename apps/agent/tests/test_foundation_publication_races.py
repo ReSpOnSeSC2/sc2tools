@@ -357,6 +357,12 @@ def test_recovery_publishes_api_replacements_under_lock_then_starts_transport_ou
     def unlocked(*args):
         assert not _STATE_SAVE_LOCK._is_owned()
 
+    def profile(api, **kwargs):
+        assert not _STATE_SAVE_LOCK._is_owned()
+        assert api is cell.api and api.device_token == "new"
+        assert kwargs == {"interactive": True}
+        return {"displayName": "Current owner"}
+
     old_socket.stop.side_effect = unlocked
     old_socket.with_device_token.side_effect = rebuild
     new_socket.set_session_enabled.side_effect = unlocked
@@ -364,6 +370,7 @@ def test_recovery_publishes_api_replacements_under_lock_then_starts_transport_ou
     ui = Mock()
     ui.on_paired.side_effect = lambda user_id: paired.set()
     monkeypatch.setattr("sc2tools_agent.pairing.recovery.ensure_paired", pair)
+    monkeypatch.setattr(ApiClient, "get_profile", profile)
     recovery = RuntimeRecovery(cell=cell, cfg=_cfg(tmp_path), state=state, ui=ui, stop_event=threading.Event())
     recovery.link_again()
     assert paired.wait(3)

@@ -4,6 +4,7 @@ const {
   isPrivateSearchPath, isPrivateSearchRequest, isPrivateSearchFailure,
 } = require("./privateSearchBoundary");
 const { isSearchQueryUrl, requestCarriesSearchQuery } = require("./searchQueryPrivacy");
+const { isSyncActionPath } = require("./syncActionJson");
 const PRIVATE_SEARCH_TAG = "sc2tools.private_search";
 const HEARTBEAT_PATH = /^\/v1\/devices\/heartbeat\/?$/i;
 
@@ -33,11 +34,17 @@ function isHeartbeatBodyPath(value) {
   return HEARTBEAT_PATH.test((end < 0 ? value : value.slice(0, end)).replace(/^https?:\/\/[^/]+(?=\/)/i, ""));
 }
 
-/** A heartbeat event keeps its URL and status but never its body, on either request copy.
+/** @param {unknown} value */
+const isPrivateBodyPath = value => isHeartbeatBodyPath(value) || isSyncActionPath(value);
+
+/** Heartbeats and sync actions keep their URL/status but never their private
+ * body, including a second request copy without its own URL.
  * @param {unknown} event */
-function stripHeartbeatBody(event) {
-  for (const request of [ownData(event, "request"), ownData(ownData(event, "sdkProcessingMetadata"), "normalizedRequest")]) {
-    if (request && typeof request === "object" && isHeartbeatBodyPath(ownData(request, "url"))) {
+function stripPrivateBody(event) {
+  const requests = [ownData(event, "request"), ownData(ownData(event, "sdkProcessingMetadata"), "normalizedRequest")];
+  if (!requests.some(request => isPrivateBodyPath(ownData(request, "url")))) return;
+  for (const request of requests) {
+    if (request && typeof request === "object") {
       delete /** @type {{data?: unknown}} */ (request).data;
     }
   }
@@ -73,7 +80,7 @@ function shouldDropPrivateSearchEvent(event, hint) {
  */
 function beforeSendPrivateSearch(event, hint) {
   if (shouldDropPrivateSearchEvent(event, hint)) return null;
-  stripHeartbeatBody(event);
+  stripPrivateBody(event);
   return event;
 }
 
@@ -95,7 +102,7 @@ function privateSearchSentryCallbacks() {
 function privateSearchHttpOptions() {
   return {
     /** @param {string} urlPath */
-    ignoreIncomingRequestBody: urlPath => isPrivateSearchPath(urlPath) || isHeartbeatBodyPath(urlPath),
+    ignoreIncomingRequestBody: urlPath => isPrivateSearchPath(urlPath) || isPrivateBodyPath(urlPath),
     /** @param {string} urlPath the path and query string */
     ignoreIncomingRequests: urlPath => isPrivateSearchPath(urlPath) || isSearchQueryUrl(urlPath),
   };

@@ -22,6 +22,8 @@ All routes are mounted under `/v1`.
 | GET    | /v1/health                        | none         | DB ping for Render            |
 | GET    | /v1/me                            | clerk/device | Current user + game stats     |
 | GET    | /v1/me/sync-health                | clerk/device | Sync health rows + each PC's sync report (owner only, `no-store`) |
+| POST   | /v1/me/sync-health/identity       | clerk | Add one owned toon identity without replacing the profile |
+| POST   | /v1/me/sync-health/retry          | clerk | Retry one reason on one current linked agent; bounded ACK, no full resync |
 | GET    | /v1/opponents                     | clerk/device | Page through opponents        |
 | GET    | /v1/opponents/:pulseId            | clerk/device | One opponent + aggregates     |
 | GET    | /v1/games                         | clerk/device | Page through games            |

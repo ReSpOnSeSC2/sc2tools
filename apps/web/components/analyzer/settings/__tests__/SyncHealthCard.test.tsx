@@ -6,9 +6,10 @@ import type { SyncHealthResponse } from "@/lib/syncHealth";
 import { SyncHealthCard } from "../SyncHealthCard";
 
 const h = vi.hoisted(() => ({ answer: undefined as SyncHealthResponse | Error | undefined, fetch: vi.fn(), options: {} as Record<string, unknown> }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "owner", isLoaded: true, isSignedIn: true, getToken: async () => "synthetic" }) }));
 vi.mock("@/lib/clientApi", async () => {
   const { default: useSWR } = await import("swr");
-  return { useApi: (path: string, options: Record<string, unknown>) => {
+  return { ...await vi.importActual<typeof import("@/lib/clientApi")>("@/lib/clientApi"), useApi: (path: string, options: Record<string, unknown>) => {
     h.options = options;
     return useSWR(path, async () => { h.fetch(path); if (h.answer instanceof Error) throw h.answer; return h.answer; },
       { ...options, dedupingInterval: 0, shouldRetryOnError: false });
@@ -57,8 +58,11 @@ describe("Settings Sync health", () => {
     expect(screen.getByRole("link", { name: "Learn more about player not recognized" }).getAttribute("href")).toBe("/help/my-game-didnt-show-up#sync-player-unresolved");
     expect(screen.getByText("Synthetic Player")).toBeTruthy();
     expect(screen.getByText("1-S2-1-424242")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add as my account: Synthetic Player" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry with latest agent: unrecognized players on Synthetic PC" })).toBeTruthy();
     fireEvent.click(screen.getByText("Other skipped replays"));
     expect(screen.getByText(/Skipped — game vs the AI\./)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /Retry with latest agent/ })).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Report" }));
     const dialog = screen.getByRole("dialog", { name: "Report a problem" });
     expect(dialog.textContent).toContain("- uploads_rejected: 2");

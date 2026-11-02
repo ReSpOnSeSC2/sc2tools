@@ -290,7 +290,7 @@ def test_worker_logs_exception_type_without_secret_url(caplog):
     assert "private.invalid" not in caplog.text and "secret" not in caplog.text
 
 
-def test_heartbeat_advisory_uses_the_api_that_completed_before_hot_relink_and_cannot_fail_health():
+def test_retired_heartbeat_response_cannot_publish_advisory_or_health():
     callbacks, failures, successes = [], [], []
     api = SimpleNamespace(_post=Mock(), device_token="A")
     heartbeat = Heartbeat(api, on_overlay_tokens=lambda rows, captured: callbacks.append((rows, captured)),
@@ -300,11 +300,22 @@ def test_heartbeat_advisory_uses_the_api_that_completed_before_hot_relink_and_ca
         return {"overlayTokenReplacements": [{"from": "old", "to": "ready"}]}
     api._post.side_effect = post
     heartbeat._send_one()
-    assert callbacks == [([{"from": "old", "to": "ready"}], api)]
+    assert not callbacks and not successes and not failures
+    api._post.assert_called_once()
+
+
+def test_current_heartbeat_advisory_uses_completed_api_and_cannot_fail_health():
+    callbacks, failures, successes = [], [], []
+    rows = [{"from": "old", "to": "ready"}]
+    api = SimpleNamespace(_post=Mock(return_value={"overlayTokenReplacements": rows}), device_token="A")
+    heartbeat = Heartbeat(api, on_overlay_tokens=lambda data, captured: callbacks.append((data, captured)),
+        on_success=lambda: successes.append(True), on_failure=failures.append)
+    heartbeat._send_one()
+    assert callbacks == [(rows, api)]
     assert successes == [True] and not failures
-    heartbeat._api = api
     heartbeat._on_overlay_tokens = Mock(side_effect=RuntimeError("advisory"))
     heartbeat._send_one()
+    heartbeat._on_overlay_tokens.assert_called_once_with(rows, api)
     assert successes == [True, True] and not failures
 
 

@@ -23,6 +23,8 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -48,6 +50,18 @@ from .custom_builds import load_custom_builds
 from .event_extractor import build_log_lines, extract_events
 from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
 from .preset_policy import policy_snapshot, classification_evidence
+
+_OWNED_TOONS = ContextVar("owned_replay_toons", default=None)
+
+
+@contextmanager
+def owned_toon_scope(toons):
+    """Optional native-owner identity. Browser/default parsing stays unchanged."""
+    token = _OWNED_TOONS.set((toons,))
+    try:
+        yield
+    finally:
+        _OWNED_TOONS.reset(token)
 
 
 # =========================================================
@@ -359,6 +373,17 @@ def _resolve_me_opp(replay, my_handle: str) -> Tuple[Optional[Any], Optional[Any
     Return (me_player, opp_player) by substring-matching my_handle.
     First non-me human player is treated as opponent.
     """
+    scope = _OWNED_TOONS.get()
+    if scope is not None:
+        owned = scope[0]
+        players = [p for p in replay.players if not getattr(p, "is_observer", False)
+                   and not getattr(p, "is_referee", False)]
+        matches = [p for p in players if (str(getattr(p, "toon_handle", "")) in owned if owned is not None
+                   else is_me(getattr(p, "name", ""), my_handle))]
+        if len(matches) != 1:
+            return None, None
+        me = matches[0]
+        return me, next((p for p in players if p is not me), None)
     me, opp = None, None
     for p in replay.players:
         if getattr(p, "is_observer", False) or getattr(p, "is_referee", False):

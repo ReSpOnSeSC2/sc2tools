@@ -55,8 +55,16 @@ class SyncReportTracker:
         self._upload_error = ""
         self._transport_error = ""
         self._pending = 0
+        self._owner = None
 
-    def unresolved(self, path, entries):
+    def set_owner(self, owner):
+        with self._lock:
+            if self._owner != owner:
+                self._owner = owner
+                self._unresolved.clear()
+                self._generation += 1
+
+    def unresolved(self, path, entries, *, ticket=None):
         candidates = dict()
         for entry in entries or ():
             candidate = _candidate(entry)
@@ -66,6 +74,8 @@ class SyncReportTracker:
             if len(candidates) >= 16:
                 break
         with self._lock:
+            if ticket is not None and self._owner is not None and self._owner != (ticket.owner, ticket.token, ticket.epoch):
+                return
             self._generation += 1
             self._unresolved[str(path)] = (self._generation, tuple(candidates.items()))
             self._unresolved.move_to_end(str(path))
@@ -98,7 +108,7 @@ class SyncReportTracker:
             if self._pending == 0:
                 self._upload_error = ""  # A drained queue retires its failing work.
 
-    def report(self, facts, uploaded, *, generation=None):
+    def report(self, facts, uploaded, *, generation=None, owner=None):
         generation = self.generation() if generation is None else generation
         skipped, rejected, filtered = Counter(), 0, 0
         unresolved_paths = set()
@@ -115,13 +125,14 @@ class SyncReportTracker:
                     if reason == "player_unresolved":
                         unresolved_paths.add(path)
         with self._lock:
+            same_owner = owner is None or owner == self._owner
             # A candidate captured after the caller copied markers may not
             # appear there yet. Retire only records older than that copy.
-            for path, (observed, _) in list(self._unresolved.items()):
+            for path, (observed, _) in list(self._unresolved.items()) if same_owner else ():
                 if path not in unresolved_paths and observed <= generation:
                     del self._unresolved[path]
             counts, names = Counter(), {}
-            for path in unresolved_paths:
+            for path in unresolved_paths if same_owner else ():
                 for handle, name in self._unresolved.get(path, (0, ()))[1]:
                     counts[handle] += 1
                     names[handle] = name

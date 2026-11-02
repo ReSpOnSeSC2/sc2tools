@@ -13,6 +13,7 @@ corresponding GitHub Release.
 
 ### Agent 0.24.8
 
+- Add identities and retry one sync skip reason on one linked PC from Settings, with exact owned-account perspective, owner/session fencing and the existing sync range/capture opt-in preserved. Keep explicit native player-name overrides bound to their account across restarts. This release remains unpublished and owner-gated.
 - Report current sync queues, skip reasons, unmatched accounts and upload failures to the owner's Sync health card. Keep connection, StarCraft II, OBS, player-name and missing-folder health facts current.
 - Explain desktop sync health with one dashboard card, a next step and help for each problem, and Restart agent for startup failures. The tray now matches the card's green, amber, red and paused grey states.
 - Use the opponent's current regional season and active race for MMR, and announce one automatic scouting report per game across Companion and OBS, cancelling pending readouts when the match, account or voice permissions change.

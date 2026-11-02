@@ -50,6 +50,7 @@ from .crash_reporter import (
 )
 from .heartbeat import Heartbeat
 from .sync_report import SyncReportTracker
+from .sync_retry import SyncRetryController, replay_ticket, publish_owned_toons, publish_local_hint, current_identity_source, settings_identity_origin
 from .instance_lock import AgentInstanceLock
 from .live import EventBus, LiveBridge, LiveLifecycleEvent, PulseClient
 from .live.client_api import LiveClientPoller
@@ -79,6 +80,7 @@ from .bot_lab import BotLabController
 from .player_handle import (
     auto_detect_from_replays,
     read_cache as read_player_handle_cache,
+    read_settings_hint,
     refresh_from_cloud as refresh_player_handle,
     resolve as resolve_player_handle,
     write_cache as write_player_handle_cache,
@@ -495,7 +497,7 @@ def _run_headless(
         ),
         on_replay_skipped=lambda p, reason: _desktop_replay_skipped(ui, import_ctl, p, reason),
         on_roots_changed=ui.on_folders,
-        on_unresolved=ui.sync_report.unresolved,
+        on_unresolved=lambda path, entries, *, ticket: _record_sync_unresolved(ui, state, path, entries, ticket),
     )
     import_ctl = ImportController(
         api=api,
@@ -548,6 +550,7 @@ def _run_headless(
             on_recompute_games=on_macro,
             on_recompute_opp_build=on_opp,
             on_full_resync=on_full_resync,
+            on_sync_retry=SyncRetryController(cfg=cfg, state=state, cell=recovery_cell, stop_event=stop_event).handle,
             on_import_scan=import_ctl.handle_scan_request,
             on_import_start=import_ctl.handle_start_request,
             on_import_cancel=import_ctl.handle_cancel_request,
@@ -720,11 +723,9 @@ def _run_with_gui(
         autostart_enabled=autostart.is_enabled(),
         start_minimized=state.start_minimized,
         notify_every_game=state.notify_every_game,
-        # Surface the cached handle (cloud profile or prior auto-detect)
-        # so the user sees what the agent will use when no override is
-        # set. Empty when nothing has been resolved yet — the placeholder
-        # text in the input field tells them the implications.
-        player_handle=read_player_handle_cache(cfg.state_dir) or "",
+        # Only an explicit override attributed to this account is prefilled.
+        # Legacy/cloud flat cache contents never become Settings provenance.
+        player_handle=read_settings_hint(cfg.state_dir, state.user_id) or "",
         # Show the EFFECTIVE concurrency the watcher will use this run,
         # which is the override-if-set otherwise the config default.
         # cfg.* already incorporates env vars + state via _bootstrap,
@@ -823,6 +824,7 @@ def _run_with_gui(
         return companion.action(request)
 
     gui = GuiUI(
+        settings_identity_provider=lambda: settings_identity_origin(state),
         on_restore_folders=lambda snapshot: _restore_folder_snapshot(cfg,state,cell,snapshot),
         on_install_update=lambda: cell.update_scheduler.tick(explicit=True) if cell.update_scheduler else None,
         on_update_later=lambda: cell.update_scheduler.later() if cell.update_scheduler else None,
@@ -1095,7 +1097,7 @@ def _gui_boot_worker(
             on_roots_changed=lambda folders: _show_replay_folders(
                 cell, folders,
             ),
-            on_unresolved=ui.sync_report.unresolved,
+            on_unresolved=lambda path, entries, *, ticket: _record_sync_unresolved(ui, state, path, entries, ticket),
         )
         import_ctl = ImportController(
             api=api,
@@ -1152,6 +1154,7 @@ def _gui_boot_worker(
                 on_recompute_games=on_macro,
                 on_recompute_opp_build=on_opp,
                 on_full_resync=on_full_resync,
+                on_sync_retry=SyncRetryController(cfg=cfg, state=state, cell=cell, stop_event=stop_event).handle,
                 on_import_scan=import_ctl.handle_scan_request,
                 on_import_start=import_ctl.handle_start_request,
                 on_import_cancel=import_ctl.handle_cancel_request,
@@ -1346,8 +1349,9 @@ def _handle_resync(
     state: AgentState,
     upload: Optional[UploadQueue],
 ) -> None:
-    state.uploaded.clear()
-    save_state(cfg.state_dir, state)
+    with _STATE_SAVE_LOCK:
+        state.uploaded.clear()
+        save_state(cfg.state_dir, state)
     if upload:
         upload.request_full_resync()
     logging.getLogger(__name__).info("agent_resync_requested")
@@ -1430,25 +1434,43 @@ def _sync_report_provider(ui, state, cfg):
         return tuple(dict.fromkeys(str(path) for path in configured if not Path(path).is_dir()))
 
     ui._missing_folders = missing
-    ui._identity_refresh = lambda: _reconcile_identity(ui, cfg.state_dir)
-    def current():
-        generation = ui.sync_report.generation()
+    ui._identity_refresh = lambda: _reconcile_identity(ui, cfg.state_dir, state)
+    def current(api=None):
         with _STATE_SAVE_LOCK:
+            ticket = replay_ticket(state)
+            if api is not None and getattr(api, "device_token", None) != ticket.token:
+                return {}
+            owner = (ticket.owner, ticket.token, ticket.epoch)
+            ui.sync_report.set_owner(owner)
+            generation = ui.sync_report.generation()
             uploaded = dict(state.uploaded)
             missing_paths = missing()
         ui._identity_refresh()
         ui.health.set_folders(ui.health.facts().folders, missing=missing_paths)
         facts = ui.health.facts()
-        report = ui.sync_report.report(facts, uploaded, generation=generation)
+        report = ui.sync_report.report(facts, uploaded, generation=generation, owner=owner)
         # An explicit env root stays in the discovery list even while missing.
         # Only existing directories can be watched; keep that list intact for UI.
         report["foldersWatched"] = sum(Path(path).is_dir() for path in facts.folders or ())
         return report
+    current.for_api = current
     return current
 
 
-def _reconcile_identity(ui, state_dir):
+def _record_sync_unresolved(ui, state, path, entries, ticket):
+    # Actual publication is fenced, even when a callback was held after mark.
+    # This audited tracker only acquires its own metadata lock, never a queue.
+    with _STATE_SAVE_LOCK:
+        if ticket.current(state):
+            ui.sync_report.set_owner((ticket.owner, ticket.token, ticket.epoch))
+            ui.sync_report.unresolved(path, entries, ticket=ticket)
+
+
+def _reconcile_identity(ui, state_dir, state=None):
     """A parser's first toon-path repair can populate the cache after boot."""
+    if state is not None:
+        ui.health.set_identity(current_identity_source(state, state_dir))
+        return
     if ui.health.facts().identity_source not in (None, "none"):
         return
     if read_player_handle_cache(state_dir):
@@ -1613,12 +1635,13 @@ def _queue_replays_for_resync(
     if not paths or upload is None:
         return
     removed = 0
-    for p in paths:
-        key = str(p)
-        if state.uploaded.pop(key, None) is not None:
-            removed += 1
-    if state_dir is not None:
-        save_state(state_dir, state)
+    with _STATE_SAVE_LOCK:
+        for p in paths:
+            key = str(p)
+            if state.uploaded.pop(key, None) is not None:
+                removed += 1
+        if state_dir is not None:
+            save_state(state_dir, state)
     upload.request_full_resync()
     log.info(
         "per_game_resync_queued count=%d total_requested=%d",
@@ -1825,6 +1848,7 @@ def _handle_save_settings(
     log: logging.Logger,
 ) -> None:
     """Persist Settings-tab edits and apply the registry-side changes."""
+    settings_ticket = replay_ticket(state)
     folder_before = _folder_snapshot(state) if payload.replay_folders is not None else None
     if payload.background_import_speed in ("gentle","balanced","maximum"):
         state.background_import_speed = payload.background_import_speed
@@ -1841,12 +1865,21 @@ def _handle_save_settings(
         # profile / auto-detect". Anything else writes the user-typed
         # value into the cache the parser reads on every replay.
         try:
-            write_player_handle_cache(
-                cfg.state_dir, payload.player_handle or None,
-            )
+            published_hint = False
+            with _STATE_SAVE_LOCK:
+                origin = getattr(payload, "player_handle_origin", None)
+                if settings_ticket.current(state) and (origin is None or origin == (state.user_id, state._owner_epoch)):
+                    write_player_handle_cache(cfg.state_dir, payload.player_handle or None,
+                                              owner=settings_ticket.owner, source="settings")
+                    publish_local_hint(state, payload.player_handle)
+                    published_hint = True
             health = getattr(getattr(cell, "ui", None), "health", None)
-            if health:
-                health.set_identity("settings" if payload.player_handle else "none")
+            if health and published_hint:
+                health.set_identity(current_identity_source(state, cfg.state_dir))
+            if published_hint and not payload.player_handle:
+                recovery = getattr(cell, "recovery", None)
+                if recovery:
+                    recovery.refresh_unknown_identity(force=True)
         except OSError:
             log.exception("player_handle_cache_write_failed")
     if payload.parse_concurrency is not None:
@@ -1985,10 +2018,11 @@ def _handle_save_settings(
         # values — those are durable outcomes the filter change has
         # no bearing on.
         cleared_filtered = 0
-        for path_key in list(state.uploaded.keys()):
-            if state.uploaded.get(path_key) == "filtered":
-                del state.uploaded[path_key]
-                cleared_filtered += 1
+        with _STATE_SAVE_LOCK:
+            for path_key in list(state.uploaded.keys()):
+                if state.uploaded.get(path_key) == "filtered":
+                    del state.uploaded[path_key]
+                    cleared_filtered += 1
         # Step 2: drain the upload queue's already-parsed jobs that
         # fall outside the new window. This is what stops the "I
         # clicked Save and it kept uploading" complaint — without
@@ -2198,21 +2232,34 @@ def _ensure_player_handle(
     """
     # 1. Cloud — if it returns a value, refresh_from_cloud already wrote
     #    the disk cache for us, so nothing more to do here.
+    original_source = on_source
+    on_source = lambda _source: _push_identity_source(original_source, current_identity_source(state, cfg.state_dir))
+    ticket = replay_ticket(state)
+    local_hint = read_settings_hint(cfg.state_dir, ticket.owner)
+    if local_hint:
+        with _STATE_SAVE_LOCK:
+            if ticket.current(state):
+                publish_local_hint(state, local_hint)
     try:
-        cloud_handle = refresh_player_handle(api, cfg.state_dir)
+        cloud_handle = refresh_player_handle(api, cfg.state_dir,
+            owner=ticket.owner,
+            current_guard=lambda: ticket.current(state),
+            on_profile=lambda profile: publish_owned_toons(state, profile, ticket))
     except Exception:  # noqa: BLE001
         log.exception("player_handle_refresh_unhandled")
         cloud_handle = None
+    if not ticket.current(state):
+        return None
     if cloud_handle:
-        _push_identity_source(on_source, "cloud")
+        _push_identity_source(on_source, "settings" if local_hint else "cloud")
         log.info("player_handle_resolved source=cloud")
         return cloud_handle
 
     # 2. Disk cache (cloud was empty / offline / unreachable).
     cached = read_player_handle_cache(cfg.state_dir)
     if cached:
-        _push_identity_source(on_source, "cache")
-        log.info("player_handle_resolved source=cache value=%s", cached)
+        _push_identity_source(on_source, "settings" if local_hint else "cache")
+        log.info("player_handle_resolved source=cache")
         return cached
 
     # 3. Auto-detect from a recent replay. This is the only path that
@@ -2227,10 +2274,13 @@ def _ensure_player_handle(
     if detected:
         _push_identity_source(on_source, "auto_detect")
         try:
-            write_player_handle_cache(cfg.state_dir, detected)
+            with _STATE_SAVE_LOCK:
+                if not ticket.current(state):
+                    return None
+                write_player_handle_cache(cfg.state_dir, detected)
         except OSError:
             log.warning("player_handle_cache_write_failed_post_autodetect")
-        log.info("player_handle_resolved source=auto_detect value=%s", detected)
+        log.info("player_handle_resolved source=auto_detect")
         return detected
 
     fallback = resolve_player_handle(None)

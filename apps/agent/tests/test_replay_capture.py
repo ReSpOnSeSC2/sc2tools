@@ -312,8 +312,13 @@ def test_upload_budget_failure_is_durable_and_reaches_recording_status(monkeypat
     replay.write_bytes(b"original replay")
     recording = replay.with_name(replay.name + ".observations.json")
     recording.write_bytes(b"preserved complete engine recording")
-    state = AgentState(uploaded={str(replay): "previous-upload"}, replay_capture_enabled=True,
+    state = AgentState(user_id="owner", device_token="synthetic", uploaded={str(replay): "previous-upload"}, replay_capture_enabled=True,
                        path_by_game_id={"large": str(replay)})
+    from sc2tools_agent.sync_retry import replay_ticket, publish_owned_toons
+    from sc2tools_agent.state import _STATE_SAVE_LOCK
+    with _STATE_SAVE_LOCK:
+        publish_owned_toons(state, {"displayName": "Synthetic owner"}, replay_ticket(state))
+        ticket = replay_ticket(state)
     save_state(tmp_path, state)
     monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
     monkeypatch.setattr(watcher_module, "_wait_for_file_ready", lambda *_args: True)
@@ -334,11 +339,11 @@ def test_upload_budget_failure_is_durable_and_reaches_recording_status(monkeypat
         state.uploaded.pop(str(replay), None)
         save_state(tmp_path, state)
         if parse_mode == "thread":
-            watcher._handle_replay(replay)
+            watcher._handle_replay(replay, ticket=ticket)
         else:
             result = Future()
             result.set_result(("skipped", str(replay), "playback_budget_exceeded"))
-            watcher._on_worker_done(result, str(replay))
+            watcher._on_worker_done(result, str(replay), ticket)
 
     def status(update):
         updates.append(update)

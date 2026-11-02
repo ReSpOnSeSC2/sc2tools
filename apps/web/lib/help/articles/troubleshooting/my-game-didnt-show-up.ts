@@ -85,7 +85,7 @@ const article: HelpArticle = {
       rows: [
         ["The app doesn't watch that replay folder, for example a new region or account", "Press **Auto-detect** in the app's Settings: see [Replay folders](/help/replay-folders)."],
         ["It was a game against the AI", "Games against the computer aren't synced, on purpose."],
-        ["The app couldn't tell which player is you", "Set your BattleTag and SC2Pulse IDs in [Settings → Profile](/settings?tab=profile), or your **Player handle** in the app's Settings, then press **Re-sync**."],
+        ["The app couldn't tell which player is you", "Open [Sync health](/settings?tab=account#sync-health), add an account you recognize as yours, then retry the unrecognized replays on that PC."],
         ["Someone left during loading", "The game has no result, so there's nothing to count."],
         ["The replay was cut off or can't be read", "It was interrupted while saving, or comes from an unsupported game version. Press **Re-sync** to try again."],
         ["It's outside the app's **Sync date range**", "Set the range to **All time** in the app's Settings to include older games."],
@@ -132,7 +132,11 @@ const article: HelpArticle = {
     { type: "heading", text: "Player not recognized", anchor: "sync-player-unresolved" },
     {
       type: "paragraph",
-      text: "The desktop app skipped replays because it couldn't tell which player is you. The row lists the names it saw most often, with their account IDs, so you can spot an account of yours. Only you see that list. Add your BattleTag or SC2Pulse IDs in [Settings → Profile](/settings?tab=profile), or set your **Player handle** in the app's Settings. Then press **Re-sync** in the app.",
+      text: "The desktop app skipped replays because it couldn't tell which player is you. The row lists the names it saw most often, with their account IDs. Only you see that list. If an account is yours, press **Add as my account**, then **Retry with latest agent** on that PC's row. Adding an account preserves your other profile settings. You can manage saved accounts in [Settings → Profile](/settings?tab=profile).",
+    },
+    {
+      type: "paragraph",
+      text: "**Retry with latest agent** retries only replays with the selected reason on that PC and keeps your sync date range. The desktop app must be open, connected and recent enough to support it. A queued count means the app accepted the work; press **Check again** after it syncs to see the result. Other skipped replays offers the same retry for read or analysis failures. Games skipped on purpose stay skipped. If a request can't be confirmed, check the counts before trying again.",
     },
     { type: "heading", text: "Uploads rejected", anchor: "sync-uploads-rejected" },
     {

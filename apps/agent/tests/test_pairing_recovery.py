@@ -162,10 +162,14 @@ def test_actual_recovery_holds_jobs_keeps_cursor_and_rebuilds_credentials(tmp_pa
         kwargs["state"].device_token = "new"
         return True
     monkeypatch.setattr("sc2tools_agent.pairing.recovery.ensure_paired", paired)
+    monkeypatch.setattr(ApiClient, "get_profile", lambda *_args, **_kwargs: {"displayName": "Current owner"})
     recovery.link_again()
     deadline = time.monotonic() + 3
-    while cell.api.device_token != "new" and time.monotonic() < deadline:
+    # API replacement is an intermediate stage; guarded profile refresh and
+    # socket start precede releasing the queue's authentication hold.
+    while not ui.on_paired.called and time.monotonic() < deadline:
         time.sleep(.01)
+    ui.on_paired.assert_called_once_with("u1")
     assert cell.api.device_token == "new"
     assert cell.upload._api is cell.api and cell.heartbeat._api is cell.api
     assert cell.import_ctl._api is cell.api and cell.socket_client is new_socket

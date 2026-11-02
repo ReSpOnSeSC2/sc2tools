@@ -20,7 +20,7 @@ import re
 import sys
 import time
 from collections.abc import Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -30,6 +30,25 @@ from typing import Any, Dict, List, Optional, Tuple
 log = logging.getLogger(__name__)
 
 _UNRESOLVED_SINK = ContextVar("replay_unresolved_candidates", default=None)
+_OWNED_TOONS = ContextVar("native_owned_replay_toons", default=None)
+_CACHE_PROMOTION_ALLOWED = ContextVar("replay_identity_cache_promotion", default=True)
+_NATIVE_IDENTITY_SCOPE = ContextVar("native_replay_identity_scope", default=False)
+_OWNED_HINT = ContextVar("native_replay_identity_hint", default=None)
+
+
+@contextmanager
+def owned_replay_identity(toons, hint=None):
+    token = _OWNED_TOONS.set(toons)
+    cache_token = _CACHE_PROMOTION_ALLOWED.set(False)
+    scope_token = _NATIVE_IDENTITY_SCOPE.set(True)
+    hint_token = _OWNED_HINT.set(hint)
+    try:
+        yield
+    finally:
+        _OWNED_HINT.reset(hint_token)
+        _NATIVE_IDENTITY_SCOPE.reset(scope_token)
+        _CACHE_PROMOTION_ALLOWED.reset(cache_token)
+        _OWNED_TOONS.reset(token)
 
 
 @contextmanager
@@ -815,13 +834,16 @@ def parse_replay_for_cloud(
 
 
 def _parse_with_preset_policy(parse_deep, file_path, handle, state_dir):
-    if state_dir is None:
-        # The browser worker installs its validated manifest in this isolated
-        # interpreter. No state directory, file writes or network from parsing.
+    if state_dir is None and not _NATIVE_IDENTITY_SCOPE.get():
         return parse_deep(str(file_path), handle)
-    from .preset_policy import load_cached_policy
-    from core.preset_policy import policy_scope
-    with policy_scope(load_cached_policy(state_dir)):
+    with ExitStack() as scopes:
+        if _NATIVE_IDENTITY_SCOPE.get():
+            from core.sc2_replay_parser import owned_toon_scope
+            scopes.enter_context(owned_toon_scope(_OWNED_TOONS.get()))
+        if state_dir is not None:
+            from .preset_policy import load_cached_policy
+            from core.preset_policy import policy_scope
+            scopes.enter_context(policy_scope(load_cached_policy(state_dir)))
         return parse_deep(str(file_path), handle)
 
 
@@ -870,7 +892,8 @@ def parse_replay_for_cloud_ex(
             raise AnalyzerImportError(diag or str(exc)) from exc
         from core.sc2_replay_parser import parse_deep  # type: ignore
 
-    handle = player_handle or _read_player_handle(state_dir)
+    handle = ((_OWNED_HINT.get() or "") if _NATIVE_IDENTITY_SCOPE.get() and _OWNED_TOONS.get() is None
+              else player_handle or _read_player_handle(state_dir))
     try:
         ctx = _parse_with_preset_policy(parse_deep, file_path, handle or "", state_dir)
     except Exception as exc:  # noqa: BLE001
@@ -898,7 +921,7 @@ def parse_replay_for_cloud_ex(
     # silently turns every upload into a no-op — exactly the failure
     # mode that left ``state.uploaded`` empty in v0.3.4 even though the
     # analyzer import worked.
-    if not ctx.me or not ctx.opponent:
+    if not _NATIVE_IDENTITY_SCOPE.get() and (not ctx.me or not ctx.opponent):
         toon = _toon_handle_from_path(file_path)
         if toon and getattr(ctx, "all_players", None):
             me_p, opp_p = _resolve_by_toon(ctx.all_players, toon)
@@ -924,7 +947,7 @@ def parse_replay_for_cloud_ex(
                 # handle is wrong/stale costs two full parse_deep
                 # calls (~2× slowdown). One promotion fixes the whole
                 # backfill from that point on.
-                if state_dir is not None:
+                if state_dir is not None and _CACHE_PROMOTION_ALLOWED.get():
                     cached = _read_player_handle(state_dir)
                     if cached != me_p.name:
                         try:
@@ -951,7 +974,10 @@ def parse_replay_for_cloud_ex(
                             "resume_from_replay", False)
                 )
 
-    if not ctx.me or not ctx.opponent:
+    owned = _OWNED_TOONS.get()
+    if (not ctx.me or not ctx.opponent or (owned is not None and
+            (str(getattr(ctx.me, "handle", "")) not in owned
+             or str(getattr(ctx.opponent, "handle", "")) in owned))):
         _report_unresolved_candidates(getattr(ctx, "all_players", ()))
         return None, SKIP_PLAYER_UNRESOLVED
 
