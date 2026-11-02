@@ -49,7 +49,11 @@ def test_companion_extends_the_existing_agent_and_preserves_navigation(tmp_path:
             return ui, signals, win
 
         paired_ui, paired_signals, paired = window(True)
-        assert paired._stack.count() == 6
+        page_keys = ('dashboard', 'recent', 'log', 'settings', 'streams', 'companion', 'help')
+        pages = tuple(paired._stack.widget(index) for index in range(7))
+        parents = tuple(page.parentWidget() for page in pages)
+        assert paired._stack.count() == 7 and paired._PAGE_KEYS == page_keys
+        assert pages[5] is paired._companion_page and pages[6] is paired._help_page
         assert paired._stack.currentWidget() is paired._companion_page
         assert paired._nav_group.button(5).isChecked()
         paired._nav_group.button(3).click()
@@ -60,6 +64,24 @@ def test_companion_extends_the_existing_agent_and_preserves_navigation(tmp_path:
         paired._nav_group.button(5).click()
         assert paired._stack.currentWidget() is paired._companion_page
         paired.show()
+        paired.resize(1100, 800)
+        app.processEvents()
+        geometry = paired.geometry()
+        paired._handle_input.setText('Unsaved companion navigation draft')
+        paired._api_input.setText('https://draft.example.test')
+        for index, key in enumerate(page_keys):
+            paired._nav_group.button(index).click()
+            app.processEvents()
+            assert paired._PAGE_KEYS[paired._stack.currentIndex()] == key
+            assert paired._stack.currentWidget() is pages[index]
+            assert paired._nav_group.button(index).isChecked()
+            assert paired._handle_input.text() == 'Unsaved companion navigation draft'
+            assert paired._api_input.text() == 'https://draft.example.test'
+            assert paired.geometry() == geometry
+            assert all(paired._stack.widget(number) is page for number, page in enumerate(pages))
+            assert all(page.parentWidget() is owner for page, owner in zip(pages, parents))
+        paired._nav_group.button(5).click()
+        assert paired._stack.currentWidget() is pages[5]
         paired.close()
         assert not paired.isVisible()
         assert not paired._really_quit

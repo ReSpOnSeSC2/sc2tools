@@ -4,15 +4,18 @@ from tests._gui_offscreen import run_gui_check
 def test_status_is_truthful_boot_events_queue_and_errors_copy(tmp_path):
     run_gui_check(tmp_path,r"""
 from sc2tools_agent.health import HealthMonitor, classify_boot_error
+from sc2tools_agent.support_diagnostics import DiagnosticRow, DiagnosticSnapshot, ROW_IDS, SupportInfo, diagnostic_bytes
+from sc2tools_agent.support_runtime import SupportResult
 monitor=HealthMonitor(schedule=lambda delay,callback:callback())
 original=GuiUI.__init__
+boot_detail=f"Analyzer startup exploded\nmore detail token=raw-support-private\n{base / 'agent.json'}"
 def construct(self,*args,**kwargs):
     original(self,*args,**kwargs)
     # The boot worker's order, before the window exists: the classified failure, then the phase.
     monitor.subscribe(self.on_health)
-    monitor.set_boot_error(classify_boot_error(RuntimeError("Analyzer startup exploded\nmore detail")))
+    monitor.set_boot_error(classify_boot_error(RuntimeError(boot_detail)))
     monitor.set_phase("boot_error")
-    self.on_phase("boot_error","Analyzer startup exploded\nmore detail")
+    self.on_phase("boot_error",boot_detail)
 GuiUI.__init__=construct
 ui,win=make_window(replay_folders=[base/"2-S2-1-42"])
 win.show(); app.processEvents()
@@ -20,13 +23,31 @@ view=win._health_view
 assert view.headline.text()=="SC2 Tools couldn't start syncing"
 assert [line.sentence.text() for line in view.lines]==["Analyzer startup exploded"]
 assert view.lines[0].action_button.text()=="Restart agent" and win._status_copy.isVisible()
-(base/"agent.log").write_text("\n".join(f"2026-10-23T12:00:00 ERROR issue {i}" for i in range(30)),encoding="utf-8")
+approved=DiagnosticSnapshot(SupportInfo(version="0.24.8",errors=("analysis_failed",)),
+    tuple(DiagnosticRow(key,"fail","analysis_failed") if key=="analyzer" else DiagnosticRow(key) for key in ROW_IDS))
+class Support:
+    busy=False
+    def is_current(self,nonce): return nonce==1
+    def copy_info(self,delivered):
+        delivered(SupportResult(1,"copy",approved))
+        return 1
+    def cancel(self): pass
+ui.set_support_service(Support())
+win._help_page.poll()
+(base/"agent.log").write_text("\n".join(f"2026-10-23T12:00:00 ERROR issue {i} token=raw-log-private {base / 'agent.json'}" for i in range(30)),encoding="utf-8")
+app.clipboard().setText("not yet approved")
 win._copy_status_details()
+app.processEvents()
 details=app.clipboard().text()
-assert "SC2 Tools test" in details and "issue 29" in details and "issue 0\n" not in details
-assert "Analyzer startup exploded\nmore detail" in details
+assert details==diagnostic_bytes(approved).decode("utf-8")
+assert details.startswith("SC2 Tools support diagnostics v1\n") and 'errors=["analysis_failed"]' in details
+assert "issue 29" not in details and "issue 0" not in details
+assert "Analyzer startup exploded" not in details and "more detail" not in details
+assert "raw-support-private" not in details and "raw-log-private" not in details
+assert str(base) not in details and "agent.json" not in details
 ui.on_status("watching for replays"); app.processEvents()
 assert view.headline.text()=="SC2 Tools couldn't start syncing"
+assert [line.sentence.text() for line in view.lines]==["Analyzer startup exploded"]
 win.hide()
 """)
 
