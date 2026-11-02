@@ -75,6 +75,7 @@ class SocketClient:
         on_scouting_brief: Optional[Callable[[Dict[str, Any]], None]] = None,
         overlay_token_provider: Optional[Callable[[str], Optional[str]]] = None,
         session_enabled: bool = False,
+        on_connection: Optional[Callable[[bool], None]] = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._account_base_url = base_url
@@ -103,6 +104,7 @@ class SocketClient:
         self._on_scouting_brief = on_scouting_brief
         self._overlay_token_provider = overlay_token_provider
         self._session_enabled = session_enabled is True
+        self._on_connection = on_connection
         self._session_lock = threading.RLock()
         self._session_generation = 0
         self._session_data = None
@@ -121,6 +123,7 @@ class SocketClient:
                  "import_start", "import_cancel", "import_pick_folder", "bot_lab", "obs_add", "overlay_tokens_changed", "build_intent_changed", "scouting_brief")
         callbacks = {"on_" + name: getattr(self, "_on_" + name) for name in names}
         return SocketClient(base_url=self._account_base_url, device_token=token,
+            on_connection=self._on_connection,
             overlay_token_provider=self._overlay_token_provider,
             session_enabled=self._session_enabled, obs_add_enabled_provider=self._obs_add_enabled_provider, **callbacks)
 
@@ -196,6 +199,7 @@ class SocketClient:
 
     def stop(self) -> None:
         self._stop.set()
+        self._notify_connection(False)
         self._invalidate_session()
         self._disconnect_session(self._session_sio)
         sio = self._sio
@@ -210,6 +214,14 @@ class SocketClient:
         if thr is not None:
             thr.join(timeout=3.0)
 
+    def _notify_connection(self, connected):
+        callback = getattr(self, "_on_connection", None)
+        if callback:
+            try:
+                callback(connected)
+            except Exception:
+                log.debug("socket_health_callback_failed")
+
     def _wire_handlers(self) -> None:
         sio = self._sio
         assert sio is not None
@@ -220,6 +232,7 @@ class SocketClient:
                 self._device_connected = not self._stop.is_set()
                 self._invalidate_session()
             log.info("socket_client_connected base=%s", self._base_url)
+            self._notify_connection(self._device_connected)
 
         @sio.event
         async def disconnect() -> None:  # noqa: ARG001
@@ -227,6 +240,7 @@ class SocketClient:
                 self._device_connected = False
                 self._invalidate_session()
                 session_sio = self._session_sio
+            self._notify_connection(False)
             if session_sio is not None:
                 await session_sio.disconnect()
             log.info("socket_client_disconnected")

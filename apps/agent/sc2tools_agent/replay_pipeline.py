@@ -20,12 +20,38 @@ import re
 import sys
 import time
 from collections.abc import Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 log = logging.getLogger(__name__)
+
+_UNRESOLVED_SINK = ContextVar("replay_unresolved_candidates", default=None)
+
+
+@contextmanager
+def capture_unresolved_candidates():
+    """Optional thread/task-local diagnostics; the parser's two-result API stays put."""
+    candidates = []
+    token = _UNRESOLVED_SINK.set(candidates)
+    try:
+        yield candidates
+    finally:
+        _UNRESOLVED_SINK.reset(token)
+
+
+def _report_unresolved_candidates(players):
+    sink = _UNRESOLVED_SINK.get()
+    if sink is None:
+        return
+    try:
+        sink.extend((str(player.name), str(player.handle)) for player in (players or ())
+                    if getattr(player, "name", None) and getattr(player, "handle", None))
+    except Exception:
+        pass  # Optional diagnostics never change parse results or expose names in logs.
 
 
 # Mirror the API's gameRecord schema caps in
@@ -926,6 +952,7 @@ def parse_replay_for_cloud_ex(
                 )
 
     if not ctx.me or not ctx.opponent:
+        _report_unresolved_candidates(getattr(ctx, "all_players", ()))
         return None, SKIP_PLAYER_UNRESOLVED
 
     me = ctx.me

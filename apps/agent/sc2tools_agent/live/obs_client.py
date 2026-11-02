@@ -136,6 +136,7 @@ class ObsClient:
         on_program_scene_changed: Optional[Callable[[str], None]] = None,
         timeout_sec: float = DEFAULT_TIMEOUT_SEC,
         subscribe_events: bool = True,
+        on_state=None,
     ) -> None:
         self._host = host
         self._port = port
@@ -146,6 +147,7 @@ class ObsClient:
         self._on_connected = on_connected
         self._on_program_scene_changed = on_program_scene_changed
         self._subscribe_events = subscribe_events
+        self._on_state = on_state
 
         self._raw: Any = None
         self._events: Any = None
@@ -190,9 +192,17 @@ class ObsClient:
                     pass
             self._raw = None
             self._events = None
+        self._notify_state()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
             self._thread = None
+
+    def _notify_state(self):
+        if getattr(self, "_on_state", None):
+            try:
+                self._on_state(self.is_connected, self._auth_failed)
+            except Exception:
+                _log.debug("obs_health_callback_failed")
 
     @property
     def is_connected(self) -> bool:
@@ -285,6 +295,7 @@ class ObsClient:
         self._consecutive_failures = 0
         self._auth_failed = False
         self._last_error = None
+        self._notify_state()
         _log.info(
             "obs_connected host=%s port=%s", self._host, self._port,
         )
@@ -366,6 +377,7 @@ class ObsClient:
             self._raw = None
         if isinstance(classified, ObsAuthFailed):
             self._auth_failed = True
+            self._notify_state()
             METRICS.incr("obs.connect.auth_failed")
             _log.warning(
                 "obs_connect_failed host=%s port=%s reason=auth_failed",
@@ -374,6 +386,7 @@ class ObsClient:
             )
             return
 
+        self._notify_state()
         METRICS.incr("obs.connect.refused")
         self._consecutive_failures += 1
         # Quiet until it looks like a real problem rather than "OBS
@@ -443,6 +456,7 @@ class ObsClient:
                 pass
         self._auth_failed = False
         self._consecutive_failures = 0
+        self._notify_state()
 
     # ------------------------------------------------------------------
     # Requests
@@ -477,6 +491,7 @@ class ObsClient:
                 if failed_current_connection:
                     self._raw = None
             if failed_current_connection:
+                self._notify_state()
                 try:
                     raw.disconnect()
                 except Exception:  # noqa: BLE001 — teardown is best-effort
