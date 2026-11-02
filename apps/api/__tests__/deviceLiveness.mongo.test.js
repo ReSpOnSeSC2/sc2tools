@@ -123,6 +123,22 @@ test("a delayed older heartbeat retains newer liveness while still applying its 
   expect(await service.latestAgent("a")).toEqual({ paired: true, version: "still-applied", lastSeenAt: new Date(now + 10000) });
 });
 
+test("a delayed older sync report never replaces a newer one, while its metadata still applies", async () => {
+  const row = await token(), reportedAt = new Date(now);
+  expect(await service.recordHeartbeat("a", row.tokenHash, { version: "1.0.0", sync: { pending: 5 } })).toEqual({ receivedAt: reportedAt, syncAccepted: true });
+  now -= 10000;
+  await service.recordHeartbeat("a", row.tokenHash, { version: "1.0.1", sync: { pending: 1, paused: true } });
+  expect(await db.deviceTokens.findOne({ _id: row._id })).toMatchObject({ agentVersion: "1.0.1", sync: { pending: 5 }, syncReportedAt: reportedAt, lastSeenAt: reportedAt });
+  now += 10000;
+  await service.recordHeartbeat("a", row.tokenHash, { sync: { pending: 2, lastErrorCode: "upload_timeout" } });
+  expect((await db.deviceTokens.findOne({ _id: row._id })).sync).toEqual({ pending: 2, lastErrorCode: "upload_timeout" });
+  now += 1;
+  await service.recordHeartbeat("a", row.tokenHash, { sync: { paused: false } });
+  const saved = await db.deviceTokens.findOne({ _id: row._id });
+  expect(saved).toMatchObject({ sync: { paused: false }, syncReportedAt: new Date(now) });
+  expect(saved.sync.pending).toBeUndefined();
+});
+
 test.each(["hash", "id"])("a held latestAgent snapshot may finish after %s revocation but cannot refill its cache", async method => {
   const row = await token({ agentVersion: "private-old" }), gate = deferred(), entered = deferred(), original = db.deviceTokens.findOne.bind(db.deviceTokens);
   const read = jest.spyOn(db.deviceTokens, "findOne").mockImplementationOnce(async (...args) => { const result = await original(...args); entered.resolve(); await gate.promise; return result; });

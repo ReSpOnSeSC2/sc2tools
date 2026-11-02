@@ -776,6 +776,22 @@ export interface PerGameComputeServiceListedGame {
   detailAvailable?: boolean;
 }
 
+/** A heartbeat's sanitized sync report (services/syncReport.js). Owner-only:
+ * `unresolvedNames` holds other players' names and toon handles. */
+export interface SyncReport {
+  pending?: number;
+  archivePending?: number;
+  paused?: boolean;
+  foldersWatched?: number;
+  missingFolders?: number;
+  lastUploadAt?: Date;
+  lastErrorCode?: string;
+  skipped?: Record<string, number>;
+  rejected?: number;
+  filtered?: number;
+  unresolvedNames?: Array<{ name: string; toonHandle: string; count: number }>;
+}
+
 export interface DeviceListItem {
   deviceId: string;
   userId: string;
@@ -786,6 +802,8 @@ export interface DeviceListItem {
   agentVersion?: string;
   agentOs?: string;
   agentOsRelease?: string;
+  sync?: SyncReport;
+  syncReportedAt?: Date;
 }
 
 export interface DevicePairingsService {
@@ -813,8 +831,9 @@ export interface DevicePairingsService {
       os?: string;
       osRelease?: string;
       hostname?: string;
+      sync?: unknown;
     },
-  ): Promise<{ receivedAt: Date }>;
+  ): Promise<{ receivedAt: Date; syncAccepted?: boolean }>;
 }
 
 export interface DevicePairingInfo {

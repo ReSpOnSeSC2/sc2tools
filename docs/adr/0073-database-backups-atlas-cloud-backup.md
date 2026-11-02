@@ -58,7 +58,7 @@ architecture; it does not complete the item.
    | Honest Settings and privacy copy | Done as `backup-status-honest-copy` (ledger ordinal 101). The privacy page states the live retention through `GET /v1/site/data-retention` (`apps/web/components/legal/BackupRetention.tsx:8-16`). |
 
 4. **What the public summary shows.** The production API answers
-   `GET /v1/site/data-retention` (`apps/api/src/routes/me.js:94-99`) from the
+   `GET /v1/site/data-retention` (`apps/api/src/routes/me.js:96-101`) from the
    same read-only Atlas call, marking it available only when that call is
    current (`apps/api/src/services/dataInventory.js:61-70`). A read on
    October 31, 2026 at 21:39 UTC returned `available: true` with retentions of
