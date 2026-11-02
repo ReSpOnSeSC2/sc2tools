@@ -170,7 +170,7 @@ and the session-policy reuse. Any caller that skips the guard can seed that stat
   filters. It reads no global input. Apart from the unguarded callers listed here,
   no uncovered kind shares an inner key with a covered kind;
 - session-policy reads without a known value, which share momentum's reuse key
-  (`services/sessionPolicy.js:47-48,74`): `routes/me.js:235`, and the session list
+  (`services/sessionPolicy.js:47-48,74`): `routes/me.js:237`, and the session list
   and detail (`routes/sessions.js:17,19`; `services/sessionHistory.js:92,99`).
 
 A first-observation request can therefore adopt a join up to 30 seconds old,
@@ -281,16 +281,16 @@ coverage only while the flag stays off and are never activation evidence.
 
 | Role | Writer | Coordinated |
 | --- | --- | --- |
-| Issue | `services/devicePairings.js:178-238` | Yes, `issue` |
-| Revoke by hash | `services/devicePairings.js:344-349` (no production caller) | Yes, `revoke-hash` |
-| Revoke by id | `services/devicePairings.js:364-376` | Yes, `revoke-id` |
+| Issue | `services/devicePairings.js:179-239` | Yes, `issue` |
+| Revoke by hash | `services/devicePairings.js:349-354` (no production caller) | Yes, `revoke-hash` |
+| Revoke by id | `services/devicePairings.js:369-381` | Yes, `revoke-id` |
 | Erase | `services/gdpr.js:386-390,438-455` | Yes, `erase` |
 | Touch | `services/deviceAuthTokenRead.js:39-45` | No: metadata |
-| Label | `services/devicePairings.js:379-387` | No: metadata |
-| Heartbeat | `services/devicePairings.js:427-435` | No: metadata |
-| Connection marker | `services/devicePairings.js:442-445` | No: metadata |
+| Label | `services/devicePairings.js:384-392` | No: metadata |
+| Heartbeat | `services/devicePairings.js:441-449`, including the guarded `sync` report | No: metadata |
+| Connection marker | `services/devicePairings.js:456-459` | No: metadata |
 
-Erasure is reached from `routes/me.js:776`, from `routes/clerkWebhook.js:87`
+Erasure is reached from `routes/me.js:779`, from `routes/clerkWebhook.js:87`
 through `services/gdpr.js:588-594`, and from the identity-deletion retry wired at
 `app.js:897`. The coordinator wraps erasure whenever the context has a device-token
 collection (`services/gdpr.js:150`). Snapshot restore excludes device tokens
@@ -305,6 +305,12 @@ resolves to: `tokenHash`, `revokedAt`, `userId` or `_id`
 early (`services/deviceAuthReuse.js:130-136`); an entry's 60-second lifetime is
 fixed when it is loaded (`:185-190`). The 30-second latestAgent memo
 (`services/deviceLiveness.js:6,101-118`) is not an input to credential reuse.
+
+The heartbeat also writes the agent's sanitized sync report, `sync`, and its
+receive time, `syncReportedAt` (`services/syncReport.js`). Both are metadata:
+a pipeline `$cond` keeps a stored report that is newer than the request, so a
+delayed heartbeat never rolls it back, and no credential read projects either
+field (`services/deviceAuthTokenRead.js:52`).
 
 `apps/api/__tests__/deviceCredentialWriterInventory.test.js` checks the source
 against its own copy of this table and fails closed. It resolves direct

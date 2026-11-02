@@ -5,6 +5,7 @@ const {
 } = require("./privateSearchBoundary");
 const { isSearchQueryUrl, requestCarriesSearchQuery } = require("./searchQueryPrivacy");
 const PRIVATE_SEARCH_TAG = "sc2tools.private_search";
+const HEARTBEAT_PATH = /^\/v1\/devices\/heartbeat\/?$/i;
 
 /** @param {unknown} value @param {string} key @returns {unknown} */
 function ownData(value, key) {
@@ -20,6 +21,26 @@ function privateTransaction(value) {
   if (typeof value !== "string") return false;
   const path = value.replace(/^(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+/i, "");
   return isPrivateSearchPath(path);
+}
+
+/** The device heartbeat body carries the agent's sync report, whose unresolved names
+ * are players' names and toon handles, so Sentry never keeps it.
+ * Example: isHeartbeatBodyPath("https://api.example/v1/devices/heartbeat?x=1") === true.
+ * @param {unknown} value @returns {boolean} */
+function isHeartbeatBodyPath(value) {
+  if (typeof value !== "string") return false;
+  const end = value.search(/[?#]/);
+  return HEARTBEAT_PATH.test((end < 0 ? value : value.slice(0, end)).replace(/^https?:\/\/[^/]+(?=\/)/i, ""));
+}
+
+/** A heartbeat event keeps its URL and status but never its body, on either request copy.
+ * @param {unknown} event */
+function stripHeartbeatBody(event) {
+  for (const request of [ownData(event, "request"), ownData(ownData(event, "sdkProcessingMetadata"), "normalizedRequest")]) {
+    if (request && typeof request === "object" && isHeartbeatBodyPath(ownData(request, "url"))) {
+      delete /** @type {{data?: unknown}} */ (request).data;
+    }
+  }
 }
 
 /** Private quick search, or a request URL whose query carries typed search text.
@@ -51,7 +72,9 @@ function shouldDropPrivateSearchEvent(event, hint) {
  * @template T @param {T} event @param {unknown} [hint] @returns {T|null}
  */
 function beforeSendPrivateSearch(event, hint) {
-  return shouldDropPrivateSearchEvent(event, hint) ? null : event;
+  if (shouldDropPrivateSearchEvent(event, hint)) return null;
+  stripHeartbeatBody(event);
+  return event;
 }
 
 /**
@@ -71,7 +94,8 @@ function privateSearchSentryCallbacks() {
  */
 function privateSearchHttpOptions() {
   return {
-    ignoreIncomingRequestBody: isPrivateSearchPath,
+    /** @param {string} urlPath */
+    ignoreIncomingRequestBody: urlPath => isPrivateSearchPath(urlPath) || isHeartbeatBodyPath(urlPath),
     /** @param {string} urlPath the path and query string */
     ignoreIncomingRequests: urlPath => isPrivateSearchPath(urlPath) || isSearchQueryUrl(urlPath),
   };
@@ -93,6 +117,6 @@ function runPrivateSearchScope(req, next, sdk) {
 }
 
 module.exports = {
-  PRIVATE_SEARCH_TAG, shouldDropPrivateSearchEvent, beforeSendPrivateSearch,
+  PRIVATE_SEARCH_TAG, shouldDropPrivateSearchEvent, beforeSendPrivateSearch, isHeartbeatBodyPath,
   privateSearchSentryCallbacks, privateSearchHttpOptions, runPrivateSearchScope,
 };

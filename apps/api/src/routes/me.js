@@ -1,7 +1,7 @@
 "use strict";
 
 const express = require("express");
-const { buildDoctor, withReplayResyncState, emptyReplayArchiveCounts } = require("../services/doctor");
+const { buildDoctor, buildSyncHealth, withReplayResyncState, emptyReplayArchiveCounts } = require("../services/doctor");
 const { NOTIFICATIONS_PREF_TYPE, sanitizeNotificationPrefs } = require("../services/notificationPrefs");
 const { validateProfile } = require("../validation/profile");
 const { publicDataRetention } = require("../services/dataInventory");
@@ -43,6 +43,7 @@ const ME_MMR_MAX_TOONS = 8;
  *                                     also pings ``build-intent:changed {prefs: true}``)
  *   GET    /me/analyzer-default-view — one private selected-view/legacy-tab lookup
  *   GET    /me/doctor               — diagnostic warnings (no agent, no profile, etc.)
+ *   GET    /me/sync-health          — per-PC sync reports and derived Sync health rows
  *   GET    /me/replay-archive-status — one-time original replay backfill progress
  *   POST   /me/replay-archive-resync — agent acknowledges a full local re-sync
  *   GET    /me/export               — download every per-user record as JSON
@@ -61,6 +62,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   backupStatus?: import('../services/backupStatus').BackupStatusService,
  *   dataRepairs?: import('../services/dataRepairs').DataRepairsService,
  *   pairings: import('../services/devicePairings').DevicePairingsService,
+ *   agentVersion?: Pick<import('../services/agentVersion').AgentVersionService, 'latest'>,
  *   imports?: import('../services/import').ImportService,
  *   multichatSounds?: import('../services/multichatSounds').MultichatSoundsService,
  *   replayArchiveEnabled?: boolean,
@@ -675,14 +677,15 @@ function buildMeRouter(deps) {
 
   router.get("/me/doctor", deps.auth, async (req, res, next) => {
     try {
-      const auth = req.auth;
-      if (!auth) throw new Error("auth_required");
+      if (!req.auth) throw new Error("auth_required");
 
-      res.json(await buildDoctor(deps, auth.userId));
+      res.json(await buildDoctor(deps, req.auth.userId));
     } catch (err) {
       next(err);
     }
   });
+
+  router.get("/me/sync-health", deps.auth, syncHealthRoute(deps));
 
   router.get(
     "/me/replay-archive-status",
@@ -994,6 +997,24 @@ function buildMeRouter(deps) {
   });
 
   return router;
+}
+
+/**
+ * GET /v1/me/sync-health (roadmap item 76). Private and uncached: a current
+ * report can name players the agent could not match to this account. Takes
+ * no query string; the owner always gets every PC.
+ * @param {Parameters<typeof buildMeRouter>[0]} deps
+ * @returns {import('express').RequestHandler}
+ */
+function syncHealthRoute(deps) {
+  return async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      res.set("Cache-Control", "private, no-store");
+      if (Object.keys(req.query).length) { res.status(400).json({ error: { code: "sync_health_query_invalid" } }); return; }
+      res.json(await buildSyncHealth(deps, req.auth.userId));
+    } catch (error) { next(error); }
+  };
 }
 
 /** Compatibility for narrow/older injected services; production uses the

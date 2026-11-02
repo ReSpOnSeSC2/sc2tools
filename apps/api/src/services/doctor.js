@@ -1,10 +1,14 @@
 "use strict";
 
+const { deriveSyncHealth, syncHealthWarnings, syncHealthView, syncRelease } = require("./syncHealth");
+
 /** Shared account diagnostics for the owner and authorized support view.
+ * Sync health warnings follow the original four and carry a `helpSlug`;
+ * their messages hold counts only, never a player name or toon handle.
  * @param {any} deps
  * @param {string} userId */
 async function buildDoctor(deps, userId) {
-  /** @type {Array<{id: string, severity: 'info'|'warn'|'error', message: string, cta?: {label: string, href: string}}>} */
+  /** @type {Array<{id: string, severity: 'info'|'warn'|'error', message: string, cta?: {label: string, href: string}, helpSlug?: string}>} */
   const warnings = [];
 
   const ownerSnapshot = readDoctorSnapshot(deps.users, userId);
@@ -61,7 +65,23 @@ async function buildDoctor(deps, userId) {
     });
   }
 
+  warnings.push(...syncHealthWarnings(await syncHealthRows(deps, devices, snapshot.ingestStats, Date.now())));
   return { ok: warnings.filter((w) => w.severity !== "info").length === 0, warnings };
+}
+
+/** @param {any} deps @param {any[]} devices @param {any} ingestStats @param {number} now */
+async function syncHealthRows(deps, devices, ingestStats, now) {
+  const release = await syncRelease(deps.agentVersion, devices, now);
+  return deriveSyncHealth({ devices, ingestStats, release, now });
+}
+
+/** GET /v1/me/sync-health: the Doctor's one owner read (for the rejection
+ * window) plus the owner's devices. @param {any} deps @param {string} userId */
+async function buildSyncHealth(deps, userId) {
+  const now = Date.now();
+  const [snapshot, devices] = await Promise.all([readDoctorSnapshot(deps.users, userId), deps.pairings.listDevices(userId)]);
+  const rows = await syncHealthRows(deps, devices, snapshot.ingestStats, now);
+  return syncHealthView({ devices, ingestStats: snapshot.ingestStats, rows, now });
 }
 
 /**
@@ -122,4 +142,4 @@ function emptyReplayArchiveCounts() {
 /** Any existing identity signal avoids a false setup warning. @param {any} profile */
 function hasProfileIdentity(profile) { return Boolean(profile.battleTag || profile.displayName || (Array.isArray(profile.pulseIds) && profile.pulseIds.length > 0)); }
 
-module.exports = { buildDoctor, withReplayResyncState, emptyReplayArchiveCounts };
+module.exports = { buildDoctor, buildSyncHealth, withReplayResyncState, emptyReplayArchiveCounts };

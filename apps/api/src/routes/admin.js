@@ -51,6 +51,7 @@ const {
  *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   adminAudit?: import("../services/adminAudit").AdminAuditService,
  *   pairings?: import("../services/devicePairings").DevicePairingsService,
+ *   agentVersion?: Pick<import("../services/agentVersion").AgentVersionService, "latest">,
  *   userCache?: import("../middleware/userCache").UserCache,
  *   replayArchiveEnabled?: boolean,
  *   protectedAdminIds?: string[],

@@ -39,15 +39,28 @@ test("prepared /me envelope gets summary, onboarding and proof from ONE fresh pr
   expect(users.updateOne).not.toHaveBeenCalled(); expect(users.insertOne).not.toHaveBeenCalled();
   for (const call of Object.values(games)) expect(call).not.toHaveBeenCalled();
 });
+// The Doctor envelope gained `ingestStats` (roadmap item 76) so Sync health reads
+// the rejection window from this same owner read; a row without stats maps to null.
 test("prepared Doctor envelope preserves full profile DTO and archive prefs without extra owner/game work", async () => {
   const { service, users, games } = fixture(owner());
   expect(await service.getDoctorSnapshot("owner")).toEqual({ profile: expectedProfile,
-    statsCandidate: { total: 4, latest: null }, replayArchivePrefs: { version: 1 } });
+    statsCandidate: { total: 4, latest: null }, replayArchivePrefs: { version: 1 }, ingestStats: null });
   expect(users.findOne).toHaveBeenCalledTimes(1);
   expect(users.findOne.mock.calls[0][1]).toEqual({ readPreference: "primary", projection: expect.objectContaining({
     _id: 1, userId: 1, battleTags: 1, pulseIds: 1, sessionGapMinutes: 1, _gdprMutation: 1, "preferences.replayArchive": 1,
+    ingestStats: 1,
   }) });
   for (const call of Object.values(games)) expect(call).not.toHaveBeenCalled();
+});
+test("Doctor envelope rebuilds stored ingest stats from the closed code set in the same single read", async () => {
+  const row = owner(), since = new Date("2026-10-28T00:00:00Z"), last = new Date("2026-10-30T00:00:00Z");
+  row.ingestStats = { rejected: { validation_failed: 3, game_deleted: 2, "$where": 9, "a.b": 1, upsert_failed: -1, quarantine_failed: 1.5 },
+    rejectedSince: since, lastRejectedAt: last, extra: "dropped" };
+  const { service, users } = fixture(row);
+  expect((await service.getDoctorSnapshot("owner")).ingestStats).toEqual({ rejected: { validation_failed: 3 }, rejectedSince: since, lastRejectedAt: last });
+  expect(users.findOne).toHaveBeenCalledTimes(1);
+  row.ingestStats = { rejected: "corrupt", rejectedSince: "2026-10-28", lastRejectedAt: 5 };
+  expect((await service.getDoctorSnapshot("owner")).ingestStats).toEqual({ rejected: {}, rejectedSince: null, lastRejectedAt: null });
 });
 test("existing public getters retain their projection, mapping and metadata-free DTO", async () => {
   const { service, users } = fixture(owner());
@@ -61,7 +74,7 @@ test("existing public getters retain their projection, mapping and metadata-free
 test("missing owner stays the original summary/empty profile with explicit unqualified stats, never a fabricated zero", async () => {
   const { service } = fixture(null);
   expect(await service.getMeSnapshot("owner")).toEqual({ summary: { userId: "owner", clerkUserId: null, email: null }, statsCandidate: null, onboarding: {} });
-  expect(await service.getDoctorSnapshot("owner")).toEqual({ profile: {}, statsCandidate: null, replayArchivePrefs: {} });
+  expect(await service.getDoctorSnapshot("owner")).toEqual({ profile: {}, statsCandidate: null, replayArchivePrefs: {}, ingestStats: null });
   expect(await service.getSummary("owner")).toEqual({ userId: "owner", clerkUserId: null, email: null });
   expect(await service.getProfile("owner")).toEqual({});
 });
@@ -76,7 +89,7 @@ test("current maintenance1 remains a miss without issuing repair/count or changi
   const row = owner(); row.gameStatsMaintenance.version = 1;
   const { service, games } = fixture(row);
   expect((await service.getMeSnapshot("owner")).statsCandidate).toBeNull();
-  expect(await service.getDoctorSnapshot("owner")).toEqual({ profile: expectedProfile, statsCandidate: null, replayArchivePrefs: { version: 1 } });
+  expect(await service.getDoctorSnapshot("owner")).toEqual({ profile: expectedProfile, statsCandidate: null, replayArchivePrefs: { version: 1 }, ingestStats: null });
   for (const call of Object.values(games)) expect(call).not.toHaveBeenCalled();
 });
 test.each([undefined, false])("unsupported capability %p leaves even future metadata unqualified", async capability => {

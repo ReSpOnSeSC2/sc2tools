@@ -53,8 +53,10 @@ const PATTERN_PARTS = new Set([ts.SyntaxKind.ObjectLiteralExpression, ts.SyntaxK
   ts.SyntaxKind.PropertyAssignment, ts.SyntaxKind.ShorthandPropertyAssignment, ts.SyntaxKind.SpreadAssignment,
   ts.SyntaxKind.SpreadElement, ts.SyntaxKind.ParenthesizedExpression]);
 const AUTHORITY_FIELDS = new Set(["tokenHash", "revokedAt", "userId", "_id"]);
+// `sync` and `syncReportedAt` are the heartbeat's sanitized sync report and its
+// receive time (services/syncReport.js); like lastSeenAt they are guarded metadata.
 const METADATA_FIELDS = new Set(["lastSeenAt", "label", "connectedEventRecordedAt",
-  "agentVersion", "agentOs", "agentOsRelease", "hostname"]);
+  "agentVersion", "agentOs", "agentOsRelease", "hostname", "sync", "syncReportedAt"]);
 const REGISTRIES = new Set(["COLLECTIONS", "REGISTRY"]);
 // Exported lists that name the collection; reaching one counts as naming it.
 const LISTS = ["DASHBOARD_COLLECTIONS", "GDPR_CLASSIFICATION", "RESTORABLE", "USER_SCOPED_COLLECTIONS"];

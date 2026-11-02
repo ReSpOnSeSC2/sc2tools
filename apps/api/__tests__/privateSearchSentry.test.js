@@ -27,6 +27,30 @@ afterEach(() => {
   else process.env.SENTRY_DSN = previousDsn;
 });
 
+test("never keeps the device heartbeat body, whose sync report carries players' names", () => {
+  process.env.SENTRY_DSN = "https://example.invalid/fixture";
+  const sentry = load();
+  expect(sentry.init()).toBe(true);
+  const options = mockSdk.init.mock.calls.at(-1)[0];
+  options.integrations([]);
+  const http = mockSdk.httpIntegration.mock.calls.at(-1)[0];
+  for (const path of ["/v1/devices/heartbeat", "/V1/DEVICES/HEARTBEAT/?x=1", "https://api.example/v1/devices/heartbeat"]) {
+    expect(http.ignoreIncomingRequestBody(path)).toBe(true);
+    expect(http.ignoreIncomingRequests(path)).toBe(false); // the span itself stays
+  }
+  expect(http.ignoreIncomingRequestBody("/v1/devices/heartbeat/other")).toBe(false);
+  const body = { sync: { unresolvedNames: [{ name: "Rival", toonHandle: "1-S2-1-9", count: 3 }] } };
+  const event = { request: { url: "/v1/devices/heartbeat", data: body },
+    sdkProcessingMetadata: { normalizedRequest: { url: "/v1/devices/heartbeat", data: JSON.stringify(body) } } };
+  expect(options.beforeSend(event)).toBe(event);
+  expect(event.request).toEqual({ url: "/v1/devices/heartbeat" });
+  expect(event.sdkProcessingMetadata.normalizedRequest).toEqual({ url: "/v1/devices/heartbeat" });
+  const span = { request: { url: "/v1/devices/heartbeat", data: body } };
+  expect(options.beforeSendTransaction(span).request).toEqual({ url: "/v1/devices/heartbeat" });
+  const other = { request: { url: "/v1/games", data: { keep: true } } };
+  expect(options.beforeSend(other).request.data).toEqual({ keep: true });
+});
+
 test("disabled SDK remains a no-op and still continues private requests", () => {
   delete process.env.SENTRY_DSN;
   const sentry = load(), next = jest.fn();
