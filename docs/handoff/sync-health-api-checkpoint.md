@@ -25,6 +25,7 @@ JSON, both as sent and after cleaning.
 | `lastUploadAt` | ISO 8601 string | Last successful upload. |
 | `lastErrorCode` | string | Code of the latest failed upload. Omit it after the next success. |
 | `skipped` | object | `{ reason: count }`, see the reasons below. |
+| `recentUnresolved` | integer | Distinct unresolved replay files attempted within the last seven days in the current agent session, still marked `skipped:player_unresolved`. |
 | `rejected` | integer | Uploads the server rejected (agent's own count). |
 | `filtered` | integer | Replays outside the sync range. |
 | `unresolvedNames` | array | `[{ name, toonHandle, count }]`, at most 10. |
@@ -51,8 +52,15 @@ Cleaning rules (`apps/api/src/services/syncReport.js`):
 The response gains `syncAccepted: true` or `false` only when the body had a
 `sync` key. Old bodies get the old response, `{ receivedAt }`.
 
-The agent should send the full block on every heartbeat. Counts should be the
-current state, not lifetime totals, so a warning clears once it is fixed.
+The agent should send the full block on every heartbeat. `skipped` is the saved
+marker inventory and can include years-old downloaded replays. It is not evidence
+of a current identity problem. Only `recentUnresolved`, bounded by that inventory,
+drives the unresolved-player warning. Missing `recentUnresolved` on an older app
+does not fall back to the historical total. Settings retains that total under
+Skipped replay history. Recent evidence expires after seven days, clears on
+restart or owner change, and retires when the corresponding marker is cleared.
+Retries of the same path count once. The report always includes the recent count,
+including zero; names remain optional diagnostics and do not gate the warning.
 
 ## What is stored, and who can read it
 
@@ -112,7 +120,7 @@ PCs and stale reports add nothing. Rows come in rule order, then device order
 | `agent_paused` | info | `paused` is true | `pending` | `desktop-app-status` | `resume` |
 | `agent_upload_failing` | error | not paused, `lastErrorCode` set and `pending` > 0 | `pending` | `desktop-app-status` | `retry` |
 | `agent_outdated_required` | warn | agent version is below the release's `minSupportedVersion` | 1 per PC | `desktop-app-status` | `update_agent` |
-| `replays_skipped_unresolved` | warn | `skipped.player_unresolved` > 0 | that count | `my-game-didnt-show-up` | `add_identity` |
+| `replays_skipped_unresolved` | warn | `recentUnresolved` and `skipped.player_unresolved` are positive; missing recent evidence never falls back to history | the smaller count | `my-game-didnt-show-up` | `add_identity` |
 | `uploads_rejected` | warn | the last counted rejection is under 7 days old | the window's total | `my-game-didnt-show-up` | `report` |
 
 Device rows carry `deviceId`. The `uploads_rejected` row is account-wide and

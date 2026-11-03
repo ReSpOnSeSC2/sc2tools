@@ -5,10 +5,12 @@ import json
 import math
 import re
 import threading
+import time
 
 SYNC_REPORT_MAX_BYTES = 2048
 COUNT_MAX = 999_999
 MAX_UNRESOLVED_PATHS = 2048
+RECENT_UNRESOLVED_WINDOW_SEC = 7 * 86400
 SKIP_REASONS = frozenset(("ai_game", "resumed_replay", "player_unresolved", "no_result",
     "parse_failed", "analysis_failed", "file_unstable", "playback_budget_exceeded", "unsupported_replay"))
 _CODE = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
@@ -46,10 +48,13 @@ class SyncReportTracker:
 
     Every report intersects candidates with a locked copy of the current
     uploaded markers. A resync, success or filter change therefore retires
-    names immediately, without guessing from lifetime history totals.
+    names immediately, without guessing from lifetime history totals. Recent
+    unresolved attempts are counted separately from that saved inventory;
+    loading old skip markers at startup cannot create a new warning.
     """
-    def __init__(self):
+    def __init__(self, *, clock=time.monotonic):
         self._lock = threading.RLock()
+        self._clock = clock
         self._unresolved = OrderedDict()
         self._generation = 0
         self._upload_error = ""
@@ -77,7 +82,7 @@ class SyncReportTracker:
             if ticket is not None and self._owner is not None and self._owner != (ticket.owner, ticket.token, ticket.epoch):
                 return
             self._generation += 1
-            self._unresolved[str(path)] = (self._generation, tuple(candidates.items()))
+            self._unresolved[str(path)] = (self._generation, tuple(candidates.items()), self._clock())
             self._unresolved.move_to_end(str(path))
             while len(self._unresolved) > MAX_UNRESOLVED_PATHS:
                 self._unresolved.popitem(last=False)
@@ -128,18 +133,26 @@ class SyncReportTracker:
             same_owner = owner is None or owner == self._owner
             # A candidate captured after the caller copied markers may not
             # appear there yet. Retire only records older than that copy.
-            for path, (observed, _) in list(self._unresolved.items()) if same_owner else ():
+            for path, (observed, _, _) in list(self._unresolved.items()) if same_owner else ():
                 if path not in unresolved_paths and observed <= generation:
                     del self._unresolved[path]
             counts, names = Counter(), {}
+            recent_unresolved = 0
+            now = self._clock()
             for path in unresolved_paths if same_owner else ():
-                for handle, name in self._unresolved.get(path, (0, ()))[1]:
+                observed = self._unresolved.get(path)
+                if observed is None:
+                    continue
+                if 0 <= now - observed[2] <= RECENT_UNRESOLVED_WINDOW_SEC:
+                    recent_unresolved += 1
+                for handle, name in observed[1]:
                     counts[handle] += 1
                     names[handle] = name
             error = self._upload_error or self._transport_error
         report = {"pending": _count(facts.pending), "archivePending": _count(facts.archive_pending),
             "paused": bool(facts.paused), "foldersWatched": _count(len(facts.folders or ())),
-            "missingFolders": _count(len(facts.missing_folders)), "rejected": _count(rejected), "filtered": _count(filtered)}
+            "missingFolders": _count(len(facts.missing_folders)), "rejected": _count(rejected), "filtered": _count(filtered),
+            "recentUnresolved": _count(recent_unresolved)}
         if skipped:
             report["skipped"] = {reason: _count(count) for reason, count in sorted(skipped.items())}
         if latest is not None and math.isfinite(latest) and 1262304000 <= latest <= datetime.now(timezone.utc).timestamp() + 86400:

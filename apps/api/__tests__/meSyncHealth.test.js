@@ -77,7 +77,7 @@ test("no paired PC is reported:false with an empty device list", async () => {
 test("a current report becomes rows, and its owner gets the report whole", async () => {
   const reportedAt = ago(20_000), rejectedAt = ago(3_600_000);
   const latest = jest.fn(async () => ({ minSupportedVersion: "0.31.0" }));
-  const sync = { paused: true, pending: 2, skipped: { player_unresolved: 3 }, unresolvedNames: [PRIVATE] };
+  const sync = { paused: true, pending: 2, recentUnresolved: 3, skipped: { player_unresolved: 3 }, unresolvedNames: [PRIVATE] };
   const { users, get } = harness({
     row: { userId: "owner", ingestStats: { rejected: { validation_failed: 2 }, rejectedSince: rejectedAt, lastRejectedAt: rejectedAt } },
     devices: [{ deviceId: "pc-1", agentVersion: "0.30.0", agentOs: "Windows", lastSeenAt: reportedAt, sync, syncReportedAt: reportedAt }],
@@ -116,4 +116,12 @@ test("a stale report and an old rejection window both clear", async () => {
   }).get();
   expect(res.body).toMatchObject({ reported: false, rows: [], rejections: null });
   expect(res.body.devices[0].sync).toBeUndefined();
+});
+
+test("legacy skip inventory remains available to the owner without actionable warnings", async () => {
+  const reportedAt = ago(20_000), sync = { pending: 0, skipped: { player_unresolved: 20 }, unresolvedNames: [PRIVATE] };
+  const res = await harness({ devices: [{ deviceId: "pc-1", agentVersion: "0.24.9", sync, syncReportedAt: reportedAt }] }).get();
+  expect(res.status).toBe(200);
+  expect(res.body).toMatchObject({ reported: true, rows: [] });
+  expect(res.body.devices[0].sync).toEqual(sync);
 });

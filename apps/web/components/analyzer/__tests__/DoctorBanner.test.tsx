@@ -123,7 +123,7 @@ describe("DoctorBanner Sync health warnings", () => {
         ok: false,
         warnings: [
           { id: "agent_upload_failing", severity: "error", message: "The desktop app can't upload 4 games.", helpSlug: "desktop-app-status" },
-          { id: "replays_skipped_unresolved", severity: "warn", message: "7 replays were skipped.", cta: { label: "Set up profile", href: "/settings?tab=profile" }, helpSlug: "my-game-didnt-show-up" },
+          { id: "replays_skipped_unresolved", severity: "warn", message: "The desktop app recently couldn't match 7 replays to your linked accounts.", cta: { label: "Review profile", href: "/settings?tab=profile" }, helpSlug: "my-game-didnt-show-up" },
           { id: "agent_outdated_required", severity: "warn", message: "Your desktop app is older than the minimum supported version.", cta: { label: "Update agent", href: "/download" }, helpSlug: "desktop-app-status" },
           { id: "uploads_rejected", severity: "warn", message: "SC2 Tools recently rejected 2 uploads.", helpSlug: "my-game-didnt-show-up" },
           { id: "agent_no_folders", severity: "warn", message: "No replay folder.", helpSlug: "desktop-app-status" },
@@ -137,7 +137,7 @@ describe("DoctorBanner Sync health warnings", () => {
 
     const href = (name: string) => screen.getByRole("link", { name }).getAttribute("href");
     expect(href("How to fix uploads are failing")).toBe("/help/my-game-didnt-show-up#sync-upload-failing");
-    expect(href("How to fix player not recognized")).toBe("/help/my-game-didnt-show-up#sync-player-unresolved");
+    expect(href("How to fix recent unmatched replays")).toBe("/help/my-game-didnt-show-up#sync-player-unresolved");
     expect(href("How to fix update required")).toBe("/help/my-game-didnt-show-up#sync-update-required");
     expect(href("How to fix uploads rejected")).toBe("/help/my-game-didnt-show-up#sync-uploads-rejected");
     expect(href("How to fix no replay folder")).toBe("/help/my-game-didnt-show-up#sync-no-folder");

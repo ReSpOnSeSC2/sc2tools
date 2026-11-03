@@ -45,13 +45,13 @@ beforeEach(async () => { await harness.db.deviceTokens.deleteMany({}); });
 
 test("a sync report is sanitized, stored and listed only for its owner", async () => {
   const device = await pairedDevice();
-  const hb = await device.heartbeat({ version: "0.30.0", sync: { pending: 2, paused: true, $where: "1", "a.b": 1, revokedAt: "x",
+  const hb = await device.heartbeat({ version: "0.30.0", sync: { pending: 2, paused: true, recentUnresolved: 2, $where: "1", "a.b": 1, revokedAt: "x",
     skipped: { player_unresolved: 3, $gt: 1 }, unresolvedNames: [{ ...unresolved, $set: { userId: "other" } }] } });
   expect(hb.status).toBe(200);
   expect(Object.keys(hb.body).sort()).toEqual(["receivedAt", "syncAccepted"]);
   expect(hb.body.syncAccepted).toBe(true);
   const row = await device.row();
-  expect(row.sync).toEqual({ pending: 2, paused: true, skipped: { player_unresolved: 3 }, unresolvedNames: [unresolved] });
+  expect(row.sync).toEqual({ pending: 2, paused: true, recentUnresolved: 2, skipped: { player_unresolved: 3 }, unresolvedNames: [unresolved] });
   expect(row.syncReportedAt).toEqual(row.lastSeenAt);
   expect(row.revokedAt).toBeNull();
   const [item] = (await asUser(request(harness.app).get("/v1/devices"))).body.items;

@@ -109,7 +109,8 @@ function OtherSkippedReplays({ data }: { data: SyncHealthResponse }) {
   const groups = otherSkippedByDevice(data);
   if (!groups.length) return null;
   return <details className="mt-3 text-caption">
-    <summary className="cursor-pointer text-text-muted">Other skipped replays</summary>
+    <summary className="cursor-pointer text-text-muted">Skipped replay history</summary>
+    <p className="mt-2 text-text-muted">These counts include previously skipped files, not just new games. Replays of other players can stay skipped.</p>
     {groups.map(({ deviceId, pc, skips }) => <div key={deviceId} className="mt-2">
       <p className="break-all font-semibold">{pc}</p>
       <ul className="mt-1 space-y-1">{skips.map((skip) => <li key={skip.code} className="break-words">
