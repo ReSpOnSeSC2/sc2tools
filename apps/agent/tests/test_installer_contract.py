@@ -75,5 +75,82 @@ def test_signing_order_keeps_inner_signature_and_hashes_only_final_setup():
     positions=[workflow.index('- name: '+name) for name in steps]
     assert positions==sorted(positions)
     assert '-Installer -PackageOnly' in workflow
-    assert 'Tagged installers require approved SignPath signing' in workflow
+    assert workflow.count("if: vars.SIGNPATH_ENABLED == 'true'")==6
     assert workflow.count('draft: true')==2
+
+
+SIGNPATH_FIXTURE_NAMES=(
+    'SIGNPATH_API_TOKEN','SIGNPATH_ORGANIZATION_ID','SIGNPATH_PROJECT_SLUG',
+    'SIGNPATH_POLICY_SLUG','SIGNPATH_AGENT_CONFIG','SIGNPATH_INSTALLER_CONFIG',
+)
+SIGNING_TRIGGERS=[('refs/tags/agent-v0.24.9','tagged'),('refs/heads/fixture-manual','manual')]
+UNSIGNED_NOTICE='**Unsigned Windows installer:** this build has no verified publisher or code-signing signature.'
+
+
+def _workflow_run_block(step_name):
+    workflow=(ROOT.parents[1]/'.github/workflows/agent-installer.yml').read_text(encoding='utf-8')
+    marker='      - name: '+step_name+'\n'
+    assert workflow.count(marker)==1
+    step=workflow.split(marker,1)[1].split('\n      - name: ',1)[0]
+    block=step.split('        run: |\n',1)[1]
+    lines=[]
+    for line in block.splitlines():
+        if line.strip() and not line.startswith('          '):break
+        lines.append(line[10:] if line else '')
+    assert lines
+    return '\n'.join(lines)+'\n'
+
+
+def _run_workflow_fixture(tmp_path,step_name,variables):
+    powershell=shutil.which('pwsh')
+    if not powershell:pytest.skip('PowerShell not installed')
+    script=_workflow_run_block(step_name)
+    # Evaluate the workflow's actual commands with fixture-only inputs, never Actions or signing providers.
+    script=script.replace("'${{ steps.ver.outputs.version }}'","'0.24.9'")
+    file=tmp_path/'workflow-step.ps1'
+    file.write_text("$ErrorActionPreference = 'Stop'\n"+script,encoding='utf-8')
+    environment={name:value for name,value in os.environ.items() if not name.upper().startswith('SIGNPATH_')}
+    environment.update(variables)
+    return subprocess.run([powershell,'-NoProfile','-NonInteractive','-File',str(file)],cwd=tmp_path,env=environment,capture_output=True,text=True,timeout=15)
+
+
+@pytest.mark.parametrize('ref,kind',SIGNING_TRIGGERS)
+@pytest.mark.parametrize('enabled',[None,'false'])
+def test_disabled_signing_allows_tag_and_manual_with_unsigned_summary(tmp_path,ref,kind,enabled):
+    summary=tmp_path/'summary.md'
+    variables={'GITHUB_REF':ref,'GITHUB_STEP_SUMMARY':str(summary)}
+    if enabled is not None:variables['SIGNPATH_ENABLED']=enabled
+    result=_run_workflow_fixture(tmp_path,'Check signing configuration',variables)
+    assert result.returncode==0,result.stdout+result.stderr
+    assert summary.read_text(encoding='utf-8-sig').strip()==f'Unsigned {kind} installer build; no verified publisher or signed-release claim.'
+
+
+@pytest.mark.parametrize('ref,kind',SIGNING_TRIGGERS)
+@pytest.mark.parametrize('missing',[None,*SIGNPATH_FIXTURE_NAMES])
+def test_enabled_signing_requires_every_configuration_value(tmp_path,ref,kind,missing):
+    summary=tmp_path/'summary.md'
+    variables={name:'fixture-only-'+name.lower() for name in SIGNPATH_FIXTURE_NAMES}
+    variables.update({'SIGNPATH_ENABLED':'true','GITHUB_REF':ref,'GITHUB_STEP_SUMMARY':str(summary)})
+    if missing is not None:del variables[missing]
+    result=_run_workflow_fixture(tmp_path,'Check signing configuration',variables)
+    if missing is None:
+        assert result.returncode==0,result.stdout+result.stderr
+    else:
+        assert result.returncode!=0
+        assert 'Missing signing configuration: '+missing in result.stdout+result.stderr
+    assert not summary.exists()
+
+
+@pytest.mark.parametrize('enabled',[None,'false','true'])
+def test_tagged_release_notes_disclose_unsigned_only_when_signing_disabled(tmp_path,enabled):
+    (tmp_path/'CHANGELOG.md').write_text('## 0.24.9\n\nFixture release notes.\n\n## 0.24.8\n\nOlder fixture notes.\n',encoding='utf-8')
+    variables={}
+    if enabled is not None:variables['SIGNPATH_ENABLED']=enabled
+    result=_run_workflow_fixture(tmp_path,'Extract release notes from CHANGELOG',variables)
+    assert result.returncode==0,result.stdout+result.stderr
+    notes=(tmp_path/'RELEASE_NOTES.generated.md').read_text(encoding='utf-8-sig').strip()
+    if enabled=='true':
+        assert notes=='Fixture release notes.'
+        assert not notes.startswith(UNSIGNED_NOTICE)
+    else:
+        assert notes==UNSIGNED_NOTICE+'\n\nFixture release notes.'
