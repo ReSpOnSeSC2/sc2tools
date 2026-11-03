@@ -2,6 +2,7 @@ import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { GuideCopyText } from "@/components/guides/GuideCopyText";
 import { GuidePersonalComparison } from "@/components/guides/GuidePersonalComparison";
 import { TimingsTable } from "./TimingsTable";
+import { TimingsTableContent } from "./TimingsTableContent";
 import type { GuideCopyLine } from "@/lib/guides/guideCopy";
 import type { GuideBuildPublished } from "@/lib/guides/types";
 
@@ -13,5 +14,5 @@ export function BuildTimingsSection({ payload, blurb }: { payload: GuideBuildPub
   const hasTable = Boolean(timings && community.length);
   const comparison = <GuidePersonalComparison matchupSlug={payload.matchupSlug} buildSlug={payload.buildSlug} buildName={payload.name} community={community} communityWinRate={payload.overall.winRate} showTimings={!hasTable} showSignInPrompt={!hasTable} />;
   if (!hasTable || !timings) return <Section id="your-record" title="Your record with this build">{comparison}</Section>;
-  return <Section id="key-timings" title="Key timings"><div className="space-y-4"><GuideCopyText lines={blurb} /><TimingsTable timings={timings} matchupSlug={payload.matchupSlug} buildSlug={payload.buildSlug} />{comparison}</div></Section>;
+  return <Section id="key-timings" title="Key timings"><div className="space-y-4"><GuideCopyText lines={blurb} /><TimingsTable timings={timings} matchupSlug={payload.matchupSlug} buildSlug={payload.buildSlug} community={<TimingsTableContent timings={timings} />} />{comparison}</div></Section>;
 }

@@ -58,6 +58,11 @@ describe("GuidePersonalComparison", () => {
   it("retains the Try CTA beside a real populated timings table without duplicating sign-in copy", () => {
     vi.stubEnv("NEXT_PUBLIC_INSTANT_IMPORT", "all");
     render(<BuildTimingsSection payload={FIXTURE_BUILD_PUBLISHED} blurb={[]} />);
+    expect(screen.getByRole("region", { name: "Key timings table" }).tabIndex).toBe(0);
+    expect(screen.getByRole("table").querySelector("caption")?.textContent).toMatch(/^Key timings from .+ recorded build orders, in game time$/);
+    expect(screen.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["Milestone", "Early (p25)", "Median", "Late (p75)", "Wins vs losses"]);
+    expect(screen.getAllByRole("row")).toHaveLength(FIXTURE_BUILD_PUBLISHED.timings!.milestones.length + 1);
+    expect(screen.queryByRole("columnheader", { name: /^You/ })).toBeNull();
     expect(screen.getAllByRole("link", { name: "Sign in to see your own timings next to these" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "analyze your replays in your browser — no download" }).getAttribute("href")).toContain("focus=pvz%2Fstargate-into-glaives");
     expect(harness.useApi).not.toHaveBeenCalled();
