@@ -11,13 +11,20 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
-### Agent 0.24.8
+### Agent 0.24.9
 
+- Protect the saved device token and OBS password with Windows CurrentUser storage. Migrate before starting sync, preserve unavailable saved credentials, and require explicit password replacement or removal in OBS Settings. Test connection leaves saved settings unchanged.
+- Add Help system checks, Copy support info and reviewed local support bundles with redacted diagnostics and selected logs, separate from private account exports. Retire support results when the linked account or connection changes.
 - Add identities and retry one sync skip reason on one linked PC from Settings, with exact owned-account perspective, owner/session fencing and the existing sync range/capture opt-in preserved. Keep explicit native player-name overrides bound to their account across restarts. This release remains unpublished and owner-gated.
 - Report current sync queues, skip reasons, unmatched accounts and upload failures to the owner's Sync health card. Keep connection, StarCraft II, OBS, player-name and missing-folder health facts current.
 - Explain desktop sync health with one dashboard card, a next step and help for each problem, and Restart agent for startup failures. The tray now matches the card's green, amber, red and paused grey states.
 - Use the opponent's current regional season and active race for MMR, and announce one automatic scouting report per game across Companion and OBS, cancelling pending readouts when the match, account or voice permissions change.
 - Open the import help article from the import card and skipped lines again, and explain why a Build check-in card preview cannot open. The install help article and download page now name the startup switch as the app does: Run SC2 Tools Agent on Windows startup.
+
+The existing `agent-v0.24.8` tag is retained. Its installer run 41217171109
+failed the required signing check; no 0.24.8 installer was published as of
+2026-11-03. The unpublished changes are carried forward above. This is source
+release preparation, not a signed or published 0.24.9 installer.
 
 ### Device credential write coordination
 

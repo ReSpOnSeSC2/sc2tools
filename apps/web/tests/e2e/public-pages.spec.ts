@@ -82,10 +82,18 @@ for (const theme of ["light", "dark"] as const) {
 test("phone sign-in puts the form before collapsed optional marketing", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/sign-in");
-  const form = page.getByRole("region", { name: "Account form" });
+  const main = page.getByRole("main");
+  await expect(main).toHaveCount(1);
+  await expect(main).toBeVisible();
+  const form = main.getByRole("region", { name: "Account form" });
+  await expect(form).toHaveCount(1);
   await expect(form).toBeVisible();
   await expect(form.getByText("Welcome back to your replay history.")).toBeVisible();
-  const disclosure = page.getByText("Why sign up?", { exact: true }).locator("..");
+  const summary = main.getByText("Why sign up?", { exact: true });
+  await expect(summary).toHaveCount(1);
+  await expect(summary).toBeVisible();
+  const disclosure = summary.locator("..");
+  await expect(disclosure).toHaveCount(1);
   await expect(disclosure).not.toHaveAttribute("open");
   expect(await form.evaluate((node) => node.getBoundingClientRect().top)).toBeLessThan(844);
   const email = form.locator('input[name="identifier"], input[type="email"]').first();
