@@ -2223,20 +2223,25 @@
       "dependsOn": [
         "replay-library-control"
       ],
-      "implemented": "Individual game/build exports and streamed private snapshots exist; /me/export still materializes a JSON archive.",
+      "implemented": "PR#873 delivers bounded full-account NDJSON, paged/throttled build-order CSV/NDJSON and bounded private replay-batch signing. PR#874 supplies owner-fenced browser downloads, store ZIP32/CRC32 in a lazy worker, actual-settlement admission and cleanup, exclusive selection of up to100 replays, descriptive result-aware templates, progress/cancel/partial results, Settings export cards and help. Individual JSON export and upload behavior remain available. Actual containing-main revision is bound only after successful UI delivery. The UI PR also contains a reviewed test-only Settings search rail correction; local implementation validation remains bound to106, with exact237 hosted acceptance required separately. Verified source slices are contained in delivered main 4256903f5b391058f0b4c5650aa7628675c4005d.",
       "remainingRequirements": [
-        "Stream full GDPR archive as bounded NDJSON.",
-        "Add paged/throttled build-order exports.",
-        "Add replay-batch signed URLs, managed GET CORS and bounded client ZIP/progress/cancel/partial-failure/template handling.",
-        "Add Settings export cards and regression coverage."
+        "Owner-approved bucket GET CORS configuration and real-browser original replay fetch/ZIP acceptance remain unverified. Dormant pure GET policy and upload readiness do not prove these external gates."
       ],
       "evidence": [
         "apps/api/src/routes/me.js",
         "apps/api/src/services/gdpr.js",
         "apps/web/lib/gameExport.ts",
-        "apps/web/components/analyzer/settings/SettingsBackups.tsx"
+        "apps/web/components/analyzer/settings/SettingsBackups.tsx",
+        "docs/handoff/account-export-stream-checkpoint.md",
+        "docs/handoff/replay-pack-api-checkpoint.md",
+        "docs/handoff/export-center-ui-checkpoint.md",
+        "apps/api/src/services/replayDownloadBatch.js",
+        "apps/web/lib/exports/replayPacks/downloadReplayPack.ts"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        873,
+        874
+      ],
       "requirementSha256": "1297f27ad3ec39eeb84dfa9bddc2744890e3130973b01e94ac53908ded325731"
     },
     {
@@ -7646,6 +7651,562 @@
         }
       },
       "qualification": "Actual merged source/exact-head CI, immutable final local gates, separate distinct mutation counts with baselines excluded and LF checkpoint hashes. The 20 C mutation regressions remain tied to head 45a45384; D adds one narrow arithmetic counterfactual. Only the successful containing-main snapshot qualifies C+D delivery; the failed main 2dea9489 observation is retained. No signed build/tag/release, installed-agent upgrade/migration/support acceptance, cache activation or savings claim."
+    },
+    "exportCenterProgress4256903f": {
+      "date": "2026-11-03",
+      "ordinal": 78,
+      "id": "export-center",
+      "status": "partial",
+      "containingDeliveredMain": "4256903f5b391058f0b4c5650aa7628675c4005d",
+      "prs": [
+        {
+          "number": 873,
+          "head": "9d3881f9e799bbfa4b50a564dc74f4fcc604e6da",
+          "merge": "fbf827394b405fa51f66b57cd2c55f16abe993ec",
+          "mergedAt": "2026-11-03T12:04:04Z",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": {
+              "status": "completed",
+              "conclusion": "success",
+              "id": 125895155693
+            },
+            "Lint + typecheck + test (apps/web)": {
+              "status": "completed",
+              "conclusion": "success",
+              "id": 125895156724
+            },
+            "Responsive e2e smoke (public pages)": {
+              "status": "completed",
+              "conclusion": "success",
+              "id": 125895157008
+            },
+            "Vercel Preview Comments": {
+              "status": "completed",
+              "conclusion": "success",
+              "id": 125897120208
+            }
+          },
+          "requiredNames": [
+            "Lint + typecheck + test (apps/api)",
+            "Lint + typecheck + test (apps/web)",
+            "Responsive e2e smoke (public pages)"
+          ],
+          "files": [
+            "apps/api/__tests__/accountExport.routes.test.js",
+            "apps/api/__tests__/accountExportStream.test.js",
+            "apps/api/__tests__/buildOrderExport.routes.test.js",
+            "apps/api/__tests__/buildOrderExport.test.js",
+            "apps/api/__tests__/buildOrderExportPolicy.test.js",
+            "apps/api/__tests__/deviceCredentialWriterInventory.test.js",
+            "apps/api/__tests__/gamesBrowserIngest.test.js",
+            "apps/api/__tests__/gamesUpdatedAtInventory.test.js",
+            "apps/api/__tests__/opponentsWriterFence.test.js",
+            "apps/api/__tests__/opsConsole.test.js",
+            "apps/api/__tests__/replayDownloadBatch.app.test.js",
+            "apps/api/__tests__/replayDownloadBatch.privacy.test.js",
+            "apps/api/__tests__/replayDownloadBatch.routes.test.js",
+            "apps/api/__tests__/replayDownloadBatch.test.js",
+            "apps/api/__tests__/replayDownloadBatchPolicy.test.js",
+            "apps/api/__tests__/replayDownloadCorsPolicy.test.js",
+            "apps/api/src/app.js",
+            "apps/api/src/db/connect.js",
+            "apps/api/src/middleware/privateSearchTelemetry.js",
+            "apps/api/src/middleware/replayDownloadBatchBoundary.js",
+            "apps/api/src/middleware/requestLogging.js",
+            "apps/api/src/middleware/searchQueryPrivacy.js",
+            "apps/api/src/middleware/userDataWriteFence.js",
+            "apps/api/src/routes/accountExport.js",
+            "apps/api/src/routes/buildOrderExport.js",
+            "apps/api/src/routes/exportAdmission.js",
+            "apps/api/src/routes/me.js",
+            "apps/api/src/routes/replayDownloadBatch.js",
+            "apps/api/src/routes/replayFiles.js",
+            "apps/api/src/services/accountExportData.js",
+            "apps/api/src/services/accountExportPolicy.js",
+            "apps/api/src/services/accountExportStream.js",
+            "apps/api/src/services/buildOrderExport.js",
+            "apps/api/src/services/buildOrderExportPolicy.js",
+            "apps/api/src/services/gameDetailsStore.js",
+            "apps/api/src/services/gdpr.js",
+            "apps/api/src/services/replayDownloadBatch.js",
+            "apps/api/src/services/replayDownloadBatchPolicy.js",
+            "apps/api/src/services/replayDownloadCorsPolicy.js",
+            "apps/api/src/services/replayFiles.js",
+            "apps/api/src/services/reviews.js",
+            "apps/web/components/guides/__tests__/GuidePersonalComparison.test.tsx",
+            "apps/web/components/guides/__tests__/TimingsTable.test.tsx",
+            "apps/web/components/guides/build/BuildTimingsSection.tsx",
+            "apps/web/components/guides/build/TimingsTable.tsx",
+            "apps/web/tests/e2e/guide-timings-fixture.mjs",
+            "docs/handoff/account-export-stream-checkpoint.md",
+            "docs/handoff/replay-pack-api-checkpoint.md"
+          ]
+        },
+        {
+          "number": 874,
+          "head": "2372423ed94eeafce22ff99278a70834f67f97bb",
+          "merge": "4256903f5b391058f0b4c5650aa7628675c4005d",
+          "mergedAt": "2026-11-03T15:54:11Z",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/web)": {
+              "status": "completed",
+              "conclusion": "success",
+              "id": 126016431928
+            },
+            "Responsive e2e smoke (public pages)": {
+              "status": "completed",
+              "conclusion": "success",
+              "id": 126016432568
+            },
+            "Vercel Preview Comments": {
+              "status": "completed",
+              "conclusion": "success",
+              "id": 126019173880
+            }
+          },
+          "requiredNames": [
+            "Lint + typecheck + test (apps/web)",
+            "Responsive e2e smoke (public pages)"
+          ],
+          "files": [
+            "apps/web/components/analyzer/__tests__/ReplayList.test.tsx",
+            "apps/web/components/analyzer/replays/ReplayLibrary.tsx",
+            "apps/web/components/analyzer/replays/ReplayList.tsx",
+            "apps/web/components/analyzer/replays/ReplayPackControls.tsx",
+            "apps/web/components/analyzer/replays/__tests__/ReplayLibrary.packs.test.tsx",
+            "apps/web/components/analyzer/replays/__tests__/replayPackSelection.test.ts",
+            "apps/web/components/analyzer/replays/__tests__/useReplayPackSelection.test.tsx",
+            "apps/web/components/analyzer/replays/replayPackSelection.ts",
+            "apps/web/components/analyzer/replays/useReplayPackSelection.ts",
+            "apps/web/components/analyzer/settings/AccountDeleteDialog.tsx",
+            "apps/web/components/analyzer/settings/SettingsBackups.tsx",
+            "apps/web/components/analyzer/settings/SettingsExportCards.tsx",
+            "apps/web/components/analyzer/settings/__tests__/AccountDeleteDialog.export.test.tsx",
+            "apps/web/components/analyzer/settings/__tests__/ReplayArchiveStatusCard.test.tsx",
+            "apps/web/components/analyzer/settings/__tests__/SettingsBackups.test.tsx",
+            "apps/web/components/analyzer/settings/__tests__/SettingsExportCards.recovery.test.tsx",
+            "apps/web/components/analyzer/settings/__tests__/SettingsExportCards.test.tsx",
+            "apps/web/lib/exports/downloadExport.test.ts",
+            "apps/web/lib/exports/downloadExport.ts",
+            "apps/web/lib/exports/exportAdmission.test.ts",
+            "apps/web/lib/exports/exportAdmission.ts",
+            "apps/web/lib/exports/exportErrors.ts",
+            "apps/web/lib/exports/exportNdjson.test.ts",
+            "apps/web/lib/exports/exportNdjson.ts",
+            "apps/web/lib/exports/exportStream.test.ts",
+            "apps/web/lib/exports/exportStream.ts",
+            "apps/web/lib/exports/replayPacks/downloadReplayPack.lifecycle.test.ts",
+            "apps/web/lib/exports/replayPacks/downloadReplayPack.test.ts",
+            "apps/web/lib/exports/replayPacks/downloadReplayPack.ts",
+            "apps/web/lib/exports/replayPacks/packDestination.ts",
+            "apps/web/lib/exports/replayPacks/packMetadata.ts",
+            "apps/web/lib/exports/replayPacks/packNames.test.ts",
+            "apps/web/lib/exports/replayPacks/packNames.ts",
+            "apps/web/lib/exports/replayPacks/packReaders.ts",
+            "apps/web/lib/exports/replayPacks/packResponse.test.ts",
+            "apps/web/lib/exports/replayPacks/packResponse.ts",
+            "apps/web/lib/exports/replayPacks/packWorkerOwner.ts",
+            "apps/web/lib/exports/replayPacks/recordedResult.test.ts",
+            "apps/web/lib/exports/replayPacks/replayPackTestFixtures.ts",
+            "apps/web/lib/exports/replayPacks/useReplayPackDownload.test.tsx",
+            "apps/web/lib/exports/replayPacks/useReplayPackDownload.ts",
+            "apps/web/lib/exports/replayPacks/zipStore.test.ts",
+            "apps/web/lib/exports/replayPacks/zipStore.ts",
+            "apps/web/lib/exports/replayPacks/zipWorker.ts",
+            "apps/web/lib/exports/replayPacks/zipWorkerClient.test.ts",
+            "apps/web/lib/exports/replayPacks/zipWorkerClient.ts",
+            "apps/web/lib/exports/replayPacks/zipWorkerProtocol.test.ts",
+            "apps/web/lib/exports/replayPacks/zipWorkerProtocol.ts",
+            "apps/web/lib/exports/useExportDownload.test.tsx",
+            "apps/web/lib/exports/useExportDownload.ts",
+            "apps/web/lib/help/__tests__/exportCenter.test.ts",
+            "apps/web/lib/help/articles/account-data/backups-and-export.ts",
+            "apps/web/lib/help/articles/account-data/replay-packs.ts",
+            "apps/web/lib/help/articles/analyzer/replays.ts",
+            "apps/web/lib/help/articles/index.generated.ts",
+            "apps/web/lib/settingsIndex.ts",
+            "apps/web/tests/e2e/settings-search.spec.ts",
+            "docs/handoff/export-center-ui-checkpoint.md"
+          ]
+        }
+      ],
+      "delivery": {
+        "api": {
+          "ref": {
+            "path": "C:/SC2TOOLS/.cache/roadmap-delivery-20261102/fbf82739-04.json",
+            "bytes": 59567,
+            "sha256": "2bf7e8e7abf682efe29e87d4dff3c0184f8387cc968c54b4a2408f955ff9553d"
+          },
+          "main": "fbf827394b405fa51f66b57cd2c55f16abe993ec",
+          "allSixLatestWorkflowsSuccessful": true,
+          "latestLinkedWebAndApiSuccessful": true,
+          "checkedFreshAgainstGitHub": false
+        },
+        "ui": {
+          "ref": {
+            "path": "C:/SC2TOOLS/.cache/roadmap-delivery-20261102/4256903f-06.json",
+            "bytes": 59567,
+            "sha256": "eb9a64109036a2f40c956176b1ec297cd9d6f59cfaa43eca4f9cc48f347748f4"
+          },
+          "main": "4256903f5b391058f0b4c5650aa7628675c4005d",
+          "allSixLatestWorkflowsSuccessful": true,
+          "latestLinkedWebAndApiSuccessful": true,
+          "checkedFreshAgainstGitHub": true
+        }
+      },
+      "localValidation": {
+        "api": {
+          "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/FINAL-VALIDATION02.json",
+          "bytes": 55654,
+          "sha256": "5a39c20ae9217ae73db050cef81b676a6cad4c04268c1bbc0c4678e42f0de99e"
+        },
+        "uiImplementation": {
+          "head": "106f5355f4f66cc24b700eec56b025a7d42318df",
+          "final": {
+            "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/FINAL-VALIDATION01.json",
+            "bytes": 148411,
+            "sha256": "1bd494acc2940a6610635eeb34a7e24ea86ef085535b502df26eecd61bd3c0b0"
+          }
+        },
+        "uiPrHead": "2372423ed94eeafce22ff99278a70834f67f97bb",
+        "localRuntimeOnUiPrHead": false,
+        "testOnlyRepair": {
+          "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/UI-CI-REPAIR-CANDIDATE01.json",
+          "bytes": 6769,
+          "sha256": "22c68f6ff15ad8ba2e66c30b8221dc15038304a64dee432c2b3a3dbe87bc2900"
+        },
+        "correctedHosted": {
+          "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/corrected-hosted-success01/RESULT.json",
+          "bytes": 8924,
+          "sha256": "a95e412d0a6d9c94eb7783405680733f1f2ffb5adf255fb496632494e12d900e"
+        }
+      },
+      "mutationTotals": {
+        "api": 32,
+        "ui": 33,
+        "baselinesExcluded": true,
+        "apiBaselines": {
+          "original30": {
+            "assertions": 235,
+            "modules": 11
+          },
+          "readGuard2": {
+            "assertions": 5,
+            "modules": 1
+          }
+        },
+        "uiBaselines": {
+          "foundation": {
+            "assertions": 42,
+            "modules": 5
+          },
+          "D1": {
+            "assertions": 41,
+            "modules": 4
+          },
+          "D2": {
+            "assertions": 54,
+            "modules": 4
+          },
+          "D3": {
+            "assertions": 42,
+            "modules": 6
+          }
+        }
+      },
+      "audits": {
+        "apiPrimary": [
+          {
+            "role": "focused",
+            "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/audit-export-api-guide-primary-final01.json",
+            "bytes": 25258,
+            "sha256": "7b39236363baec3ffb984e244ff54bfc827e6c80907a53efff7173dbf23be1ec",
+            "decision": "CLEAR ACTUAL local API combined48 final primary outcomes"
+          },
+          {
+            "role": "refuting",
+            "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/refutation-export-api-guide-final-primary-outcomes01.json",
+            "bytes": 78113,
+            "sha256": "8d97ed99fdca7f35291ab83d8d826abb79a3d14939d44ac83264b8f5923f5716",
+            "decision": "CLEAR ACTUAL CLEAN9D48 PRIMARY OUTCOMES"
+          }
+        ],
+        "uiPrimary": [
+          {
+            "auditorRole": "focused",
+            "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/audit-export-ui-final-primary-focused01.json",
+            "bytes": 129838,
+            "sha256": "279e7b874a205a6b78673bd54dfcbba72da980b28b1f8f414cb66b6a73762ba2"
+          },
+          {
+            "auditorRole": "refuting",
+            "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/refutation-export-ui-primary-final01.json",
+            "bytes": 156345,
+            "sha256": "5c207bcdae6bccd161730c5d015427828a412a250e7474e590fc47bb2c71336c"
+          }
+        ],
+        "uiOutcomeAudits": 17,
+        "uiCriticalArtifacts": 375,
+        "correctedHosted": [
+          {
+            "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/audit-ui-pr874-corrected-hosted-merge01.json",
+            "bytes": 24651,
+            "sha256": "2f3734d487d68707e2c37ab859377182a6609c6b966c3d28ebdd334b5f87c104"
+          },
+          {
+            "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/refutation-ui874-corrected-hosted-and-merge01.json",
+            "bytes": 4936,
+            "sha256": "fffbf607e1940862e9174645c43de774167a55a5560133472d07f7fb3b49169a"
+          }
+        ]
+      },
+      "preservedFailureHistory": {
+        "apiRejectedA05": {
+          "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/api-mutation-classifier-saved32-analysis03.json",
+          "bytes": 104109,
+          "sha256": "e9fa430b7f1a568d146513fe7c588333c0cc3ce0f2cc706928469cc3c510df14"
+        },
+        "apiGuideBudget": {
+          "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/guide-budget-failure-retained01/RESULT.json",
+          "bytes": 18828,
+          "sha256": "6487992b9367bd05b65b581e353a9e5aa28288dbccf37c737527750f20abb8e7"
+        },
+        "apiOther": {
+          "chain": {
+            "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/guide-clean-remaining-gates01/RESULT.json",
+            "bytes": 4498,
+            "sha256": "1ba53b8704bca977d99e5003acf11f50176937b61e6462421eeaba1bf25b357f"
+          },
+          "chainRemainsFailed": true,
+          "quality02": {
+            "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/abc-clean-web-quality02/RESULT.json",
+            "bytes": 861797,
+            "sha256": "ce2f40786a40bbc2a6a4650168e12aae6e70ac491e137c22137bcd691ff8cdff"
+          },
+          "quality02RemainsFailed": true,
+          "quality02Outer": {
+            "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/abc-clean-web-quality02-wrapper01/RESULT.json",
+            "bytes": 724,
+            "sha256": "65adcd2bb2ae76afe78bcae72dd895b1b30a7e546a4951e0e67d528eb01b9e94"
+          },
+          "lint": {
+            "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/abc-clean-web-quality02/web-lint.json",
+            "bytes": 1238,
+            "sha256": "7bdc3616f4f1b245439dede7d50edef74eb90f6844157886f4a3428d20b5c79c"
+          },
+          "diagnosedToolingCwd": {
+            "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/diagnostic-guide-lint-cwd01/RESULT.json",
+            "bytes": 3326,
+            "sha256": "313b1680a35f59b8ee6f5eb00a055def69304f9e51e051e5e39007ce8b9cbd78"
+          },
+          "recovery01": {
+            "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/guide-clean-web-recovery01/RESULT.json",
+            "bytes": 5295,
+            "sha256": "99e916eb2a4c6795b38a1d5b9c7748719c33388431c28305540e7d5b906544f6"
+          },
+          "recovery01RemainsFailed": true,
+          "quality03OuterPreflight": {
+            "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/abc-clean-web-quality03-wrapper01/RESULT.json",
+            "bytes": 731,
+            "sha256": "383ff7c5bb8021936ef8537f4a4af41015ae66cdafdc20e8447b5e9551f53707"
+          },
+          "quality03HasNoInnerResultOrTestAcceptance": true,
+          "successfulFreshQuality04": {
+            "path": "C:/SC2TOOLS/.cache/export-center-stream-20261102/abc-clean-web-quality04/RESULT.json",
+            "bytes": 863950,
+            "sha256": "9b4f88661a5968207edde4bdaac487f1e176c9dc82de3f8cb84d13108d390af7"
+          },
+          "closedPriorPassesReused": true
+        },
+        "ui": {
+          "D3_01": {
+            "inner": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-d3-01/RESULT.json",
+              "bytes": 863315,
+              "sha256": "b30f234d1a79a5d18411a9dbcd98888f130b905fffa572691717435bc3a69d80"
+            },
+            "outer": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-d3-01-wrapper01/RESULT.json",
+              "bytes": 560,
+              "sha256": "075ba8acb8dfce620547b1b4f4980a8c0db5d4108bb0833259cc4d4a5f08057b"
+            },
+            "outerSettlement": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-d3-01-outer-settlement01.json",
+              "bytes": 1793,
+              "sha256": "edb17f52e892ef64a56077e05e0715d8f86f191be831b16b2b6cadf85e6d5f5c"
+            },
+            "manifest": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-d3-01/MUTATION-RESULTS.json",
+              "bytes": 8919,
+              "sha256": "a9d232c84ec70fd0ec2f0650e6431c119b21458ab1a6b5856ab0bfd2da80d7c4"
+            },
+            "frozen": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-d3-01/FROZEN.json",
+              "bytes": 449078,
+              "sha256": "6916ae42898234bcd78ff5989588101d78180694216a8260ebc603f240c5d875"
+            },
+            "diagnoses": [
+              {
+                "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/audit-export-ui-d3-01-m02-format-diagnosis01.json",
+                "bytes": 16084,
+                "sha256": "21fa7e2b0621bb5473522ec11a72bd4ff8cb710691d92afdbe5dbd59a55e6ae0"
+              },
+              {
+                "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/refutation-export-ui-d3-01-m02-format-diagnosis01.json",
+                "bytes": 6321,
+                "sha256": "e1d73fc961fea8468841d94ca46ba4fc7e8ef1741c3a57fe32dfcf970143247e"
+              }
+            ],
+            "correction": {
+              "rules": {
+                "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui33-intended-matcher-rules05.json",
+                "bytes": 90782,
+                "sha256": "c1c37d9fbf82db973140446d6a844c03799e895f7566c2680d8ac4d4cece0d51"
+              },
+              "executor": {
+                "path": "C:/SC2TOOLS/.cache/faster-dashboards-tools/mutation-check-export-ui33-08.mjs",
+                "bytes": 105959,
+                "sha256": "02a59da49524413a2a2c055cf81b409a3e03831eb23e69d9fa64d2a132d44005"
+              },
+              "preparation": {
+                "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui33-array-rules05-bound08-prepared01.json",
+                "bytes": 4282,
+                "sha256": "ae9759597a1412c144a604830320fc12fa82ae1a4d6ff8d04776facf3a94c1fe"
+              }
+            }
+          },
+          "D3_01RemainsFailed": true,
+          "D3M02ExecutedKilledFalse": true,
+          "D3Executed2Accepted1Unrun6": true,
+          "D3HistoricalBaselineSeparate42Over6": true,
+          "D3CurrentRuleAnalysisNeverRelabelsHistoricalKill": true,
+          "D1_01": {
+            "inner": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-d1-01/RESULT.json",
+              "bytes": 876402,
+              "sha256": "f5e982d51b3013f7fbc8cdc3a0e58f860a167f06c5f78fc3f985356620cdb7e4"
+            },
+            "outer": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-d1-01-wrapper01/RESULT.json",
+              "bytes": 560,
+              "sha256": "8b4ecdf5d2a6267206ccf1a1f114a4833c14c2b63d8a5efea742399626626c98"
+            },
+            "outerSettlement": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-d1-01-outer-settlement01.json",
+              "bytes": 1723,
+              "sha256": "770c19a48abea042eea015edfeb2fc6c5753a526c4d806e5059418a8c2831b57"
+            },
+            "manifest": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-d1-01/MUTATION-RESULTS.json",
+              "bytes": 18285,
+              "sha256": "391cc1514b0e48b4e31e8043415467245634d8be8bcbc2ca6fe59e50143d37f7"
+            },
+            "frozen": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-d1-01/FROZEN.json",
+              "bytes": 448396,
+              "sha256": "8085342c634f611dde63256902fd1d15c9f15d72592844b32d4b900ef0a6b1ad"
+            },
+            "diagnoses": [
+              {
+                "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/audit-export-ui-d1-01-m05-format-diagnosis01.json",
+                "bytes": 22825,
+                "sha256": "23e6b9a06d970671564c870bad43b4a69fca127b39745bd5ef41b43dbe6f1169"
+              },
+              {
+                "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/refutation-export-ui-d1-01-m05-format-diagnosis01.json",
+                "bytes": 6248,
+                "sha256": "c42c53babdb928bd20cc019f3a3bc3c4992d3a209b0c0f532fb19c540ac55c7c"
+              }
+            ],
+            "correction": {
+              "rules": {
+                "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui33-intended-matcher-rules04.json",
+                "bytes": 89369,
+                "sha256": "a303d6f87b12d725add7abf19db23edc8258da5d4266e7d84ebc98c4372eafc3"
+              },
+              "executor": {
+                "path": "C:/SC2TOOLS/.cache/faster-dashboards-tools/mutation-check-export-ui33-07.mjs",
+                "bytes": 105341,
+                "sha256": "1b685f2cd58df17c4ca0bc79772b85bd771fc8bfdb03c56b85d65aeb41bdbe16"
+              },
+              "preparation": {
+                "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui33-contain-rules04-bound07-prepared01.json",
+                "bytes": 4916,
+                "sha256": "fa50209e0b8c156ce81f6660b6aa51aab51035108136a5d7404f18e7eaebd543"
+              }
+            }
+          },
+          "D1_01RemainsFailed": true,
+          "D1M05ExecutedKilledFalse": true,
+          "D1Executed5Accepted4Unrun5": true,
+          "D1HistoricalBaselineSeparate41Over4": true,
+          "D1CurrentRuleAnalysisNeverRelabelsHistoricalKill": true,
+          "foundation01": {
+            "inner": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-foundation01/RESULT.json",
+              "bytes": 870205,
+              "sha256": "938054f16ce586f1f44ec0c70a6133843e921f315757406f49032067c35b3a86"
+            },
+            "outer": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-foundation01-wrapper01/RESULT.json",
+              "bytes": 575,
+              "sha256": "c9c104c462949b44d3cb732f0661c2736c64f639b0d9a766507ec4a8a946b8d9"
+            },
+            "outerSettlement": {
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui-clean-mutations-foundation01-outer-settlement01.json",
+              "bytes": 1639,
+              "sha256": "86171181d3b7fda0805dfb51c270c1f1c2b6be751458cf030e3d329ef0f385c2"
+            }
+          },
+          "foundation01RemainsFailed": true,
+          "F04ExecutedKilledFalse": true,
+          "other4NotRunInFailedAttempt": true,
+          "blockedStatic03": [
+            {
+              "kind": "review",
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/audit-export-ui33-intended-rules-template03.json",
+              "bytes": 20116,
+              "sha256": "e3172e88764be89103652a8bf81e86b87f582a315bfac37bcf80b8b0bcf5c694"
+            },
+            {
+              "kind": "review",
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/refutation-export-ui33-intended-rules-template03.json",
+              "bytes": 5337,
+              "sha256": "fa5bb60f868d10bb472a7939ecd67b1dd5e270ecdf62e203bea6e6de816685bc"
+            },
+            {
+              "kind": "constructed counterexample only",
+              "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/ui33-classifier03-unscoped-diff-counterexample01.json",
+              "bytes": 4138,
+              "sha256": "ea3af5595ca599febd7baed2f29c1adb3d59664d5476b95cc8649ecfd1916445"
+            }
+          ]
+        },
+        "uiImplementationHostedFailure": {
+          "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/pr-browser-failure03/RESULT.json",
+          "bytes": 18953,
+          "sha256": "117102fc4852524569aafe4750fea15425969a2f93c218c1519358c06ebef3a6"
+        },
+        "uiFailureCaptureAudit": {
+          "path": "C:/SC2TOOLS/.cache/export-center-ui-20261102/refutation-ui-pr874-failure-capture03.json",
+          "bytes": 2550,
+          "sha256": "29fba633ad8e4173e636cb6e37654c331c07e66e0c5436d6374a79ad06d65ae3"
+        }
+      },
+      "remainingRequirements": [
+        "Owner-approved bucket GET CORS configuration and real-browser original replay fetch/ZIP acceptance remain unverified. Dormant pure GET policy and upload readiness do not prove these external gates."
+      ],
+      "qualification": "Source/API/UI progress only. Owner-approved GET CORS and real-browser original replay fetch/ZIP acceptance remain unknown. No bucket/provider writes, PUT startup changes, release or native acceptance. Historical failed attempts remain failed; baseline assertions are not mutation kills. Distinct audit roles/content do not prove independent authorship without manual provenance review.",
+      "preparation": {
+        "path": "C:/SC2TOOLS/.cache/handoff-20261102/item78-reconciliation-manifest-unbound02.json",
+        "bytes": 41372,
+        "sha256": "0476422f8d1b0f6b3df3ea9673ec3566472891dfa71d195e724b838b56346c66"
+      },
+      "boundWriter": {
+        "path": "C:/SC2TOOLS/.cache/faster-dashboards-tools/ledger-item78-progress-03.mjs",
+        "bytes": 30973,
+        "sha256": "920f7f31e84c448314367a08d7edfb620ba52d3aa8043b08f60b3f4302b8d4bf"
+      }
     }
   },
   "latestImplementationRevisionQualification": "PR848/main 1fe7dc8a history-on-this-device UI delivery (AC5, tested 7e5c390a) is verified by local web types and lint, 10308 web cases, 25/25 mutations and two review workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR844/main 1d2353cc device copy clearing delivery (AC4, tested 3c36f05d) is verified by local web types and lint, 10245 web cases, 59/59 mutations and five verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR842/main 1c7c1974 device-kept analysis corpus delivery (AC3, tested 208598af) is verified by local API and web types and lint, 2213 API and 10191 web cases, 51/51 mutations, an independent review and two verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR841/main d496e3ea analysis-corpus changed-since reads delivery (AC2, tested 8be5c842) is verified by local types, configured lint, 1623 API cases, 15/15 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR840/main 901be460 analysis-corpus updatedAt stamps and index delivery (AC1, tested 7c0fc2a6) is verified by local types, configured lint, 1603 API cases, 10/10 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR837/main 55378835 owner activation-review runbook delivery (R1, docs only, citations checked at 9802bc8a) made no production read and changed no flag; both production deployments succeeded for that exact commit. The latest implementation revision stays C5's c7b5ef93. PR836/main c6e7110b opponent-MMR cache source delivery (C5, tested c7b5ef93) is verified by local types, configured lint, 1025 API and 109 web cases, 14/14 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR834/main d7b925d5 default-off chart-cache overlap guard delivery (G1, tested cc8e358c) is verified by local types, configured lint, 589 API cases, 9/9 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR833/main 261fa04d owner-run durable device-auth disable primitive (never invoked) delivery (DA4, tested 90126ee2) is verified by local types, configured lint, 180 device-auth cases, 11/11 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR832/main fe6b3d1f separate-process device-auth revocation regression (no application source) delivery (DA3, tested 6df0f447) is verified by local types, configured lint, 174 device-auth cases, 3/3 mutations, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR831/main 619d8f7f matchup time-series cache source delivery (C4, tested 000734b6) is verified by local types, configured lint, 539 API and 156 web cases, 15/15 mutations, an independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR829/main 2fabe343 random-summary cache source delivery (C3, tested 10cdb0fd) is verified by local types, configured lint, 449 API and 129 web cases, 12/12 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343 with public health checks; signed-in read-only acceptance was not performed. PR828/main d20bce90 net-MMR pair cache source delivery (C2, tested f9cc5ccc) is verified by local types, configured lint, 433 API and 119 web cases, 11/11 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR826/main 294c24ab uninjected device-auth lease probe hold-off delivery (DA2, tested 1dde734b) is verified by local types, lint, 231 device-auth cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR825/main 4a4df22f streak and Macro report cache source delivery (C1, tested 1fecfca0) is verified by local types, configured lint, 293 API and 117 web cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR824/main c790de3e serving-cohort contract (ADR 0072) delivery changes no runtime behavior and is verified by exact-head API CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks. PR822/main 27b9aeb0 opponent region/identity delivery is verified by local 3056/214 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. PR821/main de2031ad custom-build definition delivery is verified by its own local 1393/71 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. Agent0.24.7 GitHub publication is complete under the approved unsigned exception; actual API and website update availability are verified, with installed0.24.6 showing update available. No installed0.24.7 uptake, signing, cache/auth activation, full writer/fleet proof, savings or fresh all197 audit is claimed."

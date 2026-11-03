@@ -2,7 +2,9 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
-## 0.24.8
+## 0.24.9
+
+Includes all changes prepared for 0.24.8 but not published in that installer release.
 
 ### Changed
 - Protect the saved device token and OBS password with Windows user storage.
@@ -45,6 +47,14 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 - Say why a card preview in Settings > Build check-in cannot open: In-game
   assistance is off, the app is not paired, or Companion is still connecting.
   It no longer claims the current check-in is already open for every refusal.
+
+## 0.24.8
+
+### Release history
+- As of 2026-11-03, the existing `agent-v0.24.8` source tag had no published
+  installer release. Its [tagged installer run](https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41217171109)
+  failed the required signing check. Keep that historical tag fixed; the
+  unpublished changes are carried forward in 0.24.9.
 
 ## 0.24.7
 
