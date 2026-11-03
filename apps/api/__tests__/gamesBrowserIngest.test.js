@@ -5,8 +5,8 @@
  * Integration: in-browser (Clerk-session) replay ingest through the full
  * app. Provenance is derived from the verified credential, never from the
  * payload: a Clerk upload is stamped ``ingestSource: "browser"`` and keeps
- * its ``engineVersion``; a device-token upload is always ``"agent"`` with no
- * engine version, whatever the body claims.
+ * its ``engineVersion``; a device-token upload is always ``"agent"`` and
+ * retains its validated reported parse versions, whatever source the body claims.
  */
 
 const request = require("supertest");
@@ -78,7 +78,7 @@ describe("POST /v1/games - browser ingest provenance", () => {
     expect(detail.ingestSource).toBeUndefined();
   });
 
-  test("device uploads are stamped agent and drop any claimed engine version", async () => {
+  test("device uploads are stamped agent and retain the reported engine version", async () => {
     const first = await postAs("browser-token", { games: [sampleGame(1)] });
     expect(first.status).toBe(202);
     const userId = await userIdForClerk(harness.db, "clerk_user_browser");
@@ -91,7 +91,7 @@ describe("POST /v1/games - browser ingest provenance", () => {
 
     const row = await harness.db.games.findOne({ userId, gameId: claimed.gameId });
     expect(row.ingestSource).toBe("agent");
-    expect(row).not.toHaveProperty("engineVersion");
+    expect(row.engineVersion).toBe("1.6.3");
   });
 
   test("an agent re-upload of a browser game clears the stale engine version", async () => {

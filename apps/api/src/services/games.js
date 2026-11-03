@@ -20,6 +20,7 @@ const {
 } = require("./buildIntentShape");
 const { withOwnerBuildFlags } = require("./buildIntentReaders");
 const { ownedGameNeighbors } = require("./gameNeighbors");
+const { ANALYSIS_PROVENANCE_PROJECTION } = require("./analysisProvenance");
 
 /** @param {number} ms */
 function wait(ms) {
@@ -106,15 +107,15 @@ const GAME_SLIM_FIELDS = new Set([
   // detail-store round trip.
   "spatial",
   "_schemaVersion",
-  // Upload provenance: "agent" | "browser" plus the browser engine's semver.
-  // Together they cost ~40 bytes of the ~3 kB slim budget. They live on the
-  // slim row (not game_details) because they must be Mongo-queryable: support
-  // and rollout monitoring select browser-ingest cohorts by engine version
+  // Reported parse provenance: auth-derived source plus bounded versions.
+  // These optional stamps live on the slim row (not game_details): support
+  // and rollout monitoring select analysis cohorts by reported engine version
   // (e.g. "re-parse every row produced by engine 1.6.3") without an R2
-  // round-trip per game. Both are enum/pattern-bounded by the ingest schema
+  // round-trip per game. All are enum/pattern-bounded by the ingest schema
   // and re-bounded in normalizeSlimField below.
   "ingestSource",
   "engineVersion",
+  "agentVersion",
   // Pre-nested-agent aliases retained for upload/backfill compatibility.
   "duration",
   "macro_score",
@@ -144,6 +145,7 @@ const PUBLIC_GAME_PROJECTION = Object.freeze({
   isLadderGame: 1,
   gameVersion: 1,
   gameBuild: 1,
+  ...ANALYSIS_PROVENANCE_PROJECTION,
   durationSec: 1,
   macroScore: 1,
   apm: 1,
@@ -278,10 +280,11 @@ class GamesService {
    * @param {string} userId
    * @param {{gameId: string, date: string | Date} & Record<string, unknown>} game
    * @param {import('./gameStatsWrites').GameStatsOwner} [admissionOwner]
+   * @param {{replaceAnalysis?: boolean}} [options] Explicit full-parse replacement; otherwise provenance is preserved.
    * @returns {Promise<boolean>}
    */
-  async upsert(userId, game, admissionOwner) {
-    const result = await this.upsertWithRevision(userId, game, admissionOwner);
+  async upsert(userId, game, admissionOwner, options) {
+    const result = await this.upsertWithRevision(userId, game, admissionOwner, options);
     return result.created;
   }
 
@@ -292,9 +295,10 @@ class GamesService {
    * @param {string} userId
    * @param {{gameId: string, date: string | Date} & Record<string, unknown>} game
    * @param {import('./gameStatsWrites').GameStatsOwner} [admissionOwner]
+   * @param {{replaceAnalysis?: boolean}} [options] Set only by a full-analysis writer, never inferred from payload shape.
    * @returns {Promise<{created: boolean, customBuildRevision: string, spatial?: Record<string, any>, excluded?: boolean}>}
    */
-  async upsertWithRevision(userId, game, admissionOwner) {
+  async upsertWithRevision(userId, game, admissionOwner, options) {
     if (!game || !game.gameId) throw new Error("gameId required");
     const statsOwner = admissionOwner || await this.gameStatsWrites.capture(userId);
     if (statsOwner.userId !== userId) throw Object.assign(new Error("game_stats_owner_unavailable"), { code: "game_stats_owner_unavailable", status: 503 });
@@ -424,7 +428,7 @@ class GamesService {
     // re-uploads and must survive them; $setting the whole parent
     // object would erase the marker and retry Pulse misses forever.
     const slimSet = buildSlimSet(doc);
-    unsetStaleEngineVersion(slimSet, unset);
+    applyAnalysisProvenance(slimSet, unset, options?.replaceAnalysis === true);
     const protectOpponentMmr = normalizeOpponentMmrProvenance(slimSet);
     if (
       Object.prototype.hasOwnProperty.call(doc, "spatial")
@@ -572,12 +576,12 @@ class GamesService {
       "isLadderGame",
       "gameVersion",
       "gameBuild",
-      "ingestSource",
-      "engineVersion",
       "opponent",
     ]) {
       if (game[key] !== undefined) insert[key] = game[key];
     }
+    // A marker is not an analysis replacement. Existing stamps survive via
+    // $setOnInsert, and a new marker must not manufacture parse provenance.
     // A brand-new marker was never counted competitively, so it must not
     // generate a compensating decrement. Existing rows were marked pending
     // by the transition below and $setOnInsert leaves that state untouched.
@@ -2027,10 +2031,12 @@ const SLIM_FIELD_NORMALIZER_ENTRIES = [
   ["opp_strategy", (value) => boundedString(value, 200)],
   ["ingestSource", normalizeIngestSource],
   ["engineVersion", normalizeEngineVersion],
+  ["agentVersion", normalizeAgentVersion],
 ];
 const SLIM_FIELD_NORMALIZERS = new Map(SLIM_FIELD_NORMALIZER_ENTRIES);
 
 const ENGINE_VERSION_REGEX = new RegExp(INGEST_PROVENANCE.ENGINE_VERSION_PATTERN);
+const AGENT_VERSION_REGEX = new RegExp(INGEST_PROVENANCE.AGENT_VERSION_PATTERN);
 
 /**
  * Keep only a known provenance label.
@@ -2059,18 +2065,34 @@ function normalizeEngineVersion(value) {
 }
 
 /**
- * ``ingestSource`` / ``engineVersion`` describe the upload that last wrote
- * the slim row. When a stamped upload carries no engine version (a desktop
- * agent re-upload of a browser-parsed game), clear any older browser engine
- * version so the pair never contradicts itself under patch semantics.
- * Example: {$set: {ingestSource: "agent"}} also unsets engineVersion.
+ * Bound reported native version even for direct storage callers.
+ * @param {unknown} value
+ * @returns {string|undefined}
+ */
+function normalizeAgentVersion(value) {
+  if (typeof value !== "string") return undefined;
+  if (value.length > INGEST_PROVENANCE.AGENT_VERSION_MAX_LENGTH) return undefined;
+  return AGENT_VERSION_REGEX.test(value) ? value : undefined;
+}
+
+/**
+ * Only explicit full-analysis replacements can replace or clear stamps.
+ * Metadata patches cannot manufacture provenance, even if their shape looks
+ * like a complete replay. Missing stamps on an actual replacement are unknown
+ * and must not inherit an older parse's engine/agent identity.
  * @param {Record<string, any>} slimSet
  * @param {Record<string, string>} unset
+ * @param {boolean} replaceAnalysis
  */
-function unsetStaleEngineVersion(slimSet, unset) {
-  if (slimSet.ingestSource !== undefined && slimSet.engineVersion === undefined) {
-    unset.engineVersion = "";
+function applyAnalysisProvenance(slimSet, unset, replaceAnalysis) {
+  const fields = ["ingestSource", "engineVersion", "agentVersion"];
+  if (!replaceAnalysis) {
+    for (const field of fields) delete slimSet[field];
+    return;
   }
+  if (slimSet.ingestSource !== INGEST_PROVENANCE.SOURCE_AGENT) delete slimSet.agentVersion;
+  if (slimSet.ingestSource === undefined) delete slimSet.engineVersion;
+  for (const field of fields) if (slimSet[field] === undefined) unset[field] = "";
 }
 
 /**

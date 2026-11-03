@@ -196,17 +196,19 @@ const LIMITS = Object.freeze({
   GAME_ID_MAX_LENGTH: 200,
 });
 
-// Upload provenance stamped on slim game rows. ``ingestSource`` is derived
-// server-side from the authenticated caller; ``engineVersion`` is the semver
-// of the in-browser analysis engine (MAJOR.MINOR.PATCH with an optional
-// pre-release and/or build suffix, e.g. 1.6.3-rc.1 or 1.6.3+build.5).
+// Reported parse provenance, never an attestation or a current-version guess.
+// Keep the existing bounded version syntax for forward compatibility; cohort
+// comparison applies its own numeric/prerelease rules to these reported values.
+const ANALYSIS_VERSION_PATTERN =
+  "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$";
 const INGEST_PROVENANCE = Object.freeze({
   SOURCES: Object.freeze(["agent", "browser"]),
   SOURCE_AGENT: "agent",
   SOURCE_BROWSER: "browser",
   ENGINE_VERSION_MAX_LENGTH: 40,
-  ENGINE_VERSION_PATTERN:
-    "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$",
+  ENGINE_VERSION_PATTERN: ANALYSIS_VERSION_PATTERN,
+  AGENT_VERSION_MAX_LENGTH: 40,
+  AGENT_VERSION_PATTERN: ANALYSIS_VERSION_PATTERN,
 });
 
 // Replay Review Exchange (docs/reviews.md). Every threshold the feature

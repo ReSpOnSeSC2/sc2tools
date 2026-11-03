@@ -27,18 +27,24 @@ describe("stampIngestProvenance", () => {
     expect(game).toEqual({ gameId: "g1", ingestSource: "browser", engineVersion: "1.6.3" });
   });
 
-  test("a device token is agent provenance and drops any engine version", () => {
-    const game = { gameId: "g1", ingestSource: "browser", engineVersion: "1.6.3" };
+  test("a device token is agent provenance and retains reported engine and agent versions", () => {
+    const game = { gameId: "g1", ingestSource: "browser", engineVersion: "1.6.3", agentVersion: "0.24.9" };
     stampIngestProvenance(game, { userId: "u1", source: "device" });
-    expect(game).toEqual({ gameId: "g1", ingestSource: "agent" });
+    expect(game).toEqual({ gameId: "g1", ingestSource: "agent", engineVersion: "1.6.3", agentVersion: "0.24.9" });
+  });
+
+  test("a browser cannot claim a native agent version", () => {
+    const game = { ...claimed(), agentVersion: "0.24.9" };
+    stampIngestProvenance(game, { userId: "u1", source: "clerk" });
+    expect(game).toEqual({ gameId: "g1", ingestSource: "browser", engineVersion: "1.6.3" });
   });
 
   test.each([
     ["an unknown source", { userId: "u1", source: "overlay" }],
     ["a missing source", { userId: "u1" }],
     ["no auth at all", undefined],
-  ])("%s gets neither field, whatever the payload claimed", (_label, auth) => {
-    const game = claimed();
+  ])("%s gets no provenance fields, whatever the payload claimed", (_label, auth) => {
+    const game = { ...claimed(), agentVersion: "0.24.9" };
     stampIngestProvenance(game, auth);
     expect(game).toEqual({ gameId: "g1" });
   });

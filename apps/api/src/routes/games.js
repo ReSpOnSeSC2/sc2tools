@@ -689,14 +689,14 @@ function buildGamesRouter(deps) {
         let storedSpatial = game.spatial;
         try {
           if (typeof deps.games.upsertWithRevision === "function") {
-            const stored = await deps.games.upsertWithRevision(userId, game, ...statsArgs);
+            const stored = await deps.games.upsertWithRevision(userId, game, statsOwner, { replaceAnalysis: true });
             deps.gameExecution?.invalidateForUser(userId);
             if (stored.excluded) { accepted.push({ gameId: game.gameId, created: false, excluded: true }); continue; }
             created = stored.created;
             customBuildRevision = stored.customBuildRevision;
             storedSpatial = stored.spatial;
           } else {
-            created = await deps.games.upsert(userId, game, ...statsArgs);
+            created = await deps.games.upsert(userId, game, statsOwner, { replaceAnalysis: true });
             deps.gameExecution?.invalidateForUser(userId);
           }
         } catch (err) {

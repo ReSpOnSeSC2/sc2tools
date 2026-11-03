@@ -315,11 +315,12 @@ export interface GamesService {
   findMany(userId: string, gameIds: string[]): Promise<object[]>;
   /** Ids from ``gameIds`` with a stored row (quarantined rows included). */
   existingGameIds(userId: string, gameIds: string[]): Promise<string[]>;
-  upsert(userId: string, game: object & { gameId: string }, admissionOwner?: import("./gameStatsWrites").GameStatsOwner): Promise<boolean>;
+  upsert(userId: string, game: object & { gameId: string }, admissionOwner?: import("./gameStatsWrites").GameStatsOwner, options?: { replaceAnalysis?: boolean }): Promise<boolean>;
   upsertWithRevision?(
     userId: string,
     game: object & { gameId: string },
     admissionOwner?: import("./gameStatsWrites").GameStatsOwner,
+    options?: { replaceAnalysis?: boolean },
   ): Promise<{
     created: boolean;
     customBuildRevision: string;
