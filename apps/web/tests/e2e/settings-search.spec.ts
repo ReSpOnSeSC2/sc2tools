@@ -20,7 +20,7 @@ const results = (page: Page) => page.getByRole("listbox", { name: "Find a settin
 const nav = (page: Page) => page.getByRole("navigation", { name: "On this page", exact: true });
 const confirm = (page: Page) => page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true });
 const profileIds = ["profile-details", "pulse-ids", "player-channels", "public-profile"];
-const backupsIds = ["replay-archive", "snapshots", "repair-data", "hidden-games", "device-history", "delete-history", "gdpr"];
+const backupsIds = ["replay-archive", "snapshots", "repair-data", "hidden-games", "device-history", "export", "delete-history", "gdpr"];
 const randomizerIds = ["build-randomizer", "catalog-builds", "custom-builds", "gateway-draw", "sound-effects", "randomizer-preview"];
 
 async function choose(page: Page, query: string) {
@@ -134,6 +134,16 @@ for (const theme of ["light", "dark"] as const) {
       expect(page.url()).toBe(profileHref); await expect(name).toHaveValue("Unsaved synthetic draft");
       await choose(page, "Delete account"); await confirm(page).getByRole("button", { name: "Discard & switch" }).click();
       await expect(page).toHaveURL(/\?tab=backups#gdpr$/); await targets(page, backupsIds); await choices(page, backupsIds);
+      await search(page).fill("full archive"); await expect(results(page)).toHaveCount(1);
+      await search(page).press("ArrowDown"); await search(page).press("Enter");
+      await expect(page).toHaveURL(/\?tab=backups#export$/);
+      const exportSection = page.locator('[id="export"]');
+      await expect(exportSection.getByRole("heading", { name: "Export", exact: true })).toBeVisible();
+      await expect(exportSection.getByRole("heading", { name: "Full account archive", exact: true })).toBeVisible();
+      await expect(exportSection.getByRole("button", { name: "Download full archive", exact: true })).toBeVisible();
+      await expect(exportSection.getByRole("heading", { name: "Build orders", exact: true })).toBeVisible();
+      await expect(exportSection.getByRole("button", { name: "Download build orders", exact: true })).toBeVisible();
+      await expect(exportSection.getByRole("link", { name: "create a private replay pack in Replays", exact: true })).toHaveAttribute("href", "/app/replays#replay-packs");
       expect(evidence.writes).toEqual([]); await checkAccessibility(page, info, `/settings-search-backups-${width}`, theme); await overflow(page);
       await choose(page, "Default tab"); await targets(page, ["app-preferences", "setup-privacy", "notifications"]);
       await choices(page, ["app-preferences", "setup-privacy", "notifications"]);

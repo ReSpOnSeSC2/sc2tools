@@ -18,7 +18,11 @@ const LABELS: Record<string, string> = {
   streamRows: "Stream Studio, viewer and prediction records", reviewComments: "Comments on other review requests", activityEvents: "Service activity records", auditRows: "Admin audit records",
 };
 
-export default function AccountDeleteDialog({ onClose, onExport }: { onClose: () => void; onExport: () => Promise<boolean> }) {
+type ExportStatus = { busy: boolean; feedback: { bytes: number; message: string } | null; cancel: () => void };
+
+export default function AccountDeleteDialog({ onClose, onExport, exportStatus }: {
+  onClose: () => void; onExport: () => Promise<boolean>; exportStatus?: ExportStatus;
+}) {
   const { getToken } = useAuth();
   const { signOut } = useClerk();
   const [step, setStep] = useState(1);
@@ -26,9 +30,10 @@ export default function AccountDeleteDialog({ onClose, onExport }: { onClose: ()
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [deleted, setDeleted] = useState(false);
+  const blocked = busy || !!exportStatus?.busy;
   const inventory = useApi<Inventory>("/v1/me/data-inventory", { revalidateOnFocus: false });
   async function finish() {
-    if (busy || (!deleted && typed !== "DELETE")) return;
+    if (blocked || (!deleted && typed !== "DELETE")) return;
     setBusy(true); setError("");
     let dataDeleted = deleted;
     try {
@@ -54,18 +59,20 @@ export default function AccountDeleteDialog({ onClose, onExport }: { onClose: ()
       setError(dataDeleted ? "Your data was deleted. Signing out failed; retry signing out." : "Could not finish. Your account may have been partially cleared; retry to complete deletion.");
     } finally { setBusy(false); }
   }
-  return <Modal open onClose={() => { if (!busy && !deleted) onClose(); }} disableScrimClose={busy || deleted} hideClose={busy || deleted}
+  return <Modal open onClose={() => { if (!blocked && !deleted) onClose(); }} disableScrimClose={blocked || deleted} hideClose={blocked || deleted}
     title={deleted ? "Finish signing out" : "Delete your account"} description={`Step ${step} of 3`} size="md"
     footer={<>
-      {!deleted ? <Button variant="secondary" disabled={busy} onClick={step === 1 ? onClose : () => { setStep(step - 1); setError(""); }}>{step === 1 ? "Cancel" : "Back"}</Button> : null}
-      {step < 3 ? <Button disabled={busy || (step === 2 && !inventory.data)} onClick={() => { setStep(step + 1); setError(""); }}>Continue</Button>
-        : <Button variant="danger" loading={busy} disabled={!deleted && typed !== "DELETE"} onClick={finish}>{deleted ? "Retry signing out" : "Delete account permanently"}</Button>}
+      {!deleted ? <Button variant="secondary" disabled={blocked} onClick={step === 1 ? onClose : () => { setStep(step - 1); setError(""); }}>{step === 1 ? "Cancel" : "Back"}</Button> : null}
+      {step < 3 ? <Button disabled={blocked || (step === 2 && !inventory.data)} onClick={() => { setStep(step + 1); setError(""); }}>Continue</Button>
+        : <Button variant="danger" loading={busy} disabled={blocked || (!deleted && typed !== "DELETE")} onClick={finish}>{deleted ? "Retry signing out" : "Delete account permanently"}</Button>}
     </>}>
     <div className="space-y-4">
       {step === 1 ? <>
         <h3 className="font-semibold">Download my data first</h3>
         <p className="text-body-sm">Keep a JSON export of your structured account data before you leave. Original replays download separately from replay history. An export is optional.</p>
-        <Button variant="secondary" loading={busy} onClick={async () => { setBusy(true); try { await onExport(); } finally { setBusy(false); } }}>Download my data</Button>
+        <Button variant="secondary" loading={blocked} onClick={async () => { setBusy(true); try { await onExport(); } finally { setBusy(false); } }}>Download my data</Button>
+        {exportStatus?.feedback ? <p role="status" className="text-caption">{exportStatus.feedback.message}{exportStatus.feedback.bytes ? ` (${(exportStatus.feedback.bytes / 1024 / 1024).toFixed(1)} MiB)` : ""}</p> : null}
+        {exportStatus?.busy ? <div className="space-y-2"><p className="text-caption text-text-muted">Wait for the export to finish before continuing.</p><Button variant="secondary" onClick={exportStatus.cancel}>Cancel export</Button></div> : null}
         <p className="text-caption text-text-muted">Deletion also ends your sign-in account. Paired PCs and overlay links stop working.</p>
       </> : null}
       {step === 2 ? <>
@@ -79,7 +86,7 @@ export default function AccountDeleteDialog({ onClose, onExport }: { onClose: ()
       </> : null}
       {step === 3 ? <>
         <p>This permanently deletes your account and its live data. Your existing private snapshots are deleted too. Service backup copies expire under the backup schedule.</p>
-        <label className="block space-y-2"><span>Type DELETE to confirm</span><Input value={typed} onChange={(event) => setTyped(event.target.value)} disabled={busy || deleted} autoComplete="off" spellCheck={false} /></label>
+        <label className="block space-y-2"><span>Type DELETE to confirm</span><Input value={typed} onChange={(event) => setTyped(event.target.value)} disabled={blocked || deleted} autoComplete="off" spellCheck={false} /></label>
         <p className="text-caption text-text-muted">If the identity provider is unavailable, sign-in deletion is retried automatically. The deleted identity cannot reopen the account while that retry is pending.</p>
       </> : null}
       {error ? <p role="alert" className="text-danger">{error}</p> : null}

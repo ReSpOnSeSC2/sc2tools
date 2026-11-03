@@ -25,7 +25,7 @@ const article: HelpArticle = {
     "newer",
     "older",
   ],
-  updated: "2026-10-26",
+  updated: "2026-11-03",
   body: [
     {
       type: "paragraph",
@@ -55,6 +55,8 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "Each row, and each game page, has a download button for the original .SC2Replay file, when the file was kept as the game synced. A game synced before original files were kept has no file to download yet: run **Re-sync** in the desktop app to upload it again, as long as the replay is still on your PC.",
     },
+    { type: "heading", text: "Download a replay pack", anchor: "packs" },
+    { type: "paragraph", text: "For several originals, choose **Replay pack** in [Replays](/app/replays#replay-packs). Select up to 100 games across pages with unchanged filters, or replace your selection with the first 100 matching games in the current sort. This mode is separate from **Select replays**, whose hide/delete actions affect only selected games on the current page. See [Private replay packs](/help/replay-packs) for filenames, progress, partial results and privacy." },
     { type: "heading", text: "Share your replay archive", anchor: "share" },
     {
       type: "steps",
@@ -78,7 +80,7 @@ const article: HelpArticle = {
       text: "An .SC2Replay file includes both players' names and account details and the in-game chat. Only share your archive if you're comfortable with that.",
     },
   ],
-  related: ["game-page", "public-profile", "my-game-didnt-show-up", "analyzer-filters"],
+  related: ["game-page", "public-profile", "my-game-didnt-show-up", "analyzer-filters", "replay-packs"],
 };
 
 export default article;

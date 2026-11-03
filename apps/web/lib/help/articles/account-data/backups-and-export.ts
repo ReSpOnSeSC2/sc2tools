@@ -23,7 +23,7 @@ const article: HelpArticle = {
     "delete account",
     "recovery",
   ],
-  updated: "2026-10-28",
+  updated: "2026-11-03",
   body: [
     { type: "heading", text: "Deleting game history" },
     { type: "paragraph", text: "A Before action snapshot is saved automatically before deletion. In Settings → Backups & data, From and Through use your local time and include both chosen days. The confirmation dialog shows how many games will be deleted; an empty range cannot be confirmed. Re-sync from the desktop app afterwards to upload your replays again. [Step-by-step deletion guide](/help/deleting-game-history)." },
@@ -64,11 +64,17 @@ const article: HelpArticle = {
     },
     { type: "paragraph", text: "If backup storage is unavailable or an archive cannot be verified, restore does not change your current data. Existing uploaded replays are checked before restore. For derived-data problems, try [Fixing wrong opponent counts](/help/repair-my-data)." },
     { type: "paragraph", text: "If a restore stops part-way through, refresh its preview before trying again. The Before action snapshot remains a separate restore point. An upload batch already in progress when history is replaced may need to retry; use a fresh desktop Re-sync when you want to upload that history again." },
-    { type: "heading", text: "Export your data" },
+    { type: "heading", text: "Export your data", anchor: "export" },
     {
       type: "paragraph",
-      text: "**Export my data** in [Settings → Backups & data](/settings?tab=backups) downloads everything stored for your account as one JSON file: your account details, games list, opponents, notes, custom builds, settings, overlay tokens and the rest of your account records. Build orders and charts aren't in the file. Original replays download one at a time with the download button on each game.",
+      text: "Open [Settings → Export](/settings?tab=backups#export) for a **Full account archive** in NDJSON (one record per line). It includes account records such as games, opponents, notes, custom builds, settings and overlay tokens; keep it private. **Include game details** adds build orders and charts and makes the file larger. Original replay binaries are separate: use a [private replay pack](/help/replay-packs) or a game's download button.",
     },
+    { type: "paragraph", text: "The older **Export my data** JSON action remains a separate compatibility download without build orders or charts. Neither account export format can be uploaded as a restore point. Snapshots are the restorable copies described above; a redacted support bundle is for troubleshooting and is not an account archive. Exporting is optional before deleting your account; a cancelled or failed export does not confirm deletion." },
+    { type: "heading", text: "Export build orders", anchor: "build-orders" },
+    { type: "paragraph", text: "Choose CSV for a spreadsheet or NDJSON for structured records. Each file covers up to 2,000 games. From and Through use your local time and include both chosen days; leaving both empty uses all games. Supply is blank when it was not recorded. There are three admitted requests per rolling hour; each actual page request counts, including downloads cancelled or failed after admission." },
+    { type: "paragraph", text: "When more games remain, **Download next page** continues the captured order with a cursor that expires 24 hours after it was first issued; using it does not renew that deadline. A failed or cancelled next page keeps the same cursor for an explicit retry with unchanged format and dates. Each retry that reaches admission uses another request. **Download build orders** restarts at the first page. Changing account, format or dates clears the continuation; no page retries automatically." },
+    { type: "heading", text: "Saving and cancelling", anchor: "saving" },
+    { type: "paragraph", text: "Save directly to a file when your browser offers a file picker. Other browsers support completed downloads up to 128 MiB; choose a smaller range or direct file saving for larger exports. **Cancel export** stops the current work; another export stays blocked while actual file and network cleanup finishes. Records are read in sequence, so changes during a download can affect the file: an export is not a transactionally frozen snapshot of the account." },
     { type: "heading", text: "When you delete something" },
     {
       type: "list",
@@ -79,7 +85,7 @@ const article: HelpArticle = {
       ],
     },
   ],
-  related: ["deleting-game-history", "repair-my-data", "delete-account", "history-on-this-device"],
+  related: ["deleting-game-history", "repair-my-data", "delete-account", "history-on-this-device", "replay-packs"],
   order: 20,
 };
 

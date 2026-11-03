@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { forgetDeviceCopy, mayHaveApplied } from "@/lib/analysisCorpus/deviceClear";
 import { apiCall, API_BASE, type ClientApiError } from "@/lib/clientApi";
+import { useExportDownload } from "@/lib/exports/useExportDownload";
 import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
@@ -22,6 +23,7 @@ import { SnapshotManager } from "./SnapshotManager";
 import { DataRepairCard } from "./DataRepairCard";
 import { DeviceHistorySection } from "./DeviceHistorySection";
 import { SettingsSectionsReady } from "./SettingsSectionNav";
+import { SettingsExportCards } from "./SettingsExportCards";
 
 const AccountDeleteDialog = dynamic(() => import("./AccountDeleteDialog"), { ssr: false });
 const HiddenGames = dynamic(() => import("./HiddenGames"), { ssr: false });
@@ -33,7 +35,8 @@ export function SettingsBackups() {
   const { toast } = useToast();
   const { mutate: refresh } = useSWRConfig();
   const [pendingDelete, setPendingDelete] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const exports = useExportDownload();
+  const exporting = exports.busy;
   const [wipeSince, setWipeSince] = useState("");
   const [wipeUntil, setWipeUntil] = useState("");
   const [pendingWipe, setPendingWipe] = useState(false);
@@ -84,32 +87,7 @@ export function SettingsBackups() {
   }
 
   async function exportData() {
-    if (exporting) return false;
-    setExporting(true);
-    try {
-      const token = await getToken();
-      const res = await fetch(`${API_BASE}/v1/me/export`, {
-        headers: token ? { authorization: `Bearer ${token}` } : undefined,
-      });
-      if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `sc2tools-export-${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success("Export started — check your downloads.");
-      return true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Please try again.";
-      toast.error("Couldn't export data", { description: message });
-      return false;
-    } finally {
-      setExporting(false);
-    }
+    return exports.run({ url: `${API_BASE}/v1/me/export`, filename: `sc2tools-export-${Date.now()}.json`, contentType: "application/json" });
   }
 
   async function confirmWipeGames() {
@@ -165,6 +143,8 @@ export function SettingsBackups() {
 
       <DeviceHistorySection revision={deviceRevision} />
 
+      <SettingsExportCards key={exports.owner ?? "signed-out"} download={exports} />
+
       <Section
         id="delete-history" className="scroll-mt-28"
         title="Delete game history"
@@ -215,7 +195,7 @@ export function SettingsBackups() {
       <Section
         id="gdpr" className="scroll-mt-28"
         title="Export & delete account (GDPR)"
-        description="Download everything stored for your account as one JSON file: your games list, opponents, notes, custom builds, settings and overlay tokens. Build orders and charts aren't in the file; original replays download from your replay history. Deleting your account is permanent."
+        description="The JSON export contains your games list, opponents, notes, custom builds, settings and overlay tokens. Build orders and charts aren't in the file; choose the full archive above to include game details. Original replays download from your replay history. Keep account exports private. Deleting your account is permanent."
       >
         <Card>
           <div className="flex flex-wrap items-center gap-2">
@@ -229,7 +209,7 @@ export function SettingsBackups() {
             </Button>
             <Button
               variant="danger"
-              onClick={() => setPendingDelete(true)}
+              onClick={() => { exports.clear(); setPendingDelete(true); }}
               iconLeft={<Trash2 className="h-4 w-4" aria-hidden />}
             >
               Delete my account
@@ -238,7 +218,7 @@ export function SettingsBackups() {
         </Card>
       </Section>
 
-      {pendingDelete ? <AccountDeleteDialog onClose={() => setPendingDelete(false)} onExport={exportData} /> : null}
+      {pendingDelete ? <AccountDeleteDialog key={exports.owner ?? "signed-out"} onClose={() => setPendingDelete(false)} onExport={exportData} exportStatus={exports} /> : null}
       <DestructiveConfirmDialog
         open={pendingWipe}
         onClose={() => (wiping ? undefined : setPendingWipe(false))}
