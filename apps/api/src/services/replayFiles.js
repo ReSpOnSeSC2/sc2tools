@@ -25,6 +25,7 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { randomBytes } = require("crypto");
 
 const { LIMITS } = require("../config/constants");
+const { prepareReplayDownloadBatch } = require("./replayDownloadBatch");
 
 const REPLAY_CONTENT_TYPE = "application/octet-stream";
 const UPLOAD_EXPIRES_SEC = 5 * 60;
@@ -382,6 +383,16 @@ class ReplayFilesService {
       expiresIn: this.downloadExpiresSec,
     });
     return { url, filename, expiresIn: this.downloadExpiresSec };
+  }
+
+  /** Finite pack preparation; individual downloads retain their existing contract.
+   * @param {string} userId @param {ReadonlyArray<string>} gameIds
+   * @param {{signal?:AbortSignal, now?:()=>number}} [opts]
+   */
+  async prepareDownloadBatch(userId, gameIds, opts = {}) {
+    return prepareReplayDownloadBatch(this, userId, gameIds, opts, {
+      filenameFor: replayDownloadFilename, disposition: contentDisposition,
+    });
   }
 
   /**

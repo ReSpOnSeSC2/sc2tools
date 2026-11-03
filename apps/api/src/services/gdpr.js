@@ -12,6 +12,9 @@ const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
 const { purgeTokenData, scrubCommunityVotes } = require("./gdprOwnedData");
 const { dataInventory } = require("./dataInventory");
+const { USER_SCOPED_COLLECTIONS } = require("./accountExportPolicy");
+const { collectAccountExport } = require("./accountExportData");
+const { accountExportStream } = require("./accountExportStream");
 
 // Every registered collection needs an explicit disposition. Shared/public
 // records use dedicated scrubbers; this map is audited by a coverage test and
@@ -61,19 +64,6 @@ function wait(ms) {
  * collection that holds user data must be listed in
  * GDPR_CLASSIFICATION; dedicated scrubbers handle shared and token-owned data.
  */
-
-const USER_SCOPED_COLLECTIONS = [
-  // (db key, file/json key)
-  ["games", "games"],
-  ["opponents", "opponents"],
-  ["opponentNotes", "opponentNotes"],
-  ["customBuilds", "customBuilds"],
-  ["overlayTokens", "overlayTokens"],
-  ["deviceTokens", "deviceTokens"],
-  ["importJobs", "importJobs"],
-  ["macroJobs", "macroJobs"],
-  ["profiles", "profiles"],
-];
 
 /**
  * Collections purged on account deletion but deliberately NOT part of
@@ -214,108 +204,15 @@ class GdprService {
    * @returns {Promise<{userId: string, exportedAt: string, data: Record<string, object[]>, user: object|null}>}
    */
   async export(userId, options = {}) {
-    /** @type {Record<string, object[]>} */
-    const data = {};
-    for (const [key, jsonKey] of USER_SCOPED_COLLECTIONS) {
-      const coll = /** @type {any} */ (this.db)[key];
-      if (!coll) continue;
-      data[jsonKey] = await coll
-        .find({ userId }, { projection: { _id: 0 } })
-        .toArray();
-    }
-    if (this.db.playerIdentitySubmissions) {
-      data.playerIdentitySubmissions = await this.db.playerIdentitySubmissions.find(
-        { userId }, { projection: { _id: 0, reviewedBy: 0, evidenceMaxId: 0 } },
-      ).toArray();
-    }
-    if (this.db.multichatSounds) data.multichatSounds = await this.db.multichatSounds.find({ userId }, { projection: { _id: 0, data: 0 } }).toArray();
-    // Coaching uses a shared Locker document and relationship-specific
-    // assignment rows instead of a simple `{ userId }` collection. Export
-    // only the caller's portion of that shared state.
-    if (this.db.coaching && options.includeSharedCoaching !== false) {
-      const coaching = /** @type {any} */ (this.db.coaching);
-      const assignmentRows = await coaching.find(
-        {
-          kind: "game_requirement",
-          $or: [
-            { studentUserId: userId },
-            { coachUserId: userId },
-            { createdByUserId: userId },
-          ],
-        },
-        { projection: { _id: 0 } },
-      ).toArray();
-      data.coachingAssignments = assignmentRows.map((/** @type {any} */ row) =>
-        exportedCoachingAssignment(row, userId));
-      const locker = await coaching.findOne(
-        { _id: "locker" },
-        { projection: { _id: 0, "state.coaches": 1, "state.students": 1 } },
-      );
-      const coaches = /** @type {any[]} */ (
-        Array.isArray(locker?.state?.coaches) ? locker.state.coaches : []
-      );
-      const students = /** @type {any[]} */ (
-        Array.isArray(locker?.state?.students) ? locker.state.students : []
-      );
-      const ownCoaches = coaches.filter((row) => row && row.userId === userId);
-      const ownStudents = students.filter((row) => row && row.userId === userId);
-      const coachedIds = new Set(ownCoaches.map((row) => row.id).filter(Boolean));
-      data.coachingRelationships = [
-        ...ownCoaches.map((coach) => ({ role: "coach", coach })),
-        ...ownStudents.map((student) => ({
-          role: "student",
-          student,
-          coach: publicCoachingParty(
-            coaches.find((row) => row && row.id === student.coachId),
-          ),
-        })),
-        ...students
-          .filter((student) => student
-            && student.userId !== userId
-            && coachedIds.has(student.coachId))
-          .map((student) => ({
-            role: "coach_of_student",
-            student: publicCoachedStudent(student),
-          })),
-      ];
-      const calendarRows = await coaching.find(
-        {
-          _id: { $regex: "^calendar:" },
-          $or: [
-            { coachUserId: userId },
-            { "bookings.studentUserId": userId },
-          ],
-        },
-        { projection: { _id: 0 } },
-      ).toArray();
-      data.coachingCalendars = calendarRows.map((/** @type {any} */ calendar) =>
-        exportedCoachingCalendar(calendar, userId));
-    }
-    const user = await this.db.users.findOne(
-      { userId },
-      { projection: { _id: 0, gameStats: 0, gameStatsRevision: 0, gameStatsProtocolVersion: 0, gameStatsWriterStatus: 0, gameStatsMutationEpoch: 0, gameStatsMaintenance: 0 } },
-    );
-    if (this.db.playerChannels) {
-      data.playerChannels = await this.db.playerChannels.find(
-        { ownerUserId: userId },
-        { projection: { _id: 0, updatedBy: 0 } },
-      ).toArray();
-    }
-    // Review requests/comments/karma/blocks/notifications are public or
-    // shared content: exported here, deliberately NOT restorable (they
-    // are not in USER_SCOPED_COLLECTIONS).
-    if (this.reviews) {
-      Object.assign(data, await this.reviews.exportForUser(userId));
-    }
-    if (this.db.adminAudit) data.adminAudit = (await this.db.adminAudit.find(
-      { $or: [{ actorUserId: userId }, { target: userId }] }, { projection: { _id: 0 } },
-    ).toArray()).map((row) => ({ ...row, actorUserId: row.actorUserId === userId ? userId : null, target: row.target === userId ? userId : null }));
-    return {
-      userId,
-      exportedAt: new Date().toISOString(),
-      user,
-      data,
-    };
+    return collectAccountExport(this.db, userId, { ...options, reviews: Boolean(this.reviews) });
+  }
+
+  /** Full account transport; deliberately distinct from restorable snapshots.
+   * @param {string} userId
+   * @param {{details?:boolean, signal?:AbortSignal}} [options]
+   */
+  exportStream(userId, options = {}) {
+    return accountExportStream(this.db, this.gameDetails, userId, { ...options, reviews: Boolean(this.reviews) });
   }
 
   /** @param {string} userId */
@@ -1525,75 +1422,6 @@ function coachingReferencedAssetIds(state, candidateIds) {
   delete preserved.assets;
   const references = JSON.stringify(preserved);
   return new Set(candidateIds.filter((id) => references.includes(id)));
-}
-
-/** Keep a related party identifiable without exporting their private Locker record. */
-function publicCoachingParty(/** @type {any} */ party) {
-  if (!party || typeof party !== "object") return null;
-  return {
-    id: typeof party.id === "string" ? party.id : null,
-    name: typeof party.name === "string" ? party.name : null,
-  };
-}
-
-/** A coach's DSAR may describe the relationship, never the student's full profile. */
-function publicCoachedStudent(/** @type {any} */ student) {
-  const sharing = student?.practiceSharing && typeof student.practiceSharing === "object"
-    ? student.practiceSharing
-    : null;
-  return {
-    ...publicCoachingParty(student),
-    coachId: typeof student?.coachId === "string" ? student.coachId : null,
-    practiceSharing: sharing ? {
-      policyVersion: typeof sharing.policyVersion === "string" ? sharing.policyVersion : null,
-      status: typeof sharing.status === "string" ? sharing.status : null,
-      requestedAt: sharing.requestedAt || null,
-      respondedAt: sharing.respondedAt || null,
-      revokedAt: sharing.revokedAt || null,
-    } : null,
-  };
-}
-
-/**
- * Remove relationship secrets and the other party's internal account id.
- * @param {any} assignment @param {string} userId
- */
-function exportedCoachingAssignment(assignment, userId) {
-  const exported = { ...assignment };
-  delete exported.practiceSharingGrantId;
-  if (exported.studentUserId !== userId) delete exported.studentUserId;
-  if (exported.coachUserId !== userId) delete exported.coachUserId;
-  if (exported.createdByUserId !== userId) delete exported.createdByUserId;
-  return exported;
-}
-
-/**
- * Export only scheduling data belonging to the caller, with shared ids redacted.
- * @param {any} calendar @param {string} userId
- */
-function exportedCoachingCalendar(calendar, userId) {
-  const ownsCalendar = calendar?.coachUserId === userId;
-  const allBookings = Array.isArray(calendar?.bookings) ? calendar.bookings : [];
-  const bookings = (ownsCalendar
-    ? allBookings
-    : allBookings.filter((/** @type {any} */ booking) => booking?.studentUserId === userId))
-    .map((/** @type {any} */ booking) => {
-      const exported = { ...booking };
-      if (exported.studentUserId !== userId) delete exported.studentUserId;
-      return exported;
-    });
-  if (!ownsCalendar) {
-    return {
-      role: "student",
-      calendar: {
-        coachId: calendar?.coachId || null,
-        coachName: calendar?.coachName || null,
-        bookings,
-      },
-    };
-  }
-  const exported = { ...calendar, bookings };
-  return { role: "coach", calendar: exported };
 }
 
 /** Restore and erasure write whole per-user collections through dynamic handles. The owner's fence covers the ones a

@@ -5,6 +5,7 @@ const {
 } = require("./privateSearchBoundary");
 const { isSearchQueryUrl, requestCarriesSearchQuery } = require("./searchQueryPrivacy");
 const { isSyncActionPath } = require("./syncActionJson");
+const { isReplayDownloadBatchPath, isReplayDownloadBatchFailure } = require("./replayDownloadBatchBoundary");
 const PRIVATE_SEARCH_TAG = "sc2tools.private_search";
 const HEARTBEAT_PATH = /^\/v1\/devices\/heartbeat\/?$/i;
 
@@ -21,7 +22,7 @@ function ownData(value, key) {
 function privateTransaction(value) {
   if (typeof value !== "string") return false;
   const path = value.replace(/^(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+/i, "");
-  return isPrivateSearchPath(path);
+  return isPrivateSearchPath(path) || isReplayDownloadBatchPath(path);
 }
 
 /** The device heartbeat body carries the agent's sync report, whose unresolved names
@@ -35,7 +36,7 @@ function isHeartbeatBodyPath(value) {
 }
 
 /** @param {unknown} value */
-const isPrivateBodyPath = value => isHeartbeatBodyPath(value) || isSyncActionPath(value);
+const isPrivateBodyPath = value => isHeartbeatBodyPath(value) || isSyncActionPath(value) || isReplayDownloadBatchPath(value);
 
 /** Heartbeats and sync actions keep their URL/status but never their private
  * body, including a second request copy without its own URL.
@@ -54,7 +55,7 @@ function stripPrivateBody(event) {
  * @param {unknown} request @returns {boolean} */
 function privateRequest(request) {
   const url = ownData(request, "url");
-  return isPrivateSearchPath(url) || requestCarriesSearchQuery(url, ownData(request, "query_string"));
+  return isPrivateSearchPath(url) || isReplayDownloadBatchPath(url) || requestCarriesSearchQuery(url, ownData(request, "query_string"));
 }
 
 /**
@@ -65,7 +66,7 @@ function privateRequest(request) {
  * @param {unknown} event @param {unknown} [hint] @returns {boolean}
  */
 function shouldDropPrivateSearchEvent(event, hint) {
-  if (isPrivateSearchFailure(ownData(hint, "originalException"))) return true;
+  if (isPrivateSearchFailure(ownData(hint, "originalException")) || isReplayDownloadBatchFailure(ownData(hint, "originalException"))) return true;
   const tag = ownData(ownData(event, "tags"), PRIVATE_SEARCH_TAG);
   if (tag === "1" || tag === true) return true;
   if (privateRequest(ownData(event, "request"))) return true;
@@ -104,7 +105,7 @@ function privateSearchHttpOptions() {
     /** @param {string} urlPath */
     ignoreIncomingRequestBody: urlPath => isPrivateSearchPath(urlPath) || isPrivateBodyPath(urlPath),
     /** @param {string} urlPath the path and query string */
-    ignoreIncomingRequests: urlPath => isPrivateSearchPath(urlPath) || isSearchQueryUrl(urlPath),
+    ignoreIncomingRequests: urlPath => isPrivateSearchPath(urlPath) || isReplayDownloadBatchPath(urlPath) || isSearchQueryUrl(urlPath),
   };
 }
 
@@ -116,7 +117,7 @@ function privateSearchHttpOptions() {
  * @param {Pick<typeof import('@sentry/node'), 'withIsolationScope'|'suppressTracing'>|false} sdk
  */
 function runPrivateSearchScope(req, next, sdk) {
-  if (!sdk || !(isPrivateSearchRequest(req) || isSearchQueryUrl(req.originalUrl || req.url))) { next(); return; }
+  if (!sdk || !(isPrivateSearchRequest(req) || isReplayDownloadBatchPath(req.originalUrl || req.url) || isSearchQueryUrl(req.originalUrl || req.url))) { next(); return; }
   sdk.withIsolationScope(scope => {
     scope.setTag(PRIVATE_SEARCH_TAG, "1");
     sdk.suppressTracing(next);
