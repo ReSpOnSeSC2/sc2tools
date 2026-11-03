@@ -272,6 +272,31 @@ def test_lock_wait_is_bounded_and_leaves_cached_mapping_retryable(monkeypatch):
     assert len(obs.input_setting_updates) == 9 and lock.release.called
 
 
+def test_lock_wait_float_rounding_stays_within_fifteen_seconds_and_retries_cached_mapping(monkeypatch):
+    from sc2tools_agent.live import obs_token_rotation
+    ctl, obs, api, _ = controller_fixture()
+    clock = 1.1
+    # Even an unchanged monotonic reading can exceed the budget after adding
+    # the deadline and subtracting the same binary floating-point value.
+    assert (clock + 15) - clock > 15
+    ctl.clock = lambda: clock
+    lock = Mock()
+    lock.acquire.return_value = False
+    monkeypatch.setattr(obs_token_rotation, "OBS_GAME_WRITE_LOCK", lock)
+    receipts = [{"from": "old", "to": "ready"}]
+    assert ctl.heartbeat(receipts, api)
+    lock.acquire.assert_called_once_with(timeout=15)
+    assert 0 < lock.acquire.call_args.kwargs["timeout"] <= 15
+    assert not lock.release.called and obs.input_setting_updates == []
+    assert api.get_overlay_tokens.call_count == 1
+    lock.acquire.return_value = True
+    assert ctl.heartbeat(receipts, api)
+    assert lock.acquire.call_count == 2 and lock.release.call_count == 1
+    assert all(call.kwargs["timeout"] <= 15 for call in lock.acquire.call_args_list)
+    assert api.get_overlay_tokens.call_count == 2  # Cached mapping is revalidated before writes.
+    assert len(obs.input_setting_updates) == 9
+
+
 def test_changed_inventory_clears_cached_replacements_after_revocation():
     ctl, obs, api, _ = controller_fixture()
     ctl.heartbeat([{"from": "old", "to": "ready"}], api)

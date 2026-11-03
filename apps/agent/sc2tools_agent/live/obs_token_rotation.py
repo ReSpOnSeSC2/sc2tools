@@ -239,7 +239,7 @@ class ObsTokenRotation:
             checkpoint()
             client.connect_now()
             checkpoint()
-            if not OBS_GAME_WRITE_LOCK.acquire(timeout=max(0, deadline - self.clock())):
+            if not OBS_GAME_WRITE_LOCK.acquire(timeout=min(15, max(0, deadline - self.clock()))):
                 return
             try:
                 checkpoint()
