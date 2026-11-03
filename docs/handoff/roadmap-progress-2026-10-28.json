@@ -2182,18 +2182,36 @@
       "dependsOn": [
         "agent-health-and-sync-health"
       ],
-      "implemented": "Crash-report scrubbers and provider DPAPI secret-store primitives exist; state still reads device_token and obs_password directly.",
+      "implemented": "PR868 (4475faaf) adds bounded whitelisted diagnostics, fail-closed redaction and immutable reviewed export plans. PR869 (aadda26f) adds owner-fenced native Help checks, an isolated fixed replay fixture, Copy support info and reviewed selected-log ZIP saving with pinned Windows handles and matching help. PR870 (2dea9489) adds CurrentUser DPAPI storage for device tokens and OBS passwords, immutable encrypted credential generations and full-state pointer-last commits, read-only loads, explicit post-instance-lock migration, KEEP/SET/CLEAR revisions and authenticated/OBS/support retirement with backup/downgrade documentation. PR871 (0d72e117) bounds OBS repair lock waiting to 15 seconds despite floating rounding while preserving retry/deadline/owner checks. These source slices are contained in delivered main 0d72e117. No signed native release or installed-agent acceptance is claimed.",
       "remainingRequirements": [
-        "Implement Help system-check worker, reviewed support-info/bundle file list and comprehensive log/state redaction tests.",
-        "Migrate device token and OBS password to DPAPI with rollback/downgrade documentation and migration round-trip tests.",
-        "Deliver a signed native release after health dependency."
+        "Coordinate a signed native release and installed-agent upgrade, credential migration and support-tool acceptance after the health dependency; source merges and CI do not update desktops. Agent 0.24.8 remains unpublished and owner-gated."
       ],
       "evidence": [
         "apps/agent/sc2tools_agent/crash_reporter.py",
         "apps/agent/sc2tools_agent/streaming/secret_store.py",
-        "apps/agent/sc2tools_agent/state.py"
+        "apps/agent/sc2tools_agent/state.py",
+        "docs/handoff/agent-support-diagnostics-checkpoint.md",
+        "docs/handoff/agent-support-integration-checkpoint.md",
+        "docs/handoff/agent-secure-state-checkpoint.md",
+        "docs/adr/0021-obs-credential-storage.md",
+        "docs/handoff/obs-token-lock-budget-checkpoint.md",
+        "apps/agent/sc2tools_agent/support_diagnostics.py",
+        "apps/agent/sc2tools_agent/support_redaction.py",
+        "apps/agent/sc2tools_agent/support_export.py",
+        "apps/agent/sc2tools_agent/support_runtime.py",
+        "apps/agent/sc2tools_agent/support_files.py",
+        "apps/agent/sc2tools_agent/ui/help_page.py",
+        "apps/agent/sc2tools_agent/agent_credentials.py",
+        "apps/agent/sc2tools_agent/agent_credentials_windows.py",
+        "apps/agent/sc2tools_agent/runner.py",
+        "apps/agent/sc2tools_agent/live/obs_token_rotation.py"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        868,
+        869,
+        870,
+        871
+      ],
       "requirementSha256": "1634de3b31d1acda2662a36075be1cf18f01b4f1bbd9313b260d64c626cd8cc7"
     },
     {
@@ -6895,6 +6913,739 @@
         }
       },
       "qualification": "Merged source with verified exact-head CI, immutable local evidence and LF checkpoint hashes. Every listed main push workflow completed successfully or skipped; both exact-main production deployments succeeded. B1 and B3 requirements are retained unless their separately verified slices are included. No native build, signing, publishing, installed-agent acceptance, cache activation or savings claim is made. The recorded local full-suite dependency limitation remains an exit-1 failure and is not presented as a local pass; exact-head Windows CI passed separately."
+    },
+    "agentSupportToolsProgress0d72e117": {
+      "date": "2026-11-03",
+      "mergedPrs": [
+        868,
+        869,
+        870,
+        871
+      ],
+      "testedHeads": {
+        "868": "a8ee28ed10cada784b86937a101da7088e8c235d",
+        "869": "06a15fd51c7c29cc07e66fa3751620a4c97950b9",
+        "870": "45a453844eb5ff84920922f6586be6117f8a0ef1",
+        "871": "e72ea3d2d802364f643358314f2d079cdd234bf4"
+      },
+      "mergeCommits": {
+        "868": "4475faaff6509664a232c08255bcfc5271713f18",
+        "869": "aadda26f3173b9a6ee9d4c98cdba002ac068a247",
+        "870": "2dea9489fd04ad231a3a9a3e09ad5c0e25acb7ef",
+        "871": "0d72e11775f3635d9e5bfb3ddf735ac1ce036e18"
+      },
+      "exactHeadChecks": {
+        "868": {
+          "Responsive e2e smoke (public pages)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125392990572,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41479283197/job/125392990572"
+          },
+          "Agent core tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125392990816,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41479283339/job/125392990816"
+          },
+          "Pytest (apps/replay-engine)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125392991228,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41479283339/job/125392991228"
+          },
+          "Instant Analysis parity (CPython + Pyodide)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125392991315,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41479283339/job/125392991315"
+          },
+          "Agent ui tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125392991419,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41479283339/job/125392991419"
+          },
+          "Lint + typecheck + test (apps/web)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125392991479,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41479283197/job/125392991479"
+          },
+          "Vercel Preview Comments": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125393784971,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/runs/125393784971"
+          },
+          "Pytest (apps/agent, Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125406346449,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41479283339/job/125406346449"
+          }
+        },
+        "869": {
+          "Agent core tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125483018165,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41505322695/job/125483018165"
+          },
+          "Instant Analysis parity (CPython + Pyodide)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125483018636,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41505322695/job/125483018636"
+          },
+          "Agent ui tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125483018746,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41505322695/job/125483018746"
+          },
+          "Pytest (apps/replay-engine)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125483018865,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41505322695/job/125483018865"
+          },
+          "Responsive e2e smoke (public pages)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125483382737,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41505322754/job/125483382737"
+          },
+          "Lint + typecheck + test (apps/web)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125483383446,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41505322754/job/125483383446"
+          },
+          "Vercel Preview Comments": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125484582235,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/runs/125484582235"
+          },
+          "Pytest (apps/agent, Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125498980884,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41505322695/job/125498980884"
+          }
+        },
+        "870": {
+          "Instant Analysis parity (CPython + Pyodide)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125580275921,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41533645707/job/125580275921"
+          },
+          "Pytest (apps/replay-engine)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125580276136,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41533645707/job/125580276136"
+          },
+          "Agent core tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125580276174,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41533645707/job/125580276174"
+          },
+          "Agent ui tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125580276197,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41533645707/job/125580276197"
+          },
+          "Lint + typecheck + test (apps/web)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125580405323,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41533645634/job/125580405323"
+          },
+          "Responsive e2e smoke (public pages)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125580405805,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41533645634/job/125580405805"
+          },
+          "Vercel Preview Comments": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125581590215,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/runs/125581590215"
+          },
+          "Pytest (apps/agent, Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125597111391,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41533645707/job/125597111391"
+          }
+        },
+        "871": {
+          "Lint + typecheck + test (apps/web)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125641235025,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41551886137/job/125641235025"
+          },
+          "Responsive e2e smoke (public pages)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125641235438,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41551886137/job/125641235438"
+          },
+          "Instant Analysis parity (CPython + Pyodide)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125641236809,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41551886666/job/125641236809"
+          },
+          "Agent core tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125641237008,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41551886666/job/125641237008"
+          },
+          "Agent ui tests (Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125641237077,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41551886666/job/125641237077"
+          },
+          "Pytest (apps/replay-engine)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125641237205,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41551886666/job/125641237205"
+          },
+          "Vercel Preview Comments": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125642777788,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/runs/125642777788"
+          },
+          "Pytest (apps/agent, Windows)": {
+            "conclusion": "success",
+            "status": "completed",
+            "checkRunId": 125654636985,
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41551886666/job/125654636985"
+          }
+        }
+      },
+      "documentSha256AtMerge": {
+        "868": {
+          "docs/handoff/agent-support-diagnostics-checkpoint.md": "0b4300f9abf1227c58ffd198ae4a85708810b9f39ceaf5a758b42caa7c14b191"
+        },
+        "869": {
+          "docs/handoff/agent-support-integration-checkpoint.md": "2fc33b8f2796455fa7cf7cc67e0fe1533e0c1a0079e76a298861d3b387d54b75"
+        },
+        "870": {
+          "docs/handoff/agent-secure-state-checkpoint.md": "9a358d7fac9405989468962c312fa1c2fdd59cf5bdac1ec63929f602b6f759fa",
+          "docs/adr/0021-obs-credential-storage.md": "8608dab550ae34fa081242873a4a0a598a502f1f92acd64f3735aa7de06a50cb"
+        },
+        "871": {
+          "docs/handoff/obs-token-lock-budget-checkpoint.md": "b28dbf0c9fd6cb630c03e76efebfb3ec356029f0e95ad1e3ba4ed4af7d83d9f9"
+        }
+      },
+      "localEvidence": {
+        "868": {
+          "qualification": {
+            "record": ".cache/agent-support-diagnostics-20261102/FINAL-VALIDATION-01.json",
+            "recordSha256": "de669949179e381fb0741ac1c96d52a23e87055163428f1cb9d2f7e45b7c6181"
+          },
+          "ready": {
+            "record": ".cache/agent-support-diagnostics-20261102/PR-READY-01.json",
+            "recordSha256": "2a9a0e3a41ac6a1e9649d1c19f2aacd698744501555fdc72694efeba932f4975"
+          },
+          "gates": [
+            {
+              "record": ".cache/agent-support-diagnostics-20261102/targeted-final-01/RESULT.json",
+              "recordSha256": "6d7f874e44f573bcc43a1cd4cc8fee65984eccef5f0b386b9dd8b70fb984e588",
+              "capturedHead": "a8ee28ed10cada784b86937a101da7088e8c235d",
+              "exitCode": 0,
+              "logSha256": "665cf68c6be2511c0ea7f9ad99b37620962e2bf22a69f2943be39e42bc522d12"
+            },
+            {
+              "record": ".cache/agent-support-diagnostics-20261102/mutation-wrapper-01/RESULT.json",
+              "recordSha256": "5fd6becf446ea395174a44abaa44cbc4c6c99bbf7ed1f0b07a69f141d6c90428",
+              "capturedHead": "a8ee28ed10cada784b86937a101da7088e8c235d",
+              "exitCode": 0,
+              "logSha256": "51cd073d2b65b9c1ab540fed5f889e203d448bf3c9384377568e7b285634d115"
+            },
+            {
+              "record": ".cache/agent-support-diagnostics-20261102/full-agent-wrapper-01/RESULT.json",
+              "recordSha256": "6194d0a2642497769449b8aa5abffd83156ac975ce5455f216e8ad4c7e9618fa",
+              "capturedHead": "a8ee28ed10cada784b86937a101da7088e8c235d",
+              "exitCode": 0,
+              "logSha256": "7a6edb4849a188eae877939115609ee6b287c057708ec5bcab783667c2b4af87"
+            }
+          ],
+          "innerGates": [],
+          "mutationPhases": [
+            {
+              "record": ".cache/agent-support-diagnostics-20261102/mutation-01/MUTATION-RESULTS.json",
+              "recordSha256": "45bd8d771c4da8034490d0f6eaded836685f9653ab6aaf690968431dee454146",
+              "capturedHead": "a8ee28ed10cada784b86937a101da7088e8c235d",
+              "mutations": 8,
+              "killed": 8,
+              "baselinePassedExcluded": 172,
+              "baselinesExcluded": true,
+              "sourceFiles": 8
+            }
+          ],
+          "mutationTotals": {
+            "killed": 8,
+            "total": 8,
+            "baselinesExcluded": true
+          },
+          "summary": {
+            "targetedPassed": 184,
+            "fullPassed": 3880,
+            "fullSkipped": 1,
+            "mutationBaselinePassed": 172,
+            "distinctMutationsCaught": 8
+          },
+          "limitations": []
+        },
+        "869": {
+          "qualification": {
+            "record": ".cache/agent-support-integration-20261102/FINAL-VALIDATION-01.json",
+            "recordSha256": "a819f83e532023bb55b508486e50edea3dd2ff9597d7f171f48b048f327ae174"
+          },
+          "ready": {
+            "record": ".cache/agent-support-integration-20261102/PR-READY-01.json",
+            "recordSha256": "f6e1bc95bcadd6c78025a2898036f5855010a7e74bce1eba28e5dbb83be9fb98"
+          },
+          "gates": [
+            {
+              "record": ".cache/agent-support-integration-20261102/targeted-final-02/RESULT.json",
+              "recordSha256": "77dd4b7fcf6f9b40b7842d89fa69aacb319c68db53237ef7455fa19a6e386755",
+              "capturedHead": "06a15fd51c7c29cc07e66fa3751620a4c97950b9",
+              "exitCode": 0,
+              "logSha256": "db1611528a0e17e002a864f8a4fcbdd8f98fe1521c20ab59679c9eb66c146fdb"
+            },
+            {
+              "record": ".cache/agent-support-integration-20261102/quality-final-wrapper-02/RESULT.json",
+              "recordSha256": "115182a9572f55f6d809eafce1b273b2423e492d563253581e2c005753300279",
+              "capturedHead": "06a15fd51c7c29cc07e66fa3751620a4c97950b9",
+              "exitCode": 0,
+              "logSha256": "dae9e8cf4be5933ebd0a7cb1163f2227036b96b5cd5cd949d6cfbd990147597d"
+            },
+            {
+              "record": ".cache/agent-support-integration-20261102/mutation-wrapper-02/RESULT.json",
+              "recordSha256": "a5620ac00a459344ead4c0a5dc1f0b6f422b97fd323fa24d668eea4bb03fbe03",
+              "capturedHead": "06a15fd51c7c29cc07e66fa3751620a4c97950b9",
+              "exitCode": 0,
+              "logSha256": "3f2f13fb9476941a3c631fc315068e798ac24b0b7dddf46ae648b795c34aaac5"
+            },
+            {
+              "record": ".cache/agent-support-integration-20261102/full-agent-wrapper-02/RESULT.json",
+              "recordSha256": "09155a0a5514144eae017f0eec6b13595f3dfb8d98e1dfea8a0098c9ad723181",
+              "capturedHead": "06a15fd51c7c29cc07e66fa3751620a4c97950b9",
+              "exitCode": 0,
+              "logSha256": "2eccf67fc672dd759c13d640f5a7f78b98a41eb3629de0b72f38e10928894863"
+            },
+            {
+              "record": ".cache/agent-support-integration-20261102/full-web-wrapper-01/RESULT.json",
+              "recordSha256": "ae0a8c359cd77ede055dbf466589a23bec713cce35a6c29fe65a5a57537de8b3",
+              "capturedHead": "06a15fd51c7c29cc07e66fa3751620a4c97950b9",
+              "exitCode": 0,
+              "logSha256": "620736f19744563de357546f82d262fd408b4a2ad298c4235ec2688fec9be3b7"
+            },
+            {
+              "record": ".cache/agent-support-integration-20261102/build-budget-wrapper-01/RESULT.json",
+              "recordSha256": "14407088bd5d217371b06f955348a0c6104bbe712385bc6b227b0d7500917a0b",
+              "capturedHead": "06a15fd51c7c29cc07e66fa3751620a4c97950b9",
+              "exitCode": 0,
+              "logSha256": "ef8993d2336d0d1dfd6dd65a170f55d6af91cc5391e2b1508b104e5d3a47b01f"
+            }
+          ],
+          "innerGates": [
+            {
+              "record": ".cache/agent-support-integration-20261102/quality-final-02/RESULT.json",
+              "recordSha256": "ea871ae5fd43d7ae752b2b2ad657a9bddee12b69edfbc44f78d7fc40038cc21a",
+              "capturedHead": "06a15fd51c7c29cc07e66fa3751620a4c97950b9",
+              "ok": true,
+              "steps": 4
+            },
+            {
+              "record": ".cache/agent-support-integration-20261102/full-web-01/RESULT.json",
+              "recordSha256": "8ba27e57789c6e183f4f10a4e6d149a2119123cbdbd4fd4c253bf4d4f2f84f06",
+              "capturedHead": "06a15fd51c7c29cc07e66fa3751620a4c97950b9",
+              "ok": true,
+              "steps": 1
+            },
+            {
+              "record": ".cache/agent-support-integration-20261102/build-budget-01/RESULT.json",
+              "recordSha256": "b8ded70da6bdabf09b9575d01be3a16cfcbae914228ed092998e02d5eee09730",
+              "capturedHead": "06a15fd51c7c29cc07e66fa3751620a4c97950b9",
+              "ok": true,
+              "steps": 2
+            }
+          ],
+          "mutationPhases": [
+            {
+              "record": ".cache/agent-support-integration-20261102/mutation-02/MUTATION-RESULTS.json",
+              "recordSha256": "3d133e2a2da96899d5c37a82e4b607ff41607f3aa5ad5c6329a79e6dba1a6550",
+              "capturedHead": "06a15fd51c7c29cc07e66fa3751620a4c97950b9",
+              "mutations": 10,
+              "killed": 10,
+              "baselinePassedExcluded": 292,
+              "baselinesExcluded": true,
+              "sourceFiles": 56
+            }
+          ],
+          "mutationTotals": {
+            "killed": 10,
+            "total": 10,
+            "baselinesExcluded": true
+          },
+          "summary": {
+            "targetedPassed": 594,
+            "targetedSkipped": 1,
+            "fullAgentPassed": 4001,
+            "fullAgentSkipped": 2,
+            "fullWebPassed": 10562,
+            "fullWebSuites": 1073,
+            "mutationBaselinePassed": 292,
+            "mutationBaselineSkipped": 1,
+            "distinctMutationsCaught": 10
+          },
+          "limitations": []
+        },
+        "870": {
+          "qualification": {
+            "record": ".cache/agent-secure-state-20261102/FINAL-VALIDATION05.json",
+            "recordSha256": "e4bc6861900428c70b298dbf4f705e43a61c6cce27928b7062b6dc9c179584f4"
+          },
+          "ready": {
+            "record": ".cache/agent-secure-state-20261102/PR-READY-03.json",
+            "recordSha256": "c503726660d221eb425db27f1af9ecd96156917ab08e5dc0c447111db87d6a4c"
+          },
+          "gates": [
+            {
+              "record": ".cache/agent-secure-state-20261102/targeted-final-03/RESULT.json",
+              "recordSha256": "037c71382bd4648197e89ee4d2b33f90a99e4003ab9d7958f4b677690da70065",
+              "capturedHead": "45a453844eb5ff84920922f6586be6117f8a0ef1",
+              "exitCode": 0,
+              "logSha256": "28e1ba9c05b6bbfd5df54180a29ad061d1401d64d715f15b49aeb64ac0fb6180"
+            },
+            {
+              "record": ".cache/agent-secure-state-20261102/full-agent-wrapper-05/RESULT.json",
+              "recordSha256": "8562f372d6a9a5951fbb6c5529a34b8b7c821be051e5a8807c5804b71a69662e",
+              "capturedHead": "45a453844eb5ff84920922f6586be6117f8a0ef1",
+              "exitCode": 0,
+              "logSha256": "4e0466f7ef7c9c44bed8f23e3cc7a5a259b4c44388db4977913d91f75df7b151"
+            }
+          ],
+          "innerGates": [],
+          "mutationPhases": [
+            {
+              "record": ".cache/agent-secure-state-20261102/transaction-mutation-03/MUTATION-RESULTS.json",
+              "recordSha256": "7fdafb20d3a8caa1a0b746d03d43419406ea34d3f15bd599041144ab2e42ffd3",
+              "capturedHead": "45a453844eb5ff84920922f6586be6117f8a0ef1",
+              "mutations": 10,
+              "killed": 10,
+              "baselinePassedExcluded": 170,
+              "baselinesExcluded": true,
+              "sourceFiles": 45
+            },
+            {
+              "record": ".cache/agent-secure-state-20261102/runtime-mutation-03/MUTATION-RESULTS.json",
+              "recordSha256": "9b443b519338354e60306f88e09f6e8dd6bde38fbe12b2eb707d5146ed91c553",
+              "capturedHead": "45a453844eb5ff84920922f6586be6117f8a0ef1",
+              "mutations": 10,
+              "killed": 10,
+              "baselinePassedExcluded": 88,
+              "baselinesExcluded": true,
+              "sourceFiles": 45
+            }
+          ],
+          "mutationTotals": {
+            "killed": 20,
+            "total": 20,
+            "baselinesExcluded": true
+          },
+          "summary": {
+            "targetedPassed": 881,
+            "targetedSkipped": 0,
+            "fullAgentPassed": 4185,
+            "fullAgentSkipped": 2,
+            "distinctMutationsCaught": 20,
+            "fullAgentCollected": 4187,
+            "fullAgentWarnings": 1
+          },
+          "limitations": [
+            "Prior native installed-golden parser fault root cause remains unknown. Controlled full05 completion, if qualified here, establishes this run only; it does not prove a fix, a flake, corrupt bytecode or installed-agent acceptance.",
+            "Full05 recorded one external sc2reader SyntaxWarning separately; no warning/dependency modification or installed-agent acceptance is inferred."
+          ]
+        },
+        "871": {
+          "qualification": {
+            "record": ".cache/agent-obs-lock-budget-20261102/FINAL-VALIDATION01.json",
+            "recordSha256": "daa918d873fe17f21b1f81fb9b01e076be1d9e4675e5af4602f8cbf4bbcebfcc"
+          },
+          "ready": {
+            "record": ".cache/agent-obs-lock-budget-20261102/PR-READY-01.json",
+            "recordSha256": "c887aa515df814d6a0c663becd3e43b813e404e684ea476fb53ac4ec86c08851"
+          },
+          "gates": [
+            {
+              "record": ".cache/agent-obs-lock-budget-20261102/targeted-01/RESULT.json",
+              "recordSha256": "7947c28fff7cf84862728845fa5a9ce7308faf62adc14725eaeef7b167a7dcc6",
+              "capturedHead": "e72ea3d2d802364f643358314f2d079cdd234bf4",
+              "exitCode": 0,
+              "logSha256": "35e67b9d1099c6427ebb4fee21c2f832617bce4c753905675e374a4a79bc1d1a"
+            },
+            {
+              "record": ".cache/agent-obs-lock-budget-20261102/full-agent-wrapper-01/RESULT.json",
+              "recordSha256": "a81422f8a886235b2db82bf19f8caf932dcf0406ec6c8c1e34625ffc5cc1a750",
+              "capturedHead": "e72ea3d2d802364f643358314f2d079cdd234bf4",
+              "exitCode": 0,
+              "logSha256": "3c04f9631e74cf2c7b9093b4c1c002eb428df439c045b722d29bbac2426da178"
+            },
+            {
+              "record": ".cache/agent-obs-lock-budget-20261102/mutation-wrapper-01/RESULT.json",
+              "recordSha256": "05ad728e4fca2f2b1dc9b032ace3aa7fd889899d99735ebe31bffdb892de9463",
+              "capturedHead": "e72ea3d2d802364f643358314f2d079cdd234bf4",
+              "exitCode": 0,
+              "logSha256": "285650e9a0ad94426e6217d7a6d568b37a39062f1bdb3b0a8851b4577b48585b"
+            }
+          ],
+          "mutation": {
+            "record": ".cache/agent-obs-lock-budget-20261102/mutation-01/MUTATION-RESULTS.json",
+            "recordSha256": "b76489c00bc4619e32ce646e7d091712c6da71be2dfd65d63357299e45a70fb7"
+          },
+          "mutationTotals": {
+            "killed": 1,
+            "total": 1,
+            "baselinePassedExcluded": 2,
+            "baselinesExcluded": true
+          },
+          "summary": {
+            "targetedPassed": 160,
+            "fullAgentCollected": 4188,
+            "fullAgentPassed": 4186,
+            "fullAgentSkipped": 2,
+            "fullAgentWarnings": 1
+          },
+          "limitations": [
+            "The failed 2dea main delivery is retained as history; only this actual containing-main snapshot qualifies delivery. No native parser root-cause fix or signed/installed acceptance is inferred."
+          ]
+        }
+      },
+      "localLimitations": [
+        {
+          "pr": 870,
+          "qualification": "Prior native installed-golden parser fault root cause remains unknown. Controlled full05 completion, if qualified here, establishes this run only; it does not prove a fix, a flake, corrupt bytecode or installed-agent acceptance."
+        },
+        {
+          "pr": 870,
+          "qualification": "Full05 recorded one external sc2reader SyntaxWarning separately; no warning/dependency modification or installed-agent acceptance is inferred."
+        },
+        {
+          "pr": 871,
+          "qualification": "The failed 2dea main delivery is retained as history; only this actual containing-main snapshot qualifies delivery. No native parser root-cause fix or signed/installed acceptance is inferred."
+        }
+      ],
+      "historicalDeliverySnapshotsBySlice": [
+        {
+          "record": ".cache/roadmap-delivery-20261102/4475faaf-04.json",
+          "recordSha256": "a1c5397507158e90a1e6bc2800281c5a47960c273075492d1b0734eef8652385",
+          "atUtc": "2026-11-02T17:17:14.393642+00:00",
+          "mainRevision": "4475faaff6509664a232c08255bcfc5271713f18",
+          "mainChecks": [
+            {
+              "name": "data-integrity",
+              "workflowRunId": 41483430321,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41483430321"
+            },
+            {
+              "name": "version-check",
+              "workflowRunId": 41483430284,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41483430284"
+            },
+            {
+              "name": "community-builds-ci",
+              "workflowRunId": 41483430261,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41483430261"
+            },
+            {
+              "name": "api-ci",
+              "workflowRunId": 41483430303,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41483430303"
+            },
+            {
+              "name": "web-ci",
+              "workflowRunId": 41483430357,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41483430357"
+            },
+            {
+              "name": "python-tests",
+              "workflowRunId": 41483430374,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41483430374"
+            }
+          ],
+          "deployments": {
+            "Production": {
+              "deploymentId": 7497806434,
+              "state": "success",
+              "statusId": 21185486151
+            },
+            "main - sc2tools-api": {
+              "deploymentId": 7497724347,
+              "state": "success",
+              "statusId": 21185287134
+            }
+          }
+        },
+        {
+          "record": ".cache/roadmap-delivery-20261102/aadda26f-06.json",
+          "recordSha256": "35688b48adbd3b76f8ac881711fd9301b9fc090a283518a07cbfc3729002c1bb",
+          "atUtc": "2026-11-02T20:51:06.403815+00:00",
+          "mainRevision": "aadda26f3173b9a6ee9d4c98cdba002ac068a247",
+          "mainChecks": [
+            {
+              "name": "data-integrity",
+              "workflowRunId": 41516995625,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41516995625"
+            },
+            {
+              "name": "version-check",
+              "workflowRunId": 41516995900,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41516995900"
+            },
+            {
+              "name": "community-builds-ci",
+              "workflowRunId": 41516995766,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41516995766"
+            },
+            {
+              "name": "python-tests",
+              "workflowRunId": 41516995872,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41516995872"
+            },
+            {
+              "name": "api-ci",
+              "workflowRunId": 41516996137,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41516996137"
+            },
+            {
+              "name": "web-ci",
+              "workflowRunId": 41516995551,
+              "conclusion": "success",
+              "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41516995551"
+            }
+          ],
+          "deployments": {
+            "Production": {
+              "deploymentId": 7502342189,
+              "state": "success",
+              "statusId": 21199605696
+            },
+            "main - sc2tools-api": {
+              "deploymentId": 7502253689,
+              "state": "success",
+              "statusId": 21199375377
+            }
+          }
+        }
+      ],
+      "failedMainObservation": {
+        "commit": "2dea9489fd04ad231a3a9a3e09ad5c0e25acb7ef",
+        "snapshot": {
+          "record": ".cache/roadmap-delivery-20261102/2dea9489-04.json",
+          "recordSha256": "267ee4413b105e83fbe7e786b09d3e9e1ac8d90e6da208143b73d392cf18acc9"
+        },
+        "coreFailureLog": {
+          "record": ".cache/agent-secure-state-20261102/main-core-failure01/job.log",
+          "recordSha256": "929beed16e8b2e6074dba71d3a13b2e7d9c945593bfaf395492cd58341873148"
+        },
+        "delivered": false
+      },
+      "includedSlices": [
+        "diagnostics",
+        "integration",
+        "secure-state",
+        "obs-lock-budget"
+      ],
+      "partialIds": [
+        "agent-support-tools"
+      ],
+      "completedIds": [],
+      "remainingCount": 69,
+      "delivery": {
+        "record": ".cache/roadmap-delivery-20261102/0d72e117-04.json",
+        "recordSha256": "ad957e27be343e208ee7ee6533315eb25b07ed5732b1e72fdf9278b685beb7d5",
+        "atUtc": "2026-11-03T02:07:32.764187+00:00",
+        "mainRevision": "0d72e11775f3635d9e5bfb3ddf735ac1ce036e18",
+        "mainChecks": [
+          {
+            "name": "data-integrity",
+            "workflowRunId": 41560434738,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41560434738"
+          },
+          {
+            "name": "community-builds-ci",
+            "workflowRunId": 41560434804,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41560434804"
+          },
+          {
+            "name": "version-check",
+            "workflowRunId": 41560434658,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41560434658"
+          },
+          {
+            "name": "api-ci",
+            "workflowRunId": 41560434793,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41560434793"
+          },
+          {
+            "name": "web-ci",
+            "workflowRunId": 41560434899,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41560434899"
+          },
+          {
+            "name": "python-tests",
+            "workflowRunId": 41560434759,
+            "conclusion": "success",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/41560434759"
+          }
+        ],
+        "deployments": {
+          "Production": {
+            "deploymentId": 7508045514,
+            "state": "success",
+            "statusId": 21217865718
+          },
+          "main - sc2tools-api": {
+            "deploymentId": 7507985979,
+            "state": "success",
+            "statusId": 21217708395
+          }
+        }
+      },
+      "qualification": "Actual merged source/exact-head CI, immutable final local gates, separate distinct mutation counts with baselines excluded and LF checkpoint hashes. The 20 C mutation regressions remain tied to head 45a45384; D adds one narrow arithmetic counterfactual. Only the successful containing-main snapshot qualifies C+D delivery; the failed main 2dea9489 observation is retained. No signed build/tag/release, installed-agent upgrade/migration/support acceptance, cache activation or savings claim."
     }
   },
   "latestImplementationRevisionQualification": "PR848/main 1fe7dc8a history-on-this-device UI delivery (AC5, tested 7e5c390a) is verified by local web types and lint, 10308 web cases, 25/25 mutations and two review workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR844/main 1d2353cc device copy clearing delivery (AC4, tested 3c36f05d) is verified by local web types and lint, 10245 web cases, 59/59 mutations and five verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR842/main 1c7c1974 device-kept analysis corpus delivery (AC3, tested 208598af) is verified by local API and web types and lint, 2213 API and 10191 web cases, 51/51 mutations, an independent review and two verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR841/main d496e3ea analysis-corpus changed-since reads delivery (AC2, tested 8be5c842) is verified by local types, configured lint, 1623 API cases, 15/15 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR840/main 901be460 analysis-corpus updatedAt stamps and index delivery (AC1, tested 7c0fc2a6) is verified by local types, configured lint, 1603 API cases, 10/10 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR837/main 55378835 owner activation-review runbook delivery (R1, docs only, citations checked at 9802bc8a) made no production read and changed no flag; both production deployments succeeded for that exact commit. The latest implementation revision stays C5's c7b5ef93. PR836/main c6e7110b opponent-MMR cache source delivery (C5, tested c7b5ef93) is verified by local types, configured lint, 1025 API and 109 web cases, 14/14 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR834/main d7b925d5 default-off chart-cache overlap guard delivery (G1, tested cc8e358c) is verified by local types, configured lint, 589 API cases, 9/9 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR833/main 261fa04d owner-run durable device-auth disable primitive (never invoked) delivery (DA4, tested 90126ee2) is verified by local types, configured lint, 180 device-auth cases, 11/11 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR832/main fe6b3d1f separate-process device-auth revocation regression (no application source) delivery (DA3, tested 6df0f447) is verified by local types, configured lint, 174 device-auth cases, 3/3 mutations, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR831/main 619d8f7f matchup time-series cache source delivery (C4, tested 000734b6) is verified by local types, configured lint, 539 API and 156 web cases, 15/15 mutations, an independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR829/main 2fabe343 random-summary cache source delivery (C3, tested 10cdb0fd) is verified by local types, configured lint, 449 API and 129 web cases, 12/12 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343 with public health checks; signed-in read-only acceptance was not performed. PR828/main d20bce90 net-MMR pair cache source delivery (C2, tested f9cc5ccc) is verified by local types, configured lint, 433 API and 119 web cases, 11/11 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR826/main 294c24ab uninjected device-auth lease probe hold-off delivery (DA2, tested 1dde734b) is verified by local types, lint, 231 device-auth cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR825/main 4a4df22f streak and Macro report cache source delivery (C1, tested 1fecfca0) is verified by local types, configured lint, 293 API and 117 web cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR824/main c790de3e serving-cohort contract (ADR 0072) delivery changes no runtime behavior and is verified by exact-head API CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks. PR822/main 27b9aeb0 opponent region/identity delivery is verified by local 3056/214 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. PR821/main de2031ad custom-build definition delivery is verified by its own local 1393/71 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. Agent0.24.7 GitHub publication is complete under the approved unsigned exception; actual API and website update availability are verified, with installed0.24.6 showing update available. No installed0.24.7 uptake, signing, cache/auth activation, full writer/fleet proof, savings or fresh all197 audit is claimed."
