@@ -5,7 +5,9 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@clerk/nextjs";
 import {
   ChevronLeft,
@@ -28,9 +30,12 @@ import { GameSourceLabelProvider } from "../GameAnalysisLink";
 import type { ReplayLibraryResponse } from "./types";
 import { useReplayListFilters } from "@/lib/useReplayListFilters";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
+import { exportBusy, subscribeExportBusy } from "@/lib/exports/exportAdmission";
+import { useReplayPackSelection } from "./useReplayPackSelection";
 import { rememberReplayPage, rememberReplayRow, replayPageMemory, replayRowMemoryKey, replayScrollBehavior, replayUntil } from "@/lib/replayListNavigation";
 
 const PAGE_SIZE = 25;
+const ReplayPackControls = dynamic(() => import("./ReplayPackControls"), { ssr: false, loading: () => <p role="status">Loading replay pack controls…</p> });
 
 type SortFilter = "date_desc" | "date_asc";
 
@@ -54,7 +59,9 @@ function ReplayLibraryBody({ ownerId }: { ownerId: string }) {
   const clearCursor = useRef(local.clearCursor); clearCursor.current = local.clearCursor;
   useEffect(() => { if (blockedCursor.current) clearCursor.current(); }, [globalQuery]);
   const [selecting, setSelecting] = useState(false), [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
-  const selectionButton = useRef<HTMLButtonElement>(null);
+  const [packing, setPacking] = useState(false);
+  const busy = useSyncExternalStore(subscribeExportBusy, exportBusy, () => false);
+  const selectionButton = useRef<HTMLButtonElement>(null), packButton = useRef<HTMLButtonElement>(null);
   const filterKey = JSON.stringify({ globalQuery, search: committed.search.trim(), result: committed.result, matchup: committed.matchup, sort: committed.sort, before: committed.before });
   const [memoryReady, setMemoryReady] = useState(false);
   useEffect(() => setMemoryReady(true), []);
@@ -95,6 +102,8 @@ function ReplayLibraryBody({ ownerId }: { ownerId: string }) {
   }, [data, isPreviousData, ownerId, filterKey, cursor]);
   const playerName = data?.profile.displayName?.trim() || "You";
   const selectionStale = local.pendingFilters || Boolean(isPreviousData) || search.trim() !== committed.search.trim() || priorSelectionScope.current !== selectionScope;
+  const packBlocked = local.pendingFilters || Boolean(isPreviousData) || search.trim() !== committed.search.trim();
+  const pack = useReplayPackSelection(ownerId, queryFor(committed).toString(), packBlocked);
   const currentSelection = selectionStale ? new Set<string>() : selectedIds;
   const selectedTargets = (data?.items || []).filter(game => currentSelection.has(game.gameId));
   const hasReplayFilters = search.length > 0 || result !== "all" || matchup !== "all" || sort !== "date_desc" || !!before;
@@ -116,13 +125,15 @@ function ReplayLibraryBody({ ownerId }: { ownerId: string }) {
           <label className="text-micro text-text-muted">Matchup<Select value={matchup} onChange={event => setMatchup(event.target.value)} aria-label="Filter by matchup"><option value="all">All matchups</option>{MATCHUPS.map(value => <option key={value} value={value}>{value}</option>)}</Select></label>
           <label className="text-micro text-text-muted">Sort<Select value={sort} onChange={event => setSort(event.target.value as SortFilter)} aria-label="Sort replays"><option value="date_desc">Newest first</option><option value="date_asc">Oldest first</option></Select></label>
           <label className="text-micro text-text-muted">Jump to date<Input type="date" aria-label="Jump to date" value={before} onChange={event => setBefore(event.target.value)} className="min-h-11" /></label>
-          <Button variant="ghost" size="sm" onClick={resetReplayFilters} disabled={!hasReplayFilters}>Reset</Button><Button variant="secondary" size="sm" aria-pressed={selecting} onClick={() => { setSelecting(value => !value); setSelectedIds(new Set()); }}>Select replays</Button>
+          <Button variant="ghost" size="sm" onClick={resetReplayFilters} disabled={!hasReplayFilters}>Reset</Button><Button variant="secondary" size="sm" aria-pressed={selecting} disabled={packing || busy} onClick={() => { pack.clear(); setSelecting(value => !value); setSelectedIds(new Set()); }}>Select replays</Button>
+          <Button ref={packButton} id="replay-packs" variant="secondary" size="sm" aria-pressed={packing} disabled={selecting || busy || pack.pending} onClick={() => { setSelectedIds(new Set()); pack.clear(); setPacking(value => !value); }}>Replay pack</Button>
         </div>
         {before || result === "tie" ? <div className="mt-2 flex flex-wrap gap-2">{before ? <Button size="sm" variant="ghost" aria-label="Clear replay date" onClick={() => setBefore("")}>Before {new Date(`${before}T12:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })} ×</Button> : null}{result === "tie" ? <Button size="sm" variant="ghost" onClick={() => setResult("all")}>Ties only ×</Button> : null}</div> : null}
         {selecting ? <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3"><Button ref={selectionButton} variant="secondary" disabled={selectionStale || !data?.items.length} onClick={() => setSelectedIds(currentSelection.size === data?.items.length ? new Set() : new Set(data?.items.map(game => game.gameId) || []))}>{currentSelection.size === data?.items.length && currentSelection.size ? "Clear selection" : "Select this page"}</Button><span className="text-caption text-text-muted">{currentSelection.size} selected · this page only (up to {PAGE_SIZE})</span><GameControlActions targets={selectedTargets} scopeKey={`library:${selectionScope}`} onComplete={async changes => { setSelectedIds(previous => new Set([...previous].filter(id => !changes.some(change => change.gameId === id)))); await mutate(); if (priorSelectionScope.current === selectionScope) selectionButton.current?.focus(); }} /></div> : null}
+        {packing ? <ReplayPackControls selection={pack} blocked={packBlocked} onClose={() => { pack.clear(); setPacking(false); packButton.current?.focus(); }} /> : null}
       </div>
       <div inert={!!isPreviousData || local.pendingFilters} aria-busy={!!isPreviousData || local.pendingFilters} className={isPreviousData || local.pendingFilters ? "opacity-60" : undefined}>
-        {isLoading && !data ? <div className="p-4" aria-busy="true" aria-label="Loading replay history"><Skeleton rows={6} /></div> : error ? <ReplayError error={error} onRetry={() => void mutate()} /> : data ? <GameSourceLabelProvider label="Replay Library" filters={path.split("?", 2)[1]} replace><ReplayList items={data.items} owner playerName={playerName} listQuery={path.split("?", 2)[1]} emptyAction={clearActions} onOpenReplay={gameId => rememberReplayRow(ownerId, filterKey, cursor, gameId)} selection={selecting ? { selectedIds: currentSelection, disabled: selectionStale, onToggle: gameId => { if (selectionStale) return; setSelectedIds(previous => { const next = new Set(previous); if (next.has(gameId)) next.delete(gameId); else next.add(gameId); return next; }); } } : undefined} /></GameSourceLabelProvider> : null}
+        {isLoading && !data ? <div className="p-4" aria-busy="true" aria-label="Loading replay history"><Skeleton rows={6} /></div> : error ? <ReplayError error={error} onRetry={() => void mutate()} /> : data ? <GameSourceLabelProvider label="Replay Library" filters={path.split("?", 2)[1]} replace><ReplayList items={data.items} owner playerName={playerName} listQuery={path.split("?", 2)[1]} emptyAction={clearActions} onOpenReplay={gameId => rememberReplayRow(ownerId, filterKey, cursor, gameId)} selection={selecting ? { selectedIds: currentSelection, disabled: selectionStale, onToggle: gameId => { if (selectionStale) return; setSelectedIds(previous => { const next = new Set(previous); if (next.has(gameId)) next.delete(gameId); else next.add(gameId); return next; }); } } : packing ? { selectedIds: pack.selectedIds, disabled: packBlocked || busy || pack.pending, label: "Select replay for pack", isDisabled: gameId => pack.rows.size >= 100 && !pack.rows.has(gameId), onToggle: gameId => { const row = data.items.find(game => game.gameId === gameId); if (row) pack.toggle(row); } } : undefined} /></GameSourceLabelProvider> : null}
       </div>
       {cursor || data?.page.hasMore ? <nav className="flex items-center justify-between gap-3 border-t-2 border-line px-4 py-3" aria-label="Replay pages"><Button variant="secondary" size="sm" onClick={goNewer} disabled={!cursor || !!isPreviousData || local.pendingFilters} iconLeft={<ChevronLeft className="h-4 w-4" aria-hidden />}>{cursor && !memory.hasPrevious ? "Back to newest" : "Newer"}</Button><span className="text-micro text-text-dim">{memory.page ? `Page ${memory.page}` : "Saved page"}</span><Button variant="secondary" size="sm" onClick={goOlder} disabled={!data?.page.hasMore || !data.page.nextCursor || !!isPreviousData || local.pendingFilters} iconRight={<ChevronRight className="h-4 w-4" aria-hidden />}>Older</Button></nav> : null}
     </Card>

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReplayLibraryItem } from "../replays/types";
 import { ReplayList } from "../replays/ReplayList";
 
@@ -109,6 +109,19 @@ afterEach(() => {
 });
 
 describe("ReplayList", () => {
+  it("labels pack selection separately and disables only unselected rows at the cap in desktop and mobile layouts", () => {
+    const onToggle = vi.fn(), items = [REPLAY, { ...REPLAY, gameId: "other" }];
+    const selection = { selectedIds: new Set([REPLAY.gameId]), onToggle, label: "Select replay for pack", isDisabled: (id: string) => id === "other" };
+    const view = render(<ReplayList items={items} owner playerName="Reaver" selection={selection} />);
+    const selected = screen.getAllByRole("checkbox", { name: "Select replay for pack game/42" }) as HTMLInputElement[];
+    const blocked = screen.getAllByRole("checkbox", { name: "Select replay for pack other" }) as HTMLInputElement[];
+    expect(selected).toHaveLength(2); expect(selected.every(input => input.checked && !input.disabled)).toBe(true);
+    expect(blocked).toHaveLength(2); expect(blocked.every(input => !input.checked && input.disabled)).toBe(true);
+    fireEvent.click(selected[0]); expect(onToggle).toHaveBeenCalledWith(REPLAY.gameId);
+    view.rerender(<ReplayList items={items} owner={false} playerName="Reaver" publicHandle="shared" selection={selection} />);
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
   it("carries archive context only on public analysis links", () => {
     const listQuery = "result=loss&cursor=old&page=3";
     const view = render(<ReplayList items={[REPLAY]} owner={false} playerName="Reaver" publicHandle="shared" listQuery={listQuery} />);

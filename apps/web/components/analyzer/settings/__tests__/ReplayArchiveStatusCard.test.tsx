@@ -16,7 +16,8 @@ vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: getTokenMock }),
 }));
 
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", async original => ({
+  useOwnerRequestScope: (await original<typeof import("@/lib/clientApi")>()).useOwnerRequestScope,
   useApi: (...args: unknown[]) => useApiMock(...args),
   apiCall: (...args: unknown[]) => apiCallMock(...args),
   API_BASE: "https://api.example.test",

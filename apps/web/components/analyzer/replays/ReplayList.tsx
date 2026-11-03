@@ -39,7 +39,7 @@ export interface ReplayListProps {
   emptyDescription?: string;
   emptyAction?: ReactNode;
   onOpenReplay?: (gameId: string) => void;
-  selection?: { selectedIds: ReadonlySet<string>; onToggle: (gameId: string) => void; disabled?: boolean };
+  selection?: { selectedIds: ReadonlySet<string>; onToggle: (gameId: string) => void; disabled?: boolean; isDisabled?: (gameId: string) => boolean; label?: string };
 }
 
 /**
@@ -283,7 +283,7 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, p
 }
 
 function ReplaySelection({ gameId, selection }: { gameId: string; selection: NonNullable<ReplayListProps["selection"]> }) {
-  return <label className="inline-flex min-h-11 min-w-11 cursor-pointer items-center gap-2 px-2 text-caption"><input type="checkbox" className="h-4 w-4 accent-accent" aria-label={`Select replay ${gameId}`} checked={selection.selectedIds.has(gameId)} disabled={selection.disabled} onChange={() => selection.onToggle(gameId)} /><span>Select</span></label>;
+  return <label className="inline-flex min-h-11 min-w-11 cursor-pointer items-center gap-2 px-2 text-caption"><input type="checkbox" className="h-4 w-4 accent-accent" aria-label={`${selection.label || "Select replay"} ${gameId}`} checked={selection.selectedIds.has(gameId)} disabled={selection.disabled || selection.isDisabled?.(gameId)} onChange={() => selection.onToggle(gameId)} /><span>Select</span></label>;
 }
 
 function Matchup({ game, playerName, owner }: { game: ReplayLibraryItem; playerName: string; owner: boolean }) {

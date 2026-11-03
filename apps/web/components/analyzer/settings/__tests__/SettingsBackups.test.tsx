@@ -15,10 +15,11 @@ vi.mock("@/lib/analysisCorpus/deviceClear", async (importOriginal) => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: async () => "test-token", isLoaded: true, isSignedIn: true }),
+  useAuth: () => ({ getToken: async () => "test-token", userId: "synthetic-owner", isLoaded: true, isSignedIn: true }),
 }));
 
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", async original => ({
+  useOwnerRequestScope: (await original<typeof import("@/lib/clientApi")>()).useOwnerRequestScope,
   useApi: (...args: unknown[]) => useApiMock(...args),
   apiCall: (...args: unknown[]) => apiCallMock(...args),
   API_BASE: "https://api.example.test",
@@ -45,6 +46,7 @@ const SNAPSHOT = {
 
 function renderBackups(items: unknown[] = [SNAPSHOT]) {
   useApiMock.mockImplementation((path: string) => {
+    if (path.startsWith("/v1/games/hidden")) return { data: { items: [], nextCursor: null }, isLoading: false, error: null, mutate: mutateMock };
     if (path === "/v1/me/backups") {
       return { data: { items }, isLoading: false, error: null, mutate: mutateMock };
     }
