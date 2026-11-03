@@ -8,9 +8,10 @@
 // as, so search[], search[0] and [search] are all `search`.
 const SEARCH_QUERY_ROUTES = Object.freeze([
   Object.freeze({ path: /^\/v1\/replays\/?$/iu, root: "search" }),
+  Object.freeze({ path: /^\/v1\/export\/build-orders\.(?:csv|ndjson)\/?$/iu, root: "search" }),
   Object.freeze({ path: /^\/v1\/community\/builds\/?$/iu, root: "q" }),
 ]);
-const SEARCH_QUERY_HINT = /\/v1\/(?:replays|community\/builds)/iu;
+const SEARCH_QUERY_HINT = /\/v1\/(?:replays|community\/builds|export\/build-orders\.(?:csv|ndjson))/iu;
 const BASE = "http://request.invalid";
 
 // Mongo comments on reads whose filter holds typed search text. A failed read

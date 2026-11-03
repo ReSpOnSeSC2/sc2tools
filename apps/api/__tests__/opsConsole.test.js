@@ -190,13 +190,58 @@ test("unmatched authenticated admin mutations never retain private path fragment
 });
 
 test("a completed wipe is audited even if its HTTP client disconnects before receiving success",async()=>{
+  // This bounds missing observations within the unchanged configured test deadline;
+  // it never treats elapsed time as successful work or cleanup settlement.
+  const deadline = Date.now() + require("../jest.config").testTimeout - 1000;
   const userId="disconnected-wipe";await db.users.insertOne({userId,clerkUserId:"disconnected-clerk",createdAt:new Date()});await db.games.insertOne({userId,gameId:"disconnected-game",date:new Date()});
-  let entered,release;const began=new Promise(resolve=>{entered=resolve;}),hold=new Promise(resolve=>{release=resolve;});
-  const original=services.gdpr.wipeGames.bind(services.gdpr);
-  const spy=jest.spyOn(services.gdpr,"wipeGames").mockImplementationOnce(async(...args)=>{entered();await hold;return original(...args);});
-  const server=require("http").createServer(app);await new Promise(resolve=>server.listen(0,resolve));
-  const pending=admin(request(server).post(`/v1/admin/users/${userId}/wipe-games`));void pending.then(()=>null,()=>null);await began;pending.abort();release();
-  try{expect(await waitAudit("user.wipe-games",userId)).toMatchObject({result:{games:1,status:202,ok:true}});expect(await db.games.countDocuments({userId})).toBe(0);}finally{spy.mockRestore();await new Promise(resolve=>server.close(resolve));}
+  const watch = async (promise, label) => {
+    let timer;
+    try { return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} not observed before test deadline`)), Math.max(1, deadline - Date.now()));
+    })]); } finally { clearTimeout(timer); }
+  };
+  let entered, release, wiped, audited;
+  const began = new Promise(resolve => { entered = resolve; }), hold = new Promise(resolve => { release = resolve; });
+  const wipeAdmitted = new Promise(resolve => { wiped = resolve; }), auditAdmitted = new Promise(resolve => { audited = resolve; });
+  const invocations = [], admitted = [], matchingAudits = [], matchingWipes = [];
+  const observe = promise => { admitted.push(promise); void promise.catch(() => {}); return promise; };
+  const originalWipe = services.gdpr.wipeGames.bind(services.gdpr), originalAudit = services.adminAudit.audit.bind(services.adminAudit);
+  const wipeSpy = jest.spyOn(services.gdpr, "wipeGames").mockImplementation((...args) => {
+    const invocation = (async () => {
+      if (args[0] === userId) { entered(); await hold; }
+      const promise = observe(originalWipe(...args));
+      if (args[0] === userId) { matchingWipes.push(promise); wiped({ promise }); }
+      return promise;
+    })();
+    invocations.push(invocation); void invocation.catch(() => {}); return invocation;
+  });
+  const auditSpy = jest.spyOn(services.adminAudit, "audit").mockImplementation((...args) => {
+    const promise = observe(originalAudit(...args));
+    if (args[1] === "user.wipe-games" && args[2] === userId) { matchingAudits.push(promise); audited({ promise }); }
+    return promise;
+  });
+  const server = require("http").createServer(app); let pending, requestDone;
+  const joinAdmitted = async () => {
+    let count = -1;
+    while (count !== admitted.length + invocations.length) { count = admitted.length + invocations.length; await Promise.allSettled([...invocations, ...admitted]); }
+  };
+  try {
+    await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, () => { server.removeListener("error", reject); resolve(); }); });
+    pending = admin(request(server).post(`/v1/admin/users/${userId}/wipe-games`)); requestDone = pending.then(() => null, () => null);
+    await watch(began, "held wipe admission"); expect(matchingWipes).toHaveLength(0); pending.abort(); release();
+    const wipe = await watch(wipeAdmitted, "actual wipe admission"); await watch(wipe.promise, "actual wipe settlement");
+    const audit = await watch(auditAdmitted, "matching real audit admission"); await watch(audit.promise, "matching real audit settlement");
+    expect(matchingWipes).toHaveLength(1); expect(matchingAudits).toHaveLength(1);
+    expect(await db.adminAudit.findOne({ action: "user.wipe-games", target: userId })).toMatchObject({result:{games:1,status:202,ok:true}});
+    expect(await db.games.countDocuments({userId})).toBe(0);
+  } finally {
+    release(); pending?.abort(); await requestDone;
+    try {
+      await joinAdmitted();
+      if (server.listening) await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      await joinAdmitted();
+    } finally { wipeSpy.mockRestore(); auditSpy.mockRestore(); }
+  }
 });
 
 

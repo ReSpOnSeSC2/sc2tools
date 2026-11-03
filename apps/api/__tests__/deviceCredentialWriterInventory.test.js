@@ -65,6 +65,8 @@ const REFERENCES = {
   "src/config/constants.js": "definition",
   [CONNECT]: "definition",
   "src/db/schemaVersioning.js": "definition",
+  "src/services/accountExportData.js": "read",
+  "src/services/accountExportPolicy.js": "definition",
   "src/services/admin.js": "read",
   "src/services/adminActivation.js": "read",
   "src/services/adminEvents.js": "read",
@@ -434,9 +436,12 @@ function exportedValues(sf) {
     ? n.right.properties.flatMap(member) : [[n.left.getText().split(".").pop(), namesDeep(n.right)]]));
 }
 
+function exportedListSites() {
+  return Object.keys(REFERENCES).flatMap(file => exportedValues(parse(file)).filter(([name, names]) => names && !REGISTRIES.has(name))
+    .map(([name]) => `${file} ${name}`)).sort();
+}
 function exportedLists() {
-  return Object.keys(REFERENCES).flatMap(file => exportedValues(parse(file)).filter(([, names]) => names).map(([name]) => name))
-    .filter(name => !REGISTRIES.has(name)).sort();
+  return [...new Set(exportedListSites().map(site => site.slice(site.lastIndexOf(" ") + 1)))].sort();
 }
 
 const propertyNamed = (root, names) => nodes(root, n => ts.isPropertyAssignment(n) && names.includes(n.name.text));
@@ -511,6 +516,13 @@ function mayUpsert(write) {
 }
 
 test("ADR 0072: every file naming the collection, or a list that names it, is classified", () => {
+  expect(exportedListSites()).toEqual([
+    "src/services/accountExportPolicy.js USER_SCOPED_COLLECTIONS",
+    "src/services/admin.js DASHBOARD_COLLECTIONS",
+    "src/services/gdpr.js GDPR_CLASSIFICATION",
+    "src/services/gdpr.js USER_SCOPED_COLLECTIONS",
+    "src/services/userBackups.js RESTORABLE",
+  ]);
   expect(exportedLists()).toEqual(LISTS);
   const referencing = allFiles().filter(file => nodes(parse(file), namesCollection).length > 0).sort();
   expect(referencing).toEqual(Object.keys(REFERENCES).sort());

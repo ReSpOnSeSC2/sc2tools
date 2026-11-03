@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("crypto");
+const { collectReviewExport } = require("./accountExportData");
 const { COLLECTIONS, REVIEWS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const {
@@ -1652,14 +1653,7 @@ class ReviewsService {
    * @param {string} userId
    */
   async exportForUser(userId) {
-    const [requests, comments, karma, blocks, notifications] = await Promise.all([
-      this.db.reviewRequests.find({ userId }, { projection: { activeKey: 0 } }).toArray(),
-      this.db.reviewComments.find({ authorId: userId }, { projection: { removedBy: 0 } }).toArray(),
-      this.db.reviewKarmaEvents.find({ userId }, { projection: { _id: 0, actorId: 0 } }).toArray(),
-      this.db.reviewBlocks.find({ blockerId: userId }, { projection: { _id: 0, blockedId: 0 } }).toArray(),
-      this.db.notifications.find({ userId }).toArray(),
-    ]);
-    return { reviewRequests: requests, reviewComments: comments, reviewKarmaEvents: karma, reviewBlocks: blocks, notifications };
+    return collectReviewExport(this.db, userId);
   }
 
   /**

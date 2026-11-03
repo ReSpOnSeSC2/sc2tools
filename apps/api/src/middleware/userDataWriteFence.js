@@ -1,6 +1,7 @@
 "use strict";
 const { randomUUID } = require("crypto");
 const { isPrivateSearchPost } = require("./privateSearchBoundary");
+const { isReplayDownloadBatchPost } = require("./replayDownloadBatchBoundary");
 const LEASE_MS = 15 * 60 * 1000;
 // All authenticated user writes participate in erasure exclusion. These
 // operations own their own exclusive fence or act on a different target user.
@@ -44,7 +45,7 @@ function withUserDataWriteFence(auth, users) {
     if (error) { next(error); return; }
     const path = req.originalUrl.split("?", 1)[0];
     const exclusiveGameControl = ["PATCH", "DELETE"].includes(req.method) && GAME_CONTROL_PATH.test(path);
-    if (!req.auth || !["POST", "PUT", "PATCH", "DELETE"].includes(req.method) || UNFENCED_PATH.test(path) || exclusiveGameControl || isPrivateSearchPost(req) || registered.has(req)) { next(); return; }
+    if (!req.auth || !["POST", "PUT", "PATCH", "DELETE"].includes(req.method) || UNFENCED_PATH.test(path) || exclusiveGameControl || isPrivateSearchPost(req) || isReplayDownloadBatchPost(req) || registered.has(req)) { next(); return; }
     void claimUserDataLease(users, req.auth.userId).then(async (lease) => {
       if (res.destroyed) { await lease.release(); return; }
       registered.add(req);

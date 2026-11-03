@@ -1,6 +1,7 @@
 "use strict";
 
 const express = require("express");
+const { accountExportHandler } = require("./accountExport");
 const { buildDoctor, buildSyncHealth, withReplayResyncState, emptyReplayArchiveCounts } = require("../services/doctor");
 const { NOTIFICATIONS_PREF_TYPE, sanitizeNotificationPrefs } = require("../services/notificationPrefs");
 const { validateProfile } = require("../validation/profile");
@@ -46,7 +47,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   GET    /me/sync-health          — per-PC sync reports and derived Sync health rows
  *   GET    /me/replay-archive-status — one-time original replay backfill progress
  *   POST   /me/replay-archive-resync — agent acknowledges a full local re-sync
- *   GET    /me/export               — download every per-user record as JSON
+ *   GET    /me/export               — download account JSON or an opt-in full NDJSON stream
  *   DELETE /me                      — permanently delete the account
  *   GET    /me/backups              — list manual snapshots
  *   POST   /me/backups              — take a manual snapshot
@@ -752,22 +753,7 @@ function buildMeRouter(deps) {
     },
   );
 
-  router.get("/me/export", deps.auth, async (req, res, next) => {
-    try {
-      const auth = req.auth;
-      if (!auth) throw new Error("auth_required");
-      const data = await deps.gdpr.export(auth.userId);
-      const filename = `sc2tools-export-${Date.now()}.json`;
-      res.setHeader("content-type", "application/json; charset=utf-8");
-      res.setHeader(
-        "content-disposition",
-        `attachment; filename="${filename}"`,
-      );
-      res.json(data);
-    } catch (err) {
-      next(err);
-    }
-  });
+  router.get("/me/export", deps.auth, accountExportHandler(deps.gdpr));
 
   router.delete("/me", deps.auth, async (req, res, next) => {
     try {

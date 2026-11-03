@@ -85,6 +85,7 @@ const REVIEWED = [
   ["services/perGameCompute.js writeOpponentBuildOrder updateOne", 2, "build-order lease release"],
   ["services/playbackArtifacts.js complete updateOne", 1, "playback storage marker"],
   ["services/playbackArtifacts.js prepare updateOne", 1, "playback storage marker"],
+  ["services/replayDownloadBatch.js prepareOne updateOne", 1, "replay storage marker cleanup only; no projected corpus or membership field changes"],
   ["services/replayFiles.js _clearIntent updateOne", 1, "replay storage marker"],
   ["services/replayFiles.js _clearMarker updateOne", 1, "replay storage marker"],
   ["services/replayFiles.js _releaseIntent updateOne", 1, "replay storage marker"],

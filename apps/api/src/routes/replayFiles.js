@@ -2,6 +2,7 @@
 
 const express = require("express");
 const { LIMITS } = require("../config/constants");
+const { registerDownloadBatch } = require("./replayDownloadBatch");
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 const MD5_BASE64 = /^[A-Za-z0-9+/]{22}==$/;
@@ -85,7 +86,7 @@ function buildReplayFilesRouter(deps) {
     },
   );
 
-  return router;
+  return registerDownloadBatch(router, deps);
 }
 
 /** @param {unknown} raw */

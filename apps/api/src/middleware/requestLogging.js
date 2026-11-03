@@ -2,6 +2,7 @@
 
 const { isPrivateSearchPath, privateSearchLogUrl } = require("./privateSearchBoundary");
 const { isSearchQueryUrl, redactSearchQuery } = require("./searchQueryPrivacy");
+const { isReplayDownloadBatchPath } = require("./replayDownloadBatchBoundary");
 
 // Request logs are operational telemetry, not a copy of the incoming
 // request.  In particular, Clerk/device bearer tokens and overlay tokens are
@@ -52,6 +53,7 @@ const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set([
 function sanitiseRequestUrl(value) {
   const raw = typeof value === "string" ? value : "";
   if (!raw) return "";
+  if (isReplayDownloadBatchPath(raw)) return "/v1/replays/download-batch";
   if (isPrivateSearchPath(raw)) return privateSearchLogUrl(raw);
   let redacted = raw.replace(
     CREDENTIAL_PATH_SEGMENT,

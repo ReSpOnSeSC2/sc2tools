@@ -7,10 +7,10 @@ function fixtureBundle() {
   if (!bundle) bundle = build({
     stdin: { contents: `
       import React from "react";import {createRoot} from "react-dom/client";import {SWRConfig} from "swr";
-      import {TimingsTable} from "@/components/guides/build/TimingsTable";import {GuidePersonalComparison} from "@/components/guides/GuidePersonalComparison";
+      import {TimingsTable} from "@/components/guides/build/TimingsTable";import {TimingsTableContent} from "@/components/guides/build/TimingsTableContent";import {GuidePersonalComparison} from "@/components/guides/GuidePersonalComparison";
       import {FIXTURE_BUILD_PUBLISHED} from "@/lib/guides/__fixtures__";
       const timings={...FIXTURE_BUILD_PUBLISHED.timings,milestones:FIXTURE_BUILD_PUBLISHED.timings.milestones.filter(row=>["TwilightCouncil","AdeptPiercingAttack"].includes(row.key)).map(row=>row.key==="TwilightCouncil"?{...row,p75:300}:row)};
-      createRoot(document.getElementById("root")).render(<SWRConfig value={{provider:()=>new Map(),revalidateOnFocus:false}}><main className="mx-auto max-w-5xl space-y-6 p-4 lg:p-8"><h1 className="font-display text-h2 text-text">Your guide timings</h1><TimingsTable timings={timings} matchupSlug="pvz" buildSlug="stargate-into-glaives"/><GuidePersonalComparison matchupSlug="pvz" buildSlug="stargate-into-glaives" buildName="Stargate into Glaives" community={timings.milestones} communityWinRate={0.55} showTimings={false} showSignInPrompt={false}/></main></SWRConfig>);
+      createRoot(document.getElementById("root")).render(<SWRConfig value={{provider:()=>new Map(),revalidateOnFocus:false}}><main className="mx-auto max-w-5xl space-y-6 p-4 lg:p-8"><h1 className="font-display text-h2 text-text">Your guide timings</h1><TimingsTable timings={timings} matchupSlug="pvz" buildSlug="stargate-into-glaives" community={<TimingsTableContent timings={timings}/>}/><GuidePersonalComparison matchupSlug="pvz" buildSlug="stargate-into-glaives" buildName="Stargate into Glaives" community={timings.milestones} communityWinRate={0.55} showTimings={false} showSignInPrompt={false}/></main></SWRConfig>);
     `, loader: "tsx", resolveDir: process.cwd() },
     bundle: true, write: false, minify: true, format: "iife", platform: "browser", jsx: "automatic", tsconfig: "tsconfig.json",
     define: { "process.env": "{}", "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_API_BASE": '"https://guide-timings-fixture.local"' },

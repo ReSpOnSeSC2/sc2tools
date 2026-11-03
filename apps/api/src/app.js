@@ -25,6 +25,8 @@ const { buildSyncActionJsonParser } = require("./middleware/syncActionJson");
 const { sanitiseRequestForLog, sanitiseResponseForLog } = require("./middleware/requestLogging");
 const { privateSearchNoStore, buildPrivateSearchJsonParser,
   privateSearchErrorBoundary, isPrivateSearchRequest } = require("./middleware/privateSearchBoundary");
+const { replayDownloadBatchNoStore, buildReplayDownloadBatchJsonParser,
+  replayDownloadBatchErrorBoundary } = require("./middleware/replayDownloadBatchBoundary");
 const { privateSearchRequestScope } = require("./util/sentry");
 const { PrivateSearchService } = require("./services/privateSearchService");
 const { buildPrivateSearchRouter } = require("./routes/privateSearchRoute");
@@ -125,6 +127,7 @@ const {
 const { ImportService } = require("./services/import");
 const { SpatialService } = require("./services/spatial");
 const { CatalogService } = require("./services/catalog");
+const { BuildOrderExportService } = require("./services/buildOrderExport");
 const { AgentVersionService, compareVersions } = require("./services/agentVersion");
 const { GithubReleaseFeed } = require("./services/agentGithubReleases");
 const { GdprService } = require("./services/gdpr");
@@ -232,6 +235,7 @@ const {
 const { buildImportsRouter } = require("./routes/imports");
 const { buildSpatialRouter } = require("./routes/spatial");
 const { buildCatalogRouter } = require("./routes/catalog");
+const { buildBuildOrderExportRouter } = require("./routes/buildOrderExport");
 const { buildMapImageRouter } = require("./routes/mapImage");
 const { buildMlRouter } = require("./routes/ml");
 const { buildAgentVersionRouter } = require("./routes/agentVersion");
@@ -362,7 +366,7 @@ function buildApp(deps) {
   // REST ``isAdmin`` gate and the socket layer both read this live set;
   // the boot sequence also merges persisted DB admins into it.
   mountRoutes(app, deps, services, clerk, adminClerkIds, auth);
-  app.use(privateSearchErrorBoundary);
+  app.use(replayDownloadBatchErrorBoundary, privateSearchErrorBoundary);
   app.use(buildErrorHandler(deps.logger));
   return { app, services, adminClerkIds };
 }
@@ -1023,7 +1027,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     invalidatePrivateGameCaches(userId); community.invalidateForUser(userId);
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
-  return {
+  return withBuildOrderExport({
     gameStatsWrites: games.gameStatsWrites,
     userRevision, userCache, sessionPolicy, sessionHistory, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
     privateSearch,
@@ -1119,7 +1123,15 @@ function makeServices(deps, clerk, adminClerkIds) {
     announcements,
     reviewerReputation,
     reviews,
-  };
+  }, deps, gameDetails);
+}
+
+/** @template {Record<string, any>} T
+ * @param {T} services @param {AppDeps} deps
+ * @param {import('./services/gameDetails').GameDetailsService} gameDetails
+ */
+function withBuildOrderExport(services, deps, gameDetails) {
+  return { ...services, buildOrderExport: new BuildOrderExportService(deps.db, { gameDetails, pepper: deps.config.serverPepper }) };
 }
 
 /**
@@ -1129,7 +1141,7 @@ function makeServices(deps, clerk, adminClerkIds) {
  * @param {import('./services/siteStats').SiteStatsService} siteStats
  */
 function applyBaseMiddleware(app, deps, auth, siteStats) {
-  app.use(privateSearchNoStore, privateSearchRequestScope);
+  app.use(replayDownloadBatchNoStore, privateSearchNoStore, privateSearchRequestScope);
   app.use(helmet());
   app.use(
     cors({
@@ -1139,7 +1151,7 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
       // Cross-origin JS can only read CORS-safelisted response headers
       // unless they are exposed. The browser importer honours Retry-After
       // on 503 replay_ingest_busy / 408 / 429 instead of guessing a backoff.
-      exposedHeaders: ["Retry-After", "X-Export-Truncated", "Content-Disposition", "ETag"],
+      exposedHeaders: ["Retry-After", "X-Export-Truncated", "Content-Disposition", "ETag", "X-Export-Has-More", "X-Export-Continuation-Token"],
     }),
   );
   app.use(
@@ -1221,7 +1233,7 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
   } });
   const coachingJson = express.json({ limit: COACHING_JSON_LIMIT });
   const ordinaryJson = express.json({ limit: DEFAULT_JSON_LIMIT, verify: captureSignedWebhookRawBody });
-  app.use(buildPrivateSearchJsonParser(), buildSyncActionJsonParser());
+  app.use(buildReplayDownloadBatchJsonParser(), buildPrivateSearchJsonParser(), buildSyncActionJsonParser());
   app.use((req, res, next) => {
     if (isPrivateSearchRequest(req) && req.method !== "POST") { next(); return; }
     const parser = isLargeAuthenticatedJson(req)
@@ -1817,10 +1829,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildSpatialRouter({ spatial: services.spatial, auth }),
   );
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildCatalogRouter({ catalog: services.catalog, opponents: services.opponents, auth }),
-  );
+  mountCatalogAndExport(app, services, auth);
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMlRouter({ auth }),
@@ -1863,6 +1872,15 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       logger: deps.logger,
     }),
   );
+}
+
+/** @param {import('express').Express} app
+ * @param {Pick<ReturnType<typeof makeServices>, 'catalog'|'opponents'|'buildOrderExport'>} services
+ * @param {import('express').RequestHandler} auth
+ */
+function mountCatalogAndExport(app, services, auth) {
+  app.use(SERVICE.ROUTE_PREFIX, buildCatalogRouter({ catalog: services.catalog, opponents: services.opponents, auth }));
+  app.use(SERVICE.ROUTE_PREFIX, buildBuildOrderExportRouter({ buildOrderExport: services.buildOrderExport, auth }));
 }
 
 /**

@@ -175,21 +175,24 @@ class MongoDetailsStore {
       : { _id: 0, userId: 0, date: 0, createdAt: 0, _schemaVersion: 0, trendsExplorerDetail: 0, trendsExplorerRevision: 0, opponentListDetail: 0 };
     const cursor = this.db.gameDetails.find(
       { userId, gameId: { $in: gameIds } },
-      { projection },
+      { projection, signal: opts.signal },
     );
     const out = new Map();
-    for await (const doc of cursor) {
-      if (opts.signal && opts.signal.aborted) throw detailsAbortError();
-      if (!doc || !doc.gameId) continue;
-      const { gameId, ...rest } = doc;
-      if (
-        opts.tolerateCorruptObjects === true
-        && hasCorruptProjectedFields(rest, fields)
-      ) {
-        continue;
+    try {
+      for await (const doc of cursor) {
+        if (opts.signal && opts.signal.aborted) throw detailsAbortError();
+        if (!doc || !doc.gameId) continue;
+        const { gameId, ...rest } = doc;
+        if (
+          opts.tolerateCorruptObjects === true
+          && hasCorruptProjectedFields(rest, fields)
+        ) {
+          continue;
+        }
+        out.set(gameId, rest);
       }
-      out.set(gameId, rest);
-    }
+    } finally { await cursor.close(); }
+    if (opts.signal && opts.signal.aborted) throw detailsAbortError();
     return out;
   }
 
