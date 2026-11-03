@@ -200,7 +200,7 @@ test("actual strict R2 detail failure cannot become a missing row followed by su
   const service = new GameDetailsService(store), games = finiteCollection([{ gameId: "one" }]), emitted = [];
   try {
     await expect((async () => {
-      for await (const chunk of accountExportStream({ games }, service, "A", { details: true })) emitted.push(JSON.parse(chunk));
+      for await (const chunk of accountExportStream({ games, users: finiteCollection([]) }, service, "A", { details: true })) emitted.push(JSON.parse(chunk));
     })()).rejects.toThrow("private-bucket-token");
     expect(emitted.some(row => row.type === "complete")).toBe(false);
     expect(emitted.some(row => row.collection === "gameDetails")).toBe(false);
