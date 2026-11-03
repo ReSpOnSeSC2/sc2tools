@@ -9,7 +9,7 @@ This folder builds the Windows installer for the agent.
 - *(optional)* Windows SDK (signtool.exe) for code signing
 - For local signing: a publicly trusted code-signing certificate (.pfx) and its
   password. Unsigned builds have no verified publisher; no reputation timing
-  or SmartScreen bypass is promised. Tagged release signing uses the
+  or SmartScreen bypass is promised. Optional automated signing uses the
   owner-approved SignPath Foundation integration below.
 
 ## Quick build (unsigned)
@@ -62,12 +62,16 @@ with `-Installer -PackageOnly`, then uploads/signs/verifies setup. SHA-256 and
 release upload occur **after** setup signing. `-PackageOnly` never rebuilds the
 signed executable and rejects `-Clean` or omission of `-Installer`.
 
-Tagged builds fail before packaging if approved signing is not enabled or
-credentials/configuration are missing. A manual workflow run may build an
-explicitly unsigned verification artifact while signing is disabled. Do not
-publish it as signed. Owner approval and a first real signed workflow run remain
-external release requirements. Manual/provider approval may be required by the
-configured policy; CI waits up to the action's configured timeout.
+When `SIGNPATH_ENABLED` is absent or `false`, both tagged and manual workflow
+runs build unsigned installers and record that there is no verified publisher or
+signed-release claim. Tagged draft release notes begin with an explicit unsigned
+notice. When `SIGNPATH_ENABLED=true`, all six signing credentials/configuration
+values above are required before building; missing values fail the workflow.
+The enabled path signs and verifies both executables in the order described above.
+Do not publish an unsigned build as signed. Owner approval and a first real signed
+workflow run remain requirements for claiming a signed release. Manual/provider
+approval may be required by the configured policy; CI waits up to the action's
+configured timeout.
 
 ## Publishing a release
 
@@ -84,7 +88,8 @@ git push origin "agent-v$version"
 The `agent installer` GitHub Actions workflow verifies the tag against
 the package version, builds the installer, creates its `.sha256`
 sidecar, and attaches both files to a **draft** GitHub Release. After integrated
-checks, signature verification, and owner publication, the website download card
+checks, signature verification when signing is enabled, and owner publication,
+the website download card
 and installed agent's `/v1/agent/version` feed resolve that stable release; no separate CDN upload or manual
 release-feed POST is required.
 
