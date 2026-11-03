@@ -132,11 +132,11 @@ const article: HelpArticle = {
     { type: "heading", text: "Player not recognized", anchor: "sync-player-unresolved" },
     {
       type: "paragraph",
-      text: "The desktop app skipped replays because it couldn't tell which player is you. The row lists the names it saw most often, with their account IDs. Only you see that list. If an account is yours, press **Add as my account**, then **Retry with latest agent** on that PC's row. Adding an account preserves your other profile settings. You can manage saved accounts in [Settings → Profile](/settings?tab=profile).",
+      text: "The desktop app recently tried replays it couldn't match to your linked accounts. Downloaded tournament games and other players' replays can stay skipped. This does not by itself mean your profile is missing or new games stopped syncing. The row lists the names it saw most often, with their account IDs. Only you see that list. If an account is yours, press **Add as my account**, then **Retry with latest agent** on that PC's row. Adding an account preserves your other profile settings. You can manage saved accounts in [Settings → Profile](/settings?tab=profile). Older unmatched files stay under **Skipped replay history**; they do not trigger a current sync warning on their own.",
     },
     {
       type: "paragraph",
-      text: "**Retry with latest agent** retries only replays with the selected reason on that PC and keeps your sync date range. The desktop app must be open, connected and recent enough to support it. A queued count means the app accepted the work; press **Check again** after it syncs to see the result. Other skipped replays offers the same retry for read or analysis failures. Games skipped on purpose stay skipped. If a request can't be confirmed, check the counts before trying again.",
+      text: "**Retry with latest agent** retries only replays with the selected reason on that PC and keeps your sync date range. The desktop app must be open, connected and recent enough to support it. A queued count means the app accepted the work; press **Check again** after it syncs to see the result. Skipped replay history offers the same retry for unmatched files or read and analysis failures. Games skipped on purpose stay skipped. If a request can't be confirmed, check the counts before trying again.",
     },
     { type: "heading", text: "Uploads rejected", anchor: "sync-uploads-rejected" },
     {

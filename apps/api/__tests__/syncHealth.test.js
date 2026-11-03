@@ -33,13 +33,44 @@ test.each([
   ["an upload error and nothing pending", { lastErrorCode: "upload_timeout", pending: 0 }, []],
   ["a backlog without an error", { pending: 40 }, []],
   ["a paused agent's old upload error", { paused: true, lastErrorCode: "upload_timeout", pending: 2 }, ["agent_paused:2"]],
-  ["unresolved skips", { skipped: { player_unresolved: 4, ai_game: 9 }, unresolvedNames: [PRIVATE] }, ["replays_skipped_unresolved:4"]],
+  ["recent unresolved skips", { recentUnresolved: 4, skipped: { player_unresolved: 4, ai_game: 9 }, unresolvedNames: [PRIVATE] }, ["replays_skipped_unresolved:4"]],
   ["only benign skips", { skipped: { ai_game: 9, resumed_replay: 1 } }, []],
   ["counts the rules do not read", { rejected: 4, filtered: 12, archivePending: 3 }, []],
-  ["everything at once", { foldersWatched: 0, paused: true, pending: 2, skipped: { player_unresolved: 1 } },
+  ["everything at once", { foldersWatched: 0, paused: true, pending: 2, recentUnresolved: 1, skipped: { player_unresolved: 1 } },
     ["agent_no_folders:0", "agent_paused:2", "replays_skipped_unresolved:1"]],
 ])("rule table: %s", (_label, sync, expected) => {
   expect(codes(derive([device(sync)]))).toEqual(expected);
+});
+
+test.each([
+  ["legacy lifetime inventory", { skipped: { player_unresolved: 20 }, unresolvedNames: [PRIVATE] }, []],
+  ["no recent attempts", { recentUnresolved: 0, skipped: { player_unresolved: 20 } }, []],
+  ["only recent unresolved paths", { recentUnresolved: 2, skipped: { player_unresolved: 20 } }, ["replays_skipped_unresolved:2"]],
+  ["the remaining inventory caps recent attempts", { recentUnresolved: 10, skipped: { player_unresolved: 2 } }, ["replays_skipped_unresolved:2"]],
+  ["the inventory was cleared", { recentUnresolved: 2 }, []],
+  ["a zero inventory", { recentUnresolved: 2, skipped: { player_unresolved: 0 } }, []],
+  ["a malformed recent count", { recentUnresolved: "2", skipped: { player_unresolved: 20 } }, []],
+  ["a nonfinite recent count", { recentUnresolved: Infinity, skipped: { player_unresolved: 20 } }, []],
+  ["a NaN recent count", { recentUnresolved: NaN, skipped: { player_unresolved: 20 } }, []],
+  ["a negative recent count", { recentUnresolved: -2, skipped: { player_unresolved: 20 } }, []],
+  ["a malformed inventory", { recentUnresolved: 2, skipped: { player_unresolved: "20" } }, []],
+  ["a nonfinite inventory", { recentUnresolved: 2, skipped: { player_unresolved: Infinity } }, []],
+])("unresolved warning ignores %s", (_label, sync, expected) => {
+  expect(codes(derive([device(sync)]))).toEqual(expected);
+});
+
+test("Doctor sums recent unresolved counts across PCs without counting legacy inventory", () => {
+  const rows = derive([
+    device({ recentUnresolved: 2, skipped: { player_unresolved: 20 } }, { deviceId: "pc-1" }),
+    device({ recentUnresolved: 9, skipped: { player_unresolved: 3 } }, { deviceId: "pc-2" }),
+    device({ skipped: { player_unresolved: 40 } }, { deviceId: "legacy" }),
+  ]);
+  expect(codes(rows)).toEqual(["replays_skipped_unresolved:2", "replays_skipped_unresolved:3"]);
+  expect(syncHealthWarnings(rows)).toEqual([{
+    id: "replays_skipped_unresolved", severity: "warn", helpSlug: "my-game-didnt-show-up",
+    cta: { label: "Review profile", href: "/settings?tab=profile" },
+    message: "The desktop app recently couldn't match 5 replays to your linked accounts. Downloaded replays of other players can be skipped. If these are your games, review your profile, then re-sync.",
+  }]);
 });
 
 test("rows carry the rule's severity, helpSlug, fix and the device id", () => {
@@ -75,7 +106,7 @@ test.each([
 
 test("several PCs give rows per PC in rule order; the Doctor sums them per code", () => {
   const rows = derive([
-    device({ paused: true, pending: 2, skipped: { player_unresolved: 3 } }, { deviceId: "pc-1" }),
+    device({ paused: true, pending: 2, recentUnresolved: 3, skipped: { player_unresolved: 3 } }, { deviceId: "pc-1" }),
     device({ paused: true, pending: 1 }, { deviceId: "pc-2" }),
     device({ paused: true, pending: 9 }, { deviceId: "pc-old", syncReportedAt: new Date(NOW - 86_400_000) }),
   ], { release: { minSupportedVersion: "9.0.0" } });
@@ -108,7 +139,7 @@ describe("uploads_rejected reads only the recent rejection window", () => {
 
 test("Doctor copy is count-only, pluralized, and never names a player, toon handle or PC", () => {
   const rows = derive([device({ foldersWatched: 0, lastErrorCode: "upload_timeout", pending: 1,
-    skipped: { player_unresolved: 1 }, unresolvedNames: [PRIVATE] }, { hostname: "SECRET-PC", label: "Secret label" })],
+    recentUnresolved: 1, skipped: { player_unresolved: 1 }, unresolvedNames: [PRIVATE] }, { hostname: "SECRET-PC", label: "Secret label" })],
   { release: { minSupportedVersion: "1.0.0" }, ingestStats: { rejected: { validation_failed: 1 }, rejectedSince: fresh, lastRejectedAt: fresh } });
   const warnings = syncHealthWarnings(rows);
   expect(warnings).toEqual([
@@ -118,15 +149,15 @@ test("Doctor copy is count-only, pluralized, and never names a player, toon hand
       message: "The desktop app can't upload 1 game. Open the app and press Retry now, or check its Activity log." },
     { id: "agent_outdated_required", severity: "warn", helpSlug: "desktop-app-status", cta: { label: "Update agent", href: "/download" },
       message: "Your desktop app is older than the minimum supported version, so it may stop syncing. Update it to keep syncing." },
-    { id: "replays_skipped_unresolved", severity: "warn", helpSlug: "my-game-didnt-show-up", cta: { label: "Set up profile", href: "/settings?tab=profile" },
-      message: "1 replay was skipped because the desktop app couldn't tell which player is you. Add your BattleTag or Pulse ID, then re-sync." },
+    { id: "replays_skipped_unresolved", severity: "warn", helpSlug: "my-game-didnt-show-up", cta: { label: "Review profile", href: "/settings?tab=profile" },
+      message: "The desktop app recently couldn't match 1 replay to your linked accounts. Downloaded replays of other players can be skipped. If these are your games, review your profile, then re-sync." },
     { id: "uploads_rejected", severity: "warn", helpSlug: "my-game-didnt-show-up",
       message: "SC2 Tools recently rejected 1 upload. Updating the desktop app usually fixes this; if it keeps happening, report a problem." },
   ]);
   expect(JSON.stringify(warnings)).not.toMatch(/SecretSmurf|987654|SECRET-PC|Secret label|pc-1/);
   expect(syncHealthWarnings(derive([device({ paused: true, pending: 0 })]))[0].message)
     .toBe("Syncing is paused in the desktop app. New games will upload when you resume.");
-  expect(syncHealthWarnings(derive([device({ skipped: { player_unresolved: 1234 } })]))[0].message).toMatch(/^1,234 replays were skipped/);
+  expect(syncHealthWarnings(derive([device({ recentUnresolved: 1234, skipped: { player_unresolved: 1234 } })]))[0].message).toMatch(/^The desktop app recently couldn't match 1,234 replays to your linked accounts\./);
 });
 
 test("every helpSlug is a web help article", () => {

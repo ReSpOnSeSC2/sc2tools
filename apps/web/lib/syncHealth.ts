@@ -34,6 +34,8 @@ export interface SyncReport {
   lastUploadAt?: string;
   lastErrorCode?: string;
   skipped?: Partial<Record<string, number>>;
+  /** Distinct unresolved files attempted within the last week by this app session; not historical skip inventory. */
+  recentUnresolved?: number;
   rejected?: number;
   filtered?: number;
   /** Other players' names and toon handles: the owner's Settings card only. */
@@ -137,10 +139,11 @@ export const SYNC_REASONS: Readonly<Record<SyncHealthCode, SyncReason>> = {
     ...article("sync-update-required"),
   },
   replays_skipped_unresolved: {
-    title: "Player not recognized",
+    title: "Recent unmatched replays",
     tone: "warn",
-    sentence: (n) => `${plural(n, "replay was", "replays were")} skipped because the desktop app couldn't tell which player is you.`,
-    fix: { kind: "link", label: "Set up profile", href: "/settings?tab=profile" },
+    sentence: (n) => `The desktop app recently couldn't match ${plural(n, "replay", "replays")} to your linked accounts. `
+      + "Downloaded replays of other players can be skipped. If these are your games, review your profile, then re-sync.",
+    fix: { kind: "link", label: "Review profile", href: "/settings?tab=profile" },
     ...article("sync-player-unresolved"),
   },
   uploads_rejected: {
@@ -276,17 +279,22 @@ export function unresolvedNamesFor(data: SyncHealthResponse, deviceId: string | 
 
 export type SkippedReplays = { code: string; count: number; text: string; onPurpose: boolean };
 
-/** A report's other skip counts, worded. player_unresolved has its own row. Counts only. */
-export function otherSkippedReplays(sync: SyncReport | undefined): SkippedReplays[] {
+/** Saved skip inventory not already represented by a current health row. Counts only. */
+export function otherSkippedReplays(sync: SyncReport | undefined, activeUnresolved = 0): SkippedReplays[] {
   return Object.entries(sync?.skipped ?? {})
-    .filter((entry): entry is [string, number] => entry[0] !== "player_unresolved" && typeof entry[1] === "number" && entry[1] > 0)
-    .map(([code, count]) => ({ code, count, text: ERROR_CODE_COPY[code] ?? code.replaceAll("_", " "), onPurpose: isBenignImportSkip(code) }));
+    .map(([code, count]) => [code, code === "player_unresolved" ? countOf(count) - countOf(activeUnresolved) : count] as const)
+    .filter((entry): entry is readonly [string, number] => typeof entry[1] === "number" && entry[1] > 0)
+    .map(([code, count]) => ({ code, count, text: code === "player_unresolved"
+      ? "Saved replay files not matched to your linked accounts. These may be older files or downloaded games of other players."
+      : ERROR_CODE_COPY[code] ?? code.replaceAll("_", " "), onPurpose: isBenignImportSkip(code) }));
 }
 
 /** Other skip counts for each PC with a current report, by PC name. */
 export function otherSkippedByDevice(data: SyncHealthResponse): Array<{ deviceId: string; pc: string; skips: SkippedReplays[] }> {
   return listOf(data.devices).filter((device) => device.reported)
-    .map((device) => ({ deviceId: device.deviceId, pc: syncDeviceName(device), skips: otherSkippedReplays(device.sync) }))
+    .map((device) => ({ deviceId: device.deviceId, pc: syncDeviceName(device), skips: otherSkippedReplays(device.sync,
+      listOf(data.rows).filter((row) => row.code === "replays_skipped_unresolved" && row.deviceId === device.deviceId)
+        .reduce((sum, row) => sum + countOf(row.count), 0)) }))
     .filter((group) => group.skips.length > 0);
 }
 
@@ -333,7 +341,7 @@ export function deviceSyncSummary(device: { sync?: SyncReport | null; syncReport
   if (sync.foldersWatched === 0) codes.push("agent_no_folders");
   if (sync.paused === true) codes.push("agent_paused");
   if (sync.paused !== true && sync.lastErrorCode && countOf(sync.pending) > 0) codes.push("agent_upload_failing");
-  if (countOf(sync.skipped?.player_unresolved) > 0) codes.push("replays_skipped_unresolved");
+  if (Math.min(countOf(sync.recentUnresolved), countOf(sync.skipped?.player_unresolved)) > 0) codes.push("replays_skipped_unresolved");
   const worst = codes.map((code) => SYNC_REASONS[code]).sort((a, b) => TONE_RANK[a.tone] - TONE_RANK[b.tone])[0];
   const skipped = Object.values(sync.skipped ?? {}).reduce<number>((sum, n) => sum + countOf(n), 0);
   const details = [

@@ -1455,8 +1455,8 @@ class ReplayWatcher:
                 if not self._mark_replay(path_str, f"skipped:{reason}" if reason else "skipped", ticket):
                     return
                 self._notify_skipped(path, reason, ticket=ticket)
-                if reason == "player_unresolved" and isinstance(payload, dict):
-                    self._notify_unresolved(path, payload.get("unresolved", ()), ticket)
+                if reason == "player_unresolved":
+                    self._notify_unresolved(path, payload.get("unresolved", ()) if isinstance(payload, dict) else (), ticket)
                 if self._analyzer_unavailable:
                     log.info("analyzer_recovered")
                     self._analyzer_unavailable = False

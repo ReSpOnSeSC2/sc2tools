@@ -15,7 +15,7 @@ import pytest
 from sc2tools_agent import replay_pipeline, runner, watcher
 from sc2tools_agent.health import HealthFacts, HealthMonitor
 from sc2tools_agent.heartbeat import Heartbeat
-from sc2tools_agent.sync_report import MAX_UNRESOLVED_PATHS, SKIP_REASONS, SyncReportTracker, report_size
+from sc2tools_agent.sync_report import MAX_UNRESOLVED_PATHS, RECENT_UNRESOLVED_WINDOW_SEC, SKIP_REASONS, SyncReportTracker, report_size
 from sc2tools_agent.state import AgentState
 from sc2tools_agent.sync_retry import replay_ticket, publish_owned_toons
 
@@ -49,6 +49,67 @@ def test_legacy_filtered_markers_count_as_range_not_skip():
     assert "skipped" not in report
 
 
+def test_old_unresolved_inventory_does_not_become_recent_on_startup():
+    markers = {str(number): "skipped:player_unresolved" for number in range(20)}
+    tracker = SyncReportTracker()
+    historical = tracker.report(facts(), markers)
+    assert historical["skipped"] == {"player_unresolved": 20}
+    assert historical["recentUnresolved"] == 0
+    # Even an attempt without readable player names is a current attempt.
+    tracker.unresolved("fresh", [])
+    markers["fresh"] = "skipped:player_unresolved"
+    report = tracker.report(facts(), markers)
+    assert report["skipped"] == {"player_unresolved": 21}
+    assert report["recentUnresolved"] == 1
+    assert SyncReportTracker().report(facts(), markers)["recentUnresolved"] == 0
+
+
+def test_recent_attempts_expire_and_retry_refreshes_one_distinct_path():
+    clock = [100.0]
+    tracker = SyncReportTracker(clock=lambda: clock[0])
+    markers = {"one": "skipped:player_unresolved", "two": "skipped:player_unresolved"}
+    for _ in range(8):
+        tracker.unresolved("one", [])
+    assert tracker.report(facts(), markers)["recentUnresolved"] == 1
+    clock[0] += RECENT_UNRESOLVED_WINDOW_SEC
+    assert tracker.report(facts(), markers)["recentUnresolved"] == 1
+    clock[0] += 1
+    expired = tracker.report(facts(), markers)
+    assert expired["recentUnresolved"] == 0
+    assert expired["skipped"] == {"player_unresolved": 2}
+    tracker.unresolved("one", [])
+    tracker.unresolved("two", [])
+    assert tracker.report(facts(), markers)["recentUnresolved"] == 2
+
+
+@pytest.mark.parametrize("replacement", [None, "2026-01-01T00:00:00Z", "filtered", "rejected"])
+def test_recent_attempt_retires_when_resynced_uploaded_filtered_or_rejected(replacement):
+    tracker = SyncReportTracker()
+    tracker.unresolved("one", [])
+    assert tracker.report(facts(), {"one": "skipped:player_unresolved"})["recentUnresolved"] == 1
+    markers = {} if replacement is None else {"one": replacement}
+    assert tracker.report(facts(), markers)["recentUnresolved"] == 0
+    # A saved marker alone cannot revive an observation retired by recovery.
+    assert tracker.report(facts(), {"one": "skipped:player_unresolved"})["recentUnresolved"] == 0
+
+
+def test_recent_attempts_are_isolated_by_owner_and_ignore_old_tickets():
+    tracker = SyncReportTracker()
+    old_ticket = SimpleNamespace(owner="a", token="a-token", epoch=object())
+    old_owner = (old_ticket.owner, old_ticket.token, old_ticket.epoch)
+    new_owner = ("b", "b-token", object())
+    markers = {"one": "skipped:player_unresolved"}
+    tracker.set_owner(old_owner)
+    tracker.unresolved("one", [], ticket=old_ticket)
+    assert tracker.report(facts(), markers, owner=old_owner)["recentUnresolved"] == 1
+    assert tracker.report(facts(), markers, owner=new_owner)["recentUnresolved"] == 0
+    assert tracker.report(facts(), markers, owner=old_owner)["recentUnresolved"] == 1
+    tracker.set_owner(new_owner)
+    tracker.unresolved("one", [], ticket=old_ticket)
+    assert tracker.report(facts(), markers, owner=new_owner)["recentUnresolved"] == 0
+    assert tracker.report(facts(), markers, owner=old_owner)["recentUnresolved"] == 0
+
+
 def test_names_count_distinct_current_paths_not_retry_events():
     tracker = SyncReportTracker()
     entries = [("  Player  ", "1-S2-1-42"), ("Player", "1-S2-1-42")]
@@ -58,7 +119,9 @@ def test_names_count_distinct_current_paths_not_retry_events():
     for path in ("two", "three", "retired"):
         tracker.unresolved(path, entries)
     current = {path: "skipped:player_unresolved" for path in ("one", "two", "three")}
-    assert tracker.report(facts(), current)["unresolvedNames"] == [{"name": "Player", "toonHandle": "1-S2-1-42", "count": 3}]
+    report = tracker.report(facts(), current)
+    assert report["unresolvedNames"] == [{"name": "Player", "toonHandle": "1-S2-1-42", "count": 3}]
+    assert report["recentUnresolved"] == 3
     current["three"] = "2026-01-01T00:00:00Z"
     assert "unresolvedNames" not in tracker.report(facts(), current)
     assert "unresolvedNames" not in tracker.report(facts(), {})
@@ -95,6 +158,7 @@ def test_multibyte_long_handles_fit_default_requests_and_compact_utf8():
     assert len(json.dumps(report, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) < 2048
     assert report["pending"] == report["archivePending"] == 999_999
     assert report["skipped"]["player_unresolved"] == 30
+    assert report["recentUnresolved"] == 30
 
 
 @pytest.mark.parametrize("name,handle", [("bad\nname", "1-S2-1-42"), ("bad\u202ename", "1-S2-1-42"), ("\ud800", "1-S2-1-42"), ("ok", "not-toon"), (" ", "1-S2-1-42")])
@@ -151,7 +215,8 @@ def test_thread_parser_helper_does_not_change_parser_result_or_leak_scope():
 
 
 @pytest.mark.parametrize("mode", ["thread", "process"])
-def test_both_watcher_modes_deliver_candidates_after_current_skip_marker(mode, monkeypatch, tmp_path):
+@pytest.mark.parametrize("with_candidates", [True, False])
+def test_both_watcher_modes_deliver_candidates_after_current_skip_marker(mode, with_candidates, monkeypatch, tmp_path):
     from concurrent.futures import Future
     tracker = SyncReportTracker()
     instance = watcher.ReplayWatcher.__new__(watcher.ReplayWatcher)
@@ -170,7 +235,8 @@ def test_both_watcher_modes_deliver_candidates_after_current_skip_marker(mode, m
     instance._on_unresolved = capture
     monkeypatch.setattr(watcher, "_wait_for_file_ready", lambda *_: True)
     def parse(*_args, **_kwargs):
-        replay_pipeline._report_unresolved_candidates([SimpleNamespace(name="Synthetic", handle="1-S2-1-42")])
+        if with_candidates:
+            replay_pipeline._report_unresolved_candidates([SimpleNamespace(name="Synthetic", handle="1-S2-1-42")])
         return None, "player_unresolved"
     monkeypatch.setattr(watcher, "parse_replay_for_cloud_ex", parse)
     for number in range(3):
@@ -179,9 +245,15 @@ def test_both_watcher_modes_deliver_candidates_after_current_skip_marker(mode, m
             instance._handle_replay(path)
         else:
             future = Future()
-            future.set_result(("skipped", str(path), {"reason": "player_unresolved", "unresolved": [("Synthetic", "1-S2-1-42")]}))
+            payload = {"reason": "player_unresolved", "unresolved": [("Synthetic", "1-S2-1-42")]} if with_candidates else "player_unresolved"
+            future.set_result(("skipped", str(path), payload))
             instance._on_worker_done(future, str(path))
-    assert tracker.report(facts(), instance._state.uploaded)["unresolvedNames"][0]["count"] == 3
+    report = tracker.report(facts(), instance._state.uploaded)
+    assert report["recentUnresolved"] == 3
+    if with_candidates:
+        assert report["unresolvedNames"][0]["count"] == 3
+    else:
+        assert "unresolvedNames" not in report
     assert instance._finish_replay.call_count == 3
 
 
@@ -248,10 +320,13 @@ def test_candidate_memory_is_capped_and_retirement_does_not_drop_new_capture():
         tracker.unresolved(str(i), [("Synthetic", "1-S2-1-42")])
     assert len(tracker._unresolved) == MAX_UNRESOLVED_PATHS
     assert "0" not in tracker._unresolved
+    markers = {str(i): "skipped:player_unresolved" for i in range(MAX_UNRESOLVED_PATHS + 20)}
+    assert tracker.report(facts(), markers)["recentUnresolved"] == MAX_UNRESOLVED_PATHS
     generation = tracker.generation()
     tracker.unresolved("new", [("New", "1-S2-1-43")])
     tracker.report(facts(), {}, generation=generation)
     assert list(tracker._unresolved) == ["new"]
+    assert tracker.report(facts(), {"new": "skipped:player_unresolved"})["recentUnresolved"] == 1
     tracker.report(facts(), {})
     assert not tracker._unresolved
 

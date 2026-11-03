@@ -6,7 +6,7 @@
  *
  *   sync: { pending, archivePending, paused, foldersWatched, missingFolders,
  *           lastUploadAt, lastErrorCode, skipped: { <reason>: n }, rejected,
- *           filtered, unresolvedNames: [{ name, toonHandle, count }] }
+ *           filtered, recentUnresolved, unresolvedNames: [{ name, toonHandle, count }] }
  *
  * to POST /v1/devices/heartbeat. Only the whitelisted fields survive, rebuilt
  * into fresh objects whose keys are fixed here, so no stored key can begin
@@ -18,8 +18,8 @@
  */
 
 const SYNC_REPORT_MAX_BYTES = 2048;
-const COUNT_MAX = 999_999; // six digits, so a report at every cap still fits the byte budget
-const COUNT_FIELDS = Object.freeze(["pending", "archivePending", "foldersWatched", "missingFolders", "rejected", "filtered"]);
+const COUNT_MAX = 999_999; // six digits; optional names share the report's 2 KiB budget
+const COUNT_FIELDS = Object.freeze(["pending", "archivePending", "foldersWatched", "missingFolders", "rejected", "filtered", "recentUnresolved"]);
 /** The agent's skip codes (apps/agent/sc2tools_agent/replay_pipeline.py). */
 const SKIP_REASONS = Object.freeze(["ai_game", "resumed_replay", "player_unresolved", "no_result",
   "parse_failed", "analysis_failed", "file_unstable", "playback_budget_exceeded", "unsupported_replay"]);

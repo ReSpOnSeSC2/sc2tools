@@ -53,14 +53,14 @@ describe("Settings Sync health", () => {
     expect(screen.getByText("Press Resume syncing in the desktop app.")).toBeTruthy();
     expect(screen.getByText("Open the desktop app and press Retry now.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Update agent" }).getAttribute("href")).toBe("/download");
-    expect(screen.getByRole("link", { name: "Set up profile" }).getAttribute("href")).toBe("/settings?tab=profile");
+    expect(screen.getByRole("link", { name: "Review profile" }).getAttribute("href")).toBe("/settings?tab=profile");
     expect(screen.getByRole("link", { name: "Change sync window" }).getAttribute("href")).toBe("/help/desktop-app-sync-range#choose-range");
-    expect(screen.getByRole("link", { name: "Learn more about player not recognized" }).getAttribute("href")).toBe("/help/my-game-didnt-show-up#sync-player-unresolved");
+    expect(screen.getByRole("link", { name: "Learn more about recent unmatched replays" }).getAttribute("href")).toBe("/help/my-game-didnt-show-up#sync-player-unresolved");
     expect(screen.getByText("Synthetic Player")).toBeTruthy();
     expect(screen.getByText("1-S2-1-424242")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add as my account: Synthetic Player" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Retry with latest agent: unrecognized players on Synthetic PC" })).toBeTruthy();
-    fireEvent.click(screen.getByText("Other skipped replays"));
+    fireEvent.click(screen.getByText("Skipped replay history"));
     expect(screen.getByText(/Skipped — game vs the AI\./)).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /Retry with latest agent/ })).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Report" }));
@@ -70,6 +70,19 @@ describe("Settings Sync health", () => {
     expect(dialog.textContent).not.toMatch(/Synthetic Player|1-S2-1-424242|Synthetic PC/);
     fireEvent.click(within(dialog).getByRole("button", { name: "Close report" }));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows old unmatched inventory as history while current syncing remains healthy", async () => {
+    h.answer = answer({ devices: [{ deviceId: "pc", label: "Synthetic PC", lastSeenAt: CHECKED, reported: true,
+      syncReportedAt: CHECKED, sync: { pending: 0, lastUploadAt: CHECKED, skipped: { player_unresolved: 20 } } }] });
+    mount();
+    expect(await screen.findByRole("heading", { name: "Syncing normally" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /need.*attention|Recent unmatched replays/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Set up profile|Review profile/ })).toBeNull();
+    fireEvent.click(screen.getByText("Skipped replay history"));
+    expect(screen.getByText(/not just new games/)).toBeTruthy();
+    expect(screen.getByText(/Saved replay files not matched to your linked accounts/)).toHaveProperty("textContent", expect.stringContaining("20"));
+    expect(screen.getByRole("button", { name: /Retry with latest agent: Saved replay files/ })).toBeTruthy();
   });
 
   it("reads once on mount, refreshes on request and preserves the last answer with a visible refresh error", async () => {
