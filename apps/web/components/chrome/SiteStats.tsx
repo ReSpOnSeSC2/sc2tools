@@ -3,7 +3,7 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import useSWR from "swr";
-import { fetchSiteStats } from "@/lib/siteStats";
+import { fetchSiteStats, siteStatsUrl } from "@/lib/siteStats";
 
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
 const COMPACT_NUMBER_FORMAT = new Intl.NumberFormat("en-US", { notation: "compact", maximumSignificantDigits: 3 });
@@ -15,14 +15,26 @@ async function fetchActivity(url: string) {
 }
 
 /** Public aggregates, shared by the marketing site and the app shell. */
-export function SiteStats({ wide = false, syncStatus, variant = "marketing", signedIn = false, analyzer = false }: {
+export function SiteStats({ wide = false, syncStatus, variant = "marketing", signedIn = false, analyzer = false, sameOrigin = false }: {
   variant?: "marketing" | "app";
   signedIn?: boolean;
   analyzer?: boolean;
   wide?: boolean;
   syncStatus?: ReactNode;
+  /** Local replay demos keep aggregate reads on the website origin too. */
+  sameOrigin?: boolean;
 }) {
   const detailsId = useId();
+  const [appStatsVisible, setAppStatsVisible] = useState(false);
+  useEffect(() => {
+    if (variant !== "app") return;
+    // App community counts are hidden below Tailwind's xl breakpoint.
+    const media = window.matchMedia?.("(min-width:1280px)");
+    const update = () => setAppStatsVisible(media?.matches === true);
+    update();
+    media?.addEventListener("change", update);
+    return () => media?.removeEventListener("change", update);
+  }, [variant]);
   const [expanded, setExpanded] = useState(false);
   useEffect(() => {
     if (variant !== "app") return;
@@ -34,7 +46,8 @@ export function SiteStats({ wide = false, syncStatus, variant = "marketing", sig
     return next;
   });
   const [now, setNow] = useState(() => Date.now());
-  const { data, error, isLoading } = useSWR("/api/site/stats", fetchActivity, {
+  const statsUrl = sameOrigin ? "/api/site/stats" : siteStatsUrl();
+  const { data, error, isLoading } = useSWR(variant === "app" && !appStatsVisible ? null : statsUrl, fetchActivity, {
     refreshInterval: REFRESH_MS,
     dedupingInterval: 10_000,
     refreshWhenHidden: false,

@@ -38,8 +38,17 @@ export function parseSiteStats(value: unknown): SiteStats {
   };
 }
 
-export async function fetchSiteStats(url = "/api/site/stats"): Promise<SiteStats> {
+/** Public aggregates can go straight to the API without a website function hop. */
+export function siteStatsUrl(apiBase = process.env.NEXT_PUBLIC_API_BASE): string {
+  const base = (apiBase || "").replace(/\/+$/, "");
+  // Preserve same-origin deployments that configure their API only server-side.
+  return base ? `${base}/v1/site/stats` : "/api/site/stats";
+}
+
+export async function fetchSiteStats(url = siteStatsUrl()): Promise<SiteStats> {
   const response = await fetch(url, {
+    credentials: "omit",
+    referrerPolicy: "no-referrer",
     signal: AbortSignal.timeout(8_000),
   });
   if (!response.ok) throw new Error("Site statistics are temporarily unavailable");

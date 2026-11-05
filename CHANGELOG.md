@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Website hosting usage
+
+- Fetch public activity counts directly from the API and stop polling when those counts are hidden on small app screens. Keep the existing update frequency, same-origin fallback, and same-site requests on local replay-demo surfaces.
+- Share successful activity check-ins across open tabs, preserving immediate sign-in and sign-out updates and retries after failures.
+- Serve website reachability checks as static responses and prevent the API keepalive worker from repeatedly requesting website or Vercel deployment URLs.
+
 ### Agent 0.24.9
 
 - Protect the saved device token and OBS password with Windows CurrentUser storage. Migrate before starting sync, preserve unavailable saved credentials, and require explicit password replacement or removal in OBS Settings. Test connection leaves saved settings unchanged.

@@ -50,6 +50,9 @@ const MAIN_CLASS =
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isTokenSurface = isTokenAuthRoute(pathname);
+  // Local replay demos keep browser traffic on the website until Save.
+  // Be conservative while the router has not supplied a pathname yet.
+  const sameOriginStats = pathname === null || pathname === "/" || pathname === "/try" || pathname.startsWith("/try/");
   // Google Analytics never loads on untracked surfaces: shared replay
   // archives (a player's archive activity is not disclosed to the analytics
   // provider; the /p form remains during the legacy-link redirect window)
@@ -108,7 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Header />
         <SitePresence />
         <DeviceHistoryGuard />
-        <SiteStats />
+        <SiteStats sameOrigin={sameOriginStats} />
         <main id="main-content" tabIndex={-1} className={MAIN_CLASS}>
           {children}
         </main>

@@ -1,24 +1,18 @@
 import { NextResponse } from "next/server";
 
-// Render's "starter" web service idles after a stretch of no inbound traffic
-// — when that happens the next visitor eats a 30+ second cold start. This
-// route is the cheapest possible heartbeat endpoint to keep the Node process
-// warm. It returns a tiny JSON body, never touches the DB, and disables every
-// caching layer so each ping actually reaches the origin.
-//
-// External monitors (UptimeRobot, cron-job.org, BetterStack, etc.) and the
-// API's internal keep-alive worker both target this URL.
+// Website reachability is a static delivery check. Running a server function
+// for a fixed status response wastes the web CPU allowance and cannot keep
+// the separately hosted Render API awake. Check /v1/ping on that API for its
+// own reachability; do not use this endpoint as a server warmup.
 
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
-export const revalidate = 0;
+export const dynamic = "force-static";
 
 export function GET(): NextResponse {
   return NextResponse.json(
-    { status: "ok", time: new Date().toISOString() },
+    { status: "ok" },
     {
       headers: {
-        "cache-control": "no-store, max-age=0",
+        "cache-control": "public, max-age=0, must-revalidate",
       },
     },
   );
@@ -27,6 +21,6 @@ export function GET(): NextResponse {
 export function HEAD(): NextResponse {
   return new NextResponse(null, {
     status: 200,
-    headers: { "cache-control": "no-store, max-age=0" },
+    headers: { "cache-control": "public, max-age=0, must-revalidate" },
   });
 }

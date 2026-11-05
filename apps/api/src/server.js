@@ -233,8 +233,8 @@ async function main() {
   });
 
   // Keep-alive heartbeat. Runs only when KEEPALIVE_TARGETS is configured —
-  // typically the public web origin's /api/ping URL — so dev environments
-  // and the test harness stay quiet by default.
+  // with API endpoints such as this service's /v1/ping. Website targets
+  // are ignored to avoid consuming Vercel CPU. Unset in dev and tests.
   const keepalive = buildKeepaliveWorker({
     jobLedger: /** @type {any} */ (services).jobLedger,
     targets: config.keepaliveTargets,
