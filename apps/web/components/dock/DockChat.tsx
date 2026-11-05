@@ -24,7 +24,7 @@ import { DockButton } from "./DockControls";
  *     commits — mis-taps in a 300px dock are cheap, unblocking isn't.
  */
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import styles from "./DockLayout.module.css";
 import { fallbackColor, mergeDisplayFeed } from "@/lib/multichat/feed";
 import {
@@ -92,6 +92,7 @@ export function DockChat({
   busy,
   blocklistFull = false,
   viewers = EMPTY_VIEWER_COUNTS,
+  composer,
   onHighlight,
   onBlock,
 }: {
@@ -111,6 +112,7 @@ export function DockChat({
   blocklistFull?: boolean;
   /** Live audience per platform + combined; blank until it loads. */
   viewers?: ViewerCounts;
+  composer?: ReactNode;
   onHighlight: (message: ChatMessage) => void;
   onBlock: (user: string) => void;
 }) {
@@ -237,7 +239,7 @@ export function DockChat({
         ref={listRef}
         onScroll={onScroll}
         data-testid="dock-chat-list"
-        className="h-[50vh] min-h-48 overflow-y-auto px-2 py-1.5 lg:h-[calc(100vh-6rem)]"
+        className={`${composer ? "h-[40vh] lg:h-[calc(100dvh-22rem)]" : "h-[50vh] lg:h-[calc(100vh-6rem)]"} min-h-48 overflow-y-auto px-2 py-1.5`}
       >
         {displayRows.length === 0 ? (
           <div className="px-1 py-2 text-caption text-text-dim">
@@ -377,6 +379,7 @@ export function DockChat({
           })
         )}
       </div>
+      {composer}
       {blocklistFull ? <p className="mt-2 text-caption text-warning">Blocklist full — unblock someone first</p> : null}
     </div>
   );

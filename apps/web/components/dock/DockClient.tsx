@@ -46,6 +46,7 @@ import type { ChatMessage } from "@/lib/multichat/types";
 import { useVoiceApplier } from "@/lib/useVoiceApplier";
 import { inferVoiceGender } from "@/lib/voiceCatalog";
 import { DockChat } from "./DockChat";
+import { DockChatComposer } from "./DockChatComposer";
 import { DockBlockedUsers } from "./DockBlockedUsers";
 import { DOCK_BLOCKLIST_MAX, DOCK_CONFIG_REFRESH_MS } from "./dockConstants";
 import { DockPollCard } from "./DockPollCard";
@@ -395,6 +396,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
             busy={busy}
             blocklistFull={studio.blockedUsers.length >= DOCK_BLOCKLIST_MAX}
             viewers={viewers}
+            composer={<DockChatComposer token={token} platforms={platforms} loaded={loaded} onInvalid={onInvalid} />}
             onHighlight={(m) => void highlightMessage(m)}
             onBlock={(user) => void blockUser(user)}
           />

@@ -81,6 +81,7 @@ const { GhostConfigService } = require("./services/ghostConfig");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { PlatformIntegrationsService } = require("./services/platformIntegrations");
+const { PlatformChatService } = require("./services/platformChat");
 const { StreamingTitlesService } = require("./services/streamingTitles");
 const { TwitchAutomationService } = require("./services/twitchAutomation");
 const { TwitchAutomationProvider } = require("./services/twitchAutomationProvider");
@@ -1589,6 +1590,8 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       sounds: services.multichatSounds,
       engagement: services.multichatEngagement,
       viewers: services.multichatViewers,
+      platformChat: new PlatformChatService({ integrations: services.platformIntegrations }),
+      twitchChatBot: services.twitchChatBot,
       customBuilds: services.customBuilds,
       buildsList: (userId) => services.builds.list(userId, {}),
       tickerFacts: services.tickerFacts,

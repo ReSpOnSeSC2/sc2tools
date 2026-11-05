@@ -20,8 +20,8 @@ vi.mock("@/components/ui/Toast", () => ({ useToast: () => ({ toast: { success: s
 
 function response(overrides: Record<string, unknown> = {}) {
   return { platforms: ["twitch", "kick", "youtube"].map((platform) => ({
-    platform, configured: true, streamingAvailable: true, connected: false,
-    ready: false, streamingConsent: false, platformUserName: "fixture_account",
+    platform, configured: true, streamingAvailable: true, chatAvailable: true, connected: false,
+    ready: false, streamingConsent: false, chatConsent: false, platformUserName: "fixture_account",
     scopes: [], connectedAt: null, lastSyncedAt: null, lastError: null,
     ...(platform === "twitch" ? overrides : {}),
   })) };
@@ -119,6 +119,68 @@ describe("explicit stream control permission upgrade", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Reconnect$/ }));
     await act(async () => { await Promise.resolve(); });
     expect(JSON.parse(apiCallMock.mock.calls[0][2].body)).toEqual({ purpose: "streaming" });
+  });
+});
+
+describe("explicit chat sending permission upgrade", () => {
+  it("shows chat authorization independently from notifications and stream controls", () => {
+    useApiMock.mockReturnValue({ data: response({ connected: true, ready: true, streamingConsent: true }),
+      isLoading: false, mutate: mutateMock });
+    render(<OfficialPlatformConnections />);
+    const twitch = within(screen.getByRole("group", { name: "Twitch account permissions" }));
+    expect(twitch.getByText("Notifications ready")).toBeTruthy();
+    expect(twitch.getByText("Stream controls authorized")).toBeTruthy();
+    expect(twitch.getByText("Chat sending needs permission")).toBeTruthy();
+    expect(twitch.getByRole("button", { name: "Connect chat sending" })).toHaveProperty("disabled", false);
+  });
+
+  it("requests chat permission only after choosing Connect chat sending", async () => {
+    render(<OfficialPlatformConnections />);
+    fireEvent.click(within(screen.getByRole("group", { name: "Kick account permissions" })).getByRole("button", { name: "Connect chat sending" }));
+    await act(async () => { await Promise.resolve(); });
+    expect(apiCallMock.mock.calls[0][1]).toBe("/v1/me/integrations/kick/connect");
+    expect(JSON.parse(apiCallMock.mock.calls[0][2].body)).toEqual({ purpose: "chat" });
+  });
+
+  it("confirms chat consent even when notifications need retry", async () => {
+    apiCallMock.mockResolvedValueOnce({ authorizeUrl: "https://id.twitch.tv/oauth2/authorize?state=fixture-state" })
+      .mockResolvedValueOnce(response({ connected: true, chatConsent: true, ready: false,
+        connectedAt: "2026-11-05T12:00:00Z" }));
+    render(<OfficialPlatformConnections />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Connect chat sending" })[0]);
+    await act(async () => { await Promise.resolve(); await vi.advanceTimersByTimeAsync(2_000); });
+    expect(successMock).toHaveBeenCalledWith("Twitch chat sending connected", expect.any(Object));
+    expect(errorMock).not.toHaveBeenCalled();
+  });
+
+  it("does not report chat success when a new connection lacks chat consent", async () => {
+    apiCallMock.mockResolvedValueOnce({ authorizeUrl: "https://id.twitch.tv/oauth2/authorize?state=fixture-state" })
+      .mockResolvedValueOnce(response({ connected: true, chatConsent: false, ready: true,
+        connectedAt: "2026-11-05T12:00:00Z" }));
+    render(<OfficialPlatformConnections />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Connect chat sending" })[0]);
+    await act(async () => { await Promise.resolve(); await vi.advanceTimersByTimeAsync(2_000); });
+    expect(successMock).not.toHaveBeenCalled();
+    expect(errorMock).toHaveBeenCalledWith("Twitch chat sending needs permission", expect.any(Object));
+  });
+
+  it("reconnects chat permission and does not offer another upgrade after authorization", async () => {
+    useApiMock.mockReturnValue({ data: response({ connected: true, chatConsent: true, ready: true,
+      streamingConsent: true, connectedAt: "2026-11-04T12:00:00Z" }), isLoading: false, mutate: mutateMock });
+    render(<OfficialPlatformConnections />);
+    const twitch = within(screen.getByRole("group", { name: "Twitch account permissions" }));
+    expect(twitch.getByText("Chat sending authorized")).toBeTruthy();
+    expect(twitch.queryByRole("button", { name: "Connect chat sending" })).toBeNull();
+    fireEvent.click(twitch.getByRole("button", { name: "Reconnect" }));
+    await act(async () => { await Promise.resolve(); });
+    expect(JSON.parse(apiCallMock.mock.calls[0][2].body)).toEqual({ purpose: "chat" });
+  });
+
+  it.each(["unavailable", "signed out"])("disables new chat authorization when %s", (condition) => {
+    if (condition === "unavailable") useApiMock.mockReturnValue({ data: response({ chatAvailable: false }), isLoading: false, mutate: mutateMock });
+    else { auth.owner = null; auth.signedIn = false; }
+    render(<OfficialPlatformConnections />);
+    expect(within(screen.getByRole("group", { name: "Twitch account permissions" })).getByRole("button", { name: "Connect chat sending" })).toHaveProperty("disabled", true);
   });
 });
 

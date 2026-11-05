@@ -227,9 +227,10 @@ class PlatformCredentialVault {
   async getStreamingLeaseInfo(userId, platform) {
     assertPlatform(platform);
     const row = await this.connections.findOne({ userId, platform, connected: true },
-      { projection: { connectionRevision: 1, "metadata.streamingConsent": 1, "metadata.predictionsConsent": 1 } });
+      { projection: { connectionRevision: 1, "metadata.streamingConsent": 1, "metadata.predictionsConsent": 1, "metadata.chatConsent": 1 } });
     return row ? { revision: String(row.connectionRevision || ""),
-      streamingConsent: row.metadata?.streamingConsent === true, predictionsConsent: row.metadata?.predictionsConsent === true } : null;
+      streamingConsent: row.metadata?.streamingConsent === true, predictionsConsent: row.metadata?.predictionsConsent === true,
+      chatConsent: row.metadata?.chatConsent === true } : null;
   }
 
   /** Mongo's atomic row update is the cross-process provider-operation lease.
@@ -305,6 +306,7 @@ class PlatformCredentialVault {
       scopes: Array.isArray(row.scopes) ? row.scopes.map(String) : [],
       streamingConsent: row.metadata?.streamingConsent === true,
       predictionsConsent: row.metadata?.predictionsConsent === true,
+      chatConsent: row.metadata?.chatConsent === true,
       expiresAt: row.expiresAt instanceof Date ? row.expiresAt : null,
       connectedAt: row.connectedAt instanceof Date ? row.connectedAt : null,
       lastSyncedAt: row.metadata?.lastSyncedAt instanceof Date
@@ -417,6 +419,7 @@ class PlatformCredentialVault {
       // streaming grant's rotating refresh token, even after lease expiry.
       filter["metadata.streamingConsent"] = { $ne: true };
       filter["metadata.predictionsConsent"] = { $ne: true };
+      filter["metadata.chatConsent"] = { $ne: true };
     }
     const out = await this.connections.updateOne(
       filter,
@@ -473,7 +476,7 @@ class PlatformCredentialVault {
    *   userId: string,
    *   platform: 'twitch'|'kick'|'youtube',
    *   redirectUri: string,
-   *   purpose?: 'alerts'|'streaming'|'predictions',
+   *   purpose?: 'alerts'|'streaming'|'predictions'|'chat',
    *   requiredScopes?: string[],
    *   codeVerifier?: string|null,
    * }} input
@@ -489,7 +492,7 @@ class PlatformCredentialVault {
       userId: input.userId,
       platform: input.platform,
       redirectUri: input.redirectUri,
-      purpose: input.purpose === "streaming" || input.purpose === "predictions" ? input.purpose : "alerts",
+      purpose: ["streaming", "predictions", "chat"].includes(input.purpose || "") ? input.purpose : "alerts",
       requiredScopes: Array.isArray(input.requiredScopes)
         ? input.requiredScopes.filter((scope) => typeof scope === "string").slice(0, 32) : [],
       codeVerifier: input.codeVerifier
@@ -530,7 +533,7 @@ class PlatformCredentialVault {
     return {
       userId: String(row.userId),
       redirectUri: String(row.redirectUri || ""),
-      purpose: /** @type {'alerts'|'streaming'|'predictions'} */ (row.purpose === "streaming" || row.purpose === "predictions" ? row.purpose : "alerts"),
+      purpose: /** @type {'alerts'|'streaming'|'predictions'|'chat'} */ (["streaming", "predictions", "chat"].includes(row.purpose) ? row.purpose : "alerts"),
       requiredScopes: Array.isArray(row.requiredScopes) ? row.requiredScopes.map(String) : [],
       codeVerifier: row.codeVerifier
         ? decryptSecret(

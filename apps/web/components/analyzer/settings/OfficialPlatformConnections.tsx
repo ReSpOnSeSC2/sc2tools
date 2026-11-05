@@ -15,6 +15,8 @@ type ConnectionStatus = {
   configured: boolean;
   streamingAvailable?: boolean;
   streamingConsent?: boolean;
+  chatAvailable?: boolean;
+  chatConsent?: boolean;
   connected: boolean;
   ready: boolean;
   platformUserName: string;
@@ -46,7 +48,9 @@ function isConnectionsResponse(value: unknown): value is ConnectionsResponse {
       || !(row.lastSyncedAt === null || typeof row.lastSyncedAt === "string")
       || !(row.lastError === null || typeof row.lastError === "string")
       || !(row.streamingAvailable === undefined || typeof row.streamingAvailable === "boolean")
-      || !(row.streamingConsent === undefined || typeof row.streamingConsent === "boolean")) return false;
+      || !(row.streamingConsent === undefined || typeof row.streamingConsent === "boolean")
+      || !(row.chatAvailable === undefined || typeof row.chatAvailable === "boolean")
+      || !(row.chatConsent === undefined || typeof row.chatConsent === "boolean")) return false;
     seen.add(row.platform); return true;
   });
 }
@@ -129,7 +133,7 @@ export function OfficialPlatformConnections() {
     };
   }, []);
 
-  const connect = async (platform: OfficialPlatform, purpose: "alerts" | "streaming" = "alerts") => {
+  const connect = async (platform: OfficialPlatform, purpose: "alerts" | "streaming" | "chat" = "alerts") => {
     const baselineConnectedAt = data?.platforms.find(
       (item) => item.platform === platform,
     )?.connectedAt || null;
@@ -149,7 +153,7 @@ export function OfficialPlatformConnections() {
       const result = await apiCall<{ authorizeUrl: string }>(
         getToken,
         `/v1/me/integrations/${platform}/connect`,
-        { method: "POST", body: purpose === "streaming" ? JSON.stringify({ purpose }) : "{}" },
+        { method: "POST", body: purpose === "alerts" ? "{}" : JSON.stringify({ purpose }) },
       );
       popup.location.replace(result.authorizeUrl);
       let lastPollError: unknown = null;
@@ -178,6 +182,19 @@ export function OfficialPlatformConnections() {
         const completedThisFlow = Boolean(
           row?.connectedAt && row.connectedAt !== baselineConnectedAt,
         );
+        if (purpose === "chat" && completedThisFlow && row?.connected) {
+          popup.close();
+          if (row.chatConsent) {
+            toast.success(`${COPY[platform].label} chat sending connected`, {
+              description: "Return to Stream Dock to send messages as this account.",
+            });
+          } else {
+            toast.error(`${COPY[platform].label} chat sending needs permission`, {
+              description: "Connect chat sending again and approve the requested permission.",
+            });
+          }
+          return;
+        }
         if (purpose === "streaming" && completedThisFlow && row?.connected && row.streamingConsent) {
           popup.close();
           toast.success(`${COPY[platform].label} stream controls connected`, {
@@ -234,7 +251,7 @@ export function OfficialPlatformConnections() {
     try {
       const accepted = await confirm({
         title: `Disconnect ${COPY[platform].label}?`,
-        description: `Disconnect your ${COPY[platform].label} account? This stops its notifications and stream controls.`,
+        description: `Disconnect your ${COPY[platform].label} account? This stops its notifications and stream controls. Chat sending through this account also stops.`,
         confirmLabel: `Disconnect ${COPY[platform].label}`,
         intent: "danger", focusCancel: true,
       });
@@ -312,8 +329,9 @@ export function OfficialPlatformConnections() {
       <div>
         <div className="text-body font-medium text-text">Connected accounts</div>
         <p className="mt-1 text-caption text-text-dim">
-          Notifications and stream controls have separate permissions. Stream controls
-          let SC2Tools update titles and prepare YouTube broadcasts.
+          Choose permissions for notifications, stream controls and chat sending.
+          Stream controls let SC2Tools update titles and prepare YouTube broadcasts.
+          Chat sending lets you reply as the connected account from Stream Dock.
         </p>
       </div>
       <p className="rounded-md border border-border bg-bg/40 px-3 py-2 text-caption text-text-muted">
@@ -337,6 +355,7 @@ export function OfficialPlatformConnections() {
             const configured = row?.configured === true;
             const connected = row?.connected === true;
             const streamControlsAuthorized = connected && row?.streamingConsent === true;
+            const chatAuthorized = connected && row?.chatConsent === true;
             return (
               <div key={platform} role="group" aria-label={`${COPY[platform].label} account permissions`}
                 className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
@@ -362,6 +381,11 @@ export function OfficialPlatformConnections() {
                         : configured && row?.streamingAvailable === true
                           ? "Stream controls need permission" : "Stream controls unavailable"}
                     </Badge>
+                    <Badge variant={chatAuthorized ? "success" : "neutral"} size="sm">
+                      {chatAuthorized ? "Chat sending authorized"
+                        : configured && row?.chatAvailable === true
+                          ? "Chat sending needs permission" : "Chat sending unavailable"}
+                    </Badge>
                   </div>
                   <p className="mt-1 text-caption text-text-dim">{COPY[platform].coverage}</p>
                   {row?.lastError ? (
@@ -375,7 +399,7 @@ export function OfficialPlatformConnections() {
                       size="sm"
                       variant="secondary"
                       disabled={actionBusy}
-                      onClick={() => void connect(platform, row?.streamingConsent ? "streaming" : "alerts")}
+                      onClick={() => void connect(platform, row?.chatConsent ? "chat" : row?.streamingConsent ? "streaming" : "alerts")}
                     >
                       Reconnect
                     </Button>
@@ -405,6 +429,14 @@ export function OfficialPlatformConnections() {
                     onClick={() => void connect(platform, "streaming")}
                   >
                     Connect stream controls
+                  </Button>
+                ) : null}
+                {!chatAuthorized ? (
+                  <Button size="sm" variant="secondary"
+                    disabled={!owner || !configured || row?.chatAvailable !== true || actionBusy}
+                    onClick={() => void connect(platform, "chat")}
+                  >
+                    Connect chat sending
                   </Button>
                 ) : null}
                 </div>

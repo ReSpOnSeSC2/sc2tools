@@ -123,6 +123,38 @@ class TwitchChatBotService {
    * @param {string} userId @param {string} token @param {string} text */
   queueGameMoments(userId, token, text) { return this.queueShoutout(userId, token, text); }
 
+  /** Manual Dock messages use only an already connected bot in the saved channel.
+   * @param {string} userId @param {string} token @param {string} channel */
+  chatStatus(userId, token, channel) {
+    const conn = this._conns.get(userId);
+    let saved = typeof channel === "string" ? channel.trim().toLowerCase() : "";
+    saved = saved.replace(/^https?:\/\//, "").replace(/^www\./, "");
+    if (saved.startsWith("twitch.tv/")) saved = saved.slice("twitch.tv/".length);
+    saved = saved.replace(/^#/, "").split(/[/?#]/)[0];
+    const available = Boolean(conn && !conn.stopped && conn.state === "connected"
+      && conn.overlayToken === token && conn.cfg.channel.toLowerCase() === saved);
+    return { platform: "twitch", available, maxLength: MAX_CHAT_CHARS,
+      ...(available ? { identity: conn.cfg.username } : {}) };
+  }
+
+  /** Preserve accepted manual lines when automatic announcements fill the queue.
+   * @param {string} userId @param {string} token @param {string} channel @param {string} text */
+  queueChat(userId, token, channel, text) {
+    if (!this.chatStatus(userId, token, channel).available) {
+      throw Object.assign(new Error("The Twitch chat bot is disconnected or its channel changed."), { code: "chat_bot_unavailable" });
+    }
+    if (typeof text !== "string" || !text.trim() || text.length > MAX_CHAT_CHARS || /[\p{Cc}]/u.test(text)) {
+      throw Object.assign(new Error(`Use a single chat message up to ${MAX_CHAT_CHARS} characters.`), { code: "chat_message_invalid" });
+    }
+    const conn = this._conns.get(userId);
+    if (conn.sendQueue.length >= SEND_QUEUE_MAX) {
+      throw Object.assign(new Error("The Twitch chat queue is full. Wait before sending again."), { code: "chat_queue_full" });
+    }
+    conn.sendQueue.push({ line: `PRIVMSG #${conn.cfg.channel.toLowerCase()} :${text.trim()}` });
+    this._drainSendQueue(conn);
+    return { status: "queued", message: `Queued as ${conn.cfg.username} on Twitch.` };
+  }
+
   /**
    * Boot-time restore: reconnect every streamer whose saved config is
    * enabled. Best-effort — a down Twitch endpoint must not block app
@@ -535,20 +567,29 @@ class TwitchChatBotService {
     if (conn.state !== "connected" || conn.stopped || this._conns.get(conn.userId) !== conn) return;
     const line = `PRIVMSG #${conn.cfg.channel.toLowerCase()} :${text.slice(0, MAX_CHAT_CHARS)}`;
     conn.sendQueue.push(line);
-    while (conn.sendQueue.length > SEND_QUEUE_MAX) conn.sendQueue.shift();
+    while (conn.sendQueue.length > SEND_QUEUE_MAX) {
+      const automatic = conn.sendQueue.findIndex((/** @type {unknown} */ entry) => typeof entry === "string");
+      conn.sendQueue.splice(automatic, 1);
+    }
     this._drainSendQueue(conn);
   }
 
   /** @param {Record<string, any>} conn */
   _drainSendQueue(conn) {
-    if (conn.sendTimer || conn.sendQueue.length === 0) return;
+    if (conn.sendTimer || conn.sendQueue.length === 0 || conn.stopped || this._conns.get(conn.userId) !== conn) return;
     const token = conn.overlayToken;
     const nowMs = this.now();
     const wait = Math.max(0, conn.lastSentAt + SEND_GAP_MS - nowMs);
-    conn.sendTimer = setTimeout(() => {
+    conn.sendTimer = setTimeout(async () => {
+      const queued = conn.sendQueue.shift();
+      const line = typeof queued === "string" ? queued : queued?.line;
+      let authorized = true;
+      if (queued && typeof queued !== "string") {
+        try { authorized = (await this.overlayTokens.resolve(token))?.userId === conn.userId; }
+        catch { authorized = false; }
+      }
       conn.sendTimer = null;
-      const line = conn.sendQueue.shift();
-      if (line && conn.state === "connected" && !conn.stopped && this._conns.get(conn.userId) === conn && conn.overlayToken === token) {
+      if (authorized && line && conn.state === "connected" && !conn.stopped && this._conns.get(conn.userId) === conn && conn.overlayToken === token) {
         conn.lastSentAt = this.now();
         this._raw(conn, line);
       }
