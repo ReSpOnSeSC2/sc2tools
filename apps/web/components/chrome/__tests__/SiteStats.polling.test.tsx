@@ -38,11 +38,11 @@ describe("visible community statistics polling", () => {
     localStorage.clear();
   });
 
-  async function mount(variant: "app" | "marketing") {
+  async function mount(variant: "app" | "marketing", sameOrigin = false) {
     let view: ReturnType<typeof render>;
     await act(async () => {
       view = render(<SWRConfig value={{ provider: () => new Map(), errorRetryCount: 0 }}>
-        <SiteStats variant={variant} signedIn syncStatus={<span>Agent online</span>} />
+        <SiteStats variant={variant} sameOrigin={sameOrigin} signedIn syncStatus={<span>Agent online</span>} />
       </SWRConfig>);
     });
     return view!;
@@ -97,6 +97,16 @@ describe("visible community statistics polling", () => {
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "https://api.sc2tools.test/v1/site/stats", "https://api.sc2tools.test/v1/site/stats",
     ]);
+    expect(screen.getByRole("status").textContent).toBe("Updates every 30 seconds");
+  });
+
+  it.each([false, true])("keeps local-demo counts fresh without direct API requests (wide=%s)", async desktop => {
+    wide = desktop;
+    await mount("marketing", true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await elapse(30_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(["/api/site/stats", "/api/site/stats"]);
     expect(screen.getByRole("status").textContent).toBe("Updates every 30 seconds");
   });
 

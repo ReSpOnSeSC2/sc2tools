@@ -13,7 +13,7 @@ corresponding GitHub Release.
 
 ### Website hosting usage
 
-- Fetch public activity counts directly from the API and stop polling when those counts are hidden on small app screens. Keep the existing update frequency and same-origin fallback.
+- Fetch public activity counts directly from the API and stop polling when those counts are hidden on small app screens. Keep the existing update frequency, same-origin fallback, and same-site requests on local replay-demo surfaces.
 - Share successful activity check-ins across open tabs, preserving immediate sign-in and sign-out updates and retries after failures.
 - Serve website reachability checks as static responses and prevent the API keepalive worker from repeatedly requesting website or Vercel deployment URLs.
 

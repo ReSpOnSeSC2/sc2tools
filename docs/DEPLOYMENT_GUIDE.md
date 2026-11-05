@@ -26,8 +26,10 @@ keep another serverless function or the Render API awake.
 With `NEXT_PUBLIC_API_BASE` configured, browsers fetch public activity counts
 directly from `/v1/site/stats` on that API without credentials. Keep the website
 origin in the existing API CORS allowlist. The same-origin statistics handler
-remains for older bundles and deployments without a public API base. Presence
-continues through the website's signed HttpOnly cookie handler; visible, active
+remains for older bundles and deployments without a public API base.
+The home page and `/try` also retain same-origin statistics so local replay
+analysis does not initiate direct API traffic before a visitor saves.
+Presence continues through the website's signed HttpOnly cookie handler; visible, active
 tabs share a successful check-in for one minute for the same auth identity.
 
 For Vercel usage, distinguish retained Deployment Storage (website outputs and

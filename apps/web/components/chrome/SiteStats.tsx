@@ -15,12 +15,14 @@ async function fetchActivity(url: string) {
 }
 
 /** Public aggregates, shared by the marketing site and the app shell. */
-export function SiteStats({ wide = false, syncStatus, variant = "marketing", signedIn = false, analyzer = false }: {
+export function SiteStats({ wide = false, syncStatus, variant = "marketing", signedIn = false, analyzer = false, sameOrigin = false }: {
   variant?: "marketing" | "app";
   signedIn?: boolean;
   analyzer?: boolean;
   wide?: boolean;
   syncStatus?: ReactNode;
+  /** Local replay demos keep aggregate reads on the website origin too. */
+  sameOrigin?: boolean;
 }) {
   const detailsId = useId();
   const [appStatsVisible, setAppStatsVisible] = useState(false);
@@ -44,7 +46,8 @@ export function SiteStats({ wide = false, syncStatus, variant = "marketing", sig
     return next;
   });
   const [now, setNow] = useState(() => Date.now());
-  const { data, error, isLoading } = useSWR(variant === "app" && !appStatsVisible ? null : siteStatsUrl(), fetchActivity, {
+  const statsUrl = sameOrigin ? "/api/site/stats" : siteStatsUrl();
+  const { data, error, isLoading } = useSWR(variant === "app" && !appStatsVisible ? null : statsUrl, fetchActivity, {
     refreshInterval: REFRESH_MS,
     dedupingInterval: 10_000,
     refreshWhenHidden: false,

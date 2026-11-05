@@ -41,7 +41,7 @@ vi.mock("@/components/chrome/Footer", () => ({
 }));
 
 vi.mock("@/components/chrome/SiteStats", () => ({
-  SiteStats: () => <div data-testid="site-stats" />,
+  SiteStats: ({ sameOrigin = false }: { sameOrigin?: boolean }) => <div data-testid="site-stats" data-same-origin={String(sameOrigin)} />,
 }));
 
 vi.mock("@/components/chrome/SitePresence", () => ({
@@ -225,6 +225,18 @@ describe("normal and protected routes", () => {
     expect(screen.getByTestId("clerk-provider")).toBeTruthy();
       expect(screen.getByTestId("realtime-provider")).toBeTruthy();
     expect(route.clerkRenders).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("local replay demo statistics traffic", () => {
+  it.each([null, "/", "/try", "/try/", "/try/resume"])("keeps statistics same-origin on %s", pathname => {
+    renderAt(pathname);
+    expect(screen.getByTestId("site-stats").getAttribute("data-same-origin")).toBe("true");
+  });
+
+  it.each(["/download", "/guides", "/try-other", "/trying", "/definitions"])("uses direct public API statistics on %s", pathname => {
+    renderAt(pathname);
+    expect(screen.getByTestId("site-stats").getAttribute("data-same-origin")).toBe("false");
   });
 });
 
