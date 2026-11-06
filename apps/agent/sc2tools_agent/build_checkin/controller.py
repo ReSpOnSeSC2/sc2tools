@@ -92,6 +92,7 @@ from .models import (
     sanitize_notes,
 )
 from .scouting_controller import ScoutingControllerMixin
+from .scouting import plain_text
 from .records import (
     ACTIVE_PHASES,
     CARD_DONE,
@@ -851,11 +852,22 @@ class BuildCheckinController(ScoutingControllerMixin):
                 norm = normalize_player_name(name)
                 if game.opp_norm and norm != game.opp_norm:
                     game.opp_race = None
+                    game.opp_revealed_name = None
+                    game.scouting = None
                 game.opp_name = name.strip()
                 game.opp_norm = norm
+            if "revealedName" in opponent:
+                game.opp_revealed_name = plain_text(opponent.get("revealedName"), 120) or None
             race = canonical_race(opponent.get("race"))
             if race:
                 game.opp_race = race
+        history = envelope.get("streamerHistory")
+        if isinstance(history, dict) and "oppRevealedName" in history:
+            history_name = plain_text(history.get("oppName"), 120)
+            if (history.get("opponentIdentityMatched") is not False
+                    and (not history_name or normalize_player_name(history_name) == game.opp_norm)
+                    and not (isinstance(opponent, dict) and plain_text(opponent.get("revealedName"), 120))):
+                game.opp_revealed_name = plain_text(history.get("oppRevealedName"), 120) or None
         user = envelope.get("user")
         if isinstance(user, dict):
             name = user.get("name")
@@ -1641,6 +1653,7 @@ class BuildCheckinController(ScoutingControllerMixin):
             created_at=self._clock(),
             game_key=game.game_key,
             opp_name=game.opp_name,
+            opp_revealed_name=game.opp_revealed_name,
             my_race=game.my_race,
             opp_race=game.opp_race,
             result=game.result,

@@ -83,6 +83,7 @@ function buildScoutingBrief(envelope) {
   const answerWins = total !== null && winRate !== null ? Math.round(total * winRate) : null;
   const brief = {
     gameKey, oppName, pulseId,
+    oppRevealedName: text(envelope.opponent?.revealedName, 120) || text(records.oppRevealedName, 120) || null,
     h2h: wins !== null && losses !== null ? { w: wins, l: losses } : null,
     lastMet: last3[0]?.at ? { at: last3[0].at, result: last3[0].result, map: last3[0].map } : null,
     last3,

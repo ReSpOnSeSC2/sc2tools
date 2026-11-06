@@ -286,3 +286,74 @@ def test_private_opponent_note_and_new_build_actions_use_same_card(desk):
     widget.add_own_build.click()
     widget.add_opponent_build.click()
     assert controller.actions("add_build") == [(("card-1", "you"), {}), (("card-1", "opponent"), {})]
+
+
+@pytest.mark.parametrize("side", ["own", "opponent"])
+def test_expand_build_names_keeps_detected_selection_and_only_marks_interaction(desk, side):
+    widget, controller, state, app = desk
+    name = "PvT - Blink pressure into a third Nexus with a delayed robotics transition " * 4
+    detected = replace(option("detected", name), suggested=True)
+    model = postgame(
+        featured=(detected,), selection="detected", reason="detected",
+        reason_label="Detected in your replay",
+        opponent=OpponentRowModel(
+            label="Opponent's build: " + name, name=name, selection="detected",
+            server_key="detected", replay_key="detected", replay_name=name,
+            featured=(detected,),
+        ),
+    )
+    widget.dispatch("show_postgame", (model,))
+    widget.tabs.setCurrentIndex(1)
+    if side == "opponent":
+        widget.change_opponent.setChecked(True)
+    builds = widget.postgame_builds if side == "own" else widget.opponent_builds
+    app.processEvents()
+    row = builds.row("detected")
+    compact_height = row.height()
+    controller.calls.clear()
+
+    builds.names_toggle.click()
+    app.processEvents()
+
+    assert row.height() > compact_height
+    assert builds.selection() == "detected"
+    assert row.text() == name
+    assert row.record == "3–2"
+    expected_chips = [("Detected in your replay", "reason")] if side == "own" else [("Suggested", "suggested")]
+    assert row.chips == expected_chips
+    text = row._name_layout()
+    last_line = text.lineAt(text.lineCount() - 1)
+    assert last_line.textStart() + last_line.textLength() == len(name)
+    _, _, chips, record = row._layout()
+    text_bottom = text.boundingRect().bottom() + 6
+    assert text_bottom < min(rect.top() for rect, _, _ in chips)
+    assert all(row.rect().contains(rect) for rect, _, _ in chips)
+    assert row.rect().contains(record)
+    assert controller.calls == [("interacted", ("card-1",), {})]
+    assert widget.notes.toPlainText() == "Original note"
+
+    builds.names_toggle.click()
+    app.processEvents()
+    assert row.height() == compact_height
+    assert builds.selection() == "detected"
+
+
+def test_expanded_loading_names_resize_after_refresh_without_selecting_a_build(desk):
+    widget, controller, state, app = desk
+    initial = option("blink", "Blink expansion with pressure before a robotics transition " * 4)
+    widget.dispatch("show_loading", (loading(featured=(initial,)),))
+    app.processEvents()
+    widget.loading_builds.names_toggle.click()
+    app.processEvents()
+    before = widget.loading_builds.row("blink").height()
+
+    updated = replace(initial, name=initial.name * 3)
+    added = option("new", "Newly discovered long build order with several transitions " * 4)
+    widget.dispatch("update_loading", (loading(featured=(updated, added)),))
+    app.processEvents()
+
+    assert widget.loading_builds.names_toggle.isChecked()
+    assert widget.loading_builds.row("blink").height() > before
+    assert widget.loading_builds.row("new").height() > 30
+    assert not controller.actions("declare")
+    assert not controller.actions("update_draft")

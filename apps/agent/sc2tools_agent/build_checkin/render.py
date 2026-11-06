@@ -54,8 +54,12 @@ class Preselection(NamedTuple):
 NO_PRESELECTION = Preselection(None, None)
 
 
-def versus(opp_name: Optional[str]) -> Optional[str]:
-    return f"vs {opp_name}" if opp_name else None
+def versus(opp_name: Optional[str], revealed_name: Optional[str] = None) -> Optional[str]:
+    if not opp_name:
+        return None
+    alias = (revealed_name or "").strip()
+    suffix = f" (aka {alias})" if alias and alias.casefold() != opp_name.strip().casefold() else ""
+    return f"vs {opp_name}{suffix}"
 
 
 def loading_model(
@@ -117,9 +121,10 @@ def loading_model(
         locked_label = None
     return LoadingCardModel(
         game_key=game.game_key,
-        title=card_title(matchup, versus(game.opp_name)),
+        title=card_title(matchup, versus(game.opp_name, game.opp_revealed_name)),
         matchup=matchup,
         opponent_name=game.opp_name,
+        opponent_revealed_name=game.opp_revealed_name,
         waiting_for_matchup=matchup is None,
         options_loading=bool(matchup) and options_loading and not card.rows.painted,
         featured=featured,
@@ -318,11 +323,12 @@ def postgame_model(
         game_id=card.game_id,
         variant=card.variant,
         heading=NOTES_FIRST_HEADING if notes_first else POSTGAME_HEADING,
-        title=card_title(result, matchup, versus(opponent)),
+        title=card_title(result, matchup, versus(opponent, card.opp_revealed_name)),
         result=result,
         result_tone=result_tone(result),
         matchup=matchup,
         opponent_name=opponent,
+        opponent_revealed_name=card.opp_revealed_name,
         options_loading=options_loading and not card.rows.painted,
         featured=featured,
         more=more,

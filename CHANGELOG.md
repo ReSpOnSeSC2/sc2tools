@@ -11,6 +11,14 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.24.10
+
+- Expand complete build names in floating check-ins and the agent's Build selectors,
+  including replay-detected choices. Wrap long names above badges and records,
+  scroll tall cards, and preserve selections and notes while expanding.
+- Show known opponents as `Barcode (aka KnownPlayer)` at loading and after the
+  game, including when the optional loading-screen scouting strip is hidden.
+
 ### Website hosting usage
 
 - Fetch public activity counts directly from the API and stop polling when those counts are hidden on small app screens. Keep the existing update frequency, same-origin fallback, and same-site requests on local replay-demo surfaces.

@@ -71,6 +71,7 @@ class ScoutingBrief:
     forecast_confidence: str = ""
     forecast_effective_n: Optional[float] = None
     also_plays_as: tuple[str, ...] = ()
+    opponent_revealed_name: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -121,6 +122,7 @@ def parse_scouting_brief(raw: Any, game_key: str) -> Optional[ScoutingBrief]:
         forecast_confidence=confidence if posterior and opening_valid else "",
         forecast_effective_n=float(effective_n) if posterior and opening_valid else None,
         also_plays_as=tuple(dict.fromkeys(plain_text(value, 120) for value in raw.get("alsoPlaysAs", [])[:3] if isinstance(value, str) and value.strip())) if isinstance(raw.get("alsoPlaysAs"), list) else (),
+        opponent_revealed_name=plain_text(raw.get("oppRevealedName"), 120) or None,
     )
 
 

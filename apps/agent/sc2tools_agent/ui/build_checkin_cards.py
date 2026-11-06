@@ -112,6 +112,7 @@ class CardWindow(QtWidgets.QWidget):
 
     KIND = ""
     WIDTH = 320
+    EXPANDED_WIDTH = 600
     FLAGS = LOADING_FLAGS
 
     def __init__(self, *, host: Any) -> None:
@@ -148,6 +149,17 @@ class CardWindow(QtWidgets.QWidget):
         self.card.setObjectName("card")
         self.card.setFixedWidth(self.WIDTH)
         outer.addWidget(self.card)
+        card_layout = QtWidgets.QVBoxLayout(self.card)
+        card_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_scroll = QtWidgets.QScrollArea()
+        self.content_scroll.setWidgetResizable(True)
+        self.content_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.content_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.content_scroll.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.content = QtWidgets.QWidget()
+        self.content_scroll.setWidget(self.content)
+        card_layout.addWidget(self.content_scroll)
+        self._names_expanded = False
 
         self._topmost_timer = QtCore.QTimer(self)
         self._topmost_timer.setInterval(TOPMOST_INTERVAL_MS)
@@ -174,7 +186,44 @@ class CardWindow(QtWidgets.QWidget):
         """
         for _ in range(LAYOUT_DEPTH):
             QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.LayoutRequest)
+        content_layout = self.content.layout()
+        if content_layout is not None:
+            width = self.content_scroll.viewport().width()
+            height = content_layout.totalHeightForWidth(width)
+            if height < 0:
+                height = content_layout.sizeHint().height()
+            screen = self.screen()
+            available_height = screen.availableGeometry().height() - 48 if screen else height
+            self.content_scroll.setFixedHeight(min(height, max(1, available_height)))
+            self.card.layout().invalidate()
+            self.card.layout().activate()
+            self.layout().invalidate()
         self.layout().activate()
+
+    def _expand_build_names(self, expanded: bool) -> None:
+        """Expand either picker without changing the player's answer."""
+        self._names_expanded = expanded
+        screen = self.screen() if self.isVisible() else self._target_screen()
+        width = self.EXPANDED_WIDTH if expanded else self.WIDTH
+        if screen is not None:
+            width = min(width, screen.availableGeometry().width() - 48)
+        self.card.setFixedWidth(max(1, width))
+        for builds in self.findChildren(BuildList):
+            if builds.names_toggle.isChecked() != expanded:
+                builds.blockSignals(True)
+                builds.set_names_expanded(expanded)
+                builds.blockSignals(False)
+        interacted = getattr(self, "_interacted", None)
+        if interacted is not None:
+            interacted()
+        self.settle()
+        # Widening a card already beside the right edge must keep it on screen.
+        if self.isVisible() and screen is not None:
+            available = screen.availableGeometry()
+            self.move(
+                min(max(self.x(), available.left()), max(available.left(), available.right() - self.width() + 1)),
+                min(max(self.y(), available.top()), max(available.top(), available.bottom() - self.height() + 1)),
+            )
 
     def _present(self) -> None:
         """Show (without activating) at the right spot."""
@@ -281,6 +330,10 @@ class CardWindow(QtWidgets.QWidget):
         handle = self.windowHandle()
         if handle is not None and handle.screen() is not screen:
             handle.setScreen(screen)
+        if self._names_expanded:
+            self.card.setFixedWidth(min(self.EXPANDED_WIDTH, max(1, screen.availableGeometry().width() - 48)))
+        self.settle()
+        size = (self.width(), self.height())
         self.move(*default_card_position(
             rect_of(screen.availableGeometry()), rect_of(screen.geometry()), size,
         ))
@@ -375,7 +428,7 @@ class LoadingCardWindow(CardWindow):
         super().__init__(host=host)
         self.model: Optional[LoadingCardModel] = None
 
-        layout = QtWidgets.QVBoxLayout(self.card)
+        layout = QtWidgets.QVBoxLayout(self.content)
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(0)
         layout.addWidget(self.preview_chip)
@@ -417,6 +470,7 @@ class LoadingCardWindow(CardWindow):
         self.builds = BuildList(selectable=False, searchable=False, focusable=False)
         self.builds.picked.connect(self._declare)
         self.builds.expanded.connect(lambda _open: self.settle())
+        self.builds.names_expanded.connect(self._expand_build_names)
         full.addWidget(self.builds)
 
         self.loading = plain_label("Loading your builds…", "checkinMuted")
@@ -449,7 +503,7 @@ class LoadingCardWindow(CardWindow):
         bar_row = QtWidgets.QHBoxLayout()
         bar_row.setContentsMargins(0, 0, 0, 0)
         bar_row.setSpacing(6)
-        self.locked = plain_label("", "checkinLocked")
+        self.locked = plain_label("", "checkinLocked", wrap=True)
         self.locked.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
         bar_row.addWidget(self.locked, 1)
         self.saving = plain_label("Saving…", "checkinMuted")
@@ -586,7 +640,7 @@ class PostgameCardWindow(CardWindow):
         """The model's own selection from the last untouched render."""
         self._last_interaction = 0.0
 
-        layout = QtWidgets.QVBoxLayout(self.card)
+        layout = QtWidgets.QVBoxLayout(self.content)
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(8)
         layout.addWidget(self.preview_chip)
@@ -642,6 +696,7 @@ class PostgameCardWindow(CardWindow):
         self.builds.picked.connect(self._picked)
         self.builds.searched.connect(self._searched)
         self.builds.expanded.connect(self._expanded)
+        self.builds.names_expanded.connect(self._expand_build_names)
         picker.addWidget(self.builds)
         self.loading = plain_label("Loading builds…", "checkinMuted")
         picker.addWidget(self.loading)
@@ -670,6 +725,7 @@ class PostgameCardWindow(CardWindow):
         self.opp_builds.picked.connect(self._opp_picked)
         self.opp_builds.searched.connect(self._searched)
         self.opp_builds.expanded.connect(self._expanded)
+        self.opp_builds.names_expanded.connect(self._expand_build_names)
         opp_picker.addWidget(self.opp_builds)
         self.opp_loading = plain_label("Loading builds…", "checkinMuted")
         opp_picker.addWidget(self.opp_loading)
