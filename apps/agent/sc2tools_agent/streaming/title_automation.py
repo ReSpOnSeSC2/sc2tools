@@ -1,4 +1,4 @@
-"""One bounded, independent worker for post-sync title refreshes."""
+"""One independent worker for game-start and post-sync title refreshes."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -12,7 +12,7 @@ MAX_ACCEPTED_RECEIPTS = 4
 
 
 class GameTitleAutomation:
-    def __init__(self, refresh, *, clock=time.time, last_attempt=0):
+    def __init__(self, refresh, *, clock=time.time, last_attempt=0, refresh_match=None):
         self.refresh, self.clock = refresh, clock
         self.last_attempt = (min(last_attempt, clock()) if isinstance(last_attempt, (int, float))
                              and not isinstance(last_attempt, bool) and math.isfinite(last_attempt) else 0)
@@ -26,6 +26,9 @@ class GameTitleAutomation:
         self.accepted_receipts = []
         self.consumed_receipts = []
         self.preview_pending = True
+        from .title_match import MatchTitleAutomation
+        self.match = MatchTitleAutomation(refresh_match, clock=lambda: self.clock(),
+                                         wake=self.wake, stop_event=self.stop_event)
 
     def reset(self):
         """Discard all queued work when its paired owner/connection changes."""
@@ -38,12 +41,14 @@ class GameTitleAutomation:
             self.consumed_receipts = []
             self.preview_pending = True
         self.wake.set()
+        self.match.reset()
 
     def _remember_consumed(self, ended_at):
         self.consumed_receipts = (self.consumed_receipts + [ended_at])[-32:]
         self.accepted_receipts = [row for row in self.accepted_receipts if row[0] != ended_at]
 
     def on_event(self, event):
+        self.match.on_event(event)
         if (getattr(event, "phase", None) != "match_ended"
                 or getattr(getattr(event, "game_state", None), "is_replay", True)):
             return
@@ -101,6 +106,7 @@ class GameTitleAutomation:
 
     def run_once(self):
         """Claim work without holding the lock during network/provider calls."""
+        match_ran = self.match.run_once()
         with self.lock:
             if self.stop_event.is_set():
                 return False
@@ -113,7 +119,7 @@ class GameTitleAutomation:
                 self.pending = None
                 self.last_attempt = self.clock()
             if not preview and not automatic:
-                return False
+                return match_ran
         self.refresh(automatic)
         return True
 

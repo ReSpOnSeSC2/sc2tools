@@ -209,3 +209,216 @@ def test_strict_boolean_and_account_settings_validation():
         with pytest.raises(ValueError):
             configure_title_settings(settings, {"enabled": bad}, "fixture-owner")
     assert load_title_settings({"enabled": True, "owner": "old"}, "new")["enabled"] is False
+
+
+def live_event(at, key="game-one", phase="match_loading", **changes):
+    from sc2tools_agent.live.types import LiveGameState, LiveLifecycleEvent, LiveLifecyclePhase, LivePlayer
+    players = [LivePlayer("Me", "user", "Protoss", "Undecided"),
+               LivePlayer("Barcode", "user", "Terran", "Undecided")]
+    game = LiveGameState(players=players, **changes)
+    return LiveLifecycleEvent(phase=LiveLifecyclePhase(phase), captured_at=at, game_key=key, game_state=game)
+
+
+def configure_start(instance, stats, *, youtube=False):
+    stats["currentMatch"] = {"gameKey": "game-one", "opponent": "Barcode", "alias": "Maru",
+                             "race": "Protoss", "map": "Alcyone LE", "h2h": {"wins": 3, "losses": 2}}
+    instance.action({"action": "configure_title_automation", "enabled": False, "on_game_start": True,
+        "template": "GM Protoss | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}",
+        "platforms": {"twitch": True, "kick": True, "youtube": youtube}})
+    now = [1200]
+    instance.titles.worker.clock = lambda: now[0]
+    instance.titles.worker.preview_pending = False
+    return now
+
+
+def test_game_start_publishes_opponent_alias_and_head_to_head_without_waiting_for_sync(service):
+    instance, calls, stats, _ = service
+    now = configure_start(instance, stats)
+    assert not calls  # saving the setting never sends a title
+    instance.on_game_event(live_event(now[0]))
+    assert instance.titles.worker.run_once() is False
+    now[0] += 3
+    assert instance.titles.worker.run_once() is True
+    writes = [call for call in calls if call[0] == "POST"]
+    assert [call[2]["json"]["platforms"] for call in writes] == [["twitch"], ["kick"]]
+    assert all(call[2]["json"]["title"] == "GM Protoss | v Barcode (aka Maru) | 3W–2L (60%) | Alcyone LE" for call in writes)
+    assert instance.titles.settings["last_start_game"] == "game-one"
+    instance.on_game_event(live_event(now[0], phase="match_started", display_time=1))
+    assert instance.titles.worker.run_once() is False
+
+
+def test_slow_enrichment_is_retried_then_only_current_history_is_published(service):
+    instance, calls, stats, _ = service
+    now = configure_start(instance, stats)
+    match = stats.pop("currentMatch")
+    instance.on_game_event(live_event(now[0]))
+    now[0] += 3
+    instance.titles.worker.run_once()
+    assert not any(call[0] == "POST" for call in calls)
+    stats["currentMatch"] = {**match, "gameKey": "previous-game"}
+    now[0] += 5
+    instance.titles.worker.run_once()
+    assert not any(call[0] == "POST" for call in calls)
+    stats["currentMatch"] = {key: value for key, value in match.items() if key != "h2h"}
+    now[0] += 5
+    instance.titles.worker.run_once()
+    assert not any(call[0] == "POST" for call in calls)
+    stats["currentMatch"] = match
+    now[0] += 5
+    instance.titles.worker.run_once()
+    assert len([call for call in calls if call[0] == "POST"]) == 2
+
+
+@pytest.mark.parametrize("change", ["end", "new_game", "account", "disabled"])
+def test_game_start_read_is_fenced_before_delivery_and_does_not_block_lifecycle(service, change):
+    instance, calls, stats, connection = service
+    now = configure_start(instance, stats)
+    instance.on_game_event(live_event(now[0]))
+    now[0] += 3
+    entered, release = threading.Event(), threading.Event()
+    original = instance.cloud_client.transport
+    def held(*args, **kwargs):
+        if args[0] == "GET":
+            entered.set()
+            assert release.wait(3)
+        return original(*args, **kwargs)
+    instance.cloud_client.transport = held
+    thread = threading.Thread(target=instance.titles.worker.run_once)
+    thread.start()
+    assert entered.wait(3)
+    if change == "account":
+        connection[1] = "different-owner"
+    elif change == "disabled":
+        instance.action({"action": "configure_title_automation", "enabled": False, "on_game_start": False,
+            "template": "SC2", "platforms": {"twitch": True, "kick": True, "youtube": False}})
+    else:
+        completed = threading.Event()
+        event = live_event(now[0], phase="match_ended") if change == "end" else live_event(now[0], key="game-two")
+        listener = threading.Thread(target=lambda: (instance.on_game_event(event), completed.set()))
+        listener.start()
+        assert completed.wait(1), "The title read blocked the game's lifecycle listener"
+        listener.join(1)
+    release.set()
+    thread.join(3)
+    assert not thread.is_alive()
+    assert not any(call[0] == "POST" for call in calls)
+
+
+def test_end_during_first_platform_prevents_the_remaining_platform_write(service):
+    instance, calls, stats, _ = service
+    now = configure_start(instance, stats)
+    original = instance.cloud_client.transport
+    def ending(method, url, **kwargs):
+        result = original(method, url, **kwargs)
+        if method == "POST":
+            instance.on_game_event(live_event(now[0], phase="match_ended"))
+        return result
+    instance.cloud_client.transport = ending
+    instance.on_game_event(live_event(now[0]))
+    now[0] += 3
+    instance.titles.worker.run_once()
+    assert len([call for call in calls if call[0] == "POST"]) == 1
+    assert "opp" not in instance.status()["title_automation"]["values"]
+    assert instance.titles.preview("GM Protoss | v {opp} {aka}") == "GM Protoss"
+
+
+def test_game_start_receipt_survives_restart_even_if_the_template_changes(service, tmp_path):
+    instance, calls, stats, _ = service
+    now = configure_start(instance, stats)
+    instance.on_game_event(live_event(now[0]))
+    now[0] += 3
+    instance.titles.worker.run_once()
+    instance.close()
+    restored = StreamService(tmp_path, lambda: {}, no_obs=True, cloud_client=instance.cloud_client)
+    try:
+        restored.titles.worker.clock = lambda: now[0]
+        restored.titles.save_template("New prefix | v {opp} {aka}")
+        restored.titles.worker.preview_pending = False
+        restored.on_game_event(live_event(now[0]))
+        now[0] += 3
+        restored.titles.worker.run_once()
+        assert len([call for call in calls if call[0] == "POST"]) == 2
+    finally:
+        restored.close()
+
+
+def test_same_game_rekey_during_receipt_save_releases_only_the_unattempted_receipt(service):
+    instance, calls, stats, _ = service
+    now = configure_start(instance, stats)
+    old = "Barcode|Me|1790000000000"
+    new = "Barcode#123|Me|1790000000000"
+    stats["currentMatch"]["gameKey"] = old
+    original = instance.titles._persist
+    corrected = []
+    def correcting(settings):
+        original(settings)
+        if settings.get("last_start_game") == old and not corrected:
+            corrected.append(True)
+            stats["currentMatch"]["gameKey"] = new
+            instance.on_game_event(live_event(now[0], key=new))
+    instance.titles._persist = correcting
+    instance.on_game_event(live_event(now[0], key=old))
+    now[0] += 3
+    instance.titles.worker.run_once()
+    assert not any(call[0] == "POST" for call in calls)
+    assert instance.titles.settings["last_start_game"] == ""
+    now[0] += 5
+    instance.titles.worker.run_once()
+    assert len([call for call in calls if call[0] == "POST"]) == 2
+    assert instance.titles.settings["last_start_game"] == new
+
+
+def test_unavailable_history_and_map_are_omitted_after_bounded_wait(service):
+    instance, calls, stats, _ = service
+    now = configure_start(instance, stats)
+    stats["currentMatch"].pop("h2h")
+    stats["currentMatch"].pop("map")
+    stats["currentMatch"]["alias"] = ""
+    stats["lastMet"] = {"map": "Previous game's map", "result": "Victory"}
+    instance.on_game_event(live_event(now[0]))
+    now[0] += 3
+    instance.titles.worker.run_once()
+    assert not any(call[0] == "POST" for call in calls)
+    now[0] = 1260
+    instance.titles.worker.run_once()
+    writes = [call[2]["json"]["title"] for call in calls if call[0] == "POST"]
+    assert writes == ["GM Protoss | v Barcode"] * 2
+    assert instance.titles.worker.match.pending is None
+
+
+def test_late_previous_replay_sync_cannot_replace_an_active_match_title(service):
+    instance, calls, stats, _ = service
+    now = configure_start(instance, stats)
+    instance.titles.settings["enabled"] = True
+    instance.on_game_event(live_event(now[0]))
+    instance.titles.worker.ready = True
+    instance.titles.worker.run_once()
+    assert not any(call[0] == "POST" for call in calls)
+    now[0] += 3
+    instance.titles.worker.run_once()
+    assert len([call for call in calls if call[0] == "POST"]) == 2
+
+
+def test_invalid_title_draft_does_not_prevent_turning_both_automatic_options_off(service, tmp_path):
+    instance, calls, stats, _ = service
+    now = configure_start(instance, stats)
+    saved_template = instance.titles.settings["template"]
+    instance.on_game_event(live_event(now[0]))
+    assert instance.titles.worker.match.pending is not None
+    instance.action({"action": "configure_title_automation", "enabled": False, "on_game_start": False,
+        "template": "{unknown}", "platforms": {"twitch": True, "kick": True, "youtube": False}})
+    assert instance.titles.settings["enabled"] is False
+    assert instance.titles.settings["on_game_start"] is False
+    assert instance.titles.settings["template"] == saved_template
+    assert instance.titles.worker.match.pending is None
+    now[0] += 3
+    instance.titles.worker.run_once()
+    assert not any(call[0] == "POST" for call in calls)
+    instance.close()
+    restored = StreamService(tmp_path, lambda: {}, no_obs=True, cloud_client=instance.cloud_client)
+    try:
+        assert restored.titles.settings["enabled"] is False
+        assert restored.titles.settings["on_game_start"] is False
+        assert restored.titles.settings["template"] == saved_template
+    finally:
+        restored.close()

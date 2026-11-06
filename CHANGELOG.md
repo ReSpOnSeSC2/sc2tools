@@ -11,6 +11,18 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.24.11
+
+- Add an independent game-start title refresh with current opponent, known alias,
+  race and head-to-head record/win-rate tokens. Include the map only when the
+  live source supplies it. Keep account consent, platform selection and the
+  existing post-sync refresh option independent, and cancel stale game work.
+  Game-start updates are off by default; turn their Streams checkbox on or off
+  and save to control automatic posting. Saving settings never publishes, and
+  both options can be turned off even when the current title draft is invalid.
+- Let the floating build-versus-build scouting panel receive mouse clicks and
+  wheel scrolling over either build order while StarCraft II keeps focus.
+
 ### Agent 0.24.10
 
 - Expand complete build names in floating check-ins and the agent's Build selectors,

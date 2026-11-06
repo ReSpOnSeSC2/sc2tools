@@ -4,6 +4,7 @@ const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { resultBucket } = require("../util/parseQuery");
+const { streamTitleMatch } = require("./streamTitleMatch");
 const RACES = new Map([["Protoss", "P"], ["Terran", "T"], ["Zerg", "Z"]]);
 const LEAGUES = new Set(["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"]);
 const HISTORY_LIMIT = 512;
@@ -13,8 +14,9 @@ const HISTORY_LIMIT = 512;
  * @param {{games: import('mongodb').Collection}} db
  * @param {Pick<import('./games').GamesService, 'todaySession'>} games
  * @param {string} userId
+ * @param {() => Record<string, any>|null|undefined} [liveSnapshot]
  */
-async function streamTitleSession(db, games, userId) {
+async function streamTitleSession(db, games, userId, liveSnapshot) {
   const session = await games.todaySession(userId, undefined, { reuseRecent: true });
   const now = new Date();
   const since = new Date(now.getTime() - 90 * 86400000);
@@ -41,12 +43,16 @@ async function streamTitleSession(db, games, userId) {
     const counts = winRates[key] || (winRates[key] = { wins: 0, losses: 0 });
     counts[result === "win" ? "wins" : "losses"] += 1;
   }
+  // Read the live cache after the awaited statistics calls, so a menu/new-game
+  // transition during that work cannot leave the previous opponent in a title.
+  const currentMatch = streamTitleMatch(liveSnapshot?.());
   return { schema: 1, generatedAt: now.toISOString(),
     session: { wins: session.wins, losses: session.losses },
     ...(Number.isInteger(session.mmrCurrent) ? { mmr: session.mmrCurrent } : {}),
     ...(session.league && LEAGUES.has(session.league) ? { league: session.league } : {}),
     ...(session.streak ? { streak: session.streak } : {}),
     ...(peak !== undefined ? { peak } : {}), winRates,
+    ...(currentMatch ? { currentMatch } : {}),
     history: { since: since.toISOString(), limit: HISTORY_LIMIT, sampled: rows.length,
       capped: rows.length === HISTORY_LIMIT, scope: "Recorded ladder games in the last 90 days; peak uses the current character and race." } };
 }

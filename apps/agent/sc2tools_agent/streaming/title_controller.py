@@ -1,4 +1,4 @@
-"""Account-bound title preview and optional post-game publication.
+"""Account-bound title preview and optional game-start/post-game publication.
 
 Human authorization received 2026-10-23 permits this optional updater for
 linked Twitch/Kick/YouTube accounts, only when enabled. Development uses mocks;
@@ -9,18 +9,21 @@ from __future__ import annotations
 import copy
 
 from .title_automation import GameTitleAutomation
+from .title_live_controller import LiveTitleControllerMixin
 from .title_settings import connection_key, configure_title_settings, load_title_settings
 from .title_template import render_title, title_values
 from .youtube_pair_backend import atomic_json
 
 
-class StreamTitleController:
+class StreamTitleController(LiveTitleControllerMixin):
     def __init__(self, service):
         self.service = service
         self.settings = load_title_settings(service.backend.config.get("title_automation"), self.owner())
         self.stats = {}
         self.message = "Waiting for synced game statistics."
-        self.worker = GameTitleAutomation(self.refresh, last_attempt=self.settings["last_attempt"])
+        self.worker = GameTitleAutomation(self.refresh, last_attempt=self.settings["last_attempt"],
+                                          refresh_match=self.refresh_match)
+        self.worker.match.configure(self.settings["on_game_start"])
 
     def connection(self):
         client = self.service.cloud_client
@@ -47,8 +50,10 @@ class StreamTitleController:
 
     def snapshot(self):
         self._current()
-        result = {key: copy.deepcopy(self.settings[key]) for key in ("enabled", "platforms", "template")}
-        result.update(values=title_values(self.stats), message=self.message)
+        result = {key: copy.deepcopy(self.settings[key]) for key in ("enabled", "on_game_start", "platforms", "template")}
+        stats = self._title_stats()
+        result.update(values=title_values(stats), message=self.message,
+                      match_game_key=stats.get("currentMatch", {}).get("gameKey"))
         return result
 
     def save_template(self, template):
@@ -64,6 +69,7 @@ class StreamTitleController:
         configured = configure_title_settings(self.settings, payload, self.owner())
         self._persist(configured)
         self.settings = configured
+        self.worker.match.configure(self.settings["on_game_start"])
         self.worker.preview_pending = True
         self.worker.wake.set()
         self.message = "Automatic title settings saved. No title was published."
@@ -76,7 +82,7 @@ class StreamTitleController:
 
     def preview(self, template):
         self._current()
-        return render_title(template, self.stats)
+        return render_title(template, self._title_stats())
 
     def refresh(self, automatic):
         service = self.service
@@ -103,9 +109,12 @@ class StreamTitleController:
             service._sync_cloud_owner(service._connection_context())
             self.stats = stats
             self.message = "Preview uses your synced cloud session and recorded ladder history."
-            if automatic and self.settings["enabled"]:
+            # A late upload from the previous game must not overwrite a new
+            # game's pending opponent title with generic session statistics.
+            match_owns_title = self.settings["on_game_start"] and self.worker.match.current_key() is not None
+            if automatic and self.settings["enabled"] and not match_owns_title:
                 try:
-                    title = render_title(self.settings["template"], stats)
+                    title = render_title(self.settings["template"], self._title_stats())
                     selected = [name for name, enabled in self.settings["platforms"].items()
                                 if enabled and self.settings["last_titles"].get(name) != title]
                     if selected:
@@ -118,10 +127,10 @@ class StreamTitleController:
                     self.message = "Automatic title could not be completed. Check platform receipts before retrying."
             service._publish()
 
-    def _deliver(self, title, selected, client):
+    def _deliver(self, title, selected, client, *, guard=None, game_key=None):
         service = self.service
         for name in selected:
-            if service.stop_event.is_set() or self.owner() != self.settings["owner"]:
+            if service.stop_event.is_set() or self.owner() != self.settings["owner"] or guard is not None and not guard():
                 break
             # A known local preflight failure has made no provider attempt.
             # Keep its receipt separate and still deliver other selections.
@@ -131,11 +140,21 @@ class StreamTitleController:
                 continue
             # Persist this platform immediately before its path. An ambiguous
             # attempt must not repeat after restart; untouched platforms may.
-            attempted = copy.deepcopy(self.settings)
+            previous = copy.deepcopy(self.settings)
+            attempted = copy.deepcopy(previous)
             attempted["last_attempt"] = self.worker.last_attempt
             attempted["last_titles"][name] = title
+            if game_key is not None:
+                attempted["last_start_game"] = game_key
             self._persist(attempted)
             self.settings = attempted
+            if guard is not None and not guard():
+                # The guard changed while saving, before any provider call.
+                # Release only this unattempted receipt; earlier platforms'
+                # attempts are retained in the previous settings snapshot.
+                self._persist(previous)
+                self.settings = previous
+                break
             try:
                 service._apply_title(title, service.backend.metadata["description"], [name], client=client)
             except Exception as error:

@@ -262,6 +262,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.owner = owner
             self.kind = kind
             self.setProperty("textOverlay", kind == "opponent")
+            self.setProperty("gameInteractiveOverlay", kind == "scouting")
             if kind == "opponent":
                 self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
             self._context = {}
@@ -407,6 +408,14 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                     self.owner._manual_scouting_dismissed = True
                 self.owner.set_preference(self.kind + "Overlay", False)
             event.accept()
+
+        def nativeEvent(self, event_type, message):
+            if self.kind == "scouting":
+                from .overlay_input import mouse_activation_reply
+                reply = mouse_activation_reply(message)
+                if reply is not None:
+                    return reply
+            return super().nativeEvent(event_type, message)
 
         def showEvent(self, event):
             super().showEvent(event)
@@ -1679,8 +1688,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 buttons = [opponent.identity_card.scouting_button]
             else:
                 buttons = [self.compact_card.scouting_button]
-            # The report stays click-through in game. Only these explicit
-            # window actions receive non-activating native input surfaces.
+            # Native proxies are needed only for click-through source windows;
+            # the interactive scouting report receives its input directly.
             controls = self.overlays["scouting"].window_controls
             return [*buttons, controls.minimize_button, controls.close_button]
 
