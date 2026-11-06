@@ -30,6 +30,8 @@ const LIMIT_MAX_ENTRIES = 4096;
 const HTTP_MOVED_PERMANENTLY = 301;
 const HTTP_NOT_FOUND = 404;
 const HTTP_SERVER_ERROR = 500;
+const HTTP_UNAVAILABLE = 503;
+const GUIDE_REVISION_CACHE_CONTROL = "public, max-age=0, s-maxage=15, must-revalidate";
 /**
  * Unknown slugs and not-yet-computed maps: cached at the edge, but for
  * minutes rather than the hour a real page gets. A crawler or scanner
@@ -52,6 +54,7 @@ const BAND_LEAGUE = "league";
  *
  *   GET /guides                              hub: matchups, what's winning, maps, videos
  *   GET /guides/videos                       full build-order video collection
+ *   GET /guides/revision                     opaque content version for background refresh
  *   GET /guides/sitemap                      published guide paths
  *   GET /guides/maps/:map                    map guide
  *   GET /guides/:matchup[?band=&era=]        openers of a matchup
@@ -64,11 +67,13 @@ const BAND_LEAGUE = "league";
  * When ``enabled`` is false every ``/guides`` path answers 404 (the gate
  * is path-scoped, so unrelated /v1 traffic passing through is untouched).
  * A bounded per-IP-and-path limiter guards the whole prefix. Public 200s and 301s
- * carry GUIDE_CACHE_CONTROL, 404s a five-minute edge cache, ``/me`` is
- * ``private, no-store`` and everything else (429, 5xx) ``no-store``.
+ * carry GUIDE_CACHE_CONTROL (revision checks use a 15-second edge cache),
+ * 404s a five-minute edge cache, ``/me`` is ``private, no-store`` and
+ * everything else (429, 5xx) ``no-store``.
  *
  * @param {{
  *   guides: import('../services/guides').GuidesService,
+ *   guideFreshness?: Pick<import('../services/guideFreshness').GuideFreshnessService, "readRevision">,
  *   guideSamples: Pick<import('../services/guideSamples').GuideSamplesService, "userHash">,
  *   auth: import('express').RequestHandler,
  *   enabled: boolean,
@@ -132,9 +137,18 @@ function buildGuidesRouter(deps) {
  * ``:matchup`` patterns so static paths are never read as matchup slugs).
  *
  * @param {import('express').Router} router
- * @param {{ guides: import('../services/guides').GuidesService }} deps
+ * @param {{ guides: import('../services/guides').GuidesService,
+ *   guideFreshness?: Pick<import('../services/guideFreshness').GuideFreshnessService, "readRevision"> }} deps
  */
 function mountPublicRoutes(router, deps) {
+  router.get("/guides/revision", handle(async (_req, res) => {
+    if (!deps.guideFreshness) {
+      res.status(HTTP_UNAVAILABLE).json({ error: { code: "guide_revision_unavailable" } });
+      return;
+    }
+    const revision = await deps.guideFreshness.readRevision();
+    res.set("Cache-Control", GUIDE_REVISION_CACHE_CONTROL).json({ revision });
+  }));
   router.get("/guides", handle(async (_req, res) => {
     sendPublic(res, await deps.guides.index());
   }));
@@ -303,4 +317,5 @@ module.exports = {
   parseBand,
   parseEra,
   GUIDE_NOT_FOUND_CACHE_CONTROL,
+  GUIDE_REVISION_CACHE_CONTROL,
 };

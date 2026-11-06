@@ -141,6 +141,7 @@ const { GuideSamplesService } = require("./services/guideSamples");
 const { buildGuideSamplesBackfillJob } = require("./jobs/guideSamplesBackfillJob");
 const { GuideStatsService } = require("./services/guideStats");
 const { buildGuideRevalidator } = require("./services/guideRevalidate");
+const { GuideFreshnessService } = require("./services/guideFreshness");
 const { buildCommunityRevalidator } = require("./services/communityRevalidate");
 const { buildGuideStatsRecomputeJob } = require("./jobs/guideStatsRecomputeJob");
 const { GuideVideosService } = require("./services/guideVideos");
@@ -856,16 +857,29 @@ function makeServices(deps, clerk, adminClerkIds) {
   // is built here but only started by server.js when GUIDES_ENABLED; the
   // admin "Recompute now" route calls guideStatsJob.runOnce({ force: true }).
   const guideStats = new GuideStatsService(deps.db, { logger: deps.logger });
+  const guideFreshness = new GuideFreshnessService(deps.db);
+  const revalidateGuidePages = buildGuideRevalidator({
+    url: deps.config.guidesRevalidateUrl || null,
+    secret: deps.config.guidesRevalidateSecret || null,
+    logger: deps.logger,
+  });
+  const revalidateGuides = async () => {
+    const result = await revalidateGuidePages();
+    if (result.ok) {
+      try {
+        await guideFreshness.markChanged();
+      } catch {
+        deps.logger.warn("guide_revision_write_failed");
+      }
+    }
+    return result;
+  };
   const guideStatsJob = buildGuideStatsRecomputeJob({
     jobLedger, enabled: deps.config.guidesEnabled,
     db: deps.db,
     guideStats,
     logger: deps.logger,
-    revalidate: buildGuideRevalidator({
-      url: deps.config.guidesRevalidateUrl || null,
-      secret: deps.config.guidesRevalidateSecret || null,
-      logger: deps.logger,
-    }),
+    revalidate: revalidateGuides,
   });
   // SC2 Tools Guides build-order videos from the site owner's YouTube
   // channel (committed snapshot + RSS sync). The sync job is built here
@@ -879,7 +893,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     },
     logger: deps.logger,
   });
-  const guideVideosJob = buildGuideVideosSyncJob({ guideVideos, logger: deps.logger, jobLedger, enabled: deps.config.guidesEnabled });
+  const guideVideosJob = buildGuideVideosSyncJob({ guideVideos, revalidate: revalidateGuides, logger: deps.logger, jobLedger, enabled: deps.config.guidesEnabled });
   // SC2 Tools Guides read layer (public /v1/guides, routes/guides.js) and
   // the admin-edited coach's notes it shows (routes/adminGuides.js).
   const guideNotes = new GuideNotesService(deps.db);
@@ -1108,6 +1122,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     guideSamplesBackfill,
     guideStats,
     guideStatsJob,
+    revalidateGuides,
+    guideFreshness,
     guideVideos,
     guideVideosJob,
     guideNotes,
@@ -1344,6 +1360,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildGuidesRouter({
       guides: services.guides,
+      guideFreshness: services.guideFreshness,
       guideSamples: services.guideSamples,
       auth,
       enabled: Boolean(deps.config.guidesEnabled),
@@ -1640,6 +1657,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       guides: services.guides,
       guideStats: services.guideStats,
       guideStatsJob: services.guideStatsJob,
+      revalidateGuides: services.revalidateGuides,
       guideSamplesBackfill: services.guideSamplesBackfill,
       guideVideos: services.guideVideos,
     }),

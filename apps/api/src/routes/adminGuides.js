@@ -28,6 +28,7 @@ const PENDING = Symbol("pending");
  * @property {Pick<import('../jobs/guideSamplesBackfillJob').GuideSamplesBackfillJob, "start"|"stop"|"status">|null} [guideSamplesBackfill]
  * @property {Pick<import('../services/guideVideos').GuideVideosService,
  *   "listForAdmin"|"addVideo"|"setHidden"|"syncFromChannel">} guideVideos
+ * @property {() => Promise<import('../services/guideRevalidate').GuideRevalidateResult>} [revalidate]
  * @property {() => number} [now]
  */
 
@@ -83,12 +84,17 @@ function mountNoteRoutes(router, deps) {
     const build = resolveCanonicalBuild(req.params.matchup, req.params.build);
     if (!build) return notFound(res);
     const editor = req.auth && typeof req.auth.userId === "string" ? req.auth.userId : null;
-    res.json({ note: await deps.guideNotes.save(build.matchup, build.name, req.body, editor) });
+    const note = await deps.guideNotes.save(build.matchup, build.name, req.body, editor);
+    // Refresh public pages before the admin sees success: their six-hour
+    // cache otherwise keeps serving the previous note and video pins.
+    await deps.revalidate?.();
+    res.json({ note });
   }));
   router.delete("/notes/:matchup/:build", handle(async (req, res) => {
     const build = resolveCanonicalBuild(req.params.matchup, req.params.build);
     if (!build) return notFound(res);
     await deps.guideNotes.remove(build.matchup, build.name);
+    await deps.revalidate?.();
     res.status(HTTP_NO_CONTENT).end();
   }));
 }
@@ -150,18 +156,23 @@ function mountVideoRoutes(router, deps) {
     res.json({ items: await deps.guideVideos.listForAdmin() });
   }));
   router.post("/videos/sync", handle(async (_req, res) => {
-    res.json(await deps.guideVideos.syncFromChannel());
+    const summary = await deps.guideVideos.syncFromChannel();
+    await deps.revalidate?.();
+    res.json(summary);
   }));
   router.post("/videos", handle(async (req, res) => {
     const checked = validateGuideAdminInput("videoAdd", req.body);
     if (!checked.valid) return badRequest(res, "invalid_video_id", checked.errors);
-    res.status(HTTP_CREATED).json({ item: await deps.guideVideos.addVideo(checked.value.youtubeId) });
+    const item = await deps.guideVideos.addVideo(checked.value.youtubeId);
+    await deps.revalidate?.();
+    res.status(HTTP_CREATED).json({ item });
   }));
   router.patch("/videos/:youtubeId", handle(async (req, res) => {
     const checked = validateGuideAdminInput("videoPatch", req.body);
     if (!checked.valid) return badRequest(res, "invalid_video_patch", checked.errors);
     const item = await deps.guideVideos.setHidden(req.params.youtubeId, checked.value.hidden);
     if (!item) return notFound(res);
+    await deps.revalidate?.();
     res.json({ item });
   }));
 }

@@ -9,6 +9,8 @@ const { observeJob } = require("../util/jobLedger");
  * snapshot (insert-only) and pulls the channel's public Atom feed, then
  * re-pulls the feed on a fixed interval. The feed lists the newest 15
  * videos and the sync never deletes, so older videos stay.
+ * Successful syncs also purge the public guide cache, including the
+ * startup sync, so visitors do not need a manual refresh action.
  *
  * Modeled on jobs/ladderMetaRecomputeJob.js: setInterval (no node-cron
  * dep), unref'd timer, single-flight guard, same disable-knob convention.
@@ -76,9 +78,10 @@ function parseSeconds(raw) {
  *
  * @param {GuideVideosSyncTarget} videos
  * @param {import('pino').Logger} logger
+ * @param {() => Promise<import('../services/guideRevalidate').GuideRevalidateResult>} [revalidate]
  * @returns {{ runOnce: () => Promise<GuideVideosSyncSummary>, inflight: () => Promise<GuideVideosSyncSummary> | null }}
  */
-function buildSyncRunner(videos, logger) {
+function buildSyncRunner(videos, logger, revalidate) {
   let seeded = false;
   /** @type {Promise<GuideVideosSyncSummary> | null} */
   let current = null;
@@ -104,6 +107,13 @@ function buildSyncRunner(videos, logger) {
       summary.error = summary.error || code;
       logger.warn({ code }, "guide_videos_sync_error");
     }
+    if (revalidate && (summary.sync || (summary.snapshot?.inserted ?? 0) > 0)) {
+      try {
+        await revalidate();
+      } catch (err) {
+        logger.warn({ code: reasonCode(err) }, "guide_videos_revalidate_error");
+      }
+    }
     return summary;
   }
 
@@ -125,6 +135,7 @@ function buildSyncRunner(videos, logger) {
  *   guideVideos: GuideVideosSyncTarget,
  *   logger: import('pino').Logger,
  *   enabled?: boolean,
+ *   revalidate?: () => Promise<import('../services/guideRevalidate').GuideRevalidateResult>,
  *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   intervalMs?: number,
  *   env?: NodeJS.ProcessEnv,
@@ -147,7 +158,7 @@ function buildGuideVideosSyncJob(deps) {
   );
   const logger = deps.logger.child({ component: "guideVideosJob" });
   const videos = deps.guideVideos;
-  const runner = buildSyncRunner(videos, logger);
+  const runner = buildSyncRunner(videos, logger, deps.revalidate);
   const runOnce = observeJob(deps, "guide-videos", interval, runner.runOnce, { disabled: deps.enabled === false || disabled || !videos.isConfigured(), envFlag: "GUIDES_ENABLED / SC2TOOLS_GUIDE_VIDEOS_DISABLED" });
   /** @type {NodeJS.Timeout | null} */
   let timer = null;

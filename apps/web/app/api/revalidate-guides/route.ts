@@ -10,7 +10,8 @@ import {
 
 /**
  * POST /api/revalidate-guides — on-demand purge after the API's nightly
- * guide_stats run, so fresh numbers don't wait out the 6 h data cache.
+ * guide_stats run or admin note/video changes, without waiting out the
+ * 6 h data cache.
  *
  * Auth is the HMAC signature only (lib/guides/revalidateSignature.ts,
  * secret GUIDES_REVALIDATE_SECRET shared with the API): 503 while the

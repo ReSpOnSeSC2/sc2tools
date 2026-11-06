@@ -3,7 +3,8 @@
 /**
  * On-demand ISR purge for the public guide pages.
  *
- * After a successful nightly guide_stats run the job POSTs a signed ping
+ * After a successful nightly guide_stats run or admin note/video change,
+ * the caller POSTs a signed ping
  * to the web app (apps/web/app/api/revalidate-guides), which then purges
  * the "guides" fetch-cache tag and the /guides + /sitemap.xml paths, so
  * fresh numbers show up without waiting out the 6 h ISR window.

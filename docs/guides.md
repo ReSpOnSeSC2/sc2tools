@@ -266,6 +266,7 @@ not announced as new again.
   (`apps/api/src/config/guideVideosSnapshot.json`). Every 6 hours it is
   refreshed from `https://www.youtube.com/feeds/videos.xml?channel_id=…`.
   The feed only lists the newest 15, so older videos are never deleted.
+  Startup and scheduled imports also refresh the public guide cache.
 - **Automatic matching** (`services/guideVideoMatch.js`) is conservative and
   deterministic:
   - The title (or a `#PvZ`-style hashtag) must name the matchup.
@@ -299,7 +300,16 @@ not announced as new again.
   playlist on YouTube does not move it on the site.
 - **Admin page:** you can pin or hide videos per guide, hide a video
   everywhere, add a video by URL (it must be on the configured channel),
-  or sync now.
+  or sync now. Successful note and video changes attempt the signed web
+  cache purge before returning. With revalidation configured and successful,
+  saved pins do not wait for the six-hour page cache. This uses the same
+  `GUIDES_REVALIDATE_URL` and `GUIDES_REVALIDATE_SECRET` configuration as
+  the nightly stats job; failed purges do not undo saved changes.
+  Open guide pages check a tiny public content revision once a minute
+  while visible and online, refreshing only when it changes. Checks pause
+  in hidden/offline tabs. Pages also refresh when returning from another
+  tab or mobile app, including restoration from the browser's back cache.
+  No refresh button or manual stats recompute is needed.
 - **On the page:** the embed is a click-to-play facade using
   `youtube-nocookie.com`. Nothing loads from YouTube until someone clicks.
   Under the video the page shows the description's first paragraph and its
