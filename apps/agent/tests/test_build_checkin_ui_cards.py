@@ -1096,3 +1096,107 @@ def test_keyboard_focus_moves_with_the_opponent_list(harness, app) -> None:
     QtTest.QTest.mouseClick(window.opp_builds.row("custom:ling-flood"), QtCore.Qt.LeftButton)
     app.processEvents()
     assert window.opp_change.hasFocus()
+
+
+@pytest.mark.parametrize("kind", [LOADING, POSTGAME])
+def test_expanding_build_names_keeps_the_pick_and_native_window(harness, app, kind) -> None:
+    host, controller, *_ = harness
+    name = "PvZ - Stargate pressure into a third base, Chargelots and a late-game Carrier transition " * 3
+    build = option("long-build", name, 12, 8, rolled=True)
+    if kind == LOADING:
+        window = show_loading(host, loading_model(featured=(build,), more=()))
+    else:
+        window = show_postgame(host, postgame_model(
+            featured=(build,), more=(), selection=build.key,
+            reason="detected", reason_label="Detected in your replay",
+        ))
+    row = window.builds.row(build.key)
+    native, flags = window.winId(), window.windowFlags()
+    controller.calls.clear()
+    window.builds.names_toggle.click()
+    app.processEvents()
+    window.settle()
+    assert window.card.width() > window.WIDTH
+    assert row.height() > 30
+    assert row.toolTip() == ""  # the full name is now visible
+    text = row._name_layout()
+    assert text.lineCount() > 1
+    last_line = text.lineAt(text.lineCount() - 1)
+    assert last_line.textStart() + last_line.textLength() == len(name)
+    assert text.boundingRect().bottom() + 6 < row._layout()[3].top()
+    assert window.windowFlags() == flags and window.winId() == native
+    assert not any(call in {"declare", "update_draft", "confirm"} for call, _args in controller.calls)
+    if kind == POSTGAME:
+        assert window.selection() == build.key
+        assert "Detected in your replay" in [chip[0] for chip in row.chips]
+    else:
+        assert window.builds.names_toggle.focusPolicy() == QtCore.Qt.NoFocus
+    window.builds.names_toggle.click()
+    app.processEvents()
+    window.settle()
+    assert window.card.width() == window.WIDTH
+    assert row.height() == 30 and row.toolTip() == name
+
+
+def test_expanded_names_follow_refresh_search_and_opponent_picker(harness, app) -> None:
+    host, controller, *_ = harness
+    name = "Zerg - " + "LingBaneRoachRavagerTransition" * 15
+    window = show_postgame(host, with_opponent(opponent=opp_model(
+        featured=(option("zerg-12-pool", name, 5, 4),), more=(), name=name,
+    )))
+    window.opp_change.click()
+    controller.calls.clear()
+    window.opp_builds.names_toggle.click()
+    app.processEvents()
+    window.settle()
+    row = window.opp_builds.row("zerg-12-pool")
+    assert row.height() > 30
+    assert window.opp_builds.selection() == "zerg-12-pool"
+    assert window.builds.names_toggle.isChecked()
+    assert not window._opp_touched
+    assert controller.named("update_draft") == []
+    window.opp_builds.search.setText("LingBane")
+    window.opp_builds.search.textEdited.emit("LingBane")
+    host.dispatch("update_postgame", (with_opponent(opponent=opp_model(
+        featured=(option("zerg-12-pool", name * 2, 5, 4),), more=(), name=name * 2,
+    )),))
+    app.processEvents()
+    window.settle()
+    assert window.opp_builds.row("zerg-12-pool") is row
+    assert row.name == name * 2 and row.toolTip() == ""
+    assert window.opp_builds.selection() == "zerg-12-pool"
+    assert window.opp_builds.visible_keys() == ["zerg-12-pool"]
+
+
+def test_expanded_card_stays_on_screen_with_scrollable_long_builds(harness, app) -> None:
+    host, controller, *_ = harness
+    builds = tuple(option(f"long-{i}", f"Build {i}: " + "Macro transition " * 100) for i in range(5))
+    window = show_postgame(host, postgame_model(featured=builds, more=(), selection="long-0"))
+    available = window.screen().availableGeometry()
+    window.move(available.right() - window.width() + 1, available.top())
+    window.builds.names_toggle.click()
+    app.processEvents()
+    window.settle()
+    assert available.contains(window.geometry())
+    assert window.content_scroll.verticalScrollBar().maximum() > 0
+    window.content_scroll.ensureWidgetVisible(window.primary)
+    app.processEvents()
+    point = window.primary.mapTo(window.content_scroll.viewport(), window.primary.rect().center())
+    assert window.content_scroll.viewport().rect().contains(point)
+    assert controller.named("confirm") == []
+
+
+def test_expanded_more_builds_can_scroll_to_the_last_full_name(harness, app) -> None:
+    host, *_ = harness
+    more = tuple(option(f"long-{i}", f"Catalog build {i}: " + "Macro transition " * 30) for i in range(10))
+    window = show_loading(host, loading_model(more=more))
+    window.builds.names_toggle.click()
+    window.builds.more_toggle.click()
+    app.processEvents()
+    window.settle()
+    last = window.builds.row("long-9")
+    window.builds.more_area.ensureWidgetVisible(last, 0, 0)
+    app.processEvents()
+    point = last.mapTo(window.builds.more_area.viewport(), last.rect().bottomLeft())
+    assert window.builds.more_area.viewport().rect().contains(point)
+    assert last.height() > 30 and last.toolTip() == ""

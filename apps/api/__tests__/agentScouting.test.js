@@ -21,6 +21,22 @@ function envelope(key = "current") {
   };
 }
 
+test("private scouting includes the opponent widget's revealed name and rejects ambiguous history", () => {
+  const env = envelope();
+  env.streamerHistory.oppRevealedName = " KnownPlayer ";
+  expect(buildScoutingBrief(env).oppRevealedName).toBe("KnownPlayer");
+  env.opponent.revealedName = "Direct identity";
+  expect(buildScoutingBrief(env).oppRevealedName).toBe("Direct identity");
+  delete env.opponent.revealedName;
+  env.streamerHistory.opponentIdentityMatched = false;
+  expect(buildScoutingBrief(env).oppRevealedName).toBeNull();
+  env.streamerHistory.opponentIdentityMatched = true;
+  env.streamerHistory.oppRevealedName = "🦊".repeat(100);
+  const bounded = buildScoutingBrief(env).oppRevealedName;
+  expect(bounded.length).toBe(120);
+  expect(bounded.endsWith("🦊")).toBe(true);
+});
+
 describe("private scouting projection and broker", () => {
   test("uses the shared posterior rather than a different favourite, including prior-only Low confidence", () => {
     const env = envelope();

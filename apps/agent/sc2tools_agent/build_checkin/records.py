@@ -129,6 +129,7 @@ class LiveGame:
     scouting_fetching: bool = False
     scouting_read_at: Optional[float] = None
     card_id: Optional[str] = None
+    opp_revealed_name: Optional[str] = None
 
     @property
     def matchup(self) -> Optional[str]:
@@ -220,6 +221,7 @@ class PostgameCard:
     ops: Deque[CardOp] = field(default_factory=deque)
     op_inflight: Optional[CardOp] = None
     model: Optional[PostgameCardModel] = None
+    opp_revealed_name: Optional[str] = None
 
     @property
     def matchup(self) -> Optional[str]:

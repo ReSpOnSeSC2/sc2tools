@@ -166,6 +166,11 @@ navigation, **Border & animations…**, **Help & support**, **Check for updates*
 The **Build selectors** screen contains the pre-game plan and post-game check-in.
 Choices, opponent corrections, and notes use the same records as the website
 and floating game cards. Their independent switches can be changed at any time.
+Use **Expand build names** to read complete names, including choices marked
+**Detected in your replay**. Floating cards widen, long names wrap above their
+badges and records, and tall cards scroll. **Compact build names** restores the
+smaller view. Known opponent identities appear in both check-ins as
+**vs Barcode (aka KnownPlayer)**, including with loading-screen scouting hidden.
 The **Randomizer settings** screen silently manages the matchup's eligible pool
 and shows the saved pick. In the loading check-in, **Randomize** selects and saves
 one build even when the separate widget is closed. Every display uses that same

@@ -3,9 +3,9 @@
 * :func:`card_stylesheet` — the cards' self-contained dark style, built
   from the shared Companion theme. It is set on each card window,
   so it wins over the application style sheet inside the card.
-* :class:`BuildRow` — one pickable build, painted by hand: the name is
-  drawn as plain text (never rich text), elided to fit, with the record
-  and the Rolled / Usual / Suggested chips on the right.
+* :class:`BuildRow` — one pickable build, painted as plain text. Compact
+  rows elide names; expanded rows wrap the full name above the record
+  and the Rolled / Usual / Suggested chips.
 * :class:`BuildList` — the "Your builds" rows, a **More builds…**
   expander with a scrollable list of every other option, and on the end
   card a search box. Rows keep their first-paint order for the life of
@@ -331,6 +331,8 @@ def row_chips(
 class BuildRow(QtWidgets.QAbstractButton):
     """One build. Painted by hand so every string stays plain text."""
 
+    height_changed = QtCore.Signal()
+
     def __init__(
         self,
         option,
@@ -344,6 +346,7 @@ class BuildRow(QtWidgets.QAbstractButton):
         self.name = ""
         self.record = ""
         self.chips: List[Tuple[str, str]] = []
+        self._names_expanded = False
         self._selectable = selectable
         self.setObjectName("checkinRow")
         self.setCheckable(selectable)
@@ -375,15 +378,56 @@ class BuildRow(QtWidgets.QAbstractButton):
             description = f"{description}, {reason_label}"
         self.setAccessibleName(description)
         self._refresh_tooltip()
+        self._refresh_height()
         self.update()
 
     # ------------------------------------------------------------ paint
 
     def sizeHint(self) -> QtCore.QSize:  # noqa: N802 — Qt API
-        return QtCore.QSize(220, ROW_HEIGHT)
+        return QtCore.QSize(220, self.height())
+
+    def set_names_expanded(self, expanded: bool) -> None:
+        self._names_expanded = expanded
+        self._refresh_height()
+        self._refresh_tooltip()
+        self.update()
+
+    def _name_layout(self) -> QtGui.QTextLayout:
+        """Use the same line breaks when measuring and painting, even for
+        names without spaces. QTextLayout always treats names as plain text.
+        """
+        name_font, _chip = self._fonts()
+        text = QtGui.QTextLayout(self.name, name_font)
+        options = QtGui.QTextOption()
+        options.setWrapMode(QtGui.QTextOption.WrapAtWordBoundaryOrAnywhere)
+        text.setTextOption(options)
+        left = 30 if self._selectable else 10
+        width = max(1, self.width() - left - 10)
+        text.beginLayout()
+        y = 0.0
+        while True:
+            line = text.createLine()
+            if not line.isValid():
+                break
+            line.setLineWidth(width)
+            line.setPosition(QtCore.QPointF(0, y))
+            y += line.height()
+        text.endLayout()
+        return text
+
+    def _refresh_height(self) -> None:
+        height = ROW_HEIGHT
+        if self._names_expanded:
+            text_height = self._name_layout().boundingRect().height()
+            metadata_height = 22 if self.chips or self.record else 0
+            height = max(ROW_HEIGHT, int(text_height + 0.999) + 12 + metadata_height)
+        if self.height() != height:
+            self.setFixedHeight(height)
+            self.height_changed.emit()
 
     def resizeEvent(self, event: QtGui.QResizeEvent) -> None:  # noqa: N802
         super().resizeEvent(event)
+        self._refresh_height()
         self._refresh_tooltip()
 
     def enterEvent(self, event: QtGui.QEnterEvent) -> None:  # noqa: N802
@@ -410,19 +454,29 @@ class BuildRow(QtWidgets.QAbstractButton):
         record_rect = QtCore.QRect()
         if self.record:
             width = QtGui.QFontMetrics(name_font).horizontalAdvance(self.record)
-            record_rect = QtCore.QRect(right - width + 1, 0, width, self.height())
+            record_rect = QtCore.QRect(
+                right - width + 1, self.height() - 25 if self._names_expanded else 0,
+                width, 22 if self._names_expanded else self.height(),
+            )
             right -= width + 8
         chips: List[Tuple[QtCore.QRect, str, str]] = []
         metrics = QtGui.QFontMetrics(chip_font)
         for text, tone in reversed(self.chips):
             width = metrics.horizontalAdvance(text) + 12
-            chip_rect = QtCore.QRect(right - width + 1, (self.height() - 16) // 2, width, 16)
+            chip_rect = QtCore.QRect(
+                right - width + 1,
+                self.height() - 23 if self._names_expanded else (self.height() - 16) // 2,
+                width, 16,
+            )
             chips.insert(0, (chip_rect, text, tone))
             right -= width + 4
         left = rect.left() + (20 if self._selectable else 0)
         return left, right - 4, chips, record_rect
 
     def _refresh_tooltip(self) -> None:
+        if self._names_expanded:
+            self.setToolTip("")
+            return
         name_font, _chip = self._fonts()
         left, right, _chips, _record = self._layout()
         fits = QtGui.QFontMetrics(name_font).horizontalAdvance(self.name) <= max(0, right - left)
@@ -459,7 +513,7 @@ class BuildRow(QtWidgets.QAbstractButton):
         muted = QtGui.QColor(_TEXT_MUTED if enabled else _TEXT_DIM)
 
         if self._selectable:
-            dot = QtCore.QRectF(10.5, (self.height() - 12) / 2, 12, 12)
+            dot = QtCore.QRectF(10.5, 8 if self._names_expanded else (self.height() - 12) / 2, 12, 12)
             painter.setPen(QtGui.QPen(
                 QtGui.QColor(_ACCENT_CYAN if self.isChecked() else _TEXT_DIM), 1.4,
             ))
@@ -472,10 +526,13 @@ class BuildRow(QtWidgets.QAbstractButton):
 
         painter.setFont(name_font)
         painter.setPen(text_color)
-        metrics = QtGui.QFontMetrics(name_font)
-        name_rect = QtCore.QRect(left, 0, max(0, right - left), self.height())
-        elided = metrics.elidedText(self.name, QtCore.Qt.ElideRight, name_rect.width())
-        painter.drawText(name_rect, QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, elided)
+        if self._names_expanded:
+            self._name_layout().draw(painter, QtCore.QPointF(left, 6))
+        else:
+            metrics = QtGui.QFontMetrics(name_font)
+            name_rect = QtCore.QRect(left, 0, max(0, right - left), self.height())
+            elided = metrics.elidedText(self.name, QtCore.Qt.ElideRight, name_rect.width())
+            painter.drawText(name_rect, QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, elided)
 
         painter.setFont(chip_font)
         for chip_rect, text, tone in chips:
@@ -513,6 +570,7 @@ class BuildList(QtWidgets.QWidget):
     picked = QtCore.Signal(str)
     searched = QtCore.Signal(str)
     expanded = QtCore.Signal(bool)
+    names_expanded = QtCore.Signal(bool)
 
     def __init__(
         self,
@@ -544,6 +602,14 @@ class BuildList(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
+
+        self.names_toggle = button("Expand build names", "checkinMoreToggle", focusable=focusable)
+        self.names_toggle.setCheckable(True)
+        self.names_toggle.setFlat(True)
+        self.names_toggle.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
+        self.names_toggle.setToolTip("Show complete build names with badges and records below")
+        self.names_toggle.toggled.connect(self._on_names_toggled)
+        layout.addWidget(self.names_toggle)
 
         self.search: Optional[QtWidgets.QLineEdit] = None
         if searchable:
@@ -635,6 +701,8 @@ class BuildList(QtWidgets.QWidget):
                         option, selectable=self._selectable, focusable=self._focusable,
                     )
                     row.set_option(option, reason_label=label, reason=reason)
+                    row.set_names_expanded(self.names_toggle.isChecked())
+                    row.height_changed.connect(self._sync_sections)
                     row.clicked.connect(lambda _checked=False, k=option.key: self._on_row_clicked(k))
                     if self._group is not None:
                         self._group.addButton(row)
@@ -693,6 +761,18 @@ class BuildList(QtWidgets.QWidget):
         row = self._rows.get(key) if key else None
         if row is not None and key in self._more:
             self.more_area.ensureWidgetVisible(row, 0, 4)
+
+    # ------------------------------------------------------ full names
+
+    def set_names_expanded(self, expanded: bool) -> None:
+        self.names_toggle.setChecked(expanded)
+
+    def _on_names_toggled(self, checked: bool) -> None:
+        self.names_toggle.setText("Compact build names" if checked else "Expand build names")
+        for row in self._rows.values():
+            row.set_names_expanded(checked)
+        self._sync_sections()
+        self.names_expanded.emit(checked)
 
     # ----------------------------------------------------------- more
 
@@ -769,6 +849,7 @@ class BuildList(QtWidgets.QWidget):
         featured_hits = sum(1 for key in self._featured if self._matches(key))
         more_hits = sum(1 for key in self._more if self._matches(key))
         show_featured = featured_hits > 0
+        self.names_toggle.setVisible(bool(featured_hits or more_hits))
         # Without featured rows the full list is the list: no expander.
         expander = bool(self._featured) and bool(self._more) and not searching
         show_more = more_hits > 0 and (
@@ -784,9 +865,12 @@ class BuildList(QtWidgets.QWidget):
             )
         self.more_label.setVisible(show_more and not self._featured and not searching)
         self.more_area.setVisible(show_more)
-        visible_rows = min(more_hits, MORE_VISIBLE_ROWS)
+        heights = [self._rows[key].height() for key in self._more if self._matches(key)]
+        content_height = sum(heights) + max(0, len(heights) - 1) * ROW_SPACING
+        # Keep a bounded viewport; every expanded row remains scrollable.
+        max_height = MORE_VISIBLE_ROWS * (60 if self.names_toggle.isChecked() else ROW_HEIGHT + ROW_SPACING) - ROW_SPACING
         self.more_area.setFixedHeight(
-            max(0, visible_rows * (ROW_HEIGHT + ROW_SPACING) - ROW_SPACING),
+            min(content_height, max_height),
         )
         if searching and not featured_hits and not more_hits:
             self.empty_label.setText(self._no_match)

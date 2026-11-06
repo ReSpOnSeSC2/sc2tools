@@ -24,6 +24,10 @@ class ScoutingControllerMixin:
         if identity is None:
             return
         game.opponent_pulse_id = identity
+        if game.scouting is not None and game.scouting.pulse_id not in (None, identity):
+            game.opp_revealed_name = None
+            if card is not None:
+                card.opp_revealed_name = None
         if card is not None and card.opponent_pulse_id != identity:
             card.opponent_pulse_id = identity
             if not card.opponent_note_touched:
@@ -52,13 +56,22 @@ class ScoutingControllerMixin:
 
     def _receive_scouting(self, payload: Any) -> None:
         game = self._current_game()
-        if game is None or not game.in_progress:
+        if game is None or (not game.in_progress and (game.closed or game.phase != "match_ended")):
             return
         brief = parse_scouting_brief(payload, game.game_key)
         if brief is None or (game.opp_name and brief.opponent_name.casefold() != game.opp_name.casefold()):
             return
+        if game.opponent_pulse_id and brief.pulse_id and game.opponent_pulse_id != brief.pulse_id:
+            return
         game.scouting = brief
-        self._show_or_refresh_scouting(game)
+        if "oppRevealedName" in payload:
+            game.opp_revealed_name = brief.opponent_revealed_name
+        card = self._cards.get(game.card_id) if game.card_id else None
+        if card is not None and card.undecided:
+            card.opp_revealed_name = game.opp_revealed_name
+            self._render_card(card)
+        if game.in_progress:
+            self._show_or_refresh_scouting(game)
 
     def _show_or_refresh_scouting(self, game: Any) -> None:
         if not self._prefs.loading_cards and self._loading_may_show(game) and (
@@ -70,7 +83,10 @@ class ScoutingControllerMixin:
 
     def _ensure_scouting(self, game: Any) -> None:
         read = getattr(self._api, "get_scouting_brief", None)
-        if (not self._show_scouting or not self._prefs.enabled or self._supported is False
+        # The same bounded cache read supplies the check-in's revealed name
+        # even when the player hides the optional scouting strip.
+        wants_identity = self._prefs.loading_cards or self._prefs.postgame_cards
+        if (not self._prefs.enabled or not (self._show_scouting or wants_identity) or self._supported is False
                 or game.display_time >= 30 or game.has_random or game.human_1v1() is not True
                 or game.scouting is not None or not callable(read) or game.scouting_fetching):
             return

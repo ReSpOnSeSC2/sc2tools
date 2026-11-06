@@ -2,6 +2,15 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.24.10
+
+### Fixed
+- Let build check-ins expand complete build names, including replay-detected
+  choices, in floating cards and Build selectors. Wrap names above badges and
+  records, keep tall cards scrollable and preserve selections while expanding.
+- Show known opponent identities in parentheses at loading and after the game,
+  including when loading-screen scouting is hidden.
+
 ## 0.24.9
 
 Includes all changes prepared for 0.24.8 but not published in that installer release.
