@@ -1421,7 +1421,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     auth,
     integrations: services.platformIntegrations,
     streamingTitles: new StreamingTitlesService({ integrations: services.platformIntegrations }),
-    titleSession: (userId) => require("./services/streamTitleSession").streamTitleSession(deps.db, services.games, userId),
+    titleSession: (userId) => require("./services/streamTitleSession").streamTitleSession(
+      deps.db, services.games, userId, () => services.liveGameBroker.latest(userId),
+    ),
   }));
   if (services.twitchAutomation) app.use(SERVICE.ROUTE_PREFIX, buildTwitchAutomationRouter({
     auth, automation: services.twitchAutomation, tokens: services.overlayTokens,

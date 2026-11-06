@@ -34,11 +34,17 @@ Leave the setting off to sync standard analysis only. The website's
 either setting, using agent 0.16.11 or newer.
 
 **Streams** accepts statistic tokens such as `SC2 | {mmr} MMR | {record}` and
-shows a live preview. Automatic updates start off: choose the connected
-platforms, enable **Refresh titles after each synced game**, and save its
-settings. Twitch/Kick are selected initially; YouTube is not. Updates wait for
-the live replay to sync, skip unchanged titles and run at most every ten minutes
-on their own worker. See [Stream titles](https://sc2tools.com/help/desktop-stream-titles).
+shows a live preview. **Use current-match template** keeps your plain-text
+prefix and adds the opponent, known alias, head-to-head record and available
+map, for example `GM Protoss | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}`.
+Maps appear only when the live source provides them; ordinary ladder games
+may not report a map. Automatic updates start off: choose the connected
+platforms, enable **Refresh titles at the start of each game** or the independent
+**Refresh titles after each synced game**, and save the settings. Game-start
+updates run once for each live game when the current opponent is ready.
+Post-game updates wait for the live replay to sync and run at most every ten
+minutes. Both skip unchanged titles and use their own worker. Twitch/Kick are
+selected initially; YouTube is not. See [Stream titles](https://sc2tools.com/help/desktop-stream-titles).
 
 If you unpair this PC on the website, the desktop window says **This PC was
 unlinked from your account**. Click **Link again** and confirm the new code.
@@ -142,9 +148,11 @@ upgrade timings, Ghost reference buttons and 3/6/10-minute or full-build ranges.
 It follows the live opponent even while you browse another profile. Between
 matches, compact clears the opponent and waits for the next match.
 
-While StarCraft II has focus, only the compact button's **Scouting** action accepts clicks.
-Other compact controls and floating panel areas pass clicks through to the game.
-Use Alt+Tab to another application to restore normal overlay interaction or expand.
+While StarCraft II has focus, the compact button's **Scouting** action and the
+floating **Scouting** report accept mouse input without taking game focus.
+Scroll either build order directly, and use the report's replay, range and window
+controls. Other compact controls and display panels pass clicks through to the
+game. Use Alt+Tab to interact with those display panels or expand Compact.
 Right-click the strip to expand Companion, minimize, close or open the shared
 Agent menu. These window actions are kept off the compact strip itself.
 Compact uses a transparent background with text and one original control: a

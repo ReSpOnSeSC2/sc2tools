@@ -2,6 +2,26 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.24.11
+
+### Added
+- Add optional game-start stream titles with the current opponent, known alias,
+  race and head-to-head W–L record and win-rate tokens. Include a map only when
+  the live source supplies it. A template preset preserves your custom prefix.
+- Keep game-start updates off by default, with their own on/off checkbox in
+  Streams. Choose the destination platforms and save to opt in; turn the
+  checkbox off and save to stop future updates. The existing post-sync option
+  remains independent. Saving a template or settings never publishes a title.
+
+### Fixed
+- Allow both automatic title options to be turned off even with a blank or
+  invalid draft title, keeping the last valid saved template.
+- Let the floating build-versus-build scouting report receive mouse clicks and
+  wheel scrolling over either build order while StarCraft II keeps focus.
+- Cancel pending title work when a game ends, its identity changes, the account
+  changes or automatic updates are turned off. Retain attempted-title receipts
+  so ambiguous platform requests are not automatically repeated after restart.
+
 ## 0.24.10
 
 ### Fixed

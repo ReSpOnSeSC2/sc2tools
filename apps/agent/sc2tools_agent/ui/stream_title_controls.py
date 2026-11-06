@@ -11,8 +11,16 @@ class StreamTitleControls:
         self.preview = page._label("Preview: waiting for synced statistics.", True)
         layout.addWidget(self.preview)
         layout.addWidget(page._label("Tokens: " + TOKEN_REFERENCE + ". Separate optional parts with |. Rendered titles must fit 70 characters.", True))
+        self.match_template = page._button("Use current-match template", self.use_match_template, quiet=True)
+        layout.addWidget(self.match_template)
+        self.on_game_start = QtWidgets.QCheckBox("Refresh titles at the start of each game")
+        self.on_game_start.setChecked(False)
+        self.on_game_start.setToolTip("Optional and off by default. Uncheck and save to stop game-start title updates.")
+        self.on_game_start.toggled.connect(self.edited)
+        layout.addWidget(self.on_game_start)
         self.enabled = QtWidgets.QCheckBox("Refresh titles after each synced game")
         self.enabled.setChecked(False)
+        self.enabled.setToolTip("Optional post-sync updates, independent of game-start updates. Uncheck and save to stop.")
         layout.addWidget(self.enabled)
         row = QtWidgets.QHBoxLayout()
         self.platforms = {}
@@ -36,9 +44,18 @@ class StreamTitleControls:
     def edited(self, *_args):
         self.dirty = True
 
+    def use_match_template(self):
+        # Preserve a custom plain-text prefix without repeating match tokens.
+        current = self.page.title_input.text().split("|", 1)[0].strip()
+        prefix = current if current and "{" not in current and "}" not in current else "SC2"
+        self.page.title_input.setText(prefix + " | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}")
+        self.page._title_edited()
+        self.edited()
+
     def configure(self):
         self.page.job({"action": "configure_title_automation", "template": self.page.title_input.text(),
-            "enabled": self.enabled.isChecked(), "platforms": {name: control.isChecked() for name, control in self.platforms.items()}})
+            "enabled": self.enabled.isChecked(), "on_game_start": self.on_game_start.isChecked(),
+            "platforms": {name: control.isChecked() for name, control in self.platforms.items()}})
 
     def update_preview(self, *_args):
         try:
@@ -51,18 +68,19 @@ class StreamTitleControls:
         self.values = settings.get("values", {})
         if not self.dirty:
             for control, checked in [(self.enabled, settings.get("enabled") is True),
+                (self.on_game_start, settings.get("on_game_start") is True),
                 *[(control, settings.get("platforms", {}).get(name, name != "youtube")) for name, control in self.platforms.items()]]:
                 blocked = control.blockSignals(True)
                 control.setChecked(checked)
                 control.blockSignals(blocked)
         self.note.setText(settings.get("message", "Automatic updates are off. Saving these settings never publishes a title.")
-            + " At most once every 10 minutes, only when the rendered title changes. Matchup rates and peak use at most 512 recorded ladder games from 90 days; peak uses the current character/race.")
+            + " Game-start refresh runs once per live game when its opponent is ready. Post-sync refresh runs at most once every 10 minutes. Only changed titles are sent. Head-to-head uses your confirmed record against the current opponent. Map appears only when the live source supplies it. Matchup rates and peak use at most 512 recorded ladder games from 90 days.")
         self.update_preview()
         self.buttons()
 
     def buttons(self):
         usable = not self.page.busy and self.page.state.get("account_mode") == "sc2tools"
-        for control in (self.enabled, self.save, self.refresh, *self.platforms.values()):
+        for control in (self.enabled, self.on_game_start, self.match_template, self.save, self.refresh, *self.platforms.values()):
             control.setEnabled(usable)
 
 
