@@ -82,18 +82,13 @@ const PULSE_ID_CAP = 20;
 //   - A numeric SC2Pulse character id, e.g. "994428"
 //   - A sc2reader toon handle, e.g. "1-S2-1-267727" (region-S<season>-realm-id)
 const NUMERIC_RE = /^[0-9]{1,12}$/;
-const TOON_RE = /^[1-9]-S\d+-\d+-\d+$/i;
+const TOON_RE = /^(98|[1-9])-S\d+-\d+-\d+$/i;
 
-function isNumericPulseId(raw: string): boolean {
-  return NUMERIC_RE.test(raw);
-}
-function isToonHandle(raw: string): boolean {
-  return TOON_RE.test(raw);
-}
-function classifyPulseId(raw: string): "pulse" | "toon" | "invalid" {
-  if (isNumericPulseId(raw)) return "pulse";
-  if (isToonHandle(raw)) return "toon";
-  return "invalid";
+function classifyPulseId(raw: string): "pulse" | "toon" | "ptr" | "invalid" {
+  if (NUMERIC_RE.test(raw)) return "pulse";
+  const toon = TOON_RE.exec(raw);
+  if (!toon) return "invalid";
+  return toon[1] === "98" ? "ptr" : "toon";
 }
 
 function toDraft(read: ProfileRead | undefined): Draft {
@@ -481,7 +476,9 @@ function PulseIdEditor({
       {/* Add row */}
       <Field
         label={ids.length === 0 ? "Add your first Pulse ID" : "Add another Pulse ID"}
-        hint="Numeric SC2Pulse id (e.g. 994428) or toon handle (e.g. 1-S2-1-267727)"
+        hint={liveClass === "ptr"
+          ? "This PTR toon can identify you in replays. It has no SC2Pulse ladder rating."
+          : "Numeric SC2Pulse id (e.g. 994428) or toon handle (e.g. 1-S2-1-267727)"}
         error={error || undefined}
       >
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -532,16 +529,17 @@ function PulseIdEditor({
 
 function PulseIdChip({ id, onRemove }: { id: string; onRemove: () => void }) {
   const kind = classifyPulseId(id);
-  const isToon = kind === "toon";
-  const sc2pulseHref = !isToon
+  const sc2pulseHref = kind === "pulse"
     ? `https://sc2pulse.nephest.com/sc2/?type=character&id=${encodeURIComponent(id)}&m=1#player-stats-mmr`
     : null;
   return (
     <li className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-bg-elevated py-1 pl-3 pr-1.5 text-caption text-text">
       <span className="truncate font-mono">{id}</span>
-      <Badge variant={isToon ? "neutral" : "accent"} size="sm">
-        {isToon ? "toon" : "pulse"}
-      </Badge>
+      {kind !== "invalid" ? (
+        <Badge variant={kind === "pulse" ? "accent" : "neutral"} size="sm">
+          {kind === "ptr" ? "PTR" : kind}
+        </Badge>
+      ) : null}
       {sc2pulseHref ? (
         <a
           href={sc2pulseHref}
@@ -599,7 +597,7 @@ function DetectedSuggestions({
       </div>
       <p className="mt-1 text-caption text-text-dim">
         These are toon handles the agent saw in your uploaded games. Add the
-        ones that are yours and we'll use them for MMR lookups and overlays.
+        ones that are yours to identify your replays and look up available ladder ratings.
       </p>
       <ul className="mt-2 flex flex-wrap gap-2">
         {detected.map((id) => (
@@ -667,8 +665,10 @@ function PulseIdHelp() {
         </li>
       </ol>
       <p className="mt-3 text-text-dim">
-        Multiple regions? Add one ID per region. The session widget picks the
-        most recent identity automatically.
+        Multiple regions? Add one ID per region. Today shows available ladder
+        ratings by region. The session widget uses your most recent ladder
+        identity. PTR toon handles can identify your replays, but the PTR has
+        no SC2Pulse ladder rating.
       </p>
     </div>
   );

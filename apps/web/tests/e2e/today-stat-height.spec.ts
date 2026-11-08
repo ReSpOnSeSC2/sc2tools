@@ -33,14 +33,14 @@ async function geometry(page: Page) {
 }
 
 for (const theme of ["light", "dark"] as const) {
-  test(`Today ${theme}: mobile statistics fit their content with populated, empty and loading sessions`, async ({ page }, info) => {
+  test(`Today ${theme}: mobile statistics fit their content across card states`, async ({ page }, info) => {
     test.setTimeout(120_000);
     const evidence = await openTodayStatHeightFixture(page, { theme });
     const widths = info.project.name === "mobile-360" ? [320, 390] : [info.project.name === "tablet-768" ? 768 : 1280];
     const observations = [];
     for (const width of widths) {
       await page.setViewportSize({ width, height: 1000 });
-      for (const state of ["populated", "empty", "loading"]) {
+      for (const state of ["populated", "empty", "loading", "mmr-unavailable"]) {
         await evidence.showState(state);
         const strip = page.getByTestId("dashboard-kpi-strip"), session = page.getByTestId("kpi-today-session");
         // The record is a text node in the same hint as the timeframe span.
@@ -60,6 +60,9 @@ for (const theme of ["light", "dark"] as const) {
           await expect(session.getByText("No session in the current view", { exact: true })).toBeVisible();
           await expect(winRateHint).toHaveText(/^No games in this window\s*Own timeframe · ignores date, matchup, region and Strategies filters$/);
           await expect(strip.getByRole("link", { name: "Add a Pulse ID in Settings", exact: true })).toHaveAttribute("href", "/settings?tab=profile#pulse-id-help");
+        } else if (state === "mmr-unavailable") {
+          await expect(strip.getByRole("button", { name: "No current ladder MMR Retry", exact: true })).toBeVisible();
+          await expect(strip.getByRole("link", { name: "Add a Pulse ID in Settings", exact: true })).toHaveCount(0);
         } else {
           await expect(session.getByRole("status")).toHaveText("Loading session view…");
           await expect(session.getByText("No session in the current view", { exact: true })).toHaveCount(0);

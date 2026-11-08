@@ -325,7 +325,14 @@ function KpiPendingHint({
   what: string;
   q: QueryLike<unknown>;
 }) {
-  if (status === "failed") return <KpiRetry what={what} onRetry={() => q.mutate()} />;
+  if (status === "failed") {
+    return (
+      <KpiRetry
+        message={<>Couldn&apos;t load<span className="sr-only"> {what}.</span></>}
+        onRetry={() => q.mutate()}
+      />
+    );
+  }
   // A bar shaped like the hint line, not "Loading…" text.
   return (
     <>
@@ -342,7 +349,7 @@ function KpiPendingHint({
  * repeat presses. The connection banner covers a dropped connection,
  * so the card itself stays short.
  */
-function KpiRetry({ what, onRetry }: { what: string; onRetry: () => unknown }) {
+function KpiRetry({ message, onRetry }: { message: ReactNode; onRetry: () => unknown }) {
   const [retrying, setRetrying] = useState(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -381,7 +388,7 @@ function KpiRetry({ what, onRetry }: { what: string; onRetry: () => unknown }) {
         aria-hidden
       />
       <span>
-        Couldn&apos;t load<span className="sr-only"> {what}.</span>
+        {message}
         <span aria-hidden> ·</span>{" "}
         <span className="font-semibold text-accent">
           {retrying ? "Retrying…" : "Retry"}
@@ -405,31 +412,13 @@ interface MmrEntry {
 
 interface MmrResponse {
   entries: MmrEntry[];
+  hasSavedIds: boolean;
   truncated: boolean;
 }
 
 /**
- * Per-toon / per-region MMR card. Sourced from SC2Pulse via
- * ``/v1/me/mmr`` which fans out one fetch per ``pulseIds`` entry on
- * the user's profile, so each Battle.net account contributes its own
- * region + MMR row.
- *
- * Auto-resizing strategy — the strip allots ~120 px of horizontal
- * real estate per card, so we never try to fit every name inline:
- *
- *   * Single toon (most common): headline number with the region as
- *     the hint. Looks identical in weight to the surrounding KPI
- *     cards.
- *   * 2 toons: both stacked as REGION · MMR rows.
- *   * 3+ toons OR multiple toons in the same region: headline shows
- *     the best MMR and a "details" disclosure opens a popover with
- *     the full grouped-by-region list. The popover is scrollable —
- *     any toon count fits without the card itself growing.
- *
- * The card is filter-agnostic: region selection in the global
- * FilterBar does NOT prune entries here. The card answers "what's my
- * ladder rating right now?", a per-user attribute — not a per-game
- * stat.
+ * Current SC2Pulse MMR for saved identities. Show the highest returned
+ * rating per region, independent of the global analysis filters.
  */
 function MmrPerRegionStat() {
   // Not keyed on dbRev: each request asks SC2Pulse once per Pulse ID.
@@ -453,14 +442,16 @@ function MmrPerRegionStat() {
       <StatCard
         label="MMR"
         value="—"
-        hint={
+        hint={data?.hasSavedIds === false ? (
           <Link
             href={PULSE_ID_SETTINGS_HREF}
             className="rounded-sm text-accent hover:text-accent-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Add a Pulse ID in Settings
           </Link>
-        }
+        ) : (
+          <KpiRetry message="No current ladder MMR" onRetry={() => mmr.mutate()} />
+        )}
         size="md"
       />
     );
