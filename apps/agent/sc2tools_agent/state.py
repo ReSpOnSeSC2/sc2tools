@@ -523,7 +523,7 @@ def _state_from_raw(raw):
                 raw.get("companion_preferences")
                 if isinstance(raw.get("companion_preferences"), dict) else {}
             ).items()
-            if key in {"overlaysEnabled", "opponentOverlay", "scoutingOverlay", "scoutingReadAloud"}
+            if key in {"overlaysEnabled", "opponentOverlay", "scoutingOverlay", "scoutingSkipFirstMeeting", "scoutingReadAloud"}
             and type(value) is bool
         },
         companion_ghost=(

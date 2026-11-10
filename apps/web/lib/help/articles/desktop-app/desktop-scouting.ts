@@ -7,8 +7,8 @@ const article: HelpArticle = {
   category: "desktop-app",
   audience: "all",
   signedInOnly: true,
-  keywords: ["scouting", "loading screen", "opponent", "private note", "dossier", "head to head", "usually", "best answer", "first meeting"],
-  updated: "2026-10-23",
+  keywords: ["scouting", "loading screen", "opponent", "private note", "dossier", "head to head", "usually", "best answer", "first meeting", "last five games", "recent builds"],
+  updated: "2026-11-10",
   body: [
     { type: "paragraph", text: "The paired desktop app can show a small private scouting strip when a human 1v1 loads. It uses your account's existing opponent history. The strip stays visible after you lock in a build, then disappears with the loading card about 30 seconds into the game. It uses the desktop card's non-activating window, so there is no keyboard shortcut you need to press while loading." },
     { type: "heading", text: "Show or hide scouting", anchor: "turn-on" },
@@ -21,6 +21,7 @@ const article: HelpArticle = {
     { type: "list", items: [
       "**You 3–2 · last met 2 days ago (L on Alcyone)** is your record and most recent meeting. **First meeting** requires a confirmed empty history; **No confirmed record yet** means an exact record was unavailable.",
       "**Usually: 12 Pool (3 of last 5)** names the most common recorded opening and its actual sample count. **Best: Hatch First 3–1** shows the build with the best qualifying record in your opponent history. Small samples describe past games; they are not a promise about this game.",
+      "**Their last 5 games: W vs 12 Pool · L vs Hatch First · …** and **Your last 5 games: W with Blink · …** list each player's most recent builds, newest first, with **your** result in each game. They arrive with agent 0.25.0. The opponent's line holds only your own games against them, so a first meeting has none. Fewer than five games say how many there are. Long build names are shortened so all five games fit; the [floating Scouting report](/help/desktop-companion#last-five-games) has the full names.",
       "Your private opponent note takes up at most two lines. **Open dossier** opens the opponent in your browser, where you can read the full history and note. If the opponent's exact account is not known, it opens your Opponents list instead and does not show a private note from a name-only match.",
     ] },
     { type: "heading", text: "Leave a note for next time", anchor: "notes" },

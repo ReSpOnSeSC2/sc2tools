@@ -34,17 +34,22 @@ class ElidedText(QtWidgets.QLabel):
         value = " ".join(self._raw.split())
         width = max(1, self.contentsRect().width())
         metrics = self.fontMetrics()
-        if self._lines == 2:
-            layout = QtGui.QTextLayout(value, self.font())
-            layout.beginLayout()
-            first = layout.createLine()
-            if first.isValid(): first.setLineWidth(width)
-            length = first.textLength() if first.isValid() else len(value)
-            layout.endLayout()
-            if length < len(value):
-                value = value[:length].rstrip() + "\n" + metrics.elidedText(value[length:].lstrip(), QtCore.Qt.ElideRight, width)
-        else:
-            value = metrics.elidedText(value, QtCore.Qt.ElideRight, width)
+        rows, end = [], 0
+        layout = QtGui.QTextLayout(value, self.font())
+        layout.beginLayout()
+        # Every line but the last wraps; the last one takes the rest, elided.
+        while len(rows) < self._lines - 1 and end < len(value):
+            line = layout.createLine()
+            if not line.isValid():
+                break
+            line.setLineWidth(width)
+            end = line.textStart() + line.textLength()
+            rows.append(value[line.textStart():end].rstrip())
+        layout.endLayout()
+        rest = value[end:].lstrip()
+        if rest or not rows:
+            rows.append(metrics.elidedText(rest, QtCore.Qt.ElideRight, width))
+        value = "\n".join(rows)
         if value != self.text(): self.setText(value)
         self.setMaximumHeight(metrics.lineSpacing() * self._lines + 4)
 
@@ -60,16 +65,24 @@ class ScoutingStrip(QtWidgets.QFrame):
         layout.setSpacing(4)
         self.record = ElidedText()
         self.opening = ElidedText()
+        # Each player's recent builds, newest first. With long names cut in
+        # the short form, all five games fit four lines of the 320 px card.
+        self.their_builds = ElidedText(lines=4)
+        self.your_builds = ElidedText(lines=4)
         self.note = ElidedText(lines=2)
         self.dossier = link("Open dossier", focusable=False)
         self.dossier.clicked.connect(self.open_requested.emit)
-        for widget in (self.record, self.opening, self.note, self.dossier):
+        for widget in (self.record, self.opening, self.their_builds, self.your_builds, self.note, self.dossier):
             layout.addWidget(widget)
 
     def set_model(self, model: Optional[ScoutingStripModel]) -> None:
         self.record.set_full_text(model.record_line if model else "Scouting isn't available yet.")
         self.opening.set_full_text(model.opening_line if model else "")
         self.opening.setVisible(model is not None)
+        for label, text in ((self.their_builds, model.their_builds if model else ""),
+                            (self.your_builds, model.your_builds if model else "")):
+            label.set_full_text(text)
+            label.setVisible(bool(text))
         self.note.set_full_text(model.note if model else "")
         self.note.setVisible(bool(model and model.note))
         self.dossier.setVisible(model is not None)

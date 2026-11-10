@@ -128,7 +128,7 @@ def test_floating_scouting_hydrates_independently_and_catches_up_on_restore(quie
     context = {"name": "Separate live enemy", "pulseId": "live-enemy",
                "last5GamesScouting": [game("other-encounter")]}
     panel.update_context(context, scope=("fixture-owner", "live-game"))
-    key = panel._key
+    key = panel._keys["opp"]
     complete(page, key, name="Hatchery")
     assert filters == [] and not panel.comparison.build_chains["my"].events
     panel.show()

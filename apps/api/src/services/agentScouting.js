@@ -4,6 +4,9 @@
 // device room or the device-auth REST response, never an overlay event.
 const SCOUTING_BRIEF_MAX_BYTES = 8_192;
 const ACTIVE = new Set(["match_loading", "match_started", "match_in_progress"]);
+const { RECENT_BUILDS_LIMIT } = require("./scouting/recentBuilds");
+/** The strip elides long names anyway; the dossier keeps the full one. */
+const BRIEF_BUILD_NAME_LIMIT = 80;
 
 /** @param {unknown} value @param {number} limit @returns {string} */
 function text(value, limit) {
@@ -32,6 +35,58 @@ function toonIdentity(value) {
   if (typeof value !== "string") return null;
   const id = value.trim();
   return id.length <= 80 && /^\d+-S2-\d+-\d+$/.test(id) ? id : null;
+}
+/** @param {unknown} value @returns {'Win'|'Loss'|'Tie'|null} */
+function gameResult(value) {
+  return value === "Win" || value === "Loss" || value === "Tie" ? value : null;
+}
+
+/**
+ * One player's recent builds in the strip's short form: the result and the
+ * build only, so ten rows stay a small part of the byte cap.
+ * @param {unknown} rows
+ */
+function briefBuildRows(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .slice(0, RECENT_BUILDS_LIMIT)
+    .filter((row) => row && typeof row === "object")
+    .map((row) => ({ result: gameResult(row.result), build: text(row.build, BRIEF_BUILD_NAME_LIMIT) }));
+}
+/**
+ * The lists are matched by exact account, never by display name, so they
+ * are read from the enrichment even when a name-only match set its other
+ * records aside.
+ * @param {unknown} value ``streamerHistory.recentBuilds``
+ * @returns {{matchup: string|null, mine: object[], theirs: object[]|null}|null}
+ *   null when the enrichment carries no lists, so the brief omits the field;
+ *   ``theirs`` stays null while the opponent's account is unknown
+ */
+function briefRecentBuilds(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const builds = /** @type {Record<string, unknown>} */ (value);
+  const { matchup } = builds;
+  return {
+    matchup: typeof matchup === "string" && /^[PTZR]v[PTZR]$/.test(matchup) ? matchup : null,
+    mine: briefBuildRows(builds.mine),
+    theirs: Array.isArray(builds.theirs) ? briefBuildRows(builds.theirs) : null,
+  };
+}
+/** @param {object} brief @returns {boolean} */
+function fitsBrief(brief) {
+  return Buffer.byteLength(JSON.stringify(brief), "utf8") <= SCOUTING_BRIEF_MAX_BYTES;
+}
+/**
+ * The largest brief inside the byte cap. The recent builds are dropped
+ * first, so adding them can never cost a player the lines an older agent
+ * already showed.
+ * @param {Record<string, any>} brief
+ * @param {object|null} recentBuilds
+ * @returns {Record<string, any>|null}
+ */
+function cappedBrief(brief, recentBuilds) {
+  const complete = recentBuilds ? { ...brief, recentBuilds } : brief;
+  if (fitsBrief(complete)) return complete;
+  return fitsBrief(brief) ? brief : null;
 }
 
 /**
@@ -97,9 +152,25 @@ function buildScoutingBrief(envelope) {
     note: pulseId ? text(history.opponentNotes?.text, 500) : "",
     dossierUrl: pulseId ? `/app/opponents/${encodeURIComponent(pulseId)}` : "/app/opponents",
   };
-  return Buffer.byteLength(JSON.stringify(brief), "utf8") <= SCOUTING_BRIEF_MAX_BYTES ? brief : null;
+  return cappedBrief(brief, briefRecentBuilds(history.recentBuilds));
+}
+
+/**
+ * The envelope as an overlay token receives it. Each player's recent
+ * builds are for the device's private views, so the OBS source gets
+ * exactly the enrichment it got before they existed.
+ * @template {Record<string, any>|null|undefined} T
+ * @param {T} envelope
+ * @returns {T}
+ */
+function overlayEnvelope(envelope) {
+  const history = envelope?.streamerHistory;
+  if (!history || typeof history !== "object" || !("recentBuilds" in history)) return envelope;
+  const shared = { ...history };
+  delete shared.recentBuilds;
+  return /** @type {T} */ ({ ...envelope, streamerHistory: shared });
 }
 
 /** @param {string} userId */
 const scoutingDeviceRoom = (userId) => `device-user:${userId}`;
-module.exports = { buildScoutingBrief, scoutingDeviceRoom, SCOUTING_BRIEF_MAX_BYTES };
+module.exports = { buildScoutingBrief, overlayEnvelope, scoutingDeviceRoom, SCOUTING_BRIEF_MAX_BYTES };

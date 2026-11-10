@@ -2,6 +2,24 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.25.0
+
+### Added
+- List the builds from each player's last five games in the floating **Scouting**
+  report, newest first, each with your result, the map and how long ago it was.
+  **You** is your last five games in this matchup. **Opponent** is the last five
+  games in your library against this player, linked accounts included: the app
+  knows a player's builds only from your own games against them. Fewer than
+  five says how many there are. Choose a game to open its build order. Until
+  the opponent's account is confirmed, their side reads **Not identified yet**,
+  never **First meeting**.
+- Show the same two lists in short form on the loading-screen scouting strip,
+  with long build names shortened so all five games fit.
+- Add **Keep scouting closed on a first meeting** to Companion's Assistance
+  settings, on by default. A pinned report now opens only when your library has
+  an earlier game against the opponent. The Scouting button still opens it, with
+  your own five games and **First meeting** on the opponent's side, never a guess.
+
 ## 0.24.11
 
 ### Added
