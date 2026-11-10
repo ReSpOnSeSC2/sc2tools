@@ -27,6 +27,7 @@ import { SettingsExportCards } from "./SettingsExportCards";
 
 const AccountDeleteDialog = dynamic(() => import("./AccountDeleteDialog"), { ssr: false });
 const HiddenGames = dynamic(() => import("./HiddenGames"), { ssr: false });
+const ReanalysisCard = dynamic(() => import("./ReanalysisCard"), { ssr: false });
 
 export function SettingsBackups() {
   const { getToken } = useAuth();
@@ -67,7 +68,7 @@ export function SettingsBackups() {
   async function refreshCaches() {
     try { await refresh((key) => {
       const path = Array.isArray(key) ? key.find((part) => typeof part === "string" && part.startsWith("/v1/")) : key;
-      return typeof path === "string" && /^\/v1\/(?:me(?:\?|$|\/(?:doctor|backups|replay-archive-status))|games|opponents|timeseries|streak|matchups|builds|macro|maps|trends|strategies|dashboard)/.test(path);
+      return typeof path === "string" && /^\/v1\/(?:me(?:\?|$|\/(?:doctor|backups|replay-archive-status|reanalysis))|games|opponents|timeseries|streak|matchups|builds|macro|maps|trends|strategies|dashboard)/.test(path);
     }); } catch { /* A refresh failure must not turn a completed wipe, restore or repair into a reported failure. */ }
   }
 
@@ -138,6 +139,7 @@ export function SettingsBackups() {
 
       <SnapshotManager onRestored={refreshHistory} onRestoreFailed={forgetUnlessRejected} />
       <DataRepairCard onStarted={refreshCaches} />
+      <ReanalysisCard />
 
       <HiddenGames />
 

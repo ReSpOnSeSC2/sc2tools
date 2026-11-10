@@ -18,6 +18,7 @@ import {
 import { ReplayDownloadButton } from "@/components/analyzer/ReplayDownloadButton";
 import { fmtGameDate, fmtMinutes, fmtMmr } from "@/lib/format";
 import { ShareGameButton } from "./ShareGameButton";
+import { AnalysisEngineChip } from "./AnalysisEngineChip";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { isReviewableGame } from "@/lib/reviews";
 import { CorrectedBadge, PlannedBadge } from "@/components/build-checkin/PlannedBadge";
@@ -151,6 +152,7 @@ export function GameDetailShell({
               {namedOpponent || game.opponent?.race ? <MetaItem label="Opponent">
                 <OpponentLink pulseId={game.opponent?.pulseId} name={oppName} race={game.opponent?.race} />
               </MetaItem> : null}
+              <MetaItem label="Analysis"><AnalysisEngineChip engineVersion={game.engineVersion} /></MetaItem>
             </dl>
 
             <div

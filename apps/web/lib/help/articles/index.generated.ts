@@ -15,6 +15,7 @@ import accountData_notifications from "./account-data/notifications";
 import accountData_playerChannels from "./account-data/player-channels";
 import accountData_privacyCookies from "./account-data/privacy-cookies";
 import accountData_publicProfile from "./account-data/public-profile";
+import accountData_reanalyze from "./account-data/reanalyze";
 import accountData_repairMyData from "./account-data/repair-my-data";
 import accountData_replayPacks from "./account-data/replay-packs";
 import accountData_stayUpToDate from "./account-data/stay-up-to-date";
@@ -117,6 +118,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   accountData_playerChannels,
   accountData_privacyCookies,
   accountData_publicProfile,
+  accountData_reanalyze,
   accountData_repairMyData,
   accountData_replayPacks,
   accountData_stayUpToDate,

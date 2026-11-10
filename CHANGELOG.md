@@ -11,6 +11,19 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Re-analysis
+
+- Add **Re-analyze games** to Settings → Backups & data. It lists the games an
+  older analysis engine labelled (each label-changing release says what
+  changed), games missing a macro score and games with no engine version, then
+  re-analyzes the chosen group through the desktop agent 100 games at a time,
+  with progress, time left, Pause, Resume and Cancel. Games come from the PC
+  when the replay is still there, otherwise from your Cloud Replay Archive.
+  Requires the next desktop agent release. See
+  [Re-analyze old games after an update](https://sc2tools.com/help/reanalyze).
+- Show which engine analyzed a game on its page, with a **Re-analyze** link.
+- Keep the engine and agent versions the desktop agent reports for each upload.
+
 ### Share cards
 
 - Fix the link printed on every share card. `sc2tools.com/arcade` now leads to
@@ -1153,6 +1166,8 @@ release preparation, not a signed or published 0.24.9 installer.
   fast-third Oracle/Robo/Twilight variant uses **AlphaStar Style (Oracle/Robo)**.
   TvP Widow Mine Drop requires early mines and Medivac-first Starport production,
   so Vikings into fast-three-CC bio with later support mines keep their bio label.
+  To relabel games uploaded earlier, see
+  [Re-analyze old games after an update](https://sc2tools.com/help/reanalyze).
 
 - **Agent 0.18.9:** game-start randomizer and scouting widgets no longer
   restart on brief loading/UI changes or reconnects. The agent preserves the match identity,
@@ -1165,6 +1180,8 @@ release preparation, not a signed or published 0.24.9 installer.
   upgrade. Dark Templar's Shadow Stride no longer counts as Blink. Charge-first
   macro openings that start their third Nexus before 6:00 are labeled
   **Charge First (Fast 3rd Nexus)**, including later Blink transitions.
+  To relabel games uploaded earlier, see
+  [Re-analyze old games after an update](https://sc2tools.com/help/reanalyze).
 
 - **Agent 0.18.6: post-game scene recovery.** A definite SC2 menu takes
   precedence over a cached result from the finished match. Slash-qualified

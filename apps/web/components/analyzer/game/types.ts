@@ -39,6 +39,8 @@ export interface GameSummary {
   macroScore?: number | null;
   apm?: number | null;
   spq?: number | null;
+  /** Reported analysis engine (SemVer) for owner reads; absent when unknown. */
+  engineVersion?: string | null;
   /** True when a confirmed build check-in overrides the classifier's label. */
   buildPlanned?: boolean;
   /** The classifier's own label while a check-in override is applied. */
