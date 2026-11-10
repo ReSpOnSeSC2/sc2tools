@@ -54,6 +54,17 @@ corresponding GitHub Release.
   Scouting button still opens it.
 - The lists reach paired desktop agents only. OBS overlay sources and the spoken
   report receive nothing new.
+- Give the main window and its Dashboard a flat, modern look: dark surfaces
+  told apart by tone instead of a gradient bezel and nested borders, one type
+  scale in the system font, and one style for every button, field, check box,
+  tab, table, menu and tooltip.
+- Give each skin one accent colour (violet, Protoss gold, Terran steel blue,
+  Zerg orange) and a small race mark beside the name; the race border artwork
+  stays. Text keeps at least 4.5:1 contrast in every skin.
+- Shorten the border animation and skip it while Windows has animation effects
+  turned off. Status lights keep their colour after a skin change.
+- Show the "&" in Help & support and three other labels, and line up the
+  Dashboard's four counts.
 
 ### Agent 0.24.11
 

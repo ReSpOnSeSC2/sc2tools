@@ -1239,10 +1239,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             brand_row = QtWidgets.QHBoxLayout(self._agent_brandbar)
             brand_row.setContentsMargins(0, 0, 0, 0)
             brand_row.setSpacing(10)
-            emblem = QtWidgets.QLabel()
-            emblem.setObjectName("agentBrandOrb")
-            emblem.setFixedSize(23, 23)
-            brand_row.addWidget(emblem)
+            from .brand_mark import create_brand_mark
+            brand_row.addWidget(create_brand_mark(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets))
             brand = QtWidgets.QLabel("SC2 TOOLS")
             brand.setObjectName("agentBrand")
             brand_row.addWidget(brand)
@@ -1256,6 +1254,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             brand_row.addWidget(version)
             self._agent_version = version
             self._agent_menu_button = QtWidgets.QToolButton()
+            self._agent_menu_button.setObjectName("agentMenuButton")
             self._agent_menu_button.setText("Agent")
             self._agent_menu_button.setAccessibleName("Agent pages and settings")
             self._agent_menu_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
@@ -1264,8 +1263,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             for title, route in (("Companion", "companion"), ("Dashboard", "dashboard"), ("Recent games", "recent"), ("Streams", "streams"), ("Activity log", "log"), ("Settings", "settings"), ("Help", "help")):
                 menu.addAction(title, lambda _checked=False, destination=route: self._go_to_page(destination))
             menu.addSeparator()
-            menu.addAction("Border & animations…", self._open_companion_appearance)
-            menu.addAction("Help & troubleshooting", lambda: self._go_to_page("help"))
+            menu.addAction("Border && animations…", self._open_companion_appearance)
+            menu.addAction("Help && troubleshooting", lambda: self._go_to_page("help"))
             self._check_updates_action = menu.addAction("Check for updates", self._check_updates_from_menu)
             menu.addSeparator()
             menu.addAction("Quit SC2 Tools", ui._on_quit)
@@ -1426,7 +1425,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._sidebar_status.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
             layout.addWidget(self._sidebar_status)
 
-            help_btn = QtWidgets.QPushButton("Help & support")
+            help_btn = QtWidgets.QPushButton("Help && support")
             help_btn.setFlat(True)
             help_btn.clicked.connect(lambda: self._go_to_page("help"))
             layout.addWidget(help_btn)
@@ -1654,8 +1653,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._stat_last = self._make_stat_card("Last upload", "—")
             self._stat_failed = self._make_stat_card("Failed (24 h)", "0")
             failures = QtWidgets.QPushButton("View problems")
+            failures.setObjectName("statAction")
             failures.setFlat(True)
             failures.clicked.connect(self._show_recent_problems)
+            # Below the stretch, so every card's number and caption share one line.
             self._stat_failed["frame"].layout().addWidget(failures)
 
             self._stat_cards = (self._stat_synced, self._stat_queued, self._stat_last, self._stat_failed)
@@ -1680,6 +1681,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             label_lbl.setObjectName("muted")
             label_lbl.setWordWrap(True)
             v.addWidget(label_lbl)
+            v.addStretch(1)
 
             return {"frame": card, "value": value_lbl, "label": label_lbl}
 
@@ -3633,7 +3635,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             widgets = [self, *self.findChildren(QtWidgets.QWidget)]
             for widget in widgets:
                 base_style = widget.property("raceBaseStyle")
-                if base_style is None and widget.styleSheet():
+                # A style of bare declarations (a status dot's colour) styles only its
+                # own widget; rules appended to it would not parse and drop that colour.
+                if base_style is None and "{" in widget.styleSheet():
                     base_style = widget.styleSheet()
                     widget.setProperty("raceBaseStyle", base_style)
                 if base_style is not None:

@@ -1,13 +1,13 @@
 """Qt-free race skin tokens and lazily constructed decorative window effects."""
 from __future__ import annotations
 
-from . import theme
+from . import system_motion, theme
 from .race_artwork import create_race_artwork
 from .race_materials import TERRAN_PALETTE, ZERG_PALETTE, paint_terran_border, paint_zerg_border
 
 
 RACE_SKINS = (("Default", "default"), ("Protoss", "protoss"), ("Terran", "terran"), ("Zerg", "zerg"))
-EXPAND_DURATION_MS = 450
+EXPAND_DURATION_MS = theme.MOTION_EXPAND_MS
 PROTOSS_GOLD_STOPS = ((0.0, "#fff0b8"), (0.15, "#b17a32"), (0.34, "#edcf86"),
                       (0.58, "#ac7937"), (0.78, "#f6dc9d"), (1.0, "#3a2817"))
 _PALETTES = {
@@ -30,61 +30,39 @@ def palette_for_skin(skin):
 
 
 def css_for_skin(skin):
+    """What a skin adds after the default stylesheet: its canvas, accent and focus colours.
+
+    The default skin adds nothing. Companion's pages still carry their own
+    stylesheets, so their accents are recoloured here as well.
+    """
     skin = normalize_skin(skin)
     if skin == "default":
         return ""
-    colors = palette_for_skin(skin)
-    frame_background = ("qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #242329,stop:0.5 #14131b,stop:1 #1b1820)"
-                        if skin == "protoss" else
-                        f"qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 {colors['frame']},stop:1 {colors['plate']})")
+    return theme.skin_layer(skin) + _companion_layer(theme.SKINS[skin])
+
+
+def _companion_layer(skin):
     return f"""
-QFrame#agentFrame, QFrame#companionConsole {{
-    background: {frame_background};
-    border-color: {colors['border']};
-}}
-QFrame#agentSidebar, QFrame#agentDisplay, QFrame#consoleProfile, QFrame#consoleDisplay,
-QFrame#card, QFrame#cardElevated, QFrame#companionCard,
-QFrame#studioCard, QFrame#studioDestination, QFrame#studioCommand {{ border-color: {colors['border']}; }}
-QPushButton, QToolButton, QPushButton#primary, QPushButton#checkinPrimary,
-QToolButton#windowMinimize, QToolButton#windowMaximize, QToolButton#windowClose,
-QFrame#companionConsole QPushButton, QFrame#companionConsole QToolButton,
-QWidget#companionDesk QPushButton, QWidget#companionPanel QPushButton,
-QWidget#ghostDesk QPushButton {{ background: {colors['frame']}; border-color: {colors['border']}; }}
-QPushButton:hover, QToolButton:hover, QPushButton#primary:hover, QPushButton#checkinPrimary:hover,
+QFrame#companionConsole {{ background: {skin.canvas}; border-color: {theme.BORDER}; }}
 QFrame#companionConsole QPushButton:hover, QFrame#companionConsole QToolButton:hover,
 QWidget#companionDesk QPushButton:hover, QWidget#companionPanel QPushButton:hover,
-QWidget#ghostDesk QPushButton:hover {{ background: {colors['plate']}; border-color: {colors['accent']}; }}
-QPushButton:checked, QToolButton:checked, QTabBar::tab:selected,
+QWidget#ghostDesk QPushButton:hover {{ border-color: {skin.accent_hover}; }}
 QFrame#companionConsole QPushButton:checked, QFrame#companionConsole QToolButton:checked,
-QWidget#companionDesk QPushButton:checked, QWidget#ghostDesk QPushButton:checked {{
-    background: {colors['plate']}; border-color: {colors['accent']};
-}}
-QLineEdit, QComboBox, QPlainTextEdit, QTextEdit, QAbstractSpinBox,
-QTreeView, QTreeWidget, QTableView, QTableWidget, QListView, QListWidget, QGroupBox,
-QWidget#companionDesk QLineEdit, QWidget#companionDesk QComboBox, QWidget#companionDesk QPlainTextEdit,
-QWidget#ghostDesk QLineEdit, QWidget#ghostDesk QComboBox, QWidget#ghostDesk QTreeWidget {{ border-color: {colors['border']}; }}
-QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus,
-QAbstractSpinBox:focus, QTreeView:focus, QTableView:focus, QListView:focus,
-QPushButton#navItem:checked, QTabBar::tab:selected {{ border-color: {colors['accent']}; }}
-QCheckBox::indicator:checked, QRadioButton::indicator:checked {{
-    background: {colors['accent']}; border-color: {colors['border']};
-}}
-QTreeView::item:selected, QTreeWidget::item:selected,
-QTableView::item:selected, QTableWidget::item:selected,
-QListView::item:selected, QListWidget::item:selected {{ border-color: {colors['accent']}; }}
-QPushButton#danger, QPushButton#dangerButton {{ color: {theme.DANGER}; border-color: rgba(241,109,109,0.55); }}
-QPushButton#danger:hover, QPushButton#dangerButton:hover,
-QFrame#companionConsole QPushButton#danger:hover, QFrame#companionConsole QPushButton#dangerButton:hover {{
-    background: rgba(241,109,109,0.10); border-color: {theme.DANGER};
-}}
-QToolButton#windowClose:hover, QFrame#companionConsole QToolButton#windowClose:hover {{
-    background: #8c345d; border-color: {theme.DANGER};
-}}
+QWidget#companionDesk QPushButton:checked, QWidget#ghostDesk QPushButton:checked,
+QWidget#companionDesk QListWidget::item:selected, QWidget#companionDesk QTabBar::tab:selected,
+QWidget#ghostDesk QTabBar::tab:selected {{ background: {skin.selected}; border-color: {skin.accent}; }}
+QWidget#companionDesk QLineEdit:focus, QWidget#companionDesk QComboBox:focus,
+QWidget#companionDesk QPlainTextEdit:focus, QWidget#ghostDesk QLineEdit:focus,
+QWidget#ghostDesk QComboBox:focus {{ border-color: {skin.focus}; }}
 """
 
 
 def create_race_effects(window, *, QtCore, QtGui, QtWidgets, compact_bezel=False):
-    """Decorate this window without changing its geometry, focus or input routing."""
+    """Decorate this window without changing its geometry, focus or input routing.
+
+    The expansion plays only while both the player's animation choice and
+    Windows' own animation effects are on.
+    """
 
     class RaceOverlay(QtWidgets.QWidget):
         def __init__(self):
@@ -388,7 +366,8 @@ def create_race_effects(window, *, QtCore, QtGui, QtWidgets, compact_bezel=False
             self.cancel()
             if (self._closed or not self.motion_enabled or self.skin == "default" or not window.isVisible()
                     or window.isMinimized() or not self._frame_target.isVisible()
-                    or window.property("textOverlay") is True or self._frame_target.property("textOverlay") is True):
+                    or window.property("textOverlay") is True or self._frame_target.property("textOverlay") is True
+                    or not system_motion.animations_enabled()):
                 return False
             self._clock.start()
             self.overlay.progress = 0.0
