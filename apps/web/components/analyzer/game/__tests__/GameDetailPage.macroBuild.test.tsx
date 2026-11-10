@@ -14,12 +14,17 @@ vi.mock("@/lib/useUserSocket", () => ({ useUserSocket: () => undefined }));
 
 import { BuildCheckInProvider } from "@/components/build-checkin/BuildCheckInProvider";
 import { GameDetailPage } from "../GameDetailPage";
+import { loadLazyHelpLink } from "@/components/help/__tests__/loadLazyHelpLink";
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
 beforeAll(async () => {
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
-  await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("@/components/battleReport/GameBattleReport")]);
+  await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("@/components/battleReport/GameBattleReport"),
+    import("@/components/notes/GameNotesPanel"), import("@/components/notes/GameReviewControl"), import("@/components/notes/GameOpponentNote")]);
 });
+// The page shows several lazy help links (the notes panel adds one): load their chunk
+// before rendering it, as loadLazyHelpLink explains.
+beforeAll(loadLazyHelpLink, 20_000);
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   h.reads = []; h.writes = []; h.state = intent({ detected: { name: "Replay classified opener", slug: null, key: null }, opponent: opponentState() });
