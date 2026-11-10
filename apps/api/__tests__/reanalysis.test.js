@@ -272,6 +272,23 @@ test("one active job per owner; other owners and their devices cannot touch it",
   expect((await db.reanalysisJobs.findOne({ userId: OWNER })).processed).toBe(0);
 });
 
+test("a running job records an agent that went offline and redelivers when it returns", async () => {
+  await db.games.insertMany([game(1)]);
+  const h = harness();
+  await h.service.start(OWNER, { cohortId: "engine-before:1.6.11" });
+  await h.idle();
+  h.setDevices([]);
+  expect((await h.service.overview(OWNER)).agent).toBe("offline");
+  await h.idle();
+  expect((await db.reanalysisJobs.findOne({ userId: OWNER })).status).toBe("waiting_for_agent");
+  expect(h.deliveries).toHaveLength(1);
+  h.setDevices([h.device]);
+  await h.service.deviceReady(deviceData);
+  await h.idle();
+  expect((await db.reanalysisJobs.findOne({ userId: OWNER })).status).toBe("running");
+  expect(h.deliveries).toHaveLength(2);
+});
+
 test("an API restart resumes the stored batch through a reconnecting agent", async () => {
   await db.games.insertMany([game(1), game(2)]);
   const before = harness();

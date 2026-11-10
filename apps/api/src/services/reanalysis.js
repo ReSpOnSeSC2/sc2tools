@@ -53,6 +53,8 @@ const OUTCOMES = new Map([
   ["no_result", "failed"],
 ]);
 const JOB_VIEW_PROJECTION = Object.freeze({ "batch.items": 0, versions: 0 });
+/** Coalesced triggers keep the strongest request: always > stale > presence > none. */
+const REDELIVERY_RANK = Object.freeze(/** @type {Record<string, number>} */ ({ false: 0, presence: 1, stale: 2, always: 3 }));
 
 /** @param {number} status @param {string} code */
 function fail(status, code) {
@@ -352,7 +354,7 @@ class ReanalysisService {
   _schedule(userId, redeliver) {
     const pending = this.kicks.get(userId);
     if (pending && !pending.started) {
-      if (redeliver === "always" || (redeliver && !pending.redeliver)) pending.redeliver = redeliver;
+      if (REDELIVERY_RANK[String(redeliver)] > REDELIVERY_RANK[String(pending.redeliver)]) pending.redeliver = redeliver;
       return pending.promise;
     }
     const entry = { started: false, redeliver, promise: Promise.resolve() };
@@ -377,7 +379,7 @@ class ReanalysisService {
       || (job.status === "waiting_for_agent" && agentState === "update_required")
       || (job.status === "update_required" && agentState === "offline");
     const undelivered = job.status === "running" && job.batch && job.batch.ackedGeneration !== job.generation;
-    if (job.status !== "paused" && (mismatch || stale || undelivered)) void this._schedule(userId, stale ? "stale" : false);
+    if (job.status !== "paused" && (mismatch || stale || undelivered)) void this._schedule(userId, stale ? "stale" : mismatch ? "presence" : false);
   }
 
   /** @param {string} userId @param {string|false} redeliver */
@@ -388,12 +390,15 @@ class ReanalysisService {
       const inFlight = job.status === "running" && job.batch && job.batch.ackedGeneration === job.generation && !batchSettled(job.batch);
       if (inFlight && !redeliver) return;
       const now = this.now();
-      if (inFlight && redeliver === "stale" && !(job.batch.lastActivityAt instanceof Date && now - job.batch.lastActivityAt.getTime() > this.stallMs)) return;
+      const quiet = job.batch?.lastActivityAt instanceof Date && now - job.batch.lastActivityAt.getTime() > this.stallMs;
+      if (inFlight && redeliver === "stale" && !quiet) return;
       const agent = await this._agent(userId);
       if (agent.state !== "ready") {
         await this._setWaiting(job, agent.state === "update_required" ? "update_required" : "waiting_for_agent");
         return;
       }
+      // A presence check only records who is connected; it never redelivers.
+      if (inFlight && redeliver === "presence") return;
       if (job.status !== "running") {
         const at = new Date(now);
         const running = await this.jobs.findOneAndUpdate(
