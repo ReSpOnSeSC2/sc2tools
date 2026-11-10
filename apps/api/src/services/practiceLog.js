@@ -191,7 +191,8 @@ class PracticeLogService {
     const context = await this.ingestContext(userId);
     const slot = context ? context.slots[matchup] : undefined;
     if (!slot) throw failure("practice_target_required", 409);
-    const races = { mine: matchup[0], theirs: matchup[2] };
+    // A validated matchup key is "<own race>v<their race>", e.g. "PvZ".
+    const races = { mine: /** @type {"P"|"T"|"Z"} */ (matchup[0]), theirs: /** @type {"P"|"T"|"Z"} */ (matchup[2]) };
     const candidates = await this.db.games
       .find(
         { userId, practice: { $exists: false }, myRace: raceMatch(races.mine), "opponent.race": raceMatch(races.theirs), ...LIVE_ROW },
