@@ -1,0 +1,76 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const api = vi.hoisted(() => ({ replies: new Map<string, unknown>(), paths: [] as string[] }));
+vi.mock("@/lib/clientApi", () => ({
+  useApi: (path: string | null) => {
+    if (path) api.paths.push(path);
+    return { data: path ? api.replies.get(path.split("#")[0]) : undefined, error: undefined, isLoading: false, mutate: vi.fn() };
+  },
+}));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "u1", isLoaded: true, isSignedIn: true }) }));
+
+const { CompareGamesButton, COMPARE_HINT_KEY } = await import("../CompareGamesButton");
+const { CompareSelectionButton } = await import("../CompareSelectionButton");
+beforeAll(async () => { await import("../CompareGamePicker"); });
+
+beforeEach(() => { window.localStorage.clear(); api.replies.clear(); api.paths.length = 0; router.push.mockReset(); });
+afterEach(() => cleanup());
+
+const game = { gameId: "g1", result: "Defeat", myBuild: "Chargelot", myRace: "Protoss", opponent: { pulseId: "p1", race: "Zerg", displayName: "Rival" } };
+
+describe("Compare… on the game page", () => {
+  it("shows a one-time hint until it is used or dismissed", () => {
+    const view = render(<CompareGamesButton game={game} />);
+    expect(screen.getByTestId("compare-hint")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Got it" }));
+    expect(screen.queryByTestId("compare-hint")).toBeNull();
+    expect(window.localStorage.getItem(COMPARE_HINT_KEY)).toBe("true");
+    view.unmount();
+    render(<CompareGamesButton game={game} />);
+    expect(screen.queryByTestId("compare-hint")).toBeNull();
+  });
+
+  it("opens the picker with the three smart chips and compares with the chosen game", async () => {
+    api.replies.set("/v1/replays?build=Chargelot&result=win&limit=25&sort=date_desc&enrich=none", { items: [
+      { gameId: "w1", result: "Victory", map: "Alcyone LE", macroScore: 70 },
+      { gameId: "w2", result: "Victory", map: "Ruby Rock LE", macroScore: 88 },
+    ] });
+    api.replies.set("/v1/games/g1/neighbors?scope=opponent", { prev: { gameId: "o1", result: "Victory", map: "Pylon LE" }, next: null });
+    api.replies.set("/v1/games/g1/neighbors?scope=matchup", { prev: null, next: { gameId: "m1", result: "Defeat", map: "Oceanborn" } });
+    render(<CompareGamesButton game={game} buildLabel="Chargelot" />);
+    fireEvent.click(screen.getByRole("button", { name: "Compare…" }));
+    await screen.findByTestId("compare-picker");
+    expect(window.localStorage.getItem(COMPARE_HINT_KEY)).toBe("true");
+    const best = screen.getByRole("button", { name: /Best win with this build/ });
+    expect(best.textContent).toContain("Ruby Rock LE");
+    expect(screen.getByRole("button", { name: /Previous game vs this opponent/ }).textContent).toContain("Pylon LE");
+    expect(screen.getByRole("button", { name: /Last game in this matchup/ }).textContent).toContain("Oceanborn");
+    fireEvent.click(best);
+    expect(router.push).toHaveBeenCalledWith("/app/compare?a=g1&b=w2");
+  });
+
+  it("disables a chip with nothing to offer", async () => {
+    render(<CompareGamesButton game={{ gameId: "g2" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Compare…" }));
+    await screen.findByTestId("compare-picker");
+    expect(screen.getByRole("button", { name: /Best win with this build/ }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: /Previous game vs this opponent/ }).hasAttribute("disabled")).toBe(true);
+    // No build label and no opponent identity: those reads are never made.
+    expect(api.paths.some((path) => path.includes("build="))).toBe(false);
+    expect(api.paths.some((path) => path.includes("scope=opponent"))).toBe(false);
+  });
+});
+
+describe("Compare in Replays", () => {
+  it("links exactly two selected replays, first selected as game A", () => {
+    const view = render(<CompareSelectionButton ids={["x1", "x2"]} />);
+    expect(screen.getByRole("link", { name: /Compare 2 games/ }).getAttribute("href")).toBe("/app/compare?a=x1&b=x2");
+    view.rerender(<CompareSelectionButton ids={["x1"]} />);
+    expect(screen.getByRole("button", { name: /Compare/ }).hasAttribute("disabled")).toBe(true);
+    view.rerender(<CompareSelectionButton ids={["x1", "x2", "x3"]} />);
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+});

@@ -30,11 +30,11 @@
  * rendering this at all).
  */
 
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { statsAt, worldProjection, type MapPlayback } from "@/lib/mapReplay";
 
 import { spriteAssetsVersion } from "@/lib/spriteSheets";
-import { computeLosses, morphConsumedIndices, statsHaveWorkers, tradeEfficiency, workerCountAt, type LossSummary } from "@/lib/mapReplayLosses";
+import { computeLosses, morphConsumedIndices, statsHaveWorkers, tradeEfficiency, workerCountAt } from "@/lib/mapReplayLosses";
 import type { PatchEra } from "@/lib/meta";
 import { spellEffectsVersion } from "@/lib/spellEffects";
 
@@ -42,15 +42,28 @@ import { spellEffectsVersion } from "@/lib/spellEffects";
 
 import { Maximize2, Minimize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { getMapLayoutUrl } from "@/lib/map-images";
-import { getIconPath } from "@/lib/sc2-icons";
-import { REPLAY_SCOPE_CLASS } from "./replay/replayTheme";
+import { REPLAY_SCOPE_CLASS, sideLabel } from "./replay/replayTheme";
+import { LossPanel } from "./replay/LossPanel";
+import { ReplayUnitInspector } from "./replay/ReplayUnitInspector";
+import { useReplayInspector } from "./replay/useReplayInspector";
+import { visionIsObserved, visionLabel, visionViewer, type ReplayVision } from "@/lib/replayVision";
+import { followView, inspectEntity, type ReplayEntityRef } from "@/lib/replayInspect";
 import { PlaybackAccuracyBadge } from "./PlaybackAccuracyBadge";
 import { markerAt, type ReplayMapMarker } from "@/lib/replayMarkers";
 
 import { renderFrame } from "./replay/mapCanvasRenderer";
-import { ME_ARMY, OPP_ARMY, STAGE_VIEWPORT_FRACTION, STAGE_MIN_H_PX, STAGE_MAX_H_PX, STAGE_PAD_PX, derivedOf, assetsVersion, bumpReplayAssetsVersion } from "./replay/mapCanvasAssets";
+import { ME_ARMY, OPP_ARMY, STAGE_VIEWPORT_FRACTION, STAGE_MIN_H_PX, STAGE_MAX_H_PX, STAGE_PAD_PX, derivedOf, assetsVersion, bumpReplayAssetsVersion, type ViewTransform } from "./replay/mapCanvasAssets";
 
 export type { ReplayMapMarker };
+
+/** What a host (the clip exporter, the stage shortcuts) may ask of a
+ *  mounted replayer without owning its camera or inspector. */
+export interface MapReplayerHandle {
+  /** The on-screen camera and canvas size, plus any followed entity. */
+  snapshot(): { view: ViewTransform; width: number; height: number; follow: ReplayEntityRef | null };
+  /** Keyboard inspection: select the next unit outward from the view centre. */
+  inspectNext(): void;
+}
 
 import { REPLAY_SPEEDS as SPEEDS } from "@/lib/replayControls";
 
@@ -113,6 +126,15 @@ export function MapReplayer({
    * prices the units-lost panels; omitted, the live 12-worker game.
    * MapPlayback carries no game version, so the host passes it. */
   patchEra,
+  /** Whose sight reveals the map (lib/replayVision). Default: both. */
+  vision = "both",
+  /** Tap a unit to inspect it. Hosts that use taps for their own
+   *  ``onWorldClick`` still get those first. */
+  inspect = true,
+  /** Owner labels for the unit inspector; falls back to You / Opponent. */
+  sideLabels,
+  /** Published once mounted; see ``MapReplayerHandle``. */
+  handleRef,
 }: {
   playback: MapPlayback;
   /** The loaded segment. The clock waits at its end until the next arrives. */
@@ -131,6 +153,10 @@ export function MapReplayer({
   markers?: readonly ReplayMapMarker[];
   onMarkerClick?: (id: string) => void;
   patchEra?: PatchEra | null;
+  vision?: ReplayVision;
+  inspect?: boolean;
+  sideLabels?: { me?: string | null; opp?: string | null };
+  handleRef?: MutableRefObject<MapReplayerHandle | null>;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -158,8 +184,14 @@ export function MapReplayer({
   onMarkerClickRef.current = onMarkerClick;
   const markersRef = useRef(markers);
   markersRef.current = markers;
+  const tapRef = useRef<(x: number, y: number) => boolean>(() => false);
+  const escapeRef = useRef<() => boolean>(() => false);
   const playbackRef = useRef(playback);
   playbackRef.current = playback;
+  const visionRef = useRef(vision);
+  visionRef.current = vision;
+  const inspector = useReplayInspector(playback, inspect);
+  const { hitsRef, selectedRef, followingRef, setFollowing } = inspector;
   // Last value we published, so the sync effect can tell the host
   // echoing our own tick apart from a real external seek.
   const lastEmitRef = useRef<number | null>(null);
@@ -220,9 +252,32 @@ export function MapReplayer({
   }, []);
 
   const resetView = useCallback(() => {
+    setFollowing(false);
     viewRef.current = { z: 1, ox: 0, oy: 0 };
     if (canvasRef.current) canvasRef.current.style.touchAction = "pan-y";
-  }, []);
+  }, [setFollowing]);
+  tapRef.current = inspector.tap;
+  escapeRef.current = inspector.escape;
+  const { inspectNext } = inspector;
+  useEffect(() => {
+    if (!handleRef) return;
+    handleRef.current = {
+      snapshot: () => {
+        const canvas = canvasRef.current;
+        const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+        return { view: { ...viewRef.current }, width: canvas ? canvas.width / dpr : 0, height: canvas ? canvas.height / dpr : 0,
+          follow: followingRef.current ? selectedRef.current : null };
+      },
+      inspectNext: () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const dpr = window.devicePixelRatio || 1;
+        inspectNext(canvas.width / dpr / 2, canvas.height / dpr / 2);
+        canvas.focus({ preventScroll: true });
+      },
+    };
+    return () => { handleRef.current = null; };
+  }, [handleRef, inspectNext, followingRef, selectedRef]);
 
   /* ── Fullscreen ────────────────────────────────────────────────
    * The stage, not the canvas. A host that draws chrome around the
@@ -377,6 +432,14 @@ export function MapReplayer({
         }
       }
       lastTs = ts;
+      // Follow: the camera tracks the selected unit; it lets go when the
+      // unit dies or boards a transport.
+      const follow = followingRef.current ? selectedRef.current : null;
+      if (follow) {
+        const dpr = window.devicePixelRatio || 1;
+        const next = followView(playback, follow, timeRef.current, viewRef.current, canvas.width / dpr, canvas.height / dpr, STAGE_PAD_PX);
+        if (next) { viewRef.current = next; canvas.style.touchAction = "none"; } else setFollowing(false);
+      }
       // Dirty-check: a paused replay re-renders only when the scrub
       // time, canvas size, or asset readiness actually changed —
       // otherwise a static frame would burn battery at 60 fps.
@@ -394,9 +457,12 @@ export function MapReplayer({
         view.z !== drawn.z ||
         view.ox !== drawn.ox ||
         view.oy !== drawn.oy ||
-        markersRef.current !== drawn.mk;
+        markersRef.current !== drawn.mk ||
+        visionRef.current !== drawn.vi ||
+        selectedRef.current !== drawn.se;
       if (dirty) {
-        renderFrame(ctx, canvas, playback, timeRef.current, layoutImageRef.current, view, markersRef.current);
+        renderFrame(ctx, canvas, playback, timeRef.current, layoutImageRef.current, view, markersRef.current, undefined,
+          { vision: visionRef.current, hits: hitsRef.current, selected: selectedRef.current });
         drawn = {
           t: timeRef.current,
           v: assetsVersion,
@@ -411,17 +477,19 @@ export function MapReplayer({
           ox: view.ox,
           oy: view.oy,
           mk: markersRef.current,
+          vi: visionRef.current,
+          se: selectedRef.current,
         };
       }
     };
     let lastReactSync = -1;
     let drawn: {
       t: number; v: number; sv: number; cw: number; ch: number; z: number; ox: number; oy: number;
-      mk: readonly ReplayMapMarker[] | undefined;
-    } = { t: -1, v: -1, sv: -1, cw: 0, ch: 0, z: 1, ox: 0, oy: 0, mk: undefined };
+      mk: readonly ReplayMapMarker[] | undefined; vi: ReplayVision; se: ReplayEntityRef | null;
+    } = { t: -1, v: -1, sv: -1, cw: 0, ch: 0, z: 1, ox: 0, oy: 0, mk: undefined, vi: "both", se: null };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [playback, gameLength, emitTime, emitPlaying]);
+  }, [playback, gameLength, emitTime, emitPlaying, hitsRef, selectedRef, followingRef, setFollowing]);
 
   // ── Stage sizing ────────────────────────────────────────────────
   //
@@ -584,6 +652,7 @@ export function MapReplayer({
       }
       const v = viewRef.current;
       if (v.z <= 1) return;
+      if (tapMoved && followingRef.current) setFollowing(false); // a deliberate pan takes the camera back
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       viewRef.current = {
@@ -620,7 +689,10 @@ export function MapReplayer({
         return;
       }
       const handler = onWorldClickRef.current;
-      if (!handler) return;
+      if (!handler) {
+        tapRef.current(pt.x, pt.y);
+        return;
+      }
       // Exact inverse of renderFrame: undo zoom/pan, then the projection
       // (world Y points up; the canvas flips it).
       const sx = (pt.x - v.ox) / v.z;
@@ -632,7 +704,9 @@ export function MapReplayer({
     };
 
     const releaseFocus = () => { if (document.activeElement === canvas) canvas.blur(); };
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") releaseFocus(); };
+    // Escape releases a follow, then closes the unit details, and only
+    // then gives up map focus.
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !escapeRef.current()) releaseFocus(); };
     let gestureScale = 1;
     const onGestureStart = (event: Event) => { event.preventDefault(); gestureScale = 1; };
     const onGestureChange = (event: Event) => {
@@ -666,8 +740,14 @@ export function MapReplayer({
       canvas.removeEventListener("pointercancel", onPointerEnd);
       canvas.removeEventListener("dblclick", onDblClick);
     };
-  }, [applyZoom, resetView]);
+  }, [applyZoom, resetView, followingRef, setFollowing]);
 
+  const inspected = useMemo(
+    () => (inspector.selected ? inspectEntity(playback, inspector.selected, timeSec) : null),
+    [playback, inspector.selected, timeSec],
+  );
+  const seekTo = (target: number) => { setTime(target); emitPlaying(false); };
+  const viewer = visionViewer(vision);
   const me = useMemo(() => statsAt(playback.stats.me, timeSec), [playback, timeSec]);
   const opp = useMemo(() => statsAt(playback.stats.opp, timeSec), [playback, timeSec]);
   // Payloads synced before engine 1.5.3 carry an all-zero workers
@@ -795,6 +875,27 @@ export function MapReplayer({
             aria-label={`Map playback of ${playback.mapName || "this game"}`}
           />
           <PlaybackAccuracyBadge playback={playback} estimatedCreep={!playback.creep && derivedOf(playback).creepSources.length > 0} />
+          <div className="pointer-events-none absolute left-2 top-2 z-10 flex max-w-[calc(100%-4rem)] flex-col items-start gap-1.5">
+            {viewer ? (
+              <span data-testid="replay-vision-badge" className="rounded-md border border-white/10 bg-black/75 px-2 py-1 text-micro font-semibold text-white">
+                Vision: {visionLabel(vision, sideLabel("me", sideLabels?.me), sideLabel("opp", null, sideLabels?.opp))}
+                {visionIsObserved(playback) ? "" : " · approximate vision"}
+              </span>
+            ) : null}
+            {inspected ? (
+              <ReplayUnitInspector
+                info={inspected}
+                ownerLabel={sideLabel(inspected.owner, sideLabels?.me, sideLabels?.opp)}
+                following={inspector.following}
+                onJump={seekTo}
+                onFollow={(next) => {
+                  setFollowing(next);
+                  if (!next) canvasRef.current?.focus({ preventScroll: true });
+                }}
+                onClose={() => { inspector.setSelected(null); canvasRef.current?.focus({ preventScroll: true }); }}
+              />
+            ) : null}
+          </div>
           <div
             className="absolute right-2 top-2 flex flex-col gap-1 rounded-lg border border-white/10 bg-black/55 p-1 backdrop-blur-sm"
             role="group"
@@ -924,80 +1025,6 @@ export function MapReplayer({
       </>)}
     </div>
   );
-}
-
-/** How many lost-unit rows a panel lists before folding into "+N". */
-const LOSS_ROWS_MAX = 8;
-
-function LossPanel({
-  label,
-  color,
-  losses,
-  efficiency,
-}: {
-  label: string;
-  color: string;
-  losses: LossSummary;
-  efficiency: number | null;
-}) {
-  const shown = losses.byUnit.slice(0, LOSS_ROWS_MAX);
-  const folded = losses.byUnit.length - shown.length;
-  return (
-    <div
-      className="rounded-md border border-border bg-bg-elevated/60 p-2"
-      data-testid={`loss-panel-${label.toLowerCase()}`}
-    >
-      <div className="flex items-baseline justify-between gap-2 text-caption">
-        <span className="whitespace-nowrap">
-          <b style={{ color }}>{label}</b>{" "}
-          <span className="text-text-muted">units lost</span>
-        </span>
-        <span
-          className="whitespace-nowrap tabular-nums text-text-muted"
-          title="Resources the opponent lost per resource this side lost — above 1.00× means this side traded up"
-        >
-          trade {formatEfficiency(efficiency)}
-        </span>
-      </div>
-      <div className="mt-1 text-caption tabular-nums text-text">
-        {losses.count} units · {losses.minerals.toLocaleString()} minerals ·{" "}
-        {losses.gas.toLocaleString()} gas
-      </div>
-      {shown.length > 0 && (
-        <ul className="mt-1.5 flex flex-wrap gap-1.5">
-          {shown.map((g) => {
-            const icon = getIconPath(g.name, "unit");
-            return (
-              <li
-                key={g.name}
-                className="inline-flex items-center gap-1 rounded border border-border bg-bg-elevated px-1.5 py-0.5 text-micro tabular-nums text-text-muted"
-                title={`${g.count}× ${g.name} — ${g.minerals.toLocaleString()} minerals, ${g.gas.toLocaleString()} gas`}
-              >
-                {icon ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={icon} alt="" aria-hidden className="h-3.5 w-3.5" />
-                ) : null}
-                <span>
-                  {g.count}× {g.name}
-                </span>
-              </li>
-            );
-          })}
-          {folded > 0 && (
-            <li className="inline-flex items-center rounded px-1 py-0.5 text-micro text-text-dim">
-              +{folded} more
-            </li>
-          )}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function formatEfficiency(eff: number | null): string {
-  if (eff === null) return "—";
-  if (!Number.isFinite(eff)) return "∞";
-  return `${eff.toFixed(2)}×`;
 }
 
 /* ──────────────── resource glyphs ────────────────

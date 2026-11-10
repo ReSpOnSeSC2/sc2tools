@@ -71,6 +71,7 @@ import desktopApp_pairingTroubleshooting from "./desktop-app/pairing-troubleshoo
 import desktopApp_replayFolders from "./desktop-app/replay-folders";
 import gamePage_battleReports from "./game-page/battle-reports";
 import gamePage_benchmarks from "./game-page/benchmarks";
+import gamePage_compareGames from "./game-page/compare-games";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
 import gamePage_gamePageReplay from "./game-page/game-page-replay";
 import gamePage_gamePageSharing from "./game-page/game-page-sharing";
@@ -177,6 +178,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   desktopApp_replayFolders,
   gamePage_battleReports,
   gamePage_benchmarks,
+  gamePage_compareGames,
   gamePage_gamePageAccuratePlayback,
   gamePage_gamePageReplay,
   gamePage_gamePageSharing,

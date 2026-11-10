@@ -11,10 +11,21 @@ import { attackAt, attackFrame, drawWeaponEffects, unitFacingAt } from "@/lib/re
 import { type IconKind } from "@/lib/sc2-icons";
 
 import { drawMarkers, type ReplayMapMarker } from "@/lib/replayMarkers";
+import { buildingFirstSeen, VISION_EDGE, VisionGrid, visionViewer, type ReplayVision, type SightRadii } from "@/lib/replayVision";
+import { pushHit, type ReplayEntityRef, type ReplayHitBuffer } from "@/lib/replayInspect";
 
 import { ME_ARMY, ME_WORKER, OPP_ARMY, OPP_WORKER, ME_SHEET, OPP_SHEET, BATTLE_WINDOW_SEC, RESOURCE_GLYPH_WORLD, ROCKS_GLYPH_WORLD, SPAWN_RING_WORLD, BATTLE_RING_MIN_WORLD, BATTLE_RING_GROW_WORLD, MIN_FURNITURE_SCREEN_PX, STAGE_PAD_PX, SPRITE_WORLD_GAIN, MIN_SPRITE_SCREEN_PX, FALLBACK_UNIT_WORLD, FALLBACK_WORKER_WORLD, FALLBACK_BUILDING_WORLD, WALK_SPEED_THRESHOLD, FOG_ALPHA, SIGHT_UNIT, SIGHT_WORKER, SIGHT_HALL, SIGHT_BUILDING, FOG_RENDER_SCALE, FOG_MAX_DPR, CULL_MARGIN_WORLD, FOG_DEDUPE_RADIUS_FRACTION, VIGNETTE_ALPHA, VIGNETTE_INNER, iconToken, resourceGlyph, derivedOf, fogMask, ViewTransform } from "./mapCanvasAssets";
 
-let fogCanvas: HTMLCanvasElement | null = null;
+/** One fog buffer per target canvas: the live stage and an off-screen
+ * clip render alternate frames, and sharing one buffer would resize
+ * (and reallocate) it on every call. */
+const fogCanvases = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+
+/** "Last seen" enemy structures draw at this opacity in single-side vision. */
+const GHOST_ALPHA = 0.4;
+const SIGHT: SightRadii = { unit: SIGHT_UNIT, worker: SIGHT_WORKER, hall: SIGHT_HALL, building: SIGHT_BUILDING };
+/** Reused every frame; only single-side vision touches it. */
+const visionGrid = new VisionGrid();
 
 interface DrawEntity {
   side: "me" | "opp";
@@ -32,6 +43,13 @@ interface DrawEntity {
   dot: string;
   alpha: number;
   worker: boolean;
+  /** World position, for the one vision lookup per enemy entity. */
+  wx: number;
+  wy: number;
+  /** Index into ``playback.units`` or ``playback.buildings``. */
+  index: number;
+  /** A remembered enemy structure outside current sight. */
+  ghost: boolean;
 }
 
 const entityPool: DrawEntity[] = [];
@@ -43,7 +61,7 @@ function pushEntity(): DrawEntity {
   if (!e) {
     e = {
       side: "me", x: 0, y: 0, cellPx: 0, handle: null, color: "red", facing: 0, frame: 0,
-      name: "", iconKind: "unit", tint: "", dot: "", alpha: 1, worker: false,
+      name: "", iconKind: "unit", tint: "", dot: "", alpha: 1, worker: false, wx: 0, wy: 0, index: 0, ghost: false,
     };
     entityPool[entityCount] = e;
   }
@@ -70,6 +88,18 @@ function pushFog(x: number, y: number, r: number): void {
 
 export type MapFrameStyle = { entities: "dots"; palette?: { me?: string; opp?: string } };
 
+export interface RenderFrameOptions {
+  /** Whose sight reveals the map (lib/replayVision); default both. */
+  vision?: ReplayVision;
+  /** Device pixels per CSS pixel of THIS canvas. Defaults to the
+   *  window's; an off-screen clip render draws 1:1. */
+  dpr?: number;
+  /** Filled with every live entity drawn, in canvas CSS px, for taps. */
+  hits?: ReplayHitBuffer | null;
+  /** Ringed so the inspected or followed unit stands out. */
+  selected?: ReplayEntityRef | null;
+}
+
 export function renderFrame(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
@@ -79,9 +109,10 @@ export function renderFrame(
   view: ViewTransform,
   markers?: readonly ReplayMapMarker[],
   style?: MapFrameStyle,
+  options?: RenderFrameOptions,
 ) {
   const dots = style?.entities === "dots";
-  const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  const dpr = options?.dpr ?? (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
   const w = canvas.width / dpr;
   const h = canvas.height / dpr;
   const { bounds } = playback;
@@ -179,6 +210,11 @@ export function renderFrame(
   const trackBox = derived.trackBox;
   entityCount = 0;
   fogCount = 0;
+  // Single-side vision: only the viewer's units and structures push fog
+  // and stamp the world-space sight grid that hides everything else.
+  const viewer = visionViewer(options?.vision);
+  const fogOff = options?.vision === "off";
+  if (viewer) visionGrid.reset(bounds);
 
   // Margin for the cheap track-bbox reject, in canvas px — see
   // CULL_MARGIN_WORLD for what it has to cover.
@@ -213,7 +249,11 @@ export function renderFrame(
 
     const sx = projectX(bounds, proj, wx);
     const sy = projectY(bounds, proj, wy);
-    pushFog(sx, sy, worker ? SIGHT_WORKER : SIGHT_UNIT);
+    if (!fogOff && (!viewer || u.owner === viewer)) {
+      const sight = worker ? SIGHT_WORKER : SIGHT_UNIT;
+      pushFog(sx, sy, sight);
+      if (viewer) visionGrid.stamp(wx, wy, sight * VISION_EDGE);
+    }
 
     // Actual weapon cycles trigger a single Attack clip. Otherwise use
     // observed movement to choose Walk or Stand.
@@ -253,6 +293,10 @@ export function renderFrame(
     e.dot = u.owner === "me" ? (worker ? ME_WORKER : ME_ARMY) : worker ? OPP_WORKER : OPP_ARMY;
     e.alpha = handle ? 1 : worker ? 0.75 : 1;
     e.worker = worker;
+    e.wx = wx;
+    e.wy = wy;
+    e.index = idx;
+    e.ghost = false;
   }
 
   /* ── Buildings ─────────────────────────────────────────────────── */
@@ -263,7 +307,11 @@ export function renderFrame(
     const bpos = buildingPositionAt(b, t, playback.fidelity?.positions === "engine");
     const sx = projectX(bounds, proj, bpos.x);
     const sy = projectY(bounds, proj, bpos.y);
-    pushFog(sx, sy, derived.buildingHall[bi] === 1 ? SIGHT_HALL : SIGHT_BUILDING);
+    if (!fogOff && (!viewer || b.owner === viewer)) {
+      const sight = derived.buildingHall[bi] === 1 ? SIGHT_HALL : SIGHT_BUILDING;
+      pushFog(sx, sy, sight);
+      if (viewer) visionGrid.stamp(bpos.x, bpos.y, sight * VISION_EDGE);
+    }
 
     // Buildings have facings: 1 — they never rotate — and their draw
     // size comes from the same worldUnitsPerCell ladder as units, so
@@ -299,8 +347,14 @@ export function renderFrame(
     e.dot = b.owner === "me" ? "rgba(62,192,199,0.75)" : "rgba(224,86,86,0.75)";
     e.alpha = 1;
     e.worker = false;
-
+    e.wx = bpos.x;
+    e.wy = bpos.y;
+    e.index = bi;
+    e.ghost = false;
   }
+
+  if (viewer) hideUnseenEnemies(playback, viewer, t);
+  recordHits(options?.hits, view);
 
   /* ── Fog of war ────────────────────────────────────────────────
    * Union of BOTH sides' vision (matching the replay viewer
@@ -308,9 +362,15 @@ export function renderFrame(
    * every unit and standing building. Unscouted map stays dim. Drawn
    * over terrain but UNDER the entities, so units are never hidden.
    */
-  const mask = fogCount > 0 ? fogMask() : null;
+  // Single-side vision fogs the whole view even with no friendly source
+  // in it; the default union keeps its old "no sources, no fog" rule.
+  const mask = fogCount > 0 || viewer ? fogMask() : null;
   if (typeof document !== "undefined" && mask) {
-    if (!fogCanvas) fogCanvas = document.createElement("canvas");
+    let fogCanvas = fogCanvases.get(canvas);
+    if (!fogCanvas) {
+      fogCanvas = document.createElement("canvas");
+      fogCanvases.set(canvas, fogCanvas);
+    }
     const fscale = Math.min(FOG_MAX_DPR, dpr) * FOG_RENDER_SCALE;
     const fw = Math.max(1, Math.round(w * fscale));
     const fh = Math.max(1, Math.round(h * fscale));
@@ -367,7 +427,11 @@ export function renderFrame(
     ctx.stroke();
   }
 
-  if (!dots) drawSpellEffects(ctx, playback, t, proj, view, w, h, "ground");
+  // Enemy effects and shots outside the viewer's sight stay hidden too.
+  const canSee = viewer
+    ? (owner: "me" | "opp" | "neutral", x: number, y: number) => owner === viewer || owner === "neutral" || visionGrid.seen(x, y)
+    : undefined;
+  if (!dots) drawSpellEffects(ctx, playback, t, proj, view, w, h, "ground", canSee);
 
   /* ── Painter's pass ────────────────────────────────────────────
    * Back to front by ground-point Y. Sorting an index array keeps the
@@ -421,14 +485,16 @@ export function renderFrame(
   }
   if (alpha !== 1) ctx.globalAlpha = 1;
   if (!dots) endSpriteFrame();
+  if (!dots && options?.selected) drawSelection(ctx, options.selected, view.z);
 
-  if (!dots) { drawSpellEffects(ctx, playback, t, proj, view, w, h, "overlay"); drawWeaponEffects(ctx, playback, t, proj, view); }
+  if (!dots) { drawSpellEffects(ctx, playback, t, proj, view, w, h, "overlay", canSee); drawWeaponEffects(ctx, playback, t, proj, view, canSee); }
 
   // Battle pulses near their marker time — drawn last so the amber
   // ring reads over the sprites it is calling attention to.
   for (const m of playback.battles) {
     const d = Math.abs(m.t - t);
     if (d > BATTLE_WINDOW_SEC) continue;
+    if (viewer && !visionGrid.seen(m.x, m.y)) continue;
     const f = 1 - d / BATTLE_WINDOW_SEC;
     ctx.beginPath();
     ctx.arc(
@@ -457,6 +523,58 @@ export function renderFrame(
 
   if (markers && markers.length) {
     drawMarkers(ctx, bounds, worldProjection(bounds, w, h, STAGE_PAD_PX), t, view, w, h, markers);
+  }
+}
+
+/**
+ * Single-side vision, after both entity loops have stamped the viewer's
+ * sight: ONE grid lookup per enemy entity. Unseen units are dropped;
+ * unseen structures the viewer scouted earlier stay as dimmed, frozen
+ * "last seen" ghosts. Partitions the pooled list in place.
+ */
+function hideUnseenEnemies(playback: MapPlayback, viewer: "me" | "opp", t: number): void {
+  const firstSeen = buildingFirstSeen(playback, viewer, SIGHT);
+  let kept = 0;
+  for (let i = 0; i < entityCount; i += 1) {
+    const e = entityPool[i];
+    if (e.side !== viewer && !visionGrid.seen(e.wx, e.wy)) {
+      if (e.iconKind !== "building" || !(firstSeen[e.index] <= t)) continue;
+      e.ghost = true;
+      e.alpha = GHOST_ALPHA;
+      e.frame = 0;
+    }
+    if (kept !== i) {
+      entityPool[i] = entityPool[kept];
+      entityPool[kept] = e;
+    }
+    kept += 1;
+  }
+  entityCount = kept;
+}
+
+/** Live (non-ghost) entities in canvas CSS px, for click-to-inspect. */
+function recordHits(hits: ReplayHitBuffer | null | undefined, view: ViewTransform): void {
+  if (!hits) return;
+  hits.count = 0;
+  for (let i = 0; i < entityCount; i += 1) {
+    const e = entityPool[i];
+    if (e.ghost) continue;
+    pushHit(hits, e.x * view.z + view.ox, e.y * view.z + view.oy, e.cellPx * view.z * 0.5,
+      e.iconKind === "building" ? "building" : "unit", e.index);
+  }
+}
+
+/** A thin ring around the inspected entity, drawn over the sprites. */
+function drawSelection(ctx: CanvasRenderingContext2D, selected: ReplayEntityRef, z: number): void {
+  for (let i = 0; i < entityCount; i += 1) {
+    const e = entityPool[i];
+    if (e.ghost || e.index !== selected.index || (e.iconKind === "building") !== (selected.kind === "building")) continue;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, Math.max(7 / z, e.cellPx * 0.55), 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,255,255,0.92)";
+    ctx.lineWidth = 2 / z;
+    ctx.stroke();
+    return;
   }
 }
 

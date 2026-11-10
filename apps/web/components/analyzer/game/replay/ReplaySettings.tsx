@@ -3,23 +3,21 @@
 /**
  * ReplaySettings — the small popover at the end of the transport dock.
  *
- * Holds the view toggles that belong to the HUD shell: show/hide each
- * rail, and which side the production rail follows.
+ * Holds the view toggles that belong to the HUD shell: whose vision
+ * reveals the map, show/hide each rail, and which side the production
+ * rail follows.
  *
- * NOT HERE, deliberately: fog of war (Both / Selected / Off) and
- * follow-a-player's-camera. Both are properties of the CANVAS, not of
- * this shell — fog reveals are pushed inside ``MapReplayer``'s
- * ``renderFrame`` (one ``pushFog`` per live unit and building, with no
- * owner filter) and the camera is ``viewRef`` inside the same file.
- * Wiring them means changing ``renderFrame``'s signature and the pan /
- * zoom clamp, which is outside the minimal contract this HUD has with
- * that component. Shipping dead switches would be worse than shipping
- * none; see the handover notes for the exact change each needs.
+ * Vision is a property of the canvas (``renderFrame`` filters fog
+ * reveals by owner); the stage persists the choice with the other
+ * replay preferences and hands it down to ``MapReplayer``. V cycles it.
+ * Following one unit's camera lives on the map itself: tap a unit, then
+ * Follow in its details card.
  */
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Settings2 } from "lucide-react";
 import type { ReplaySide } from "@/lib/replayHud";
+import { REPLAY_VISIONS, visionLabel, type ReplayVision } from "@/lib/replayVision";
 import { sideLabel } from "./replayTheme";
 
 function ToggleRow({
@@ -54,6 +52,9 @@ export function ReplaySettings({
   myName,
   oppName,
   footer,
+  vision = "both",
+  onVision,
+  approximateVision = true,
 }: {
   showProductionRail: boolean;
   onShowProductionRail: (v: boolean) => void;
@@ -64,6 +65,10 @@ export function ReplaySettings({
   myName?: string | null;
   oppName?: string | null;
   footer?: ReactNode;
+  vision?: ReplayVision;
+  onVision?: (vision: ReplayVision) => void;
+  /** Single-side vision is estimated from sight radii (no engine data). */
+  approximateVision?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -105,8 +110,35 @@ export function ReplaySettings({
           data-replay-popover=""
           role="group"
           aria-label="Replay display settings"
-          className="absolute bottom-full right-0 z-20 mb-2 w-56 overflow-hidden rounded-lg border border-border bg-bg-elevated py-1 shadow-card"
+          className="absolute bottom-full right-0 z-20 mb-2 w-64 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border bg-bg-elevated py-1 shadow-card"
         >
+          {onVision ? (
+            <>
+              <p id={`${menuId}-vision`} className="px-3 pb-1 pt-1.5 text-micro font-semibold uppercase tracking-wider text-text-dim">
+                Vision
+              </p>
+              <div role="group" aria-labelledby={`${menuId}-vision`} aria-keyshortcuts="V" className="grid grid-cols-2 gap-1 px-3 pb-1">
+                {REPLAY_VISIONS.map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => onVision(mode)}
+                    aria-pressed={vision === mode}
+                    className={`min-h-9 truncate rounded-md border px-2 py-1 text-micro font-semibold ${
+                      vision === mode
+                        ? "border-accent bg-accent/15 text-text"
+                        : "border-border bg-bg-subtle text-text-muted hover:border-accent"
+                    }`}
+                  >
+                    {visionLabel(mode, sideLabel("me", myName), sideLabel("opp", null, oppName))}
+                  </button>
+                ))}
+              </div>
+              <p className="px-3 pb-2 text-micro text-text-dim">
+                {approximateVision ? "One side's view is approximate vision, estimated from sight ranges. " : ""}Press V to cycle.
+              </p>
+            </>
+          ) : null}
           <p className="px-3 pb-1 pt-1.5 text-micro font-semibold uppercase tracking-wider text-text-dim">
             Panels
           </p>

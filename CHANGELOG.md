@@ -42,6 +42,27 @@ corresponding GitHub Release.
 - A game's SQ now shows its percentile for its league and matchup, such as
   "p38 · Diamond PvZ", where that table has enough games.
 
+### Map replay studio
+
+- Choose whose vision reveals the map replay: both players, you, the opponent
+  or no fog (display settings, or press V). One side's view hides enemy units
+  outside its sight and keeps scouted enemy structures as dimmed last-seen
+  outlines, labelled approximate vision.
+- Tap a unit or structure for its details: owner, birth, death, lifetime and
+  recorded attacks, with Jump to birth, Jump to death and Follow. Tap again to
+  cycle through overlapping units; Esc stops following.
+- Make a clip of up to 60 seconds, starting on the nearest fight: WebM (MP4
+  where that is what the browser records) or a GIF where video recording is
+  unavailable, with speed, size, scoreboard and watermark options. Clips are
+  made in your browser and never uploaded.
+
+### Compare two games
+
+- Compare two of your games side by side at `/app/compare`: synced workers,
+  army, income and supply timelines, a step-by-step build-order diff and
+  mechanics. Start from Compare… on a game page, or select two replays in
+  Replays.
+
 ### Game share links
 
 - Share one game by link from its new Share menu, on the game page and on each
