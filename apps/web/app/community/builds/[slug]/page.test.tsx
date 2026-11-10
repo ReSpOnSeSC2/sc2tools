@@ -173,13 +173,20 @@ describe("/community/builds/[slug]", () => {
     expect(screen.queryByText("private scouting notes")).toBeNull();
   });
 
-  it("hands Save to my library the public slug and version", async () => {
+  it("hands Save to my library the public slug and its publication version", async () => {
     await renderPage("Saveable", { rules: RULES });
+    // A publication from before versions existed is version 1.
     expect(mocks.saveProps[0]).toMatchObject({
       communitySlug: "build-fixture0001",
-      version: "2026-09-10T00:00:00.000Z",
+      version: "1",
       title: "Saveable",
     });
+    cleanup();
+    mocks.saveProps.length = 0;
+    mocks.getJsonWithStatus.mockResolvedValue({ data: { ...detail("Updated", { rules: RULES }), version: 3, saves: 4 }, status: 200 });
+    render(await CommunityBuildPage({ params: Promise.resolve({ slug: "build-fixture0001" }) }));
+    expect(mocks.saveProps[0]).toMatchObject({ version: "3" });
+    expect(screen.getByText("4 players")).toBeTruthy();
   });
 
   it("places phone actions before rules, hides desktop action cards and removes duplicate meta", async () => {
@@ -188,7 +195,7 @@ describe("/community/builds/[slug]", () => {
     expect(actions.className).toContain("lg:hidden");
     expect(actions.compareDocumentPosition(screen.getByRole("heading", { name: "Build order" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const labels = Array.from(screen.getByLabelText("Build details").querySelectorAll("dt")).map((node) => node.textContent);
-    expect(labels).toEqual(["Matchup", "Type", "Rules", "Skill level", "Published", "Updated"]);
+    expect(labels).toEqual(["Matchup", "Type", "Rules", "Skill level", "Published", "Updated", "Saved by"]);
     expect(screen.getByText("Protoss", { exact: false })).toBeTruthy();
     expect(screen.getByText("Opponent build to scout")).toBeTruthy();
     expect(container.querySelectorAll("aside > .hidden.lg\\:block")).toHaveLength(3);
