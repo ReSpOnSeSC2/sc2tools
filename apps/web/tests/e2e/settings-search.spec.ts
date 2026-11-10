@@ -23,6 +23,7 @@ const profileIds = ["profile-details", "pulse-ids", "player-channels", "public-p
 const backupsIds = ["replay-archive", "snapshots", "repair-data", "reanalyze", "hidden-games", "device-history", "export", "delete-history", "gdpr"];
 // Client-only (ssr: false) Backups modules wait for the synthetic client boundary.
 const backupsClientIds = ["reanalyze", "hidden-games"];
+const preferencesIds = ["app-preferences", "setup-privacy", "reports", "notifications", "push"];
 const randomizerIds = ["build-randomizer", "catalog-builds", "custom-builds", "gateway-draw", "sound-effects", "randomizer-preview"];
 
 async function choose(page: Page, query: string) {
@@ -147,8 +148,8 @@ for (const theme of ["light", "dark"] as const) {
       await expect(exportSection.getByRole("button", { name: "Download build orders", exact: true })).toBeVisible();
       await expect(exportSection.getByRole("link", { name: "create a private replay pack in Replays", exact: true })).toHaveAttribute("href", "/app/replays#replay-packs");
       expect(evidence.writes).toEqual([]); await checkAccessibility(page, info, `/settings-search-backups-${width}`, theme); await overflow(page);
-      await choose(page, "Default tab"); await targets(page, ["app-preferences", "setup-privacy", "notifications"]);
-      await choices(page, ["app-preferences", "setup-privacy", "notifications"]);
+      await choose(page, "Default tab"); await targets(page, preferencesIds);
+      await choices(page, preferencesIds);
       await page.getByLabel("Default tab", { exact: true }).selectOption("macro");
       await page.getByRole("checkbox", { name: "New reviews", exact: true }).uncheck();
       await choose(page, "Notification preferences"); await expect(confirm(page)).toHaveCount(0);

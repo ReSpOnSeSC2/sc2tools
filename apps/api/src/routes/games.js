@@ -230,6 +230,7 @@ function analysisCorpusPage(analysisCorpusAdmission, prepare, load) {
  *   series?: import('../services/streamSeries').StreamSeriesService,
  *   gameMoments?: import('../services/gameMoments').GameMomentsService,
  *   twitchAutomation?: import('../services/twitchAutomation').TwitchAutomationService,
+ *   discord?: {onFreshGame: (userId: string, game: Record<string, any>) => Promise<void>},
  *   gameVods?: {
  *     resolveForGames: (userId: string, games: Array<Record<string, any>>, opts?: {includeOpponent?: boolean}) => Promise<{
  *       configuredPlatforms: string[],
@@ -1031,7 +1032,9 @@ function buildGamesRouter(deps) {
           }
         }
       }
-      const freshGame = accepted.length > 0 ? pickFreshOverlayGame(competitiveIncoming, competitiveAccepted) : null;
+      // Discord result/peak posts (the user's own opt-in webhooks) are only
+      // queued here; the outbox job sends. Never delays or fails the ingest.
+      const freshGame = accepted.length > 0 ? pickFreshOverlayGame(competitiveIncoming, competitiveAccepted) : null; queueDiscordPosts(deps.discord, userId, freshGame, req.log);
       if (freshGame && deps.twitchAutomation?.deps.enabled === true && deps.liveGameBroker) {
         const key = pickGameKey(deps.liveGameBroker, userId, freshGame, { oppName: freshGame.opponent?.displayName });
         // Dormant under the default-off server gate. Independent from overlay
@@ -1387,6 +1390,15 @@ function compactGameForRealtime(game) {
         }
       : undefined,
   };
+}
+
+/**
+ * @param {{onFreshGame: (userId: string, game: Record<string, any>) => Promise<void>}|undefined} discord
+ * @param {string} userId @param {Record<string, any>|null} game @param {import('pino').Logger|undefined} log
+ */
+function queueDiscordPosts(discord, userId, game, log) {
+  if (!discord || !game) return;
+  void discord.onFreshGame(userId, game).catch((err) => log?.warn({ code: err?.code || "discord_enqueue_failed" }, "discord_enqueue_failed"));
 }
 
 /**

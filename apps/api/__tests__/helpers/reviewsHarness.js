@@ -44,7 +44,9 @@ const SECRET_NEEDLES = Object.freeze([
  * is a PulseMmrService whose fetch always fails, so no suite reaches the
  * live API.
  *
- * @param {{rollout?: "off"|"admins"|"on", admins?: string[], pulseMmr?: object}} [opts]
+ * ``config`` merges extra config fields (e.g. ``delivery``) over the defaults.
+ *
+ * @param {{rollout?: "off"|"admins"|"on", admins?: string[], pulseMmr?: object, config?: Record<string, any>}} [opts]
  */
 async function createHarness(opts = {}) {
   const mongo = await MongoMemoryServer.create();
@@ -66,7 +68,7 @@ async function createHarness(opts = {}) {
     pythonExe: null,
     pythonAnalyzerDir: "/tmp/__nonexistent__",
     adminUserIds: (opts.admins || ["admin"]).map((name) => `clerk_${name}`),
-    reviewsEnabled: opts.rollout || "on",
+    reviewsEnabled: opts.rollout || "on", ...(opts.config || {}),
   };
   const built = buildApp({
       userBackupsStore: require("./userBackupsStore").createBackupStore(),

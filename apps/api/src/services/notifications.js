@@ -61,6 +61,9 @@ class NotificationsService {
     this.db = db;
     this.io = opts.io || null;
     this.logger = opts.logger || null;
+    /** Web Push fan-out (services/pushNotifications.js), attached by app.js.
+     * @type {{deliver: (userId: string, row: any) => Promise<unknown>}|null} */
+    this.push = null;
   }
 
   /**
@@ -133,6 +136,9 @@ class NotificationsService {
     }
     if (!row) return null;
     this._push(userId, row);
+    // Devices are best effort and never delay or fail the stored row. Only
+    // rows that were stored reach here, so muted kinds never push.
+    if (this.push) void this.push.deliver(userId, row).catch(() => {});
     return row;
   }
 

@@ -17,9 +17,12 @@ async function dataInventory(db, userId) {
     connectedAccounts: ["platformConnections", "userId"], notifications: ["notifications", "userId"],
     reviewRequests: ["reviewRequests", "userId"], playerChannels: ["playerChannels", "ownerUserId"],
     ghostExamples: ["ghostExamples", "ownerUserId"], goals: ["playerGoals", "userId"], gameShares: ["gameShares", "userId"],
+    streamReports: ["streamSessions", "userId"], discordWebhooks: ["discordHooks", "userId"], pushDevices: ["pushSubscriptions", "userId"],
   };
   await Promise.all(Object.entries(fields).map(async ([label, [key, field]]) => {
-    removed[label] = await /** @type {any} */ (db)[key].countDocuments({ [field]: userId }, QUERY_OPTIONS);
+    const collection = /** @type {any} */ (db)[key];
+    // Focused tests build partial contexts; a missing collection holds nothing.
+    removed[label] = collection ? await collection.countDocuments({ [field]: userId }, QUERY_OPTIONS) : 0;
   }));
   // Legacy opponent notes not yet moved into ``notes`` are still notes.
   if (db.opponentNotes) removed.notes += await db.opponentNotes.countDocuments({ userId }, QUERY_OPTIONS);

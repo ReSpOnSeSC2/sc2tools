@@ -78,3 +78,19 @@ it("header removes opponent on end/staleness, labels connection and retains coun
   act(() => vi.advanceTimersByTime(31_000)); expect(screen.queryByLabelText("Current opponent")).toBeNull();
   view.rerender(<DockStatusHeader {...base} live={null} status="reconnecting" />); expect(screen.getByRole("status").textContent).toBe("Reconnecting…"); expect(screen.getByText("Counts only")).toBeTruthy();
 });
+it("End stream waits for confirmation, then reports the saved stream or that nothing was saved", async () => {
+  const p = props();
+  p.onPost = vi.fn(async () => ({ ...DEFAULT_STUDIO_STATE, streamEnd: { id: "abc123", games: 14, wins: 9, losses: 5 } }));
+  render(<DockGame {...p} />);
+  fireEvent.click(screen.getByRole("button", { name: "End stream" }));
+  const dialog = screen.getByRole("dialog", { name: "End this stream?" });
+  expect(p.onPost).not.toHaveBeenCalled();
+  await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "End stream" })));
+  expect(p.onPost).toHaveBeenCalledWith({ action: "streamEnd" });
+  expect(screen.getByText("Stream report saved: 14 games, 9–5.").getAttribute("role")).toBe("status");
+  p.onPost = vi.fn(async () => ({ ...DEFAULT_STUDIO_STATE, streamEnd: null }));
+  cleanup(); render(<DockGame {...p} />);
+  fireEvent.click(screen.getByRole("button", { name: "End stream" }));
+  await act(async () => fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "End stream" })));
+  expect(screen.getByText("Stream ended. No games were recorded, so there is no report.")).toBeTruthy();
+});

@@ -2,7 +2,7 @@
 
 The authenticated `/v1/me/notifications` router is always available. Review rollout flags gate review producers, not the inbox. Both normal web shells render the bell for signed-in users; overlay and Dock token surfaces keep their existing isolated UI.
 
-Notifications remain in the existing collection with its 90-day TTL. The server emits only `notifications:changed {kind}` to the user's room. Text and destination URLs are read through authenticated, user-scoped REST endpoints. The web keeps its slow polling recovery. No new scheduled job, delivery provider, push infrastructure, or email send is introduced.
+Notifications remain in the existing collection with its 90-day TTL. The server emits only `notifications:changed {kind}` to the user's room. Text and destination URLs are read through authenticated, user-scoped REST endpoints. The web keeps its slow polling recovery. There is no email send. Optional delivery channels (Web Push, Discord webhooks) and the reports are described in [Reports and delivery channels](#reports-and-delivery-channels); none adds a scheduler, queue service or paid provider.
 
 ## Event delivery and grouping
 
@@ -29,3 +29,40 @@ Admins update a report through `PATCH /v1/admin/messages/:eventId` with `{expect
 `GET/PUT /v1/me/preferences/notifications` stores `{muted: string[]}` separately from Misc and onboarding preferences. Settings Misc has per-kind controls and its own save/recovery state. Muting affects future deliveries only.
 
 The bell preserves its cursor and read-acknowledgement behavior. Its presentation is loaded on demand to protect route budgets. Opening marks visible rows read but retains their per-open New tint. Unread/All is a visible segmented control, categories filter loaded rows, and the full `/notifications` page uses server-side category filtering plus compound cursors. Focus enters the first row or empty header and returns to the bell on close. The bell remains available on count errors with Retry. Coaching alerts and build check-ins remain actionable queues and use the same compact chip/badge visual treatment.
+
+## Reports and delivery channels
+
+Everything below runs on the API's existing in-process timers (`jobs/deliveryJobs.js`, the `reviewDigestJob` pattern registered with the job ledger). Every unit of work is idempotent by itself, so a deploy restart or a brief two-instance overlap cannot double-send.
+
+| Job | Interval | Work | Idempotency |
+| --- | --- | --- | --- |
+| `reports` | 1 h (first run 5 min after boot) | Close streams idle for four hours, then deliver due weekly reports | `users.streamSession` claimed with a conditional `$unset`; `users.reports.weeklyWeek` claimed per ISO week; notification keys `report.stream:<id>` / `report.weekly:<week>` |
+| `discord-outbox` | 30 s (only with webhook storage) | Drain ≤20 due posts; session summaries every 5 min | Unique `dedupeKey` per hook and event; per-row claim before posting; `jobLock` single flight |
+| `coaching-reminders` | 5 min | Reminders 24 h and 1 h before booked sessions | Notification key `coaching:reminder:<booking>:<window>` |
+
+### Weekly report
+
+`services/weeklyReport.js` builds a local ISO week (Monday 00:00 to Monday 00:00 in the report time zone, DST-correct) next to the week before from slim `games` rows: totals, hours, sessions (session gap policy), W-L by matchup with last week's counts, MMR per account and race, best and worst map and build (at least three decided games), the top three opponent strategies with the owner's record, and average macro score and most frequent leak (at least three games). Facts only. `GET /v1/reports/weekly?week=YYYY-Www&tz=Zone` serves the owner; `week` defaults to the last complete week. Delivery is due from Monday 09:00 to the end of Wednesday in `preferences.reports.timezone` (UTC until saved); weeks under five games are claimed and skipped; `preferences.reports.weekly=false` opts out. Candidates come from one bounded aggregation over the global `games.createdAt` index per week, cached for six hours.
+
+### Stream reports
+
+The Dock's **Start new session** opens `users.streamSession`; **End stream** (game desk action `streamEnd`), a new session, or four quiet hours closes it. The closer computes one report document (≤5 kB, newest 100 per user) in `stream_sessions`: record, matchups, maps, builds, MMR start/end/peak with a 40-point line, best win (opponent MMR, never a name), randomizer games, Crystal Ball accuracy (verified rounds only; a percentage from five calls), supporter event and distinct viewer counts, and up to eight clip moments. `GET /v1/reports/streams` and `/v1/reports/streams/:id` are owner-only. `preferences.reports.stream=false` saves nothing.
+
+### Web Push
+
+`services/pushNotifications.js` with `services/webPushCrypto.js` (RFC 8291 `aes128gcm` encryption and RFC 8292 VAPID on `node:crypto`, pinned to the RFC 8291 Appendix A vector in tests; no dependency). `NotificationsService` fans out every stored row to the owner's devices for the push groups they chose (muted kinds are never stored, so never pushed). Endpoints must be a browser push service over https (FCM, Mozilla, Apple, Windows); devices answering 404/410, or 401/403 after a VAPID change, are removed. At most ten devices per account. The service worker shows the notification with a same-site destination only, focuses or opens a tab on click, and re-registers a rotated subscription through `POST /v1/push/subscription-change` (the old endpoint proves ownership). Inert until `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY` and `WEB_PUSH_VAPID_SUBJECT` are set; `node scripts/generate-vapid-keys.js` in `apps/api` prints a pair.
+
+### Calendar feed
+
+`GET /v1/calendar/<secret>.ics` serves booked and cancelled sessions from 30 days back to a year ahead: a coach sees "Coaching session" without student names, a student their own sessions with the coach's name. Only the SHA-256 of the 256-bit secret is stored (`users.calendarFeed.hash`); the link is shown once, **Regenerate** replaces it and **Turn off** removes it. Request logs redact the path segment. Each booking card also offers a client-side one-event `.ics` file.
+
+### Discord
+
+`services/discordWebhooks.js`. The user pastes up to three webhook URLs; only `https://(canary.|ptb.)discord(app).com/api/webhooks/<id>/<token>` is accepted, stored AES-GCM encrypted with `PLATFORM_TOKEN_ENCRYPTION_KEY` through the platform credential vault helpers (bound to owner and hook), and shown, exported and logged only by its last four characters or hook id. Request bodies carrying a webhook URL or push endpoint are kept out of Sentry. A hook starts off and can be switched on only after its posts were previewed. Events: ranked results (ingest enqueues only), session summaries (after the session gap), weekly recap and new MMR peaks (at least 20 prior rated games). Opponent names off, MMR on and public replay links off by default; `allowed_mentions` is empty. The drain honours 429 `retry_after`, backs off exponentially on 5xx and network errors, gives up after five attempts, and disables a hook after three consecutive 401/404 answers with a notification to its owner. Outbox rows expire after 7 days. Nothing is sent while the account is being erased. Without the key the card says the feature is unavailable.
+
+The battle report Discord post (headline and paragraph) has a template (`battleReportMessage`) but no producer: it waits for a public battle-report link.
+
+### Privacy and erasure
+
+`stream_sessions`, `discord_hooks`, `discord_outbox` and `push_subscriptions` are purged with the account and never restored from snapshots. The account export includes stream reports, push devices (endpoint and keys) and Discord hooks without their ciphertext.
+

@@ -235,6 +235,8 @@ export interface StudioState {
   gameWidgetsPaused?: boolean;
   /** Ephemeral action receipt; never persisted in Studio. */
   deskAction?: { shoutoutText: string; queued: boolean };
+  /** Ephemeral "End stream" receipt: the saved report's record, or null when nothing was saved. */
+  streamEnd?: { id: string; games: number; wins: number; losses: number } | null;
   scene: StudioScene | null;
   timer: StudioTimer | null;
   broll: StudioBrollConfig;
@@ -521,8 +523,17 @@ export function sanitizeStudioState(raw: unknown): StudioState {
     ...(s.deskAction && typeof s.deskAction === "object" && !Array.isArray(s.deskAction)
       && typeof (s.deskAction as Record<string, unknown>).shoutoutText === "string"
       ? { deskAction: { shoutoutText: String((s.deskAction as Record<string, unknown>).shoutoutText).slice(0, 500), queued: (s.deskAction as Record<string, unknown>).queued === true } } : {}),
+    ...(s.deskAction && typeof s.deskAction === "object" && !Array.isArray(s.deskAction) && "streamReport" in s.deskAction
+      ? { streamEnd: sanitizeStreamEnd((s.deskAction as Record<string, unknown>).streamReport) } : {}),
     updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : null,
   };
+}
+
+function sanitizeStreamEnd(value: unknown): StudioState["streamEnd"] {
+  const row = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  const count = (n: unknown) => (Number.isInteger(n) && Number(n) >= 0 ? Number(n) : 0);
+  return row && typeof row.id === "string" && /^[0-9a-z]{6,12}$/.test(row.id)
+    ? { id: row.id, games: count(row.games), wins: count(row.wins), losses: count(row.losses) } : null;
 }
 
 /**

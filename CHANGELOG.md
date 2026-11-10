@@ -100,6 +100,25 @@ corresponding GitHub Release.
   games** grades recent games on request. A game page now shows the grade it
   received when it was played, against the target armed at the time.
 
+### Reports and delivery
+
+- Add a weekly report every Monday morning: games, record by matchup, MMR,
+  best and worst map and build, opponents faced and macro, each next to the
+  week before. Turn it off or set its time zone in Settings → Preferences →
+  Reports.
+- Add stream reports. Press **End stream** in the Stream Dock (or play nothing
+  for four hours) and a recap of the stream appears in your notifications and
+  under Stream reports, with a **Copy Discord summary** button.
+- Add phone and browser notifications. Turn them on per device in Settings →
+  Preferences, choose what to push, send a test and remove old devices.
+- Add coaching session reminders 24 hours and 1 hour before a session, an
+  **Add to calendar** button on each booking and a private calendar link you
+  can subscribe to, regenerate or turn off.
+- Add **Post to Discord** in Settings → Integrations: ranked results, session
+  summaries, the weekly recap and new MMR peaks in your own server's channel.
+  Off until you preview the posts and turn a channel on; opponent names stay
+  hidden unless you allow them.
+
 ### Game share links
 
 - Share one game by link from its new Share menu, on the game page and on each

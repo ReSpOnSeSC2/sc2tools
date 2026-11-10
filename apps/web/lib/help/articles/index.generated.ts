@@ -8,9 +8,11 @@ import accountData_appearance from "./account-data/appearance";
 import accountData_backupsAndExport from "./account-data/backups-and-export";
 import accountData_deleteAccount from "./account-data/delete-account";
 import accountData_deletingGameHistory from "./account-data/deleting-game-history";
+import accountData_discord from "./account-data/discord";
 import accountData_exportCsv from "./account-data/export-csv";
 import accountData_hideOrDeleteAGame from "./account-data/hide-or-delete-a-game";
 import accountData_historyOnThisDevice from "./account-data/history-on-this-device";
+import accountData_notificationsOnYourPhone from "./account-data/notifications-on-your-phone";
 import accountData_notifications from "./account-data/notifications";
 import accountData_playerChannels from "./account-data/player-channels";
 import accountData_privacyCookies from "./account-data/privacy-cookies";
@@ -42,6 +44,7 @@ import analyzer_strategies from "./analyzer/strategies";
 import analyzer_today from "./analyzer/today";
 import analyzer_trends from "./analyzer/trends";
 import analyzer_vsExpected from "./analyzer/vs-expected";
+import analyzer_weeklyReport from "./analyzer/weekly-report";
 import builds_buildCheckIn from "./builds/build-check-in";
 import builds_buildGuides from "./builds/build-guides";
 import builds_buildOrderPaste from "./builds/build-order-paste";
@@ -106,6 +109,7 @@ import streamStudio_overlayHealth from "./stream-studio/overlay-health";
 import streamStudio_overlayUrlLeaked from "./stream-studio/overlay-url-leaked";
 import streamStudio_seriesMode from "./stream-studio/series-mode";
 import streamStudio_streamDock from "./stream-studio/stream-dock";
+import streamStudio_streamReports from "./stream-studio/stream-reports";
 import streamStudio_viewerEngagement from "./stream-studio/viewer-engagement";
 import streamStudio_voice from "./stream-studio/voice";
 import troubleshooting_myGameDidntShowUp from "./troubleshooting/my-game-didnt-show-up";
@@ -119,9 +123,11 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   accountData_backupsAndExport,
   accountData_deleteAccount,
   accountData_deletingGameHistory,
+  accountData_discord,
   accountData_exportCsv,
   accountData_hideOrDeleteAGame,
   accountData_historyOnThisDevice,
+  accountData_notificationsOnYourPhone,
   accountData_notifications,
   accountData_playerChannels,
   accountData_privacyCookies,
@@ -153,6 +159,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_today,
   analyzer_trends,
   analyzer_vsExpected,
+  analyzer_weeklyReport,
   builds_buildCheckIn,
   builds_buildGuides,
   builds_buildOrderPaste,
@@ -217,6 +224,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   streamStudio_overlayUrlLeaked,
   streamStudio_seriesMode,
   streamStudio_streamDock,
+  streamStudio_streamReports,
   streamStudio_viewerEngagement,
   streamStudio_voice,
   troubleshooting_myGameDidntShowUp,
