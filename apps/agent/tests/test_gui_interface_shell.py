@@ -63,15 +63,17 @@ def test_dashboard_stat_numbers_and_captions_share_one_line_and_labels_show_thei
 import re
 app.setStyleSheet(gui._STYLE)
 ui, win = make_window(window_page="dashboard")
-win.resize(1100, 760)
+# Wide enough that each stat card is wider than its contents, so an alignment shows.
+win.resize(1600, 900)
 win.show()
-app.processEvents()
+QtTest.QTest.qWait(200)
 for part in ("value", "label"):
     rows = {card[part].mapTo(win, QtCore.QPoint()).y() for card in win._stat_cards}
     assert len(rows) == 1, (part, rows)
 problems = win._stat_failed["frame"].findChild(QtWidgets.QPushButton)
 assert problems.text() == "View problems" and problems.x() == win._stat_failed["label"].x()
 image, rect = win._stat_failed["frame"].grab().toImage(), problems.geometry()
+assert rect.width() - problems.sizeHint().width() >= 40, (rect.getRect(), problems.sizeHint())
 ink = [x for x in range(rect.left(), rect.right())
        if any(image.pixelColor(x, y).lightness() > 80 for y in range(rect.top(), rect.bottom()))]
 # Its text starts at the button's own padding, like the caption above it, not centred.
