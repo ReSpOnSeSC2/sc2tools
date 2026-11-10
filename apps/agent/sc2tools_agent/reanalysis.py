@@ -286,9 +286,24 @@ class ReanalysisController:
             batch.active = game_id
             return batch, game_id, original
 
+    def _held(self) -> bool:
+        queue = getattr(self.cell, "upload", None)
+        held = getattr(queue, "history_held", None)
+        try:
+            return bool(held()) if callable(held) else False
+        except Exception:  # noqa: BLE001
+            return False
+
     def _run(self) -> None:
         idle_since = self._clock()
         while not self.stop_event.is_set():
+            if self._held():
+                # Paused syncing or a match in progress: start nothing new,
+                # like the watcher's own history work.
+                self._wake.wait(2.0)
+                self._wake.clear()
+                idle_since = self._clock()
+                continue
             item = self._next()
             if item is None:
                 self._wake.wait(1.0)
@@ -388,7 +403,9 @@ class ReanalysisController:
             if not queue.is_pending(path):
                 done.wait(2.0)  # A settle callback runs just after the reservation ends.
                 break
-            if self._clock() >= deadline:
+            if self._held():
+                deadline = self._clock() + self._settle_seconds  # Expected holds never count.
+            elif self._clock() >= deadline:
                 break
         return result.get("outcome", "upload_failed")
 

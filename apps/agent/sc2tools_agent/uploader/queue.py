@@ -1135,6 +1135,10 @@ class UploadQueue:
         with self._lock:
             return self._paused or self._auth_held
 
+    def history_held(self) -> bool:
+        """Whether background (non-live) uploads are deliberately on hold."""
+        return self.is_paused() or self._history_held_for_match()
+
     def set_activity_gate(self, gate):
         self._activity_gate = gate
 

@@ -171,6 +171,22 @@ def test_redelivery_reports_settled_games_and_cancel_stops_new_work(tmp_path):
     assert len(c.cell.upload.jobs) == 3  # Nothing settled was processed twice.
 
 
+def test_worker_starts_nothing_while_syncing_is_paused_or_a_match_runs(tmp_path):
+    class HeldQueue(_Queue):
+        held = True
+
+        def history_held(self):
+            return self.held
+    queue = HeldQueue()
+    c = controller(tmp_path, queue=queue)
+    c.worker.handle_batch(batch(("archived", ORIGINAL)), "synthetic", c.emit)
+    assert not _wait_for(lambda: bool(c.fetched), timeout=0.5)
+    queue.held = False
+    c.worker._wake.set()
+    assert _wait_for(lambda: len(c.events) == 1, timeout=5)
+    assert c.events[0]["outcome"] == "uploaded"
+
+
 def test_an_unsettled_upload_reports_upload_failed_not_uploaded(tmp_path):
     c = controller(tmp_path, queue=_Queue(outcome=None))
     run(c, batch(("archived", ORIGINAL)))
