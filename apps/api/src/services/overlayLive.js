@@ -17,6 +17,7 @@ const {
   tendenciesFromLegacyOpenings,
 } = require("./scouting/opponentTendencies");
 const { computePlayerCard } = require("./scouting/playerCard");
+const { recentBuilds } = require("./scouting/recentBuilds");
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 
 const { bucketResult } = aggregations;
@@ -835,6 +836,13 @@ class OverlayLiveService {
         userId, (e && e.message) || e,
       );
     }
+
+    // Each player's last five builds, for the desktop agent's private
+    // scouting views. The broker removes them from every overlay emit.
+    const builds = await recentBuilds(this.db.games, userId, {
+      identity: tendencyIdentity, myRace, oppRace: opponentRace, matchup,
+    });
+    if (builds) payload.recentBuilds = builds;
 
     // Best answer vs the opponent's most-likely opening.
     const favOpeningStrategy = payload.favOpening?.name;
