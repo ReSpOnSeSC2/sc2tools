@@ -5,6 +5,7 @@ const { parseFilters } = require("../util/parseQuery");
 const rateLimitModule = require("express-rate-limit");
 const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
 const { parseAnalysisGameIds } = require("../util/opponentAnalysisMembership");
+const { parseReviewQueueQuery } = require("./replays");
 
 /**
  * /v1/catalog, /v1/definitions, /v1/export.csv, /v1/playback —
@@ -53,7 +54,7 @@ function buildCatalogRouter(deps) {
       const opponentId = req.params.pulseId;
       const prepared = opponentId
         ? await deps.opponents?.prepareGamesCsv(userId, opponentId, { filters: parseFilters(req.query), mergeLinked: req.query.mergeLinked === "1", result: req.query.result, analysisGameIds: parseAnalysisGameIds(req.query.analysisGameIds), signal: controller.signal })
-        : await deps.catalog.prepareCsv(userId, parseFilters(req.query), { search: req.query.search, result: req.query.result, matchup: req.query.matchup, sort: req.query.sort, signal: controller.signal });
+        : await deps.catalog.prepareCsv(userId, parseFilters(req.query), { search: req.query.search, result: req.query.result, matchup: req.query.matchup, sort: req.query.sort, ...parseReviewQueueQuery(req.query), signal: controller.signal });
       if (!prepared) { res.status(404).json({ error: { code: "not_found" } }); return; }
       res.set("Cache-Control", "private, no-store");
       res.set("X-Export-Truncated", String(prepared.truncated));

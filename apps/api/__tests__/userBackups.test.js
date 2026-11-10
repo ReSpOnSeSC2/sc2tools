@@ -70,7 +70,7 @@ describe("streamed snapshots and safe restore (real Mongo)", () => {
     services.gdpr.replayFiles = { verifyAvailableMarker: jest.fn(async () => true), deleteMany: jest.fn(async () => {}) };
     try {
       const preview = await api("get", `/me/backups/${snapshot.id}/preview`).expect(200);
-      expect(preview.body).toEqual({ games: { kept: 1, removed: 1, added: 1 }, customBuilds: 1, opponentNotes: 0, overlayTokens: 0, currentRevision: expect.stringMatching(/^[a-f0-9]{24}$/) });
+      expect(preview.body).toEqual({ games: { kept: 1, removed: 1, added: 1 }, customBuilds: 1, opponentNotes: 0, notes: 0, overlayTokens: 0, currentRevision: expect.stringMatching(/^[a-f0-9]{24}$/) });
       await api("post", `/me/backups/${snapshot.id}/restore`).send({}).expect(200);
       expect(await db.games.findOne({ userId: "u1", gameId: "removed" })).toBeNull();
       expect((await db.games.findOne({ userId: "u1", gameId: "kept" })).replayFile.sha256).toBe("abc");

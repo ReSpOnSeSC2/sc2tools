@@ -21,6 +21,7 @@ import { Card, Skeleton } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { useApi, type ClientApiError } from "@/lib/clientApi";
+import { REVIEW_TAG_PRESETS, REVIEW_TAGS_PATH } from "@/lib/notes";
 import { defaultAnalyzerFilters, filtersToQuery, useFilters } from "@/lib/filterContext";
 import { ReplayList } from "./ReplayList";
 import { ReplayShareControl } from "./ReplayShareControl";
@@ -51,7 +52,7 @@ export function ReplayLibrary() {
 function ReplayLibraryBody({ ownerId }: { ownerId: string }) {
   const { filters, setFilters, dbRev, seasons } = useFilters();
   const local = useReplayListFilters();
-  const { search, setSearch, result, setResult, matchup, setMatchup, sort, setSort, before, setBefore, committed, reset: resetReplayFilters } = local;
+  const { search, setSearch, result, setResult, matchup, setMatchup, sort, setSort, before, setBefore, review, setReview, tag, setTag, notes, setNotes, committed, reset: resetReplayFilters } = local;
   const globalQuery = filtersToQuery(filters);
   const priorGlobal = useRef(globalQuery), blockedCursor = useRef<string | null>(null);
   if (priorGlobal.current !== globalQuery) { priorGlobal.current = globalQuery; blockedCursor.current = committed.cursor; }
@@ -63,16 +64,20 @@ function ReplayLibraryBody({ ownerId }: { ownerId: string }) {
   const [packing, setPacking] = useState(false);
   const busy = useSyncExternalStore(subscribeExportBusy, exportBusy, () => false);
   const selectionButton = useRef<HTMLButtonElement>(null), packButton = useRef<HTMLButtonElement>(null);
-  const filterKey = JSON.stringify({ globalQuery, search: committed.search.trim(), result: committed.result, matchup: committed.matchup, sort: committed.sort, before: committed.before });
+  const filterKey = JSON.stringify({ globalQuery, search: committed.search.trim(), result: committed.result, matchup: committed.matchup, sort: committed.sort, before: committed.before, review: committed.review, tag: committed.tag, notes: committed.notes });
   const [memoryReady, setMemoryReady] = useState(false);
   useEffect(() => setMemoryReady(true), []);
   const memory = useMemo(() => memoryReady ? replayPageMemory(ownerId, filterKey, cursor) : { previous: null, hasPrevious: false, page: cursor ? null : 1 }, [memoryReady, ownerId, filterKey, cursor]);
-  const queryFor = (values: { search: string; result: string; matchup: string; sort: string; before: string }, pageCursor?: string | null) => {
+  const queryFor = (values: { search: string; result: string; matchup: string; sort: string; before: string; review: string; tag: string; notes: string }, pageCursor?: string | null) => {
     const params = new URLSearchParams(globalQuery.slice(1));
     params.set("sort", values.sort);
     if (values.search.trim()) params.set("search", values.search.trim());
     if (values.result !== "all") params.set("result", values.result);
     if (values.matchup !== "all") params.set("matchup", values.matchup);
+    // Owner review queue: allowlisted by the API (review, review_tag, notes).
+    if (values.review !== "all") params.set("review", values.review);
+    if (values.tag) params.set("review_tag", values.tag);
+    if (values.notes === "has") params.set("notes", "has");
     const until = replayUntil(params.get("until"), values.before); if (until) params.set("until", until);
     if (pageCursor) params.set("cursor", pageCursor);
     return params;
@@ -80,7 +85,9 @@ function ReplayLibraryBody({ ownerId }: { ownerId: string }) {
   const params = queryFor(committed, cursor); params.set("limit", String(PAGE_SIZE));
   const path = `/v1/replays?${params}`;
   // Export follows the visible controls, independently of cursor/debounced list.
-  const exportQuery = queryFor({ search, result, matchup, sort, before }).toString();
+  const exportQuery = queryFor({ search, result, matchup, sort, before, review, tag, notes }).toString();
+  const reviewTags = useApi<{ tags: string[] }>(REVIEW_TAGS_PATH, { revalidateOnFocus: false, shouldRetryOnError: false });
+  const tagOptions = [...new Set([...REVIEW_TAG_PRESETS, ...(reviewTags.data?.tags ?? []), ...(tag ? [tag] : [])])];
   const selectionScope = `${exportQuery}:${cursor || ""}`;
   const priorSelectionScope = useRef(selectionScope);
   useEffect(() => { if (priorSelectionScope.current !== selectionScope) { priorSelectionScope.current = selectionScope; setSelectedIds(new Set()); } }, [selectionScope]);
@@ -107,7 +114,7 @@ function ReplayLibraryBody({ ownerId }: { ownerId: string }) {
   const pack = useReplayPackSelection(ownerId, queryFor(committed).toString(), packBlocked);
   const currentSelection = selectionStale ? new Set<string>() : selectedIds;
   const selectedTargets = (data?.items || []).filter(game => currentSelection.has(game.gameId));
-  const hasReplayFilters = search.length > 0 || result !== "all" || matchup !== "all" || sort !== "date_desc" || !!before;
+  const hasReplayFilters = search.length > 0 || result !== "all" || matchup !== "all" || sort !== "date_desc" || !!before || review !== "all" || !!tag || notes !== "all";
   const defaults = defaultAnalyzerFilters(seasons), hasGlobalFilters = filtersToQuery(defaults) !== globalQuery;
   function goOlder() {
     const next = data?.page.nextCursor; if (!next || isPreviousData || local.pendingFilters) return;
@@ -121,11 +128,14 @@ function ReplayLibraryBody({ ownerId }: { ownerId: string }) {
         <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h2 className="font-display text-h3 font-bold text-text">Replays</h2>{data ? <Badge variant="cyan" size="sm">{data.items.length}{data.total != null ? ` of ${data.total.toLocaleString()}` : ""} shown</Badge> : null}{(isValidating || local.pendingFilters) && data ? <span className="inline-flex items-center gap-1 text-micro text-text-dim" role="status"><RefreshCcw className="h-3 w-3 animate-spin" aria-hidden /> Refreshing</span> : null}</div><p className="mt-1 text-caption text-text-muted">Search synced games within the global filters above.</p><span className="sr-only" role="status" aria-live="polite">{data ? `${data.items.length} replays shown${memory.page ? ` on page ${memory.page}` : " on the saved page"}.` : ""}</span></div><div className="flex flex-wrap items-start gap-2"><ReplayCsvExportButton query={exportQuery} /><ReplayShareControl /></div></div>
         <ReplayLibraryTip />
         <div className="mt-3 flex flex-wrap items-end gap-3">
-          <label className="relative min-w-48 flex-1"><span className="sr-only">Search replays</span><Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-text-dim" aria-hidden /><Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Player, map, build or strategy" className="pl-9" maxLength={100} /></label>
+          <label className="relative min-w-48 flex-1"><span className="sr-only">Search replays</span><Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-text-dim" aria-hidden /><Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Player, map, build, strategy or your notes" className="pl-9" maxLength={100} /></label>
           <div role="group" aria-label="Filter by result" className="flex flex-wrap gap-1">{([['all','All'],['win','Wins'],['loss','Losses']] as const).map(([value,label]) => <Button key={value} variant="secondary" size="sm" className="min-h-11" aria-pressed={result === value} onClick={() => setResult(value)}>{label}</Button>)}</div>
           <label className="text-micro text-text-muted">Matchup<Select value={matchup} onChange={event => setMatchup(event.target.value)} aria-label="Filter by matchup"><option value="all">All matchups</option>{MATCHUPS.map(value => <option key={value} value={value}>{value}</option>)}</Select></label>
           <label className="text-micro text-text-muted">Sort<Select value={sort} onChange={event => setSort(event.target.value as SortFilter)} aria-label="Sort replays"><option value="date_desc">Newest first</option><option value="date_asc">Oldest first</option></Select></label>
           <label className="text-micro text-text-muted">Jump to date<Input type="date" aria-label="Jump to date" value={before} onChange={event => setBefore(event.target.value)} className="min-h-11" /></label>
+          <div role="group" aria-label="Review queue" className="flex flex-wrap gap-1">{([["all", "Any"], ["todo", "To review"], ["done", "Reviewed"]] as const).map(([value, label]) => <Button key={value} variant="secondary" size="sm" className="min-h-11" aria-pressed={review === value} onClick={() => setReview(value)}>{label}</Button>)}</div>
+          <label className="text-micro text-text-muted">Review tag<Select value={tag} onChange={event => setTag(event.target.value)} aria-label="Filter by review tag"><option value="">Any tag</option>{tagOptions.map(value => <option key={value} value={value}>{value}</option>)}</Select></label>
+          <Button variant="secondary" size="sm" className="min-h-11" aria-pressed={notes === "has"} onClick={() => setNotes(notes === "has" ? "all" : "has")}>Has notes</Button>
           <Button variant="ghost" size="sm" onClick={resetReplayFilters} disabled={!hasReplayFilters}>Reset</Button><Button variant="secondary" size="sm" aria-pressed={selecting} disabled={packing || busy} onClick={() => { pack.clear(); setSelecting(value => !value); setSelectedIds(new Set()); }}>Select replays</Button>
           <Button ref={packButton} id="replay-packs" variant="secondary" size="sm" aria-pressed={packing} disabled={selecting || busy || pack.pending} onClick={() => { setSelectedIds(new Set()); pack.clear(); setPacking(value => !value); }}>Replay pack</Button>
         </div>

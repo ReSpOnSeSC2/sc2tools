@@ -5,6 +5,7 @@ const USER_SCOPED_COLLECTIONS = [
   ["games", "games"],
   ["opponents", "opponents"],
   ["opponentNotes", "opponentNotes"],
+  ["notes", "notes"],
   ["customBuilds", "customBuilds"],
   ["overlayTokens", "overlayTokens"],
   ["deviceTokens", "deviceTokens"],

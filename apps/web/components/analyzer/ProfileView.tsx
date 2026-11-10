@@ -411,9 +411,12 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         pulseId={pulseId}
         initialNotes={data.notes}
         initialNotesReadAloud={data.notesReadAloud}
-        onSaved={(value: OpponentNotesValue) => {
+        initialNote={data.note}
+        linkedNotes={data.linkedNotes}
+        suggestedTags={data.suggestedTags}
+        onSaved={(value: OpponentNotesValue, note) => {
           void mutate(
-            { ...data, ...value },
+            { ...data, notes: value.notes, notesReadAloud: value.notesReadAloud, note },
             { revalidate: false },
           );
         }}

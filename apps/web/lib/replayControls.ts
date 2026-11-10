@@ -21,6 +21,7 @@ export const REPLAY_SHORTCUTS: [string, string][] = [
   ["Esc", "Stop following a unit, then close its details"],
   ["F", "Toggle fullscreen"],
   ["M", "Toggle replay music"],
+  ["B", "Add a private note at this moment (your own games)"],
   ["?", "Show keyboard shortcuts"],
 ];
 

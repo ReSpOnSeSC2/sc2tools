@@ -123,6 +123,8 @@ class GameControlsService {
       }
       await this.purgePayloads(userId, gameId);
       await this.db.macroJobs.deleteMany({ userId, gameId });
+      // Private game notes belong to the game; its review state goes with the row.
+      if (this.db.notes) await this.db.notes.deleteMany({ userId, "target.kind": "game", "target.id": gameId });
       await this.gdpr._deleteWipedGuideSamples(userId, [gameId]);
       await this.gdpr._scrubUserGuideExamples(userId);
       await fence.assert();

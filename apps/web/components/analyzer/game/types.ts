@@ -19,6 +19,10 @@ export interface GameOpponentSummary {
 
 export interface GameSummary {
   gameId: string;
+  /** Owner-only review queue state (``PUT /v1/games/:id/review``). */
+  review?: import("@/lib/notes").GameReview | null;
+  /** Owner-only: how many private notes this game has. */
+  noteCount?: number;
   excluded?: boolean;
   exclusionReason?: string | null;
   /** ISO date-time of the replay's end. */

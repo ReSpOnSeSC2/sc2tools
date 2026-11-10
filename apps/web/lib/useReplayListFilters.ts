@@ -2,7 +2,7 @@
 import { useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useUrlQueryWriter, useUrlState, type QueryPatch } from "./useUrlState";
-import { replayBefore, replayCursor, replayMatchup, replayResult, replaySearch, replaySort } from "./replayListNavigation";
+import { replayBefore, replayCursor, replayMatchup, replayNotes, replayResult, replayReview, replaySearch, replaySort, replayTag } from "./replayListNavigation";
 
 const LEGACY = { q: "replaySearch", result: "replayResult", matchup: "replayMatchup", sort: "replaySort" } as const;
 /** Canonical section state; legacy backlinks remain readable until an explicit edit. */
@@ -14,13 +14,18 @@ export function useReplayListFilters() {
   const sort = useUrlState("sort", { parse: replaySort, serialize: value => value === "date_desc" ? null : value, defaultValue: "date_desc" as ReturnType<typeof replaySort> });
   const cursor = useUrlState("cursor", { parse: replayCursor, serialize: value => value, defaultValue: null as string | null });
   const before = useUrlState("before", { parse: replayBefore, serialize: value => value || null, defaultValue: "" });
+  const review = useUrlState("review", { parse: replayReview, serialize: value => value === "all" ? null : value, defaultValue: "all" as ReturnType<typeof replayReview> });
+  const tag = useUrlState("tag", { parse: replayTag, serialize: value => value || null, defaultValue: "" });
+  const notes = useUrlState("notes", { parse: replayNotes, serialize: value => value === "all" ? null : value, defaultValue: "all" as ReturnType<typeof replayNotes> });
   const legacy = { q: replaySearch(params?.get(LEGACY.q) ?? null), result: replayResult(params?.get(LEGACY.result) ?? null), matchup: replayMatchup(params?.get(LEGACY.matchup) ?? null), sort: replaySort(params?.get(LEGACY.sort) ?? null) };
   const selected = { search: params?.has("q") || q.source === "draft" ? q.value : legacy.q,
     result: params?.has("result") ? result.value : legacy.result, matchup: params?.has("matchup") ? matchup.value : legacy.matchup, sort: params?.has("sort") ? sort.value : legacy.sort };
   const committed = { search: params?.has("q") ? q.committedValue : legacy.q,
     result: params?.has("result") ? result.committedValue : legacy.result, matchup: params?.has("matchup") ? matchup.committedValue : legacy.matchup,
-    sort: params?.has("sort") ? sort.committedValue : legacy.sort, cursor: cursor.committedValue, before: before.committedValue };
-  const canonical: Record<"q" | "result" | "matchup" | "sort" | "before", string | null> = { q: committed.search || null, result: committed.result === "all" ? null : committed.result, matchup: committed.matchup === "all" ? null : committed.matchup, sort: committed.sort === "date_desc" ? null : committed.sort, before: committed.before || null };
+    sort: params?.has("sort") ? sort.committedValue : legacy.sort, cursor: cursor.committedValue, before: before.committedValue,
+    review: review.committedValue, tag: tag.committedValue, notes: notes.committedValue };
+  const canonical: Record<"q" | "result" | "matchup" | "sort" | "before" | "review" | "tag" | "notes", string | null> = { q: committed.search || null, result: committed.result === "all" ? null : committed.result, matchup: committed.matchup === "all" ? null : committed.matchup, sort: committed.sort === "date_desc" ? null : committed.sort, before: committed.before || null,
+    review: committed.review === "all" ? null : committed.review, tag: committed.tag || null, notes: committed.notes === "all" ? null : committed.notes };
   const pending = useRef<{ epoch: number; path: string; values: typeof canonical } | null>(null);
   if (pending.current && (pending.current.epoch !== writer.epoch || pending.current.path !== writer.path || Object.entries(canonical).every(([key, value]) => pending.current?.values[key as keyof typeof canonical] === value))) pending.current = null;
   const migration = useRef({ epoch: writer.epoch, path: writer.path, done: false });
@@ -46,14 +51,20 @@ export function useReplayListFilters() {
     result: draft ? replayResult(draft.result) : selected.result,
     matchup: draft ? replayMatchup(draft.matchup) : selected.matchup,
     sort: draft ? replaySort(draft.sort) : selected.sort,
-    before: draft ? replayBefore(draft.before) : before.value, committed, pendingFilters: !!draft,
+    before: draft ? replayBefore(draft.before) : before.value,
+    review: draft ? replayReview(draft.review) : review.value,
+    tag: draft ? replayTag(draft.tag) : tag.value,
+    notes: draft ? replayNotes(draft.notes) : notes.value, committed, pendingFilters: !!draft,
     setSearch: (value: string) => change({ q: replaySearch(value) || null }, 300),
     setResult: (value: string) => change({ result: replayResult(value) === "all" ? null : replayResult(value) }),
     setMatchup: (value: string) => change({ matchup: replayMatchup(value) === "all" ? null : replayMatchup(value) }),
     setSort: (value: string) => change({ sort: replaySort(value) === "date_desc" ? null : replaySort(value) }),
     setBefore: (value: string) => change({ before: replayBefore(value) || null }),
+    setReview: (value: string) => change({ review: replayReview(value) === "all" ? null : replayReview(value) }),
+    setTag: (value: string) => change({ tag: replayTag(value) || null }),
+    setNotes: (value: string) => change({ notes: replayNotes(value) === "all" ? null : replayNotes(value) }),
     setCursor: (value: string | null) => change({ cursor: value }, 0, "push"),
     clearCursor: () => change({ cursor: null }),
-    reset: () => change({ q: null, result: null, matchup: null, sort: null, before: null }),
+    reset: () => change({ q: null, result: null, matchup: null, sort: null, before: null, review: null, tag: null, notes: null }),
   };
 }

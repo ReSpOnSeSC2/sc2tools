@@ -16,12 +16,13 @@ const { USER_SCOPED_COLLECTIONS } = require("./accountExportPolicy");
 const { collectAccountExport } = require("./accountExportData");
 const { accountExportStream } = require("./accountExportStream");
 const { retireReanalysisJobs } = require("./reanalysis");
+const { NotesService } = require("./notes");
 
 // Every registered collection needs an explicit disposition. Shared/public
 // records use dedicated scrubbers; this map is audited by a coverage test and
 // deliberately has no catch-all for future collections.
 const GDPR_CLASSIFICATION = Object.freeze({
-  USERS: "user_scoped", PROFILES: "user_scoped", OPPONENTS: "user_scoped", OPPONENT_NOTES: "user_scoped",
+  USERS: "user_scoped", PROFILES: "user_scoped", OPPONENTS: "user_scoped", OPPONENT_NOTES: "user_scoped", NOTES: "user_scoped",
   GAMES: "user_scoped", GAME_DETAILS: "user_scoped", CUSTOM_BUILDS: "user_scoped", CUSTOM_BUILD_JOBS: "purge_only",
   DEVICE_PAIRINGS: "ttl_ephemeral", DEVICE_TOKENS: "user_scoped", OVERLAY_TOKENS: "user_scoped",
   MULTICHAT_STUDIO: "overlay_token_scoped", MULTICHAT_SOUNDS: "purge_only", MULTICHAT_ENGAGEMENT_EVENTS: "overlay_token_scoped",
@@ -764,6 +765,13 @@ class GdprService {
     return this.db.games.countDocuments(this._gamesWipeFilter(userId, opts));
   }
 
+  /** What still points at removed games: Review Exchange requests and private game notes.
+   * @param {string} userId */
+  async _afterGamesRemoved(userId) {
+    if (this.reviews) await this.reviews.closeForMissingGames(userId);
+    if (this.db.notes) await new NotesService(this.db).deleteForMissingGames(userId);
+  }
+
   /** @param {string} userId @param {{since?: Date|null, until?: Date|null, expectedGames?:number}} [opts] */
   async wipeGames(userId, opts = {}) {
     const gdprFence = await this._acquireMutationFence(userId, "wipe_games");
@@ -892,9 +900,8 @@ class GdprService {
     // A running re-analysis batch could otherwise re-upload wiped games.
     await retireReanalysisJobs(this.db.reanalysisJobs, this.io, userId);
 
-    // A review request's scoped grant points at one game; once that game
-    // is gone the request closes (its thread text stays).
-    if (this.reviews) await this.reviews.closeForMissingGames(userId);
+    // Requests on a removed game close (thread text stays); its private notes go.
+    await this._afterGamesRemoved(userId);
 
     const opponentsDeleted = await this.rebuildOpponentsForUser(userId);
     await gdprFence.assert();

@@ -4,6 +4,7 @@ import type { Prediction } from "./PredictedStrategiesList";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import type { BuildPhasePayload, BuildTransitionsPayload } from "@/lib/serverApi";
 import type { OpeningForecast } from "@/lib/openingForecast";
+import type { NoteDto } from "@/lib/notes";
 
 export type OpponentProfileResp = {
   globalIdentity?: GlobalPlayerIdentity | null;
@@ -40,6 +41,12 @@ export type OpponentProfileResp = {
   notes?: string;
   /** Add the notes to TTS when this opponent is detected. */
   notesReadAloud?: boolean;
+  /** The account's own note with tags, visibility and scope. */
+  note?: NoteDto | null;
+  /** Player-scope notes written on this player's other linked accounts. */
+  linkedNotes?: NoteDto[];
+  /** Deterministic tag suggestions from your games; never auto-applied. */
+  suggestedTags?: string[];
   totals?: { wins: number; losses: number; total: number; winRate: number };
   byMap?: Record<string, { wins: number; losses: number }>;
   byStrategy?: Record<string, { wins: number; losses: number }>;

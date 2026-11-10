@@ -3,8 +3,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { OpponentNotesValue } from "./OpponentNotesCard";
 import { useUnsavedNote } from "./UnsavedNoteContext";
+import { normalizeTagList } from "@/lib/notes";
 
-const same = (a: OpponentNotesValue, b: OpponentNotesValue) => a.notes === b.notes && a.notesReadAloud === b.notesReadAloud;
+const same = (a: OpponentNotesValue, b: OpponentNotesValue) => a.notes === b.notes && a.notesReadAloud === b.notesReadAloud
+  && a.visibility === b.visibility && a.scope === b.scope && JSON.stringify(a.tags) === JSON.stringify(b.tags);
+
+/** A stored draft from this or an older editor; missing newer fields keep the server's. */
+function restoredDraft(value: unknown, server: OpponentNotesValue): OpponentNotesValue | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.notes !== "string" || raw.notes.length > 500 || typeof raw.notesReadAloud !== "boolean") return null;
+  const tags = Array.isArray(raw.tags) && raw.tags.every((tag) => typeof tag === "string") ? normalizeTagList(raw.tags as string[]) : server.tags;
+  return {
+    notes: raw.notes,
+    notesReadAloud: raw.notesReadAloud,
+    tags,
+    visibility: raw.visibility === "stream" || raw.visibility === "private" ? raw.visibility : server.visibility,
+    scope: raw.scope === "account" || raw.scope === "player" ? raw.scope : server.scope,
+  };
+}
 
 /** The caller keys its editor by owner and opponent, isolating pending work. */
 export function useOpponentNoteDraft(pulseId: string, ownerId: string | null, server: OpponentNotesValue) {
@@ -43,8 +60,8 @@ export function useOpponentNoteDraft(pulseId: string, ownerId: string | null, se
   useEffect(() => {
     try {
       const stored = JSON.parse(sessionStorage.getItem(key) || "null");
-      const value = stored?.draft;
-      if (stored?.ownerId === ownerId && value && typeof value.notes === "string" && value.notes.length <= 500 && typeof value.notesReadAloud === "boolean" && !same(value, server)) {
+      const value = stored?.ownerId === ownerId ? restoredDraft(stored?.draft, server) : null;
+      if (value && !same(value, server)) {
         setDraft(value); setRestored(true);
       }
     } catch { /* An invalid entry never replaces a server value. */ }

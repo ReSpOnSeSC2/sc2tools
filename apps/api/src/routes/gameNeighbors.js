@@ -1,6 +1,7 @@
 "use strict";
 
 const { parseFilters } = require("../util/parseQuery");
+const { parseReviewQueueQuery } = require("./replays");
 
 /** @param {import('express').Router} router
  * @param {{games:Pick<import('../services/games').GamesService,'neighbors'>}} deps */
@@ -15,6 +16,7 @@ function registerGameNeighborsRoute(router, deps) {
         result: req.query.result,
         matchup: req.query.matchup,
         search: typeof req.query.q === "string" ? req.query.q : req.query.search,
+        ...parseReviewQueueQuery(req.query),
       });
       if (!result) { res.status(404).json({ error: { code: "not_found" } }); return; }
       res.json(result);

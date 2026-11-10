@@ -51,6 +51,7 @@ export function GameDetailShell({
   oppStrategyLabel,
   oppCorrected,
   exportAction,
+  noteActions,
   source,
   shareTimeSec,
 }: {
@@ -60,6 +61,8 @@ export function GameDetailShell({
   source?: GameSource | null;
   children: ReactNode;
   exportAction?: ReactNode;
+  /** Review queue toggle and the opponent quick note (owner page). */
+  noteActions?: ReactNode;
   opponentContext?: OpponentNavigationContext | null;
   streamLinks?: GameStreamLink[] | null;
   /** Effective build label from the live check-in state; the slim row's otherwise. */
@@ -163,6 +166,7 @@ export function GameDetailShell({
               aria-label="Game actions"
               className="flex min-h-9 w-full flex-wrap items-center justify-end gap-2"
             >
+              {noteActions}
               <ShareGameButton game={game} currentTimeSec={shareTimeSec} />
               {exportAction}
               <ReplayDownloadButton

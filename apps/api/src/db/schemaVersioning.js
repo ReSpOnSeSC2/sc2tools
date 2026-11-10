@@ -90,6 +90,13 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  // v1 — unified notes: {target:{kind,id}, text, tags, visibility, scope,
+  // groupKey?, pinned, readAloud, gameTimeSec?, x?, y?}.
+  [COLLECTIONS.NOTES]: {
+    collection: COLLECTIONS.NOTES,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.GAMES]: {
     collection: COLLECTIONS.GAMES,
     // v2 — v0.4.3 storage trim: ``earlyBuildLog`` / ``oppEarlyBuildLog``

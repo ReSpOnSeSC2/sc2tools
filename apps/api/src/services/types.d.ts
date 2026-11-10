@@ -162,13 +162,16 @@ export interface OpponentsService {
       includeProfile?: boolean;
     },
   ): Promise<object | null>;
+  getNote?(userId: string, pulseId: string): Promise<{ notes: string; notesReadAloud: boolean; note: Record<string, unknown> | null } | null>;
   updateNotes(
     userId: string,
     pulseId: string,
-    input: { notes: string } & ({ notesReadAloud: boolean; preserveReadAloud?: never } | { preserveReadAloud: true; notesReadAloud?: never }),
+    input: { notes: string; tags?: string[]; visibility?: "stream" | "private"; scope?: "account" | "player"; pinned?: boolean }
+      & ({ notesReadAloud: boolean; preserveReadAloud?: never } | { preserveReadAloud: true; notesReadAloud?: never }),
   ): Promise<{
     notes: string;
     notesReadAloud: boolean;
+    note: Record<string, unknown> | null;
     opponentName: string;
     pulseCharacterId: string | null;
   } | null>;

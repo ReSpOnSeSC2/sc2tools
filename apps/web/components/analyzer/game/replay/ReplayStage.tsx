@@ -111,6 +111,8 @@ export function ReplayStage({
   onMarkerClick,
   commentMarkers,
   onCommentMarker,
+  commentLabel,
+  onAddNote,
   mobileCompact = false,
   defaultShowProduction = true,
   patchEra,
@@ -165,6 +167,10 @@ export function ReplayStage({
   onMarkerClick?: (id: string) => void;
   commentMarkers?: readonly CommentTimelineMarker[];
   onCommentMarker?: (marker: CommentTimelineMarker) => void;
+  /** Accessible name of the transport dock's comment strip. */
+  commentLabel?: string;
+  /** Owner game page only: "Add note at 4:12" in the dock and the B key. */
+  onAddNote?: (t: number) => void;
   /** Below ``xl``: hide both rails and shorten the map band, so the
    *  whole stage is short enough to pin above a scrolling thread. */
   mobileCompact?: boolean;
@@ -253,7 +259,8 @@ export function ReplayStage({
   }, [seek, onPlayingChange, onStageSeek, model.gameLength]);
   const onReplayKeyDown = useReplayShortcuts({ root: stageRef, time, gameLength: model.gameLength, playing, speed, markers: model.markers,
     onSeek: onUserSeek, onPlay: onPlayingChange, onSpeed: onSpeedChange, onMusic: () => music.setEnabled(!music.enabled), onHelp: () => setShortcutsOpen(true), helpOpen: shortcutsOpen || clipOpen,
-    onVision: () => setVision(nextReplayVision(vision)), onInspect: () => replayerRef.current?.inspectNext() });
+    onVision: () => setVision(nextReplayVision(vision)), onInspect: () => replayerRef.current?.inspectNext(),
+    onNote: onAddNote ? () => { onPlayingChange(false); onAddNote(currentTime.current); } : undefined });
 
   // Pause and seek before the browser can tick the old playing position.
   // External seek-and-pause. Keyed on ``seq`` so asking for the same
@@ -413,6 +420,8 @@ export function ReplayStage({
         phases={model.phases}
         commentMarkers={commentMarkers}
         onCommentMarker={onCommentMarker}
+        commentLabel={commentLabel}
+        onAddNote={onAddNote ? (t: number) => { onPlayingChange(false); onAddNote(t); } : undefined}
         onSeek={onUserSeek}
         onPlayingChange={onPlayingChange}
         onSpeedChange={onSpeedChange}

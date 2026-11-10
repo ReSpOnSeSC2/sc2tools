@@ -44,6 +44,11 @@ const COLLECTIONS = Object.freeze({
   // opponents aggregate. Admin rebuilds can safely drop/recreate the
   // aggregate without erasing notes the user wrote by hand.
   OPPONENT_NOTES: "opponent_notes",
+  // One private notes system: opponent notes (one per exact account, with
+  // tags, stream/private visibility and account/player scope) and
+  // timestamped game notes. Legacy ``opponent_notes`` rows move here in
+  // bounded per-user batches (services/notes.js ``ensureMigrated``).
+  NOTES: "notes",
   GAMES: "games",
   // Per-game heavy fields (build logs, macroBreakdown, apmCurve,
   // spatial). Split out of ``games`` in v0.4.3 so list-page queries
@@ -192,6 +197,13 @@ const LIMITS = Object.freeze({
   OPPONENT_GAMES_PAGE_SIZE: 200,
   OPPONENT_GAMES_LIST_MAX: 200,
   OPPONENT_NOTES_MAX_LENGTH: 500,
+  // Unified notes (services/notesPolicy.js). Game notes are private and
+  // capped per game; review tags are the small queue labels on a game row.
+  NOTE_TEXT_MAX_LENGTH: 500,
+  NOTE_TAGS_MAX: 8,
+  NOTE_TAG_MAX_LENGTH: 24,
+  GAME_NOTES_MAX: 200,
+  REVIEW_TAGS_MAX: 5,
   PAIRING_CODE_TTL_SEC: 600,
   PAIRING_CODE_LEN: 6,
   CSV_EXPORT_MAX_ROWS: 50000,

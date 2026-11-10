@@ -27,7 +27,7 @@
  */
 
 import { memo, type CSSProperties, type ReactNode } from "react";
-import { Pause, Play, SkipBack, SkipForward, RotateCcw, RotateCw } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, RotateCcw, RotateCw, StickyNote } from "lucide-react";
 import { formatClock, type TimelineMarker } from "@/lib/replayHud";
 import type { PhaseBand } from "@/lib/replayHud";
 import type { ReplayMusicApi } from "@/lib/replayMusic";
@@ -104,17 +104,19 @@ function CommentStrip({
   markers,
   gameLength,
   onSelect,
+  label,
 }: {
   markers: readonly CommentTimelineMarker[];
   gameLength: number;
   onSelect: (marker: CommentTimelineMarker) => void;
+  label: string;
 }) {
   if (markers.length === 0) return null;
   return (
     <div
       className="relative h-4"
       role="group"
-      aria-label="Review comments on the timeline"
+      aria-label={label}
       data-testid="replay-comment-strip"
     >
       {markers.map((m) => {
@@ -183,6 +185,8 @@ function TransportDockImpl({
   children,
   commentMarkers,
   onCommentMarker,
+  commentLabel = "Review comments on the timeline",
+  onAddNote,
 }: {
   t: number;
   gameLength: number;
@@ -201,6 +205,10 @@ function TransportDockImpl({
   /** Review-comment clusters; selecting one seeks unless a handler is given. */
   commentMarkers?: readonly CommentTimelineMarker[];
   onCommentMarker?: (marker: CommentTimelineMarker) => void;
+  /** Accessible name of the comment strip (game notes use their own). */
+  commentLabel?: string;
+  /** Owner game page: open a private note at the current moment (B). */
+  onAddNote?: (t: number) => void;
 }) {
   const progress = pct(t, gameLength);
   return (
@@ -258,6 +266,11 @@ function TransportDockImpl({
           const label = direction === -1 ? "Previous event" : "Next event";
           return <button key={direction} type="button" className={`${DOCK_BUTTON_CLASS} disabled:opacity-40`} title={`${label} (${direction === -1 ? "P" : "N"})`} aria-label={label} aria-keyshortcuts={direction === -1 ? "P" : "N"} disabled={target === null} onClick={() => { if (target !== null) onSeek(Math.max(0, Math.min(gameLength, target))); }}>{direction === -1 ? <SkipBack className="h-4 w-4" aria-hidden /> : <SkipForward className="h-4 w-4" aria-hidden />}</button>;
         })}
+        {onAddNote ? (
+          <button type="button" className={DOCK_BUTTON_CLASS} title="Add a private note at this moment (B)" aria-label={`Add note at ${formatClock(t)}`} aria-keyshortcuts="B" onClick={() => onAddNote(t)}>
+            <StickyNote className="h-4 w-4" aria-hidden /><span className="hidden text-micro sm:inline">Note at</span><span className="text-micro tabular-nums">{formatClock(t)}</span>
+          </button>
+        ) : null}
       </div>
 
       {/* A separate timeline row on phones. The basis also lets it wrap
@@ -269,6 +282,7 @@ function TransportDockImpl({
             <CommentStrip
               markers={commentMarkers}
               gameLength={gameLength}
+              label={commentLabel}
               onSelect={(m) => (onCommentMarker ? onCommentMarker(m) : onSeek(m.t))}
             />
           ) : null}

@@ -60,10 +60,15 @@ function sameOpponentHistory(live: LiveGameEnvelope | null) {
 export function privateScouting(live: LiveGameEnvelope | null) {
   const source = sameOpponentHistory(live), history = matchedHistory(live), rawId = source.oppPulseId;
   const pulseId = typeof rawId === "string" && /^\d+-S2-\d+-\d+$/.test(rawId) && rawId.length <= 80 ? rawId : null;
+  // The private view carries this account's own note whatever its
+  // visibility; an older API sent only the (always on-stream) note.
+  const notes = record(source.privateNotes), own = source.privateNotes ? record(notes.note) : record(source.opponentNotes);
   return {
     pulseId, writable: source.opponentNotesWritable === true,
-    note: pulseId ? text(record(source.opponentNotes).text, 500) : "",
-    readAloud: record(source.opponentNotes).readAloud === true,
+    note: pulseId ? text(own.text, 500) : "",
+    noteVisibility: (source.privateNotes ? own.visibility === "stream" ? "stream" : "private" : "stream") as "stream" | "private",
+    readAloud: own.readAloud === true,
+    linkedNotes: pulseId ? list(notes.linked).slice(0, 3).map(row => ({ text: text(row.text, 500), account: text(row.account, 120), tags: (Array.isArray(row.tags) ? row.tags : []).map(tag => text(tag, 24)).filter(Boolean).slice(0, 8) })).filter(row => row.text) : [],
     recent: list(history.recentGames).filter(row => ["Win", "Loss", "Tie"].includes(String(row.result))).map(row => ({
       result: String(row.result),
       gameId: typeof row.gameId === "string" && /^[a-zA-Z0-9_-]{1,200}$/.test(row.gameId) ? row.gameId : null,

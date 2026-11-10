@@ -10,7 +10,7 @@ async function dataInventory(db, userId) {
   /** @type {Record<string,number>} */ const removed = {};
   /** @type {Record<string,number>} */ const anonymized = {};
   const fields = {
-    games: ["games", "userId"], opponents: ["opponents", "userId"], notes: ["opponentNotes", "userId"],
+    games: ["games", "userId"], opponents: ["opponents", "userId"], notes: ["notes", "userId"],
     builds: ["customBuilds", "userId"], devices: ["deviceTokens", "userId"], overlayTokens: ["overlayTokens", "userId"],
     snapshots: ["userBackups", "userId"], sounds: ["multichatSounds", "userId"],
     publishedBuilds: ["communityBuilds", "ownerUserId"], reports: ["communityReports", "reporterUserId"],
@@ -21,6 +21,8 @@ async function dataInventory(db, userId) {
   await Promise.all(Object.entries(fields).map(async ([label, [key, field]]) => {
     removed[label] = await /** @type {any} */ (db)[key].countDocuments({ [field]: userId }, QUERY_OPTIONS);
   }));
+  // Legacy opponent notes not yet moved into ``notes`` are still notes.
+  if (db.opponentNotes) removed.notes += await db.opponentNotes.countDocuments({ userId }, QUERY_OPTIONS);
   removed.archivedReplays = await db.games.countDocuments({ userId, "replayFile.storedAt": { $exists: true } }, QUERY_OPTIONS);
   removed.streamRows = 0;
   /** @type {string[]} */ let tokens = [];

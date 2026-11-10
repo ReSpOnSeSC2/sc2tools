@@ -65,6 +65,13 @@ export function MapReplaySection({
   banked,
   upgrades,
   clockLink,
+  mapMarkers,
+  onWorldClick,
+  onMarkerClick,
+  commentMarkers,
+  onCommentMarker,
+  commentLabel,
+  onAddNote,
 }: {
   gameId: string;
   /** Share the host’s recording action and progress without a second request. */
@@ -91,7 +98,10 @@ export function MapReplaySection({
   /** The game's patch era (``patchEraForGame`` on the game row), which
    *  prices kills and losses. Omitted, the live 12-worker game. */
   patchEra?: PatchEra | null;
-} & Pick<ComponentProps<typeof ReplayStage>, "seekRequest" | "onPlaybackTimeChange" | "onPlaybackStateChange" | "onStageSeek" | "banked" | "upgrades" | "clockLink">) {
+} & Pick<ComponentProps<typeof ReplayStage>, "seekRequest" | "onPlaybackTimeChange" | "onPlaybackStateChange" | "onStageSeek" | "banked" | "upgrades" | "clockLink"
+  | "mapMarkers" | "onWorldClick" | "onMarkerClick" | "commentMarkers" | "onCommentMarker" | "commentLabel" | "onAddNote">) {
+  // Game notes (owner page): pins, the note strip and "Add note at" (B).
+  const notes = { mapMarkers, onWorldClick, onMarkerClick, commentMarkers, onCommentMarker, commentLabel, onAddNote };
   const fallback = useMapReplay(controller ? null : gameId);
   const recording = controller ?? fallback;
   const { playback, manifest, isLoading, error, canRefresh } = recording;
@@ -105,6 +115,7 @@ export function MapReplaySection({
     {refreshControl}
     <SegmentedReplayHost key={JSON.stringify([gameId, manifest.artifactId, onPlaybackTimeChange ? null : initialTimeSec ?? null])}
       seekRequest={seekRequest} onPlaybackTimeChange={onPlaybackTimeChange} onPlaybackStateChange={onPlaybackStateChange} onStageSeek={onStageSeek} banked={banked} upgrades={upgrades} clockLink={clockLink}
+      {...notes}
       manifest={manifest} gameId={gameId} compact={compact} initialTimeSec={initialTimeSec} clip={compact ? undefined : "owner"}
       maxHeightPx={stageMaxH} myName={myName} oppName={oppName} myRace={myRace} oppRace={oppRace}
       buildName={buildName} buildMatchPct={buildMatchPct} patchEra={patchEra} />
@@ -174,6 +185,7 @@ export function MapReplaySection({
     <ReplayStage
       key={JSON.stringify([gameId, onPlaybackTimeChange ? null : initialTimeSec ?? null])}
       seekRequest={seekRequest} onPlaybackTimeChange={onPlaybackTimeChange} onPlaybackStateChange={onPlaybackStateChange} onStageSeek={onStageSeek} banked={banked} upgrades={upgrades} clockLink={clockLink}
+      {...notes}
       playback={playback}
       gameId={gameId}
       initialTimeSec={initialTimeSec}

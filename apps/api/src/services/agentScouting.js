@@ -149,25 +149,32 @@ function buildScoutingBrief(envelope) {
     bestAnswer: build && total !== null && answerWins !== null
       ? { build, w: answerWins, l: total - answerWins } : null,
     cheese: share(records.cheeseProbability),
-    note: pulseId ? text(history.opponentNotes?.text, 500) : "",
+    // The exact account's own note, whatever its visibility: the device
+    // edits this same note, so a player-scope note from another account is
+    // never shown here as if it were this account's.
+    note: pulseId ? text(history.privateNotes ? history.privateNotes.note?.text : history.opponentNotes?.text, 500) : "",
     dossierUrl: pulseId ? `/app/opponents/${encodeURIComponent(pulseId)}` : "/app/opponents",
   };
   return cappedBrief(brief, briefRecentBuilds(history.recentBuilds));
 }
 
+/** Owner-only enrichment fields an OBS overlay token never receives. */
+const OVERLAY_PRIVATE_HISTORY_FIELDS = Object.freeze(["recentBuilds", "privateNotes"]);
+
 /**
  * The envelope as an overlay token receives it. Each player's recent
- * builds are for the device's private views, so the OBS source gets
- * exactly the enrichment it got before they existed.
+ * builds are for the device's private views, and private notes are for the
+ * owner's dashboard and device, so the OBS source gets only the stream-safe
+ * ``opponentNotes`` it always rendered.
  * @template {Record<string, any>|null|undefined} T
  * @param {T} envelope
  * @returns {T}
  */
 function overlayEnvelope(envelope) {
   const history = envelope?.streamerHistory;
-  if (!history || typeof history !== "object" || !("recentBuilds" in history)) return envelope;
+  if (!history || typeof history !== "object" || !OVERLAY_PRIVATE_HISTORY_FIELDS.some((key) => key in history)) return envelope;
   const shared = { ...history };
-  delete shared.recentBuilds;
+  for (const key of OVERLAY_PRIVATE_HISTORY_FIELDS) delete shared[key];
   return /** @type {T} */ ({ ...envelope, streamerHistory: shared });
 }
 

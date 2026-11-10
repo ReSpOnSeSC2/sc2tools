@@ -660,6 +660,9 @@ function fakeCollection(overrides = {}) {
     updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
     updateMany: jest.fn(async () => ({ modifiedCount: 0 })),
     insertMany: jest.fn(async () => ({})),
+    // An empty pipeline result: a history wipe asks the notes collection for
+    // game notes whose game is gone.
+    aggregate: jest.fn(() => ({ toArray: jest.fn(async () => []) })),
     ...overrides,
   };
 }
