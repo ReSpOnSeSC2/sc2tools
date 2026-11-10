@@ -20,7 +20,9 @@ const results = (page: Page) => page.getByRole("listbox", { name: "Find a settin
 const nav = (page: Page) => page.getByRole("navigation", { name: "On this page", exact: true });
 const confirm = (page: Page) => page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true });
 const profileIds = ["profile-details", "pulse-ids", "player-channels", "public-profile"];
-const backupsIds = ["replay-archive", "snapshots", "repair-data", "hidden-games", "device-history", "export", "delete-history", "gdpr"];
+const backupsIds = ["replay-archive", "snapshots", "repair-data", "reanalyze", "hidden-games", "device-history", "export", "delete-history", "gdpr"];
+// Client-only (ssr: false) Backups modules wait for the synthetic client boundary.
+const backupsClientIds = ["reanalyze", "hidden-games"];
 const randomizerIds = ["build-randomizer", "catalog-builds", "custom-builds", "gateway-draw", "sound-effects", "randomizer-preview"];
 
 async function choose(page: Page, query: string) {
@@ -241,7 +243,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByRole("button", { name: "Reading focus" }).focus();
     const before = await page.evaluate(() => ({ href: location.href, focus: document.activeElement?.id, y: scrollY, scrolls: (window as SearchWindow).sectionScrolls.slice() }));
     await page.waitForTimeout(8_050); await page.evaluate(() => (window as SearchWindow).sectionReleaseBoundary("backups"));
-    await targets(page, backupsIds.filter(id => id !== "hidden-games")); await choices(page, backupsIds.filter(id => id !== "hidden-games"));
+    await targets(page, backupsIds.filter(id => !backupsClientIds.includes(id))); await choices(page, backupsIds.filter(id => !backupsClientIds.includes(id)));
     await page.waitForTimeout(8_050); await page.evaluate(() => (window as SearchWindow).sectionReleaseBoundary("client"));
     await targets(page, backupsIds); await choices(page, backupsIds);
     expect(await page.evaluate(() => ({ href: location.href, focus: document.activeElement?.id, y: scrollY, scrolls: (window as SearchWindow).sectionScrolls.slice() }))).toEqual(before);

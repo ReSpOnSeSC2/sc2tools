@@ -163,7 +163,7 @@ function CohortPicker({ overview, selected, onSelect, starting, onStart }: {
   return (
     <div className="space-y-4">
       {last ? <LastRun job={last} cohorts={overview.cohorts} /> : null}
-      <AgentNote agent={overview.agent} running={false} />
+      {available.length > 0 ? <AgentNote agent={overview.agent} running={false} /> : null}
       {available.length === 0 ? (
         <p className="text-body text-text-muted" role="status">All your games already use the current analysis. Nothing to re-analyze.</p>
       ) : (
@@ -189,13 +189,13 @@ function CohortPicker({ overview, selected, onSelect, starting, onStart }: {
                   <span className="text-caption tabular-nums text-text-muted">{cohort.count.toLocaleString()} game{cohort.count === 1 ? "" : "s"}</span>
                 </span>
                 {cohort.kind === "engine" ? (
-                  <span className="block text-caption text-text-dim">
+                  <span className="block text-caption text-text-muted">
                     {cohort.matchups?.join(" and ")} games{formatMilestoneDate(cohort.date) ? ` · engine change from ${formatMilestoneDate(cohort.date)}` : ""}
                   </span>
                 ) : null}
                 <span className="block text-body-sm text-text-muted">What changed: {cohortDetail(cohort)}</span>
                 {cohort.kind === "engine" && cohort.unknown ? (
-                  <span className="block text-caption text-text-dim">
+                  <span className="block text-caption text-text-muted">
                     {cohort.unknown.toLocaleString()} more in these matchups have no engine version; choose Engine version unknown for those.
                   </span>
                 ) : null}
@@ -273,7 +273,7 @@ function JobProgress({ job, agent, cohorts, pending, onAction }: {
         )}
         <Button variant="ghost" size="sm" loading={pending === "cancel"} disabled={Boolean(pending)} onClick={() => onAction("cancel")}>Cancel re-analysis</Button>
       </div>
-      <p className="text-caption text-text-dim">{STATS_NOTE}</p>
+      <p className="text-caption text-text-muted">{STATS_NOTE}</p>
     </div>
   );
 }
