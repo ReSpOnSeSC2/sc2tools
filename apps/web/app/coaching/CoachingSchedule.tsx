@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { apiMessage, formatDay, formatDuration, formatTime, groupSlots, useLocalTimeZone, useZoneClock } from "./coachingTime";
+import { apiMessage, formatDay, formatDuration, formatTime, groupSlots, splitSessions, useLocalTimeZone, useZoneClock } from "./coachingTime";
 import { CoachSchedule } from "./CoachSchedule";
-import { BookingCard, BookingSummary, ChoiceChip, EmptySchedule, ScheduleSkeleton } from "./CoachingScheduleParts";
-import type { Booking, CalendarPayload, Slot } from "./coachingScheduleModel";
+import { BookingCard, BookingSummary, ChoiceChip, EmptySchedule, PastSessions, ScheduleSkeleton, type HistoryState } from "./CoachingScheduleParts";
+import type { Booking, CalendarPayload, SessionHistory, Slot } from "./coachingScheduleModel";
 export default function CoachingSchedule({ onDirtyChange, active = true }: { onDirtyChange?: (dirty: boolean) => void; active?: boolean }) {
   const localTimeZone = useLocalTimeZone();
   const path = `/v1/coaching/calendar?timeZone=${encodeURIComponent(localTimeZone)}`;
@@ -19,6 +19,9 @@ export default function CoachingSchedule({ onDirtyChange, active = true }: { onD
     refreshInterval: 60_000,
   });
   const mutateCalendar = calendar.mutate;
+  const historyReq = useApi<SessionHistory>("/v1/coaching/calendar?past=1&limit=50", { revalidateOnFocus: true });
+  const mutateHistory = historyReq.mutate;
+  const history: HistoryState = { data: historyReq.data, error: historyReq.error, retry: () => void mutateHistory() };
   const { getToken } = useAuth();
   const readSignature = useRef("");
 
@@ -45,10 +48,10 @@ export default function CoachingSchedule({ onDirtyChange, active = true }: { onD
   }, [calendar.data, getToken, active]);
 
   useEffect(() => {
-    const refresh = () => void mutateCalendar();
+    const refresh = () => { void mutateCalendar(); void mutateHistory(); };
     window.addEventListener("coaching:booking-realtime", refresh);
     return () => window.removeEventListener("coaching:booking-realtime", refresh);
-  }, [mutateCalendar]);
+  }, [mutateCalendar, mutateHistory]);
 
   if (calendar.isLoading || !calendar.data) {
     if (calendar.error) {
@@ -78,6 +81,7 @@ export default function CoachingSchedule({ onDirtyChange, active = true }: { onD
       refresh={calendar.mutate}
       onDirtyChange={onDirtyChange}
       active={active}
+      history={history}
     />
   ) : (
     <StudentSchedule
@@ -85,6 +89,7 @@ export default function CoachingSchedule({ onDirtyChange, active = true }: { onD
       localTimeZone={localTimeZone}
       refresh={calendar.mutate}
       active={active}
+      history={history}
     />
   );
 }
@@ -94,11 +99,13 @@ function StudentSchedule({
   localTimeZone,
   refresh,
   active,
+  history,
 }: {
   data: CalendarPayload;
   localTimeZone: string;
   refresh: () => Promise<CalendarPayload | undefined>;
   active: boolean;
+  history?: HistoryState;
 }) {
   const { getToken } = useAuth();
   const { toast } = useToast();
@@ -120,9 +127,8 @@ function StudentSchedule({
   const slots = data.slots.filter((slot) => slot.durationMinutes === duration);
   const grouped = groupSlots(slots, localTimeZone);
   const shownGroups = showAll ? grouped : grouped.slice(0, 7);
-  const upcoming = data.bookings.filter(
-    (item) => item.status === "booked" && new Date(item.startAt).getTime() > Date.now(),
-  );
+  const sessions = splitSessions(data.bookings, Date.now());
+  const upcoming = sessions.upcoming;
 
   const confirmBooking = async () => {
     if (!selected) return;
@@ -202,18 +208,22 @@ function StudentSchedule({
             <span className="rounded-full bg-success/15 px-2.5 py-1 font-mono text-caption font-bold text-success">{upcoming.length}</span>
           </Card.Header>
           <Card.Body className="grid gap-3 lg:grid-cols-2">
-            {upcoming.map((item) => (
+            {upcoming.map((item, index) => (
               <BookingCard
                 key={item.id}
                 booking={item}
                 primaryTimeZone={localTimeZone}
                 coachTimeZone={data.availability?.timeZone}
+                viewer={{ role: "student", coachName: data.coach.name }}
+                digestOpen={index === 0}
                 onCancel={() => setCancelBooking(item)}
               />
             ))}
           </Card.Body>
         </Card>
       ) : null}
+
+      <PastSessions viewer="student" timeZone={localTimeZone} history={history} recent={sessions.past} />
 
       <Card>
         <Card.Header className="items-start">

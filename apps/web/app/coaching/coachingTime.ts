@@ -160,3 +160,114 @@ export function apiMessage(error: unknown) {
     ? candidate.message
     : "Try again in a moment.";
 }
+
+/** A window ending at midnight is 24:00; the time input shows that end as 00:00. */
+export function endClockValue(minutes: number) {
+  return minutes === 24 * 60 ? "00:00" : clockValue(minutes);
+}
+
+/** An end of 00:00 can only mean the end of the day. */
+export function endMinuteValue(value: string) {
+  return value === "00:00" ? 24 * 60 : minuteValue(value);
+}
+
+type SessionLike = { startAt: string; endAt: string; status: "booked" | "cancelled" };
+
+/**
+ * Upcoming keeps booked sessions that have not ended (a session in
+ * progress stays visible); past is everything that ended, newest first.
+ */
+export function splitSessions<T extends SessionLike>(bookings: readonly T[], nowMs: number) {
+  const start = (item: T) => Date.parse(item.startAt);
+  return {
+    upcoming: bookings.filter((item) => item.status === "booked" && Date.parse(item.endAt) > nowMs)
+      .sort((a, b) => start(a) - start(b)),
+    past: bookings.filter((item) => Date.parse(item.endAt) <= nowMs).sort((a, b) => start(b) - start(a)),
+  };
+}
+
+export function sessionStarted(booking: { startAt: string }, nowMs: number) {
+  return Date.parse(booking.startAt) <= nowMs;
+}
+
+export type CalendarViewer = { role: "coach" | "student"; coachName: string; origin: string };
+
+type CalendarBooking = { id: string; studentName: string; startAt: string; endAt: string; createdAt: string };
+
+/** "2026-03-08T07:00:00.000Z" → "20260308T070000Z" (always UTC). */
+function utcStamp(iso: string) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+/** Only the other person on this booking; never another student's name. */
+function otherParty(booking: CalendarBooking, viewer: CalendarViewer) {
+  const name = (viewer.role === "coach" ? booking.studentName : viewer.coachName).trim();
+  return name || (viewer.role === "coach" ? "your student" : "your coach");
+}
+
+export function sessionsUrl(origin: string) {
+  return `${origin}/coaching?view=schedule`;
+}
+
+/** A Google Calendar template link, built here: no Google API, no sign-in. */
+export function googleCalendarUrl(booking: CalendarBooking, viewer: CalendarViewer) {
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: `SC2 coaching with ${otherParty(booking, viewer)}`,
+    dates: `${utcStamp(booking.startAt)}/${utcStamp(booking.endAt)}`,
+    details: `Coaching session booked in SC2 Tools. Your sessions: ${sessionsUrl(viewer.origin)}`,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function icsText(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+}
+
+/** RFC 5545: lines over 75 octets continue on CRLF + one space. */
+function foldIcsLine(line: string) {
+  const encoder = new TextEncoder();
+  if (encoder.encode(line).length <= 75) return line;
+  const parts: string[] = [];
+  let current = "";
+  let size = 0;
+  for (const char of line) {
+    const bytes = encoder.encode(char).length;
+    if (size + bytes > (parts.length === 0 ? 75 : 74)) {
+      parts.push(current);
+      current = "";
+      size = 0;
+    }
+    current += char;
+    size += bytes;
+  }
+  parts.push(current);
+  return parts.join("\r\n ");
+}
+
+/** One booking as an .ics event: UTC times, CRLF line endings, escaped text. */
+export function bookingIcs(booking: CalendarBooking, viewer: CalendarViewer) {
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//SC2 Tools//Coaching//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    `UID:${booking.id}@sc2tools.com`,
+    `DTSTAMP:${utcStamp(booking.createdAt) || utcStamp(booking.startAt)}`,
+    `DTSTART:${utcStamp(booking.startAt)}`,
+    `DTEND:${utcStamp(booking.endAt)}`,
+    `SUMMARY:${icsText(`SC2 coaching with ${otherParty(booking, viewer)}`)}`,
+    `DESCRIPTION:${icsText("Coaching session booked in SC2 Tools.")}`,
+    `URL:${sessionsUrl(viewer.origin)}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ];
+  return `${lines.map(foldIcsLine).join("\r\n")}\r\n`;
+}
+
+export function icsHref(ics: string) {
+  return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
+}

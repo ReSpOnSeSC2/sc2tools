@@ -11,6 +11,35 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Coaching sessions and prep digest
+
+- Add "Since last session" to each upcoming coaching session: the student's
+  eligible 1v1 games since their previous session, wins and losses by matchup,
+  the detected builds and the newest replays. It shows facts only, never
+  grades or scores, only to that session's coach and student, and only while
+  practice sharing is on.
+- Copy a day's hours to the weekdays or to every day, clear a day, and undo
+  either for 10 seconds. Empty days offer evening, afternoon and weekend
+  presets, and Add hours now continues after the day's last window.
+- Add each upcoming session to Google Calendar or download it as an .ics file,
+  both built in the browser with no calendar account connected.
+- List past sessions under the upcoming ones, newest first, with cancelled
+  sessions marked and, for coaches, each student's session count. Sessions in
+  progress stay listed until they end.
+
+### Replay review links and navigation
+
+- Open `#comment-…` links with that comment highlighted, the replay at its
+  time and the comment in view, and `?t=5:12` links at that moment with a
+  comment started there. Links to removed comments say so.
+- Copy a link to any comment, to the moment in the comment box, or to the
+  current replay time from Share. Moving through the replay never changes the
+  address bar.
+- Step through timed comments with Prev and Next, filter the thread by focus
+  range, map pins and replies, and keep Top or Timeline order on this device.
+- Press N or P for the next or previous comment and C to comment at the
+  replay time; ? lists them. Scrolling to a comment respects reduced motion.
+
 ### Share cards
 
 - Fix the link printed on every share card. `sc2tools.com/arcade` now leads to

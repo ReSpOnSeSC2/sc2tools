@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { CheckCircle2, MapPin, MoreHorizontal, Star, ThumbsUp } from "lucide-react";
@@ -8,6 +8,18 @@ import { apiCall, useOwnerRequestScope } from "@/lib/clientApi";
 import { gaEvent } from "@/lib/analytics/gtag";
 import { ReviewMarkdown } from "@/lib/reviewMarkdown";
 import type { ReviewComment, ReviewPageData } from "@/lib/reviews";
+import {
+  filterThread,
+  readThreadOrder,
+  reviewCommentUrl,
+  stepAnnouncement,
+  stepPosition,
+  timedComments,
+  writeThreadOrder,
+  type ThreadFilter,
+  type ThreadOrder,
+} from "@/lib/reviewNavigation";
+import { useToastOptional } from "@/components/ui/Toast";
 import { ReviewComposer, type DraftPin } from "./ReviewComposer";
 import { CommentEditor } from "./CommentEditor";
 import { ReviewerBadges } from "./ReviewerBadges";
@@ -15,8 +27,8 @@ import { TimeChip } from "./TimeChip";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { REPORT_REASONS, ReviewMenu, type ReviewMenuItem } from "./ReviewMenu";
 import { CommentTime } from "./CommentTime";
-
-type ThreadOrder = "top" | "timeline";
+import { ThreadFilterChips, ThreadStepper } from "./ReviewThreadNav";
+import { useReviewShortcuts } from "./useReviewShortcuts";
 
 export type ThreadContext = {
   data: ReviewPageData;
@@ -31,16 +43,31 @@ export type ThreadContext = {
   onTogglePinMode: (owner: string) => void;
   onClearPin: (owner: string) => void;
   onChanged: () => void | Promise<unknown>;
+  /** Select, seek and scroll to a comment (the stepper and N/P). */
+  onGoTo?: (comment: ReviewComment) => void;
+  /** The C key: start a comment at the replay time. Absent when the viewer can't. */
+  onCompose?: () => void;
 };
+
+function useThreadOrder() {
+  const [order, setOrder] = useState<ThreadOrder>("top");
+  useEffect(() => { setOrder(readThreadOrder()); }, []);
+  const choose = useCallback((next: ThreadOrder) => { setOrder(next); writeThreadOrder(next); }, []);
+  return [order, choose] as const;
+}
 
 /**
  * The review thread: top-level reviews with one level of replies.
  * "Top" puts the asker's best pick first, then helpful, then upvotes;
- * "Timeline" follows the replay clock.
+ * "Timeline" follows the replay clock. The stepper, the filter chips and
+ * N / P walk the timed comments the filters leave in replay order.
  */
 export function ReviewThread(ctx: ThreadContext) {
-  const [order, setOrder] = useState<ThreadOrder>("top");
+  const [order, setOrder] = useThreadOrder();
+  const [filters, setFilters] = useState<ReadonlySet<ThreadFilter>>(() => new Set());
+  const [announcement, setAnnouncement] = useState("");
   const { data } = ctx;
+  const filtered = useMemo(() => filterThread(data.comments, filters, data.request.timeRange), [data.comments, filters, data.request.timeRange]);
   const { topLevel, replies } = useMemo(() => {
     const top = data.comments.filter((c) => !c.parentId);
     const byParent = new Map<string, ReviewComment[]>();
@@ -51,13 +78,31 @@ export function ReviewThread(ctx: ThreadContext) {
       byParent.set(c.parentId, list);
     }
     const score = (c: ReviewComment) => (c.best ? 1e6 : 0) + (c.helpful ? 1e4 : 0) + c.upvotes;
-    const sorted = [...top].sort((a, b) =>
+    const matching = filtered.matching;
+    const kept = matching ? top.filter((c) => matching.has(c.id) || (byParent.get(c.id) ?? []).some((r) => matching.has(r.id))) : top;
+    const sorted = [...kept].sort((a, b) =>
       order === "timeline"
         ? (a.gameTimeSec ?? Infinity) - (b.gameTimeSec ?? Infinity)
         : score(b) - score(a) || (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
     );
     return { topLevel: sorted, replies: byParent };
-  }, [data.comments, order]);
+  }, [data.comments, order, filtered]);
+  const timed = useMemo(() => timedComments(data.comments, filtered.matching), [data.comments, filtered]);
+  const position = stepPosition(timed, ctx.activeId, ctx.currentTime);
+  const step = (direction: -1 | 1) => {
+    const target = direction === 1 ? position.next : position.prev;
+    if (!target) return;
+    if (ctx.onGoTo) ctx.onGoTo(target);
+    else if (target.gameTimeSec !== null) ctx.onSeek(target.gameTimeSec, target.id);
+    setAnnouncement(stepAnnouncement(timed, target));
+  };
+  useReviewShortcuts({ onNext: () => step(1), onPrev: () => step(-1), onCompose: ctx.onCompose });
+  const toggleFilter = (filter: ThreadFilter) => setFilters((old) => {
+    const next = new Set(old);
+    if (next.has(filter)) next.delete(filter); else next.add(filter);
+    return next;
+  });
+  const hasComments = data.comments.length > 0;
 
   return (
     <section aria-labelledby="review-thread-title" className="space-y-3">
@@ -79,7 +124,18 @@ export function ReviewThread(ctx: ThreadContext) {
           ))}
         </div>
       </div>
-      {topLevel.length === 0 ? (
+      {hasComments ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <ThreadFilterChips active={filters} counts={filtered.counts} hasFocusRange={Boolean(data.request.timeRange)} onToggle={toggleFilter} />
+          {timed.length >= 2 ? <ThreadStepper total={timed.length} position={position} announcement={announcement} onStep={step} /> : null}
+        </div>
+      ) : null}
+      {filtered.matching && filtered.matching.size === 0 ? (
+        <p role="status" className="rounded-xl border-2 border-dashed border-border p-4 text-body text-text-muted">
+          No comments match these filters ·{" "}
+          <button type="button" onClick={() => setFilters(new Set())} className="min-h-10 font-semibold text-link hover:underline">Clear</button>
+        </p>
+      ) : topLevel.length === 0 ? (
         <p className="rounded-xl border-2 border-dashed border-border p-4 text-body text-text-muted">
           No reviews yet. Scrub to a moment that matters and leave the first one.
         </p>
@@ -115,6 +171,8 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeError, setNoticeError] = useState(false);
   const [confirm, setConfirm] = useState<"delete" | "block" | null>(null);
+  const [copyFallback, setCopyFallback] = useState<string | null>(null);
+  const toasts = useToastOptional();
   const pin = ctx.pinNumbers.get(c.id);
   const active = ctx.activeId === c.id;
   const base = `/v1/reviews/${encodeURIComponent(requestId)}/comments/${encodeURIComponent(c.id)}`;
@@ -148,11 +206,27 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
       : c.state === "blocked"
         ? "Hidden — you blocked this reviewer."
         : "[removed by a moderator]";
-    return <p id={`comment-${c.id}`} className="rounded-xl border border-border bg-bg-elevated/40 px-3 py-2 text-caption italic text-text-dim">{text}</p>;
+    // No fragment id: a link to a comment that is gone must not scroll here.
+    return <p data-comment-id={c.id} className="rounded-xl border border-border bg-bg-elevated/40 px-3 py-2 text-caption italic text-text-dim">{text}</p>;
+  }
+
+  /** Explicit copy only: selecting or seeking never rewrites the address bar. */
+  async function copyLink() {
+    const url = reviewCommentUrl(window.location.origin, data.request.url, c.id);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyFallback(null);
+      toasts?.toast.success("Link copied");
+      gaEvent("review_shared", { channel: "comment_link" });
+      return true;
+    } catch {
+      setCopyFallback(url);
+      return false;
+    }
   }
 
   const author = c.author;
-  const menuItems: ReviewMenuItem[] = [];
+  const menuItems: ReviewMenuItem[] = [{ id: "copy-link", label: "Copy link to comment", keepOpen: true, onSelect: copyLink }];
   if (isSignedIn && !c.mine && author) {
     menuItems.push({ id: "report", label: "Report…", items: REPORT_REASONS.map((reason) => ({ id: reason, label: reason, onSelect: async () => {
       const result = await act("/report", { reason }, "POST", "review_report");
@@ -245,7 +319,7 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
         {c.mine ? (
           <button type="button" disabled={busy} onClick={() => setConfirm("delete")} className="min-h-[32px] rounded-full px-2 font-semibold text-text-muted hover:text-danger">Delete</button>
         ) : null}
-        <ReviewMenu label="More actions" disabled={busy} items={menuItems}><MoreHorizontal className="h-4 w-4" aria-hidden /></ReviewMenu>
+        <ReviewMenu label="More actions" disabled={busy} items={menuItems} fallbackText={copyFallback} onClose={() => setCopyFallback(null)}><MoreHorizontal className="h-4 w-4" aria-hidden /></ReviewMenu>
         {notice ? <span role={noticeError ? "alert" : "status"} className={`basis-full text-micro ${noticeError ? "text-danger" : "text-text-muted"}`}>{notice}</span> : null}
       </footer>
 
@@ -255,6 +329,7 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
           durationSec={ctx.durationSec}
           currentTime={ctx.currentTime}
           initialTime={c.gameTimeSec ?? ctx.currentTime}
+          requestUrl={data.request.url}
           parentId={c.id}
           draftPin={ctx.pinFor(c.id)}
           nextPinNumber={ctx.pinNumbers.size + 1}
