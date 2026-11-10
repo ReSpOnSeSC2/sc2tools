@@ -9,6 +9,7 @@ const rateLimit =
 const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { registerStreamSeriesRoutes } = require("./streamSeries");
+const { registerDockChatRoutes } = require("./dockChat");
 
 const {
   YoutubeChatError,
@@ -55,7 +56,7 @@ const {
  *     read straight from the platforms (no CORS from the browser).
  *
  * @param {{
- *   overlayTokens: { resolve: (token: string) => Promise<{userId: string} | null>, isReplaced?: (token:string)=>Promise<boolean> },
+ *   overlayTokens: { resolve: (token: string) => Promise<{userId: string} | null>, isReplaced?: (token:string)=>Promise<boolean>, withWrite?:(token:string,work:()=>Promise<any>)=>Promise<any> },
  *   dataUsers?: import('mongodb').Collection<any>,
  *   users: {
  *     getPreferences: (userId: string, type: string) => Promise<Record<string, any>>,
@@ -72,6 +73,8 @@ const {
  *   sounds?: import('../services/multichatSounds').MultichatSoundsService,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   viewers?: import('../services/multichatViewers').MultichatViewersService,
+ *   platformChat?: import('../services/platformChat').PlatformChatService,
+ *   twitchChatBot?: import('../services/twitchChatBot').TwitchChatBotService,
  *   customBuilds?: { list: (userId: string) => Promise<Array<Record<string, any>>> },
  *   buildsList?: (userId: string) => Promise<Array<Record<string, any>>>,
  *   tickerFacts?: import('../services/tickerFacts').TickerFactsService,
@@ -163,6 +166,8 @@ function buildMultichatRouter(deps) {
 
   router.use("/multichat/:token", globalLimiter);
   registerStreamSeriesRoutes(router, { series: deps.series, limiter, tokenAuth });
+  registerDockChatRoutes(router, { ...deps, limiter, tokenAuth,
+    overlayTokens: /** @type {import('../services/overlayTokens').OverlayTokensService} */ (deps.overlayTokens) });
 
   router.post("/multichat/:token/command", limiter, tokenAuth, async (req, res, next) => {
     res.set("Cache-Control", "no-store");

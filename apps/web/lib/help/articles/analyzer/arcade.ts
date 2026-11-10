@@ -31,7 +31,7 @@ const article: HelpArticle = {
     "bingo",
     "buildle",
   ],
-  updated: "2026-10-28",
+  updated: "2026-11-09",
   body: [
     {
       type: "paragraph",
@@ -52,6 +52,11 @@ const article: HelpArticle = {
     {
       type: "paragraph",
       text: "At the top of Arcade, **Season Recap** sums up your season as a set of slides you can share as an image. It unlocks once you have 10 games.",
+    },
+    { type: "heading", text: "Sharing a round or your recap", anchor: "sharing" },
+    {
+      type: "paragraph",
+      text: "After a round, **Share** makes an image of the question and your result, with text to post beside it. What you share never names another player: opponents appear as Rival A, Rival B and so on, and your Season Recap describes your nemesis by race only. Game dates appear without the time, and rating gaps are rounded to the nearest 100. Names and exact figures stay in the app, where only you see them.",
     },
     { type: "heading", text: "XP, minerals and badges", anchor: "progress" },
     {

@@ -45,7 +45,7 @@ test("an older agent (no sync report) adds nothing and looks up no release", asy
 
 test("current reports append count-only sync warnings with a helpSlug after the originals", async () => {
   const devices = [{ deviceId: "pc-1", hostname: "SECRET-PC", agentVersion: "0.30.0", lastSeenAt: fresh(), syncReportedAt: fresh(),
-    sync: { paused: true, pending: 4, skipped: { player_unresolved: 6 }, unresolvedNames: [PRIVATE] } }];
+    sync: { paused: true, pending: 4, recentUnresolved: 6, skipped: { player_unresolved: 6 }, unresolvedNames: [PRIVATE] } }];
   const ingestStats = { rejected: { validation_failed: 2 }, rejectedSince: fresh(), lastRejectedAt: fresh() };
   const doctor = await buildDoctor(deps({ devices, ingestStats, agentVersion: { latest: async () => ({ minSupportedVersion: null }) } }), "owner");
   expect(JSON.stringify(doctor.warnings.slice(0, 3)))
@@ -75,4 +75,12 @@ test("the release floor flags a current but outdated agent; a failed lookup flag
     message: "Your desktop app is older than the minimum supported version, so it may stop syncing. Update it to keep syncing." }] });
   const failed = await buildDoctor(deps({ ...base, agentVersion: { latest: async () => { throw new Error("releases down"); } } }), "owner");
   expect(failed).toEqual({ ok: true, warnings: [] });
+});
+
+
+test.each([undefined, 0])("historical unresolved inventory does not warn when recent count is %p", async (recentUnresolved) => {
+  const devices = [{ deviceId: "pc-1", agentVersion: "0.24.9", lastSeenAt: fresh(), syncReportedAt: fresh(),
+    sync: { pending: 0, skipped: { player_unresolved: 20 }, ...(recentUnresolved === undefined ? {} : { recentUnresolved }) } }];
+  const doctor = await buildDoctor(deps({ devices, profile: { battleTag: "Owner#1" }, total: 13561, missing: 0 }), "owner");
+  expect(doctor).toEqual({ ok: true, warnings: [] });
 });

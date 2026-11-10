@@ -344,7 +344,7 @@ def test_real_owned_hidden_window_roundtrips_styles_without_showing_moving_or_ta
         assert user32.UnregisterClassW(name, instance)
 
 
-def test_all_native_pins_and_only_main_compact_follow_foreground_without_focus_or_geometry_changes(tmp_path):
+def test_display_pins_and_only_main_compact_follow_foreground_while_scouting_stays_interactive(tmp_path):
     run_gui_check(tmp_path, '''
         from sc2tools_agent.ui.overlay_input import install_overlay_input
         class Native:
@@ -377,14 +377,15 @@ def test_all_native_pins_and_only_main_compact_follow_foreground_without_focus_o
         app.processEvents()
         before = [(panel.geometry(), panel.windowFlags(), panel.windowState()) for panel in panels]
         controller.refresh()
-        assert len(native.locked) == 4
-        assert all(panel.property("gameClickThrough") for panel in panels)
+        assert len(native.locked) == 3
+        assert all(panel.property("gameClickThrough") is (panel is not page.overlays["scouting"])
+                   for panel in panels)
         assert int(window.winId()) not in native.locked
         window._set_window_size("Compact")
         app.processEvents()
         controller.refresh()
         assert not window.isVisible()
-        assert int(window.winId()) not in native.locked and len(native.locked) == 4
+        assert int(window.winId()) not in native.locked and len(native.locked) == 3
         assert window.size().toTuple() == (420, 44)
         panels[0].showMinimized()
         window.showNormal()

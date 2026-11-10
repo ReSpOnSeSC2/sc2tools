@@ -24,9 +24,9 @@ function keysDeep(value) {
 test("a full contract report survives with its exact shape and types", () => {
   const raw = { pending: 3, archivePending: 1, paused: false, foldersWatched: 2, missingFolders: 0,
     lastUploadAt: "2026-11-01T11:59:30.123456+00:00", lastErrorCode: "upload_timeout",
-    skipped: { player_unresolved: 4, ai_game: 2 }, rejected: 1, filtered: 7, unresolvedNames: [name()] };
+    skipped: { player_unresolved: 4, ai_game: 2 }, rejected: 1, filtered: 7, recentUnresolved: 2, unresolvedNames: [name()] };
   expect(sanitize(raw)).toEqual({ report: { pending: 3, archivePending: 1, foldersWatched: 2, missingFolders: 0, rejected: 1,
-    filtered: 7, paused: false, lastUploadAt: new Date("2026-11-01T11:59:30.123Z"), lastErrorCode: "upload_timeout",
+    filtered: 7, recentUnresolved: 2, paused: false, lastUploadAt: new Date("2026-11-01T11:59:30.123Z"), lastErrorCode: "upload_timeout",
     skipped: { player_unresolved: 4, ai_game: 2 }, unresolvedNames: [name()] } });
 });
 
@@ -43,11 +43,11 @@ test("unknown and injection-shaped keys are dropped at every depth", () => {
 test.each([
   [-5, 0], [2.9, 2], [0, 0], [5_000_000, 999_999], [Number.MAX_SAFE_INTEGER, 999_999],
 ])("count %p is clamped to %p", (value, expected) => {
-  expect(sanitize({ pending: value }).report).toEqual({ pending: expected });
+  expect(sanitize({ pending: value, recentUnresolved: value }).report).toEqual({ pending: expected, recentUnresolved: expected });
 });
 
-test.each(["3", true, null, [], {}])("non-number count %p is dropped", (value) => {
-  expect(sanitize({ pending: value, paused: true }).report).toEqual({ paused: true });
+test.each(["3", true, null, [], {}, NaN, Infinity, -Infinity])("non-number or nonfinite count %p is dropped", (value) => {
+  expect(sanitize({ pending: value, recentUnresolved: value, paused: true }).report).toEqual({ paused: true });
 });
 
 test.each([["yes"], [1], [null]])("non-boolean paused %p is dropped", (value) => {
@@ -123,14 +123,17 @@ test("a block above 2 KiB is dropped whole, even when its valid part would fit",
   expect(sanitize(cyclic)).toEqual({ report: null, dropped: "too_large" });
 });
 
-test("a report at every cap (3-byte names, the widest counts) still fits the budget", () => {
+test("the agent can trim optional names to fit widest counts including recent unresolved", () => {
   const max = 999_999;
-  const big = { pending: max, archivePending: max, foldersWatched: max, missingFolders: max, rejected: max, filtered: max, paused: false,
+  const big = { pending: max, archivePending: max, foldersWatched: max, missingFolders: max, rejected: max, filtered: max, recentUnresolved: max, paused: false,
     lastUploadAt: "2026-11-01T11:00Z", lastErrorCode: "e".repeat(48), skipped: Object.fromEntries(SKIP_REASONS.map((reason) => [reason, max])),
     unresolvedNames: Array.from({ length: 10 }, (_, i) => name({ name: "界".repeat(32), toonHandle: `1-S2-1-${max + i}`, count: max })) };
-  expect(Buffer.byteLength(JSON.stringify(big))).toBeLessThanOrEqual(SYNC_REPORT_MAX_BYTES);
-  const { report } = sanitize(big);
-  expect(report.unresolvedNames).toHaveLength(10);
+  expect(Buffer.byteLength(JSON.stringify(big))).toBeGreaterThan(SYNC_REPORT_MAX_BYTES);
+  expect(sanitize(big)).toEqual({ report: null, dropped: "too_large" });
+  const trimmed = { ...big, unresolvedNames: big.unresolvedNames.slice(0, 9) };
+  const { report } = sanitize(trimmed);
+  expect(report.recentUnresolved).toBe(max);
+  expect(report.unresolvedNames).toHaveLength(9);
   expect(Buffer.byteLength(JSON.stringify(report))).toBeLessThanOrEqual(SYNC_REPORT_MAX_BYTES);
 });
 

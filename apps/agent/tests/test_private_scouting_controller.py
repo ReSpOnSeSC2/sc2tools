@@ -178,3 +178,16 @@ def test_new_postgame_card_does_not_copy_another_resolved_accounts_note():
     game.opponent_pulse_id = "1-S2-1-99"
     card = h.ctl._new_card(game)
     assert card.opponent_pulse_id == "1-S2-1-99" and card.opponent_note == ""
+
+
+def test_recent_builds_reach_the_loading_card_and_an_older_brief_draws_the_strip_as_before():
+    h = Harness(show_scouting_at_loading=True).boot(); key = h.new_key()
+    h.send(envelope("match_loading", key))
+    h.ctl.on_scouting_brief(brief(key)); h.pump()
+    assert (model(h).scouting.their_builds, model(h).scouting.your_builds) == ("", "")
+    lists = {"matchup": "PvZ", "mine": [{"result": "Win", "build": "PvZ - Blink"}],
+             "theirs": [{"result": "Loss", "build": "Zerg - 12 Pool"}]}
+    h.ctl.on_scouting_brief({**brief(key), "recentBuilds": lists}); h.pump()
+    assert model(h).scouting.their_builds == "Their 1 earlier game: L vs 12 Pool"
+    assert model(h).scouting.your_builds == "Your 1 earlier game: W with Blink"
+    assert model(h).scouting.record_line == "You 3\N{EN DASH}2"

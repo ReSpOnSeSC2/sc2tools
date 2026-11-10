@@ -1,5 +1,8 @@
 /**
- * What Google Analytics is told a page is.
+ * What Google Analytics is told a page is, on every event: page views,
+ * custom events and gtag.js's own automatic ones (lib/analytics/gtag
+ * keeps gtag's page state on these forms). The referrer follows the
+ * same rules.
  *
  * Three rules keep the GA4 page reports readable and free of private
  * values:
@@ -106,4 +109,33 @@ export function analyticsPageLocation(
   search?: string | null,
 ): string {
   return `${origin}${normalizePagePath(pathname)}${analyticsSearch(search)}`;
+}
+
+/**
+ * The page_referrer sent with every event ("" when there is none).
+ *
+ * The browser's referrer is the previous page's full address whenever
+ * that page was on this site: a link opened in a new tab, a reload, any
+ * full page load. So it gets the same treatment as a page location, and
+ * one from an untracked surface is cut down to the site root. Another
+ * site's referrer is attribution data and passes through unchanged.
+ *
+ * Example:
+ *   analyticsReferrer("https://sc2tools.com/app/opponents/1-S2-1-123?tab=games", "https://sc2tools.com")
+ *   // -> "https://sc2tools.com/app/opponents/:pulseId"
+ */
+export function analyticsReferrer(
+  referrer: string | null | undefined,
+  origin: string,
+): string {
+  if (!referrer) return "";
+  let url: URL;
+  try {
+    url = new URL(referrer);
+  } catch {
+    return "";
+  }
+  if (url.origin !== origin) return referrer;
+  if (isUntrackedPath(url.pathname)) return `${origin}/`;
+  return analyticsPageLocation(origin, url.pathname, url.search);
 }

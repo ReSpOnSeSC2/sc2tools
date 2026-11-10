@@ -4,8 +4,9 @@ from __future__ import annotations
 import math
 import re
 
-TOKEN_REFERENCE = "{mmr} {league} {record} {wins} {losses} {streak} {peak} {wr:PvZ}"
-TOKENS = {"mmr", "league", "record", "wins", "losses", "streak", "peak"}
+TOKEN_REFERENCE = "{opp} {aka} {map} {race} {h2h} {h2h_wr} {mmr} {league} {record} {wins} {losses} {streak} {peak} {wr:PvZ}"
+TOKENS = {"mmr", "league", "record", "wins", "losses", "streak", "peak",
+          "opp", "aka", "map", "race", "h2h", "h2h_wr"}
 MATCHUP = re.compile(r"wr:[PTZ]v[PTZ]\Z")
 PLACEHOLDER = re.compile(r"\{([^{}]+)\}")
 MAX_TEMPLATE_LENGTH = 500
@@ -30,10 +31,46 @@ def _number(value, maximum=9999):
             and math.isfinite(value) and 0 <= value <= maximum and value == int(value))
 
 
+def _plain_text(value, maximum=120):
+    if (not isinstance(value, str) or not value.strip() or len(value) > maximum
+            or any(ord(char) < 32 or ord(char) == 127 or char in "<>" for char in value)):
+        return None
+    return value.strip()
+
+
+def _match_values(stats):
+    match = stats.get("currentMatch")
+    if not isinstance(match, dict) or not _plain_text(match.get("gameKey"), 300):
+        return {}
+    opponent = _plain_text(match.get("opponent"))
+    if not opponent:
+        return {}
+    values = {"opp": opponent}
+    alias = match.get("alias", "")
+    if alias == "" or alias is None:
+        values["aka"] = ""
+    else:
+        alias = _plain_text(alias)
+        if alias:
+            values["aka"] = f"(aka {alias})" if alias.casefold() != opponent.casefold() else ""
+    name = _plain_text(match.get("map"))
+    if name:
+        values["map"] = name
+    if match.get("race") in ("Protoss", "Terran", "Zerg", "Random"):
+        values["race"] = match["race"]
+    h2h = match.get("h2h")
+    if isinstance(h2h, dict) and all(_number(h2h.get(key), 10**7) for key in ("wins", "losses")):
+        wins, losses = int(h2h["wins"]), int(h2h["losses"])
+        values["h2h"] = f"{wins}W–{losses}L"
+        if wins + losses:
+            values["h2h_wr"] = f"{math.floor(wins * 100 / (wins + losses) + 0.5)}%"
+    return values
+
+
 def title_values(stats):
     """Only known, validated fields can enter a title. Missing is never zero."""
     stats = stats if isinstance(stats, dict) else {}
-    values = {}
+    values = _match_values(stats)
     for field in ("mmr", "peak"):
         if _number(stats.get(field)):
             values[field] = str(int(stats[field]))
@@ -77,7 +114,9 @@ def render_values(template, values):
         segment = segment.strip()
         if not segment or any(match[1] not in values for match in PLACEHOLDER.finditer(segment)):
             continue
-        segments.append(PLACEHOLDER.sub(lambda match: values[match[1]], segment))
+        rendered = " ".join(PLACEHOLDER.sub(lambda match: values[match[1]], segment).split())
+        if rendered:
+            segments.append(rendered)
     while segments and len(" | ".join(segments)) > 70 and len(segments) > 1:
         segments.pop()
     if not segments:

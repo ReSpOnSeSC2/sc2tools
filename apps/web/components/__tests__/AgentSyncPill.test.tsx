@@ -87,7 +87,7 @@ it("reads sync health only once its details open, then lists the top count-only 
   const text = dialog.textContent ?? "";
   expect(text).toContain("Sync health: 3 things need attention");
   expect(text).toContain("The desktop app can't upload 4 games.");
-  expect(text).toContain("7 replays were skipped because the desktop app couldn't tell which player is you.");
+  expect(text).toContain("The desktop app recently couldn't match 7 replays to your linked accounts.");
   expect(text).toContain("1 more in Sync health.");
   expect(text).not.toContain("Syncing is paused");
   // The pill never shows a player, a toon handle or a PC name.

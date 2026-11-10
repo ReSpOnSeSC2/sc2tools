@@ -11,6 +11,76 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Share cards
+
+- Fix the link printed on every share card. `sc2tools.com/arcade` now leads to
+  the no-install analyzer, or to the home page while that is hidden, instead of
+  a missing page.
+- Stop identifying opponents on Arcade, Season Recap and battle cards. Opponents
+  appear as "Rival A" or by race, rating gaps are rounded to the nearest 100 and
+  games are dated to the day. Names and exact figures stay in the app.
+- Stop copying or downloading a card when the share sheet is dismissed, and say
+  whether a card was shared, copied or saved.
+- Count delivered share cards by card type and delivery path, with nothing from
+  the card itself.
+
+### Analytics privacy
+
+- Stop reporting raw page addresses to Google Analytics as the page of an event,
+  for visitors who accepted analytics. Custom events and the events Google's
+  script raises on its own (time on page, outbound clicks, downloads, form use)
+  now report the same generalized page that page views already did. A game page
+  is `/app/game/:gameId` and an opponent page is `/app/opponents/:pulseId`,
+  with no ids, names, tabs or filters. The referrer is generalized the same way.
+- Pause analytics on admin screens, overlay and dock pages and shared replay
+  archives. Moving there from another page used to skip the page view but keep
+  measuring clicks and time spent.
+- Known gap: two Google Analytics options, Form interactions and Site search,
+  read the browser's address themselves. A form's destination and a `?q=` search
+  term still reach Google until those two options are switched off in the Google
+  Analytics stream settings.
+
+### Agent 0.25.0
+
+- List the builds from each player's last five games in the floating Scouting
+  report and, in short form, on the loading-screen strip: your last five games
+  in this matchup and the last five games in your library against the opponent,
+  linked accounts included. Each row has your result, the map and how long ago
+  it was; fewer than five says how many there are, and a row opens its build
+  order. A first meeting says so instead of guessing, and an opponent whose
+  account is not confirmed yet is never called one.
+- Add **Keep scouting closed on a first meeting**, on by default: a pinned
+  report opens only when there is an earlier game against the opponent. The
+  Scouting button still opens it.
+- The lists reach paired desktop agents only. OBS overlay sources and the spoken
+  report receive nothing new.
+
+### Agent 0.24.11
+
+- Add an independent game-start title refresh with current opponent, known alias,
+  race and head-to-head record/win-rate tokens. Include the map only when the
+  live source supplies it. Keep account consent, platform selection and the
+  existing post-sync refresh option independent, and cancel stale game work.
+  Game-start updates are off by default; turn their Streams checkbox on or off
+  and save to control automatic posting. Saving settings never publishes, and
+  both options can be turned off even when the current title draft is invalid.
+- Let the floating build-versus-build scouting panel receive mouse clicks and
+  wheel scrolling over either build order while StarCraft II keeps focus.
+
+### Agent 0.24.10
+
+- Expand complete build names in floating check-ins and the agent's Build selectors,
+  including replay-detected choices. Wrap long names above badges and records,
+  scroll tall cards, and preserve selections and notes while expanding.
+- Show known opponents as `Barcode (aka KnownPlayer)` at loading and after the
+  game, including when the optional loading-screen scouting strip is hidden.
+
+### Website hosting usage
+
+- Fetch public activity counts directly from the API and stop polling when those counts are hidden on small app screens. Keep the existing update frequency, same-origin fallback, and same-site requests on local replay-demo surfaces.
+- Share successful activity check-ins across open tabs, preserving immediate sign-in and sign-out updates and retries after failures.
+- Serve website reachability checks as static responses and prevent the API keepalive worker from repeatedly requesting website or Vercel deployment URLs.
+
 ### Agent 0.24.9
 
 - Protect the saved device token and OBS password with Windows CurrentUser storage. Migrate before starting sync, preserve unavailable saved credentials, and require explicit password replacement or removal in OBS Settings. Test connection leaves saved settings unchanged.

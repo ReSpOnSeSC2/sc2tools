@@ -80,6 +80,7 @@ const {
  *   guides?: import('../services/guides').GuidesService,
  *   guideStats?: import('../services/guideStats').GuideStatsService,
  *   guideStatsJob?: import('./adminGuides').AdminGuidesDeps["guideStatsJob"],
+ *   revalidateGuides?: import('./adminGuides').AdminGuidesDeps["revalidate"],
  *   guideSamplesBackfill?: import('../jobs/guideSamplesBackfillJob').GuideSamplesBackfillJob,
  *   guideVideos?: import('../services/guideVideos').GuideVideosService,
  * }} deps
@@ -113,6 +114,7 @@ function buildAdminRouter(deps) {
       guides: deps.guides,
       guideStats: deps.guideStats,
       guideStatsJob: deps.guideStatsJob,
+      revalidate: deps.revalidateGuides,
       guideSamplesBackfill: deps.guideSamplesBackfill || null,
       guideVideos: deps.guideVideos,
     }));

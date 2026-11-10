@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { pct1 } from "@/lib/format";
+import { rivalLabel } from "@/lib/sharePrivacy";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import { isGameTooShort, outcome, registerMode } from "../../ArcadeEngine";
@@ -507,17 +508,21 @@ function questionPlain(q: Q): string {
   return `Over the ${WINDOW_LABEL[v.window]}, of the ${c.pluralNoun} ${c.playedVerb} at least ${v.minGames} times, how many do you have ${WR_FULL[v.wr]} ${c.prep}?`;
 }
 
+/**
+ * Maps and builds are the player's own stats and keep their names. An
+ * opponent census lists other people, and the card is public, so those
+ * rows are lettered instead of named (lib/sharePrivacy.ts).
+ */
 function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
   const v = q.variant;
   const answer: string[] = [
     `${KIND_SHORT[v.kind]} · ${WR_SHORT[v.wr]} WR · ${WINDOW_SHORT[v.window]} · ≥${v.minGames}g → ${q.truth}`,
     noteFor(q),
   ];
-  for (const e of q.examples) {
-    answer.push(
-      `${e.displayName} · ${e.wins}-${e.losses} (${pct1(e.winRate)})`,
-    );
-  }
+  q.examples.forEach((e, i) => {
+    const label = v.kind === "opponent" ? rivalLabel(i) : e.displayName;
+    answer.push(`${label} · ${e.wins}-${e.losses} (${pct1(e.winRate)})`);
+  });
   return { question: questionPlain(q), answer };
 }
 

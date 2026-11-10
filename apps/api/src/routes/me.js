@@ -29,6 +29,8 @@ const {
 // the dashboard caller surfaces a "+N more" indicator from
 // ``truncated`` when this kicks in.
 const ME_MMR_MAX_TOONS = 8;
+// PulseMmrService admits two distinct upstream requests at once.
+const ME_MMR_LOOKUP_CONCURRENCY = 2;
 
 /**
  * /v1/me — sanity endpoint for the web app. Returns the user record
@@ -897,14 +899,14 @@ function buildMeRouter(deps) {
    *
    * One entry per pulseId on the user's profile, each resolved
    * against SC2Pulse independently so a multi-toon streamer sees
-   * their NA and EU rows side-by-side. Cached for 5 minutes inside
-   * PulseMmrService — the dashboard polls liberally but pays no
-   * outbound cost until the cache expires.
+   * their NA and EU rows side-by-side. PulseMmrService caches
+   * successful ratings for 5 minutes.
    *
    * Response shape (small + capped so a streamer with many alts
    * doesn't blow up the payload):
    *   {
    *     entries: Array<{ pulseId, region, mmr }>,
+   *     hasSavedIds: boolean,
    *     truncated: boolean,
    *   }
    *
@@ -916,22 +918,24 @@ function buildMeRouter(deps) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
+      const profile = await deps.users.getProfile(auth.userId);
+      const ids = Array.isArray(profile?.pulseIds) ? profile.pulseIds : [];
+      const hasSavedIds = ids.length > 0;
+      const truncated = ids.length > ME_MMR_MAX_TOONS;
       if (!deps.pulseMmr || typeof deps.pulseMmr.getCurrentMmr !== "function") {
-        res.json({ entries: [], truncated: false });
+        res.json({ entries: [], hasSavedIds, truncated });
         return;
       }
       // Hoisted past the guard so the narrowed (non-undefined) type
       // survives into the per-id closure below.
       const pulseMmr = deps.pulseMmr;
-      const profile = await deps.users.getProfile(auth.userId);
-      const ids = Array.isArray(profile && profile.pulseIds)
-        ? /** @type {string[]} */ (profile.pulseIds).slice(0, ME_MMR_MAX_TOONS)
-        : [];
-      const truncated =
-        Array.isArray(profile && profile.pulseIds)
-        && /** @type {string[]} */ (profile.pulseIds).length > ME_MMR_MAX_TOONS;
-      const settled = await Promise.all(
-        ids.map(async (id) => {
+      const lookupIds = ids.slice(0, ME_MMR_MAX_TOONS);
+      const resolved = [];
+      // Let each batch finish before issuing more distinct requests so
+      // uncached lookups don't consume each other's Pulse slots.
+      for (let i = 0; i < lookupIds.length; i += ME_MMR_LOOKUP_CONCURRENCY) {
+        const batch = lookupIds.slice(i, i + ME_MMR_LOOKUP_CONCURRENCY);
+        const settled = await Promise.all(batch.map(async (id) => {
           try {
             const r = await pulseMmr.getCurrentMmr(id);
             if (!r || !Number.isFinite(Number(r.mmr)) || Number(r.mmr) <= 0) {
@@ -949,13 +953,12 @@ function buildMeRouter(deps) {
           } catch {
             return null;
           }
-        }),
-      );
+        }));
+        resolved.push(...settled.filter((e) => e !== null));
+      }
       // Sort descending by MMR so the highest ladder always reads
       // first — that's what a streamer's chat asks about.
-      const resolved = settled
-        .filter((e) => e !== null)
-        .sort((a, b) => b.mmr - a.mmr);
+      resolved.sort((a, b) => b.mmr - a.mmr);
       // Collapse duplicate identifiers for the SAME real account. A
       // profile commonly stores both the raw toon handle
       // (``1-S2-1-267727``) AND the canonical SC2Pulse character id
@@ -976,7 +979,7 @@ function buildMeRouter(deps) {
         // wire shape ``{ pulseId, region, mmr }`` the client expects.
         entries.push({ pulseId: e.pulseId, region: e.region, mmr: e.mmr });
       }
-      res.json({ entries, truncated });
+      res.json({ entries, hasSavedIds, truncated });
     } catch (err) {
       next(err);
     }

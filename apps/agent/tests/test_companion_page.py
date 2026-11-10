@@ -210,7 +210,8 @@ def test_master_off_persists_and_retains_independent_pin_choices(companion):
     assert all(not panel.isVisible() for panel in page.overlays.values())
     wait_until(app, lambda: not page._preference_busy)
     preferences = state["snapshot"]["preferences"]
-    assert preferences == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": True, "scoutingReadAloud": False}
+    assert preferences == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": True,
+                           "scoutingSkipFirstMeeting": True, "scoutingReadAloud": False}
     page.preference_checks["overlaysEnabled"].setChecked(True)
     wait_until(app, lambda: not page._preference_busy)
     assert all(panel.isVisible() for panel in page.overlays.values())
@@ -303,7 +304,8 @@ def test_late_local_settings_cannot_overwrite_new_mode_or_master_choice(companio
     gate.set()
     wait_until(app, lambda: "modes_load" not in page._requests)
     assert page._modes["active"] == "practice"
-    assert page._preferences == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": True, "scoutingReadAloud": False}
+    assert page._preferences == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": True,
+                                 "scoutingSkipFirstMeeting": True, "scoutingReadAloud": False}
 
 
 def test_offline_start_restores_local_modes_hotkey_and_pins_without_telemetry():
@@ -312,7 +314,8 @@ def test_offline_start_restores_local_modes_hotkey_and_pins_without_telemetry():
     modes["active"] = "review"
     modes["hotkeyEnabled"] = True
     modes["profiles"]["customs"]["ghost"] = False
-    state = {"modes": modes, "preferences": {"overlaysEnabled": True, "opponentOverlay": True, "scoutingOverlay": False, "scoutingReadAloud": False}}
+    state = {"modes": modes, "preferences": {"overlaysEnabled": True, "opponentOverlay": True, "scoutingOverlay": False,
+                                             "scoutingSkipFirstMeeting": True, "scoutingReadAloud": False}}
     calls = []
 
     def handler(payload):
@@ -342,7 +345,8 @@ def test_offline_start_restores_local_modes_hotkey_and_pins_without_telemetry():
         assert page.mode_controls.isEnabled()
         page.set_preference("overlaysEnabled", False)
         wait_until(app, lambda: not page._preference_busy)
-        assert state["preferences"] == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": False, "scoutingReadAloud": False}
+        assert state["preferences"] == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": False,
+                                        "scoutingSkipFirstMeeting": True, "scoutingReadAloud": False}
         page.mode_controls.mode_select.setCurrentIndex(page.mode_controls.mode_select.findData("practice"))
         wait_until(app, lambda: not page._mode_busy)
         assert state["modes"]["profiles"]["customs"]["ghost"] is False

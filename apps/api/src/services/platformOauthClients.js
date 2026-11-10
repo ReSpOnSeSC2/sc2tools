@@ -36,24 +36,33 @@ const STREAMING_SCOPES = Object.freeze({
   kick: Object.freeze([...KICK_SCOPES, "channel:write"]),
   youtube: Object.freeze(["https://www.googleapis.com/auth/youtube.force-ssl"]),
 });
+const CHAT_SCOPES = Object.freeze({
+  twitch: Object.freeze([...TWITCH_SCOPES, "user:write:chat"]),
+  kick: Object.freeze([...KICK_SCOPES, "chat:write"]),
+  youtube: Object.freeze(["https://www.googleapis.com/auth/youtube.force-ssl"]),
+});
 
 /** Explicit streaming consent; notification defaults remain unchanged.
  * @param {'twitch'|'kick'|'youtube'} platform
- * @param {'alerts'|'streaming'|'predictions'} [purpose]
+ * @param {'alerts'|'streaming'|'predictions'|'chat'} [purpose]
  * @param {readonly string[]} [existingScopes]
  */
 function scopesForPurpose(platform, purpose = "alerts", existingScopes = []) {
-  if (!["alerts", "streaming", "predictions"].includes(purpose) || purpose === "predictions" && platform !== "twitch") {
+  if (!["alerts", "streaming", "predictions", "chat"].includes(purpose) || purpose === "predictions" && platform !== "twitch") {
     throw new PlatformOauthError("oauth_purpose_invalid", "Unsupported account connection purpose", 400);
   }
   const defaults = { twitch: TWITCH_SCOPES, kick: KICK_SCOPES, youtube: YOUTUBE_SCOPES };
   if (!Object.hasOwn(defaults, platform)) {
     throw new PlatformOauthError("oauth_platform_invalid", "Unsupported account platform", 400);
   }
-  if (purpose === "predictions") return [...TWITCH_SCOPES, "channel:manage:predictions",
-    ...(existingScopes.includes("channel:manage:broadcast") ? ["channel:manage:broadcast"] : [])];
-  if (platform === "twitch" && purpose === "streaming" && existingScopes.includes("channel:manage:predictions")) return [...STREAMING_SCOPES.twitch, "channel:manage:predictions"];
-  return [...(purpose === "streaming" ? STREAMING_SCOPES[platform] : defaults[platform])];
+  const requested = purpose === "predictions" ? [...TWITCH_SCOPES, "channel:manage:predictions"]
+    : purpose === "streaming" ? STREAMING_SCOPES[platform]
+      : purpose === "chat" ? CHAT_SCOPES[platform] : defaults[platform];
+  const allowed = new Set([...defaults[platform], ...STREAMING_SCOPES[platform], ...CHAT_SCOPES[platform],
+    ...(platform === "twitch" ? ["channel:manage:predictions"] : [])]);
+  const scopes = [...new Set([...requested, ...existingScopes.filter(scope => allowed.has(scope))])];
+  return platform === "youtube" && scopes.includes("https://www.googleapis.com/auth/youtube.force-ssl")
+    ? scopes.filter(scope => scope !== "https://www.googleapis.com/auth/youtube.readonly") : scopes;
 }
 const YOUTUBE_UPLOAD_PAGE_LIMIT = 3;
 const YOUTUBE_UPLOAD_PAGE_SIZE = 50;
@@ -86,7 +95,7 @@ function setQuery(url, params) {
   return url;
 }
 
-/** @param {ProviderConfig} config @param {string} state @param {'alerts'|'streaming'|'predictions'} [purpose] @param {readonly string[]} [existingScopes] */
+/** @param {ProviderConfig} config @param {string} state @param {'alerts'|'streaming'|'predictions'|'chat'} [purpose] @param {readonly string[]} [existingScopes] */
 function buildTwitchAuthorizeUrl(config, state, purpose = "alerts", existingScopes = []) {
   return setQuery(new URL("https://id.twitch.tv/oauth2/authorize"), {
     response_type: "code",
@@ -97,26 +106,26 @@ function buildTwitchAuthorizeUrl(config, state, purpose = "alerts", existingScop
   }).toString();
 }
 
-/** @param {ProviderConfig} config @param {string} state @param {string} challenge @param {'alerts'|'streaming'|'predictions'} [purpose] */
-function buildKickAuthorizeUrl(config, state, challenge, purpose = "alerts") {
+/** @param {ProviderConfig} config @param {string} state @param {string} challenge @param {'alerts'|'streaming'|'predictions'|'chat'} [purpose] @param {readonly string[]} [existingScopes] */
+function buildKickAuthorizeUrl(config, state, challenge, purpose = "alerts", existingScopes = []) {
   return setQuery(new URL("https://id.kick.com/oauth/authorize"), {
     response_type: "code",
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
-    scope: scopesForPurpose("kick", purpose),
+    scope: scopesForPurpose("kick", purpose, existingScopes),
     state,
     code_challenge: challenge,
     code_challenge_method: "S256",
   }).toString();
 }
 
-/** @param {ProviderConfig} config @param {string} state @param {'alerts'|'streaming'|'predictions'} [purpose] */
-function buildYoutubeAuthorizeUrl(config, state, purpose = "alerts") {
+/** @param {ProviderConfig} config @param {string} state @param {'alerts'|'streaming'|'predictions'|'chat'} [purpose] @param {readonly string[]} [existingScopes] */
+function buildYoutubeAuthorizeUrl(config, state, purpose = "alerts", existingScopes = []) {
   return setQuery(new URL("https://accounts.google.com/o/oauth2/v2/auth"), {
     response_type: "code",
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
-    scope: scopesForPurpose("youtube", purpose),
+    scope: scopesForPurpose("youtube", purpose, existingScopes),
     state,
     access_type: "offline",
     include_granted_scopes: "true",
@@ -836,6 +845,7 @@ module.exports = {
   KICK_SCOPES,
   YOUTUBE_SCOPES,
   STREAMING_SCOPES,
+  CHAT_SCOPES,
   scopesForPurpose,
   TWITCH_EVENT_TYPES,
   KICK_EVENT_TYPES,

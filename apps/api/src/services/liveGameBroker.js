@@ -1,7 +1,7 @@
 "use strict";
 const { withEndedGameControl } = require("./liveGameEndedControl");
 
-const { buildScoutingBrief, scoutingDeviceRoom } = require("./agentScouting");
+const { buildScoutingBrief, overlayEnvelope, scoutingDeviceRoom } = require("./agentScouting");
 const { ScoutingVoiceClaims, validScoutingVoiceGameKey } = require("./scoutingVoiceClaims");
 
 /**
@@ -496,6 +496,7 @@ class LiveGameBroker {
       return;
     }
     if (!Array.isArray(tokens) || tokens.length === 0) return;
+    const shared = overlayEnvelope(envelope);
     for (const t of tokens) {
       if (!t || !t.token) continue;
       // Mirror the post-game ``emitOverlayLive`` filter in
@@ -505,7 +506,7 @@ class LiveGameBroker {
       try {
         this._io
           .to(`overlay:${t.token}`)
-          .emit("overlay:liveGame", envelope);
+          .emit("overlay:liveGame", shared);
         this.counters.overlay_emit_ok += 1;
       } catch (err) {
         this.counters.overlay_emit_failed += 1;
@@ -586,7 +587,7 @@ class LiveGameBroker {
    * }}
    */
   replayLatestForOverlay(userId) {
-    const envelope = this.latest(userId);
+    const envelope = overlayEnvelope(this.latest(userId));
     if (!envelope) return { prelude: null, envelope: null };
     const phase = typeof envelope.phase === "string" ? envelope.phase : null;
     const gameKey = typeof envelope.gameKey === "string" ? envelope.gameKey : null;

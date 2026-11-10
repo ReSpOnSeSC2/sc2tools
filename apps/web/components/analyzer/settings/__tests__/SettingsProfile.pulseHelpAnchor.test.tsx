@@ -4,7 +4,7 @@
  * the Settings anchor scroll has nothing to land on. API, auth and the
  * sibling cards are MOCKS.
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "a", isLoaded: true, isSignedIn: true, getToken: async () => "token" }) }));
@@ -12,7 +12,7 @@ vi.mock("@/lib/clientApi", async importOriginal => ({
   ...await importOriginal<typeof import("@/lib/clientApi")>(),
   apiCall: vi.fn(),
   useApi: () => ({
-    data: { battleTag: "Player#1234", pulseIds: [] },
+    data: { battleTag: "Player#1234", pulseIds: ["98-S2-1-30230", "994428"] },
     isLoading: false,
     mutate: vi.fn(),
   }),
@@ -47,5 +47,22 @@ describe("SettingsProfile Pulse ID help anchor", () => {
     window.history.replaceState(null, "", "/settings?tab=profile");
     render(<SettingsProfile />);
     expect(document.getElementById("pulse-id-help")).toBeNull();
+  });
+
+  it("keeps PTR toon handles as replay identities without SC2Pulse links", () => {
+    render(<SettingsProfile />);
+    const saved = within(screen.getByRole("list", { name: "Saved Pulse IDs" }));
+    expect(saved.getByText("PTR")).toBeTruthy();
+    expect(saved.getAllByRole("link").map((link) => link.getAttribute("aria-label")))
+      .toEqual(["Open 994428 on sc2pulse.nephest.com"]);
+
+    fireEvent.change(screen.getByPlaceholderText("994428 or 1-S2-1-267727"), {
+      target: { value: "98-S2-1-42" },
+    });
+    expect(screen.getByText(/It has no SC2Pulse ladder rating/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(saved.getByText("98-S2-1-42")).toBeTruthy();
+    expect(saved.getAllByText("PTR")).toHaveLength(2);
+    expect(saved.getAllByRole("link")).toHaveLength(1);
   });
 });

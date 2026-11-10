@@ -74,6 +74,65 @@ describe("guide videos sync job", () => {
     expect(videos.syncFromChannel).toHaveBeenCalledTimes(1);
   });
 
+  test("successful syncs purge the public cache after persistence, even without changed rows", async () => {
+    const videos = fakeVideos({ syncFromChannel: async () => ({ fetched: 15, inserted: 0, updated: 0 }) });
+    const revalidate = jest.fn(async () => ({ ok: true, status: 200 }));
+    const job = buildGuideVideosSyncJob({ guideVideos: videos, logger: recordingLogger(), revalidate, env: {} });
+    await job.runOnce();
+    await job.runOnce();
+    expect(revalidate).toHaveBeenCalledTimes(2);
+    expect(videos.syncFromChannel.mock.invocationCallOrder[0]).toBeLessThan(revalidate.mock.invocationCallOrder[0]);
+  });
+
+  test("single flight and stop wait for the cache purge to finish", async () => {
+    let release;
+    const videos = fakeVideos();
+    const revalidate = jest.fn(() => new Promise((resolve) => { release = resolve; }));
+    const job = buildGuideVideosSyncJob({ guideVideos: videos, logger: recordingLogger(), revalidate, env: {} });
+    const a = job.runOnce();
+    await flush();
+    const b = job.runOnce();
+    let stopped = false;
+    const stopping = job.stop().then(() => { stopped = true; });
+    await flush();
+    expect(stopped).toBe(false);
+    expect(revalidate).toHaveBeenCalledTimes(1);
+    expect(videos.syncFromChannel).toHaveBeenCalledTimes(1);
+    release({ ok: true, status: 200 });
+    expect(await a).toBe(await b);
+    await stopping;
+    expect(stopped).toBe(true);
+  });
+
+  test.each([0, 32])("a failed feed purges only when snapshot seeding inserted rows (%i)", async (inserted) => {
+    const videos = fakeVideos({
+      ensureSnapshot: async () => ({ inserted }),
+      syncFromChannel: async () => { throw Object.assign(new Error("feed failed"), { code: "feed_http_503" }); },
+    });
+    const revalidate = jest.fn(async () => ({ ok: true, status: 200 }));
+    const job = buildGuideVideosSyncJob({ guideVideos: videos, logger: recordingLogger(), revalidate, env: {} });
+    expect((await job.runOnce()).error).toBe("feed_http_503");
+    expect(revalidate).toHaveBeenCalledTimes(inserted > 0 ? 1 : 0);
+  });
+
+  test("purge failures never undo a successful sync or prevent a later retry", async () => {
+    const videos = fakeVideos();
+    const logger = recordingLogger();
+    const revalidate = jest.fn()
+      .mockRejectedValueOnce(new Error("https://private.invalid/cache?secret=never-log"))
+      .mockResolvedValueOnce({ ok: false, error: "timeout" })
+      .mockResolvedValueOnce({ ok: false, skipped: "not_configured" });
+    const job = buildGuideVideosSyncJob({ guideVideos: videos, logger, revalidate, env: {} });
+    for (let i = 0; i < 3; i += 1) {
+      const summary = await job.runOnce();
+      expect(summary.error).toBeNull();
+      expect(summary.sync).toEqual({ fetched: 15, inserted: 0, updated: 15 });
+    }
+    expect(revalidate).toHaveBeenCalledTimes(3);
+    expect(logger.calls).toContainEqual({ level: "warn", obj: { code: "error" }, msg: "guide_videos_revalidate_error" });
+    expect(JSON.stringify(logger.calls)).not.toContain("never-log");
+  });
+
   test("failures are logged at warn with a reason code only and never thrown", async () => {
     const leaky = Object.assign(new Error("GET https://www.youtube.com/feeds/videos.xml?channel_id=UC… failed"), {
       code: "feed_http_503",
@@ -106,15 +165,18 @@ describe("guide videos sync job", () => {
     test("start runs at once, then every interval (default 6 h); stop halts it", async () => {
       const videos = fakeVideos();
       const logger = recordingLogger();
-      const job = buildGuideVideosSyncJob({ guideVideos: videos, logger, env: {} });
+      const revalidate = jest.fn(async () => ({ ok: true, status: 200 }));
+      const job = buildGuideVideosSyncJob({ guideVideos: videos, logger, revalidate, env: {} });
       job.start();
       job.start();
       expect(job.isRunning()).toBe(true);
       await jest.advanceTimersByTimeAsync(0);
       expect(videos.syncFromChannel).toHaveBeenCalledTimes(1);
+      expect(revalidate).toHaveBeenCalledTimes(1);
       expect(logger.calls).toContainEqual({ level: "info", obj: { intervalMs: DEFAULT_INTERVAL_MS }, msg: "guide_videos_job_started" });
       await jest.advanceTimersByTimeAsync(DEFAULT_INTERVAL_MS);
       expect(videos.syncFromChannel).toHaveBeenCalledTimes(2);
+      expect(revalidate).toHaveBeenCalledTimes(2);
       await job.stop();
       expect(job.isRunning()).toBe(false);
       await jest.advanceTimersByTimeAsync(DEFAULT_INTERVAL_MS * 2);

@@ -65,16 +65,61 @@ def test_live_title_template_preview_and_explicit_default_off_platform_selection
     controls = widget.title_controls
     assert controls.preview.text() == "Preview: SC2 | 5000 MMR | 1W–0L"
     assert not controls.enabled.isChecked()
+    assert not controls.on_game_start.isChecked()
     assert not controls.platforms["youtube"].isChecked()
     payloads = []
     monkeypatch.setattr(widget, "job", payloads.append)
     controls.enabled.setChecked(True)
     controls.configure()
     assert payloads == [{"action": "configure_title_automation", "template": "SC2 | {mmr} MMR | {record}",
-        "enabled": True, "platforms": {"twitch": True, "kick": True, "youtube": False}}]
+        "enabled": True, "on_game_start": False,
+        "platforms": {"twitch": True, "kick": True, "youtube": False}}]
     widget._completed({"action": "configure_title_automation", "error": "Storage unavailable"})
     assert controls.dirty is True
     assert controls.enabled.isChecked()
+
+
+def test_current_match_template_preserves_prefix_and_only_edits_locally(page, monkeypatch):
+    widget, state, app = page
+    state["account_mode"] = "sc2tools"
+    widget.render(state)
+    widget.title_input.setText("GM Protoss")
+    calls = []
+    monkeypatch.setattr(widget, "job", calls.append)
+    controls = widget.title_controls
+    controls.values = {"opp": "Barcode", "aka": "(aka Maru)", "h2h": "3W–2L", "map": "Alcyone LE", "h2h_wr": "60%"}
+    controls.match_template.click()
+    assert widget.title_input.text() == "GM Protoss | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}"
+    assert controls.preview.text() == "Preview: GM Protoss | v Barcode (aka Maru) | 3W–2L (60%) | Alcyone LE"
+    assert widget.title_dirty and controls.dirty
+    assert not controls.on_game_start.isChecked() and not controls.enabled.isChecked()
+    assert calls == []
+
+
+def test_game_start_refresh_has_its_own_opt_in_and_survives_polling(page, monkeypatch):
+    widget, state, app = page
+    state["account_mode"] = "sc2tools"
+    state["title_automation"] = {"enabled": False, "on_game_start": False}
+    widget.render(state)
+    widget.title_input.setText("GM Protoss v {opp} {aka} | {h2h} | {map}")
+    controls = widget.title_controls
+    controls.on_game_start.setChecked(True)
+    widget.render(state)
+    assert controls.on_game_start.isChecked()
+    calls = []
+    monkeypatch.setattr(widget, "job", calls.append)
+    controls.configure()
+    assert calls[0]["on_game_start"] is True and calls[0]["enabled"] is False
+    assert calls[0]["platforms"] == {"twitch": True, "kick": True, "youtube": False}
+
+
+def test_template_preset_uses_neutral_prefix_for_dynamic_template(page):
+    widget, state, app = page
+    state["account_mode"] = "sc2tools"
+    widget.render(state)
+    widget.title_input.setText("{mmr} MMR | {record}")
+    widget.title_controls.match_template.click()
+    assert widget.title_input.text().startswith("SC2 | v {opp} {aka}")
 
 
 def test_youtube_metadata_failure_is_visible_with_connected_account(page):

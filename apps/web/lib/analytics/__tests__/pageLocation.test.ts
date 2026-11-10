@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   analyticsPageLocation,
+  analyticsReferrer,
   analyticsSearch,
   isUntrackedPath,
   normalizePagePath,
@@ -80,5 +81,37 @@ describe("analyticsPageLocation", () => {
 
   it("never repeats the query string", () => {
     expect(analyticsPageLocation("https://sc2tools.com", "/", "?source=pwa")).toBe("https://sc2tools.com/?source=pwa");
+  });
+});
+
+describe("analyticsReferrer", () => {
+  const SITE = "https://sc2tools.com";
+
+  it("normalizes a previous page on this site like a page location", () => {
+    expect(analyticsReferrer(`${SITE}/app/opponents/1-S2-1-20646762?tab=games&q=SecretFoe#notes`, SITE)).toBe(
+      `${SITE}/app/opponents/:pulseId`,
+    );
+    expect(analyticsReferrer(`${SITE}/app/game/g1?opponent=2-S2-1-1&utm_source=discord`, SITE)).toBe(
+      `${SITE}/app/game/:gameId?utm_source=discord`,
+    );
+    expect(analyticsReferrer(`${SITE}/guides`, SITE)).toBe(`${SITE}/guides`);
+  });
+
+  it.each(["/admin/users/346d2a86", "/overlay/secret-token", "/dock/secret-token?mode=live", "/players/abc/replays"])(
+    "cuts an untracked page on this site down to the site root (%s)",
+    (path) => {
+      expect(analyticsReferrer(`${SITE}${path}`, SITE)).toBe(`${SITE}/`);
+    },
+  );
+
+  it("passes another site through unchanged", () => {
+    expect(analyticsReferrer("https://www.reddit.com/r/starcraft/", SITE)).toBe("https://www.reddit.com/r/starcraft/");
+    expect(analyticsReferrer("android-app://com.google.android.gm/", SITE)).toBe("android-app://com.google.android.gm/");
+    // A different origin is another site, even when the path looks like ours.
+    expect(analyticsReferrer("https://example.org/app/game/g1", SITE)).toBe("https://example.org/app/game/g1");
+  });
+
+  it.each(["", null, undefined, "not a url"])("is empty when there is no usable referrer (%j)", (referrer) => {
+    expect(analyticsReferrer(referrer, SITE)).toBe("");
   });
 });

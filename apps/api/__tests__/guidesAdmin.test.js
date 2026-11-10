@@ -16,6 +16,13 @@ const request = require("supertest");
 const { createGuidesHarness, seedGuideCorpus, GLAIVES } = require("./helpers/guidesHarness");
 
 jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
+jest.mock("../src/services/guideRevalidate", () => {
+  const actual = jest.requireActual("../src/services/guideRevalidate");
+  return {
+    ...actual,
+    buildGuideRevalidator: jest.fn((deps) => jest.fn(actual.buildGuideRevalidator(deps))),
+  };
+});
 
 const FEED = fs.readFileSync(path.join(__dirname, "fixtures", "guides", "youtube-channel-feed.xml"), "utf8");
 const NOTE_PATH = "/v1/admin/guides/notes/pvz/stargate-into-glaives";
@@ -38,19 +45,21 @@ async function waitFor(check) {
 }
 
 describe("/v1/admin/guides", () => {
-  let h; let adminId;
+  let h; let adminId; let revalidatePages;
   const fetchMock = jest.fn();
   const as = (name, req) => req.set("authorization", `Bearer u:${name}`);
   const admin = (req) => as("admin", req);
 
   beforeAll(async () => {
     h = await createGuidesHarness({ fetchImpl: (...args) => fetchMock(...args) });
+    revalidatePages = require("../src/services/guideRevalidate").buildGuideRevalidator.mock.results.at(-1).value;
     adminId = await h.seedUser("admin");
     await h.seedUser("player");
     await seedGuideCorpus(h);
   });
 
   beforeEach(() => {
+    revalidatePages.mockClear();
     fetchMock.mockReset();
     fetchMock.mockImplementation(async () => {
       throw new Error("network_disabled_in_tests");
@@ -111,11 +120,19 @@ describe("/v1/admin/guides", () => {
     // 12-worker page shows one only when it is pinned.
     const before = await request(h.app).get("/v1/guides/pvz/stargate-into-glaives");
     expect(before.body.videos).toEqual([]);
+    expect(revalidatePages).not.toHaveBeenCalled();
+    const revisionBefore = await request(h.app).get("/v1/guides/revision");
+    revalidatePages.mockResolvedValueOnce({ ok: true, status: 200 });
     const pin = await admin(request(h.app).put(NOTE_PATH)).send({ videos: { pinned: ["A4x6gR7J-AY"], hidden: ["YcTMc_Ee11w"] } });
     expect(pin.status).toBe(200);
+    expect(revalidatePages).toHaveBeenCalledTimes(1);
+    const revisionAfter = await request(h.app).get("/v1/guides/revision");
+    expect(revisionAfter.status).toBe(200);
+    expect(revisionAfter.body.revision).not.toBe(revisionBefore.body.revision);
     const page = await request(h.app).get("/v1/guides/pvz/stargate-into-glaives");
     expect(page.body.videos.map((v) => v.youtubeId)).toEqual(["A4x6gR7J-AY"]);
     await admin(request(h.app).delete(NOTE_PATH));
+    expect(revalidatePages).toHaveBeenCalledTimes(2);
   });
 
   test.each([
@@ -239,6 +256,26 @@ describe("/v1/admin/guides", () => {
     const bad = await admin(request(h.app).post("/v1/admin/guides/videos/sync"));
     expect(bad.status).toBe(502);
     expect(bad.body).toEqual({ error: { code: "feed_http_500" } });
+  });
+
+  test("automatic video sync refreshes pages and publishes the new background revision", async () => {
+    fetchMock.mockImplementation(async () => textResponse(FEED));
+    const before = await h.services.guideFreshness.readRevision();
+    revalidatePages.mockResolvedValueOnce({ ok: true, status: 200 });
+    const result = await h.services.guideVideosJob.runOnce();
+    expect(result.sync.fetched).toBeGreaterThan(0);
+    expect(revalidatePages).toHaveBeenCalledTimes(1);
+    expect(await h.services.guideFreshness.readRevision()).not.toBe(before);
+  });
+
+  test.each([
+    { ok: false, error: "timeout" },
+    { ok: false, skipped: "not_configured" },
+  ])("unsuccessful purge %j leaves the background revision unchanged", async (result) => {
+    const before = await h.services.guideFreshness.readRevision();
+    revalidatePages.mockResolvedValueOnce(result);
+    expect(await h.services.revalidateGuides()).toEqual(result);
+    expect(await h.services.guideFreshness.readRevision()).toBe(before);
   });
 });
 

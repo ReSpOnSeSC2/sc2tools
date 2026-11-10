@@ -90,4 +90,36 @@ describe("Companion release documentation", () => {
       expect(settings.caption).toContain("not a native live-draw popup");
     }
   });
+
+  it("documents each player's last five games, what a first meeting shows and the version that brings them", () => {
+    const article = getArticle("desktop-companion")!;
+    const start = article.body.findIndex(block => block.type === "heading" && block.anchor === "last-five-games");
+    expect(start).toBeGreaterThan(-1);
+    const end = article.body.findIndex((block, index) => index > start && block.type === "heading");
+    const section = article.body.slice(start, end);
+    const text = section.map(helpBlockText).join(" ");
+    for (const phrase of ["previous five games, newest first", "your result in that game", "your last five games in this matchup",
+      "in your library against this player", "linked accounts", "another race", "2 EARLIER GAMES", "FIRST MEETING", "NOT IDENTIFIED YET",
+      "never a guess", "knows a build only from a game you played", "Keep scouting closed on a first meeting",
+      "on by default", "Scouting button still opens it", "short form"]) {
+      expect(text).toContain(phrase);
+    }
+    // The site goes live before the agent release does: the section says which
+    // version brings the lists and never tells a player to install it now.
+    expect(section[1].type).toBe("callout");
+    expect(helpBlockText(section[1])).toContain("arrive with agent 0.25.0");
+    expect(text).not.toMatch(/Check for updates|download/i);
+    const picture = section.find(block => block.type === "image");
+    expect(picture?.type).toBe("image");
+    if (picture?.type === "image") {
+      expect(picture.src).toBe("/landing/companion-last-five-games.png");
+      expect(picture.caption).toContain("sample data");
+      expect(picture.caption).toContain("650 × 450");
+    }
+    const strip = getArticle("desktop-scouting")!.body.map(helpBlockText).join(" ");
+    expect(strip).toContain("Their last 5 games");
+    expect(strip).toContain("arrive with agent 0.25.0");
+    expect(strip).toContain("a first meeting has none");
+    expect(strip).toContain("all five games fit");
+  });
 });

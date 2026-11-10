@@ -3,17 +3,15 @@ const { observeJob } = require("../util/jobLedger");
 
 // Keep-alive worker.
 //
-// The API runs on Render's "starter" web service, which idles after a
-// stretch of no inbound traffic and then eats a 30+ second cold start when
-// the next visitor lands. Socket.io clients that hold persistent
-// connections normally keep the API warm, but the Next.js web frontend
-// shares the same idle problem — and may have no live clients overnight.
+// For deployments with an idle timeout, inbound requests can keep the API
+// warm while its process is running. The external GitHub keepalive workflow
+// can wake the API even after the process itself has gone to sleep.
 //
 // This worker fires off lightweight HTTP GETs against a configurable list
-// of URLs every N minutes (default 13 — under Render's 15-minute idle
-// window). Targets are typically:
-//   - the public web origin's /api/ping       (keeps the frontend warm)
-//   - the API's own /v1/ping                  (defensive belt-and-braces)
+// of URLs every N minutes (default 13). Configure the API's own /v1/ping,
+// or another long-lived API
+// service. Website requests cannot keep the Render API awake and consume
+// Vercel's server execution allowance, so known website targets are ignored.
 //
 // The worker is best-effort: failed pings are logged and dropped, never
 // thrown. It intentionally uses native fetch (Node 18+) rather than a
@@ -56,11 +54,16 @@ const REQUEST_TIMEOUT_MS = 15 * 1000;
  * @returns {KeepaliveWorker}
  */
 function buildKeepaliveWorker(opts) {
-  const targets = sanitizeTargets(opts.targets);
+  let blockedTargetCount = 0;
+  const targets = sanitizeTargets(opts.targets, () => { blockedTargetCount += 1; });
   const intervalMs = clampInterval(opts.intervalMs);
   const logger = opts.logger.child({ component: "keepalive" });
   const fetchImpl = opts.fetchImpl || globalThis.fetch;
   const userAgent = opts.userAgent || "sc2tools-keepalive/1";
+
+  if (blockedTargetCount > 0) {
+    logger.warn({ blockedTargetCount }, "keepalive_website_targets_ignored");
+  }
 
   /** @type {NodeJS.Timeout | null} */
   let timer = null;
@@ -76,12 +79,12 @@ function buildKeepaliveWorker(opts) {
   function start() {
     if (timer) return;
     if (targets.length === 0) {
-      logger.info("keepalive_disabled: no targets configured");
+      logger.info("keepalive_disabled: no eligible targets configured");
       return;
     }
     if (typeof fetchImpl !== "function") return;
     logger.info(
-      { targets, intervalMs },
+      { targetCount: targets.length, intervalMs },
       "keepalive_started",
     );
     // Fire once immediately so a cold deploy starts warming peers without
@@ -173,6 +176,8 @@ async function pingOne(url, fetchImpl, userAgent, logger) {
   try {
     const res = await fetchImpl(url, {
       method: "GET",
+      // An allowed API endpoint must not redirect the heartbeat to the web.
+      redirect: "error",
       headers: {
         accept: "application/json",
         "user-agent": userAgent,
@@ -199,12 +204,14 @@ async function pingOne(url, fetchImpl, userAgent, logger) {
 }
 
 /**
- * Drop blank entries, dedupe, validate as absolute http(s) URLs.
+ * Drop blank entries, dedupe, validate as absolute http(s) URLs, and
+ * exclude the website and Vercel deployments from API keepalive traffic.
  *
  * @param {ReadonlyArray<string>} raw
+ * @param {() => void} [onWebsiteTarget]
  * @returns {string[]}
  */
-function sanitizeTargets(raw) {
+function sanitizeTargets(raw, onWebsiteTarget) {
   const seen = new Set();
   /** @type {string[]} */
   const out = [];
@@ -218,6 +225,13 @@ function sanitizeTargets(raw) {
       continue;
     }
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") continue;
+    const hostname = parsed.hostname.toLowerCase().replace(/\.+$/, "");
+    const sc2toolsWebsite = (hostname === "sc2tools.com" || hostname.endsWith(".sc2tools.com")) &&
+      hostname !== "api.sc2tools.com";
+    if (sc2toolsWebsite || hostname === "vercel.app" || hostname.endsWith(".vercel.app")) {
+      if (onWebsiteTarget) onWebsiteTarget();
+      continue;
+    }
     const normalized = parsed.toString();
     if (seen.has(normalized)) continue;
     seen.add(normalized);

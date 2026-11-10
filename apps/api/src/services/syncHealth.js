@@ -44,8 +44,17 @@ const DEVICE_RULES = [
   ["agent_upload_failing", (sync) => (sync.paused !== true && sync.lastErrorCode ? positive(sync.pending) : null)],
   // Count: this PC.
   ["agent_outdated_required", (_sync, device, release) => (belowMinimum(device, release) ? 1 : null)],
-  ["replays_skipped_unresolved", (sync) => positive(sync.skipped?.player_unresolved)],
+  ["replays_skipped_unresolved", recentUnresolved],
 ];
+
+/** Lifetime skip inventory is not evidence of a current sync problem. Older
+ * agents omit the recent count, so never fall back to their inventory total.
+ * @param {import('./types').SyncReport} sync */
+function recentUnresolved(sync) {
+  const recent = sync.recentUnresolved, total = sync.skipped?.player_unresolved;
+  if (typeof recent !== "number" || !Number.isFinite(recent) || typeof total !== "number" || !Number.isFinite(total)) return null;
+  return positive(Math.min(Math.trunc(recent), Math.trunc(total)));
+}
 
 /** @param {SyncDevice} device @param {SyncRelease} release */
 function belowMinimum(device, release) {
@@ -90,7 +99,7 @@ function deriveSyncHealth({ devices = [], ingestStats = null, release = null, no
 /** @param {number} n @param {string} one @param {string} many */
 const plural = (n, one, many) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 const UPDATE_CTA = Object.freeze({ label: "Update agent", href: "/download" });
-const PROFILE_CTA = Object.freeze({ label: "Set up profile", href: "/settings?tab=profile" });
+const PROFILE_CTA = Object.freeze({ label: "Review profile", href: "/settings?tab=profile" });
 /** Count-only copy: never a player name, toon handle or PC name.
  * @type {Record<SyncHealthCode, (n: number) => { message: string, cta?: { label: string, href: string } }>} */
 const WARNING_COPY = {
@@ -112,8 +121,8 @@ const WARNING_COPY = {
     cta: { ...UPDATE_CTA },
   }),
   replays_skipped_unresolved: (n) => ({
-    message: `${plural(n, "replay was", "replays were")} skipped because the desktop app couldn't tell which player is you. `
-      + "Add your BattleTag or Pulse ID, then re-sync.",
+    message: `The desktop app recently couldn't match ${plural(n, "replay", "replays")} to your linked accounts. `
+      + "Downloaded replays of other players can be skipped. If these are your games, review your profile, then re-sync.",
     cta: { ...PROFILE_CTA },
   }),
   uploads_rejected: (n) => ({

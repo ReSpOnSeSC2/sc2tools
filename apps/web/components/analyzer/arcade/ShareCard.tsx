@@ -23,6 +23,8 @@
  * (4–6 lines) both look right. No third-party libs.
  */
 
+import type { CardShareMethod } from "@/lib/analytics/shareEvents";
+
 export interface ShareCardInput {
   title: string;
   /** The question prompt as plain text. Optional for legacy callers. */
@@ -59,17 +61,39 @@ export const FONT_STACK = "system-ui, -apple-system, Segoe UI, Roboto, sans-seri
  * URL (so pasted shares are clickable) and the card itself carries the
  * short label as a watermark (so screenshots still say where they came
  * from).
+ *
+ * No page lives at this address yet: next.config.mjs redirects it
+ * (shareCardRedirects), and a test keeps that rule on this exact path.
+ * Cards already posted carry it, so change the redirect, not the address.
  */
 export const SHARE_LINK_URL = "https://sc2tools.com/arcade";
 export const SHARE_LINK_LABEL = "sc2tools.com/arcade";
 
-export async function shareCard(input: ShareCardInput): Promise<{ shared: boolean }> {
-  if (typeof document === "undefined") return { shared: false };
+/**
+ * Outcome of a share attempt. `method` is the path that delivered the
+ * card, so callers can count shares by path. It is null, with `shared`
+ * false, when nothing was delivered: the card could not be rendered, or
+ * the player dismissed the share sheet.
+ */
+export interface ShareDelivery {
+  shared: boolean;
+  method: CardShareMethod | null;
+}
+
+const NOT_SHARED: ShareDelivery = { shared: false, method: null };
+
+/**
+ * Callers must pass text that is safe to publish: opponents by neutral
+ * label or race only, never by name, id or exact rating
+ * (lib/sharePrivacy.ts). Everything in `input` is drawn and sent as is.
+ */
+export async function shareCard(input: ShareCardInput): Promise<ShareDelivery> {
+  if (typeof document === "undefined") return NOT_SHARED;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return { shared: false };
+  if (!ctx) return NOT_SHARED;
 
   const accent = pickAccent(input);
   drawCardBackground(ctx, accent);
@@ -137,7 +161,7 @@ export async function shareCard(input: ShareCardInput): Promise<{ shared: boolea
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob((b) => resolve(b), "image/png"),
   );
-  if (!blob) return { shared: false };
+  if (!blob) return NOT_SHARED;
 
   const shareText = [
     input.title,
@@ -216,17 +240,34 @@ export interface DeliverShareInput {
   filename?: string;
 }
 
+/** The Web Share API rejects with an AbortError when the sheet is dismissed. */
+function isShareDismissal(error: unknown): boolean {
+  return (error as { name?: unknown } | null)?.name === "AbortError";
+}
+
+/**
+ * What to tell the player once a card has been delivered.
+ *
+ * Example: `shareOutcome("Recap", "download")` → "Recap saved".
+ */
+export function shareOutcome(what: string, method: CardShareMethod): string {
+  if (method === "web_share") return `${what} shared`;
+  if (method === "download") return `${what} saved`;
+  return `${what} copied`;
+}
+
 /**
  * Delivery pipeline shared by every share surface:
  * Web Share (with PNG attached) → clipboard PNG → clipboard text →
- * download. Resolves { shared: true } as soon as one path lands.
+ * download. Resolves { shared: true, method } as soon as one path lands,
+ * and { shared: false } when the player dismisses the share sheet.
  */
 export async function deliverShareCard({
   blob,
   title,
   text,
   filename = "arcade-share.png",
-}: DeliverShareInput): Promise<{ shared: boolean }> {
+}: DeliverShareInput): Promise<ShareDelivery> {
   const file = new File([blob], filename, { type: "image/png" });
 
   if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
@@ -241,10 +282,14 @@ export async function deliverShareCard({
         (navigator as Navigator & { canShare: (data: ShareData) => boolean }).canShare(shareData)
       ) {
         await navigator.share(shareData);
-        return { shared: true };
+        return { shared: true, method: "web_share" };
       }
-    } catch {
-      // user cancelled — fall through to clipboard
+    } catch (error) {
+      // Dismissing the share sheet is a choice, not a failure: stop here
+      // rather than copy or download a card the player just declined to
+      // send. Any other error (no permission, files unsupported) falls
+      // through to the next path.
+      if (isShareDismissal(error)) return NOT_SHARED;
     }
   }
 
@@ -255,11 +300,11 @@ export async function deliverShareCard({
       await navigator.clipboard.write([
         new ClipboardItem({ "image/png": blob }),
       ]);
-      return { shared: true };
+      return { shared: true, method: "clipboard_image" };
     }
     if (navigator?.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
-      return { shared: true };
+      return { shared: true, method: "clipboard_text" };
     }
   } catch {
     // ignore
@@ -275,7 +320,7 @@ export async function deliverShareCard({
     URL.revokeObjectURL(a.href);
     a.remove();
   }, 0);
-  return { shared: true };
+  return { shared: true, method: "download" };
 }
 
 function pickAccent(input: ShareCardInput): string {

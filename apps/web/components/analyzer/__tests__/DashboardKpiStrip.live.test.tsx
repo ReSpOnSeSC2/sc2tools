@@ -84,7 +84,7 @@ function ready(overrides: Partial<Record<ReturnType<typeof cardOf>, Canned>> = {
       case "streak":
         return { data: { kind: "win", count: 3, lastGameAt: null } };
       case "mmr":
-        return { data: { entries: [{ pulseId: "1", region: "NA", mmr: 4200 }], truncated: false } };
+        return { data: { entries: [{ pulseId: "1", region: "NA", mmr: 4200 }], hasSavedIds: true, truncated: false } };
       default:
         return {};
     }
@@ -267,10 +267,20 @@ describe("card states", () => {
 
 describe("MMR card", () => {
   it("links to the Pulse ID help when no Pulse ID is saved", async () => {
-    harness.respond = ready({ mmr: { data: { entries: [], truncated: false } } });
+    harness.respond = ready({ mmr: { data: { entries: [], hasSavedIds: false, truncated: false } } });
     await renderStrip();
     const link = screen.getByRole("link", { name: "Add a Pulse ID in Settings" });
     expect(link.getAttribute("href")).toBe("/settings?tab=profile#pulse-id-help");
+  });
+
+  it("offers to retry an empty lookup when Pulse IDs are already saved", async () => {
+    harness.respond = ready({ mmr: { data: { entries: [], hasSavedIds: true, truncated: false } } });
+    await renderStrip();
+
+    const card = within(cardWithLabel("MMR"));
+    expect(card.queryByRole("link", { name: "Add a Pulse ID in Settings" })).toBeNull();
+    fireEvent.click(card.getByRole("button", { name: "No current ladder MMR Retry" }));
+    expect(harness.mutate).toHaveBeenCalledWith("/v1/me/mmr");
   });
 });
 

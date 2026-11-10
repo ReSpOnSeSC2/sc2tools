@@ -171,7 +171,7 @@ class StreamService:
         snapshot.update(accountKey=context["accountKey"], connectionKey=context["connectionKey"])
         unavailable = changed or not context["connectionKey"]
         if unavailable:
-            snapshot["title_automation"] = {"enabled": False, "template": "", "values": {},
+            snapshot["title_automation"] = {"enabled": False, "on_game_start": False, "template": "", "values": {},
                 "platforms": {"twitch": True, "kick": True, "youtube": False},
                 "message": "SC2Tools pairing changed. Automatic titles are off; review settings again."}
             snapshot.update(catalog={"channels": [], "streams": []}, platform_results={},
@@ -240,6 +240,8 @@ class StreamService:
         with self.snapshot_lock:
             result = copy.deepcopy(self._cached)
             result["auth_prompt"] = self.prompt
+        if "title_automation" in result:
+            self.titles.scope_snapshot(result["title_automation"])
         return self._scope_snapshot(result, cached=True)
 
     def authorization_prompt(self):

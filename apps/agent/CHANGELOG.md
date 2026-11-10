@@ -2,6 +2,53 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.25.0
+
+### Added
+- List the builds from each player's last five games in the floating **Scouting**
+  report, newest first, each with your result, the map and how long ago it was.
+  **You** is your last five games in this matchup. **Opponent** is the last five
+  games in your library against this player, linked accounts included: the app
+  knows a player's builds only from your own games against them. Fewer than
+  five says how many there are. Choose a game to open its build order. Until
+  the opponent's account is confirmed, their side reads **Not identified yet**,
+  never **First meeting**.
+- Show the same two lists in short form on the loading-screen scouting strip,
+  with long build names shortened so all five games fit.
+- Add **Keep scouting closed on a first meeting** to Companion's Assistance
+  settings, on by default. A pinned report now opens only when your library has
+  an earlier game against the opponent. The Scouting button still opens it, with
+  your own five games and **First meeting** on the opponent's side, never a guess.
+
+## 0.24.11
+
+### Added
+- Add optional game-start stream titles with the current opponent, known alias,
+  race and head-to-head W–L record and win-rate tokens. Include a map only when
+  the live source supplies it. A template preset preserves your custom prefix.
+- Keep game-start updates off by default, with their own on/off checkbox in
+  Streams. Choose the destination platforms and save to opt in; turn the
+  checkbox off and save to stop future updates. The existing post-sync option
+  remains independent. Saving a template or settings never publishes a title.
+
+### Fixed
+- Allow both automatic title options to be turned off even with a blank or
+  invalid draft title, keeping the last valid saved template.
+- Let the floating build-versus-build scouting report receive mouse clicks and
+  wheel scrolling over either build order while StarCraft II keeps focus.
+- Cancel pending title work when a game ends, its identity changes, the account
+  changes or automatic updates are turned off. Retain attempted-title receipts
+  so ambiguous platform requests are not automatically repeated after restart.
+
+## 0.24.10
+
+### Fixed
+- Let build check-ins expand complete build names, including replay-detected
+  choices, in floating cards and Build selectors. Wrap names above badges and
+  records, keep tall cards scrollable and preserve selections while expanding.
+- Show known opponent identities in parentheses at loading and after the game,
+  including when loading-screen scouting is hidden.
+
 ## 0.24.9
 
 Includes all changes prepared for 0.24.8 but not published in that installer release.

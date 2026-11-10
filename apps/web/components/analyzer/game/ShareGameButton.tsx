@@ -9,7 +9,11 @@ import {
   battleCardShareText,
   renderBattleCardPng,
 } from "@/lib/battleCard";
-import { deliverShareCard } from "@/components/analyzer/arcade/ShareCard";
+import {
+  deliverShareCard,
+  shareOutcome,
+} from "@/components/analyzer/arcade/ShareCard";
+import { trackCardShared } from "@/lib/analytics/shareEvents";
 import type { GameSummary } from "./types";
 
 /**
@@ -42,13 +46,16 @@ export function ShareGameButton({
         toast?.error("Couldn't render the battle card");
         return;
       }
-      const { shared } = await deliverShareCard({
+      const { shared, method } = await deliverShareCard({
         blob,
         title: "SC2 Battle Card",
         text: battleCardShareText(game),
         filename: battleCardFilename(game),
       });
-      toast?.success(shared ? "Battle card shared" : "Battle card saved");
+      // Nothing delivered means the player dismissed the share sheet.
+      if (!shared || !method) return;
+      trackCardShared({ card: "battle_card", method });
+      toast?.success(shareOutcome("Battle card", method));
     } catch {
       toast?.error("Share failed");
     } finally {

@@ -34,11 +34,17 @@ Leave the setting off to sync standard analysis only. The website's
 either setting, using agent 0.16.11 or newer.
 
 **Streams** accepts statistic tokens such as `SC2 | {mmr} MMR | {record}` and
-shows a live preview. Automatic updates start off: choose the connected
-platforms, enable **Refresh titles after each synced game**, and save its
-settings. Twitch/Kick are selected initially; YouTube is not. Updates wait for
-the live replay to sync, skip unchanged titles and run at most every ten minutes
-on their own worker. See [Stream titles](https://sc2tools.com/help/desktop-stream-titles).
+shows a live preview. **Use current-match template** keeps your plain-text
+prefix and adds the opponent, known alias, head-to-head record and available
+map, for example `GM Protoss | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}`.
+Maps appear only when the live source provides them; ordinary ladder games
+may not report a map. Automatic updates start off: choose the connected
+platforms, enable **Refresh titles at the start of each game** or the independent
+**Refresh titles after each synced game**, and save the settings. Game-start
+updates run once for each live game when the current opponent is ready.
+Post-game updates wait for the live replay to sync and run at most every ten
+minutes. Both skip unchanged titles and use their own worker. Twitch/Kick are
+selected initially; YouTube is not. See [Stream titles](https://sc2tools.com/help/desktop-stream-titles).
 
 If you unpair this PC on the website, the desktop window says **This PC was
 unlinked from your account**. Click **Link again** and confirm the new code.
@@ -142,9 +148,24 @@ upgrade timings, Ghost reference buttons and 3/6/10-minute or full-build ranges.
 It follows the live opponent even while you browse another profile. Between
 matches, compact clears the opponent and waits for the next match.
 
-While StarCraft II has focus, only the compact button's **Scouting** action accepts clicks.
-Other compact controls and floating panel areas pass clicks through to the game.
-Use Alt+Tab to another application to restore normal overlay interaction or expand.
+The report lists the builds from each player's last five games, newest first,
+each with your result, the map and how long ago it was. **You** is your last
+five games in this matchup. **Opponent** is the last five games in your library
+against this player, linked accounts included; a game they played as another
+race says so. Fewer than five says how many there are. Choose a game to open
+its build order in the card below: the newest opens first, and each player's
+card follows its own list. The app knows a player's builds only from your own
+games against them, so a first meeting shows **First meeting** beside your own
+five games, never a guess. **Assistance → Keep scouting closed on a first
+meeting** is on by default: a pinned report opens only when there is an earlier
+game against the opponent, and the **Scouting** button still opens it. A server
+that does not send the lists yet keeps the single replay picker.
+
+While StarCraft II has focus, the compact button's **Scouting** action and the
+floating **Scouting** report accept mouse input without taking game focus.
+Scroll either build order directly, and use the report's game lists, range and
+window controls. Other compact controls and display panels pass clicks through to the
+game. Use Alt+Tab to interact with those display panels or expand Compact.
 Right-click the strip to expand Companion, minimize, close or open the shared
 Agent menu. These window actions are kept off the compact strip itself.
 Compact uses a transparent background with text and one original control: a
@@ -166,6 +187,11 @@ navigation, **Border & animations…**, **Help & support**, **Check for updates*
 The **Build selectors** screen contains the pre-game plan and post-game check-in.
 Choices, opponent corrections, and notes use the same records as the website
 and floating game cards. Their independent switches can be changed at any time.
+Use **Expand build names** to read complete names, including choices marked
+**Detected in your replay**. Floating cards widen, long names wrap above their
+badges and records, and tall cards scroll. **Compact build names** restores the
+smaller view. Known opponent identities appear in both check-ins as
+**vs Barcode (aka KnownPlayer)**, including with loading-screen scouting hidden.
 The **Randomizer settings** screen silently manages the matchup's eligible pool
 and shows the saved pick. In the loading check-in, **Randomize** selects and saves
 one build even when the separate widget is closed. Every display uses that same
@@ -361,8 +387,9 @@ list first, then means Later. These keys never activate a card over the game.
 
 Settings → Build check-in → **Show scouting at loading** is a local PC choice.
 It starts off. With check-ins and this option enabled, loading cards show the
-current opponent's record, recent opening samples, best recorded answer and a
-two-line private note. Turning off
+current opponent's record, recent opening samples, best recorded answer, each
+player's last five builds in short form (`Their last 5 games: W vs 12 Pool · …`,
+newest first, with your result) and a two-line private note. Turning off
 Ask during the loading screen leaves a slim scouting-only card only when
 Show scouting at loading is enabled. Missing or ambiguous identity never borrows
 another account's private note. **Open dossier**
@@ -372,7 +399,7 @@ After the replay syncs and identifies the opponent, **Note for next time → Sav
 note** saves up to 500 characters to that opponent's private dossier, separately
 from the game's check-in notes. Notes are never enabled for read-aloud. Scouting
 uses a bounded authenticated device-room brief with a current-game cache fallback;
-private notes do not go to OBS overlay rooms. Native cards retain their Windows
+private notes and the build lists do not go to OBS overlay rooms. Native cards retain their Windows
 capture-exclusion request and non-activating loading flags. Offscreen tests verify
 those requests, not every capture tool's behavior or real OS foreground state.
 Read [Private desktop scouting](https://sc2tools.com/help/desktop-scouting).

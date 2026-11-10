@@ -27,6 +27,10 @@ def sample_loading_model(race=None) -> LoadingCardModel:
             "You 3–2 · last met yesterday (W on Alcyone)",
             f"Usually: Gate Expand (3 of last 5) · Best: {options[1].name} 3–1",
             "Sample note: scout the ramp before moving out.", "/app/opponents",
+            their_builds="Their last 5 games: W vs Gate Expand · L vs 12 Pool · W vs Gate Expand"
+                         " · L vs Hatch First · W vs Gate Expand",
+            your_builds=f"Your last 5 games: W with {options[1].name} · L with {options[0].name}"
+                        f" · W with {options[1].name} · W with {options[2].name} · L with {options[1].name}",
         ),
     )
 

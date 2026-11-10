@@ -8,7 +8,10 @@ from tests.build_checkin_fakes import Harness, ManualExecutor, envelope
 
 def test_new_agent_has_no_automatic_game_screen_assistance(tmp_path):
     for state in (AgentState(), load_state(tmp_path)):
-        assert not any(normalize_preferences(state.companion_preferences).values())
+        preferences = normalize_preferences(state.companion_preferences)
+        # The one choice that starts on keeps a window closed; it shows nothing.
+        assert preferences.pop("scoutingSkipFirstMeeting") is True
+        assert not any(preferences.values())
         assert not state.companion_session_enabled
         assert not state.companion_ghost.get("enabled", False)
         assert not state.show_scouting_at_loading
@@ -70,8 +73,8 @@ def test_first_server_opt_in_can_show_loading_without_another_game_update():
 
 def test_saved_opt_ins_survive_loading_and_saving(tmp_path):
     prefs = {"enabled": True, "askAtLoading": True, "askAfterGame": True}
-    panels = {"overlaysEnabled": True, "opponentOverlay": True,
-              "scoutingOverlay": True, "scoutingReadAloud": True}
+    panels = {"overlaysEnabled": True, "opponentOverlay": True, "scoutingOverlay": True,
+              "scoutingSkipFirstMeeting": False, "scoutingReadAloud": True}
     save_state(tmp_path, AgentState(
         build_checkin_prefs=prefs, companion_preferences=panels,
         show_scouting_at_loading=True, companion_session_enabled=True,

@@ -37,7 +37,12 @@ def load_title_settings(value, owner):
                           and math.isfinite(attempt) and attempt >= 0) else 0
     titles = value.get("last_titles") if same_owner else None
     titles = titles if isinstance(titles, dict) else {}
+    start_game = value.get("last_start_game") if same_owner else None
+    start_game = start_game if (isinstance(start_game, str) and start_game.strip()
+        and len(start_game) <= 300 and not any(ord(char) < 32 or ord(char) == 127 for char in start_game)) else ""
     return {"owner": owner, "enabled": same_owner and value.get("enabled") is True,
+            "on_game_start": same_owner and value.get("on_game_start") is True,
+            "last_start_game": start_game,
             "template": template,
             "platforms": {name: selected.get(name) if type(selected.get(name)) is bool
                           else DEFAULT_SELECTION[name] for name in PLATFORMS},
@@ -50,16 +55,31 @@ def configure_title_settings(current, payload, owner):
     """Strict opt-in: master switch and every platform require actual booleans."""
     if not isinstance(payload, dict) or type(payload.get("enabled")) is not bool:
         raise ValueError("Choose whether automatic stream titles are enabled.")
+    on_game_start = payload.get("on_game_start", current.get("on_game_start", False))
+    if type(on_game_start) is not bool:
+        raise ValueError("Choose whether titles refresh at the start of each game.")
     selected = payload.get("platforms")
     if (not isinstance(selected, dict) or set(selected) != set(PLATFORMS)
             or any(type(selected[name]) is not bool for name in PLATFORMS)):
         raise ValueError("Choose the platforms that may receive automatic stream titles.")
-    if payload["enabled"] and not owner:
+    automatic = payload["enabled"] or on_game_start
+    if automatic and not owner:
         raise ValueError("Pair this agent with your SC2Tools account first.")
-    template = validate_template(payload.get("template"))
-    if payload["enabled"] and not any(selected.values()):
+    try:
+        template = validate_template(payload.get("template"))
+    except ValueError:
+        if automatic:
+            raise
+        # Turning automation off must remain possible while the user is
+        # editing an empty or invalid draft. Keep only a valid saved template.
+        try:
+            template = validate_template(current.get("template"))
+        except ValueError:
+            template = ""
+    if automatic and not any(selected.values()):
         raise ValueError("Choose at least one platform for automatic stream titles.")
     result = copy.deepcopy(current)
     result.update(owner=owner, enabled=payload["enabled"], template=template,
+                  on_game_start=on_game_start,
                   platforms=copy.deepcopy(selected))
     return result

@@ -17,6 +17,21 @@ server execution allowance, and warming a separate endpoint does not ensure
 the dashboard's function stays warm. The public status page checks website
 reachability when a visitor opens it.
 
+The API's `KEEPALIVE_TARGETS` must also point to API endpoints, such as
+`https://sc2tools-api.onrender.com/v1/ping`. The worker rejects website and
+Vercel deployment targets and does not follow redirects. `/api/ping` and the
+legacy `/api/warmup-dashboard` are static website delivery checks; they cannot
+keep another serverless function or the Render API awake.
+
+With `NEXT_PUBLIC_API_BASE` configured, browsers fetch public activity counts
+directly from `/v1/site/stats` on that API without credentials. Keep the website
+origin in the existing API CORS allowlist. The same-origin statistics handler
+remains for older bundles and deployments without a public API base.
+The home page and `/try` also retain same-origin statistics so local replay
+analysis does not initiate direct API traffic before a visitor saves.
+Presence continues through the website's signed HttpOnly cookie handler; visible, active
+tabs share a successful check-in for one minute for the same auth identity.
+
 For Vercel usage, distinguish retained Deployment Storage (website outputs and
 assets), Functions Storage (server-function packages) and Fluid Active CPU
 (time spent executing server code). Review Usage by project and the same date

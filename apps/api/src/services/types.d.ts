@@ -788,6 +788,9 @@ export interface SyncReport {
   lastUploadAt?: Date;
   lastErrorCode?: string;
   skipped?: Record<string, number>;
+  /** Distinct still-skipped replay paths attempted in the last seven days of
+   * the current agent runtime. Missing on older agents; skipped is inventory. */
+  recentUnresolved?: number;
   rejected?: number;
   filtered?: number;
   unresolvedNames?: Array<{ name: string; toonHandle: string; count: number }>;

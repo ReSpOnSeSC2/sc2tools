@@ -660,6 +660,7 @@ class LoadingCardModel:
     saving: bool = False
     scouting: Optional[ScoutingStripModel] = None
     scouting_only: bool = False
+    opponent_revealed_name: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -770,6 +771,7 @@ class PostgameCardModel:
     """The replay is in, so **Add new build…** can open it on the web."""
     add_build_label: str = ADD_NEW_BUILD
     add_build_hint: str = ADD_NEW_BUILD_UNAVAILABLE
+    opponent_revealed_name: Optional[str] = None
 
 
 def option_models(

@@ -173,6 +173,42 @@ describe("services/twitchChatBot", () => {
     }
   }
 
+  test("manual Dock messages require the exact owner token and saved channel", async () => {
+    const ws = await connectBot();
+    expect(bot.chatStatus("u1", "tokA", "RESPONSE")).toMatchObject({ available: true, identity: "sc2toolsbot", maxLength: 450 });
+    expect(bot.chatStatus("u1", "tokA", "https://www.twitch.tv/Response")).toMatchObject({ available: true });
+    expect(bot.chatStatus("u1", "tokA", 123)).toMatchObject({ available: false });
+    for (const args of [["u2", "tokA", "response"], ["u1", "wrong", "response"], ["u1", "tokA", "other"]]) {
+      expect(() => bot.queueChat(...args, "hello")).toThrow("disconnected or its channel changed");
+    }
+    expect(() => bot.queueChat("u1", "tokA", "response", "bad\r\nline")).toThrow("single chat message");
+    expect(() => bot.queueChat("u1", "tokA", "response", "x".repeat(451))).toThrow("single chat message");
+    expect(bot.queueChat("u1", "tokA", "response", " hello chat ")).toMatchObject({ status: "queued" });
+    await drainSends(); expect(ws.sent.filter(line => line.startsWith("PRIVMSG"))).toEqual(["PRIVMSG #response :hello chat"]);
+  });
+
+  test("manual messages survive announcement pressure, reject full queues and clear on rotation", async () => {
+    const ws = await connectBot(); const conn = bot._conns.get("u1");
+    for (let i = 0; i < 8; i++) bot.queueChat("u1", "tokA", "response", `manual-${i}`);
+    expect(() => bot.queueChat("u1", "tokA", "response", "overflow")).toThrow("queue is full");
+    bot._say(conn, "automatic announcement"); expect(conn.sendQueue).toHaveLength(8);
+    await drainSends();
+    const delivered = ws.sent.filter(line => line.startsWith("PRIVMSG")).length;
+    expect(delivered).toBeGreaterThan(0); expect(delivered).toBeLessThan(8);
+    expect(ws.sent.join(" ")).not.toContain("automatic announcement");
+    bot.replaceOverlayToken("u1", "tokA", "rotated"); await drainSends();
+    expect(ws.sent.filter(line => line.startsWith("PRIVMSG"))).toHaveLength(delivered);
+    expect(conn.sendQueue).toHaveLength(0);
+  });
+
+  test("manual messages queued before token revocation never leave the bot", async () => {
+    const ws = await connectBot();
+    bot.queueChat("u1", "tokA", "response", "revoked message");
+    deps.overlayTokens.resolve.mockResolvedValue(null);
+    await drainSends();
+    expect(ws.sent.filter(line => line.startsWith("PRIVMSG"))).toHaveLength(0);
+  });
+
   test("handshake sends CAP/PASS/NICK, joins on welcome, reports connected", async () => {
     const ws = await connectBot();
     expect(ws.sent[0]).toBe("CAP REQ :twitch.tv/tags twitch.tv/commands");

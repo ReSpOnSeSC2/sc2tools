@@ -11,14 +11,14 @@ import{FiltersContext,DEFAULT_ANALYZER_FILTERS}from'@/lib/filterContext';
 import{DashboardKpiStrip}from'@/components/analyzer/DashboardKpiStrip';
 import{currentHistory}from'@/components/sessions/__tests__/sessionHistoryFixtures';
 const state=new URLSearchParams(location.search).get('state')||'populated';
-if(!['populated','empty','loading'].includes(state))throw new Error('Unknown explicit Today specimen');
+if(!['populated','empty','loading','mmr-unavailable'].includes(state))throw new Error('Unknown explicit Today specimen');
 const filters={...DEFAULT_ANALYZER_FILTERS,preset:'season:68',since:'2026-07-19T00:00:00.000Z',until:'2026-10-28T00:00:00.000Z',regions:'NA,EU',min_minutes:10,max_minutes:20};
 window.todayFixtureRequests=[];window.todayFixtureFilterWrites=[];
 window.todayFixtureSession=state==='loading'?undefined:state==='empty'?currentHistory({session:null,activity:'empty',manualAnchorAt:null}):currentHistory();
 window.todayFixtureApi=key=>{
   window.todayFixtureRequests.push(key);
   if(state==='loading')return undefined;
-  if(key.startsWith('/v1/me/mmr'))return{entries:state==='empty'?[]:[{pulseId:'fixture-na',region:'NA',mmr:5468},{pulseId:'fixture-eu',region:'EU',mmr:5224}],truncated:false};
+  if(key.startsWith('/v1/me/mmr'))return{entries:state==='populated'?[{pulseId:'fixture-na',region:'NA',mmr:5468},{pulseId:'fixture-eu',region:'EU',mmr:5224}]:[],hasSavedIds:state!=='empty',truncated:false};
   if(key.startsWith('/v1/streak'))return{kind:state==='empty'?null:'win',count:state==='empty'?0:2,lastGameAt:null};
   if(key.startsWith('/v1/timeseries')){const range=new URLSearchParams(key.split('?')[1]?.split('#')[0]).get('interval')==='month';
     return{interval:range?'month':'day',points:state==='empty'?[]:[{bucket:'2026-10-01T12:00:00Z',wins:range?200:161,losses:range?150:116,total:range?350:277}]};}

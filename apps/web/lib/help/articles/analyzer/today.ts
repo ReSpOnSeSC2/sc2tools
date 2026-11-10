@@ -28,7 +28,7 @@ const article: HelpArticle = {
     "session",
     "retry",
   ],
-  updated: "2026-10-31",
+  updated: "2026-11-08",
   body: [
     {
       type: "paragraph",
@@ -48,7 +48,7 @@ const article: HelpArticle = {
         ["Win rate", "Your win rate over the timeframe picked in the menu next to its title. It has its own timeframe and ignores the date range in the filter bar."],
         ["Active streak", "Your current run of wins or losses, from your latest games."],
         ["Games in range", "Every game the filter bar lets through. Its note says which filters apply."],
-        ["MMR", "Your current ladder rating from SC2Pulse, for the Pulse IDs in [Settings → Profile](/settings?tab=profile#pulse-id-help). With none saved, the card links there to add one. It ignores filters."],
+        ["MMR", "Your current ladder rating by region from SC2Pulse, using the identities saved in [Settings → Profile](/settings?tab=profile#pulse-id-help). With none saved, the card links there to add one. If SC2Pulse returns no rating, you can retry the lookup. PTR has no SC2Pulse ladder rating. This card ignores filters."],
       ],
     },
     {
@@ -92,7 +92,7 @@ const article: HelpArticle = {
       type: "callout",
       tone: "info",
       title: "Where the numbers come from",
-      text: "Every number here is computed from your replays with fixed rules, never AI. The same games always give the same numbers.",
+      text: "Your game and session stats are computed from your replays with fixed rules, never AI. The MMR card gets current ladder ratings from SC2Pulse.",
     },
     {
       type: "paragraph",

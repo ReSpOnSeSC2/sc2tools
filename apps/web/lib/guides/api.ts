@@ -15,9 +15,10 @@
  *                   unavailable" state; ISR pages throw instead, so the
  *                   outage is never cached (lib/guides/guideErrors.ts).
  *
- * Responses are kept in Next's data cache (`GUIDE_REVALIDATE_SEC`, 200s
- * only) under the "guides" tag, which `app/api/revalidate-guides` purges
- * after the nightly recompute. Within one server render every API path
+ * Responses are kept in Next's data cache (`GUIDE_REVALIDATE_SEC`, 6 h)
+ * under the "guides" tag, which `app/api/revalidate-guides` purges after
+ * nightly recomputes and admin note/video changes. Within one server
+ * render every API path
  * is fetched at most once (React `cache`): the timeout `signal` opts each
  * call out of Next's built-in fetch dedupe, and without the memo a page's
  * generateMetadata and body would each hit the API on a cold cache.

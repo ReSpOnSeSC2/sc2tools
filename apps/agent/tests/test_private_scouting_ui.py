@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
-from sc2tools_agent.build_checkin.scouting import ScoutingStripModel
+from sc2tools_agent.build_checkin.scouting import ScoutingStripModel, parse_scouting_brief, scouting_model
 from sc2tools_agent.ui import win32_window
 from sc2tools_agent.ui.build_checkin_cards import LoadingCardWindow
 from sc2tools_agent.ui.build_checkin_window import BuildCheckinHost, LOADING, POSTGAME
@@ -65,6 +65,37 @@ def test_actual_loading_card_keeps_plain_scouting_visible_when_locked(native, ap
     assert window.scouting.note.text().endswith("…")
     window.update_model(replace(model, collapsed=True, locked_label="Locked in: Hatch First"))
     assert window.bar.isVisible() and window.scouting.isVisible()
+
+
+def test_loading_strip_shows_all_five_recent_builds_and_elides_only_past_four_lines(native, app):
+    host, _, _ = native
+    long_names = ("Hatch First into Roach Timing", "Ravager into Roach Bane All-in", "Twelve Pool into Baneling Bust",
+                  "Hatch Pool Gas into Ling Speed", "Roach Ravager Timing Attack")
+    games = [{"result": ("Win", "Loss")[index % 2], "build": "Zerg - " + name} for index, name in enumerate(long_names)]
+    brief = parse_scouting_brief({"gameKey": "g", "oppName": "Opponent", "recentBuilds": {"matchup": "PvZ", "mine": games, "theirs": games}}, "g")
+    five = scouting_model(brief, 0)
+    host.dispatch("show_loading", (loading_model(scouting=replace(strip(), their_builds=five.their_builds)),)); app.processEvents()
+    window = host.existing_window(LOADING)
+    their_line, your_line = window.scouting.their_builds, window.scouting.your_builds
+    assert window.width() == 320
+    # The five longest realistic names, cut in the short form, are all read in full.
+    assert their_line.isVisible() and their_line.textFormat() == QtCore.Qt.PlainText
+    assert " ".join(their_line.text().splitlines()) == five.their_builds
+    assert 2 <= len(their_line.text().splitlines()) <= 4
+    theirs = "Their last 5 games: " + " · ".join(f"W vs <i>Opening number {index}</i>" for index in range(12))
+    model = loading_model(scouting=replace(strip(), their_builds=theirs, your_builds="Your 1 earlier game: W with Blink"))
+    host.dispatch("show_loading", (model,)); app.processEvents()
+    assert their_line.isVisible() and your_line.isVisible()
+    assert their_line.accessibleName() == theirs and "W vs <i>Opening" in their_line.text()
+    assert len(their_line.text().splitlines()) == 4 and their_line.text().endswith("…")
+    assert your_line.text() == "Your 1 earlier game: W with Blink"
+    layout = window.scouting.layout()
+    assert layout.indexOf(window.scouting.opening) < layout.indexOf(their_line) < layout.indexOf(your_line) < layout.indexOf(window.scouting.note)
+    # A first meeting has no opponent line; an older brief has neither.
+    window.update_model(replace(model, scouting=replace(strip(), your_builds="Your 1 earlier game: W with Blink")))
+    assert not their_line.isVisible() and your_line.isVisible()
+    window.update_model(replace(model, scouting=strip()))
+    assert not their_line.isVisible() and not your_line.isVisible()
 
 
 def test_loading_scouting_preserves_non_activation_contract_capture_and_local_close(native, app, monkeypatch):

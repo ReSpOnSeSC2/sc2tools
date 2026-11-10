@@ -6,6 +6,7 @@ const route = vi.hoisted(() => ({
   pathname: "/app" as string | null,
   clerkRenders: vi.fn(),
   router: { push: vi.fn() },
+  syncAnalyticsPage: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -41,7 +42,7 @@ vi.mock("@/components/chrome/Footer", () => ({
 }));
 
 vi.mock("@/components/chrome/SiteStats", () => ({
-  SiteStats: () => <div data-testid="site-stats" />,
+  SiteStats: ({ sameOrigin = false }: { sameOrigin?: boolean }) => <div data-testid="site-stats" data-same-origin={String(sameOrigin)} />,
 }));
 
 vi.mock("@/components/chrome/SitePresence", () => ({
@@ -54,6 +55,11 @@ vi.mock("@/components/chrome/DeviceHistoryGuard", () => ({
 
 vi.mock("@/components/CookieBanner", () => ({
   CookieBanner: () => <div data-testid="cookie-banner" />,
+}));
+
+// Spy: the shell reports each navigation to analytics (lib/analytics/gtag).
+vi.mock("@/lib/analytics/gtag", () => ({
+  syncAnalyticsPage: route.syncAnalyticsPage,
 }));
 
 vi.mock("@/components/analytics/GoogleAnalytics", () => ({
@@ -88,6 +94,8 @@ afterEach(() => {
   cleanup();
   route.pathname = "/app";
   route.clerkRenders.mockClear();
+  route.syncAnalyticsPage.mockClear();
+  window.history.pushState({}, "", "/");
 });
 
 describe("token-auth broadcast routes", () => {
@@ -228,6 +236,18 @@ describe("normal and protected routes", () => {
   });
 });
 
+describe("local replay demo statistics traffic", () => {
+  it.each([null, "/", "/try", "/try/", "/try/resume"])("keeps statistics same-origin on %s", pathname => {
+    renderAt(pathname);
+    expect(screen.getByTestId("site-stats").getAttribute("data-same-origin")).toBe("true");
+  });
+
+  it.each(["/download", "/guides", "/try-other", "/trying", "/definitions"])("uses direct public API statistics on %s", pathname => {
+    renderAt(pathname);
+    expect(screen.getByTestId("site-stats").getAttribute("data-same-origin")).toBe("false");
+  });
+});
+
 describe("shared player replay routes", () => {
   it.each([
     "/players/reaver-7a6b5c4d3e/replays",
@@ -254,4 +274,42 @@ describe("shared player replay routes", () => {
       expect(screen.getByTestId("google-analytics")).toBeTruthy();
     },
   );
+});
+
+describe("analytics page state", () => {
+  // gtag.js outlives the page that loaded it, so every surface reports its
+  // address: tracked ones to be normalized, untracked ones to be silenced.
+  it.each([
+    "/",
+    "/app",
+    "/status",
+    "/admin/users",
+    "/overlay/secret-token",
+    "/dock/secret-token",
+    "/players/reaver-7a6b5c4d3e/replays",
+  ])("syncs analytics with %s whether or not it mounts the tracker", (pathname) => {
+    window.history.pushState({}, "", `${pathname}?tab=games`);
+    renderAt(pathname);
+
+    expect(route.syncAnalyticsPage.mock.calls).toEqual([[pathname, "?tab=games"]]);
+  });
+
+  it("follows a client-side move onto an untracked page", () => {
+    const view = renderAt("/app");
+    route.pathname = "/admin/users";
+    view.rerender(
+      <AppShell>
+        <div data-testid="route-content" />
+      </AppShell>,
+    );
+
+    expect(screen.queryByTestId("google-analytics")).toBeNull();
+    expect(route.syncAnalyticsPage.mock.calls.map(([pathname]) => pathname)).toEqual(["/app", "/admin/users"]);
+  });
+
+  it("waits until the router supplies a pathname", () => {
+    renderAt(null);
+
+    expect(route.syncAnalyticsPage).not.toHaveBeenCalled();
+  });
 });

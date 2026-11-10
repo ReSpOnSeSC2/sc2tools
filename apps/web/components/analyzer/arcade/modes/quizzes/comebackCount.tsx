@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { fmtDate } from "@/lib/format";
+import { sharedDay } from "@/lib/sharePrivacy";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import {
@@ -457,13 +458,22 @@ function questionPlain(q: Q): string {
   }
 }
 
+/**
+ * The card is public, so sessions are dated to the day (sharedDay). The
+ * app shows the time as well, but a session's start and end are the exact
+ * times of single games, and a time to the second would point at the
+ * player on the other side of that game (lib/sharePrivacy.ts).
+ */
 function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
   const headline = `${VARIANT_LABEL[q.variant]}: ${q.truth}`;
-  const detail = noteFor(q);
+  const detail =
+    q.variant === "recency"
+      ? `Most recent comeback: ${sharedDay(q.truthValue as string)}.`
+      : noteFor(q);
   const answer: string[] = [headline, detail, `A session ends after more than ${q.gapMinutes ?? 240} minutes without a game.`];
   if (q.variant === "count") {
     for (const c of q.comebacks.slice(0, 6)) {
-      answer.push(`${fmtDate(c.startDate)} · ${c.wins}W / ${c.losses}L`);
+      answer.push(`${sharedDay(c.startDate)} · ${c.wins}W / ${c.losses}L`);
     }
   } else if (q.variant === "rate") {
     const n = q.comebacks.length;

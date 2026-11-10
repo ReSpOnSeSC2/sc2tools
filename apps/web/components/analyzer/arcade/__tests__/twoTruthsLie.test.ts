@@ -497,3 +497,108 @@ describe("Two Truths & a Lie — census-style facts", () => {
     }
   });
 });
+
+describe("Two Truths & a Lie — the share card names no opponent", () => {
+  const rivalDataset: ArcadeDataset = {
+    ...baseDataset,
+    summary: { totalGames: 50, wins: 25, losses: 25, winRate: 0.5 },
+    opponents: [
+      {
+        pulseId: "p1",
+        name: "smurfymcsmurf",
+        displayName: "RivalGuy",
+        wins: 8,
+        losses: 2,
+        games: 10,
+        userWinRate: 0.8,
+        opponentWinRate: 0.2,
+        lastPlayed: "2026-05-01T00:00:00Z",
+      },
+    ],
+  };
+
+  test("the top-rival fact names them in the app and not on the card", () => {
+    const f = buildFactPool(rivalDataset).find((x) =>
+      x.truthText.includes("most-faced opponent"),
+    );
+    expect(f).toBeDefined();
+    expect(f!.truthText).toContain("RivalGuy");
+    expect(f!.lieText).toContain("RivalGuy");
+    expect(f!.detail).toContain("RivalGuy");
+
+    expect(f!.share).toEqual({
+      truthText:
+        "In your tracked history, your WR vs your most-faced opponent is higher than your overall WR.",
+      lieText:
+        "In your tracked history, your WR vs your most-faced opponent is lower than your overall WR.",
+      detail: "Most-faced opponent 80.0% (10g) vs overall 50.0%.",
+    });
+  });
+
+  test("opponent census facts keep the record and drop the name", () => {
+    const games: ArcadeGame[] = [
+      // Unbeaten in ten against one opponent, 5-5 against another. Both
+      // need ten games: the even-record fact only counts long rivalries.
+      ...Array.from({ length: 10 }, (_, i) =>
+        game({ gameId: `perfect-${i}`, oppPulseId: "p-perfect", result: "Win" }),
+      ),
+      ...Array.from({ length: 10 }, (_, i) =>
+        game({ gameId: `even-${i}`, oppPulseId: "p-even", result: i % 2 ? "Win" : "Loss" }),
+      ),
+    ];
+    const facts = buildFactPool({
+      ...baseDataset,
+      games,
+      opponents: [
+        { pulseId: "p-perfect", name: "FreeWin", displayName: "FreeWin", wins: 10, losses: 0, games: 10, userWinRate: 1, opponentWinRate: 0, lastPlayed: null },
+        { pulseId: "p-even", name: "CoinFlip", displayName: "CoinFlip", wins: 5, losses: 5, games: 10, userWinRate: 0.5, opponentWinRate: 0.5, lastPlayed: null },
+      ],
+    });
+    const perfect = facts.find((x) => x.truthText.includes("without ever losing"));
+    const even = facts.find((x) => x.truthText.includes("exactly even"));
+    expect(perfect?.detail).toBe("FreeWin · 10-0 (100.0%).");
+    expect(perfect?.share?.detail).toBe("One opponent · 10-0 (100.0%).");
+    expect(even?.detail).toBe("CoinFlip · 5-5 (50.0%).");
+    expect(even?.share?.detail).toBe("One opponent · 5-5 (50.0%).");
+    // The claims themselves never named anyone, so they are shared as written.
+    expect(perfect?.share?.truthText).toBe(perfect?.truthText);
+    expect(even?.share?.lieText).toBe(even?.lieText);
+  });
+
+  test("every fact that names an opponent in the app carries share wording", () => {
+    const names = ["RivalGuy", "smurfymcsmurf"];
+    for (const f of buildFactPool(rivalDataset)) {
+      const inApp = `${f.truthText}\n${f.lieText}\n${f.detail}`;
+      if (!names.some((n) => inApp.includes(n))) continue;
+      expect(f.share).toBeDefined();
+      const shared = `${f.share!.truthText}\n${f.share!.lieText}\n${f.share!.detail}`;
+      for (const n of names) expect(shared).not.toContain(n);
+    }
+  });
+
+  test("share lines and Mode.share use the share wording", () => {
+    const q = {
+      claims: [
+        {
+          text: "Your WR vs your most-faced opponent (RivalGuy) is higher.",
+          truthful: true,
+          detail: "vs RivalGuy 80.0% (10g).",
+          shareText: "Your WR vs your most-faced opponent is higher.",
+          shareDetail: "Most-faced opponent 80.0% (10g).",
+        },
+        { text: "Claim B (the lie).", truthful: false, detail: "B detail." },
+        { text: "Claim C.", truthful: true, detail: "C detail." },
+      ],
+      lieIndex: 1,
+    };
+    const lines = twoTruthsLieShareLines(q, true);
+    expect(lines[1]).toBe("1. TRUE · Your WR vs your most-faced opponent is higher.");
+    expect(lines[2]).toBe("2. LIE · Claim B (the lie).");
+
+    const summary = twoTruthsLie.share!(q, 1, { raw: 1, xp: 16, outcome: "correct" });
+    const card = [summary.question, ...summary.answer].join("\n");
+    expect(card).not.toContain("RivalGuy");
+    expect(summary.answer).toContain("   Most-faced opponent 80.0% (10g).");
+    expect(summary.answer).toContain("   B detail.");
+  });
+});

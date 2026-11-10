@@ -69,11 +69,11 @@ test("support sees count-only sync health and never the owner's unresolved names
   const reportedAt = new Date(Date.now() - 10000);
   await db.deviceTokens.insertOne({ userId: "support-sync", tokenHash: "sync-secret-hash", hostname: "Desk", agentVersion: "0.30.0", agentOs: "windows",
     lastSeenAt: reportedAt, revokedAt: null, syncReportedAt: reportedAt,
-    sync: { pending: 2, skipped: { player_unresolved: 4 }, unresolvedNames: [{ name: "PrivateSmurf", toonHandle: "2-S2-1-987654", count: 4 }] } });
+    sync: { pending: 2, recentUnresolved: 4, skipped: { player_unresolved: 4 }, unresolvedNames: [{ name: "PrivateSmurf", toonHandle: "2-S2-1-987654", count: 4 }] } });
   const response = await admin(request(app).get("/v1/admin/users/support-sync/support"));
   expect(response.status).toBe(200);
   expect(Object.keys(response.body.devices[0]).sort()).toEqual(["deviceId", "hostname", "lastSeenAt", "online", "os", "version"]);
-  expect(response.body.doctor.warnings.find(w => w.id === "replays_skipped_unresolved")).toMatchObject({ helpSlug: "my-game-didnt-show-up", message: expect.stringMatching(/^4 replays were skipped/) });
+  expect(response.body.doctor.warnings.find(w => w.id === "replays_skipped_unresolved")).toMatchObject({ helpSlug: "my-game-didnt-show-up", message: expect.stringMatching(/^The desktop app recently couldn't match 4 replays/) });
   expect(JSON.stringify(response.body)).not.toMatch(/PrivateSmurf|987654|sync-secret-hash|unresolvedNames/);
 });
 

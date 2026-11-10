@@ -51,7 +51,7 @@ describe("the six Sync health reasons", () => {
     ["agent_paused", 1, "info", "Syncing is paused in the desktop app. 1 game is waiting to upload.", "agent", "sync-paused"],
     ["agent_upload_failing", 1234, "error", "The desktop app can't upload 1,234 games.", "agent", "sync-upload-failing"],
     ["agent_outdated_required", 1, "warn", "This desktop app is older than the minimum supported version, so it may stop syncing.", "link", "sync-update-required"],
-    ["replays_skipped_unresolved", 1, "warn", "1 replay was skipped because the desktop app couldn't tell which player is you.", "link", "sync-player-unresolved"],
+    ["replays_skipped_unresolved", 1, "warn", "The desktop app recently couldn't match 1 replay to your linked accounts. Downloaded replays of other players can be skipped. If these are your games, review your profile, then re-sync.", "link", "sync-player-unresolved"],
     ["uploads_rejected", 3, "warn", "SC2 Tools rejected 3 uploads in the last 7 days.", "report", "sync-uploads-rejected"],
   ] as const)("%s (%i) reads as one plain sentence with a %s tone", (code, count, tone, sentence, fix, anchor) => {
     const reason = SYNC_REASONS[code];
@@ -63,7 +63,7 @@ describe("the six Sync health reasons", () => {
 
   it("offers the fixes this slice can do", () => {
     expect(SYNC_REASONS.agent_outdated_required.fix).toEqual({ kind: "link", label: "Update agent", href: "/download" });
-    expect(SYNC_REASONS.replays_skipped_unresolved.fix).toEqual({ kind: "link", label: "Set up profile", href: "/settings?tab=profile" });
+    expect(SYNC_REASONS.replays_skipped_unresolved.fix).toEqual({ kind: "link", label: "Review profile", href: "/settings?tab=profile" });
     expect(SYNC_REASONS.uploads_rejected.fix).toEqual({ kind: "report", label: "Report" });
     expect(SYNC_WINDOW_REASON.fix).toEqual({ kind: "help", label: "Change sync window", helpSlug: "desktop-app-sync-range", anchor: "choose-range" });
   });
@@ -178,7 +178,12 @@ describe("Devices line", () => {
     expect(failing).toMatchObject({ tone: "error", label: "Uploads are failing", details: ["4 waiting", "3 skipped", "9 outside sync range"] });
     expect(JSON.stringify(failing)).not.toMatch(/RivalName|424242/);
     expect(deviceSyncSummary({ syncReportedAt: fresh, sync: { pending: 0, lastErrorCode: "network" } }, now)).toMatchObject({ tone: "ok" });
-    expect(deviceSyncSummary({ syncReportedAt: fresh, sync: { skipped: { player_unresolved: 1 } } }, now)).toMatchObject({ tone: "warn", label: "Player not recognized" });
+    expect(deviceSyncSummary({ syncReportedAt: fresh, sync: { skipped: { player_unresolved: 1 }, recentUnresolved: 1 } }, now)).toMatchObject({ tone: "warn", label: "Recent unmatched replays" });
+    for (const recentUnresolved of [undefined, 0, -1, NaN]) {
+      expect(deviceSyncSummary({ syncReportedAt: fresh, sync: { skipped: { player_unresolved: 20 }, recentUnresolved } }, now))
+        .toMatchObject({ tone: "ok", label: "Syncing", details: ["20 skipped"] });
+    }
+    expect(deviceSyncSummary({ syncReportedAt: fresh, sync: { recentUnresolved: 1 } }, now)).toMatchObject({ tone: "ok", label: "Syncing" });
   });
 
   it("mutes a report older than five minutes, or one with no time", () => {
@@ -190,22 +195,43 @@ describe("Devices line", () => {
 });
 
 describe("other skipped replays", () => {
-  it("words every skip reason the API keeps, apart from the one with its own row", () => {
+  it("words every saved skip reason the API keeps, including unmatched history", () => {
     const source = readFileSync(path.join(API, "syncReport.js"), "utf8");
     const reasons = [...(source.match(/SKIP_REASONS = Object\.freeze\(\[([\s\S]*?)\]\)/)?.[1] ?? "").matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
     expect(reasons).toContain("player_unresolved");
     for (const reason of reasons) expect(ERROR_CODE_COPY[reason], reason).toBeTruthy();
     const skipped = Object.fromEntries(reasons.map((reason) => [reason, 1]));
-    expect(otherSkippedReplays({ skipped }).map((item) => item.code)).toEqual(reasons.filter((reason) => reason !== "player_unresolved"));
+    expect(otherSkippedReplays({ skipped }).map((item) => item.code)).toEqual(reasons);
   });
 
   it("marks on-purpose skips and groups counts by reporting PC", () => {
     expect(otherSkippedReplays({ skipped: { ai_game: 2, parse_failed: 1, player_unresolved: 4, no_result: 0 } })).toEqual([
       { code: "ai_game", count: 2, text: "Skipped — game vs the AI.", onPurpose: true },
       { code: "parse_failed", count: 1, text: ERROR_CODE_COPY.parse_failed, onPurpose: false },
+      { code: "player_unresolved", count: 4, text: expect.stringContaining("older files or downloaded games"), onPurpose: false },
     ]);
     const data = answer({ devices: [pc({ sync: { skipped: { ai_game: 2 } } }), pc({ deviceId: "pc-2", reported: false, sync: { skipped: { ai_game: 5 } } }), pc({ deviceId: "pc-3", sync: {} })] });
     expect(otherSkippedByDevice(data)).toEqual([{ deviceId: "pc-1", pc: "GAMING-PC", skips: [expect.objectContaining({ code: "ai_game", count: 2 })] }]);
+  });
+
+  it("keeps the 20 historical unmatched files available without a current warning", () => {
+    const data = answer({ devices: [pc({ sync: { skipped: { player_unresolved: 20 }, pending: 0, lastUploadAt: CHECKED } })] });
+    expect(syncHealthItems(data)).toEqual([]);
+    expect(syncHealthStatus(data)).toMatchObject({ kind: "healthy", tone: "ok" });
+    expect(otherSkippedByDevice(data)).toEqual([{ deviceId: "pc-1", pc: "GAMING-PC", skips: [
+      expect.objectContaining({ code: "player_unresolved", count: 20 }),
+    ] }]);
+  });
+
+  it("keeps historical counts per PC and excludes only the unresolved files in its active row", () => {
+    const data = answer({ rows: [row("replays_skipped_unresolved", 1, "pc-1")], devices: [
+      pc({ sync: { skipped: { player_unresolved: 21 }, recentUnresolved: 1 } }),
+      pc({ deviceId: "pc-2", sync: { skipped: { player_unresolved: 4 } } }),
+      pc({ deviceId: "pc-old", reported: false, sync: { skipped: { player_unresolved: 8 } } }),
+    ] });
+    expect(otherSkippedByDevice(data).map((group) => [group.deviceId, group.skips[0].count])).toEqual([["pc-1", 20], ["pc-2", 4]]);
+    expect(otherSkippedReplays({ skipped: { player_unresolved: 1 } }, 1)).toEqual([]);
+    expect(otherSkippedReplays({ skipped: { player_unresolved: 1 } }, 5)).toEqual([]);
   });
 });
 

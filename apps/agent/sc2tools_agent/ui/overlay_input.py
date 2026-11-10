@@ -322,11 +322,15 @@ def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, 
                     if widget.isVisible():
                         hwnd = int(widget.winId())
                         current[hwnd] = widget
-                        applied = self._apply_native_state(hwnd, widget, locked, now)
+                        # Scouting is a real, scrollable workspace. Its native
+                        # mouse-activation handler keeps game focus while its
+                        # contents receive wheel/click input normally.
+                        widget_locked = locked and widget.property("gameInteractiveOverlay") is not True
+                        applied = self._apply_native_state(hwnd, widget, widget_locked, now)
                         if applied:
                             applied_widgets.add(widget)
-                            if widget.property("gameClickThrough") is not locked:
-                                widget.setProperty("gameClickThrough", locked)
+                            if widget.property("gameClickThrough") is not widget_locked:
+                                widget.setProperty("gameClickThrough", widget_locked)
                 for hwnd, widget in self._handles.items():
                     if hwnd not in current:
                         self._native_states.pop(hwnd, None)

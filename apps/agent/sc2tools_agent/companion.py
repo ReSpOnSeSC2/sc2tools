@@ -18,6 +18,9 @@ DEFAULT_PREFERENCES = {
     "overlaysEnabled": False,
     "opponentOverlay": False,
     "scoutingOverlay": False,
+    # On by default: a pinned scouting report that has no earlier game of the
+    # opponent to show stays closed instead of opening empty in every game.
+    "scoutingSkipFirstMeeting": True,
     "scoutingReadAloud": False,
 }
 
