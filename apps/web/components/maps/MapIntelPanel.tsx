@@ -29,6 +29,7 @@ import {
   belowMinimumText,
   cellRect,
   heatAlpha,
+  layerForKind,
   mapIntelLayer,
   mapIntelPath,
   sampleCaption,
@@ -126,8 +127,10 @@ function NoSpatialData() {
   );
 }
 
-function IntelView({ data, map, layer, opacity, stale }: { data: MapIntelResponse; map: string; layer: MapIntelLayer; opacity: number; stale: boolean }) {
+function IntelView({ data, map, layer: requested, opacity, stale }: { data: MapIntelResponse; map: string; layer: MapIntelLayer; opacity: number; stale: boolean }) {
   const bounds = data.bounds!;
+  // While another layer loads, the previous answer keeps its own label and colour.
+  const layer = layerForKind(data.kind) ?? requested;
   const spec = mapIntelLayer(layer);
   const zones = data.belowMinimum ? [] : data.zones;
   const caption = sampleCaption(data, layer);

@@ -4,6 +4,7 @@ import {
   belowMinimumText,
   cellRect,
   heatAlpha,
+  layerForKind,
   mapIntelPath,
   sampleCaption,
   stageAspect,
@@ -102,6 +103,11 @@ describe("Map Intel words", () => {
     expect(sampleCaption({ games: 4, scanned: 300, capped: true, maxGames: 300 }, "opp-proxies")).toBe("Proxies in 4 of the latest 300 analysed games");
     expect(sampleCaption({ games: 1, scanned: 1, capped: false, maxGames: 300 }, "death-zone")).toBe("Lost fights in 1 of 1 analysed game");
     expect(belowMinimumText({ games: 2, minGames: 3 }, "battle")).toBe("Not enough games to show a pattern yet: fights in 2 games, 3 needed.");
+  });
+
+  it("names the layer an answer belongs to from its kind", () => {
+    expect([layerForKind("opp_proxy"), layerForKind("battle"), layerForKind("death"), layerForKind("buildings")]).toEqual(["opp-proxies", "battle", "death-zone", "buildings"]);
+    expect(layerForKind("proxy")).toBeNull();
   });
 
   it("keeps faint cells visible and never exceeds the chosen opacity", () => {

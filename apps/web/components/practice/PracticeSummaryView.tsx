@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/Button";
 import { PracticeGamesList } from "./PracticeGamesList";
 import { GRADE_TEXT_CLASS } from "./gradeStyles";
 
-
 export function PracticeSummaryView({ summary, matchup, onSelectTarget, onGraded }: {
   summary: PracticeSummary;
   matchup: string;
@@ -45,7 +44,7 @@ export function PracticeSummaryView({ summary, matchup, onSelectTarget, onGraded
           <FallOff summary={summary} />
         </>
       )}
-      {target ? <PracticeGamesList key={`${matchup}:${target.hash}`} matchup={matchup} targetHash={target.hash} /> : null}
+      {target ? <PracticeGamesList key={`${matchup}:${target.hash}:${summary.sample.graded}:${summary.sample.ungraded}`} matchup={matchup} targetHash={target.hash} /> : null}
     </div>
   );
 }

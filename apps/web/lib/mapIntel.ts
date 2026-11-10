@@ -41,6 +41,13 @@ export function mapIntelLayer(id: MapIntelLayer): MapIntelLayerSpec {
   return MAP_INTEL_LAYERS.find((layer) => layer.id === id) ?? MAP_INTEL_LAYERS[0];
 }
 
+const LAYER_BY_KIND: Readonly<Record<string, MapIntelLayer>> = { opp_proxy: "opp-proxies", battle: "battle", death: "death-zone", buildings: "buildings" };
+
+/** The layer an API answer belongs to (its ``kind``), so a stale answer is never labelled as the layer being loaded. */
+export function layerForKind(kind: string): MapIntelLayer | null {
+  return LAYER_BY_KIND[kind] ?? null;
+}
+
 /** Grid the panel requests: 48 cells across a ladder map is ~3.5 world units a cell. */
 export const MAP_INTEL_GRID = 48;
 

@@ -130,12 +130,13 @@ describe("Map Intel cache", () => {
   });
 
   test("an answer computed across an invalidation is never stored, and owners are separate", () => {
-    const cache = new MapIntelCache();
+    const cache = new MapIntelCache({ max: 1 });
     const stale = cache.token("u1");
     cache.set("u2", "k2", cache.token("u2"), { owner: "u2" });
     cache.invalidate("u1");
     cache.set("u1", "k1", stale, { owner: "u1" });
     expect(cache.get("u1", "k1")).toBeNull();
+    // The stale answer took no slot, so it evicted nobody's live answer.
     expect(cache.get("u2", "k2")).toEqual({ owner: "u2" });
   });
 });

@@ -60,6 +60,15 @@ describe("MapIntelPanel", () => {
     expect(screen.getByText("40%")).toBeTruthy();
   });
 
+  it("keeps a previous answer labelled as its own layer while the next one loads", () => {
+    state.respond = () => answer();
+    render(<MapIntelPanel map="Goldenaura" />);
+    fireEvent.click(screen.getByRole("radio", { name: "Fights" }));
+    expect(params(state.paths.at(-1)!).pathname).toBe("/v1/spatial/battle");
+    expect(screen.getByText("Proxies in 6 of 30 analysed games")).toBeTruthy();
+    expect(screen.queryByText(/^Fights in/)).toBeNull();
+  });
+
   it("withholds the heat below the minimum sample and says how many games there are", () => {
     state.respond = () => answer({ games: 2, belowMinimum: true });
     render(<MapIntelPanel map="Goldenaura" />);
