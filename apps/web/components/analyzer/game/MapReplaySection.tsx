@@ -105,7 +105,7 @@ export function MapReplaySection({
     {refreshControl}
     <SegmentedReplayHost key={JSON.stringify([gameId, manifest.artifactId, onPlaybackTimeChange ? null : initialTimeSec ?? null])}
       seekRequest={seekRequest} onPlaybackTimeChange={onPlaybackTimeChange} onPlaybackStateChange={onPlaybackStateChange} onStageSeek={onStageSeek} banked={banked} upgrades={upgrades} clockLink={clockLink}
-      manifest={manifest} gameId={gameId} compact={compact} initialTimeSec={initialTimeSec}
+      manifest={manifest} gameId={gameId} compact={compact} initialTimeSec={initialTimeSec} clip={compact ? undefined : "owner"}
       maxHeightPx={stageMaxH} myName={myName} oppName={oppName} myRace={myRace} oppRace={oppRace}
       buildName={buildName} buildMatchPct={buildMatchPct} patchEra={patchEra} />
   </section>;
@@ -185,6 +185,7 @@ export function MapReplaySection({
       buildName={buildName}
       buildMatchPct={buildMatchPct}
       patchEra={patchEra}
+      clip="owner"
     />
     </div>
   );

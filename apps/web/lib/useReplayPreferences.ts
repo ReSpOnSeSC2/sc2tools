@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { REPLAY_SPEEDS, type ReplaySpeed } from "./replayControls";
+import { isReplayVision, type ReplayVision } from "./replayVision";
 
 export const REPLAY_PREFS_KEY = "sc2tools:replay-prefs:v1";
 export type ReplayPreferences = {
@@ -14,6 +15,8 @@ export type ReplayPreferences = {
   panelTab: "production" | "build";
   panelOpen?: boolean;
   volume?: number;
+  /** Whose sight reveals the map; see lib/replayVision. */
+  vision: ReplayVision;
 };
 
 /** Ignore malformed, oversized and unknown fields rather than trusting stored JSON. */
@@ -28,6 +31,7 @@ export function parseReplayPreferences(raw: string | null): Partial<ReplayPrefer
     if (source.productionSide === "me" || source.productionSide === "opp") result.productionSide = source.productionSide;
     if (["both", "me", "opp"].includes(source.buildFilter as string)) result.buildFilter = source.buildFilter as ReplayPreferences["buildFilter"];
     if (source.panelTab === "production" || source.panelTab === "build") result.panelTab = source.panelTab;
+    if (isReplayVision(source.vision)) result.vision = source.vision;
     for (const key of ["showWorkers", "autoScroll", "panelOpen"] as const) if (typeof source[key] === "boolean") result[key] = source[key];
     if (typeof source.volume === "number" && Number.isFinite(source.volume) && source.volume >= 0 && source.volume <= 1) result.volume = source.volume;
     const rails = source.rails as Record<string, unknown> | null;
@@ -37,7 +41,7 @@ export function parseReplayPreferences(raw: string | null): Partial<ReplayPrefer
 }
 
 export function useReplayPreferences(defaultShowProduction: boolean) {
-  const [preferences, setPreferences] = useState<ReplayPreferences>({ speed: 8, rails: { production: defaultShowProduction, build: true }, productionSide: "me", buildFilter: "both", showWorkers: false, autoScroll: true, panelTab: "production" });
+  const [preferences, setPreferences] = useState<ReplayPreferences>({ speed: 8, rails: { production: defaultShowProduction, build: true }, productionSide: "me", buildFilter: "both", showWorkers: false, autoScroll: true, panelTab: "production", vision: "both" });
   const [ready, setReady] = useState(false);
   const touched = useRef<Partial<ReplayPreferences>>({});
   useEffect(() => {

@@ -25,7 +25,7 @@
  * ``lib/replayHud`` header).
  */
 
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import { resolveRaceIcon } from "@/lib/sc2-icons";
 import { formatClock, type HudSide, type ReplaySide } from "@/lib/replayHud";
 import { SIDE_COLOR, sideLabel } from "./replayTheme";
@@ -215,6 +215,7 @@ function ReplayTopBarImpl({
   myRace,
   oppRace,
   upgrades,
+  actions,
 }: {
   t: number;
   gameLength: number;
@@ -225,6 +226,8 @@ function ReplayTopBarImpl({
   myRace?: string | null;
   oppRace?: string | null;
   upgrades?: Record<ReplaySide, readonly { time: number; name: string }[]>;
+  /** Stage actions under the clock (the Clip button). */
+  actions?: ReactNode;
 }) {
   return (
     <div
@@ -248,6 +251,7 @@ function ReplayTopBarImpl({
         <span className="mt-1 max-w-full break-words text-center text-micro font-medium text-text-dim" title={mapName || undefined}>
           {mapName || "—"}
         </span>
+        {actions ? <div className="mt-1.5 flex justify-center gap-1">{actions}</div> : null}
       </div>
       <SideBlock
         side="opp"

@@ -1000,9 +1000,11 @@ export function drawSpellEffects(
   now: number,
   proj: Proj,
   view: ViewTransform,
-  w: number,
-  h: number,
+  w: number, h: number,
   layer: SpellLayer,
+  /** Single-side replay vision: effects for which this returns false
+   *  (an enemy's, outside the viewer's sight) are not drawn. */
+  canSee?: (owner: "me" | "opp" | "neutral", x: number, y: number) => boolean,
 ): number {
   // v4 and older: no casts, no work, no behaviour change. This is the
   // hot path for the majority of stored games.
@@ -1039,7 +1041,7 @@ export function drawSpellEffects(
     const telegraphing = e.tel >= 0;
     // Telegraphs are always overlay: a bile in flight and a nuke dot
     // are in the air, above everything, whatever their impact's layer.
-    if (telegraphing ? ground : ground !== (s.z === "ground")) continue;
+    if ((telegraphing ? ground : ground !== (s.z === "ground")) || (canSee && !canSee(e.owner === 2 ? "neutral" : e.owner === 1 ? "opp" : "me", e.wx, e.wy))) continue;
 
     const sx = projectX(dc.bounds, proj, e.wx);
     const sy = projectY(dc.bounds, proj, e.wy);
