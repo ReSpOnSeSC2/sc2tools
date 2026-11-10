@@ -253,5 +253,7 @@ describe("shared helpers", () => {
     expect(validateGameIntentBody({ action: "register" }).code).toBe("invalid_action");
     expect(validateGameIntentBody({ action: "notes", notes: "x".repeat(4001) }).code).toBe("invalid_notes");
     expect(validateGameIntentBody({ action: "skip", gameKey: "k" }).code).toBe("invalid_request");
+    expect(validateGameIntentBody({ action: "reopen" })).toEqual({ valid: true, value: { action: "reopen" } });
+    expect(validateGameIntentBody({ action: "reopen", notes: "kept" }).valid).toBe(true);
   });
 });

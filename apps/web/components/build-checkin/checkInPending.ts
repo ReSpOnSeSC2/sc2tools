@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-export type CheckInBusy = "confirm" | "skip" | "notes" | "opponent" | null;
+export type CheckInBusy = "confirm" | "skip" | "notes" | "opponent" | "reopen" | null;
 
 // Retain only active writes. Mounted editors subscribe separately, so opening
 // another game never leaves its IDs or request state in a permanent cache.

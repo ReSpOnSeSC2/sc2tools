@@ -18,8 +18,10 @@ def run_gui_check(tmp_path, body, *, timeout=30):
 import sys
 from pathlib import Path
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets
-from sc2tools_agent.ui import gui
+from sc2tools_agent.ui import gui, system_motion
 from sc2tools_agent.ui.gui import GuiUI, SettingsPayload, _GuiSignals, _MainWindow
+# Windows' animation switch is the host's; a check that needs it off says so.
+system_motion.animations_enabled = lambda: True
 app = QtWidgets.QApplication([])
 base = Path(sys.argv[1])
 saved = []

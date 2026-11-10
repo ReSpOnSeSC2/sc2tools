@@ -83,7 +83,7 @@ def context(mine, theirs, *, lists=True):
             "headToHead": {"wins": 3, "losses": 2}, "last5GamesScouting": _legacy_games(theirs or 0), **history}
 
 
-def _load_stored_events(page, panel):
+def load_stored_events(page, panel):
     # Stand in for the stored replay events the paired agent would fetch.
     for side in ("my", "opp"):
         for index in range(5):
@@ -115,7 +115,7 @@ def render_report(folder):
     for name, live, size, skin in states:
         panel.update_context({})
         panel.update_context(live)
-        _load_stored_events(page, panel)
+        load_stored_events(page, panel)
         panel.set_appearance(skin, False)
         panel.resize(*size)
         panel.show()

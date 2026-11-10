@@ -31,7 +31,7 @@ assert "border-radius: 18px" in shell.styleSheet()
 assert theme.TEXT in chain.styleSheet() and theme.TEXT_MUTED in chain.styleSheet()
 assert theme.SUBTLE in chain.styleSheet()
 style = card_stylesheet()
-assert theme.SURFACE in style and theme.BUTTON in style and theme.BUTTON_CHECKED in style
+assert theme.SURFACE in style and theme.BUTTON in style and theme.ON_ACCENT in style
 assert theme.SUCCESS in style and theme.DANGER in style and theme.WARNING in style
 assert "background-color: transparent" in style
 assert "border-radius: 14px" in style
