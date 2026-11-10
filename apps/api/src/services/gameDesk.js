@@ -2,13 +2,14 @@
 
 const { shoutoutText } = require("./opponentChannels");
 const { captureSessionPublication } = require("./sessionPublication");
-const ACTIONS = ["predictionCancel", "predictionResolve", "sessionReset", "gamePause", "shoutout"];
+const ACTIONS = ["predictionCancel", "predictionResolve", "sessionReset", "streamEnd", "gamePause", "shoutout"];
 /** @param {number} status @param {string} code */
 function deskError(status, code) { return Object.assign(new Error(code), { status, code }); }
 
 /** Token-authenticated controls; the enclosing route holds its owner's data lease. */
 class GameDeskService {
-  /** @param {{users:import('mongodb').Collection,studio:import('./multichatStudio').MultichatStudioService,engagement:import('./multichatEngagement').MultichatEngagementService,games:import('./games').GamesService,broker:import('./liveGameBroker').LiveGameBroker,channels:import('./opponentChannels').OpponentChannelsCache,tokens:import('./overlayTokens').OverlayTokensService,bot:import('./twitchChatBot').TwitchChatBotService,io?:import('socket.io').Server,onSessionReset?:(owner:string)=>void,now?:()=>number}} deps */
+  /** @param {{users:import('mongodb').Collection,studio:import('./multichatStudio').MultichatStudioService,engagement:import('./multichatEngagement').MultichatEngagementService,games:import('./games').GamesService,broker:import('./liveGameBroker').LiveGameBroker,channels:import('./opponentChannels').OpponentChannelsCache,tokens:import('./overlayTokens').OverlayTokensService,bot:import('./twitchChatBot').TwitchChatBotService,io?:import('socket.io').Server,onSessionReset?:(owner:string)=>void,now?:()=>number,
+   *   streams?:{start:(userId:string,startMs:number)=>Promise<void>,end:(userId:string)=>Promise<unknown>}}} deps */
   constructor(deps) { this.deps = deps; this.now = deps.now || Date.now; }
 
   /** @param {string} userId @param {string} token @param {Record<string,any>} body */
@@ -32,6 +33,11 @@ class GameDeskService {
       return studio.update(token, { gameWidgetsPaused: body.paused });
     }
     if (body.action === "sessionReset") return this.resetSession(userId, token);
+    // "End stream": close the open stream and build its report (services/streamReports.js).
+    if (body.action === "streamEnd") {
+      const streamReport = this.deps.streams ? await this.deps.streams.end(userId) : null;
+      return { ...await studio.get(token), deskAction: { streamReport } };
+    }
     const gameKey = body.gameKey;
     if (typeof gameKey !== "string" || !gameKey.trim() || gameKey.length > 120) throw deskError(400, "invalid_prediction_game");
     if (body.action === "predictionCancel") {
@@ -84,6 +90,9 @@ class GameDeskService {
     if (!Number.isFinite(anchor)) throw new Error("session anchor unavailable");
     games.invalidateSessionForReset(userId);
     const state = await studio.advanceStreamStart(token, anchor);
+    // A Dock session is a stream: open it for the post-stream report. Optional;
+    // the committed session reset stands even if this bookkeeping fails.
+    try { await this.deps.streams?.start(userId, anchor); } catch { /* report bookkeeping only */ }
     // Owner invalidation only: no private session DTO or replay insertion.
     io?.to(`user:${userId}`).emit("games:changed", { count: 0, inserted: 0, bulk: false, reason: "session-reset" });
     try {

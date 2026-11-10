@@ -26,6 +26,7 @@ export const SETTINGS_SECTIONS = {
     { id: "delete-history", label: "Delete game history" },
     { id: "gdpr", label: "Export & delete account" },
   ],
+  integrations: [{ id: "discord", label: "Post to Discord" }],
   checkin: [{ id: "build-check-in", label: "Build check-in" }],
   randomizer: [
     { id: "build-randomizer", label: "Build randomizer" },
@@ -66,7 +67,9 @@ export const SETTINGS_SECTIONS = {
   preferences: [
     { id: "app-preferences", label: "App preferences" },
     { id: "setup-privacy", label: "Setup & privacy" },
+    { id: "reports", label: "Reports" },
     { id: "notifications", label: "Notifications" },
+    { id: "push", label: "Phone and browser notifications" },
   ],
   help: [],
 } as const satisfies Record<SettingsTabId, readonly SettingsSectionEntry[]>;
@@ -129,6 +132,9 @@ export const SETTINGS_FIELDS = [
   { id: "app-preferences", tab: "preferences", section: "app-preferences", label: "Default tab", synonyms: ["start page", "app preferences", "default dashboard"] },
   { id: "setup-privacy", tab: "preferences", section: "setup-privacy", label: "Setup & privacy", synonyms: ["analytics cookies", "cookie consent", "setup guide", "setup checklist"] },
   { id: "notifications", tab: "preferences", section: "notifications", label: "Notification preferences", synonyms: ["mute notifications", "in-app updates", "notifications"] },
+  { id: "reports", tab: "preferences", section: "reports", label: "Weekly and stream reports", synonyms: ["weekly report", "stream report", "report time zone", "Monday summary"] },
+  { id: "push", tab: "preferences", section: "push", label: "Phone and browser notifications", synonyms: ["push notifications", "phone notifications", "notification devices", "web push"] },
+  { id: "discord", tab: "integrations", section: "discord", label: "Post to Discord", synonyms: ["Discord webhook", "post results", "clan channel", "Discord"] },
 ] as const satisfies readonly SettingsFieldEntry[];
 
 export function settingsFieldHref(field: SettingsFieldEntry): string {

@@ -161,7 +161,7 @@ export async function openSettingsRegistryFixture(page, theme) {
     if (url.pathname.startsWith("/fonts/") && !url.search && !url.hash && fonts.has(url.pathname.slice(7))) return { contentType: "font/woff2", body: fonts.get(url.pathname.slice(7)) };
     if (url.pathname.startsWith("/synthetic/panels/") && !url.search && !url.hash) {
       const id = url.pathname.slice("/synthetic/panels/".length);
-      const titles = { account: "Account", profile: "Profile", backups: "Backups & data", checkin: "Build check-in", randomizer: "Randomizer", import: "Import", overlay: "Overlay", chat: "Chat & alerts", voice: "Voice", preferences: "Preferences", help: "Help" };
+      const titles = { account: "Account", profile: "Profile", backups: "Backups & data", checkin: "Build check-in", randomizer: "Randomizer", import: "Import", overlay: "Overlay", chat: "Chat & alerts", voice: "Voice", preferences: "Preferences", integrations: "Integrations", help: "Help" };
       if (Object.hasOwn(titles, id)) {
         panelReads.push(id);
         return { contentType: "application/json", body: JSON.stringify({ id, title: titles[id] }) };

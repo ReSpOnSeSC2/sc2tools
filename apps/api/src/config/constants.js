@@ -141,6 +141,15 @@ const COLLECTIONS = Object.freeze({
   // pre-game declaration, randomizer roll, post-game answer) until the
   // uploaded replay binds it. TTL-reaped; see services/buildIntentLive.js.
   BUILD_INTENT_LIVE: "build_intent_live",
+  // Reports and delivery channels (docs/notifications.md).
+  // ``stream_sessions``: one ≤5 kB post-stream report per ended stream,
+  // capped at 100 per user. ``discord_hooks``: the user's own channel
+  // webhooks (URL encrypted, last 4 shown). ``discord_outbox``: queued
+  // posts with a 7-day TTL. ``push_subscriptions``: Web Push endpoints.
+  STREAM_SESSIONS: "stream_sessions",
+  DISCORD_HOOKS: "discord_hooks",
+  DISCORD_OUTBOX: "discord_outbox",
+  PUSH_SUBSCRIPTIONS: "push_subscriptions",
 });
 
 const LIMITS = Object.freeze({

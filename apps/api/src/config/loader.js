@@ -83,6 +83,7 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *     keyFile: string|null,
  *   },
  *   platformIntegrations: ReturnType<typeof parsePlatformIntegrationsConfig>,
+ *   delivery: ReturnType<typeof parseDeliveryConfig>,
  *   twitchAutomationEnabled: boolean,
  *   reviewsEnabled: "off" | "admins" | "on",
  *   guidesEnabled: boolean,
@@ -157,6 +158,7 @@ function loadConfig(env = process.env) {
     renderAdmin: parseRenderAdminConfig(env),
     analytics: parseAnalyticsConfig(env),
     platformIntegrations: parsePlatformIntegrationsConfig(env),
+    delivery: parseDeliveryConfig(env),
     // Separate from configured credentials and explicit user opt-ins.
     // This implementation never changes the operator's environment.
     twitchAutomationEnabled: env.TWITCH_AUTOMATION_ENABLED === "true",
@@ -402,6 +404,27 @@ function parsePlatformIntegrationsConfig(env) {
     twitch,
     kick,
     youtube,
+  };
+}
+
+/**
+ * Optional delivery channels (docs/notifications.md). Both stay inert
+ * until configured and never fail boot: Web Push needs all three
+ * WEB_PUSH_VAPID_* values (validated as a matching P-256 pair by
+ * services/pushNotifications.js); Discord webhooks are stored encrypted
+ * with the existing PLATFORM_TOKEN_ENCRYPTION_KEY and are unavailable
+ * without it.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ */
+function parseDeliveryConfig(env) {
+  const publicKey = String(env.WEB_PUSH_VAPID_PUBLIC_KEY || "").trim();
+  const privateKey = String(env.WEB_PUSH_VAPID_PRIVATE_KEY || "").trim();
+  const subject = String(env.WEB_PUSH_VAPID_SUBJECT || "").trim();
+  const encryptionKey = String(env.PLATFORM_TOKEN_ENCRYPTION_KEY || "").trim();
+  return {
+    webPush: publicKey && privateKey && subject ? { publicKey, privateKey, subject } : null,
+    discordEncryptionKey: isValidEncryptionKey(encryptionKey) ? encryptionKey : null,
   };
 }
 

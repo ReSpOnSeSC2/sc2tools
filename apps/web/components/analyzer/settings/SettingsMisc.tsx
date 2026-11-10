@@ -3,6 +3,8 @@
 import { useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { NotificationPreferences } from "@/components/notifications/NotificationPreferences";
+import { PushPreferences } from "@/components/notifications/PushPreferences";
+import { ReportPreferences } from "@/components/reports/ReportPreferences";
 import { useAuth } from "@clerk/nextjs";
 import { ArrowRight } from "lucide-react";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
@@ -167,7 +169,9 @@ export function SettingsMisc() {
         </Card>
       </Section>
 
+      <ReportPreferences />
       <NotificationPreferences />
+      <PushPreferences />
       <SaveBar
         visible={dirty}
         saving={saving}

@@ -19,7 +19,8 @@ export const SETTINGS_TABS = [
   { id: "overlay", group: "streaming", label: "Overlay", description: "OBS sources, widgets, scenes and theme" },
   { id: "chat", group: "streaming", label: "Chat & alerts", description: "Platforms, alerts, TTS, Dock and bot" },
   { id: "voice", group: "streaming", label: "Voice", description: "Spoken scouting reports" },
-  { id: "preferences", group: "preferences", label: "Preferences", description: "Start page, setup, browser choices" },
+  { id: "preferences", group: "preferences", label: "Preferences", description: "Start page, reports, notifications" },
+  { id: "integrations", group: "preferences", label: "Integrations", description: "Post your games to Discord" },
   { id: "help", group: "help", label: "Help", description: "Articles and troubleshooting" },
 ] as const satisfies readonly { id: string; group: SettingsGroupId; label: string; description: string }[];
 

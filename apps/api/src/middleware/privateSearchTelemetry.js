@@ -8,6 +8,7 @@ const { isSyncActionPath } = require("./syncActionJson");
 const { isReplayDownloadBatchPath, isReplayDownloadBatchFailure } = require("./replayDownloadBatchBoundary");
 const PRIVATE_SEARCH_TAG = "sc2tools.private_search";
 const HEARTBEAT_PATH = /^\/v1\/devices\/heartbeat\/?$/i;
+const CREDENTIAL_BODY_PATH = /^\/(?:v1\/)?(?:me\/integrations\/discord\/hooks|me\/push\/(?:subscriptions|unsubscribe)|push\/subscription-change)\/?$/i;
 
 /** @param {unknown} value @param {string} key @returns {unknown} */
 function ownData(value, key) {
@@ -35,8 +36,18 @@ function isHeartbeatBodyPath(value) {
   return HEARTBEAT_PATH.test((end < 0 ? value : value.slice(0, end)).replace(/^https?:\/\/[^/]+(?=\/)/i, ""));
 }
 
+/** Bodies carrying a delivery credential: a Discord webhook URL, or a Web
+ * Push endpoint and its keys (docs/notifications.md).
+ * Example: isCredentialBodyPath("/v1/me/integrations/discord/hooks") === true.
+ * @param {unknown} value @returns {boolean} */
+function isCredentialBodyPath(value) {
+  if (typeof value !== "string") return false;
+  const end = value.search(/[?#]/);
+  return CREDENTIAL_BODY_PATH.test((end < 0 ? value : value.slice(0, end)).replace(/^https?:\/\/[^/]+(?=\/)/i, ""));
+}
+
 /** @param {unknown} value */
-const isPrivateBodyPath = value => isHeartbeatBodyPath(value) || isSyncActionPath(value) || isReplayDownloadBatchPath(value);
+const isPrivateBodyPath = value => isHeartbeatBodyPath(value) || isSyncActionPath(value) || isReplayDownloadBatchPath(value) || isCredentialBodyPath(value);
 
 /** Heartbeats and sync actions keep their URL/status but never their private
  * body, including a second request copy without its own URL.
@@ -125,6 +136,6 @@ function runPrivateSearchScope(req, next, sdk) {
 }
 
 module.exports = {
-  PRIVATE_SEARCH_TAG, shouldDropPrivateSearchEvent, beforeSendPrivateSearch, isHeartbeatBodyPath,
+  PRIVATE_SEARCH_TAG, shouldDropPrivateSearchEvent, beforeSendPrivateSearch, isHeartbeatBodyPath, isCredentialBodyPath,
   privateSearchSentryCallbacks, privateSearchHttpOptions, runPrivateSearchScope,
 };

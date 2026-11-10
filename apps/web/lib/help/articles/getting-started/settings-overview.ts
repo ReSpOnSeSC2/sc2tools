@@ -36,11 +36,11 @@ const article: HelpArticle = {
     "privacy",
     "telemetry",
   ],
-  updated: "2026-10-27",
+  updated: "2026-11-10",
   body: [
     {
       type: "paragraph",
-      text: "[Settings](/settings) groups your account, gameplay and streaming tools, followed by Preferences and Help. Each tab has one job. Form edits stay in draft until you press **Save**; browser choices such as analytics cookies say when they take effect immediately.",
+      text: "[Settings](/settings) groups your account, gameplay and streaming tools, followed by Preferences, Integrations and Help. Each tab has one job. Form edits stay in draft until you press **Save**; browser choices such as analytics cookies say when they take effect immediately.",
     },
     { type: "heading", text: "What each tab is for" },
     {
@@ -57,7 +57,8 @@ const article: HelpArticle = {
         ["Streaming", "Overlay", "OBS widget URLs and themes, scenes, the Ghost Build coach and Build profile."],
         ["Streaming", "Chat & alerts", "Connected platforms, multi-platform chat, alerts, TTS, translation, commands, Stream Dock and the chat bot. Overlay and Chat share one selected streaming token."],
         ["Streaming", "Voice", "The scouting report read aloud through your overlay."],
-        ["Preferences", "Preferences (previously Misc)", "The page SC2 Tools opens on, running setup again, notification preferences and analytics cookies for this browser."],
+        ["Preferences", "Preferences (previously Misc)", "The page SC2 Tools opens on, running setup again, weekly and stream reports, notification preferences, phone and browser notifications, and analytics cookies for this browser."],
+        ["Preferences", "Integrations", "Post your results, session summaries, weekly recap and MMR peaks to your own Discord channels."],
         ["Help", "Help", "These help articles, with search."],
       ],
     },

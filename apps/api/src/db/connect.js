@@ -75,6 +75,10 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   guideNotes: import('mongodb').Collection,
  *   guideVideos: import('mongodb').Collection<any>,
  *   buildIntentLive: import('mongodb').Collection<any>,
+ *   streamSessions: import('mongodb').Collection<any>,
+ *   discordHooks: import('mongodb').Collection<any>,
+ *   discordOutbox: import('mongodb').Collection<any>,
+ *   pushSubscriptions: import('mongodb').Collection<any>,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -185,7 +189,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     guideStats: db.collection(COLLECTIONS.GUIDE_STATS),
     guideNotes: db.collection(COLLECTIONS.GUIDE_NOTES),
     guideVideos: db.collection(COLLECTIONS.GUIDE_VIDEOS),
-    buildIntentLive: db.collection(COLLECTIONS.BUILD_INTENT_LIVE),
+    buildIntentLive: db.collection(COLLECTIONS.BUILD_INTENT_LIVE), ...deliveryCollections(db),
     close: () => client.close(),
   };
   await ensureIndexes(ctx, { logger, awaitBackground: awaitBackgroundIndexes });
@@ -750,7 +754,7 @@ async function ensureIndexes(ctx, opts = {}) {
 
   await ensureBuildIntentIndexes(ctx);
   await ensureGuideIndexes(ctx);
-  await ensureReviewIndexes(ctx);
+  await ensureReviewIndexes(ctx); await ensureDeliveryIndexes(ctx);
   // Last, so the ``games`` collection exists and the long build never
   // competes with the awaited ones above.
   const logger = opts.logger || null, guides = startBackgroundIndexBuilds(ctx, logger);
@@ -834,6 +838,44 @@ async function ensureReviewIndexes(ctx) {
     { expireAfterSeconds: 90 * 24 * 60 * 60, name: "notification_ttl" },
   );
   await ctx.users.createIndex({ "reviewer.karma": -1 }, { sparse: true });
+}
+
+/**
+ * Reports and delivery channels (docs/notifications.md).
+ * @param {import('mongodb').Db} db
+ */
+function deliveryCollections(db) {
+  return {
+    streamSessions: db.collection(COLLECTIONS.STREAM_SESSIONS),
+    discordHooks: db.collection(COLLECTIONS.DISCORD_HOOKS),
+    discordOutbox: db.collection(COLLECTIONS.DISCORD_OUTBOX),
+    pushSubscriptions: db.collection(COLLECTIONS.PUSH_SUBSCRIPTIONS),
+  };
+}
+
+/**
+ * Weekly/stream reports, Discord posts, Web Push and the calendar feed
+ * (docs/notifications.md). Every lookup is owner-keyed except the two
+ * bearer-secret lookups (calendar feed hash, push endpoint hash) and the
+ * outbox drain, which reads due rows across users in send order.
+ *
+ * @param {DbContext} ctx
+ */
+async function ensureDeliveryIndexes(ctx) {
+  await ctx.streamSessions.createIndex({ userId: 1, streamId: 1 }, { unique: true });
+  await ctx.streamSessions.createIndex({ userId: 1, startAt: -1 });
+  // Open streams waiting for "End stream" or the four-hour idle close.
+  await ctx.users.createIndex({ "streamSession.startAt": 1 }, { sparse: true });
+  await ctx.users.createIndex({ "calendarFeed.hash": 1 }, { unique: true, sparse: true });
+  await ctx.discordHooks.createIndex({ userId: 1, createdAt: 1 });
+  await ctx.discordHooks.createIndex({ enabled: 1, status: 1 });
+  await ctx.discordOutbox.createIndex({ dedupeKey: 1 }, { unique: true });
+  await ctx.discordOutbox.createIndex({ status: 1, nextAttemptAt: 1 });
+  await ctx.discordOutbox.createIndex({ hookId: 1 });
+  await ctx.discordOutbox.createIndex({ userId: 1 });
+  await ctx.discordOutbox.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await ctx.pushSubscriptions.createIndex({ endpointHash: 1 }, { unique: true });
+  await ctx.pushSubscriptions.createIndex({ userId: 1, createdAt: -1 });
 }
 
 module.exports = { connect, ensureIndexes, attachSlowQueryLogging };

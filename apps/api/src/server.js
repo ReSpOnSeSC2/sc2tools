@@ -40,6 +40,7 @@ const {
 const { buildReviewDigestJob } = require("./jobs/reviewDigestJob");
 const { buildBackupHealthJob } = require("./jobs/backupHealthJob");
 const { buildIdentityDeletionJob } = require("./jobs/identityDeletionJob");
+const { startDeliveryJobs } = require("./jobs/deliveryJobs");
 const sentry = require("./util/sentry");
 const { TrendsExplorerBackfill } = require("./services/trendsExplorerBackfill");
 const { startBrowserUploadCorsCheck } = require("./services/replayFilesCors");
@@ -393,7 +394,8 @@ async function main() {
   });
   backupHealthJob.start();
   const identityDeletionJob = buildIdentityDeletionJob({ jobLedger: /** @type {any} */ (services).jobLedger, service: /** @type {any} */ (services).identityDeletions, logger });
-  identityDeletionJob.start();
+  // Reports, Discord outbox and coaching reminders (jobs/deliveryJobs.js).
+  identityDeletionJob.start(); const deliveryJobs = startDeliveryJobs(/** @type {any} */ (services), logger);
 
   // SC2 Tools Guides build-order videos: seed the committed channel
   // snapshot, then re-read the owner's YouTube RSS feed every 6 h. Only
@@ -462,7 +464,7 @@ async function main() {
     await ladderMetaJob.stop();
     await reviewDigestJob.stop();
     await backupHealthJob.stop();
-    await identityDeletionJob.stop();
+    await identityDeletionJob.stop(); await deliveryJobs.stop();
     // Also waits for an admin-forced run when the schedule never started.
     await guideStatsJob.stop();
     // Admin-triggered guide backfill (never started at boot) and any

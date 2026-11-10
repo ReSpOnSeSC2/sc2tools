@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/Toast";
 import { apiMessage, formatDay, formatDuration, formatTime, groupSlots, useLocalTimeZone, useZoneClock } from "./coachingTime";
 import { CoachSchedule } from "./CoachSchedule";
 import { BookingCard, BookingSummary, ChoiceChip, EmptySchedule, ScheduleSkeleton } from "./CoachingScheduleParts";
+import { CalendarFeedCard } from "./CalendarFeedCard";
 import type { Booking, CalendarPayload, Slot } from "./coachingScheduleModel";
 export default function CoachingSchedule({ onDirtyChange, active = true }: { onDirtyChange?: (dirty: boolean) => void; active?: boolean }) {
   const localTimeZone = useLocalTimeZone();
@@ -208,6 +209,7 @@ function StudentSchedule({
                 booking={item}
                 primaryTimeZone={localTimeZone}
                 coachTimeZone={data.availability?.timeZone}
+                calendarSummary={`Coaching session with ${data.coach.name}`}
                 onCancel={() => setCancelBooking(item)}
               />
             ))}
@@ -287,6 +289,8 @@ function StudentSchedule({
           )}
         </Card.Body>
       </Card>
+
+      <CalendarFeedCard />
 
       <Modal
         open={Boolean(selected)}

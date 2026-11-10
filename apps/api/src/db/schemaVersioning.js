@@ -355,6 +355,11 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  // Post-stream reports and the delivery channels (docs/notifications.md).
+  [COLLECTIONS.STREAM_SESSIONS]: { collection: COLLECTIONS.STREAM_SESSIONS, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.DISCORD_HOOKS]: { collection: COLLECTIONS.DISCORD_HOOKS, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.DISCORD_OUTBOX]: { collection: COLLECTIONS.DISCORD_OUTBOX, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.PUSH_SUBSCRIPTIONS]: { collection: COLLECTIONS.PUSH_SUBSCRIPTIONS, currentVersion: 1, versionKey: VERSION_KEY },
 });
 
 /** @type {{collection:string,fromVersion:number,toVersion:number,forward:Function,backward:Function,description?:string}[]} */

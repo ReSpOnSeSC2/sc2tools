@@ -39,6 +39,10 @@ const GDPR_CLASSIFICATION = Object.freeze({
   JOB_RUNS: "global", ADMIN_AUDIT: "purge_only",
   GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
   GHOST_EXAMPLES: "purge_only",
+  // Reports and delivery channels: exported explicitly (Discord URLs
+  // redacted, push endpoints/keys included) and purged with the owner.
+  STREAM_SESSIONS: "purge_only", DISCORD_HOOKS: "purge_only", DISCORD_OUTBOX: "purge_only",
+  PUSH_SUBSCRIPTIONS: "purge_only",
   // The independently stacked What's New feature adds this global config.
   ...(Object.hasOwn(COLLECTIONS, "SITE_CONFIG") ? { SITE_CONFIG: "global" } : {}),
 });
@@ -103,6 +107,14 @@ const PURGE_ONLY_COLLECTIONS = [
   // must never replay. Bound answers already live on games.buildIntent.
   ["buildIntentLive", "userId"],
   ["multichatSounds", "userId"],
+  // Reports and delivery channels. The outbox goes first so a drain that
+  // races the erasure finds no hook to decrypt; push endpoints and the
+  // stream reports follow. Restoring them from a snapshot would revive a
+  // revoked device or webhook, so they never round-trip.
+  ["discordOutbox", "userId"],
+  ["discordHooks", "userId"],
+  ["pushSubscriptions", "userId"],
+  ["streamSessions", "userId"],
 ];
 
 class GdprService {

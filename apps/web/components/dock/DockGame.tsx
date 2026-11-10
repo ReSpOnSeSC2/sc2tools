@@ -14,7 +14,12 @@ import { sessionRecord } from "./DockStatusHeader";
 
 const PHASES = { idle: "Waiting for a game", menu: "In menu", match_loading: "Loading match", match_started: "Match started", match_in_progress: "In game", match_ended: "Match ended" };
 const raceLetter = (race: string | null | undefined) => race && /^[PTZR]$/i.test(race[0]) ? race[0].toUpperCase() : "?";
-type Action = { action: "predictionCancel" | "predictionResolve" | "sessionReset"; gameKey?: string; result?: "win" | "loss" };
+type Action = { action: "predictionCancel" | "predictionResolve" | "sessionReset" | "streamEnd"; gameKey?: string; result?: "win" | "loss" };
+const CONFIRM = {
+  sessionReset: { title: "Start new session?", label: "Start new session", text: "Begin a new stream session and set its clip timestamp mark to now." },
+  streamEnd: { title: "End this stream?", label: "End stream", text: "Save a stream report from this session's games. It appears in your notifications and under Stream reports." },
+  predictionCancel: { title: "Cancel this round?", label: "Cancel round", text: "No points or oracle accuracy will be recorded." },
+};
 export function DockGame({ token, live, lastLiveAt, gameStatus, session, studio, engagement, ready, busy, onPost }: {
   token: string; live: LiveGameEnvelope | null; lastLiveAt: number | null; gameStatus: DockGameStatus | null;
   session: LiveGamePayload["session"] | null; studio: StudioState; engagement: EngagementSummary; ready: boolean; busy: boolean; onPost: DockPost;
@@ -25,6 +30,7 @@ export function DockGame({ token, live, lastLiveAt, gameStatus, session, studio,
   const identity = source.current, mounted = useRef(true);
   const [confirm, setConfirm] = useState<{ identity: typeof identity; action: Action } | null>(null);
   const [receipt, setReceipt] = useState<{ identity: typeof identity; text: string; queued: boolean } | null>(null);
+  const [streamNote, setStreamNote] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const progress = useRef<HTMLParagraphElement>(null);
   useEffect(() => { mounted.current = true; const timer = setInterval(() => setNow(Date.now()), 1000); return () => { mounted.current = false; clearInterval(timer); }; }, []);
@@ -40,6 +46,9 @@ export function DockGame({ token, live, lastLiveAt, gameStatus, session, studio,
   async function confirmAction() {
     if (!canConfirm || !activeConfirm) return;
     const saved = await onPost(activeConfirm);
+    if (saved && activeConfirm.action === "streamEnd" && mounted.current) {
+      setStreamNote(saved.streamEnd ? `Stream report saved: ${saved.streamEnd.games} game${saved.streamEnd.games === 1 ? "" : "s"}, ${saved.streamEnd.wins}–${saved.streamEnd.losses}.` : "Stream ended. No games were recorded, so there is no report.");
+    }
     if (saved && mounted.current && source.current === identity) setConfirm(null);
   }
   async function shoutout() {
@@ -63,10 +72,16 @@ export function DockGame({ token, live, lastLiveAt, gameStatus, session, studio,
       <div className="flex flex-wrap gap-2"><DockButton disabled={!ready || busy} onClick={() => setConfirm({ identity, action: { action: "predictionCancel", gameKey: round.gameKey } })}>Cancel round</DockButton>{(["win", "loss"] as const).map(result => <DockButton key={result} disabled={!ready || busy || !manual} onClick={() => setConfirm({ identity, action: { action: "predictionResolve", gameKey: round.gameKey, result } })}>Resolve {result === "win" ? "Win" : "Loss"}</DockButton>)}</div>
       <p className="text-text-muted">After the game ends, manual resolve stays available for 30 minutes until your next match or a verified result. Manual and cancelled rounds earn no points or oracle accuracy.</p>
     </> : <p className="text-text-muted">No open round. Crystal Ball opens automatically when a match starts.</p>}</div>
-    <div className="flex flex-wrap gap-2"><DockButton disabled={!ready || busy} onClick={() => setConfirm({ identity, action: { action: "sessionReset" } })}>Start new session</DockButton><DockButton disabled={!ready || busy} onClick={() => void onPost({ action: "gamePause", paused: studio.gameWidgetsPaused !== true })}>{studio.gameWidgetsPaused ? "Show game widgets" : "Hide game widgets"}</DockButton></div>
+    <div className="flex flex-wrap gap-2"><DockButton disabled={!ready || busy} onClick={() => setConfirm({ identity, action: { action: "sessionReset" } })}>Start new session</DockButton><DockButton disabled={!ready || busy} onClick={() => { setStreamNote(""); setConfirm({ identity, action: { action: "streamEnd" } }); }}>End stream</DockButton><DockButton disabled={!ready || busy} onClick={() => void onPost({ action: "gamePause", paused: studio.gameWidgetsPaused !== true })}>{studio.gameWidgetsPaused ? "Show game widgets" : "Hide game widgets"}</DockButton></div>
+    {streamNote ? <p role="status">{streamNote}</p> : null}
     <p className="text-text-muted">Game overlays and scouting voice hide together. Chat, polls, scenes and timers keep running.</p>
-    <ConfirmDialog open={!!activeConfirm} focusCancel loading={busy} onClose={() => { if (!busy) setConfirm(null); }} onConfirm={() => void confirmAction()} title={activeConfirm?.action === "sessionReset" ? "Start new session?" : activeConfirm?.action === "predictionCancel" ? "Cancel this round?" : `Resolve ${activeConfirm?.result === "win" ? "Win" : "Loss"} manually?`} confirmLabel={activeConfirm?.action === "sessionReset" ? "Start new session" : activeConfirm?.action === "predictionCancel" ? "Cancel round" : "Resolve manually"} description={activeConfirm?.action === "sessionReset" ? "Begin a new stream session and set its clip timestamp mark to now." : "No points or oracle accuracy will be recorded."}>
+    <ConfirmDialog open={!!activeConfirm} focusCancel loading={busy} onClose={() => { if (!busy) setConfirm(null); }} onConfirm={() => void confirmAction()} title={confirmCopy(activeConfirm).title} confirmLabel={confirmCopy(activeConfirm).label} description={confirmCopy(activeConfirm).text}>
       <p ref={progress} tabIndex={-1} role="status">{busy ? "Saving game control…" : ""}</p>
     </ConfirmDialog>
   </div>;
+}
+
+function confirmCopy(action: Action | null) {
+  if (action && action.action !== "predictionResolve") return CONFIRM[action.action];
+  return { title: `Resolve ${action?.result === "win" ? "Win" : "Loss"} manually?`, label: "Resolve manually", text: "No points or oracle accuracy will be recorded." };
 }

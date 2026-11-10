@@ -192,11 +192,11 @@ const { PlayerChannelsService } = require("./services/playerChannels");
 const { buildPlayerChannelsRouter } = require("./routes/playerChannels");
 const { PlayerIdentitiesService } = require("./services/playerIdentities");
 const { buildPlayerIdentitiesRouter } = require("./routes/playerIdentities");
-const { NotificationsService } = require("./services/notifications");
 const { SupportMessagesService } = require("./services/supportMessages");
 const { AnnouncementsService } = require("./services/announcements");
 const { buildAnnouncementsRouter } = require("./routes/announcements");
-const { buildNotificationsRouter } = require("./routes/notifications");
+const { buildNotificationServices } = require("./services/deliveryServices");
+const { mountNotificationRoutes } = require("./routes/deliveryRoutes");
 const { ReviewerReputationService } = require("./services/reviewerReputation");
 const { ReviewsService } = require("./services/reviews");
 const { buildReviewsRouter } = require("./routes/reviews");
@@ -389,10 +389,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     logger: deps.logger,
     supportEmail: deps.config.supportEmail,
   });
-  const notifications = new NotificationsService(deps.db, {
-    io: deps.io,
-    logger: deps.logger,
-  });
+  // The bell plus Web Push, reports, Discord, calendar feed and reminders.
+  const { notifications, delivery, useSessionPolicy } = buildNotificationServices(deps);
   const supportMessages = new SupportMessagesService(deps.db, notifications, adminEvents);
   const announcements = new AnnouncementsService(deps.db, { notifications, io: deps.io, logger: deps.logger });
   const identityDeletions = new IdentityDeletionsService(deps.db, { clerk, secret: deps.config.serverPepper, logger: deps.logger });
@@ -707,7 +705,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   };
   const gameDesk = new GameDeskService({ users: deps.db.users, studio: multichatStudio,
     engagement: multichatEngagement, games, broker: liveGameBroker, channels: opponentChannels,
-    tokens: overlayTokens, bot: twitchChatBot, io: deps.io, onSessionReset: owner => sessionHistory.invalidateForReset(owner) });
+    tokens: overlayTokens, bot: twitchChatBot, io: deps.io, onSessionReset: owner => sessionHistory.invalidateForReset(owner), streams: delivery.streamReports });
   twitchChatBot.shoutoutLine = userId => gameDesk.shoutoutLine(userId);
   const streamSeries = new StreamSeriesService({ studio: multichatStudio, games: deps.db.games,
     tokens: overlayTokens, io: deps.io, onCompleted: async (token, series) => {
@@ -720,7 +718,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const aggregations = new AggregationsService(deps.db, { mmrExpectation });
   const sessionPolicy = new SessionPolicyService(deps.db, { revisions: aggregations.trendsRequests.revisions });
   aggregations.sessionPolicy = sessionPolicy;
-  games.sessionPolicy = sessionPolicy;
+  games.sessionPolicy = sessionPolicy; useSessionPolicy(sessionPolicy);
   const sessionHistory = new SessionHistoryService(deps.db, { sessionPolicy });
   const macroReport = new MacroReportService(deps.db);
   const streak = new StreakService(deps.db);
@@ -1135,7 +1133,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     pulseDirectory,
     playerChannels,
     playerIdentities,
-    notifications,
+    notifications, ...delivery,
     supportMessages,
     announcements,
     reviewerReputation,
@@ -1580,13 +1578,8 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       rollout: deps.config.reviewsEnabled || "off",
     }),
   );
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildNotificationsRouter({
-      notifications: services.notifications,
-      auth,
-    }),
-  );
+  // The bell, push devices, calendar feed, reports and Discord settings.
+  mountNotificationRoutes(app, SERVICE.ROUTE_PREFIX, services, auth);
   // Multichat overlay relays — overlay-token auth (path segment), no
   // Clerk session, so it mounts with the public bundle.
   app.use(
@@ -1763,7 +1756,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       ladderMapPool: services.seasons ? services.seasons.ladderMapPool : undefined,
       series: services.streamSeries,
       gameMoments: services.gameMoments,
-      twitchAutomation: services.twitchAutomation || undefined,
+      twitchAutomation: services.twitchAutomation || undefined, discord: services.discordWebhooks,
       replayFiles: services.replayFiles || undefined,
       io: deps.io,
       guideSamples: services.guideSamples,
