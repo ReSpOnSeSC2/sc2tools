@@ -76,6 +76,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   guideNotes: import('mongodb').Collection,
  *   guideVideos: import('mongodb').Collection<any>,
  *   buildIntentLive: import('mongodb').Collection<any>,
+ *   playerGoals: import('mongodb').Collection<any>,
  *   gameShares: import('mongodb').Collection<any>,
  *   close: () => Promise<void>,
  * }} DbContext
@@ -108,9 +109,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     retryWrites: true,
     monitorCommands: !!logger,
   });
-  if (logger) {
-    attachSlowQueryLogging(client, logger, observability.slowQueryMs);
-  }
+  if (logger) attachSlowQueryLogging(client, logger, observability.slowQueryMs);
   await client.connect();
   const db = client.db(dbName);
   // Check the connected topology rather than inferring transaction support
@@ -189,6 +188,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     guideNotes: db.collection(COLLECTIONS.GUIDE_NOTES),
     guideVideos: db.collection(COLLECTIONS.GUIDE_VIDEOS),
     buildIntentLive: db.collection(COLLECTIONS.BUILD_INTENT_LIVE), gameShares: db.collection(COLLECTIONS.GAME_SHARES),
+    playerGoals: db.collection(COLLECTIONS.PLAYER_GOALS),
     close: () => client.close(),
   };
   await ensureIndexes(ctx, { logger, awaitBackground: awaitBackgroundIndexes });
@@ -757,7 +757,7 @@ async function ensureIndexes(ctx, opts = {}) {
 
   await ensureBuildIntentIndexes(ctx);
   await ensureGuideIndexes(ctx);
-  await ensureReviewIndexes(ctx);
+  await ensureReviewIndexes(ctx); await ensurePlayerGoalIndexes(ctx);
   // Last, so the ``games`` collection exists and the long build never
   // competes with the awaited ones above.
   const logger = opts.logger || null, guides = startBackgroundIndexBuilds(ctx, logger);
@@ -768,6 +768,23 @@ async function ensureIndexes(ctx, opts = {}) {
   ctx.privateSearchIndexes = search;
   if (opts.awaitBackground) await Promise.all([guides.settled, search.settled, corpus.settled]);
   return guides;
+}
+
+/**
+ * Personal goals (services/playerGoals.js): lookups by public id, the
+ * active/completed lists, and the active-goal cap. Only an active goal
+ * holds a ``slot`` (0..7), so the unique partial index makes "at most 8
+ * active goals" a constraint instead of a racy count.
+ *
+ * @param {{ playerGoals: import('mongodb').Collection<any> }} ctx
+ */
+async function ensurePlayerGoalIndexes(ctx) {
+  await ctx.playerGoals.createIndex({ userId: 1, id: 1 }, { unique: true });
+  await ctx.playerGoals.createIndex({ userId: 1, status: 1, completedAt: -1 });
+  await ctx.playerGoals.createIndex(
+    { userId: 1, slot: 1 },
+    { unique: true, partialFilterExpression: { slot: { $exists: true } }, name: "player_goals_active_slot" },
+  );
 }
 
 /**

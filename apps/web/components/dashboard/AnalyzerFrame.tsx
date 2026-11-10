@@ -120,6 +120,8 @@ export function AnalyzerFrame({
   const isGameRoute =
     pathname === "/app/game" || pathname.startsWith("/app/game/");
   const isArcade = pathname === "/app/arcade";
+  // Goals carry their own filters; the global bar would not change them.
+  const ownFilters = isArcade || pathname === "/app/goals";
 
   const { enabled: browserImportEnabled } = useInstantImport();
   const noGames = me.games.total === 0;
@@ -146,7 +148,7 @@ export function AnalyzerFrame({
 
             {browserImportEnabled ? <FolderSyncAutoRunner /> : null}
 
-            {!isArcade ? <FrameFilters today={pathname === "/app"} /> : null}
+            {!ownFilters ? <FrameFilters today={pathname === "/app"} /> : null}
 
             {view.checklist ? (
               <OnboardingChecklist

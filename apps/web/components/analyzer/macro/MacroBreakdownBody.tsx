@@ -13,6 +13,7 @@ import { MacroKpiRow } from "./MacroKpiRow";
 import { readGameApm, type ApmCurveResponse } from "@/lib/apm";
 import { patchEraForGame } from "@/lib/ladderPulse";
 import type { LeakItem, MacroBreakdownData, PanelHeaderMeta } from "./MacroBreakdownPanel.types";
+import type { LeagueBenchmark } from "@/lib/benchmarks";
 
 export function MacroBreakdownBody({
   data,
@@ -28,6 +29,7 @@ export function MacroBreakdownBody({
   inspectionTime,
   onSeek,
   fitOverview = false,
+  league = null,
 }: {
   data: MacroBreakdownData;
   gameId: string;
@@ -43,6 +45,8 @@ export function MacroBreakdownBody({
   onSeek?: (time: number) => void;
   /** Local modal overview; full game/review layouts retain their normal sizing. */
   fitOverview?: boolean;
+  /** The game's league table (game page context) for the SQ percentile tag. */
+  league?: LeagueBenchmark | null;
 }) {
   const headingId = useId();
   const fittedOverview = useMacroOverviewMode(fitOverview);
@@ -127,7 +131,7 @@ export function MacroBreakdownBody({
 
       <Headline score={score} colourClass={headlineColour} />
 
-      <MacroKpiRow raw={raw} apm={gameApm} apmLoading={apmReq.isLoading} />
+      <MacroKpiRow raw={raw} apm={gameApm} apmLoading={apmReq.isLoading} league={league} />
 
       <section
         aria-labelledby={`${headingId}-penalty`}

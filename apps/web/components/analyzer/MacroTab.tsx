@@ -5,6 +5,7 @@ import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Skeleton } from "@/components/ui/Card";
 import { QueryState } from "@/components/ui/QueryState";
+import { SectionBoundary } from "@/components/ui/SectionBoundary";
 import { MacroSummaryCard } from "./MacroSummaryCard";
 import { MacroEmptyState } from "./MacroEmptyState";
 import { MechanicsTrendCard } from "./MechanicsTrendCard";
@@ -14,6 +15,7 @@ import { ScoreBucketsCard } from "./macro/report/ScoreBucketsCard";
 import { SegmentsCard } from "./macro/report/SegmentsCard";
 import { LeakLedgerCard } from "./macro/report/LeakLedgerCard";
 import { ReportGamesModal } from "./macro/report/ReportGamesModal";
+import { TargetsCard } from "./macro/targets/TargetsCard";
 import type { MacroReportData, ReportDrill } from "./macro/report/types";
 
 /**
@@ -30,6 +32,9 @@ import type { MacroReportData, ReportDrill } from "./macro/report/types";
  *   - Segments: where macro collapses (matchup / length / build).
  *   - Leak ledger: every leak priced in minerals with win-rate impact.
  *
+ *   - Targets (first): your last 20 games against your league and the
+ *     next one, timing gaps and a season goal estimate.
+ *
  * Every clickable row opens ReportGamesModal — the exact games behind
  * the number, each expandable into the existing per-game breakdown.
  * One report request per filter change; no synthesised data anywhere.
@@ -45,6 +50,7 @@ export function MacroTab() {
 
   return (
     <div className="space-y-4">
+      <SectionBoundary label="your league targets"><TargetsCard onDrill={setDrill} /></SectionBoundary>
       <MacroSummaryCard backfill={backfill} />
       <MechanicsTrendCard />
       <QueryState

@@ -16,6 +16,7 @@ const LABELS: Record<string, string> = {
   publishedBuilds: "Published builds", reports: "Community reports", connectedAccounts: "Connected streaming accounts", notifications: "Notifications",
   reviewRequests: "Review requests", reviewThreadComments: "Comments on your review requests", playerChannels: "Player channel submissions", gameShares: "Game share links",
   streamRows: "Stream Studio, viewer and prediction records", reviewComments: "Comments on other review requests", activityEvents: "Service activity records", auditRows: "Admin audit records",
+  goals: "Personal goals",
 };
 
 type ExportStatus = { busy: boolean; feedback: { bytes: number; message: string } | null; cancel: () => void };

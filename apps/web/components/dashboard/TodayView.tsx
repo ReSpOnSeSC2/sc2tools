@@ -19,6 +19,9 @@ const LadderPulse = dynamic(
   { loading: () => <LadderPulseFrame pending /> },
 );
 const LevelUpChecklist = dynamic(() => import("@/components/onboarding/LevelUpChecklist").then(module => module.LevelUpChecklist));
+// Own chunks: Today's first load stays within its route budget.
+const GoalsTodayCard = dynamic(() => import("@/components/goals/GoalsTodayCard").then((module) => module.GoalsTodayCard));
+const TargetsStrip = dynamic(() => import("@/components/analyzer/macro/targets/TargetsStrip").then((module) => module.TargetsStrip));
 
 /**
  * TodayView — the /app landing surface. Everything here is the
@@ -57,6 +60,9 @@ export function TodayView() {
       </SectionBoundary>
 
       <div data-tour="today-summary"><DashboardKpiStrip /></div>
+
+      <SectionBoundary label="your goals"><GoalsTodayCard /></SectionBoundary>
+      <SectionBoundary label="your league targets"><TargetsStrip /></SectionBoundary>
 
       <div data-tour="today-daily-pulse"><SectionBoundary label="the Daily Pulse strip">
         <DailyPulse
