@@ -12,7 +12,7 @@ win.show()
 app.processEvents()
 page = win._companion_page
 expected = ["Companion", "Dashboard", "Recent games", "Streams", "Activity log", "Settings", "Help",
-            "Border & animations…", "Help & troubleshooting", "Check for updates", "Quit SC2 Tools"]
+            "Border && animations…", "Help && troubleshooting", "Check for updates", "Quit SC2 Tools"]
 for route in ("companion", "dashboard", "recent", "streams", "log", "settings", "help", "companion"):
     win._go_to_page(route)
     app.processEvents()
@@ -102,13 +102,13 @@ for route in ("settings", "companion"):
     app.processEvents()
     button = page.agent_menu_button if route == "companion" else win._agent_menu_button
     actions = {action.text(): action for action in button.menu().actions() if not action.isSeparator()}
-    actions["Border & animations…"].trigger()
+    actions["Border && animations…"].trigger()
     app.processEvents()
     assert win._stack.currentWidget() is page
     assert page.console.current_route() == "settings"
     assert page.appearance_controls.isVisible()
     assert win._handle_input.text() == "Unsaved player"
-    actions["Help & troubleshooting"].trigger()
+    actions["Help && troubleshooting"].trigger()
     app.processEvents()
     assert win._stack.currentWidget() is win._help_page
 assert opened == []
