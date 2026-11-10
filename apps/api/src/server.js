@@ -31,6 +31,7 @@ const {
   buildLeaguePercentilesRecomputeJob,
 } = require("./jobs/leaguePercentilesRecomputeJob");
 const { buildMmrExpectationRecomputeJob } = require("./jobs/mmrExpectationRecomputeJob");
+const { buildClassifierQualityJob } = require("./jobs/classifierQualityJob");
 const {
   buildFingerprintPopulationCalibrationRecomputeJob,
 } = require("./jobs/fingerprintPopulationCalibrationRecomputeJob");
@@ -346,6 +347,12 @@ async function main() {
     mmrExpectation: /** @type {any} */ (services).mmrExpectation,
   });
   mmrExpectationJob.start();
+  // Nightly check-in correction aggregates for /admin/classifier.
+  const classifierQualityJob = buildClassifierQualityJob({
+    db, logger, jobLedger: /** @type {any} */ (services).jobLedger,
+    classifierQuality: /** @type {any} */ (services).classifierQuality,
+  });
+  classifierQualityJob.start();
 
   // Nightly player-level reference for Skill Fingerprint naming. This is a
   // separate table from per-game league benchmarks: each player/matchup window
@@ -458,6 +465,7 @@ async function main() {
     await ladderMapBackfill.stop();
     await leaguePercentilesJob.stop();
     await mmrExpectationJob.stop();
+    await classifierQualityJob.stop();
     await fingerprintPopulationCalibrationJob.stop();
     await ladderMetaJob.stop();
     await reviewDigestJob.stop();

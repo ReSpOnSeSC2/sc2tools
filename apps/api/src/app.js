@@ -74,6 +74,7 @@ const { CustomBuildsService } = require("./services/customBuilds");
 const { PresetPoliciesService } = require("./services/presetPolicies");
 const { AdminBuildStudioService } = require("./services/adminBuildStudio");
 const { buildPresetPolicyRouter } = require("./routes/presetPolicy");
+const { buildClassifierTrustRouter } = require("./routes/adminClassifier");
 const { BuildIntentsService } = require("./services/buildIntents");
 const { GhostExamplesService } = require("./services/ghostExamples");
 const { GhostReferencesService } = require("./services/ghostReferences");
@@ -182,6 +183,7 @@ const {
 const { buildFingerprintRouter } = require("./routes/fingerprint");
 const { AdminService } = require("./services/admin");
 const { AdminGlobalService } = require("./services/adminGlobal");
+const { ClassifierQualityService } = require("./services/classifierQuality");
 const { AdminGlobalTrendsService } = require("./services/adminGlobalTrends");
 const { AdminEventsService } = require("./services/adminEvents");
 const { SiteStatsService } = require("./services/siteStats");
@@ -992,6 +994,9 @@ function makeServices(deps, clerk, adminClerkIds) {
     db: deps.db,
     pulseDirectory,
   });
+  // Check-in correction aggregates for /admin/classifier and the
+  // /definitions trust lines (nightly job: jobs/classifierQualityJob.js).
+  const classifierQuality = new ClassifierQualityService({ db: deps.db, gameDetails, presetPolicies });
   const adminGlobalTrends = new AdminGlobalTrendsService({ db: deps.db, mmrExpectation });
   // Atlas Cloud Backup health + in-app snapshot counts for /admin/health;
   // server.js runs the hourly stale-backup alert against the same cache.
@@ -1103,6 +1108,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     admin,
     adminGlobal,
     adminGlobalTrends,
+    classifierQuality,
     adminEvents,
     backupStatus,
     analytics,
@@ -1618,6 +1624,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     }),
   );
   app.use(SERVICE.ROUTE_PREFIX, buildPresetPolicyRouter(services.presetPolicies));
+  // Public, k-floored /definitions trust lines; before any router that
+  // applies auth to every /v1 path it sees.
+  app.use(SERVICE.ROUTE_PREFIX, buildClassifierTrustRouter(services.classifierQuality));
   // Operational admin router — gated on isAdmin(req) inside the
   // router. Mounted alongside the rest of the v1 prefix so
   // /v1/admin/* shares CORS, rate-limit, and JSON parsing config.
@@ -1625,6 +1634,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildAdminRouter({
       buildStudio: { studio: services.buildStudio, policies: services.presetPolicies },
+      classifierQuality: services.classifierQuality,
       announcements: services.announcements,
       supportMessages: services.supportMessages,
       jobLedger: services.jobLedger, adminAudit: services.adminAudit,

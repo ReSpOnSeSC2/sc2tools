@@ -26,6 +26,23 @@ const { AdminUsersService } = require("./adminUsers");
 const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 const { COLLECTIONS } = require("../config/constants");
 const { disabledBrowserUploadStatus } = require("./replayFilesCors");
+const { RESULT_CLASS_EXPR, resultFilterQuery } = require("../util/gameResultClass");
+
+/** Opponent head-to-head strip: maps it names, and maps offered to the filter. */
+const SUMMARY_TOP_MAPS = 5;
+const SUMMARY_MAP_OPTIONS = 50;
+/** One user's games against one opponent; a slow plan fails instead of hanging. */
+const SUMMARY_MAX_TIME_MS = 10_000;
+
+/**
+ * @typedef {{
+ *   wins: number, losses: number, ties: number, unknown: number,
+ *   avgDurationSec: number | null,
+ *   maps: Array<{ map: string, games: number, wins: number, losses: number, ties: number }>,
+ *   mapOptions: string[],
+ *   last10: Array<import('../util/gameResultClass').ResultClass>,
+ * }} OpponentGamesSummary
+ */
 
 /**
  * Subset of collection names that have meaningful per-collection
@@ -441,11 +458,14 @@ class AdminService {
    *
    * Cursor-paginated by ``date`` to match the rest of the games
    * surface. Returns slim rows only — build orders live in
-   * ``game_details`` and are fetched per-game on demand.
+   * ``game_details`` and are fetched per-game on demand. ``result``
+   * (win|loss|tie, the gameResultClass classification) and ``map``
+   * (exact name) narrow the list; the first page (no ``before``) also
+   * carries ``summary``, computed over every game against this opponent.
    *
    * @param {string} userId
    * @param {string} pulseId
-   * @param {{ limit?: number, before?: Date }} [opts]
+   * @param {{ limit?: number, before?: Date, result?: import('../util/gameResultClass').ResultFilter, map?: string }} [opts]
    * @returns {Promise<{
    *   items: Array<{
    *     gameId: string,
@@ -461,6 +481,7 @@ class AdminService {
    *     opponent: { displayName: string, race: string, mmr: number | null },
    *   }>,
    *   nextBefore: Date | null,
+   *   summary?: OpponentGamesSummary,
    * }>}
    */
   async listGamesVsOpponent(userId, pulseId, opts = {}) {
@@ -468,14 +489,19 @@ class AdminService {
     if (!pulseId) throw new Error("pulseId required");
     const limit = clampLimit(opts.limit, 50);
     /** @type {Record<string, any>} */
-    const filter = {
+    const cohort = {
       userId,
       $or: [{ oppPulseId: pulseId }, { "opponent.pulseId": pulseId }],
     };
-    if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
+    /** @type {Record<string, any>} */
+    const filter = { ...cohort };
+    if (opts.result) Object.assign(filter, resultFilterQuery(opts.result));
+    if (opts.map) filter.map = opts.map;
+    const firstPage = !(opts.before instanceof Date && !Number.isNaN(opts.before.getTime()));
+    if (!firstPage) {
       filter.date = { $lt: opts.before };
     }
-    const rows = await this.db.games
+    const listed = this.db.games
       .find(filter, {
         projection: {
           _id: 0,
@@ -495,6 +521,12 @@ class AdminService {
       .sort({ date: -1 })
       .limit(limit + 1)
       .toArray();
+    // The head-to-head strip describes every game against this opponent,
+    // whatever filter the list shows, so it rides only the first page.
+    const [rows, summary] = await Promise.all([
+      listed,
+      firstPage ? this.opponentGamesSummary(cohort) : null,
+    ]);
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const items = page.map((/** @type {any} */ g) => {
@@ -521,6 +553,65 @@ class AdminService {
     return {
       items,
       nextBefore: hasMore && page.length > 0 ? page[page.length - 1].date : null,
+      ...(summary ? { summary } : {}),
+    };
+  }
+
+  /**
+   * Head-to-head summary over every game in ``cohort`` (one user against
+   * one opponent), in one aggregate: W/L/T plus unknown results, the
+   * average length of games with a recorded duration, the top five maps by
+   * games with each map's W/L/T, every map name (for the map filter) and
+   * the ten most recent results. Ties and unknown results are counted but
+   * are never decided games; callers derive the win rate from wins and
+   * losses only.
+   *
+   * @param {Record<string, any>} cohort
+   * @returns {Promise<OpponentGamesSummary>}
+   */
+  async opponentGamesSummary(cohort) {
+    const countOf = (/** @type {string} */ cls) => ({ $sum: { $cond: [{ $eq: ["$cls", cls] }, 1, 0] } });
+    const timed = { $and: [{ $isNumber: "$durationSec" }, { $gt: ["$durationSec", 0] }] };
+    const [row] = await this.db.games
+      .aggregate([
+        { $match: cohort },
+        { $project: { _id: 0, date: 1, map: 1, durationSec: 1, cls: RESULT_CLASS_EXPR } },
+        {
+          $facet: {
+            totals: [{
+              $group: {
+                _id: null,
+                wins: countOf("win"), losses: countOf("loss"), ties: countOf("tie"), unknown: countOf("unknown"),
+                timedSec: { $sum: { $cond: [timed, "$durationSec", 0] } },
+                timedGames: { $sum: { $cond: [timed, 1, 0] } },
+              },
+            }],
+            maps: [
+              { $match: { map: { $type: "string", $ne: "" } } },
+              { $group: { _id: "$map", games: { $sum: 1 }, wins: countOf("win"), losses: countOf("loss"), ties: countOf("tie") } },
+              { $sort: { games: -1, _id: 1 } },
+              { $limit: SUMMARY_MAP_OPTIONS },
+            ],
+            last10: [{ $sort: { date: -1 } }, { $limit: 10 }, { $project: { cls: 1 } }],
+          },
+        },
+      ], { maxTimeMS: SUMMARY_MAX_TIME_MS })
+      .toArray();
+    const totals = row?.totals?.[0] || {};
+    const maps = Array.isArray(row?.maps) ? row.maps : [];
+    const timedGames = Number(totals.timedGames) || 0;
+    return {
+      wins: Number(totals.wins) || 0,
+      losses: Number(totals.losses) || 0,
+      ties: Number(totals.ties) || 0,
+      unknown: Number(totals.unknown) || 0,
+      avgDurationSec: timedGames > 0 ? Math.round((Number(totals.timedSec) || 0) / timedGames) : null,
+      maps: maps.slice(0, SUMMARY_TOP_MAPS).map((/** @type {any} */ m) => ({
+        map: String(m._id), games: Number(m.games) || 0,
+        wins: Number(m.wins) || 0, losses: Number(m.losses) || 0, ties: Number(m.ties) || 0,
+      })),
+      mapOptions: maps.map((/** @type {any} */ m) => String(m._id)),
+      last10: (Array.isArray(row?.last10) ? row.last10 : []).map((/** @type {any} */ g) => g.cls),
     };
   }
 

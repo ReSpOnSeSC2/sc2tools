@@ -27,7 +27,7 @@ const article: HelpArticle = {
     "macro breakdown",
     "change build",
   ],
-  updated: "2026-10-27",
+  updated: "2026-11-10",
   body: [
     {
       type: "paragraph",
@@ -126,6 +126,9 @@ const article: HelpArticle = {
         "Games under 45 seconds never count toward a build. **No set build** undoes a check-in.",
       ],
     },
+    { type: "heading", text: "Your corrections improve labels for everyone", anchor: "corrections-improve-labels" },
+    { type: "paragraph", text: "A confirmed check-in also keeps the label the replay detector gave that game. Once a night, SC2 Tools counts the last 90 days of these without names, games or opponents, so the people who maintain the detection rules can see where players and the detector disagree most. A disagreement only appears once at least three different players reported it. No rule changes by itself: a person reviews the examples and edits the rule by hand, so later replays are labelled better for everyone. Your own stats work exactly as described above." },
+    { type: "paragraph", text: "On [Build & Strategy Definitions](/definitions), a rule with enough check-ins shows **Matches N of M player corrections**: of M confirmed check-ins that named this build, the detector also named it in N. It counts disagreement volume from players who checked in. It is not an accuracy score, and a rule few players check in with shows no line." },
     { type: "heading", text: "Plan survival", anchor: "plan-survival" },
     { type: "paragraph", text: "After at least **five confirmed declarations** for a build, its dossier shows **Plan survival** and build lists can show **Held**. Held means the replay detector named the declared build or recorded no different label. **Knocked off** means it recorded another build. This comparison describes labels; missing detection does not prove execution, and a different label does not prove that your opponent caused a change. Stable custom-build identity is used before a renamed display label." },
     { type: "paragraph", text: "The ring counts all confirmed declared games in the visible cohort. **Held win rate** and **Knocked-off win rate** each use their own decided-game count; missing results stay unknown rather than becoming losses. Ordinary detected games remain in Performance but do not inflate the declared denominator." },
