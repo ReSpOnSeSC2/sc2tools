@@ -150,6 +150,18 @@ export function clock(seconds: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
+/** Games in each rolling-drift window. */
+export const DRIFT_WINDOW = 5;
+
+/**
+ * Rolling drift: the mean average drift of the newest DRIFT_WINDOW graded
+ * games and of the DRIFT_WINDOW before them, 1 dp; null when a window is empty.
+ */
+export function rollingDrift(history: readonly PracticeHistoryRow[]): { recent: number | null; previous: number | null } {
+  const mean = (rows: readonly PracticeHistoryRow[]) => rows.length ? Math.round((rows.reduce((sum, row) => sum + row.avgDrift, 0) / rows.length) * 10) / 10 : null;
+  return { recent: mean(history.slice(0, DRIFT_WINDOW)), previous: mean(history.slice(DRIFT_WINDOW, DRIFT_WINDOW * 2)) };
+}
+
 /** Share of graded games at each grade, in display order. */
 export function gradeShares(grades: Record<GhostGradeLetter, number>): Array<{ grade: GhostGradeLetter; games: number; share: number }> {
   const total = GRADE_ORDER.reduce((sum, grade) => sum + (grades[grade] ?? 0), 0);

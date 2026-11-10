@@ -5,6 +5,7 @@ import {
   gradeSparkline,
   practiceGamesPath,
   practiceSummaryPath,
+  rollingDrift,
   startOfLocalWeek,
   weekProgress,
   type PracticeHistoryRow,
@@ -42,6 +43,13 @@ describe("practice log helpers", () => {
     ];
     expect(weekProgress(history, wednesday, 4)).toEqual({ graded: 3, good: 2, goal: 4, ratio: 0.5 });
     expect(weekProgress(history, wednesday, 1).ratio).toBe(1);
+  });
+
+  it("compares the newest five graded games' drift with the five before", () => {
+    const history = [4, 6, 5, 5, 5, 10, 12, 8, 10, 10].map((avgDrift, i) => ({ ...row(`g${i}`, new Date(2026, 10, 20 - i), "B"), avgDrift }));
+    expect(rollingDrift(history)).toEqual({ recent: 5, previous: 10 });
+    expect(rollingDrift(history.slice(0, 3))).toEqual({ recent: 5, previous: null });
+    expect(rollingDrift([])).toEqual({ recent: null, previous: null });
   });
 
   it("puts drift and grade shares into words and numbers", () => {

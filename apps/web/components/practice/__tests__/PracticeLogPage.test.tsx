@@ -83,6 +83,7 @@ describe("/practice", () => {
     expect(screen.getByText(/2 graded, 1 without a build log/)).toBeTruthy();
     expect(screen.getByRole("img", { name: "Grades, oldest to newest: C, A" })).toBeTruthy();
     expect(screen.getByRole("progressbar", { name: "Weekly practice goal" })).toBeTruthy();
+    expect(screen.getByText(/Average drift over your last 2 graded games/).textContent).toBe("Average drift over your last 2 graded games: 14s");
     expect(screen.getByText("18s late · 2/2 games")).toBeTruthy();
     expect(screen.getByText("never built · 0/2 games")).toBeTruthy();
     expect(screen.getByText(/first slip in 1 of 2 games/)).toBeTruthy();

@@ -6,11 +6,13 @@ import { apiCall } from "@/lib/clientApi";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import {
   DEFAULT_WEEKLY_GOAL,
+  DRIFT_WINDOW,
   SPARKLINE_GAMES,
   clock,
   driftText,
   gradeShares,
   gradeSparkline,
+  rollingDrift,
   weekProgress,
   type PracticeStepStat,
   type PracticeSummary,
@@ -131,6 +133,7 @@ function GradeTrend({ summary }: { summary: PracticeSummary }) {
         })}
       </svg>
       <p className="text-micro text-text-dim">Hollow dots are games graded on request, played before you armed the target.</p>
+      <DriftTrend summary={summary} />
       <ul className="mt-3 grid grid-cols-5 gap-2" aria-label="Grade distribution">
         {shares.map((entry) => (
           <li key={entry.grade} className="flex flex-col items-center gap-1 text-caption">
@@ -141,6 +144,18 @@ function GradeTrend({ summary }: { summary: PracticeSummary }) {
         ))}
       </ul>
     </Card>
+  );
+}
+
+function DriftTrend({ summary }: { summary: PracticeSummary }) {
+  const drift = rollingDrift(summary.history);
+  if (drift.recent === null) return null;
+  const change = drift.previous === null ? null : Math.round((drift.recent - drift.previous) * 10) / 10;
+  return (
+    <p className="mt-2 text-caption text-text-muted">
+      Average drift over your last {Math.min(DRIFT_WINDOW, summary.history.length)} graded games: <span className="font-semibold tabular-nums text-text">{drift.recent}s</span>
+      {change === null ? null : <> ({change === 0 ? "same as" : change < 0 ? `${-change}s tighter than` : `${change}s looser than`} the {DRIFT_WINDOW} before)</>}
+    </p>
   );
 }
 
