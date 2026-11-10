@@ -11,6 +11,7 @@ import {
   BUILD_CHECKIN_PREFS_PATH,
   buildIntentErrorCode,
   buildIntentErrorMessage,
+  buildOptionHref,
   buildOptionsPath,
   checkinsText,
   confirmGameIntent,
@@ -32,6 +33,7 @@ import {
   plannedTooltip,
   putCheckinPrefs,
   recordText,
+  reopenGameIntent,
   sanitizeCheckinPrefs,
   saveGameIntentNotes,
   setOpponentBuild,
@@ -435,5 +437,32 @@ describe("Add new build copy", () => {
     expect(NEW_BUILD_NOT_CHECKED_IN).toBe(
       "Saved to your library, but this game can't take it as its check-in",
     );
+  });
+});
+
+describe("Undo and build links", () => {
+  it("reopens a decided game with the reopen action", async () => {
+    apiCallMock.mockResolvedValueOnce({});
+    const signal = new AbortController().signal;
+    await reopenGameIntent(getToken, "a|b", { signal });
+    expect(apiCallMock).toHaveBeenCalledWith(getToken, "/v1/games/a%7Cb/build-intent", {
+      method: "PUT",
+      body: JSON.stringify({ action: "reopen" }),
+      signal,
+    });
+    expect(buildIntentErrorMessage({ status: 409, code: "not_reopenable", message: "x" })).toMatch(
+      /already undone or changed elsewhere/,
+    );
+  });
+
+  it("links your builds to their page and catalog builds to their definition", () => {
+    expect(buildOptionHref("custom:dt-3-gate", "DT into 3 Gate")).toBe("/builds/dt-3-gate");
+    expect(buildOptionHref("custom:a b", "A B")).toBe("/builds/a%20b");
+    expect(buildOptionHref("protoss-stargate-opener", "Protoss - Stargate Opener")).toBe(
+      "/definitions#protoss-stargate-opener",
+    );
+    expect(buildOptionHref("pvz-made-up", "PvZ - Made Up Build")).toBeNull();
+    expect(buildOptionHref("custom:", "Nameless")).toBeNull();
+    expect(buildOptionHref(null, "Anything")).toBeNull();
   });
 });

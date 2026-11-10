@@ -384,6 +384,20 @@ describe("BuildCheckInCard — other states", () => {
     expect(screen.getByText("This game counts toward it in your stats.")).toBeTruthy();
   });
 
+  it("links a planned custom build to its library page, unless it was deleted", () => {
+    const build = { key: "custom:dt-rush", name: "DT Rush", slug: "dt-rush", source: "custom" as const };
+    harness.intent = intent({ status: "confirmed", applied: true, build });
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("link", { name: "DT Rush" }).getAttribute("href")).toBe("/builds/dt-rush");
+    cleanup();
+
+    harness.intent = intent({ status: "confirmed", applied: true, build: { ...build, deleted: true } });
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByText("DT Rush").closest("a")).toBeNull();
+  });
+
   it("renders nothing for a 404 and a retry row for other failures", () => {
     harness.error = { status: 404, message: "Not found." };
     const { unmount } = render(<BuildCheckInCard gameId="g1" />);
