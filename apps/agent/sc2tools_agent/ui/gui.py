@@ -1239,10 +1239,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             brand_row = QtWidgets.QHBoxLayout(self._agent_brandbar)
             brand_row.setContentsMargins(0, 0, 0, 0)
             brand_row.setSpacing(10)
-            emblem = QtWidgets.QLabel()
-            emblem.setObjectName("agentBrandOrb")
-            emblem.setFixedSize(23, 23)
-            brand_row.addWidget(emblem)
+            from .brand_mark import create_brand_mark
+            brand_row.addWidget(create_brand_mark(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets))
             brand = QtWidgets.QLabel("SC2 TOOLS")
             brand.setObjectName("agentBrand")
             brand_row.addWidget(brand)
@@ -1256,6 +1254,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             brand_row.addWidget(version)
             self._agent_version = version
             self._agent_menu_button = QtWidgets.QToolButton()
+            self._agent_menu_button.setObjectName("agentMenuButton")
             self._agent_menu_button.setText("Agent")
             self._agent_menu_button.setAccessibleName("Agent pages and settings")
             self._agent_menu_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
@@ -3633,7 +3632,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             widgets = [self, *self.findChildren(QtWidgets.QWidget)]
             for widget in widgets:
                 base_style = widget.property("raceBaseStyle")
-                if base_style is None and widget.styleSheet():
+                # A style of bare declarations (a status dot's colour) styles only its
+                # own widget; rules appended to it would not parse and drop that colour.
+                if base_style is None and "{" in widget.styleSheet():
                     base_style = widget.styleSheet()
                     widget.setProperty("raceBaseStyle", base_style)
                 if base_style is not None:

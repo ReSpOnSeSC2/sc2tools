@@ -20,6 +20,25 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   an earlier game against the opponent. The Scouting button still opens it, with
   your own five games and **First meeting** on the opponent's side, never a guess.
 
+### Changed
+- Give the main window and its Dashboard a flat, modern look: quiet dark
+  surfaces told apart by tone and space instead of a gradient bezel and a
+  border around every panel, and one type scale in the system font (Segoe UI
+  Variable on Windows 11). Buttons, fields, check boxes, tabs, tables, menus
+  and tooltips share one style, and a page's main action is its only filled
+  button.
+- Give each skin one accent colour for the selected page, the main action and
+  checked controls: violet for Default, gold for Protoss, steel blue for Terran
+  and orange for Zerg. The race border artwork stays, and a small race mark
+  beside the SC2 Tools name replaces the cyan dot.
+- Keep text at 4.5:1 contrast or more in every skin and show keyboard focus on
+  every control. Help buttons are round again instead of squeezed.
+- Shorten the border animation to 0.3 s, and skip it while Windows has
+  animation effects turned off.
+
+### Fixed
+- Status lights on the Dashboard keep their colour after you change the skin.
+
 ## 0.24.11
 
 ### Added
