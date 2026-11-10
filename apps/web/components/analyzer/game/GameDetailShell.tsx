@@ -161,7 +161,6 @@ export function GameDetailShell({
               aria-label="Game actions"
               className="flex min-h-9 w-full flex-wrap items-center justify-end gap-2"
             >
-              {noteActions}
               <ShareGameButton game={game} />
               {exportAction}
               <ReplayDownloadButton
@@ -182,6 +181,9 @@ export function GameDetailShell({
               ) : null}
               {streamLinks && streamLinks.length > 0 ? <GameStreamLinks links={streamLinks} variant="toolbar" /> : null}
             </div>
+            {/* The owner's review queue and opponent quick note: a separate row,
+                so the toolbar keeps only share and export actions. */}
+            {noteActions ? <div className="flex w-full flex-wrap items-center justify-end gap-2">{noteActions}</div> : null}
 
             <div className="flex flex-wrap items-center gap-2 text-caption">
               <span className="text-text-dim">My build</span>
