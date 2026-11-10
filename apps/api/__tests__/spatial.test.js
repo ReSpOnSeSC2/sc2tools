@@ -128,7 +128,9 @@ describe("services/spatial", () => {
     await expect(svc.buildings("u1", "", {})).rejects.toThrow(/map_required/);
   });
 
-  test("falls back to JS heatmap when python is unavailable", async () => {
+  test("always bins in plain JS, never spawning python", async () => {
+    const runner = require("../src/util/pythonRunner");
+    const spawn = jest.spyOn(runner, "runPythonNdjson"), available = jest.spyOn(runner, "pythonAvailable").mockReturnValue(true);
     const games = buildGames([
       [
         {
@@ -143,15 +145,13 @@ describe("services/spatial", () => {
       ],
     ]);
     const svc = new SpatialService({ games });
-    const original = process.env.SC2_PY_ANALYZER_DIR;
-    process.env.SC2_PY_ANALYZER_DIR = "/tmp/__nonexistent__";
     try {
       const out = await svc.buildings("u1", "Goldenaura", {}, { grid: 16 });
       expect(out.cells.length).toBeGreaterThan(0);
       expect(out.cells.every((c) => c.intensity >= 0 && c.intensity <= 1)).toBe(true);
+      expect(spawn).not.toHaveBeenCalled();
     } finally {
-      if (original === undefined) delete process.env.SC2_PY_ANALYZER_DIR;
-      else process.env.SC2_PY_ANALYZER_DIR = original;
+      spawn.mockRestore(); available.mockRestore();
     }
   });
 });
@@ -297,7 +297,7 @@ describe("services/spatial proxy heatmaps use the canonical proxy test", () => {
     const games = buildGames([(pipeline) => { captured = pipeline; return []; }]);
     await new SpatialService({ games }).proxy("u1", "Goldenaura", {});
     const { $project } = captured.find((s) => s && s.$project);
-    expect($project.points).toBe("$spatial.my_proxies");
+    expect($project.points.$slice[0].$cond[1]).toBe("$spatial.my_proxies");
     expect($project.proxyVersion).toBe("$spatial.my_proxy_classification_v");
     // spatial.buildings holds up to 2000 rows a game; it must never be
     // projected whole.
@@ -325,7 +325,7 @@ describe("services/spatial proxy heatmaps use the canonical proxy test", () => {
     const games = buildGames([(pipeline) => { captured = pipeline; return []; }]);
     await new SpatialService({ games }).opponentProxies("u1", "Goldenaura", {});
     const { $project } = captured.find((s) => s && s.$project);
-    expect($project.points).toBe("$spatial.opp_proxies");
+    expect($project.points.$slice[0].$cond[1]).toBe("$spatial.opp_proxies");
     expect($project.proxyVersion).toBe("$spatial.opp_proxy_classification_v");
     expect($project.townHalls).toBeUndefined();
   });
@@ -336,7 +336,7 @@ describe("services/spatial proxy heatmaps use the canonical proxy test", () => {
     await new SpatialService({ games }).buildings("u1", "Goldenaura", {});
     const { $project } = captured.find((s) => s && s.$project);
     expect(Object.keys($project).sort()).toEqual(
-      ["_id", "gameId", "mapBounds", "points"],
+      ["_id", "anchors", "gameId", "mapBounds", "points"],
     );
   });
 });
@@ -444,7 +444,8 @@ describe("services/spatial proxy heatmap against Mongo", () => {
     const out = await svc.opponentProxies("u1", "Goldenaura", {}, { grid: 20 });
     expect(out.points).toBe(1);
     expect(out.cells.map((c) => `${c.x},${c.y}`)).toEqual(["4,4"]);
-    expect(seen.rows).toHaveLength(1);
-    expect(seen.rows[0]).not.toHaveProperty("townHalls");
+    // Both games with map data are the sample; one of them had a proxy.
+    expect([out.scanned, out.games, seen.rows.length]).toEqual([2, 1, 2]);
+    expect(seen.rows.some((row) => "townHalls" in row)).toBe(false);
   });
 });

@@ -182,6 +182,7 @@ describe("AppChrome navigation", () => {
       "/app/builds",
       "/app/arcade",
       "/builds",
+      "/practice",
       "/community",
       "/devices",
       "/settings",

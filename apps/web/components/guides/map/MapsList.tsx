@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { MapViews } from "./MapViews";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
@@ -33,6 +34,9 @@ export function MapsList({ payload }: { payload: GuideIndexPayload }) {
         {payload.computedAt ? (
           <p className="text-caption text-text-dim">Stats updated {fmtGuideDate(payload.computedAt)}</p>
         ) : null}
+        <p className="text-caption text-text-muted">
+          Signed in, <Link href="/help/map-intel" className="text-accent underline">Map intel heatmaps</Link> show where opponents proxy, where your fights happen and where you lose units on each map, from your own games.
+        </p>
       </div>
       {payload.maps.length > 0 ? (
         <MapViews maps={payload.maps} />

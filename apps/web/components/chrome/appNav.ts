@@ -4,6 +4,7 @@ import {
   BookOpen,
   CalendarClock,
   Cpu,
+  Crosshair,
   Library,
   MessageSquareText,
   MonitorPlay,
@@ -87,6 +88,7 @@ const SECTION_ENTRIES: NavEntry[] = TABS.map((tab) => ({
 
 const UTILITY_ENTRIES: NavEntry[] = [
   { key: "builds-library", href: "/builds", label: "Build library", description: "Your saved build orders and rules", icon: Library, group: "utility" },
+  // Guides stay directly after Build library (AppChrome.test); the practice log follows them.
   {
     key: "guides",
     href: "/guides",
@@ -97,6 +99,7 @@ const UTILITY_ENTRIES: NavEntry[] = [
     guidesFlag: true,
     ownChrome: true,
   },
+  { key: "practice", href: "/practice", label: "Practice log", description: "Ghost Build grades and your progress", icon: Crosshair, group: "utility" },
   { key: "community", href: "/community", label: "Community", description: "Builds and scouting shared by players", icon: Users2, group: "utility", publicRoute: true },
   { key: "reviews", href: "/reviews", label: "Reviews", description: "Replay reviews from other players", icon: MessageSquareText, group: "utility", publicRoute: true, reviewsRollout: true },
   {

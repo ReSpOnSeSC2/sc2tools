@@ -1,47 +1,111 @@
 "use strict";
 
 const { gamesMatchStage } = require("../util/parseQuery");
+const { OwnerRevisions } = require("../util/gameVisibility");
 const { attachRecentByMap } = require("./recentResults");
-const {
-  runPythonNdjson,
-  pythonAvailable,
-  writeTempFile,
-  PythonError,
-} = require("../util/pythonRunner");
+const { requestKey } = require("./trendsRequests");
 const { proxyEvidence } = require("./proxyClassification");
+const { baseAnchors, binGamePoints, hotZones } = require("./mapIntelZones");
 
 const SPATIAL_DEFAULT_GRID = 64;
-const SPATIAL_MAX_GAMES = 5000;
+/** The heatmaps read the most recent games with map data, never more. */
+const MAP_INTEL_MAX_GAMES = 300;
+/** A map-wide layer needs this many contributing games to show a pattern. */
+const MAP_INTEL_MIN_GAMES = 3;
+/** One opponent's layer shows every observed game: one game is a fact. */
+const MAP_INTEL_OPPONENT_MIN_GAMES = 1;
+/** Rows read per game and layer. The building list holds up to 2000. */
+const LAYER_ROW_CAP = Object.freeze({ buildings: 400, proxy: 100, other: 200 });
+/** Town halls read per game for the base labels. */
+const ANCHOR_ROW_CAP = 12;
+const MAP_INTEL_CACHE_TTL_MS = 10 * 60 * 1000;
+const MAP_INTEL_CACHE_MAX = 128;
 
 /**
  * The town halls ``ownerMain`` (services/proxyClassification.js) reads to
  * find a player's main. The own-side proxy heatmap projects only these rows
- * of ``spatial.buildings`` — the full list is up to 2000 rows a game, times
- * SPATIAL_MAX_GAMES. spatial.test.js checks the list against ``ownerMain``.
+ * of ``spatial.buildings`` — the full list is up to 2000 rows a game.
+ * spatial.test.js checks the list against ``ownerMain``.
  */
 const MAIN_TOWN_HALL_NAMES = [
   "Nexus", "Hatchery", "CommandCenter", "OrbitalCommand", "PlanetaryFortress",
 ];
 
 /**
+ * In-process LRU for the heatmap answers, keyed by owner, map, layer,
+ * filters and opponent. Each entry carries the owner's revision token, so
+ * an ingest, hide or delete retires every answer for that owner at once, and
+ * an answer computed across such a change is never stored.
+ */
+class MapIntelCache {
+  /** @param {{ttlMs?: number, max?: number, now?: () => number}} [opts] */
+  constructor(opts = {}) {
+    this.ttlMs = opts.ttlMs ?? MAP_INTEL_CACHE_TTL_MS;
+    this.max = opts.max ?? MAP_INTEL_CACHE_MAX;
+    this.now = opts.now || Date.now;
+    this.revisions = new OwnerRevisions();
+    /** @type {Map<string, {owner: string, revision: {id: number}, expiresAt: number, value: any}>} */
+    this.entries = new Map();
+  }
+
+  /** @param {string} owner */
+  token(owner) { return this.revisions.get(owner); }
+
+  /** @param {string} owner @param {string} key */
+  get(owner, key) {
+    const entry = this.entries.get(key);
+    if (!entry) return null;
+    if (entry.expiresAt <= this.now() || !this.revisions.current(owner, entry.revision)) {
+      this.entries.delete(key);
+      return null;
+    }
+    this.entries.delete(key);
+    this.entries.set(key, entry);
+    return structuredClone(entry.value);
+  }
+
+  /** @param {string} owner @param {string} key @param {{id: number}} revision @param {any} value */
+  set(owner, key, revision, value) {
+    if (!this.revisions.current(owner, revision)) return;
+    this.entries.delete(key);
+    while (this.entries.size >= this.max) {
+      const oldest = this.entries.keys().next().value;
+      if (oldest === undefined) break;
+      this.entries.delete(oldest);
+    }
+    this.entries.set(key, { owner, revision, expiresAt: this.now() + this.ttlMs, value: structuredClone(value) });
+  }
+
+  /** @param {string} owner */
+  invalidate(owner) {
+    this.revisions.invalidate(owner);
+    for (const [key, entry] of this.entries) if (entry.owner === owner) this.entries.delete(key);
+  }
+}
+
+/**
  * SpatialService — heatmap and per-map aggregates.
  *
- * The legacy /spatial/{maps,buildings,proxy,battle,death-zone,
- * opponent-proxies} endpoints all operated on per-game spatial point
- * arrays the agent extracted from each replay. The cloud port stores
- * those same arrays in the game documents under `spatial.*` keys, so
- * the routes are mostly Mongo aggregations.
- *
- * Where the legacy code rasterised points into a heatmap grid via
- * scripts/spatial_cli.py (scipy KDE), we keep that same pattern: the
- * service writes the candidate points to a tmp NDJSON file and shells
- * out to spatial_cli.py — but the route can also fall back to a pure
- * JS bin counter when scipy isn't available.
+ * The agent extracts per-game spatial point arrays from each replay and the
+ * ingest stores a bounded copy on the slim game row under ``spatial.*``
+ * (games.js ``sanitizeSpatial``). The heatmap routes bin the most recent
+ * MAP_INTEL_MAX_GAMES games with map data in plain JS — never a child
+ * process — and cache each answer for ten minutes per owner revision.
  */
 class SpatialService {
-  /** @param {{games: import('mongodb').Collection}} db */
-  constructor(db) {
+  /**
+   * @param {{games: import('mongodb').Collection}} db
+   * @param {{cache?: MapIntelCache}} [opts]
+   */
+  constructor(db, opts = {}) {
     this.db = db;
+    this.cache = opts.cache || new MapIntelCache();
+  }
+
+  /** Retire every cached heatmap of one owner (ingest, hide, delete).
+   * @param {string} userId */
+  invalidateForUser(userId) {
+    this.cache.invalidate(userId);
   }
 
   /**
@@ -166,8 +230,8 @@ class SpatialService {
    *
    * @param {string} userId
    * @param {string} map
-   * @param {object} filters
-   * @param {{ grid?: number }} [opts]
+   * @param {import('../util/parseQuery').GlobalFilters} filters
+   * @param {HeatmapOptions} [opts]
    */
   async buildings(userId, map, filters, opts = {}) {
     return this._heatmap(userId, map, filters, "spatial.buildings", "buildings", opts);
@@ -178,8 +242,8 @@ class SpatialService {
    *
    * @param {string} userId
    * @param {string} map
-   * @param {object} filters
-   * @param {{ grid?: number }} [opts]
+   * @param {import('../util/parseQuery').GlobalFilters} filters
+   * @param {HeatmapOptions} [opts]
    */
   async proxy(userId, map, filters, opts = {}) {
     return this._heatmap(userId, map, filters, "spatial.my_proxies", "proxy", opts, "my");
@@ -190,8 +254,8 @@ class SpatialService {
    *
    * @param {string} userId
    * @param {string} map
-   * @param {object} filters
-   * @param {{ grid?: number }} [opts]
+   * @param {import('../util/parseQuery').GlobalFilters} filters
+   * @param {HeatmapOptions} [opts]
    */
   async battle(userId, map, filters, opts = {}) {
     return this._heatmap(userId, map, filters, "spatial.battles", "battle", opts);
@@ -202,8 +266,8 @@ class SpatialService {
    *
    * @param {string} userId
    * @param {string} map
-   * @param {object} filters
-   * @param {{ grid?: number }} [opts]
+   * @param {import('../util/parseQuery').GlobalFilters} filters
+   * @param {HeatmapOptions} [opts]
    */
   async deathZone(userId, map, filters, opts = {}) {
     return this._heatmap(userId, map, filters, "spatial.deaths", "death", opts);
@@ -215,166 +279,163 @@ class SpatialService {
    *
    * @param {string} userId
    * @param {string} map
-   * @param {object} filters
-   * @param {{ grid?: number }} [opts]
+   * @param {import('../util/parseQuery').GlobalFilters} filters
+   * @param {HeatmapOptions} [opts]
    */
   async opponentProxies(userId, map, filters, opts = {}) {
     return this._heatmap(userId, map, filters, "spatial.opp_proxies", "opp_proxy", opts, "opp");
   }
 
   /**
+   * One heatmap layer of one map, from the latest MAP_INTEL_MAX_GAMES games
+   * with map data that match the filters (and the opponent, when given).
+   *
+   * Sample semantics travel with the answer: ``scanned`` games were read,
+   * ``games`` of them placed a point on this layer, ``capped`` says older
+   * games exist beyond the read, and ``belowMinimum`` says ``games`` is under
+   * ``minGames`` — the panel then shows the count instead of a pattern.
+   *
    * @private
    * @param {string} userId
    * @param {string} map
-   * @param {object} filters
+   * @param {import('../util/parseQuery').GlobalFilters} filters
    * @param {string} field   dotted path on the game doc
    * @param {string} kind    label echoed in the response
-   * @param {{ grid?: number }} opts
+   * @param {HeatmapOptions} opts
    * @param {"my" | "opp"} [proxySide] set by the two proxy heatmaps, whose
    *   stored rows are resolved to the canonical proxy test before plotting
    */
   async _heatmap(userId, map, filters, field, kind, opts, proxySide) {
     if (!map || typeof map !== "string") throw httpError(400, "map_required");
     const grid = clampGrid(opts.grid);
-    const baseMatch = {
+    const opponent = opts.opponent || null;
+    const key = requestKey(["heatmap", userId, map, kind, grid, filters || {}, opponent]);
+    const cached = key === null ? null : this.cache.get(userId, key);
+    if (cached) return cached;
+    const revision = this.cache.token(userId);
+    const result = await this._computeHeatmap({ userId, map, filters, field, kind, grid, opponent, proxySide });
+    if (key !== null) this.cache.set(userId, key, revision, result);
+    return result;
+  }
+
+  /**
+   * @private
+   * @param {{userId: string, map: string, filters: import('../util/parseQuery').GlobalFilters,
+   *   field: string, kind: string, grid: number, opponent: Record<string, any> | null,
+   *   proxySide?: "my" | "opp"}} input
+   */
+  async _computeHeatmap({ userId, map, filters, field, kind, grid, opponent, proxySide }) {
+    const exact = filters && Array.isArray(filters.mapExact) && filters.mapExact.length > 0
+      ? { $in: filters.mapExact }
+      : map;
+    const match = {
       ...gamesMatchStage(userId, filters),
-      map,
-      [field]: { $exists: true, $not: { $size: 0 } },
+      map: exact,
+      "spatial.map_bounds": { $exists: true },
     };
-    const docs = await this.db.games
+    const docs = /** @type {Array<Record<string, any>>} */ (await this.db.games
       .aggregate([
-        { $match: baseMatch },
+        { $match: opponent ? { $and: [match, opponent] } : match },
         { $sort: { date: -1 } },
-        { $limit: SPATIAL_MAX_GAMES },
+        // One extra row tells a full sample from a capped one.
+        { $limit: MAP_INTEL_MAX_GAMES + 1 },
         {
           $project: {
             _id: 0,
             gameId: 1,
             mapBounds: "$spatial.map_bounds",
-            points: `$${field}`,
+            points: layerRows(field, proxySide),
+            anchors: townHallAnchors(),
             ...(proxySide ? proxyStampProjection(proxySide) : {}),
           },
         },
       ])
-      .toArray();
+      .toArray());
+    const capped = docs.length > MAP_INTEL_MAX_GAMES;
+    const sample = capped ? docs.slice(0, MAP_INTEL_MAX_GAMES) : docs;
     if (proxySide) {
-      for (const doc of docs) doc.points = canonicalProxyPoints(doc, proxySide);
+      for (const doc of sample) doc.points = canonicalProxyPoints(doc, proxySide);
     }
-    if (docs.length === 0) {
-      return {
-        ok: true,
-        kind,
-        map,
-        grid,
-        points: 0,
-        bounds: null,
-        cells: [],
-      };
-    }
-    const bounds = docs[0].mapBounds || inferBoundsFromPoints(docs);
-    const points = flattenPoints(docs);
-    // The canonical test can leave nothing to plot (every stored row was a
-    // third base); the JS path answers that without spawning python.
-    if (points.length > 0 && pythonAvailable()) {
-      try {
-        return await this._runPythonHeatmap({ kind, map, grid, bounds, points });
-      } catch (err) {
-        if (!(err instanceof PythonError)) throw err;
-        // Fall through to JS path on python failure — never 5xx the
-        // SPA just because scipy isn't available.
-      }
-    }
-    return jsHeatmap({ kind, map, grid, bounds, points });
-  }
-
-  /**
-   * @private
-   * @param {{ kind: string, map: string, grid: number, bounds: any, points: any[] }} args
-   */
-  async _runPythonHeatmap({ kind, map, grid, bounds, points }) {
-    const ndjson = points.map(/** @param {any} p */ (p) => JSON.stringify(p)).join("\n");
-    const tmp = writeTempFile(`spatial-${kind}`, "ndjson", ndjson);
-    try {
-      const records = await runPythonNdjson({
-        script: "scripts/spatial_cli.py",
-        args: [
-          "kde",
-          "--input",
-          tmp,
-          "--grid",
-          String(grid),
-          "--bounds",
-          JSON.stringify(bounds),
-          "--kind",
-          kind,
-        ],
-      });
-      const result = /** @type {any} */ (
-        records.find((r) => r && /** @type {any} */ (r).ok)
-      );
-      if (!result) {
-        throw new PythonError("spatial_cli_no_result", { kind: "no_result" });
-      }
-      return {
-        ok: true,
-        kind,
-        map,
-        grid,
-        bounds,
-        points: points.length,
-        cells: Array.isArray(result.cells) ? result.cells : [],
-      };
-    } finally {
-      try {
-        require("fs").unlinkSync(tmp);
-      } catch (_e) {
-        // best-effort
-      }
-    }
+    const minGames = opponent ? MAP_INTEL_OPPONENT_MIN_GAMES : MAP_INTEL_MIN_GAMES;
+    const bounds = sample.length > 0 ? sample[0].mapBounds || inferBoundsFromPoints(sample) : null;
+    const perGame = sample.map((doc) => plottableRows(doc.points));
+    const binned = binGamePoints(bounds, grid, perGame);
+    const anchors = baseAnchors(sample.map((doc) => doc.anchors));
+    return {
+      ok: true,
+      kind,
+      map,
+      grid,
+      bounds,
+      points: binned.points,
+      games: binned.games,
+      scanned: sample.length,
+      capped,
+      maxGames: MAP_INTEL_MAX_GAMES,
+      minGames,
+      belowMinimum: binned.games < minGames,
+      cells: binned.cells,
+      zones: bounds ? hotZones({ bounds, grid, cells: binned.cells, perGame, anchors }) : [],
+    };
   }
 }
 
 /**
- * Pure-JS fallback for the heatmap: bin every point into a `grid x
- * grid` matrix and return the non-empty cells. Cells are normalised
- * to the densest cell so the SPA's existing colour scale works.
+ * @typedef {{
+ *   grid?: number,
+ *   opponent?: Record<string, any> | null,
+ * }} HeatmapOptions ``opponent`` is an owner-scoped identity clause from
+ *   OpponentsService.identityClause (pulse ids and character ids, merged
+ *   identities included), ANDed with the map match.
  */
+
 /**
- * @param {{ kind: string, map: string, grid: number, bounds: any, points: any[] }} args
+ * The bounded rows one layer reads per game. Proxy rows keep their name and
+ * time for the canonical proxy test; every other layer needs only a position
+ * and its weight.
+ *
+ * @param {string} field
+ * @param {"my" | "opp"} [proxySide]
  */
-function jsHeatmap({ kind, map, grid, bounds, points }) {
-  /** @type {Map<string, number>} */
-  const counts = new Map();
-  if (!bounds || points.length === 0) {
-    return { ok: true, kind, map, grid, bounds, points: points.length, cells: [] };
-  }
-  const xRange = bounds.maxX - bounds.minX || 1;
-  const yRange = bounds.maxY - bounds.minY || 1;
-  for (const p of points) {
-    if (typeof p.x !== "number" || typeof p.y !== "number") continue;
-    const ix = Math.min(grid - 1, Math.max(0, Math.floor(((p.x - bounds.minX) / xRange) * grid)));
-    const iy = Math.min(grid - 1, Math.max(0, Math.floor(((p.y - bounds.minY) / yRange) * grid)));
-    const k = `${ix},${iy}`;
-    counts.set(k, (counts.get(k) || 0) + (p.weight || 1));
-  }
-  let max = 0;
-  for (const v of counts.values()) {
-    if (v > max) max = v;
-  }
-  const cells = [];
-  for (const [key, value] of counts) {
-    const [ix, iy] = key.split(",").map(Number);
-    cells.push({ x: ix, y: iy, value, intensity: max ? value / max : 0 });
-  }
+function layerRows(field, proxySide) {
+  const path = `$${field}`;
+  const rows = { $cond: [{ $isArray: path }, path, []] };
+  if (proxySide) return { $slice: [rows, LAYER_ROW_CAP.proxy] };
+  const cap = field === "spatial.buildings" ? LAYER_ROW_CAP.buildings : LAYER_ROW_CAP.other;
   return {
-    ok: true,
-    kind,
-    map,
-    grid,
-    bounds,
-    points: points.length,
-    cells,
+    $map: {
+      input: { $slice: [rows, cap] },
+      as: "row",
+      in: { x: "$$row.x", y: "$$row.y", weight: "$$row.weight" },
+    },
   };
+}
+
+/** The owner's first town halls of each game, for the base labels. */
+function townHallAnchors() {
+  return {
+    $map: {
+      input: {
+        $slice: [{
+          $filter: {
+            input: { $cond: [{ $isArray: "$spatial.buildings" }, "$spatial.buildings", []] },
+            as: "building",
+            cond: { $in: ["$$building.name", MAIN_TOWN_HALL_NAMES] },
+          },
+        }, ANCHOR_ROW_CAP],
+      },
+      as: "hall",
+      in: { x: "$$hall.x", y: "$$hall.y", time: "$$hall.time" },
+    },
+  };
+}
+
+/** Finite positions only; anything else in a stored row is skipped.
+ * @param {unknown} rows @returns {Array<{x: number, y: number, weight?: number}>} */
+function plottableRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter((row) => row && typeof row === "object"
+    && Number.isFinite(row.x) && Number.isFinite(row.y));
 }
 
 /**
@@ -452,20 +513,6 @@ function canonicalProxyPoints(doc, side) {
 }
 
 /** @param {Array<{points?: any[]}>} docs */
-function flattenPoints(docs) {
-  /** @type {any[]} */
-  const out = [];
-  for (const d of docs) {
-    if (!Array.isArray(d.points)) continue;
-    for (const p of d.points) {
-      if (!p || typeof p !== "object") continue;
-      out.push(p);
-    }
-  }
-  return out;
-}
-
-/** @param {Array<{points?: any[]}>} docs */
 function inferBoundsFromPoints(docs) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   let any = false;
@@ -499,4 +546,10 @@ function httpError(status, code) {
   return err;
 }
 
-module.exports = { SpatialService };
+module.exports = {
+  SpatialService,
+  MapIntelCache,
+  MAP_INTEL_MAX_GAMES,
+  MAP_INTEL_MIN_GAMES,
+  MAP_INTEL_OPPONENT_MIN_GAMES,
+};

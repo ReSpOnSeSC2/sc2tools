@@ -1433,6 +1433,21 @@ class OpponentsService {
     return { clauses, analysisGameIds };
   }
 
+  /** The games-row identity match of one owned opponent: its pulse id and
+   * character id, or every linked identity's with ``mergeLinked``. The same
+   * rule as the replay history, for owner-only consumers such as the Map
+   * Intel heatmaps. Null when the opponent is not in the owner's history.
+   * @param {string} userId @param {string} pulseId @param {{mergeLinked?: boolean}} [opts] */
+  async identityClause(userId, pulseId, opts = {}) {
+    const doc = await this.db.opponents.findOne(
+      { userId, pulseId },
+      { projection: { _id: 0, userId: 1, pulseId: 1, pulseCharacterId: 1, toonHandle: 1, displayNameSample: 1, revealedName: 1 } },
+    );
+    if (!doc) return null;
+    const linked = opts.mergeLinked ? await this._resolveLinkedIdentities(userId, doc) : null;
+    return profileGamesIdentityFilter(pulseId, doc, linked);
+  }
+
   /** Shared metadata-only replay serializer, 5,000-row dossier cap.
    * @param {string} userId @param {string} pulseId
    * @param {{filters?:import('../util/parseQuery').GlobalFilters,mergeLinked?:boolean,result?:unknown,analysisGameIds?:string[],signal?:AbortSignal}} [opts] */

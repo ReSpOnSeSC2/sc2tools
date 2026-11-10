@@ -79,6 +79,7 @@ const { BuildIntentsService } = require("./services/buildIntents");
 const { GhostExamplesService } = require("./services/ghostExamples");
 const { GhostReferencesService } = require("./services/ghostReferences");
 const { GhostConfigService } = require("./services/ghostConfig");
+const { PracticeLogService } = require("./services/practiceLog");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { PlatformIntegrationsService } = require("./services/platformIntegrations");
@@ -245,6 +246,7 @@ const {
 } = require("./routes/perGame");
 const { buildImportsRouter } = require("./routes/imports");
 const { buildSpatialRouter } = require("./routes/spatial");
+const { buildPracticeRouter } = require("./routes/practice");
 const { buildCatalogRouter } = require("./routes/catalog");
 const { buildBuildOrderExportRouter } = require("./routes/buildOrderExport");
 const { buildMapImageRouter } = require("./routes/mapImage");
@@ -826,6 +828,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const ghostExamples = new GhostExamplesService({ db: deps.db, gameDetails });
   const ghostReferences = new GhostReferencesService({ db: deps.db, gameDetails });
   const ghostConfig = new GhostConfigService({ db: deps.db, overlayTokens, io: deps.io });
+  const practice = new PracticeLogService(deps.db, { gameDetails });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const reanalysis = new ReanalysisService({ db: deps.db, io: deps.io, pairings, notifications, logger: deps.logger });
   const imports = new ImportService(deps.db, { io: deps.io, notifications, logger: deps.logger });
@@ -1048,7 +1051,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const invalidatePrivateGameCaches = (/** @type {string} */ userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, rivals, gameContext, gameExecution, tickerFacts, chatStats, aggregations.trendsRequests, streamSeries, playerGoals]) {
+    for (const service of [overlayLive, rivals, gameContext, gameExecution, tickerFacts, chatStats, aggregations.trendsRequests, streamSeries, playerGoals, spatial]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
@@ -1098,7 +1101,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     buildStudio,
     ghostExamples,
     ghostReferences,
-    ghostConfig,
+    ghostConfig, practice,
     pairings,
     overlayTokens,
     platformIntegrations,
@@ -1787,6 +1790,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       games: services.games,
       gameContext: services.gameContext,
       gameExecution: services.gameExecution,
+      spatial: services.spatial, practice: services.practice,
       gameVods: services.gameVods,
       opponents: services.opponents,
       users: services.users,
@@ -1887,8 +1891,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildSpatialRouter({ spatial: services.spatial, auth }),
+    buildSpatialRouter({ spatial: services.spatial, opponents: services.opponents, auth }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildPracticeRouter({ practice: services.practice, auth }));
   mountCatalogAndExport(app, services, auth);
   app.use(
     SERVICE.ROUTE_PREFIX,

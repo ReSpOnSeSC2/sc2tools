@@ -302,6 +302,20 @@ async function ensureBrowserIngestDailyIndexes(ctx) {
 }
 
 /**
+ * Private practice log (services/practiceLog.js): one owner's graded games in
+ * a matchup, newest first. Partial, so only games with a ``practice`` record
+ * are indexed; every practice read includes ``practice: {$exists: true}``.
+ *
+ * @param {{ games: import('mongodb').Collection }} ctx
+ */
+async function ensurePracticeLogIndexes(ctx) {
+  await ctx.games.createIndex(
+    { userId: 1, "practice.matchup": 1, date: -1, _id: -1 },
+    { name: "practice_log", partialFilterExpression: { practice: { $exists: true } } },
+  );
+}
+
+/**
  * Build check-in (services/buildIntents.js). Live records are unique per
  * (userId, gameKey); the ingest bind looks up a user's unbound records by
  * key start time; the TTL index reclaims them at ``expiresAt``. The partial
@@ -756,6 +770,7 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.pulseCharacterLinks.createIndex({ toonHandle: 1 }, { sparse: true });
 
   await ensureBuildIntentIndexes(ctx);
+  await ensurePracticeLogIndexes(ctx);
   await ensureGuideIndexes(ctx);
   await ensureReviewIndexes(ctx); await ensurePlayerGoalIndexes(ctx);
   // Last, so the ``games`` collection exists and the long build never
