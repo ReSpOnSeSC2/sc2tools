@@ -25,7 +25,19 @@ type Claim = {
   text: string;
   truthful: boolean;
   detail: string;
+  /**
+   * Wording for the share card when `text` / `detail` name an opponent
+   * (see FactCandidate.share). Unset means the in-app wording is safe
+   * to share as written.
+   */
+  shareText?: string;
+  shareDetail?: string;
 };
+
+/** What a claim says on the public share card. */
+function sharedClaim(c: Claim): { text: string; detail: string } {
+  return { text: c.shareText ?? c.text, detail: c.shareDetail ?? c.detail };
+}
 
 type Q = {
   claims: Claim[];
@@ -64,13 +76,17 @@ async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
     text: lieSource.lieText,
     truthful: false,
     detail: lieSource.detail,
+    shareText: lieSource.share?.lieText,
+    shareDetail: lieSource.share?.detail,
   };
   const claims = shuffle(
     [
-      ...truths.map((t) => ({
+      ...truths.map<Claim>((t) => ({
         text: t.truthText,
         truthful: true,
         detail: t.detail,
+        shareText: t.share?.truthText,
+        shareDetail: t.share?.detail,
       })),
       lie,
     ],
@@ -98,6 +114,9 @@ function score(q: Q, a: A): ScoreResult {
  * the in-app reveal does. Each claim's supporting detail is appended
  * underneath so a reader who hasn't played sees the same evidence the
  * reveal panel shows.
+ *
+ * Claims that name an opponent in the app use their share wording here:
+ * the card is public and names nobody (lib/sharePrivacy.ts).
  */
 export function twoTruthsLieShareLines(q: Q, correct: boolean): string[] {
   const header = correct
@@ -106,7 +125,8 @@ export function twoTruthsLieShareLines(q: Q, correct: boolean): string[] {
   return [
     header,
     ...q.claims.map(
-      (c, i) => `${i + 1}. ${c.truthful ? "TRUE" : "LIE"} · ${c.text}`,
+      (c, i) =>
+        `${i + 1}. ${c.truthful ? "TRUE" : "LIE"} · ${sharedClaim(c).text}`,
     ),
   ];
 }
@@ -119,8 +139,9 @@ function share(q: Q, a: A | null, s: ScoreResult): ShareSummary {
   const answer: string[] = [header];
   for (let i = 0; i < q.claims.length; i++) {
     const c = q.claims[i];
-    answer.push(`${i + 1}. ${c.truthful ? "TRUE" : "LIE"} · ${c.text}`);
-    if (c.detail) answer.push(`   ${c.detail}`);
+    const shared = sharedClaim(c);
+    answer.push(`${i + 1}. ${c.truthful ? "TRUE" : "LIE"} · ${shared.text}`);
+    if (shared.detail) answer.push(`   ${shared.detail}`);
   }
   void a;
   return {

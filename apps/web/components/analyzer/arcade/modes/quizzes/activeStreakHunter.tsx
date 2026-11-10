@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { rivalLabel } from "@/lib/sharePrivacy";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import {
@@ -268,6 +269,10 @@ function questionPlain(variant: StreakVariant): string {
   }
 }
 
+/**
+ * The card is public, so rivals are lettered in the order the round
+ * showed them; their names stay in the app (lib/sharePrivacy.ts).
+ */
 function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
   const variant = q.variant;
   const letter = metricLetter(variant);
@@ -277,14 +282,16 @@ function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
     (best, c) => (m(c) > best ? m(c) : best),
     0,
   );
-  const leaders = q.candidates.filter((c) => m(c) === maxAmongShown);
+  const leaderIndexes = q.candidates
+    .map((c, i) => (m(c) === maxAmongShown ? i : -1))
+    .filter((i) => i >= 0);
   const headline =
-    leaders.length === 1
-      ? `${leaders[0].name} — ${maxAmongShown}${letter} ${tail}.`
-      : `${leaders.length} rivals tied on ${maxAmongShown}${letter} ${tail}.`;
-  const rows = q.candidates.map((c) => {
+    leaderIndexes.length === 1
+      ? `${rivalLabel(leaderIndexes[0])} — ${maxAmongShown}${letter} ${tail}.`
+      : `${leaderIndexes.length} rivals tied on ${maxAmongShown}${letter} ${tail}.`;
+  const rows = q.candidates.map((c, i) => {
     const star = m(c) === maxAmongShown ? " ★" : "";
-    return `${c.name} · ${m(c)}${letter} (${c.games} games)${star}`;
+    return `${rivalLabel(i)} · ${m(c)}${letter} (${c.games} games)${star}`;
   });
   return {
     question: questionPlain(variant),

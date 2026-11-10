@@ -34,7 +34,7 @@ const article: HelpArticle = {
     "download replay",
     "ask for a review",
   ],
-  updated: "2026-10-26",
+  updated: "2026-11-09",
   body: [
     {
       type: "paragraph",
@@ -49,7 +49,7 @@ const article: HelpArticle = {
       items: [
         "The result, matchup and map, when it was played, how long it lasted, the MMR, and your opponent, with a link to their dossier.",
         "**My build** and **Opponent strategy** name the openings the replay shows. **Planned** or **Corrected** means you changed them with [Build check-in](/help/build-check-in).",
-        "**Share this game** saves or shares the game as an image. The download button gets the original .SC2Replay file, and **Ask for a review** asks other players about a moment in the game.",
+        "**Share this game** saves or shares the game as an image. It shows your MMR and whether your opponent was higher or lower, rounded to the nearest 100, and never their name or exact rating. The download button gets the original .SC2Replay file, and **Ask for a review** asks other players about a moment in the game.",
         "When you or your opponent streamed the game, a link jumps to that moment in the recording.",
       ],
     },

@@ -276,6 +276,58 @@ describe("computeSeasonRecap", () => {
     expect(r.biggestUpset?.map).toBe("Alcyone");
   });
 
+  it("never treats an unrecorded rating as an upset", () => {
+    // myMmr 0 is "not recorded". Taken as a rating it would make the gap
+    // the opponent's own rating (6913) and beat every honest upset.
+    const unrecorded = [0, 1, 7, 499].map((myMmr, i) =>
+      game({
+        date: `2026-02-0${i + 1}T10:00:00Z`,
+        result: "Victory",
+        myMmr,
+        opponent: { displayName: "Champion", mmr: 6913 },
+      }),
+    );
+    expect(computeSeasonRecap(unrecorded, { since: SINCE }).biggestUpset).toBeNull();
+
+    const withHonestUpset = [
+      ...unrecorded,
+      game({ date: "2026-02-10T10:00:00Z", result: "Victory", myMmr: 4000, oppMmr: 4212 }),
+      // The opponent's side must be a real rating too.
+      game({ date: "2026-02-11T10:00:00Z", result: "Victory", myMmr: 4000, oppMmr: 12000 }),
+    ];
+    const r = computeSeasonRecap(withHonestUpset, { since: SINCE });
+    expect(r.biggestUpset?.mmrGap).toBe(212);
+    expect(r.biggestUpset?.myMmr).toBe(4000);
+    expect(r.biggestUpset?.opponentMmr).toBe(4212);
+  });
+
+  it("reads the nested opponent rating when the flat one is not recorded", () => {
+    const r = computeSeasonRecap(
+      [
+        game({
+          date: "2026-02-01T10:00:00Z",
+          result: "Victory",
+          myMmr: 4000,
+          oppMmr: 0,
+          opponent: { mmr: 4150 },
+        }),
+      ],
+      { since: SINCE },
+    );
+    expect(r.biggestUpset?.mmrGap).toBe(150);
+  });
+
+  it("keeps an unrecorded rating out of the MMR journey", () => {
+    // A 0 as the first or last point would make the delta the player's
+    // whole rating ("+4100").
+    const games = [0, 4000, 4050, 0, 4100, 0].map((myMmr, i) =>
+      game({ date: `2026-02-0${i + 1}T10:00:00Z`, result: "Victory", myMmr }),
+    );
+    const r = computeSeasonRecap(games, { since: SINCE });
+    expect(r.mmrJourneys).toHaveLength(1);
+    expect(r.mmrJourneys[0]).toMatchObject({ start: 4000, end: 4100, peak: 4100, delta: 100 });
+  });
+
   it("degrades to nulls on sparse data without throwing", () => {
     const r = computeSeasonRecap(
       [game({ date: "2026-02-01T10:00:00Z", result: "Victory" })],
@@ -421,6 +473,61 @@ describe("buildRecapSlides", () => {
         big: "+50",
       }),
     ]);
+  });
+});
+
+describe("rival race (what the share card says instead of a name)", () => {
+  const loss = (day: number, over: Partial<ArcadeGame>): ArcadeGame =>
+    game({
+      date: `2026-02-${String(day).padStart(2, "0")}T10:00:00Z`,
+      result: "Defeat",
+      oppPulseId: "p-foe",
+      opponent: { displayName: "Foe" },
+      ...over,
+    });
+
+  it("is the race the rival played most against you", () => {
+    const r = computeSeasonRecap(
+      [loss(1, { oppRace: "Zerg" }), loss(2, { oppRace: "Z" }), loss(3, { oppRace: "Terran" })],
+      { since: SINCE },
+    );
+    expect(r.nemesis?.name).toBe("Foe");
+    expect(r.nemesis?.race).toBe("Z");
+  });
+
+  it("takes the most recent race on a tie", () => {
+    const r = computeSeasonRecap(
+      [loss(1, { oppRace: "Z" }), loss(2, { oppRace: "P" })],
+      { since: SINCE },
+    );
+    expect(r.nemesis?.race).toBe("P");
+  });
+
+  it("reads the nested opponent race when the flat field is missing", () => {
+    const r = computeSeasonRecap(
+      [
+        loss(1, { opponent: { displayName: "Foe", race: "Random" } }),
+        loss(2, { opponent: { displayName: "Foe", race: "Random" } }),
+      ],
+      { since: SINCE },
+    );
+    expect(r.nemesis?.race).toBe("R");
+  });
+
+  it("is null when no game recorded a usable race", () => {
+    const r = computeSeasonRecap(
+      [loss(1, {}), loss(2, { oppRace: "Unknown" })],
+      { since: SINCE },
+    );
+    expect(r.nemesis?.name).toBe("Foe");
+    expect(r.nemesis?.race).toBeNull();
+  });
+
+  it("is tracked for the best victim too", () => {
+    const win = (day: number): ArcadeGame =>
+      loss(day, { result: "Victory", oppPulseId: "p-prey", opponent: { displayName: "Prey" }, oppRace: "T" });
+    const r = computeSeasonRecap([win(1), win(2)], { since: SINCE });
+    expect(r.bestVictim?.race).toBe("T");
   });
 });
 

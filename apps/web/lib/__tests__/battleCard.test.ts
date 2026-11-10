@@ -34,25 +34,53 @@ afterEach(() => {
 });
 
 describe("mmrLine", () => {
-  it("shows both MMRs and the signed gap when both are known", () => {
-    expect(mmrLine(SLIM)).toBe("MMR 4100 vs 4200 (-100)");
-  });
-
-  it("uses a + sign when you outrank the opponent", () => {
-    expect(mmrLine({ ...SLIM, myMmr: 4300, opponent: { mmr: 4200 } })).toBe(
-      "MMR 4300 vs 4200 (+100)",
+  it("shows your MMR and the opponent as a rounded gap, never their rating", () => {
+    expect(mmrLine(SLIM)).toBe("MMR 4100 · opponent about 100 higher");
+    expect(mmrLine({ ...SLIM, myMmr: 4300, opponent: { mmr: 4188 } })).toBe(
+      "MMR 4300 · opponent about 100 lower",
     );
   });
 
-  it("degrades to a single MMR when only one side is known", () => {
+  it("rounds the gap to the nearest 100 so the opponent's MMR can't be recovered", () => {
+    // 4100 + 212 = 4312: neither the rating nor the exact gap is printed.
+    const line = mmrLine({ ...SLIM, opponent: { mmr: 4312 } });
+    expect(line).toBe("MMR 4100 · opponent about 200 higher");
+    expect(line).not.toContain("4312");
+    expect(line).not.toContain("212");
+  });
+
+  it("calls a gap under 50 evenly matched, in either direction", () => {
+    expect(mmrLine({ ...SLIM, opponent: { mmr: 4149 } })).toBe("MMR 4100 · evenly matched");
+    expect(mmrLine({ ...SLIM, opponent: { mmr: 4051 } })).toBe("MMR 4100 · evenly matched");
+    expect(mmrLine({ ...SLIM, opponent: { mmr: 4150 } })).toBe(
+      "MMR 4100 · opponent about 100 higher",
+    );
+    expect(mmrLine({ ...SLIM, opponent: { mmr: 4050 } })).toBe(
+      "MMR 4100 · opponent about 100 lower",
+    );
+  });
+
+  it("shows only your MMR when the opponent's is unknown", () => {
     expect(mmrLine({ ...SLIM, opponent: { mmr: null } })).toBe("MMR 4100");
-    expect(mmrLine({ ...SLIM, myMmr: null, opponent: { mmr: 4200 } })).toBe(
-      "Opponent MMR 4200",
-    );
+    expect(mmrLine({ ...SLIM, opponent: { mmr: 0 } })).toBe("MMR 4100");
+    expect(mmrLine({ ...SLIM, opponent: null })).toBe("MMR 4100");
+  });
+
+  it("says nothing when only the opponent's MMR is known", () => {
+    expect(mmrLine({ ...SLIM, myMmr: null, opponent: { mmr: 4200 } })).toBeNull();
+    expect(mmrLine({ ...SLIM, myMmr: 0, opponent: { mmr: 4200 } })).toBeNull();
   });
 
   it("returns null when neither MMR is known", () => {
     expect(mmrLine({ ...SLIM, myMmr: null, opponent: { mmr: null } })).toBeNull();
+  });
+
+  it("ignores values that are not real ladder ratings", () => {
+    // With your rating taken as 7, the "gap" would be their rating give or take 7.
+    expect(mmrLine({ ...SLIM, myMmr: 7, opponent: { mmr: 4200 } })).toBeNull();
+    expect(mmrLine({ ...SLIM, myMmr: 499, opponent: { mmr: 4200 } })).toBeNull();
+    expect(mmrLine({ ...SLIM, opponent: { mmr: 3 } })).toBe("MMR 4100");
+    expect(mmrLine({ ...SLIM, opponent: { mmr: 12000 } })).toBe("MMR 4100");
   });
 });
 
@@ -107,9 +135,26 @@ describe("battleCardShareText", () => {
     const text = battleCardShareText(SLIM);
     expect(text).toContain("Defeat — ZvT on Ephemeron");
     expect(text).toContain("You: Roach Allin  vs  Terran - 2 Rax");
-    expect(text).toContain("MMR 4100 vs 4200 (-100)");
+    expect(text).toContain("MMR 4100 · opponent about 100 higher");
     expect(text).toContain("Macro score 44/100");
     expect(text.endsWith(SHARE_LINK_URL)).toBe(true);
+  });
+
+  it("never carries the opponent's name, id or exact MMR", () => {
+    const text = battleCardShareText({
+      ...SLIM,
+      opponent: {
+        displayName: "SecretFoe#1234",
+        pulseId: "1-S2-1-9988776",
+        race: "Terran",
+        mmr: 4237,
+        strategy: "Terran - 2 Rax",
+      },
+    });
+    expect(text).not.toContain("SecretFoe");
+    expect(text).not.toContain("9988776");
+    expect(text).not.toContain("4237");
+    expect(text).not.toContain("137");
   });
 
   it("still link-backs and degrades on missing fields", () => {
@@ -183,5 +228,46 @@ describe("renderBattleCardPng", () => {
     expect(blob?.type).toBe("image/png");
     // The header word was drawn.
     expect(ctxStub.fillText).toHaveBeenCalled();
+  });
+
+  it("draws no opponent name, id or exact MMR on the image", async () => {
+    const drawn: string[] = [];
+    const ctxStub = {
+      fillStyle: "",
+      font: "",
+      textBaseline: "",
+      fillRect: vi.fn(),
+      fillText: (text: string) => {
+        drawn.push(String(text));
+      },
+      measureText: (t: string) => ({ width: String(t).length * 8 }),
+      createLinearGradient: () => ({ addColorStop: vi.fn() }),
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      ctxStub as unknown as CanvasRenderingContext2D,
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (
+      this: HTMLCanvasElement,
+      cb: BlobCallback,
+    ) {
+      cb(new Blob(["png-bytes"], { type: "image/png" }));
+    });
+
+    await renderBattleCardPng({
+      ...SLIM,
+      opponent: {
+        displayName: "SecretFoe#1234",
+        pulseId: "1-S2-1-9988776",
+        race: "Terran",
+        mmr: 4237,
+        strategy: "Terran - 2 Rax",
+      },
+    });
+
+    const image = drawn.join("\n");
+    expect(image).toContain("MMR 4100 · opponent about 100 higher");
+    expect(image).not.toContain("SecretFoe");
+    expect(image).not.toContain("9988776");
+    expect(image).not.toContain("4237");
   });
 });

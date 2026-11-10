@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
+import { trackCardShared } from "@/lib/analytics/shareEvents";
 import { useDailySeed } from "./hooks/useDailySeed";
 import { useArcadeData } from "./hooks/useArcadeData";
 import { useArcadeState } from "./hooks/useArcadeState";
@@ -12,11 +13,11 @@ import type {
   GenerateResult,
   Mode,
   ScoreResult,
-  ShareSummary,
 } from "./types";
 import type { AnyMode } from "./modes";
 import { mulberry32 } from "./ArcadeEngine";
 import { shareCard } from "./ShareCard";
+import { buildShareSummary } from "./shareSummary";
 import { DailyEmptyState } from "./surfaces/DailyEmptyState";
 
 /**
@@ -183,13 +184,16 @@ function ModeRunnerView({ mode, isDaily, onPlayedFresh, forceMode = false, dataS
   const handleShare = useCallback(async () => {
     if (!question || !question.ok) return;
     const summary = buildShareSummary(mode, question.question, answered, scoreResult);
-    await shareCard({
+    const delivery = await shareCard({
       title: mode.title,
       question: summary.question,
       lines: summary.answer,
       outcome: scoreResult?.outcome,
       tag: `Arcade · ${isDaily ? "Daily" : "Quick Play"}`,
     });
+    if (delivery?.shared && delivery.method) {
+      trackCardShared({ card: "arcade_round", method: delivery.method, modeId: mode.id });
+    }
   }, [question, mode, scoreResult, answered, isDaily]);
 
   if (loading) {
@@ -304,40 +308,3 @@ function ModeRunnerView({ mode, isDaily, onPlayedFresh, forceMode = false, dataS
     </div>
   );
 }
-
-/**
- * Build the plain-text share payload for the round. Prefers the mode's
- * own `share()` implementation (which can include detail tables, the
- * full reveal etc.) and falls back to `mode.blurb` + `score.note` so
- * every mode at least surfaces the question framing — not just the
- * mode title — alongside the one-line outcome.
- */
-function buildShareSummary(
-  mode: AnyMode,
-  question: unknown,
-  answer: unknown,
-  score: ScoreResult | null,
-): ShareSummary {
-  // The Mode<Q, A, S> generic parameters vary by mode; the registry
-  // narrows them away to AnyMode here, so the cast is a one-time
-  // contract assertion — the runtime values come from the same mode.
-  type ModeShareFn = (q: unknown, a: unknown, s: ScoreResult) => ShareSummary;
-  const shareFn = (mode as { share?: ModeShareFn }).share;
-  if (shareFn && score) {
-    try {
-      const out = shareFn(question, answer, score);
-      if (out && typeof out.question === "string" && Array.isArray(out.answer)) {
-        return out;
-      }
-    } catch {
-      // fall through to the default summary
-    }
-  }
-  const fallback: string[] = [];
-  if (score?.note) fallback.push(score.note);
-  else if (score?.outcome === "correct") fallback.push("Nailed it.");
-  else if (score?.outcome === "wrong") fallback.push("Missed this one.");
-  else fallback.push("I just played in Arcade.");
-  return { question: mode.blurb, answer: fallback };
-}
-

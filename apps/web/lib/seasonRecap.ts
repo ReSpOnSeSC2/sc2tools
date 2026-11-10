@@ -23,6 +23,7 @@ import {
   outcome,
 } from "@/components/analyzer/arcade/ArcadeEngine";
 import { currentSeason, seasonRange } from "./seasonCatalog";
+import { knownMmr } from "./sharePrivacy";
 import type { LogicalSeason } from "./useSeasons";
 
 /** Recap unlocks at this many games inside the chosen window. */
@@ -61,6 +62,9 @@ export interface RecapMmrJourney {
   delta: number;
 }
 
+/** A race letter as it appears on a rival: Protoss, Terran, Zerg or Random. */
+export type RecapRace = "P" | "T" | "Z" | "R";
+
 export interface RecapOpener {
   name: string;
   games: number;
@@ -72,6 +76,12 @@ export interface RecapOpener {
 export interface RecapOpponent {
   name: string;
   pulseId: string | null;
+  /**
+   * The race they played most against the user in the window (most
+   * recent on a tie); null when no game recorded one. Lets the exported
+   * card say "a Zerg opponent" instead of printing `name`.
+   */
+  race: RecapRace | null;
   /** The USER's wins vs this opponent. */
   wins: number;
   /** The USER's losses vs this opponent. */
@@ -244,15 +254,13 @@ function computeMmrJourneys(rows: ArcadeGame[]): RecapMmrJourney[] {
     const toonHandle = cleanToonHandle(g.myToonHandle);
     // Handle-less rows cannot be assigned safely to a region/account;
     // omitting them is more honest than recreating a cross-ladder line.
-    if (
-      !toonHandle ||
-      typeof g.myMmr !== "number" ||
-      !Number.isFinite(g.myMmr)
-    ) {
-      continue;
-    }
+    // A value that is not a real ladder rating (0 means "not recorded")
+    // is skipped too: as a start or end point it would turn the delta
+    // into the player's absolute rating.
+    const mmr = knownMmr(g.myMmr);
+    if (!toonHandle || mmr === null) continue;
     const series = byAccount.get(toonHandle) ?? [];
-    series.push(g.myMmr);
+    series.push(mmr);
     byAccount.set(toonHandle, series);
   }
   // A single data point isn't a journey — require two so start/end/
@@ -351,6 +359,36 @@ interface OppAgg {
   wins: number;
   losses: number;
   games: number;
+  /** Games per race, and the row index each race was last seen at. */
+  races: Map<RecapRace, { games: number; lastSeen: number }>;
+}
+
+function recapRace(g: ArcadeGame): RecapRace | null {
+  const letter = String(g.oppRace || g.opponent?.race || "")
+    .trim()
+    .charAt(0)
+    .toUpperCase();
+  return letter === "P" || letter === "T" || letter === "Z" || letter === "R"
+    ? letter
+    : null;
+}
+
+/** Most-played race; the most recently seen one wins a tie. */
+function mainRace(races: OppAgg["races"]): RecapRace | null {
+  let best: RecapRace | null = null;
+  let bestGames = 0;
+  let bestSeen = -1;
+  for (const [race, seen] of races) {
+    if (
+      seen.games > bestGames ||
+      (seen.games === bestGames && seen.lastSeen > bestSeen)
+    ) {
+      best = race;
+      bestGames = seen.games;
+      bestSeen = seen.lastSeen;
+    }
+  }
+  return best;
 }
 
 function computeRivals(rows: ArcadeGame[]): {
@@ -358,7 +396,7 @@ function computeRivals(rows: ArcadeGame[]): {
   bestVictim: RecapOpponent | null;
 } {
   const byKey = new Map<string, OppAgg>();
-  for (const g of rows) {
+  for (const [index, g] of rows.entries()) {
     const rawName =
       typeof g.opponent?.displayName === "string" ? g.opponent.displayName.trim() : "";
     const name = rawName || null;
@@ -369,10 +407,22 @@ function computeRivals(rows: ArcadeGame[]): {
     if (!key) continue;
     let rec = byKey.get(key);
     if (!rec) {
-      rec = { name: name ?? "Unknown", pulseId, wins: 0, losses: 0, games: 0 };
+      rec = {
+        name: name ?? "Unknown",
+        pulseId,
+        wins: 0,
+        losses: 0,
+        games: 0,
+        races: new Map(),
+      };
       byKey.set(key, rec);
     }
     if (rec.name === "Unknown" && name) rec.name = name;
+    const race = recapRace(g);
+    if (race) {
+      const seen = rec.races.get(race);
+      rec.races.set(race, { games: (seen?.games ?? 0) + 1, lastSeen: index });
+    }
     rec.games += 1;
     const o = outcome(g);
     if (o === "W") rec.wins += 1;
@@ -410,6 +460,7 @@ function toRecapOpponent(o: OppAgg): RecapOpponent {
   return {
     name: o.name,
     pulseId: o.pulseId,
+    race: mainRace(o.races),
     wins: o.wins,
     losses: o.losses,
     record: `${o.wins}-${o.losses}`,
@@ -420,9 +471,11 @@ function computeBiggestUpset(rows: ArcadeGame[]): RecapUpset | null {
   let best: RecapUpset | null = null;
   for (const g of rows) {
     if (outcome(g) !== "W") continue;
-    const my = typeof g.myMmr === "number" && Number.isFinite(g.myMmr) ? g.myMmr : null;
-    const oppRaw = typeof g.oppMmr === "number" ? g.oppMmr : g.opponent?.mmr;
-    const opp = typeof oppRaw === "number" && Number.isFinite(oppRaw) ? oppRaw : null;
+    // Both sides must be real ladder ratings. With a 0 ("not recorded")
+    // standing in for the player's own, the "gap" would be the
+    // opponent's exact rating, on the slide and on the shared card.
+    const my = knownMmr(g.myMmr);
+    const opp = knownMmr(g.oppMmr) ?? knownMmr(g.opponent?.mmr);
     if (my === null || opp === null) continue;
     const gap = opp - my;
     // Beating someone at/below your own MMR isn't an upset.

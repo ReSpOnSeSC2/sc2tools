@@ -650,7 +650,27 @@ describe("groupCensus.score", () => {
     );
     expect(summary.question).toMatch(/100% WR/);
     expect(summary.question).toMatch(/against/);
-    expect(summary.answer.some((row) => row.includes("Alpha"))).toBe(true);
+    // An opponent census is about other people: the card letters them.
+    expect(summary.answer).toContain("Rival A · 5-0 (100.0%)");
+    expect(summary.answer.some((row) => row.includes("Alpha"))).toBe(false);
+  });
+
+  test("share keeps the names of the player's own maps and builds", () => {
+    if (!groupCensus.share) throw new Error("share missing");
+    for (const [kind, name] of [["map", "Goldenaura LE"], ["build", "Reaper FE"]] as const) {
+      const summary = groupCensus.share(
+        {
+          ...sampleQ,
+          variant: { kind, wr: "perfect", window: "365d", minGames: 5 } as CensusVariant,
+          examples: [
+            { key: name, displayName: name, wins: 5, losses: 0, games: 5, winRate: 1 },
+          ],
+        },
+        "1-2",
+        groupCensus.score(sampleQ, "1-2"),
+      );
+      expect(summary.answer).toContain(`${name} · 5-0 (100.0%)`);
+    }
   });
 
   test("share preposition tracks the variant kind", () => {

@@ -255,6 +255,12 @@ export function openersForRace(race: "T" | "Z" | "P"): string[] {
 
 /* ──────────── question payload ──────────── */
 
+/**
+ * Key of the case-file row that names the opponent. Shown in the app,
+ * never exported on a share card.
+ */
+export const OPPONENT_FACT_KEY = "opponent";
+
 export interface CaseFileFact {
   /** Stable key — used to dedupe and to skip the hidden one. */
   key: string;
@@ -321,7 +327,7 @@ function buildCaseFile(
 ): CaseFileFact[] {
   const facts: CaseFileFact[] = [];
   facts.push({
-    key: "opponent",
+    key: OPPONENT_FACT_KEY,
     label: "Opponent",
     value: opp?.displayName || opp?.name || g.opponent?.displayName || "Unknown",
   });
@@ -476,7 +482,7 @@ function generateTimesPlayed(
   const b = timesPlayedBucket(opp.games);
   return {
     prompt: "How many times had you played this opponent (total, all-time)?",
-    hiddenKey: "opponent",
+    hiddenKey: OPPONENT_FACT_KEY,
     options: [...TIMES_PLAYED_BUCKETS],
     correct: b,
   };
@@ -487,7 +493,7 @@ function generateCareerWr(g: ArcadeGame, opp: ArcadeOpponent | undefined): QSpec
   const b = wrBucket(opp.userWinRate);
   return {
     prompt: "What's your all-time win rate vs this opponent?",
-    hiddenKey: "opponent",
+    hiddenKey: OPPONENT_FACT_KEY,
     options: [...WR_BUCKETS],
     correct: b,
   };
@@ -632,9 +638,12 @@ function share(q: Q, a: A | null, _s: ScoreResult): ShareSummary {
     answer.push(`Your pick · ${pickedText}`);
   }
   // Surface a couple of supporting case-file rows so the reader sees
-  // the same context the in-app case file showed (opponent, matchup,
-  // date — whichever survive the hidden-key redaction).
-  const detailRows = q.caseFile.slice(0, 3);
+  // the context the in-app case file showed (date, matchup, map —
+  // whichever survive the hidden-key redaction). The opponent row is
+  // left out: the card is public and names nobody (lib/sharePrivacy.ts).
+  const detailRows = q.caseFile
+    .filter((f) => f.key !== OPPONENT_FACT_KEY)
+    .slice(0, 3);
   for (const f of detailRows) {
     answer.push(`${f.label} · ${f.value}`);
   }

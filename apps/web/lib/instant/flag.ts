@@ -7,11 +7,14 @@
  *
  * Next.js inlines `process.env.NEXT_PUBLIC_*` only where the variable is
  * referenced literally, so the default parameter below must stay a
- * literal `process.env.NEXT_PUBLIC_INSTANT_IMPORT` access.
+ * literal `process.env.NEXT_PUBLIC_INSTANT_IMPORT` access. The value is
+ * parsed by the shared `parseInstantImportMode` (also used by
+ * next.config.mjs for the /arcade share-link redirect).
  *
  * Example:
  *   if (getInstantImportMode() === "all") showTryLink();
  */
+import { parseInstantImportMode } from "@/lib/instant/instantImportFlag.mjs";
 
 export type InstantImportMode = "off" | "admins" | "all";
 
@@ -25,7 +28,5 @@ export type InstantImportMode = "off" | "admins" | "all";
 export function getInstantImportMode(
   env: string | undefined = process.env.NEXT_PUBLIC_INSTANT_IMPORT,
 ): InstantImportMode {
-  const value = (env ?? "").trim().toLowerCase();
-  if (value === "all" || value === "admins") return value;
-  return "off";
+  return parseInstantImportMode(env);
 }
