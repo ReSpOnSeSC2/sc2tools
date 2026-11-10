@@ -158,7 +158,13 @@ class WeeklyReportService {
     try {
       const claim = await this.db.users.updateOne({ userId, "reports.weeklyWeek": { $ne: week } }, { $set: { "reports.weeklyWeek": week } });
       if (claim.modifiedCount !== 1) return "skipped";
-      const report = await this.build(userId, week, tz);
+      let report;
+      try { report = await this.build(userId, week, tz); }
+      catch (err) {
+        // Give the week back so the next hourly tick can try again.
+        await this.db.users.updateOne({ userId, "reports.weeklyWeek": week }, { $unset: { "reports.weeklyWeek": "" } }).catch(() => {});
+        throw err;
+      }
       if (report.totals.games < MIN_GAMES) return "quiet";
       const row = await this.notifications.notify(userId, { kind: "report.weekly", ...weeklyNotice(report), href: `/app/reports/weekly/${week}`, eventKey: `report.weekly:${week}` });
       // Already delivered (the key is idempotent) or muted: nothing more to send.

@@ -22,7 +22,8 @@ const get = (name, path) => request(h.app).get(path).set("authorization", h.bear
 
 beforeAll(async () => {
   h = await createHarness();
-  for (const name of ["ann", "bob", "carol", "dan"]) await h.seedUser(name);
+  // Stream tests use their own users: the weekly fixtures sit on fixed dates near today.
+  for (const name of ["ann", "bob", "carol", "dan", "eve", "fay", "gus", "hal"]) await h.seedUser(name);
 });
 afterAll(async () => { await h.close(); });
 
@@ -88,50 +89,66 @@ test("weekly delivery: Monday 09:00 in the user's zone, claimed once, quiet unde
   expect(await h.db.notifications.countDocuments({ userId: "u_dan", kind: "report.weekly" })).toBe(0);
 });
 
+test("a failed weekly build gives the week back for the next tick", async () => {
+  const weekly = h.services.weeklyReports;
+  const build = weekly.build;
+  weekly.build = jest.fn(async () => { throw Object.assign(new Error("boom"), { code: "boom" }); });
+  weekly.now = () => MONDAY_W47_BERLIN_10 + HOUR;
+  weekly.candidateCache.clear();
+  await h.db.users.updateOne({ userId: "u_gus" }, { $set: { "preferences.reports": { timezone: "Europe/Berlin" } } });
+  await h.db.games.insertMany(Array.from({ length: 5 }, (_, i) => game("u_gus", Date.parse("2026-11-11T10:00:00Z") + i * HOUR)));
+  await weekly.sweep();
+  expect((await h.db.users.findOne({ userId: "u_gus" })).reports?.weeklyWeek).toBeUndefined();
+  weekly.build = build;
+  await weekly.sweep();
+  expect((await h.db.users.findOne({ userId: "u_gus" })).reports.weeklyWeek).toBe("2026-W46");
+  expect(await h.db.notifications.countDocuments({ userId: "u_gus", kind: "report.weekly" })).toBe(1);
+});
+
 test("stream report: computed once per stream, stored without opponent names, listed and readable only by its owner", async () => {
   const streams = h.services.streamReports;
   const start = Date.now() - 3 * HOUR;
-  await h.db.games.insertMany([game("u_ann", start + HOUR, { opponent: { race: "Terran", mmr: 4300, displayName: "SecretOppZed" } }),
-    game("u_ann", start + 2 * HOUR, { result: "Defeat", buildIntent: { randomizer: { key: "x" } } })]);
-  await h.db.overlayTokens.insertOne({ userId: "u_ann", token: "tok-ann" });
-  await h.db.multichatPredictions.insertOne({ token: "tok-ann", gameKey: "k1", openedAt: new Date(start + HOUR), settled: true, resolution: "verified", result: "win",
+  await h.db.games.insertMany([game("u_eve", start + HOUR, { opponent: { race: "Terran", mmr: 4300, displayName: "SecretOppZed" } }),
+    game("u_eve", start + 2 * HOUR, { result: "Defeat", buildIntent: { randomizer: { key: "x" } } })]);
+  await h.db.overlayTokens.insertOne({ userId: "u_eve", token: "tok-eve" });
+  await h.db.multichatPredictions.insertOne({ token: "tok-eve", gameKey: "k1", openedAt: new Date(start + HOUR), settled: true, resolution: "verified", result: "win",
     picks: { "twitch:viewer1": { pick: "win", user: "ViewerOne" }, "twitch:viewer2": { pick: "loss", user: "ViewerTwo" } } });
-  await h.db.multichatEngagementEvents.insertOne({ token: "tok-ann", platform: "twitch", msgId: "m1", user: "ViewerOne", userKey: "twitch:viewerone", kind: "sub", atMs: start + HOUR, atDate: new Date() });
-  await streams.start("u_ann", start);
-  const [first, second] = await Promise.all([streams.end("u_ann"), streams.end("u_ann")]);
+  await h.db.multichatEngagementEvents.insertOne({ token: "tok-eve", platform: "twitch", msgId: "m1", user: "ViewerOne", userKey: "twitch:viewerone", kind: "sub", atMs: start + HOUR, atDate: new Date() });
+  await streams.start("u_eve", start);
+  const [first, second] = await Promise.all([streams.end("u_eve"), streams.end("u_eve")]);
   expect([first, second].filter(Boolean)).toHaveLength(1);
   const summary = first || second;
   expect(summary).toMatchObject({ games: 2, wins: 1, losses: 1, endedBy: "manual" });
-  const doc = await h.db.streamSessions.findOne({ userId: "u_ann", streamId: summary.id });
+  const doc = await h.db.streamSessions.findOne({ userId: "u_eve", streamId: summary.id });
   expect(doc).toMatchObject({ randomizer: { games: 1, wins: 0, losses: 1 }, crystalBall: { rounds: 1, picks: 2, correct: 1, viewers: 2, accuracy: null },
     supporters: { events: 1, viewers: 1 }, bestWin: { opponentMmr: 4300, matchup: "PvT" } });
   expect(JSON.stringify(doc)).not.toMatch(/SecretOppZed|ViewerOne|ViewerTwo/);
   expect(Buffer.byteLength(JSON.stringify(doc))).toBeLessThanOrEqual(5120);
-  expect(await h.db.notifications.countDocuments({ userId: "u_ann", kind: "report.stream" })).toBe(1);
-  expect((await get("ann", "/v1/reports/streams")).body.items[0]).toMatchObject({ id: summary.id, games: 2 });
-  expect((await get("ann", `/v1/reports/streams/${summary.id}`)).body).toMatchObject({ streamId: summary.id, games: 2 });
+  expect(await h.db.notifications.countDocuments({ userId: "u_eve", kind: "report.stream" })).toBe(1);
+  expect((await get("eve", "/v1/reports/streams")).body.items[0]).toMatchObject({ id: summary.id, games: 2 });
+  expect((await get("eve", `/v1/reports/streams/${summary.id}`)).body).toMatchObject({ streamId: summary.id, games: 2 });
   expect((await get("bob", `/v1/reports/streams/${summary.id}`)).status).toBe(404);
-  expect(await streams.end("u_ann")).toBeNull();
+  expect(await streams.end("u_eve")).toBeNull();
 });
 
 test("stream reports: four quiet hours close a stream, the newest 100 are kept, and opting out stores nothing", async () => {
   const streams = h.services.streamReports;
   const now = Date.now();
-  await h.db.streamSessions.insertMany(Array.from({ length: KEEP }, (_, i) => ({ userId: "u_bob", streamId: `old${String(i).padStart(4, "0")}`, startAt: new Date(now - (200 - i) * 86400_000), endAt: new Date(now - (200 - i) * 86400_000), games: 1 })));
-  await h.db.games.insertOne(game("u_bob", now - 3 * HOUR));
-  await streams.start("u_bob", now - 6 * HOUR);
-  await h.db.games.insertOne(game("u_carol", now - HOUR));
-  await streams.start("u_carol", now - 2 * HOUR);
-  expect((await streams.closeIdle()).closed).toBe(0); // bob's stream began 6 h ago, but his last game was 3 h ago
+  await h.db.streamSessions.insertMany(Array.from({ length: KEEP }, (_, i) => ({ userId: "u_fay", streamId: `old${String(i).padStart(4, "0")}`, startAt: new Date(now - (200 - i) * 86400_000), endAt: new Date(now - (200 - i) * 86400_000), games: 1 })));
+  await h.db.games.insertOne(game("u_fay", now - 3 * HOUR));
+  await streams.start("u_fay", now - 6 * HOUR);
+  await h.db.games.insertOne(game("u_hal", now - HOUR));
+  await streams.start("u_hal", now - 2 * HOUR);
+  expect((await streams.closeIdle()).closed).toBe(0); // fay's stream began 6 h ago, but his last game was 3 h ago
   streams.now = () => now + 2 * HOUR;
-  expect((await streams.closeIdle()).closed).toBe(1); // five quiet hours for bob, three for carol
+  expect((await streams.closeIdle()).closed).toBe(1); // five quiet hours for fay, three for hal
   streams.now = Date.now;
-  expect(await h.db.streamSessions.countDocuments({ userId: "u_bob" })).toBe(KEEP);
-  expect(await h.db.streamSessions.findOne({ userId: "u_bob", streamId: "old0000" })).toBeNull();
-  expect((await h.db.streamSessions.find({ userId: "u_bob" }).sort({ startAt: -1 }).limit(1).next()).endedBy).toBe("idle");
-  expect((await h.db.users.findOne({ userId: "u_carol" })).streamSession).toBeTruthy();
-  await h.db.users.updateOne({ userId: "u_carol" }, { $set: { "preferences.reports": { stream: false } } });
-  expect(await streams.end("u_carol")).toBeNull();
-  expect((await h.db.users.findOne({ userId: "u_carol" })).streamSession).toBeUndefined();
-  expect(await h.db.streamSessions.countDocuments({ userId: "u_carol" })).toBe(0);
+  expect(await h.db.streamSessions.countDocuments({ userId: "u_fay" })).toBe(KEEP);
+  expect(await h.db.streamSessions.findOne({ userId: "u_fay", streamId: "old0000" })).toBeNull();
+  expect((await h.db.streamSessions.find({ userId: "u_fay" }).sort({ startAt: -1 }).limit(1).next()).endedBy).toBe("idle");
+  expect((await h.db.users.findOne({ userId: "u_hal" })).streamSession).toBeTruthy();
+  await h.db.users.updateOne({ userId: "u_hal" }, { $set: { "preferences.reports": { stream: false } } });
+  expect(await streams.end("u_hal")).toBeNull();
+  expect((await h.db.users.findOne({ userId: "u_hal" })).streamSession).toBeUndefined();
+  expect(await h.db.streamSessions.countDocuments({ userId: "u_hal" })).toBe(0);
 });
