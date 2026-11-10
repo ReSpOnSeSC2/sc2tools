@@ -86,6 +86,9 @@ test("single delete removes payloads, revokes grants, and retains only an owner-
   await h.db.reviewRequests.insertOne({ _id: "controlled-review", userId: owner, gameId: ID, status: "open", activeKey: "active", listed: true, indexable: true });
   await h.db.macroJobs.insertMany([{ userId: owner, gameId: ID }, { userId: owner, gameId: "unrelated-job" }]);
   await h.db.guideSamples.insertOne({ ...h.services.guideSamples._key(owner, ID), marker: "remove" });
+  await h.db.notes.deleteMany({});
+  await h.db.notes.insertMany([{ userId: owner, target: { kind: "game", id: ID }, text: "private game note" },
+    { userId: other, target: { kind: "game", id: ID }, text: "other owner's note" }, { userId: owner, target: { kind: "opponent", id: ID }, text: "opponent note" }]);
   const response = await call("delete", gamePath()).send({ confirmation: "DELETE GAME" });
   expect(response.status).toBe(200); expect(response.body).toMatchObject({ gameId: ID, deleted: true });
   const marker = await h.db.games.findOne({ userId: owner, gameId: ID });
@@ -95,6 +98,8 @@ test("single delete removes payloads, revokes grants, and retains only an owner-
   expect(await h.db.gameDetails.findOne({ userId: other, gameId: ID })).not.toBeNull();
   expect(await h.db.guideSamples.findOne(h.services.guideSamples._key(owner, ID))).toBeNull();
   expect(await h.db.macroJobs.findOne({ userId: owner, gameId: "unrelated-job" })).not.toBeNull();
+  // The game's private notes go with it; another owner's and opponent notes stay.
+  expect((await h.db.notes.find({}, { projection: { _id: 0, text: 1 } }).toArray()).map(row => row.text).sort()).toEqual(["opponent note", "other owner's note"]);
   expect(await h.db.reviewRequests.findOne({ _id: "controlled-review" })).toMatchObject({ status: "closed", listed: false, indexable: false, closedReason: "game_unavailable" });
   expect(await h.services.games.existingGameIds(owner, [ID])).toEqual([ID]);
   expect(await h.services.games.get(owner, ID)).toBeNull();

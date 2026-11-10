@@ -11,6 +11,23 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Notes and review queue
+
+- Opponent notes are now private unless you turn on **Show on stream**; only
+  those notes reach your OBS scouting widget. Notes written before this change
+  keep showing on stream, with a one-time explainer, until you change them.
+- Tag opponent notes (Cheeser, Proxy, All-in, Macro, Smurf, Off-race, Rival,
+  Toxic or your own). Toxic notes are always private. Cheeser is suggested from
+  your games, never added for you.
+- Let a note follow the player's other linked accounts with **All their
+  accounts**; the dossier and your live brief show notes from linked accounts.
+- Add private notes at a moment of a replay with **Note at 4:12** or the B key,
+  pin them on the map, and jump back from the timeline markers and the notes
+  list. Edit, tag, star or delete them, with Undo.
+- Mark games **To review** or **Reviewed** with review tags, and filter the
+  Replays page by review state, review tag or **Has notes**. Replay search also
+  matches your note text.
+
 ### Share cards
 
 - Fix the link printed on every share card. `sc2tools.com/arcade` now leads to

@@ -19,6 +19,8 @@ const {
   ownerBuildFlags,
 } = require("./buildIntentReaders");
 const { REPLAY_SEARCH_COMMENT } = require("../middleware/searchQueryPrivacy");
+const { NotesService } = require("./notes");
+const { canonicalTag } = require("./notesPolicy");
 
 // A replay-library page is a human-facing table, not an analysis corpus.
 // A modest default keeps first paint quick; the hard ceiling prevents a
@@ -84,6 +86,11 @@ const REPLAY_LIBRARY_PROJECTION = Object.freeze({
   // The serializer never copies the subdocument itself.
   ...BUILD_INTENT_LABEL_PROJECTION,
   ...OPP_INTENT_LABEL_PROJECTION,
+  // Owner-private review queue state and note count. Only the owner
+  // serializer copies them; detector/public DTOs never do.
+  "review.state": 1,
+  "review.tags": 1,
+  noteCount: 1,
 });
 
 /** @typedef {"owner"|"detector"} ReplayLibraryView */
@@ -94,13 +101,29 @@ const REPLAY_LIBRARY_PROJECTION = Object.freeze({
  * always scopes reads to the resolved owner id and emits a view-specific safe DTO.
  */
 class ReplayLibraryService {
-  /** @param {{games: import('mongodb').Collection}} db */
+  /** @param {{games: import('mongodb').Collection, notes?: import('mongodb').Collection, opponentNotes?: import('mongodb').Collection}} db */
   constructor(db) {
     if (!db || !db.games) {
       throw new Error("ReplayLibraryService requires db.games");
     }
     this.db = db;
     this.archiveFacets = new Map();
+    /** Owner search also matches private game-note text (never the public view). */
+    this.notes = db.notes ? new NotesService(/** @type {any} */ (db)) : null;
+  }
+
+  /**
+   * Owner-only: the games whose private notes match the search text. The
+   * public archive never sets ``searchNotes``.
+   * @param {string} ownerId
+   * @param {Record<string, any>} opts
+   * @returns {Promise<Record<string, any>>} opts with ``noteGameIds`` when any match
+   */
+  async _withNoteMatches(ownerId, opts) {
+    const query = cleanReplaySearch(opts.search);
+    if (!this.notes || opts.searchNotes !== true || replayLibraryView(opts.view) !== "owner" || !query) return opts;
+    const noteGameIds = await this.notes.gameIdsMatchingText(ownerId, query).catch(() => []);
+    return noteGameIds.length ? { ...opts, noteGameIds } : opts;
   }
 
   /**
@@ -148,7 +171,7 @@ class ReplayLibraryService {
     const cursor = decodeReplayLibraryCursor(opts.cursor);
     if (cursor && cursor.sort !== sort) throw invalidReplayLibraryCursor();
     const view = replayLibraryView(opts.view);
-    const summaryMatch = buildReplayLibraryMatch(ownerId, opts);
+    const summaryMatch = buildReplayLibraryMatch(ownerId, await this._withNoteMatches(ownerId, opts));
     const match = cursor ? { $and: [summaryMatch, { $or: replayCursorContinuationBranches(cursor) }] } : summaryMatch;
     /** @type {[Array<Record<string, any>>, Record<string, any>]} */
     const [rows, overview] = await Promise.all([this.db.games
@@ -192,12 +215,15 @@ class ReplayLibraryService {
     const ownerId = cleanOwnerId(userId);
     if (!ownerId) return { items: [], nextCursor: null, hasMore: false, sourceGames: [] };
     const limit = clampListLimit(opts.limit);
+    // Quick search keeps its one bounded read (ADR 0069): note text is
+    // searched by the full Replays list only.
+    const match = buildReplayLibraryMatch(ownerId, { ...opts, noteGameIds: undefined, view: "owner" });
     /** @type {Array<Record<string, any>>} */
     const rows = await this.db.games.aggregate([
       { $match: { userId: ownerId } },
       { $sort: { date: -1, _id: -1 } },
       { $limit: REPLAY_LIBRARY_RECENT_WINDOW },
-      { $match: buildReplayLibraryMatch(ownerId, { ...opts, view: "owner" }) },
+      { $match: match },
       { $limit: limit + 1 },
       { $project: REPLAY_LIBRARY_PROJECTION },
     ], {
@@ -280,8 +306,29 @@ function buildReplayLibraryMatch(ownerId, opts) {
   const clauses = [gamesMatchStage(ownerId, filters)];
   if (detectorBuild !== undefined) clauses.push(detectorLabelMatch("name", detectorBuild));
   if (detectorStrategy !== undefined) clauses.push(opponentDetectorLabelMatch("name", detectorStrategy));
-  for (const clause of [resultMatchClause(opts.result), matchupMatchClause(opts.matchup), replaySearchClause(opts.search, view)]) if (clause) clauses.push(clause);
+  // The review queue and note filters are the owner's private state: the
+  // public archive (detector view) can never filter or search by them.
+  const owner = view === "owner";
+  const noteGameIds = owner && Array.isArray(opts.noteGameIds) ? opts.noteGameIds : [];
+  for (const clause of [resultMatchClause(opts.result), matchupMatchClause(opts.matchup), replaySearchClause(opts.search, view, noteGameIds),
+    owner ? reviewMatchClause(opts.review, opts.reviewTag) : null,
+    owner && opts.hasNotes === true ? { noteCount: { $gt: 0 } } : null]) if (clause) clauses.push(clause);
   return clauses.length === 1 ? clauses[0] : { $and: clauses };
+}
+
+/**
+ * Owner review-queue filter: ``todo`` / ``done`` and one review tag
+ * (case-insensitive exact tag).
+ * @param {unknown} review @param {unknown} tag
+ * @returns {Record<string, any>|null}
+ */
+function reviewMatchClause(review, tag) {
+  /** @type {Record<string, any>} */
+  const clause = {};
+  if (review === "todo" || review === "done") clause["review.state"] = review;
+  const label = typeof tag === "string" && tag.length <= 48 ? canonicalTag(tag) : null;
+  if (label) clause["review.tags"] = new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+  return Object.keys(clause).length ? clause : null;
 }
 
 /**
@@ -405,13 +452,8 @@ function replayLibraryView(raw) {
  *   and opponent labels
  * @returns {Record<string, any>|null}
  */
-function replaySearchClause(raw, view = "owner") {
-  if (typeof raw !== "string") return null;
-  const query = raw
-    .replace(/[\u0000-\u001f\u007f]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, REPLAY_LIBRARY_SEARCH_MAX_CHARS);
+function replaySearchClause(raw, view = "owner", noteGameIds = /** @type {string[]} */ ([])) {
+  const query = cleanReplaySearch(raw);
   if (!query) return null;
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const pattern = new RegExp(escaped, "i");
@@ -423,8 +465,25 @@ function replaySearchClause(raw, view = "owner") {
       view === "detector"
         ? opponentDetectorLabelMatch("name", pattern)
         : { "opponent.strategy": pattern },
+      // Owner reads only: games whose private notes matched (NotesService).
+      ...(noteGameIds.length ? [{ gameId: { $in: noteGameIds } }] : []),
     ],
   };
+}
+
+/**
+ * The search text as every replay read uses it: control characters and
+ * runs of whitespace collapsed, capped at 100 characters.
+ * @param {unknown} raw
+ * @returns {string}
+ */
+function cleanReplaySearch(raw) {
+  if (typeof raw !== "string") return "";
+  return raw
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, REPLAY_LIBRARY_SEARCH_MAX_CHARS);
 }
 
 /**
@@ -480,6 +539,25 @@ function serializeReplayLibraryGame(row, view = "owner") {
     replayAvailable:
       replaySizeBytes !== null && validDateLike(replayFile.storedAt),
     replaySizeBytes,
+    ...(view === "owner" ? ownerReviewFields(row) : {}),
+  };
+}
+
+/**
+ * Owner-only review queue state and note count. Never part of a detector
+ * (public) DTO.
+ * @param {Record<string, any>} row
+ * @returns {{review: {state: "todo"|"done"|null, tags: string[]}|null, noteCount: number}}
+ */
+function ownerReviewFields(row) {
+  const review = objectOrEmpty(row?.review);
+  const state = review.state === "todo" || review.state === "done" ? review.state : null;
+  const tags = Array.isArray(review.tags)
+    ? review.tags.filter((/** @type {unknown} */ tag) => typeof tag === "string" && tag.length <= 48).slice(0, 5)
+    : [];
+  return {
+    review: state || tags.length ? { state, tags } : null,
+    noteCount: safeBoundedNumber(row?.noteCount, 0, 10_000, true) ?? 0,
   };
 }
 
@@ -694,6 +772,7 @@ function matchupLabel(myRace, opponentRace) {
 
 module.exports = {
   buildReplayLibraryMatch,
+  cleanReplaySearch,
   resultMatchClause,
   ReplayLibraryService,
   REPLAY_LIBRARY_LIST_DEFAULT,
@@ -711,5 +790,7 @@ module.exports = {
     replayCursorContinuationBranches,
     matchupMatchClause,
     resultMatchClause,
+    reviewMatchClause,
+    ownerReviewFields,
   },
 };

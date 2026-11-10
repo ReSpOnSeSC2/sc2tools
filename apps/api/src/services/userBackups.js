@@ -12,6 +12,8 @@ const { protectDeletedSnapshotGames, liveBackupGamesMatch } = require("./backupG
 
 // Credentials and work queues are live state, not restore points. Restoring a
 // snapshot must not revive an unlinked PC or restart an old import/classifier.
+/** Sections newer than the snapshot format: an older snapshot without one restores it empty. */
+const OPTIONAL_SECTIONS = new Set(["notes"]);
 const RESTORABLE = [...USER_SCOPED_COLLECTIONS.filter(([key]) => !["deviceTokens", "importJobs", "macroJobs"].includes(key)), ["users", "preferences"], ["users", "accountProfile"]];
 const PREFERENCE_KEYS = ["misc", "voice", "arcade", "randomizer", "multichat", "buildCheckin"];
 // Public-profile and replay-sharing consent is live state, deliberately never
@@ -180,7 +182,9 @@ class UserBackupsService {
         }
         checksum.update(`${text}\n`);
       }
-      if (!header || !ended || RESTORABLE.some(([, name]) => !Object.hasOwn(counts, name))) throw failure("backup_invalid", 422);
+      if (!header || !ended || RESTORABLE.some(([, name]) => !OPTIONAL_SECTIONS.has(name) && !Object.hasOwn(counts, name))) throw failure("backup_invalid", 422);
+      // Snapshots taken before a section existed restore it as empty.
+      for (const name of OPTIONAL_SECTIONS) if (!Object.hasOwn(counts, name)) counts[name] = 0;
       if (counts.preferences > 1 || counts.accountProfile > 1) throw failure("backup_invalid", 422);
       await flush();
       await protectDeletedSnapshotGames(this.db, this.staging, userId, operationId, counts);
@@ -216,7 +220,7 @@ class UserBackupsService {
       fence = await this.gdpr._acquireMutationFence(userId, "snapshot_preview");
       const removed = (await this.missingGames(userId, staged.operationId).group({ _id: null, count: { $sum: 1 } }).next())?.count || 0;
       const current = await this.db.games.countDocuments(liveBackupGamesMatch(userId)); const kept = current - removed;
-      return { games: { kept, removed, added: staged.counts.games - kept }, customBuilds: staged.counts.customBuilds, opponentNotes: staged.counts.opponentNotes, overlayTokens: 0, currentRevision: await this.membershipRevision(userId) };
+      return { games: { kept, removed, added: staged.counts.games - kept }, customBuilds: staged.counts.customBuilds, opponentNotes: staged.counts.opponentNotes, notes: staged.counts.notes, overlayTokens: 0, currentRevision: await this.membershipRevision(userId) };
     } finally { if (fence) await this.gdpr._releaseMutationFence(userId, fence); await this.staging.deleteMany({ operationId: staged.operationId }); }
   }
   /** @param {string} userId @param {string} id @param {{assert:()=>Promise<void>,id?:string,owner?:import('./gameStatsWrites').GameStatsOwner|null}} fence @param {string|undefined} [expectedRevision] */

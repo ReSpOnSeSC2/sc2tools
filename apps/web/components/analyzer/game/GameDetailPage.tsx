@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import { NotesPanel } from "@/components/notes/NotesPanel";
+import { useGameNoteWorkspace } from "@/components/notes/useGameNoteWorkspace";
 import { useGameClock } from "./useGameClock";
 import { GameClockControls } from "./GameClockControls";
 import { GameClockLink } from "./GameClockLink";
@@ -31,6 +33,9 @@ import { GameContextCard } from "./GameContextCard";
 import { useGameContext } from "@/lib/useBenchmarks";
 import { checkedMatchPercentage, type BuildExecution } from "@/lib/buildExecution";
 const BuildOrderColumns = dynamic(() => import("./GameBuildOrderColumns").then((value) => value.GameBuildOrderColumns), { loading: () => <div role="status" aria-label="Loading build orders" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
+// Owner-only header controls, loaded after first paint.
+const GameReviewControl = dynamic(() => import("@/components/notes/GameReviewControl").then(value => value.GameReviewControl));
+const GameOpponentNote = dynamic(() => import("@/components/notes/GameOpponentNote").then(value => value.GameOpponentNote));
 const BuildWorkspaceActions = dynamic(() => import("./BuildWorkspaceActions").then(value => value.BuildWorkspaceActions));
 const GameDataMenu = dynamic(() => import("./GameDataMenu").then(value => value.GameDataMenu));
 const GameMacroSection = dynamic(() => import("./GameMacroSection").then((value) => value.GameMacroSection), { loading: () => <div role="status" aria-label="Loading macro breakdown" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
@@ -145,6 +150,13 @@ function GameDetailContent({
   const clock = useGameClock(gameId, initialTimeSec, gameReq.data?.durationSec ?? macroReq.data?.game_length_sec);
   const setScrubTime = clock.seek;
   const inspectMacroTime = useCallback((time: number) => setScrubTime(time, { reveal: false }), [setScrubTime]);
+  // Private game notes: the list below the replay, its dock button (B), pins and markers.
+  const noteWorkspace = useGameNoteWorkspace(gameId, setScrubTime);
+  const { startNote } = noteWorkspace;
+  const addNoteAt = useCallback((time: number) => {
+    if (typeof document !== "undefined" && document.fullscreenElement) void document.exitFullscreen?.().catch(() => { /* Fullscreen may already be closing. */ });
+    startNote(time);
+  }, [startNote]);
 
   const game = gameReq.data ?? null;
   const playbackController = useMapReplay(game?.gameId ?? null);
@@ -263,6 +275,7 @@ function GameDetailContent({
       game={game}
       exportAction={<><GameExportMenu game={game} buildOrders={buildReq.data} macroBreakdown={breakdown} pending={buildStatus === "loading" || macroStatus === "loading"} /><GameDataMenu game={game} onComplete={async changes => { if (changes.some(change => change.deleted)) router.replace(source?.href || "/app/replays"); else await gameReq.mutate(); }} /></>}
       opponentContext={opponentContext}
+      noteActions={<><GameReviewControl gameId={game.gameId} review={game.review} onChanged={(review) => void gameReq.mutate(current => current ? { ...current, review } : current, { revalidate: false })} /><GameOpponentNote pulseId={game.opponent?.pulseId} /></>}
       streamLinks={streamLinks}
       buildLabel={checkinBuild ? checkinBuild.label : undefined}
       planned={checkinBuild ? checkinBuild.planned : undefined}
@@ -314,8 +327,13 @@ function GameDetailContent({
         myRace={ghostMyRace}
         oppRace={ghostOpponentRace}
         patchEra={patchEraForGame(game)}
+        mapMarkers={noteWorkspace.mapMarkers} onWorldClick={noteWorkspace.onWorldClick} onMarkerClick={noteWorkspace.onMarkerClick}
+        commentMarkers={noteWorkspace.commentMarkers} onCommentMarker={noteWorkspace.onCommentMarker} commentLabel="Your notes on the timeline" onAddNote={addNoteAt}
       /></SectionBoundary>
 
+      </section>
+      <section id="notes" className="scroll-mt-[var(--game-section-offset,8rem)]" aria-label="Game notes">
+        <SectionBoundary key={`notes:${game.gameId}`} label="game notes" title="Game notes hit a problem"><NotesPanel target={{ kind: "game", id: game.gameId }} workspace={noteWorkspace} currentTime={clock.t} onSeek={setScrubTime} /></SectionBoundary>
       </section>
       <section data-tour="game-macro" id="macro" className="scroll-mt-[var(--game-section-offset,8rem)]" aria-label="Macro breakdown">
         <SectionBoundary key={`macro:${game.gameId}`} label="the macro breakdown" title="The macro breakdown hit a problem"><GameMacroSection onBuildChanged={() => void gameReq.mutate()} inspectionTime={clock.t} onSeek={setScrubTime} onInspectTime={inspectMacroTime} gameId={game.gameId} data={breakdown} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} action={recomputeAction} onRecompute={() => void macroReq.recompute()} recomputing={macroReq.recomputing} headerMeta={{ playerName: myName, opponentName: oppName, myRace: ghostMyRace, opponentRace: ghostOpponentRace, dateIso: game.date, gameVersion: game.gameVersion, gameBuild: game.gameBuild }} /></SectionBoundary>

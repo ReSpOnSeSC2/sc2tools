@@ -17,7 +17,7 @@ const envelope = () => ({ type: "liveGameState", gameKey: "current-key", phase: 
 beforeAll(async () => {
   mongo = await MongoMemoryServer.create(); client = await MongoClient.connect(mongo.getUri());
   const raw = client.db("forecast_integration");
-  db = Object.fromEntries(["users", "games", "opponents", "opponentNotes", "pulseCharacterLinks", "playerIdentities"].map(name => [name, raw.collection(name)]));
+  db = Object.fromEntries(["users", "games", "opponents", "opponentNotes", "notes", "pulseCharacterLinks", "playerIdentities"].map(name => [name, raw.collection(name)]));
 });
 beforeEach(async () => {
   await Promise.all(Object.values(db).map(col => col.deleteMany({})));

@@ -174,6 +174,14 @@ const PUBLIC_GAME_PROJECTION = Object.freeze({
   // row leaves the service, so check-in notes are never listed here.
   ...BUILD_INTENT_LABEL_PROJECTION,
   ...OPP_INTENT_LABEL_PROJECTION,
+  // Owner-only review queue state and the private game-note count. Written
+  // only by NotesService (never an upload: they are not GAME_SLIM_FIELDS, so
+  // a re-upload's $set patch cannot clobber them). Public and review
+  // surfaces use their own allowlists and never copy these.
+  "review.state": 1,
+  "review.tags": 1,
+  "review.updatedAt": 1,
+  noteCount: 1,
 });
 
 /**

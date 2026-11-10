@@ -19,6 +19,7 @@ const {
 const { computePlayerCard } = require("./scouting/playerCard");
 const { recentBuilds } = require("./scouting/recentBuilds");
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
+const { NotesService } = require("./notes");
 
 const { bucketResult } = aggregations;
 
@@ -163,43 +164,13 @@ function applyOpponentTendencies(payload, tendencies, legacyOpenings) {
   }
 }
 
-/**
- * Read the streamer's private notes for one resolved opponent identity.
- * Notes are deliberately stored outside the derived ``opponents`` rows,
- * so profile rebuilds cannot erase user-authored scouting context.
- *
- * Fail-soft by design: a missing collection or transient Mongo failure
- * must never prevent the rest of the overlay payload from broadcasting.
- *
- * @param {import('mongodb').Collection | undefined} collection
- * @param {string} userId
- * @param {unknown} pulseId
- * @returns {Promise<{text: string, readAloud: boolean} | null>}
- */
-async function loadOpponentNotes(collection, userId, pulseId) {
-  if (!collection || !userId || pulseId === undefined || pulseId === null) {
-    return null;
-  }
-  const normalizedPulseId = String(pulseId).trim();
-  if (!normalizedPulseId) return null;
-
-  const row = await collection
-    .findOne(
-      { userId, pulseId: normalizedPulseId },
-      { projection: { _id: 0, notes: 1, notesReadAloud: 1 } },
-    )
-    .catch(() => null);
-  const text = typeof row?.notes === "string" ? row.notes.trim() : "";
-  if (!text) return null;
-  return { text, readAloud: row?.notesReadAloud === true };
-}
-
 class OverlayLiveService {
   /**
    * @param {{
    *   games: import('mongodb').Collection,
    *   opponents: import('mongodb').Collection,
    *   opponentNotes?: import('mongodb').Collection,
+   *   notes?: import('mongodb').Collection,
    * }} db
    * @param {{
    *   opponents?: any,
@@ -208,6 +179,7 @@ class OverlayLiveService {
    *   rivals?: Pick<import('./rivals').RivalsService,'isStarred'> | null,
  *   scoutingIdentities?: import('./scoutingIdentities').ScoutingIdentitiesService|null,
  *   scoutingForecast?: import('./scoutingForecast').ScoutingForecastService|null,
+ *   notes?: import('./notes').NotesService|null,
    * }} [services]
    */
   constructor(db, services = {}) {
@@ -233,6 +205,15 @@ class OverlayLiveService {
     this.rivals = services.rivals || null;
     this.scoutingIdentities = services.scoutingIdentities || null;
     this.scoutingForecast = services.scoutingForecast || null;
+    /**
+     * Notes reader. Notes are deliberately stored outside the derived
+     * ``opponents`` rows, so profile rebuilds cannot erase user-authored
+     * scouting context. The overlay may only ever receive the stream view.
+     * @type {import('./notes').NotesService | null}
+     */
+    this.notes = services.notes || (db && db.notes
+      ? new NotesService(/** @type {any} */ (db), { scoutingIdentities: this.scoutingIdentities })
+      : null);
     /**
      * Per-(userId, oppName, oppRace) cache for live-envelope
      * enrichment. The agent fires envelopes at 1 Hz during a match;
@@ -336,12 +317,10 @@ class OverlayLiveService {
     const historyOpp = { ...opp, ...(linked ? { pulseIds: linked.pulseIds, characterIds: linked.characterIds } : {}) };
     if (linked && linked.mergedAccounts > 1) { payload.alsoPlaysAs = linked.alsoPlaysAs; payload.mergedAccounts = linked.mergedAccounts; }
 
-    const opponentNotes = await loadOpponentNotes(
-      this.db.opponentNotes,
-      userId,
-      opp?.pulseId,
-    );
-    if (opponentNotes) payload.opponentNotes = opponentNotes;
+    // This payload goes to every overlay token and the chat bot's cache:
+    // only the single stream-safe note, never the private view.
+    const noteViews = this.notes ? await this.notes.liveNotes(userId, opp?.pulseId, linked) : null;
+    if (noteViews?.stream) payload.opponentNotes = noteViews.stream;
 
     // SC2Pulse "revealed" name behind a barcode (when the community
     // linked the anonymised account to a known pro/main). Persisted on
@@ -688,12 +667,18 @@ class OverlayLiveService {
       typeof opponentToonHandle === "string" && opponentToonHandle.trim()
         ? opponentToonHandle
         : oppRow?.pulseId;
-    const opponentNotes = await loadOpponentNotes(
-      this.db.opponentNotes,
-      userId,
-      notePulseId,
-    );
-    if (opponentNotes) payload.opponentNotes = opponentNotes;
+    // A first meeting on a new account can still be a known player: resolve
+    // the exact toon's links so player-scope notes from their other
+    // accounts follow. Never for a display-name match.
+    const noteLinks = linked || (!oppRow && this.scoutingIdentities && typeof opponentToonHandle === "string" && opponentToonHandle.trim()
+      ? await this.scoutingIdentities.resolve(userId, { pulseId: opponentToonHandle, toonHandle: opponentToonHandle, ...(pcidString ? { pulseCharacterId: pcidString } : {}) }).catch(() => null)
+      : null);
+    const noteViews = this.notes ? await this.notes.liveNotes(userId, notePulseId, noteLinks) : null;
+    // ``opponentNotes`` is the overlay-safe note; ``privateNotes`` is for the
+    // owner's dashboard and device only and is stripped from every overlay
+    // emit (agentScouting.overlayEnvelope).
+    if (noteViews?.stream) payload.opponentNotes = noteViews.stream;
+    if (noteViews?.private) payload.privateNotes = noteViews.private;
     payload.opponentIdentityMatched = oppRow?.matchedBy !== "display_name";
     if (oppRow && payload.opponentIdentityMatched) payload.opponentPulseId = oppRow.pulseId;
     // Exact current toon takes precedence over an older handle on a matched row.

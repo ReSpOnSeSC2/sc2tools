@@ -18,6 +18,7 @@ export const REPLAY_SHORTCUTS: [string, string][] = [
   ["P / N", "Previous or next notable event"],
   ["F", "Toggle fullscreen"],
   ["M", "Toggle replay music"],
+  ["B", "Add a private note at this moment (your own games)"],
   ["?", "Show keyboard shortcuts"],
 ];
 

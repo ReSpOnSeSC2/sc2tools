@@ -25,8 +25,9 @@ import { parseOpeningForecast, scoutingAliases } from "@/lib/openingForecast";
  *   2. Familiar / Rival label (gold) — only when this is a repeat
  *      opponent (`rival` populated by the cloud).
  *   3. Replay-observed tendencies radar, with an explicit sample size.
- *   4. Private opponent notes — always visual when set, independent of
- *      whether the streamer enabled read-aloud for this opponent.
+ *   4. The stream-safe opponent note: only a note with "Show on stream"
+ *      on (and no private tag) is ever sent to the overlay; it renders
+ *      whether or not read-aloud is enabled for this opponent.
  *   5. "LAST GAMES" list — newest-first rows of (result-chip, length,
  *      map, YOU build, OPP build) for this matchup. Driven by the new
  *      cloud-derived `live.recentGames` field.

@@ -18,7 +18,7 @@ type Props = {
   anonymous?: boolean;
   onPlaybackTimeChange?: (time: number) => void;
 } & Pick<ComponentProps<typeof ReplayStage>,
-  "seekRequest" | "mapMarkers" | "onWorldClick" | "onMarkerClick" | "commentMarkers" | "onCommentMarker" | "mobileCompact" | "defaultShowProduction" | "patchEra" | "onPlaybackStateChange" | "onStageSeek" | "banked" | "upgrades" | "clockLink">;
+  "seekRequest" | "mapMarkers" | "onWorldClick" | "onMarkerClick" | "commentMarkers" | "onCommentMarker" | "commentLabel" | "onAddNote" | "mobileCompact" | "defaultShowProduction" | "patchEra" | "onPlaybackStateChange" | "onStageSeek" | "banked" | "upgrades" | "clockLink">;
 
 export function SegmentedReplayHost({ manifest, compact, segmentPath, anonymous = false, onPlaybackTimeChange: onHostTime, ...props }: Props) {
   const { userId } = useAuth();

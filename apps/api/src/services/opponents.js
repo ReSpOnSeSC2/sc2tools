@@ -13,6 +13,8 @@ const { gamesMatchStage } = require("../util/parseQuery");
 const { parseExactMapNames } = require("../util/exactMapFilter");
 const { accountMatchHandles } = require("../util/accountFilter");
 const { opponentSeries } = require("./opponentSeries");
+const { NotesService, serializeNote } = require("./notes");
+const { suggestTags } = require("./notesPolicy");
 const { overlayListDetails, LIST_DETAIL_QUERY_OPTIONS } = require("./opponentListDetails");
 const { parseAnalysisGameIds } = require("../util/opponentAnalysisMembership");
 const { prepareReplayCsv } = require("./replayCsv");
@@ -82,7 +84,6 @@ function regionLabelsToHandlePrefixes(labels) {
 }
 
 const OPPONENTS_VERSION = expectedVersion(COLLECTIONS.OPPONENTS);
-const OPPONENT_NOTES_VERSION = expectedVersion(COLLECTIONS.OPPONENT_NOTES);
 
 // Profile views load at most this many games (most recent first). An
 // opponent faced thousands of times would otherwise pull their entire
@@ -291,6 +292,7 @@ class OpponentsService {
    *   scoutingIdentities?: import('./scoutingIdentities').ScoutingIdentitiesService|null,
    *   scoutingForecast?: import('./scoutingForecast').ScoutingForecastService|null,
    *   userRevision?: import('../util/userRevision').UserRevision,
+   *   notes?: import('./notes').NotesService|null,
    * }} [opts]
    *        When provided, the profile loader hydrates ``buildLog`` /
    *        ``oppBuildLog`` from the detail store for any game whose
@@ -348,6 +350,12 @@ class OpponentsService {
     this.playerIdentities = opts.playerIdentities || null;
     this.scoutingIdentities = opts.scoutingIdentities || null;
     this.scoutingForecast = opts.scoutingForecast || null;
+    // User-authored notes (services/notes.js). Built from the same context
+    // when the caller passes none, so every reader shares one migration path.
+    /** @type {import('./notes').NotesService|null} */
+    this.notes = opts.notes || (db && /** @type {any} */ (db).notes
+      ? new NotesService(/** @type {any} */ (db), { scoutingIdentities: this.scoutingIdentities, logger: opts.logger })
+      : null);
   }
 
   /**
@@ -592,22 +600,19 @@ class OpponentsService {
    * @param {boolean} [includeNotes]
    */
   async _overlayNotes(userId, rows, includeNotes = false) {
-    if (!rows.length || !this.db.opponentNotes?.find) return;
-    const ids = [...new Set(rows.map((row) => row.pulseId).filter((id) => typeof id === "string"))];
-    if (!ids.length) return;
-    const cursor = this.db.opponentNotes.find(
-      { userId, pulseId: { $in: ids } },
-      { projection: { _id: 0, pulseId: 1, notes: 1 } },
-    );
-    /** @type {Map<string, string>} */
-    const notes = new Map();
-    for await (const doc of cursor) {
-      if (typeof doc.notes === "string" && doc.notes.trim()) notes.set(doc.pulseId, doc.notes);
-    }
+    if (!rows.length || !this.notes) return;
+    const notes = await this.notes.opponentNotesFor(userId, rows.map((row) => row.pulseId));
     for (const row of rows) {
-      const value = notes.get(row.pulseId);
-      if (value) row.notesMeta = { preview: Array.from(value.replace(/\s+/g, " ").trim()).slice(0, 140).join("") };
-      else delete row.notesMeta;
+      const note = notes.get(row.pulseId);
+      const value = note?.text;
+      if (note && value) {
+        row.notesMeta = {
+          preview: Array.from(value.replace(/\s+/g, " ").trim()).slice(0, 140).join(""),
+          tags: Array.isArray(note.tags) ? note.tags : [],
+          visibility: note.visibility === "stream" ? "stream" : "private",
+          scope: note.scope === "player" ? "player" : "account",
+        };
+      } else delete row.notesMeta;
       if (includeNotes && value) row.notes = value;
       else delete row.notes;
     }
@@ -1211,16 +1216,73 @@ class OpponentsService {
   }
 
   /**
-   * Save the owning user's private scouting note for one opponent.
-   * Notes live outside the derived opponents aggregate so recounts keep
-   * user-authored data. A blank note removes the dedicated row entirely.
+   * A dossier's notes: the account's own note (with the legacy text pair the
+   * desktop agent reads) plus player-scope notes from the player's other
+   * linked accounts, through cache-only identity links.
+   * @private
+   * @param {string} userId
+   * @param {any} doc the opponents row
+   * @param {string} pulseId
+   */
+  async _profileNotes(userId, doc, pulseId) {
+    if (!this.notes) return { tags: [], profile: { notes: "", notesReadAloud: false, note: null, linkedNotes: [] } };
+    const links = this.scoutingIdentities ? await this.scoutingIdentities.resolve(userId, doc).catch(() => null) : null;
+    const set = await this.notes.forOpponent(userId, pulseId, links);
+    const notes = typeof set.note?.text === "string" ? set.note.text : "";
+    return {
+      tags: set.note?.tags || [],
+      profile: {
+        notes,
+        notesReadAloud: notes.length > 0 && set.note?.readAloud === true,
+        note: set.note ? serializeNote(set.note) : null,
+        linkedNotes: set.linked.map((row) => ({ ...serializeNote(row), ...(row.account ? { account: row.account } : {}) })),
+      },
+    };
+  }
+
+  /**
+   * The owner's own note on one opponent account (no profile aggregation).
+   * Null when the opponent is not the caller's.
+   * @param {string} userId
+   * @param {string} pulseId
+   * @returns {Promise<{notes: string, notesReadAloud: boolean, note: ReturnType<typeof serializeNote>|null}|null>}
+   */
+  async getNote(userId, pulseId) {
+    if (!this.notes) return null;
+    const owned = await this.db.opponents.findOne({ userId, pulseId }, { projection: { _id: 0, pulseId: 1 } });
+    if (!owned) return null;
+    const note = await this.notes.opponentNote(userId, pulseId);
+    return {
+      notes: typeof note?.text === "string" ? note.text : "",
+      notesReadAloud: note?.readAloud === true,
+      note: note ? serializeNote(note) : null,
+    };
+  }
+
+  /**
+   * Save the owning user's scouting note for one opponent account.
+   * Notes live outside the derived opponents aggregate (services/notes.js)
+   * so recounts keep user-authored data. Blank text removes the note.
+   *
+   * The legacy body ({notes, notesReadAloud} or {notes, preserveReadAloud})
+   * still works for older desktop agents; the optional ``tags``,
+   * ``visibility``, ``scope`` and ``pinned`` fields edit the rest of the note.
    *
    * @param {string} userId
    * @param {string} pulseId
-   * @param {{notes: string, notesReadAloud?: boolean, preserveReadAloud?: boolean}} input
+   * @param {{
+   *   notes: string,
+   *   notesReadAloud?: boolean,
+   *   preserveReadAloud?: boolean,
+   *   tags?: string[],
+   *   visibility?: "stream"|"private",
+   *   scope?: "account"|"player",
+   *   pinned?: boolean,
+   * }} input
    * @returns {Promise<{
    *   notes: string,
    *   notesReadAloud: boolean,
+   *   note: ReturnType<typeof serializeNote>|null,
    *   opponentName: string,
    *   pulseCharacterId: string|null,
    * }|null>}
@@ -1232,13 +1294,19 @@ class OpponentsService {
       || (input.preserveReadAloud === true ? Object.hasOwn(input, "notesReadAloud")
         : typeof input.notesReadAloud !== "boolean" || input.preserveReadAloud !== undefined)
       || input.notes.length > LIMITS.OPPONENT_NOTES_MAX_LENGTH
+      || (input.tags !== undefined && !Array.isArray(input.tags))
+      || (input.visibility !== undefined && input.visibility !== "stream" && input.visibility !== "private")
+      || (input.scope !== undefined && input.scope !== "account" && input.scope !== "player")
+      || (input.pinned !== undefined && typeof input.pinned !== "boolean")
     ) {
       throw invalidOpponentNotes();
     }
+    if (!this.notes) throw Object.assign(new Error("notes_unavailable"), { status: 503, code: "notes_unavailable" });
 
     const opponent = /** @type {{
      *   pulseId: string,
      *   pulseCharacterId?: string,
+     *   toonHandle?: string,
      *   displayNameSample?: string,
      * }|null} */ (
       await this.db.opponents.findOne(
@@ -1248,6 +1316,7 @@ class OpponentsService {
             _id: 0,
             pulseId: 1,
             pulseCharacterId: 1,
+            toonHandle: 1,
             displayNameSample: 1,
           },
         },
@@ -1258,30 +1327,19 @@ class OpponentsService {
     // Match the profile/list name overlay so invalidation also clears
     // name-keyed cache entries when an older opponents row is stale.
     await this._overlayLatestNameFromGames(userId, [opponent]);
-    const notes = input.notes.trim();
-    let notesReadAloud = false;
-    if (notes.length === 0) {
-      await this.db.opponentNotes.deleteOne({ userId, pulseId });
-    } else {
-      const saved = await this.db.opponentNotes.findOneAndUpdate(
-        { userId, pulseId },
-        {
-          $setOnInsert: { userId, pulseId, ...(input.preserveReadAloud === true ? { notesReadAloud: false } : {}) },
-          $set: {
-            notes,
-            ...(input.preserveReadAloud === true ? {} : { notesReadAloud: input.notesReadAloud === true }),
-            updatedAt: new Date(),
-            _schemaVersion: OPPONENT_NOTES_VERSION,
-          },
-        },
-        { upsert: true, returnDocument: "after", includeResultMetadata: false },
-      );
-      notesReadAloud = saved?.notesReadAloud === true;
-    }
+    const saved = await this.notes.saveOpponentNote(userId, opponent, {
+      text: input.notes,
+      ...(input.tags !== undefined ? { tags: input.tags } : {}),
+      ...(input.visibility !== undefined ? { visibility: input.visibility } : {}),
+      ...(input.scope !== undefined ? { scope: input.scope } : {}),
+      ...(input.pinned !== undefined ? { pinned: input.pinned } : {}),
+      ...(input.preserveReadAloud === true ? { preserveReadAloud: true } : { readAloud: input.notesReadAloud === true }),
+    });
 
     return {
-      notes,
-      notesReadAloud,
+      notes: saved ? saved.text : "",
+      notesReadAloud: saved ? saved.readAloud === true : false,
+      note: saved ? serializeNote(saved) : null,
       opponentName:
         typeof opponent.displayNameSample === "string"
           ? opponent.displayNameSample
@@ -1571,16 +1629,7 @@ class OpponentsService {
     );
     if (!doc) return null;
     if (!opts.mergeLinked) await this._overlayGlobalIdentities([doc]);
-    const noteDoc = this.db.opponentNotes
-      ? await this.db.opponentNotes.findOne(
-          { userId, pulseId },
-          { projection: { _id: 0, notes: 1, notesReadAloud: 1 } },
-        )
-      : null;
-    const notes = noteDoc && typeof noteDoc.notes === "string"
-      ? noteDoc.notes
-      : "";
-    const notesReadAloud = notes.length > 0 && noteDoc?.notesReadAloud === true;
+    const noteView = await this._profileNotes(userId, doc, pulseId);
     // Match games against either identity field. The opponents row
     // stores the canonical SC2Pulse character id; if a player ever
     // rebound their Battle.net (rotating the toon_handle while
@@ -1750,8 +1799,9 @@ class OpponentsService {
         ? doc.displayNameSample || ""
         : authoritativeName || doc.displayNameSample || "",
       name: authoritativeName,
-      notes,
-      notesReadAloud,
+      ...noteView.profile,
+      // Deterministic, never applied: the owner chooses whether to add them.
+      suggestedTags: suggestTags(scopedRawGames, noteView.tags),
       // Merged extras: the per-name breakdown (newest first) and the
       // group's revealed name — any identity's reveal (or the pro
       // nickname from the linkage) labels the whole player.

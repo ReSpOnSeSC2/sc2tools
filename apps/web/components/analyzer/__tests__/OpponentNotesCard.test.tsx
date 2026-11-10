@@ -189,6 +189,10 @@ describe("OpponentNotesCard", () => {
         body: JSON.stringify({
           notes: "Watch the proxy path at 2:30.",
           notesReadAloud: true,
+          tags: [],
+          // A legacy note (no note object) always showed on stream.
+          visibility: "stream",
+          scope: "account",
         }),
       }),
     );
@@ -196,7 +200,10 @@ describe("OpponentNotesCard", () => {
       expect(onSaved).toHaveBeenCalledWith({
         notes: "Watch the proxy path at 2:30.",
         notesReadAloud: true,
-      });
+        tags: [],
+        visibility: "stream",
+        scope: "account",
+      }, null);
       expect(screen.getByRole("status").textContent).toContain(
         "Saved just now",
       );
@@ -229,7 +236,64 @@ describe("OpponentNotesCard", () => {
     expect(JSON.parse(String(request.body))).toEqual({
       notes: "",
       notesReadAloud: false,
+      tags: [],
+      visibility: "stream",
+      scope: "account",
     });
+  });
+
+  const note = (overrides = {}) => ({
+    id: "n1", target: { kind: "opponent", id: "opp-9" }, text: "Hides a proxy", tags: [], visibility: "private", scope: "account",
+    pinned: false, readAloud: false, streamEligible: false, migrated: false, createdAt: "2026-11-01T00:00:00.000Z", updatedAt: "2026-11-01T00:00:00.000Z",
+    ...overrides,
+  });
+
+  it("new notes are private; Show on stream, tags and All their accounts are saved together", async () => {
+    harness.apiCall.mockResolvedValue({ notes: "Hides a proxy", notesReadAloud: false, note: note({ tags: ["Proxy"], visibility: "stream", scope: "player", streamEligible: true }) });
+    render(<OpponentNotesCard pulseId="opp-9" initialNote={note()} suggestedTags={["Cheeser"]} />);
+    expect(screen.getByText("Private")).toBeTruthy();
+    const read = screen.getByRole("switch", { name: "Read opponent notes aloud" }) as HTMLButtonElement;
+    expect(read.disabled).toBe(true);
+    fireEvent.click(screen.getByRole("switch", { name: "Show this note on stream" }));
+    expect(read.disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Add tag Proxy" }));
+    expect(screen.getByRole("button", { name: "Add suggested tag Cheeser" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("switch", { name: "Show this note on the player's other linked accounts" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save notes" }));
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String((harness.apiCall.mock.calls[0][2] as RequestInit).body))).toEqual({
+      notes: "Hides a proxy", notesReadAloud: false, tags: ["Proxy"], visibility: "stream", scope: "player",
+    });
+    expect(await screen.findByText("Shows on stream")).toBeTruthy();
+  });
+
+  it("a Toxic tag forces the note private and silences read-aloud", async () => {
+    harness.apiCall.mockResolvedValue({ notes: "Rude", notesReadAloud: false, note: note({ text: "Rude", tags: ["Toxic"] }) });
+    render(<OpponentNotesCard pulseId="opp-9" initialNote={note({ text: "Rude", visibility: "stream", readAloud: true, streamEligible: true })} />);
+    const stream = screen.getByRole("switch", { name: "Show this note on stream" }) as HTMLButtonElement;
+    expect(stream.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Add tag Toxic (always private)" }));
+    expect(stream.getAttribute("aria-checked")).toBe("false");
+    expect(stream.disabled).toBe(true);
+    expect(screen.getByText("Toxic notes are always private")).toBeTruthy();
+    expect((screen.getByRole("switch", { name: "Read opponent notes aloud" }) as HTMLButtonElement).getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "Save notes" }));
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String((harness.apiCall.mock.calls[0][2] as RequestInit).body))).toMatchObject({ tags: ["Toxic"], visibility: "private", notesReadAloud: false });
+  });
+
+  it("explains a migrated stream note once and lists notes from linked accounts", () => {
+    localStorage.clear();
+    const view = render(<OpponentNotesCard pulseId="opp-9" initialNote={note({ visibility: "stream", streamEligible: true, migrated: true })}
+      linkedNotes={[note({ id: "n2", text: "Main account opens 12 pool", account: "MainName", tags: ["Cheeser"] })]} />);
+    expect(screen.getByText(/written before private notes existed/)).toBeTruthy();
+    expect(screen.getByText("MainName")).toBeTruthy();
+    expect(screen.getByText("Main account opens 12 pool")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Got it" }));
+    expect(screen.queryByText(/written before private notes existed/)).toBeNull();
+    view.unmount();
+    render(<OpponentNotesCard pulseId="opp-9" initialNote={note({ visibility: "stream", streamEligible: true, migrated: true })} />);
+    expect(screen.queryByText(/written before private notes existed/)).toBeNull();
   });
 
   it("keeps edits retryable and exposes an accessible save error", async () => {

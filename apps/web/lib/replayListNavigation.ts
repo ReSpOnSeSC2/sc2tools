@@ -3,6 +3,10 @@ export const replaySearch = (raw: string | null) => raw && raw.length <= 100 && 
 export const replayResult = (raw: string | null): "all" | "win" | "loss" | "tie" => ["win", "loss", "tie"].includes(raw || "") ? raw as "win" | "loss" | "tie" : "all";
 export const replayMatchup = (raw: string | null) => raw && /^[PTZR]v[PTZR]$/.test(raw) ? raw : "all";
 export const replaySort = (raw: string | null): "date_desc" | "date_asc" => raw === "date_asc" ? raw : "date_desc";
+/** Owner review queue filters (``review``, ``tag``, ``notes`` in the URL). */
+export const replayReview = (raw: string | null): "all" | "todo" | "done" => raw === "todo" || raw === "done" ? raw : "all";
+export const replayTag = (raw: string | null) => { const value = replaySearch(raw).trim(); return value.length <= 24 ? value : ""; };
+export const replayNotes = (raw: string | null): "all" | "has" => raw === "has" ? raw : "all";
 export const replayCursor = (raw: string | null): ReplayCursor => raw && raw.length <= 2048 && !/[\u0000-\u001f\u007f]/.test(raw) ? raw : null;
 export function replayBefore(raw: string | null): string {
   return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) && Number.isFinite(Date.parse(`${raw}T00:00:00.000Z`)) && new Date(`${raw}T00:00:00.000Z`).toISOString().slice(0, 10) === raw ? raw : "";

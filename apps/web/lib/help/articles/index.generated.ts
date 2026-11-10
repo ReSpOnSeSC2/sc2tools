@@ -69,6 +69,7 @@ import desktopApp_replayFolders from "./desktop-app/replay-folders";
 import gamePage_battleReports from "./game-page/battle-reports";
 import gamePage_benchmarks from "./game-page/benchmarks";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
+import gamePage_gamePageNotes from "./game-page/game-page-notes";
 import gamePage_gamePageReplay from "./game-page/game-page-replay";
 import gamePage_gamePage from "./game-page/game-page";
 import gamePage_yourFirstGame from "./game-page/your-first-game";
@@ -85,6 +86,7 @@ import gettingStarted_settingsOverview from "./getting-started/settings-overview
 import gettingStarted_takeATour from "./getting-started/take-a-tour";
 import gettingStarted_yourFirstWeek from "./getting-started/your-first-week";
 import opponents_opponentDossier from "./opponents/opponent-dossier";
+import opponents_opponentNotes from "./opponents/opponent-notes";
 import reviewsCoaching_coaching from "./reviews-coaching/coaching";
 import reviewsCoaching_replayReviews from "./reviews-coaching/replay-reviews";
 import streamStudio_customChatCommands from "./stream-studio/custom-chat-commands";
@@ -171,6 +173,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gamePage_battleReports,
   gamePage_benchmarks,
   gamePage_gamePageAccuratePlayback,
+  gamePage_gamePageNotes,
   gamePage_gamePageReplay,
   gamePage_gamePage,
   gamePage_yourFirstGame,
@@ -187,6 +190,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_takeATour,
   gettingStarted_yourFirstWeek,
   opponents_opponentDossier,
+  opponents_opponentNotes,
   reviewsCoaching_coaching,
   reviewsCoaching_replayReviews,
   streamStudio_customChatCommands,

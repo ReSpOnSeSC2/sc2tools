@@ -57,6 +57,7 @@ const { GameControlsService } = require("./services/gameControls");
 const { UserRevision } = require("./util/userRevision");
 const { UserCache } = require("./middleware/userCache");
 const { buildGameControlsRouter } = require("./routes/gameControls");
+const { buildGameNotesRouter } = require("./routes/gameNotes");
 const { GameContextService } = require("./services/gameContext");
 const { BuildExecutionService } = require("./services/buildExecution");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
@@ -624,7 +625,8 @@ function makeServices(deps, clerk, adminClerkIds) {
   // ``pulseMmr`` gives the rank widget the streamer's REAL current
   // league + tier from SC2Pulse instead of an MMR-threshold guess.
   const overlayLive = new OverlayLiveService(deps.db, {
-    gameDetails,
+    // One notes system: every reader shares one NotesService and its migration.
+    notes: opponents.notes, gameDetails,
     pulseMmr,
     rivals,
     scoutingIdentities,
@@ -1047,7 +1049,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     userRevision, userCache, sessionPolicy, sessionHistory, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
     privateSearch,
     users,
-    activation,
+    activation, notes: /** @type {import('./services/notes').NotesService} */ (opponents.notes),
     opponents,
     opponentIdentityMatcher,
     rivals,
@@ -1741,10 +1743,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       auth,
     }),
   );
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildGameControlsRouter({ auth, controls: services.gameControls }),
-  );
+  app.use(SERVICE.ROUTE_PREFIX, buildGameControlsRouter({ auth, controls: services.gameControls }));
+  // Private game notes + review queue, before the games router's /games/:gameId.
+  app.use(SERVICE.ROUTE_PREFIX, buildGameNotesRouter({ auth, notes: services.notes }));
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildGamesRouter({

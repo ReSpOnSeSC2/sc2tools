@@ -108,8 +108,13 @@ export type LiveGamePayload = {
   openingForecast?: OpeningForecast;
   alsoPlaysAs?: string[];
   mergedAccounts?: number;
-  /** Private scouting note; always visual, optionally included in TTS. */
+  /** The one stream-safe note ("Show on stream", no private tag); optionally read aloud. */
   opponentNotes?: { text: string; readAloud: boolean };
+  /**
+   * Owner-only note view (dashboard SSE and the paired device). The server
+   * strips it from every overlay emit, so the OBS widget never receives it.
+   */
+  privateNotes?: PrivateNotesView;
   /** Current win/loss streak. */
   streak?: { kind: "win" | "loss"; count: number };
   /**
@@ -605,6 +610,7 @@ export interface LiveGameEnvelope {
     | "alsoPlaysAs"
     | "mergedAccounts"
     | "opponentNotes"
+    | "privateNotes"
     | "streak"
     | "cheeseProbability"
     | "cheeseHistory"
@@ -622,6 +628,22 @@ export interface LiveGameEnvelope {
     | "opponentPhases"
     | "last5GamesScouting"
   >;
+}
+
+/** One note in the owner-only live view. */
+export interface PrivateNoteBrief {
+  text: string;
+  tags: string[];
+  visibility: "stream" | "private";
+  readAloud?: boolean;
+  /** Linked notes: the other account's name. */
+  account?: string;
+}
+
+/** The exact account's own note plus player-scope notes from linked accounts. */
+export interface PrivateNotesView {
+  note: PrivateNoteBrief | null;
+  linked: PrivateNoteBrief[];
 }
 
 /**
