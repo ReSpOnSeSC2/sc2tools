@@ -145,6 +145,24 @@ def test_postcapture_tracker_fallback_is_reported_as_failure(setup):
     assert "Recorded movement data could not be loaded" in s.notices[0]
 
 
+@pytest.mark.parametrize("recorded_usable", [True, False])
+def test_capture_reparse_swaps_matching_snapshot_only_when_replacement_wins(setup, monkeypatch, recorded_usable):
+    from sc2tools_agent.analysis_provenance import AnalysisProvenance
+    s = setup
+    original = AnalysisProvenance("1.6.11", "0.24.9")
+    replacement = AnalysisProvenance("1.6.12", "0.24.10")
+    snapshots = iter([original, replacement])
+    monkeypatch.setattr(watcher_module, "capture_provenance", lambda: next(snapshots))
+    s.parser.side_effect = [(s.tracker, None), (s.recorded, None) if recorded_usable else (None, "playback_budget_exceeded")]
+    s.watcher._handle_replay(s.path)
+    assert s.uploaded_event.wait(2)
+    s.watcher._capture_executor.shutdown(wait=True)
+    job, = s.uploaded
+    assert job.game is (s.recorded if recorded_usable else s.tracker)
+    assert job.provenance is (replacement if recorded_usable else original)
+    assert job.provenance.payload_fields() == ({"engineVersion": "1.6.12", "agentVersion": "0.24.10"} if recorded_usable else {"engineVersion": "1.6.11", "agentVersion": "0.24.9"})
+
+
 def test_low_resolution_cache_is_recorded_again(setup):
     s = setup
     low_resolution = _game(recorded=True)

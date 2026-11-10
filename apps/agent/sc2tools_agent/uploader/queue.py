@@ -33,6 +33,7 @@ from ..errors import classify
 from ..game_activity import on_battery
 from ..config import AgentConfig
 from ..replay_pipeline import CloudGame
+from ..analysis_provenance import AnalysisProvenance, UNKNOWN_PROVENANCE
 from ..state import AgentState, _STATE_SAVE_LOCK, save_state
 from ..sync_filter import SyncFilter
 from .archive_journal import (
@@ -232,6 +233,12 @@ class UploadJob:
     file_path: Path
     game: CloudGame
     priority: bool = False
+    provenance: AnalysisProvenance = UNKNOWN_PROVENANCE
+
+    def __post_init__(self):
+        if (not isinstance(self.provenance, AnalysisProvenance)
+                or getattr(self.game, "is_resumed_from_replay", False) is True):
+            object.__setattr__(self, "provenance", UNKNOWN_PROVENANCE)
 
 
 class UploadQueue:
@@ -2134,8 +2141,13 @@ class UploadQueue:
         those aliases with the marker so the API can quarantine legacy rows
         even if parser-version changes caused the newly derived ID to drift.
         """
-        payload = job.game.to_payload()
+        payload = dict(job.game.to_payload())
+        # Only a snapshot belonging to this parse may supply reported versions.
+        for field in ("engineVersion", "agentVersion", "ingestSource"):
+            payload.pop(field, None)
         if payload.get("isResumedFromReplay") is not True:
+            if isinstance(job.provenance, AnalysisProvenance):
+                payload.update(job.provenance.payload_fields())
             return payload
 
         game_id = payload.get("gameId")
