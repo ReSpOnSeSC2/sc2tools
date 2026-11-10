@@ -11,6 +11,20 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Build check-ins
+
+- Add **Confirm all suggested (N)** to the check-in queue. It confirms the
+  suggested build of each waiting game one at a time with a result per game,
+  pauses on sign-in or rate-limit errors and offers a retry of the rest.
+- Keep decided games in the queue with **Undo** until it closes. Undo puts the
+  game back to waiting with its suggestion and notes, and also reverts an
+  opponent build change.
+- Pick the opponent's build right in the queue, label the main action
+  **Confirm** with the build's name (or **Pick build…** without a suggestion),
+  show results as Win, Loss, Tie or Unknown, and link build names to the build
+  page or its definition.
+- Give the header's check-in chip a 44px touch target without changing its look.
+
 ### Share cards
 
 - Fix the link printed on every share card. `sc2tools.com/arcade` now leads to
