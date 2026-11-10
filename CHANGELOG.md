@@ -28,6 +28,19 @@ corresponding GitHub Release.
   if your MMR is missing, and open the games below each target.
 - A game's SQ now shows its percentile for its league and matchup, such as
   "p38 · Diamond PvZ", where that table has enough games.
+### Build check-ins
+
+- Add **Confirm all suggested (N)** to the check-in queue. It confirms the
+  suggested build of each waiting game one at a time with a result per game,
+  pauses on sign-in or rate-limit errors and offers a retry of the rest.
+- Keep decided games in the queue with **Undo** until it closes. Undo puts the
+  game back to waiting with its suggestion and notes, and also reverts an
+  opponent build change.
+- Pick the opponent's build right in the queue, label the main action
+  **Confirm** with the build's name (or **Pick build…** without a suggestion),
+  show results as Win, Loss, Tie or Unknown, and link build names to the build
+  page or its definition.
+- Give the header's check-in chip a 44px touch target without changing its look.
 
 ### Share cards
 
@@ -72,6 +85,17 @@ corresponding GitHub Release.
   Scouting button still opens it.
 - The lists reach paired desktop agents only. OBS overlay sources and the spoken
   report receive nothing new.
+- Give the main window and its Dashboard a flat, modern look: dark surfaces
+  told apart by tone instead of a gradient bezel and nested borders, one type
+  scale in the system font, and one style for every button, field, check box,
+  tab, table, menu and tooltip.
+- Give each skin one accent colour (violet, Protoss gold, Terran steel blue,
+  Zerg orange) and a small race mark beside the name; the race border artwork
+  stays. Text keeps at least 4.5:1 contrast in every skin.
+- Shorten the border animation and skip it while Windows has animation effects
+  turned off. Status lights keep their colour after a skin change.
+- Show the "&" in Help & support and three other labels, and line up the
+  Dashboard's four counts.
 
 ### Agent 0.24.11
 
