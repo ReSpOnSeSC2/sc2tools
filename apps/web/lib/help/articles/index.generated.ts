@@ -47,6 +47,9 @@ import analyzer_vsExpected from "./analyzer/vs-expected";
 import analyzer_weeklyReport from "./analyzer/weekly-report";
 import builds_buildCheckIn from "./builds/build-check-in";
 import builds_buildGuides from "./builds/build-guides";
+import builds_buildHistory from "./builds/build-history";
+import builds_buildImportExport from "./builds/build-import-export";
+import builds_buildLibrary from "./builds/build-library";
 import builds_buildOrderPaste from "./builds/build-order-paste";
 import builds_buildOrdersExport from "./builds/build-orders-export";
 import builds_communityBuilds from "./builds/community-builds";
@@ -162,6 +165,9 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_weeklyReport,
   builds_buildCheckIn,
   builds_buildGuides,
+  builds_buildHistory,
+  builds_buildImportExport,
+  builds_buildLibrary,
   builds_buildOrderPaste,
   builds_buildOrdersExport,
   builds_communityBuilds,

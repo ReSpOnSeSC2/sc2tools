@@ -6,7 +6,8 @@ import { Plus, Library, BookOpen, RefreshCw, Crosshair } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
-import { activeBuildFilters, buildFiltersQuery, readBuildFilters } from "./buildLibraryFilters";
+import { activeBuildFilters, buildFilterApiQuery, buildFiltersQuery, DEFAULT_BUILD_FILTERS, readBuildFilters } from "./buildLibraryFilters";
+import { useBuildLibraryTools } from "./library/useBuildLibraryTools";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
@@ -70,13 +71,6 @@ type ReclassifyStatus = {
   requestId?: string;
 };
 
-const DEFAULT_FILTERS: BuildFilterState = {
-  search: "",
-  matchup: "All",
-  sort: "updated",
-  hideEmpty: false,
-};
-
 const EMPTY_BUILDS: CustomBuild[] = [];
 
 /**
@@ -126,14 +120,17 @@ function BuildsLibraryInner() {
     if (debouncedSearch === searchInput && debouncedSearch !== latestFilters.current.search)
       commitFilters({ ...latestFilters.current, search: debouncedSearch });
   }, [debouncedSearch, searchInput, commitFilters]);
-  const clearFilters = () => { setSearchInput(""); commitFilters({ ...DEFAULT_FILTERS, sort: filters.sort }); };
+  const clearFilters = () => { setSearchInput(""); commitFilters({ ...DEFAULT_BUILD_FILTERS, sort: filters.sort }); };
   const pageChanged = (action: () => void) => {
     action(); requestAnimationFrame(() => {
       gridHeading.current?.focus({ preventScroll: true });
       gridHeading.current?.scrollIntoView?.({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     });
   };
-  const builds = useCustomBuildPage(filters);
+  const builds = useCustomBuildPage({
+    search: filters.search, matchup: filters.matchup, sort: filters.sort, hideEmpty: filters.hideEmpty,
+    ...buildFilterApiQuery(filters),
+  });
   // The custom-build endpoint reads the durable provenance slug written by
   // replay matching, so it is the only authoritative source. Display names
   // are not identities: two unrelated builds can share one, and renames must
@@ -230,11 +227,34 @@ function BuildsLibraryInner() {
   // Search, matchup, sorting and empty-build filtering run before server
   // pagination, so they cover every saved build instead of only this page.
   const filtered = decorated;
+  const tools = useBuildLibraryTools({ items, refresh: () => { void builds.mutate().catch(() => undefined); } });
+  const openImport = tools.openImport;
+  // A share link (/builds/import#code=…) opens Import; the code never
+  // leaves the fragment and is dropped from the address bar right away.
+  useEffect(() => {
+    const match = /^#code=([A-Za-z0-9_-]{1,8192})$/.exec(window.location.hash);
+    if (!match) return;
+    openImport(match[1]);
+    window.history.replaceState(window.history.state, "", window.location.pathname === "/builds/import" ? "/builds" : `${window.location.pathname}${window.location.search}`);
+  }, [openImport]);
 
   const openCreate = useCallback((choice?: BuildStartChoice) => {
     setStartChoice(choice); setStartDefinition(undefined);
     setEditorOpen(true);
   }, []);
+  // "n" starts a new build (never while typing or inside a dialog).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "n" || event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='dialog']")) return;
+      if (document.querySelector("[role='dialog']")) return;
+      event.preventDefault();
+      openCreate();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [openCreate]);
   const consumedCreation = useRef("");
   useEffect(() => {
     const params = new URLSearchParams(queryString), choice = params.get("create");
@@ -300,7 +320,8 @@ function BuildsLibraryInner() {
         `/v1/custom-builds/${encodeURIComponent(deletingSlug)}`,
         { method: "DELETE" },
       );
-      toast.success("Build deleted.");
+      const deleted = items.find((build) => build.slug === deletingSlug);
+      tools.announceDeleted([{ slug: deletingSlug, name: deleted?.name || deletingSlug, isPublic: deleted?.isPublic }]);
       builds.resetPage();
       await builds.mutate();
     } catch (err: unknown) {
@@ -313,7 +334,7 @@ function BuildsLibraryInner() {
       setDeletePending(false);
       setDeletingSlug(null);
     }
-  }, [deletingSlug, getToken, builds, toast]);
+  }, [deletingSlug, getToken, builds, toast, items, tools]);
 
   const handleSaved = useCallback(
     async (saved: CustomBuild, result?: BuildEditorSaveResult) => {
@@ -417,8 +438,8 @@ function BuildsLibraryInner() {
   const isInitialLoad = !builds.data && !builds.error;
   const totalCount = builds.data?.total ?? decorated.length;
   const libraryCount = builds.data?.libraryTotal ?? totalCount;
-  const showFilters = libraryCount > 0 || !!filters.search || filters.matchup !== "All"
-    || filters.hideEmpty || filters.sort !== "updated" || builds.hasPrevious;
+  const filtersActive = activeBuildFilters(filters).length > 0;
+  const showFilters = libraryCount > 0 || filtersActive || filters.sort !== "updated" || builds.hasPrevious;
   const filteredCount = filtered.length;
   const targetForDelete =
     deletingSlug != null ? items.find((b) => b.slug === deletingSlug) : null;
@@ -459,6 +480,7 @@ function BuildsLibraryInner() {
       />
 
       <p className="my-3 text-caption text-text-muted">Re-match checks every saved replay against your build rules again. It runs in the cloud, so you can leave this page.</p>
+      <div className="mb-3">{tools.toolbar}</div>
       {replayMatchingActive || showReclassifyFailure || reclassifyStatus.data?.status === "failed" ? (
         <ReclassifyStatusPanel status={reclassifyStatus.data} onRetry={reclassifyAll} />
       ) : null}
@@ -505,6 +527,7 @@ function BuildsLibraryInner() {
           onClearFilters={clearFilters}
           total={totalCount}
           libraryTotal={builds.data?.libraryTotal}
+          availableTags={builds.data?.availableTags}
         />
       ) : null}
       <h2 ref={gridHeading} tabIndex={-1} className="my-3 text-h3 font-semibold focus:outline-none">Saved builds</h2>
@@ -515,7 +538,7 @@ function BuildsLibraryInner() {
         </div>
       ) : filteredCount === 0 && builds.isValidating ? (
         <p role="status" className="py-6 text-caption text-text-muted">Updating build matches…</p>
-      ) : libraryCount === 0 && !filters.search && filters.matchup === "All" && !filters.hideEmpty ? (
+      ) : libraryCount === 0 && !filtersActive ? (
         builds.error ? null : <FirstRunEmptyState onCreate={openCreate} />
       ) : (
         <>
@@ -546,6 +569,7 @@ function BuildsLibraryInner() {
                       || reclassifyAllPending
                       || !!reclassifyingSlug
                     }
+                    {...tools.cardProps(b)}
                   />
                 </li>
               ))}
@@ -553,6 +577,7 @@ function BuildsLibraryInner() {
           )}
         </>
       )}
+      {tools.overlays}
       <BuildPagination
         {...builds}
         count={items.length}

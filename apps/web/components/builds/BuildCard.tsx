@@ -15,9 +15,13 @@ import {
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
+  CheckSquare,
   Eye,
   Copy,
   Crosshair,
+  Pin,
+  Sparkles,
+  Square,
   ExternalLink,
   Link2,
   Loader2,
@@ -46,6 +50,7 @@ import { PracticeButton } from "@/components/practice/PracticeButton";
 import type { PracticeSource } from "@/lib/practiceAssignment";
 import { measuredPlanHeldRate, PlanHeldBadge } from "./PlanHeldBadge";
 import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
+import type { KebabExtra } from "./library/useBuildLibraryTools";
 
 export interface BuildCardProps {
   build: DecoratedBuild;
@@ -58,13 +63,20 @@ export interface BuildCardProps {
   onChanged?: () => void | Promise<unknown>;
   reclassifying?: boolean;
   reclassifyDisabled?: boolean;
+  /** Selection mode: the card body toggles the build in or out. */
+  selection?: { selected: boolean; onToggle: (slug: string) => void };
+  /** Extra kebab entries (Pin, Copy share code, Add to randomizer pool). */
+  extraMenuItems?: ReadonlyArray<KebabExtra>;
+  /** A saved community copy whose author published a newer version. */
+  authorUpdate?: { onReview: () => void };
 }
 
 /**
  * BuildCard — race-tinted card representing one custom build in the
- * library grid. Clicking the body opens the dossier modal in place;
- * the kebab menu surfaces edit / publish / delete. The whole card has
- * a left rail in the build's race tint.
+ * library grid. Clicking the body opens the dossier modal in place (or,
+ * in selection mode, selects the build); the kebab menu surfaces edit /
+ * publish / delete and the library tools. The whole card has a left rail
+ * in the build's race tint.
  */
 export function BuildCard({
   build,
@@ -77,8 +89,12 @@ export function BuildCard({
   onChanged,
   reclassifying = false,
   reclassifyDisabled = false,
+  selection,
+  extraMenuItems,
+  authorUpdate,
 }: BuildCardProps) {
   const tint = raceTint(build.race);
+  const label = build.name || "build";
   const matchup = matchupLabel(build.race, (build.vsRace as VsRace) ?? "Any");
   const stats = build.stats;
   const fromOpponent = build.perspective === "opponent";
@@ -90,6 +106,7 @@ export function BuildCard({
       className={[
         "group relative h-full overflow-hidden",
         "focus-within:border-border-strong",
+        selection?.selected ? "ring-2 ring-accent" : "",
       ].join(" ")}
     >
       <span
@@ -98,8 +115,9 @@ export function BuildCard({
       />
       <button
         type="button"
-        onClick={() => onOpen(build.slug)}
-        aria-label={`Open ${build.name || "build"} dossier`}
+        onClick={() => (selection ? selection.onToggle(build.slug) : onOpen(build.slug))}
+        aria-label={selection ? `Select ${label}` : `Open ${label} dossier`}
+        aria-pressed={selection ? selection.selected : undefined}
         className={[
           "absolute inset-0 z-0",
           "focus-visible:outline-none focus-visible:bg-bg-elevated",
@@ -133,6 +151,16 @@ export function BuildCard({
                   From opponent
                 </Badge>
               ) : null}
+              {selection ? (
+                <span aria-hidden className="text-accent">
+                  {selection.selected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                </span>
+              ) : null}
+              {build.pinned ? (
+                <Badge variant="neutral" size="sm" iconLeft={<Pin className="h-3 w-3" aria-hidden />}>
+                  Pinned
+                </Badge>
+              ) : null}
               {build.isPublic ? (
                 <Badge variant="accent" size="sm">
                   Published
@@ -158,6 +186,24 @@ export function BuildCard({
                 {build.description}
               </p>
             ) : null}
+            {build.tags?.length ? (
+              <ul aria-label="Tags" className="flex flex-wrap gap-1">
+                {build.tags.map((tag) => (
+                  <li key={tag} className="rounded-full border border-border px-2 py-0.5 text-micro text-text-muted">#{tag}</li>
+                ))}
+              </ul>
+            ) : null}
+            {authorUpdate ? (
+              <button
+                type="button"
+                onClick={authorUpdate.onReview}
+                className="pointer-events-auto relative z-10 inline-flex min-h-11 items-center gap-1.5 rounded-full border border-accent-cyan/50 bg-accent-cyan/10 px-3 text-caption font-semibold text-accent-cyan hover:bg-accent-cyan/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                Author updated
+                <span className="sr-only">: review the changes to {label}</span>
+              </button>
+            ) : null}
           </div>
           <div className="pointer-events-auto">
             <BuildKebab
@@ -173,6 +219,7 @@ export function BuildCard({
               onChanged={onChanged}
               reclassifying={reclassifying}
               reclassifyDisabled={reclassifyDisabled}
+              extraItems={extraMenuItems}
             />
           </div>
         </div>
@@ -273,6 +320,7 @@ interface BuildKebabProps {
   compact?: boolean;
   reclassifying?: boolean;
   reclassifyDisabled?: boolean;
+  extraItems?: ReadonlyArray<KebabExtra>;
 }
 
 type MenuPlacement = "top" | "bottom";
@@ -326,6 +374,7 @@ export function BuildKebab({
   compact = false,
   reclassifying = false,
   reclassifyDisabled = false,
+  extraItems = [],
 }: BuildKebabProps) {
   const [open, setOpen] = useState(false);
   const [practiceOpen, setPracticeOpen] = useState(false);
@@ -335,7 +384,7 @@ export function BuildKebab({
   const initialFocusRef = useRef<"first" | "last">("first");
   const scopeRestore = useRef<boolean | "if-lost">(false);
   const menuId = useId();
-  const menuItemCount = (compact ? 0 : 4 + (onReclassify ? 1 : 0)) + (onDuplicate ? 1 : 0) + (isPublic ? 3 : 0) + (practiceBuild ? 1 : 0);
+  const menuItemCount = (compact ? 0 : 4 + (onReclassify ? 1 : 0)) + (onDuplicate ? 1 : 0) + (isPublic ? 3 : 0) + (practiceBuild ? 1 : 0) + extraItems.length;
   const actions = useBuildPublicationActions({ slug, name, enabled: open && isPublic, onChanged });
   const listingState = actions.publication.error ? "Unavailable" : actions.publication.data?.published === false ? "Not published" : "Loading…";
 
@@ -625,6 +674,7 @@ export function BuildKebab({
               /> : null}
               {onDuplicate ? <KebabItem icon={<Copy className="h-4 w-4" aria-hidden />} label="Duplicate" onClick={() => { closeMenu(false, true); onDuplicate(slug); }} /> : null}
               {practiceBuild ? <KebabItem icon={<Crosshair className="h-4 w-4" aria-hidden />} label="Practice this" onClick={() => { closeMenu(false, true); setPracticeOpen(true); }} /> : null}
+              {extraItems.map((item) => <KebabItem key={item.key} icon={item.icon} label={item.label} onClick={() => { closeMenu(false, true); item.onClick(); }} />)}
               {!compact && onReclassify ? (
                 <KebabItem
                   icon={

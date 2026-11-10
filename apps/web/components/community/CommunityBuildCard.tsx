@@ -9,6 +9,7 @@ import { AuthorChip } from "./AuthorChip";
 import { CommunityBuildOwnerControls } from "./CommunityBuildOwnerControls";
 import { CommunityOwnerReplayCount } from "./CommunityOwnerReplayCount";
 import { KeySteps } from "./KeySteps";
+import { CommunityTrustLine } from "./CommunityTrustLine";
 import { VoteScore } from "./VoteScore";
 import type { CommunityBuildListItem } from "./types";
 
@@ -34,7 +35,8 @@ export function CommunityBuildCard({ build, hideAuthor = false }: CommunityBuild
       <footer className="relative z-10 mt-auto flex flex-wrap items-center gap-x-3 gap-y-2 pt-2">
         {!hideAuthor ? <span className="min-w-0 max-w-[50%]"><AuthorChip build={build} size="sm" /></span> : null}
         <VoteScore votes={build.votes} />
-        <span className="text-micro text-text-dim">Updated {fmtAgo(build.updatedAt || build.publishedAt)}</span>
+        <CommunityTrustLine build={build} />
+        <span className="text-micro text-text-dim">Updated {fmtAgo(build.contentUpdatedAt || build.updatedAt || build.publishedAt)}</span>
         <CommunityBuildOwnerControls slug={build.slug} title={build.title} compact />
         <CommunityOwnerReplayCount publicSlug={build.slug} />
       </footer>

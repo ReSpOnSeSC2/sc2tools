@@ -11,6 +11,8 @@ export interface CustomBuildPage {
   libraryTotal?: number | null;
   limit?: number | null;
   nextCursor?: string | null;
+  /** Every tag in the library with its build count (full views only). */
+  availableTags?: Array<{ tag: string; count: number }>;
 }
 
 export interface CustomBuildQuery {
@@ -21,6 +23,13 @@ export interface CustomBuildQuery {
   hideEmpty?: boolean;
   view?: "summary";
   includeGeneric?: boolean;
+  /** Your own builds ("you") or opponent captures ("opponent"). */
+  perspective?: "you" | "opponent";
+  published?: boolean;
+  /** The build's own race letter. */
+  race?: "P" | "T" | "Z";
+  /** Builds carrying every one of these tags. */
+  tags?: string[];
 }
 
 function restoredCursors(query: string): string[] {
@@ -41,6 +50,10 @@ export function useCustomBuildPage(query: CustomBuildQuery = {}) {
   if (query.hideEmpty) params.set("hideEmpty", "true");
   if (query.view) params.set("view", query.view);
   if (query.includeGeneric) params.set("includeGeneric", "true");
+  if (query.perspective) params.set("perspective", query.perspective);
+  if (query.published) params.set("published", "true");
+  if (query.race) params.set("race", query.race);
+  if (query.tags?.length) params.set("tags", query.tags.join(","));
   const queryKey = `${userId ?? ""}:${params.toString()}`;
   const [navigation, setNavigation] = useState<{ query: string; cursors: string[] }>({ query: queryKey, cursors: restoredCursors(queryKey) });
   useEffect(() => {

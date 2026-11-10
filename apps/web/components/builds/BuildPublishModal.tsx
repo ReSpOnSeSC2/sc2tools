@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { CheckCircle2, ExternalLink, ShieldCheck } from "lucide-react";
@@ -25,6 +25,8 @@ type OwnerPublicationSettings = {
   publicSlug: string | null;
   authorName: string;
   publishAnonymously: boolean;
+  /** "Show my record with this build publicly" (off unless the author opted in). */
+  showAuthorRecord?: boolean;
   mirrorPending: boolean;
 };
 
@@ -46,6 +48,8 @@ export function BuildPublishModal({
   const [description, setDescription] = useState("");
   const [authorName, setAuthorName] = useState("");
   const [publishAnonymously, setPublishAnonymously] = useState(false);
+  const [showRecord, setShowRecord] = useState(false);
+  const recordId = useId();
   const [identityLoading, setIdentityLoading] = useState(false);
   const [identityUnavailable, setIdentityUnavailable] = useState(false);
   const [identityError, setIdentityError] = useState<string | null>(null);
@@ -65,6 +69,7 @@ export function BuildPublishModal({
     setDescription(build?.description ?? "");
     setAuthorName("");
     setPublishAnonymously(false);
+    setShowRecord(false);
     setIdentityLoading(!!build);
     setIdentityUnavailable(false);
     setIdentityError(null);
@@ -84,6 +89,7 @@ export function BuildPublishModal({
           setAuthorName(settings.authorName || "");
           setOwnerPublication(settings);
           setPublishAnonymously(settings.publishAnonymously);
+          setShowRecord(settings.showAuthorRecord === true);
         })
         .catch(() => {
           if (cancelled) return;
@@ -132,6 +138,7 @@ export function BuildPublishModal({
               ? undefined
               : authorName.trim() || undefined,
             publishAnonymously,
+            showRecord,
           }),
         },
       );
@@ -313,6 +320,26 @@ export function BuildPublishModal({
               </span>
             </span>
           </label>
+          <div className="flex min-h-[48px] items-start gap-3 rounded-lg border border-border bg-bg-elevated/50 p-3">
+            <input
+              id={recordId}
+              type="checkbox"
+              checked={showRecord}
+              onChange={(e) => setShowRecord(e.target.checked)}
+              disabled={identityLoading}
+              aria-describedby={`${recordId}-hint`}
+              className="mt-0.5 h-5 w-5 flex-none accent-accent-cyan"
+            />
+            <div className="text-caption text-text-muted">
+              <label htmlFor={recordId} className="block cursor-pointer font-medium text-text">
+                Show my record with this build publicly
+              </label>
+              <p id={`${recordId}-hint`}>
+                Off by default. When on, the build&apos;s card and page show your
+                wins and losses with it (no game details or opponents).
+              </p>
+            </div>
+          </div>
           <label className="flex items-start gap-3 rounded-lg border border-accent-cyan/30 bg-accent-cyan/8 p-3">
             <input
               type="checkbox"

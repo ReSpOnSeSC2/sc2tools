@@ -28,6 +28,15 @@ describe("Community scores and cards", () => {
     expect(screen.queryByText("Open")).toBeNull(); expect(container.querySelector(".pr-24")).toBeNull();
     expect(author.closest("footer")?.className).toContain("relative");
   });
+  it("shows saves and the content update time, and the author's record only when present", () => {
+    const view = render(<CommunityBuildCard build={{ ...build, saves: 12, contentUpdatedAt: "2026-09-01T12:00:00Z" }} />);
+    expect(screen.getByText("12 saves")).toBeTruthy();
+    expect(screen.queryByText(/^Author \d/)).toBeNull();
+    expect(screen.getByText(/^Updated /).textContent).not.toContain("—");
+    view.rerender(<CommunityBuildCard build={{ ...build, saves: 1, authorRecord: { wins: 7, losses: 3 } }} />);
+    expect(screen.getByText("1 save")).toBeTruthy();
+    expect(screen.getByText("Author 7–3")).toBeTruthy();
+  });
   it("hides redundant author chips on author pages", () => {
     render(<CommunityBuildCard build={build} hideAuthor />);
     expect(screen.queryByRole("link", { name: build.authorName })).toBeNull();

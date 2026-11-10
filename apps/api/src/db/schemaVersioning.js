@@ -148,6 +148,19 @@ const REGISTRY = Object.freeze({
     currentVersion: 2,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.CUSTOM_BUILD_REVISIONS]: {
+    collection: COLLECTIONS.CUSTOM_BUILD_REVISIONS,
+    // {userId, slug, rev, savedAt, doc}: a saved build as it was before a
+    // later save replaced it.
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.COMMUNITY_SAVES]: {
+    collection: COLLECTIONS.COMMUNITY_SAVES,
+    // {slug, userId, savedAt}: unique per pair; counts ``saves`` once.
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.CUSTOM_BUILD_JOBS]: {
     collection: COLLECTIONS.CUSTOM_BUILD_JOBS,
     // Ephemeral, purge-only background classifier lease/progress documents.

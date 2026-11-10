@@ -1,6 +1,7 @@
 "use strict";
 
 const { createHash } = require("node:crypto");
+const { CUSTOM_BUILD_LIBRARY } = require("../config/constants");
 
 const CUSTOM_BUILD_PAGE_SIZE = 50;
 const CUSTOM_BUILD_MAX_PAGE_SIZE = 100;
@@ -40,12 +41,40 @@ function parseBuildPageOptions(raw = {}) {
   if (forkedFrom && !/^[a-zA-Z0-9._-]+$/.test(forkedFrom)) throw invalidPage("Invalid forkedFrom.");
   return {
     limit, sort, matchup: matchup === "All" ? "" : matchup, hideEmpty, view, includeGeneric, forkedFrom,
+    ...libraryFilterOptions(raw),
     search: textOption(raw.search, "search", 200),
     nameSearch: textOption(raw.nameSearch, "name search", 120),
     name: textOption(raw.name, "name", 200),
     normalizedName: textOption(raw.normalizedName, "normalizedName", 200),
     cursor: textOption(raw.cursor, "cursor", 2048),
   };
+}
+
+/**
+ * Library filters: ``perspective`` (you | opponent), ``published`` (a
+ * boolean), ``race`` (P | T | Z, the build's own race) and ``tags`` (comma
+ * separated; a build must carry every tag). Bad values are a 400.
+ * @param {Record<string, any>} raw
+ */
+function libraryFilterOptions(raw) {
+  const perspective = textOption(raw.perspective, "perspective", 10);
+  if (perspective && perspective !== "you" && perspective !== "opponent") throw invalidPage("Invalid perspective.");
+  // Parsed options are parsed again by the service: null and arrays round-trip.
+  if (raw.published !== undefined && raw.published !== null && ![true, false, "true", "false", "1", "0"].includes(raw.published)) {
+    throw invalidPage("Invalid published.");
+  }
+  const published = raw.published === undefined || raw.published === null ? null
+    : raw.published === true || raw.published === "true" || raw.published === "1";
+  const race = textOption(raw.race, "race", 2);
+  if (race && !/^[PTZ]$/.test(race)) throw invalidPage("Invalid race.");
+  const rawTags = Array.isArray(raw.tags) && raw.tags.every((tag) => typeof tag === "string")
+    ? raw.tags.join(",")
+    : textOption(raw.tags, "tags", (CUSTOM_BUILD_LIBRARY.TAG_MAX_LENGTH + 1) * CUSTOM_BUILD_LIBRARY.TAGS_MAX);
+  const tags = rawTags ? [...new Set(rawTags.split(",").map((tag) => tag.replace(/\s+/g, " ").trim()).filter(Boolean))] : [];
+  if (tags.length > CUSTOM_BUILD_LIBRARY.TAGS_MAX || tags.some((tag) => tag.length > CUSTOM_BUILD_LIBRARY.TAG_MAX_LENGTH)) {
+    throw invalidPage("Invalid tags.");
+  }
+  return { perspective, published, race, tags };
 }
 
 /** @param {string} value */
@@ -68,7 +97,8 @@ function decodePageCursor(cursor, scope, sort) {
   try {
     if (!/^[A-Za-z0-9_-]+$/.test(cursor)) throw new Error();
     const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
-    if (value.v !== 1 || value.scope !== scope || typeof value.slug !== "string" || value.slug.length > 80) throw new Error();
+    if (value.v !== 2 || value.scope !== scope || typeof value.slug !== "string" || value.slug.length > 80) throw new Error();
+    if (value.pinned !== 0 && value.pinned !== 1) throw new Error();
     if (sort === "name" ? typeof value.order !== "string" || value.order.length > 200 : typeof value.order !== "number" || !Number.isFinite(value.order)) throw new Error();
     return value;
   } catch { throw invalidPage("This build page has expired or does not match the selected filters."); }
@@ -115,6 +145,17 @@ function buildPageConditions(opts) {
   if (opts.name) conditions.push({ $or: [{ name: opts.name }, { slug: opts.name }] });
   if (opts.nameSearch) conditions.push({ name: { $regex: escapeRegex(opts.nameSearch), $options: "i" } });
   if (opts.forkedFrom) conditions.push({ "forkedFrom.communitySlug": opts.forkedFrom });
+  if (opts.perspective === "opponent") conditions.push({ perspective: "opponent" });
+  if (opts.perspective === "you") conditions.push({ perspective: { $ne: "opponent" } });
+  if (opts.published === true) conditions.push({ isPublic: true });
+  if (opts.published === false) conditions.push({ isPublic: { $ne: true } });
+  if (opts.race) {
+    const names = { P: "Protoss", T: "Terran", Z: "Zerg" };
+    conditions.push({ race: { $regex: `^(?:${opts.race}|${names[/** @type {keyof typeof names} */ (opts.race)]})$`, $options: "i" } });
+  }
+  if (opts.tags && opts.tags.length) {
+    conditions.push({ $and: opts.tags.map((tag) => ({ tags: { $regex: `^${escapeRegex(tag)}$`, $options: "i" } })) });
+  }
   if (opts.normalizedName) conditions.push({ $or: ["name", "slug"].map((field) => ({ [field]: { $regex: normalizedNameRegex(opts.normalizedName), $options: "i" } })) });
   if (opts.matchup) {
     const races = { P: "Protoss", T: "Terran", Z: "Zerg" };
@@ -170,16 +211,18 @@ async function listBuildPage(collection, games, userId, raw, projection) {
       ] }
         : { $convert: { input: { $convert: { input: "$updatedAt", to: "date", onError: null, onNull: null } }, to: "long", onError: 0, onNull: 0 } };
   const direction = opts.sort === "name" ? 1 : -1;
+  // Pinned builds lead every sort; the cursor carries the pin band.
   /** @type {Record<string, any>[]} */
-  const pageStages = [...stages, { $set: { _pageOrder: order } }];
+  const pageStages = [...stages, { $set: { _pageOrder: order, _pinned: { $cond: [{ $eq: ["$pinned", true] }, 1, 0] } } }];
   if (cursor) pageStages.push({ $match: { $or: [
-    { _pageOrder: { [direction === 1 ? "$gt" : "$lt"]: cursor.order } },
-    { _pageOrder: cursor.order, slug: { $gt: cursor.slug } },
+    { _pinned: { $lt: cursor.pinned } },
+    { _pinned: cursor.pinned, _pageOrder: { [direction === 1 ? "$gt" : "$lt"]: cursor.order } },
+    { _pinned: cursor.pinned, _pageOrder: cursor.order, slug: { $gt: cursor.slug } },
   ] } });
-  pageStages.push({ $sort: { _pageOrder: direction, slug: 1 } }, { $limit: opts.limit + 1 });
+  pageStages.push({ $sort: { _pinned: -1, _pageOrder: direction, slug: 1 } }, { $limit: opts.limit + 1 });
   if (opts.view === "summary") pageStages.push({ $project: {
     _id: 0, slug: 1, name: 1, race: 1, vsRace: 1, perspective: 1,
-    updatedAt: 1, description: 1, sourceGameId: 1, "forkedFrom.communitySlug": 1, _pageOrder: 1,
+    updatedAt: 1, description: 1, sourceGameId: 1, "forkedFrom.communitySlug": 1, _pageOrder: 1, _pinned: 1,
   } });
   const libraryCount = collection.countDocuments(match);
   const filteredCount = conditions.length === 0 && !opts.hideEmpty
@@ -187,18 +230,43 @@ async function listBuildPage(collection, games, userId, raw, projection) {
     : collection.aggregate([
       ...(opts.hideEmpty ? stages : filteredStages), { $count: "total" },
     ], { allowDiskUse: true }).toArray().then((/** @type {any[]} */ counts) => counts[0]?.total || 0);
-  const [rows, total, libraryTotal] = await Promise.all([
+  const [rows, total, libraryTotal, availableTags] = await Promise.all([
     collection.aggregate(pageStages, { allowDiskUse: true }).toArray(),
     filteredCount,
     libraryCount,
+    opts.view === "summary" ? Promise.resolve(undefined) : libraryTags(collection, userId),
   ]);
   const items = rows.slice(0, opts.limit);
   const last = items[items.length - 1];
   const nextCursor = rows.length > opts.limit && last
-    ? Buffer.from(JSON.stringify({ v: 1, scope, order: last._pageOrder, slug: last.slug })).toString("base64url")
+    ? Buffer.from(JSON.stringify({ v: 2, scope, pinned: last._pinned === 1 ? 1 : 0, order: last._pageOrder, slug: last.slug })).toString("base64url")
     : null;
-  for (const item of items) { delete item._pageOrder; delete item._stats; }
-  return { items, total, libraryTotal, limit: opts.limit, nextCursor, truncated: false };
+  for (const item of items) { delete item._pageOrder; delete item._stats; delete item._pinned; }
+  return {
+    items, total, libraryTotal, limit: opts.limit, nextCursor, truncated: false,
+    ...(availableTags ? { availableTags } : {}),
+  };
+}
+
+/**
+ * Every tag in the account's live library with its build count, most used
+ * first (the filter bar's tag chips).
+ * @param {any} collection
+ * @param {string} userId
+ * @returns {Promise<Array<{tag: string, count: number}>>}
+ */
+async function libraryTags(collection, userId) {
+  const rows = await collection.aggregate([
+    { $match: { userId, deletedAt: { $exists: false }, "tags.0": { $exists: true } } },
+    { $project: { _id: 0, tags: { $slice: [{ $filter: { input: "$tags", cond: { $eq: [{ $type: "$$this" }, "string"] } } }, CUSTOM_BUILD_LIBRARY.TAGS_MAX] } } },
+    { $unwind: "$tags" },
+    // One spelling per tag, the same every time.
+    { $sort: { tags: 1 } },
+    { $group: { _id: { $toLower: "$tags" }, tag: { $first: "$tags" }, count: { $sum: 1 } } },
+    { $sort: { count: -1, _id: 1 } },
+    { $limit: CUSTOM_BUILD_LIBRARY.AVAILABLE_TAGS_MAX },
+  ]).toArray();
+  return rows.map((/** @type {any} */ row) => ({ tag: String(row.tag).slice(0, CUSTOM_BUILD_LIBRARY.TAG_MAX_LENGTH), count: Number(row.count) || 0 }));
 }
 
 module.exports = {

@@ -38,6 +38,7 @@ const {
   buildLadderMetaRecomputeJob,
 } = require("./jobs/ladderMetaRecomputeJob");
 const { buildReviewDigestJob } = require("./jobs/reviewDigestJob");
+const { buildCustomBuildTrashPurgeJob } = require("./jobs/customBuildTrashPurgeJob");
 const { buildBackupHealthJob } = require("./jobs/backupHealthJob");
 const { buildIdentityDeletionJob } = require("./jobs/identityDeletionJob");
 const { startDeliveryJobs } = require("./jobs/deliveryJobs");
@@ -379,6 +380,10 @@ async function main() {
   const guideStatsJob = /** @type {any} */ (services).guideStatsJob;
   if (config.guidesEnabled) guideStatsJob.start();
 
+  // Nightly hard-delete of builds past the 30-day "Recently deleted" window.
+  const customBuildTrashPurgeJob = buildCustomBuildTrashPurgeJob({ jobLedger: /** @type {any} */ (services).jobLedger, db, logger });
+  customBuildTrashPurgeJob.start();
+
   // Weekly Replay Review Exchange digest (hourly check, weekly send).
   const reviewDigestJob = buildReviewDigestJob({
     jobLedger: /** @type {any} */ (services).jobLedger,
@@ -455,6 +460,7 @@ async function main() {
       await drained;
     }
     await keepalive.stop();
+    await customBuildTrashPurgeJob.stop();
     await supportEmailJob.stop();
     await pulseBackfill.stop();
     await opponentMmrEnrichment.stop();

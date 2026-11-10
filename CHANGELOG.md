@@ -119,6 +119,30 @@ corresponding GitHub Release.
   Off until you preview the posts and turn a channel on; opponent names stay
   hidden unless you allow them.
 
+### Build library
+
+- Undo a delete for 10 seconds, or restore it from **Recently deleted** for 30
+  days. Restored builds come back private; a nightly cleanup removes builds
+  deleted more than 30 days ago.
+- Keep the last 20 versions of each build. **History** on a build's page
+  compares a version with the current one and restores it.
+- Pin builds to the top, tag them, and filter the library by Mine or Opponent
+  captures, Published, race and tags.
+- Select many builds to tag, add to the randomizer, publish, unpublish, export
+  or delete them at once. Press **/** to search and **n** for a new build.
+- Export the library to a .json file and import builds from a file, pasted JSON
+  or a share code, choosing to skip, copy or overwrite builds you already have.
+  **Copy share code** makes a link that keeps the build in the link's fragment.
+
+### Community builds
+
+- Show how many players saved a build (each account once) and when its author
+  last changed it, and sort Community by **Most saved**.
+- Mark saved copies with **Author updated** when the author publishes a change.
+  **Review update** shows the rule changes; **Apply update** keeps your notes
+  and skill level.
+- Add **Show my record with this build publicly** to publishing, off by default.
+
 ### Game share links
 
 - Share one game by link from its new Share menu, on the game page and on each

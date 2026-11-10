@@ -58,6 +58,9 @@ const COLLECTIONS = Object.freeze({
   GAME_DETAILS: "game_details",
   CUSTOM_BUILDS: "custom_builds",
   CUSTOM_BUILD_JOBS: "custom_build_jobs",
+  // Prior versions of each saved build (newest 20 per build), written on
+  // every save; restored through the normal save path.
+  CUSTOM_BUILD_REVISIONS: "custom_build_revisions",
   DEVICE_PAIRINGS: "device_pairings",
   DEVICE_TOKENS: "device_tokens",
   OVERLAY_TOKENS: "overlay_tokens",
@@ -84,6 +87,9 @@ const COLLECTIONS = Object.freeze({
   AGENT_RELEASES: "agent_releases",
   COMMUNITY_BUILDS: "community_builds",
   COMMUNITY_REPORTS: "community_reports",
+  // One row per (community build, saver): the unique pair makes each
+  // account's "Save to my library" count once toward ``saves``.
+  COMMUNITY_SAVES: "community_saves",
   USER_BACKUPS: "user_backups",
   BACKUP_RESTORE_STAGING: "backup_restore_staging",
   PENDING_IDENTITY_DELETIONS: "pending_identity_deletions",
@@ -278,6 +284,19 @@ const REVIEWS = Object.freeze({
 
 // Build check-in (docs/adr/0025-build-check-in-attribution.md). Windows,
 // TTLs and limits for the live record, the ingest bind and the routes.
+/** Build library safety and organisation (routes/customBuildLibrary.js). */
+const CUSTOM_BUILD_LIBRARY = Object.freeze({
+  REVISIONS_PER_BUILD: 20,
+  TRASH_RETENTION_MS: 30 * 24 * 60 * 60 * 1000,
+  TRASH_LIST_MAX: 100,
+  IMPORT_BATCH_MAX: 100,
+  LIBRARY_MAX: 500,
+  TAGS_MAX: 8,
+  TAG_MAX_LENGTH: 24,
+  AVAILABLE_TAGS_MAX: 50,
+  PURGE_BATCH: 200,
+});
+
 const BUILD_INTENT = Object.freeze({
   // A bare registration lives 12 h; one carrying a declaration, roll or
   // post-game answer lives a week so a late replay upload still binds it.
@@ -337,6 +356,7 @@ module.exports = {
   LIMITS,
   REVIEWS,
   BUILD_INTENT,
+  CUSTOM_BUILD_LIBRARY,
   TIMEOUTS,
   PYTHON,
   INGEST_PROVENANCE,

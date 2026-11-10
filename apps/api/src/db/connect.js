@@ -28,6 +28,8 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   gameDetails: import('mongodb').Collection,
  *   customBuilds: import('mongodb').Collection,
  *   customBuildJobs: import('mongodb').Collection,
+ *   customBuildRevisions: import('mongodb').Collection,
+ *   communitySaves: import('mongodb').Collection,
  *   coaching: import('mongodb').Collection,
  *   devicePairings: import('mongodb').Collection,
  *   deviceTokens: import('mongodb').Collection,
@@ -142,6 +144,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     gameDetails: db.collection(COLLECTIONS.GAME_DETAILS),
     customBuilds: db.collection(COLLECTIONS.CUSTOM_BUILDS),
     customBuildJobs: db.collection(COLLECTIONS.CUSTOM_BUILD_JOBS),
+    customBuildRevisions: db.collection(COLLECTIONS.CUSTOM_BUILD_REVISIONS),
     devicePairings: db.collection(COLLECTIONS.DEVICE_PAIRINGS),
     deviceTokens: db.collection(COLLECTIONS.DEVICE_TOKENS),
     overlayTokens: db.collection(COLLECTIONS.OVERLAY_TOKENS),
@@ -164,6 +167,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     agentReleases: db.collection(COLLECTIONS.AGENT_RELEASES),
     communityBuilds: db.collection(COLLECTIONS.COMMUNITY_BUILDS),
     communityReports: db.collection(COLLECTIONS.COMMUNITY_REPORTS),
+    communitySaves: db.collection(COLLECTIONS.COMMUNITY_SAVES),
     userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
     pendingIdentityDeletions: db.collection(COLLECTIONS.PENDING_IDENTITY_DELETIONS),
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
@@ -317,6 +321,24 @@ async function ensurePracticeLogIndexes(ctx) {
     { userId: 1, "practice.matchup": 1, date: -1, _id: -1 },
     { name: "practice_log", partialFilterExpression: { practice: { $exists: true } } },
   );
+}
+
+/**
+ * Build library safety and community trust: tag chips (multikey), the
+ * trash purge's soft-deleted rows, version history, "Most saved" and one
+ * community save per account.
+ * @param {DbContext} ctx
+ */
+async function ensureBuildLibraryIndexes(ctx) {
+  await ctx.customBuilds.createIndex({ userId: 1, tags: 1 });
+  await ctx.customBuilds.createIndex(
+    { deletedAt: 1 },
+    { name: "custom_build_trash", partialFilterExpression: { deletedAt: { $exists: true } } },
+  );
+  await ctx.customBuildRevisions.createIndex({ userId: 1, slug: 1, rev: -1 }, { unique: true });
+  await ctx.communityBuilds.createIndex({ removed: 1, saves: -1 });
+  await ctx.communitySaves.createIndex({ slug: 1, userId: 1 }, { unique: true });
+  await ctx.communitySaves.createIndex({ userId: 1 });
 }
 
 /**
@@ -529,6 +551,7 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.customBuilds.createIndex({ userId: 1, updatedAt: -1 });
   await ctx.customBuilds.createIndex({ userId: 1, _id: 1 }, { name: "admin_custom_build_catalog" });
   await ctx.customBuildJobs.createIndex({ userId: 1 }, { unique: true });
+  await ensureBuildLibraryIndexes(ctx);
   await ctx.customBuildJobs.createIndex({ status: 1, leaseUntil: 1 });
 
   await ctx.devicePairings.createIndex({ code: 1 }, { unique: true });
