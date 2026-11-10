@@ -18,11 +18,12 @@
  *   GET  /games/:gameId/build-intent          GameIntentState
  *                                             (?include=options adds both lists)
  *   PUT  /games/:gameId/build-intent          confirm | skip | defer | notes
- *                                             | opponent; every action takes
- *                                             an optional opponentBuildKey
+ *                                             | opponent | reopen; every action
+ *                                             takes an optional opponentBuildKey
  *
  * Errors: ``{error: {code, message}}`` (+ ``gameId`` for already_bound,
- * ``reason`` for not_eligible). Request logs redact the live game key
+ * ``reason`` for not_eligible; ``reopen`` of an undecided game is 409
+ * not_reopenable). Request logs redact the live game key
  * (middleware/requestLogging.js): it holds both players' names.
  */
 

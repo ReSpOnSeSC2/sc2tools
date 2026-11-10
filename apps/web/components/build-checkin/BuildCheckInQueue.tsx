@@ -1,53 +1,102 @@
 "use client";
 
-import { GameAnalysisLink } from "@/components/analyzer/GameAnalysisLink";
-
-import { useEffect, useId, useRef, useState } from "react";
-import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
-import { ArrowUpRight, CheckCircle2, ClipboardCheck, Plus, Settings2 } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
-import { useToastOptional } from "@/components/ui/Toast";
-import { fmtAgo, fmtMinutes } from "@/lib/format";
 import {
-  BUILD_CHECKIN_SETTINGS_HREF,
+  NEW_BUILD_CHECKED_IN,
   PENDING_LIMIT_MAX,
   PENDING_WINDOW_HOURS,
   buildIntentErrorMessage,
-  dismissPendingIntents,
-  effectiveOpponentBuild,
-  useBuildOptions,
   usePendingIntents,
   type CheckInSide,
   type GameIntentState,
 } from "@/lib/buildIntent";
-import { isLossResult, isWinResult } from "@/components/analyzer/game/types";
 import { useBuildCheckInRevision } from "./BuildCheckInProvider";
-import { BuildPicker } from "./BuildPicker";
 import {
   CheckInNewBuild,
   type NewBuildRequest,
   type NewBuildSaved,
 } from "./CheckInNewBuild";
-import { DetectedLine, ReasonChip } from "./CheckInParts";
-import type { PickerSignal } from "./OpponentBuildRow";
+import { QueueFooter } from "./QueueFooter";
+import { QueueItem, type QueueSignal } from "./QueueItem";
 import { focusWasLost } from "./focus";
-import { CorrectedBadge } from "./PlannedBadge";
+import { useConfirmAllSuggested, type ConfirmAllResult } from "./useConfirmAllSuggested";
 import { useCheckInActions } from "./useCheckInActions";
 import { useNewBuildCheckIn } from "./useNewBuildCheckIn";
 
 const NO_ITEMS: GameIntentState[] = [];
 
+/** A game this queue decided (or undid) since it opened. */
+interface QueueOutcome {
+  /** The game as listed, updated with the write's response. */
+  item: GameIntentState;
+  /** The outcome line; null once Undo put the game back to waiting. */
+  text: string | null;
+}
+
+/**
+ * The listed game with a write's response folded in; write responses can
+ * lack a suggestion the list computed, so the listed one is kept.
+ */
+function mergeQueueState(listed: GameIntentState, next: GameIntentState): GameIntentState {
+  return {
+    ...listed,
+    ...next,
+    suggestion: next.suggestion ?? listed.suggestion,
+    opponent: next.opponent === undefined ? listed.opponent : next.opponent,
+  };
+}
+
+/**
+ * The server's pending list plus every game this queue handled since it
+ * opened: a handled game leaves the server list, but keeps its outcome and
+ * Undo here until the queue closes, in the place it was shown.
+ */
+function shownItems(
+  items: GameIntentState[],
+  outcomes: Record<string, QueueOutcome>,
+  previousOrder: readonly string[],
+): GameIntentState[] {
+  const listed = new Set(items.map((item) => item.gameId));
+  const rank = (gameId: string) => {
+    const at = previousOrder.indexOf(gameId);
+    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  const kept = Object.values(outcomes)
+    .filter((outcome) => !listed.has(outcome.item.gameId))
+    .map((outcome) => outcome.item)
+    .sort((a, b) => rank(a.gameId) - rank(b.gameId));
+  if (kept.length === 0) return items;
+  const shown = [...items];
+  for (const entry of kept) {
+    const at = previousOrder.indexOf(entry.gameId);
+    let insertAt = at < 0 ? shown.length : 0;
+    // Right after the nearest game shown above it last time.
+    for (let index = at - 1; index >= 0; index -= 1) {
+      const neighbour = shown.findIndex((other) => other.gameId === previousOrder[index]);
+      if (neighbour >= 0) {
+        insertAt = neighbour + 1;
+        break;
+      }
+    }
+    shown.splice(insertAt, 0, entry);
+  }
+  return shown;
+}
+
 /**
  * BuildCheckInQueue — the header chip's dialog (a bottom sheet on phones):
  * every game from the last 72 hours still waiting for a check-in, newest
- * first, each with Confirm / Change… / No set build and the opponent's
- * build, plus "Dismiss all". "Add new build…" beside the replay label opens
- * your editor directly; "Add opponent build…" stays on the opponent's line.
- * Both use the shared editor and check the saved build in for that game.
+ * first, each with Confirm <suggestion> / Change… (or "Pick build…") / No
+ * set build and the opponent's build with its own picker, plus "Confirm
+ * all suggested" and "Dismiss all". A decided game keeps its outcome and an
+ * Undo until the queue closes. "Add new build…" beside the replay label
+ * opens your editor directly; "Add opponent build…" stays on the
+ * opponent's line. Both use the shared editor and check the saved build in
+ * for that game.
  */
 export function BuildCheckInQueue({
   open,
@@ -63,6 +112,38 @@ export function BuildCheckInQueue({
   const total = typeof data?.total === "number" ? data.total : items.length;
   const bodyRef = useRef<HTMLDivElement>(null);
   const focusInBody = useRef(false);
+  const [outcomes, setOutcomes] = useState<Record<string, QueueOutcome>>({});
+  const [batchErrors, setBatchErrors] = useState<Record<string, string>>({});
+  const orderRef = useRef<string[]>([]);
+  const shown = useMemo(() => shownItems(items, outcomes, orderRef.current), [items, outcomes]);
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  orderRef.current = shown.map((entry) => entry.gameId);
+
+  const record = useCallback((gameId: string, state: GameIntentState, text: string | null) => {
+    const listed = shownRef.current.find((entry) => entry.gameId === gameId);
+    setOutcomes((current) => ({
+      ...current,
+      [gameId]: { item: listed ? mergeQueueState(listed, state) : state, text },
+    }));
+    setBatchErrors((current) => {
+      if (!(gameId in current)) return current;
+      const next = { ...current };
+      delete next[gameId];
+      return next;
+    });
+  }, []);
+  const onBatchResult = useCallback((result: ConfirmAllResult) => {
+    if (result.ok) record(result.gameId, result.state, result.text);
+    else setBatchErrors((current) => ({ ...current, [result.gameId]: result.text }));
+  }, [record]);
+  const confirmAll = useConfirmAllSuggested(onBatchResult);
+  const stopConfirmAll = confirmAll.stop;
+  const targets = shown.flatMap((item) =>
+    item.status === "pending" && item.eligible !== false && item.suggestion && !outcomes[item.gameId]?.text
+      ? [{ gameId: item.gameId, key: item.suggestion.key, name: item.suggestion.name }]
+      : [],
+  );
 
   // One editor for the whole queue: an item can leave the list while its
   // new build is being checked in, which must not take the editor with it.
@@ -74,7 +155,7 @@ export function BuildCheckInQueue({
     /** The queue session the editor was opened in. */
     session: number;
   } | null>(null);
-  const [signal, setSignal] = useState<(PickerSignal & { gameId: string }) | null>(null);
+  const [signal, setSignal] = useState<(QueueSignal & { gameId: string }) | null>(null);
   const writer = useCheckInActions(newBuild?.request.gameId ?? "");
   const checkInNewBuild = useNewBuildCheckIn(writer);
   // Bumped whenever the queue opens or closes: a new build saved or checked
@@ -88,14 +169,19 @@ export function BuildCheckInQueue({
     if (open) return;
     setNewBuild(null);
     setSignal(null);
-  }, [open]);
+    // Closing mid-run lets the write in flight finish, then stops; every
+    // outcome and Undo belongs to the list the player just left.
+    stopConfirmAll();
+    setOutcomes({});
+    setBatchErrors({});
+  }, [open, stopConfirmAll]);
 
-  // A handled game leaves the list on the next refresh; if it took the
-  // focused control with it, keep focus inside the dialog.
+  // A game handled elsewhere leaves the list on the next refresh; if it
+  // took the focused control with it, keep focus inside the dialog.
   useEffect(() => {
     if (!focusInBody.current || !focusWasLost()) return;
     bodyRef.current?.focus({ preventScroll: true });
-  }, [items]);
+  }, [shown]);
 
   const openNewBuild = (item: GameIntentState, side: CheckInSide, query = "") =>
     setNewBuild({
@@ -124,14 +210,19 @@ export function BuildCheckInQueue({
     const item = newBuild?.item.gameId === saved.gameId ? newBuild.item : undefined;
     const started = newBuild?.session ?? session.current;
     const outcome = await checkInNewBuild(saved, item);
-    if (outcome.state) return;
+    if (outcome.state) {
+      // Your new build decided the game: it keeps its outcome and Undo.
+      if (saved.side === "you" && session.current === started) {
+        record(saved.gameId, outcome.state, NEW_BUILD_CHECKED_IN);
+      }
+      return;
+    }
     // Saved but not checked in: refresh the lists (the new build may now
-    // be pickable) and open that game's picker on it. The queue has no
-    // opponent picker; the toast says what happened.
+    // be pickable) and open that side's picker on it.
     bump();
     if (session.current !== started) return;
-    if (saved.side === "you" && item?.eligible !== false && outcome.errorCode !== "not_eligible") {
-      setSignal({ gameId: saved.gameId, key: saved.key, open: true, nonce: Date.now() });
+    if (item?.eligible !== false && outcome.errorCode !== "not_eligible") {
+      setSignal({ gameId: saved.gameId, side: saved.side, key: saved.key, open: true, nonce: Date.now() });
     }
   };
 
@@ -147,8 +238,11 @@ export function BuildCheckInQueue({
           <QueueFooter
             count={total}
             disabled={!data || data.disabled === true}
+            suggestedCount={targets.length}
+            progress={confirmAll.progress}
             onClose={onClose}
             onDismissed={bump}
+            onConfirmAll={() => void confirmAll.start(targets)}
           />
         }
       >
@@ -192,7 +286,7 @@ export function BuildCheckInQueue({
               title="Build check-ins are off"
               description="Turn them back on in Settings to collect games here. You can still set a planned build from any game page."
             />
-          ) : items.length === 0 ? (
+          ) : shown.length === 0 ? (
             <EmptyStatePanel
               size="sm"
               icon={<CheckCircle2 className="h-6 w-6 text-success" aria-hidden />}
@@ -202,15 +296,20 @@ export function BuildCheckInQueue({
           ) : (
             <div className="space-y-3">
               <ul className="space-y-3" aria-label="Games waiting for a check-in">
-                {items.map((item) => (
+                {shown.map((item) => (
                   <QueueItem
                     key={item.gameId}
                     item={item}
                     revision={revision}
+                    outcome={outcomes[item.gameId]?.text ?? null}
+                    batchError={batchErrors[item.gameId] ?? null}
+                    batchRunning={confirmAll.progress.phase === "running"}
                     signal={signal?.gameId === item.gameId ? signal : null}
                     onSignalHandled={() => setSignal(null)}
-                    onOpenGame={onClose}
+                    onNavigate={onClose}
                     onCreate={(side, query) => openNewBuild(item, side, query)}
+                    onDecided={(state, text) => record(item.gameId, state, text)}
+                    onReopened={(state) => record(item.gameId, state, null)}
                   />
                 ))}
               </ul>
@@ -229,342 +328,5 @@ export function BuildCheckInQueue({
         onSaved={(saved) => void onNewBuildSaved(saved)}
       />
     </>
-  );
-}
-
-function QueueFooter({
-  count,
-  disabled,
-  onClose,
-  onDismissed,
-}: {
-  count: number;
-  disabled: boolean;
-  onClose: () => void;
-  onDismissed: () => void;
-}) {
-  const { getToken } = useAuth();
-  const toastContext = useToastOptional();
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const dismissAll = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await dismissPendingIntents(getToken);
-      const dismissed = typeof result?.dismissed === "number" ? result.dismissed : count;
-      toastContext?.toast.success(
-        dismissed === 1 ? "Dismissed 1 check-in" : `Dismissed ${dismissed} check-ins`,
-      );
-      setConfirming(false);
-      onDismissed();
-    } catch (err) {
-      const message = buildIntentErrorMessage(err);
-      setError(message);
-      toastContext?.toast.error("Couldn't dismiss check-ins", { description: message });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="flex w-full flex-wrap items-center justify-between gap-2">
-      <Link
-        href={BUILD_CHECKIN_SETTINGS_HREF}
-        onClick={onClose}
-        className="inline-flex min-h-11 items-center gap-1.5 rounded text-caption font-semibold text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <Settings2 className="h-4 w-4" aria-hidden />
-        Check-in settings
-      </Link>
-      {confirming ? (
-        <div
-          role="group"
-          aria-label="Confirm dismiss all"
-          className="flex flex-wrap items-center justify-end gap-2"
-        >
-          <span className="text-caption text-text">
-            Mark {count === 1 ? "this game" : `all ${count} games`} as no set build?
-          </span>
-          <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming(false)}>
-            Cancel
-          </Button>
-          <Button size="sm" loading={busy} onClick={() => void dismissAll()}>
-            Dismiss all
-          </Button>
-        </div>
-      ) : (
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={disabled || count === 0}
-          onClick={() => setConfirming(true)}
-        >
-          Dismiss all
-        </Button>
-      )}
-      {error ? (
-        <p role="alert" className="w-full text-right text-caption text-danger">
-          {error}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function QueueItem({
-  item,
-  revision,
-  signal,
-  onSignalHandled,
-  onOpenGame,
-  onCreate,
-}: {
-  item: GameIntentState;
-  revision: number;
-  signal: PickerSignal | null;
-  /** The signal is applied once; a remount must not apply it again. */
-  onSignalHandled: () => void;
-  onOpenGame: () => void;
-  onCreate: (side: CheckInSide, query: string) => void;
-}) {
-  const actions = useCheckInActions(item.gameId);
-  const [picking, setPicking] = useState(false);
-  const [selectedKey, setSelectedKey] = useState<string | null>(item.suggestion?.key ?? null);
-  const [done, setDone] = useState(false);
-  const options = useBuildOptions(picking ? item.matchup : null, { revision });
-  const builds = options.data?.builds;
-  const selected = builds?.find((option) => option.key === selectedKey) ?? null;
-  const suggestion = item.suggestion;
-  const busy = actions.busy !== null || done;
-  const titleId = useId();
-  const changeRef = useRef<HTMLButtonElement>(null);
-  const doneRef = useRef<HTMLParagraphElement>(null);
-  const returnFocus = useRef(false);
-  const opponent = item.opponent
-    ? effectiveOpponentBuild(item.opponent, null)
-    : null;
-
-  useEffect(() => {
-    if (!signal) return;
-    setSelectedKey(signal.key);
-    setPicking(signal.open);
-    onSignalHandled();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per signal
-  }, [signal]);
-
-  // Focus never falls out of the dialog when the control that had it
-  // unmounts: Cancel returns it to "Change…", a finished check-in moves it
-  // to the outcome line.
-  useEffect(() => {
-    if (picking || !returnFocus.current) return;
-    returnFocus.current = false;
-    changeRef.current?.focus();
-  }, [picking]);
-  useEffect(() => {
-    if (done) doneRef.current?.focus({ preventScroll: true });
-  }, [done]);
-
-  const confirm = async (key: string, name: string) => {
-    const outcome = await actions.confirm(key, name);
-    if (outcome.state) {
-      setDone(true);
-      setPicking(false);
-    }
-  };
-  const skip = async () => {
-    const outcome = await actions.skip();
-    if (outcome.state) {
-      setDone(true);
-      setPicking(false);
-    }
-  };
-  const cancel = () => {
-    returnFocus.current = true;
-    setPicking(false);
-  };
-
-  return (
-    <li
-      aria-labelledby={titleId}
-      className={[
-        "rounded-xl border-2 border-line bg-bg-surface p-3 shadow-hard",
-        done ? "opacity-70" : "",
-      ].join(" ")}
-      data-testid="build-checkin-queue-item"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p id={titleId} className="flex flex-wrap items-center gap-2 text-caption">
-            <QueueResultBadge result={item.result} />
-            <span className="font-display font-bold text-text">{item.matchup ?? "1v1"}</span>
-            {item.oppName ? (
-              <span className="max-w-[16ch] truncate text-text-muted" title={item.oppName}>
-                vs {item.oppName}
-              </span>
-            ) : null}
-          </p>
-          <p className="mt-0.5 text-micro text-text-dim">
-            {[item.map, item.durationSec ? fmtMinutes(item.durationSec) : null, fmtAgo(item.date)]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
-        </div>
-        <GameAnalysisLink gameId={item.gameId}
-          onClick={onOpenGame}
-          className="inline-flex min-h-11 items-center gap-1 rounded px-1 text-caption font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          Open game
-          <ArrowUpRight className="h-4 w-4" aria-hidden />
-        </GameAnalysisLink>
-      </div>
-
-      <div className="mt-2 space-y-1">
-        {suggestion ? (
-          <p className="flex flex-wrap items-center gap-2 text-caption text-text-muted">
-            Suggested
-            <span className="font-semibold text-text">{suggestion.name}</span>
-            <ReasonChip suggestion={suggestion} matchup={item.matchup} />
-          </p>
-        ) : (
-          <p className="text-caption text-text-muted">
-            No suggestion yet. Pick the build you went for.
-          </p>
-        )}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <DetectedLine detected={item.detected?.name} />
-          <button
-            type="button"
-            disabled={busy || !item.matchup}
-            onClick={() => onCreate("you", "")}
-            className={[
-              "inline-flex min-h-11 items-center gap-1 rounded px-1 font-semibold text-accent hover:underline",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-              "disabled:cursor-not-allowed disabled:opacity-50",
-            ].join(" ")}
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden />
-            Add new build…
-            <span className="sr-only"> for your plan</span>
-          </button>
-        </div>
-        {opponent ? (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-muted">
-            <span>
-              Opponent:{" "}
-              <span className="font-semibold text-text">{opponent.label?.trim() || "Unknown"}</span>
-            </span>
-            {opponent.corrected ? <CorrectedBadge detected={opponent.corrected.detected} /> : null}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onCreate("opponent", "")}
-              className="inline-flex min-h-11 items-center gap-1 rounded px-1 font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Plus className="h-3.5 w-3.5" aria-hidden />
-              Add opponent build…
-              <span className="sr-only"> from the opponent&apos;s replay</span>
-            </button>
-          </div>
-        ) : null}
-      </div>
-
-      {done && actions.message && !actions.message.error ? (
-        <p
-          ref={doneRef}
-          tabIndex={-1}
-          className="mt-3 flex items-center gap-1.5 rounded text-caption font-semibold text-success focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <ClipboardCheck className="h-4 w-4" aria-hidden />
-          {actions.message.text}
-        </p>
-      ) : picking ? (
-        <div className="mt-3 space-y-3">
-          <BuildPicker
-            options={builds}
-            loading={options.isLoading || (!builds && !options.error)}
-            error={options.error ? buildIntentErrorMessage(options.error) : null}
-            onRetry={() => void options.mutate()}
-            value={selectedKey}
-            onChange={(option) => setSelectedKey(option.key)}
-            rolledKey={item.randomizer?.key ?? null}
-            usualKey={options.data?.usualKey ?? null}
-            suggestedKey={suggestion?.key ?? null}
-            label={`Build you went for in ${item.matchup ?? "this game"}`}
-            onAddNew={(query) => onCreate("you", query)}
-            // eslint-disable-next-line jsx-a11y/no-autofocus -- User-opened picker; Cancel restores focus.
-            autoFocus
-            disabled={busy}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              loading={actions.busy === "confirm"}
-              disabled={!selected || busy}
-              onClick={() => selected && void confirm(selected.key, selected.name)}
-            >
-              {selected ? `Confirm ${selected.name}` : "Confirm"}
-            </Button>
-            <Button variant="ghost" size="sm" disabled={busy} onClick={cancel}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {suggestion ? (
-            <Button
-              size="sm"
-              loading={actions.busy === "confirm"}
-              disabled={busy}
-              onClick={() => void confirm(suggestion.key, suggestion.name)}
-            >
-              Confirm
-            </Button>
-          ) : null}
-          <Button
-            ref={changeRef}
-            variant={suggestion ? "secondary" : "primary"}
-            size="sm"
-            disabled={busy || !item.matchup}
-            onClick={() => setPicking(true)}
-          >
-            Change…
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            loading={actions.busy === "skip"}
-            disabled={busy}
-            onClick={() => void skip()}
-          >
-            No set build
-          </Button>
-        </div>
-      )}
-
-      <p
-        role={actions.message?.error ? "alert" : "status"}
-        aria-live="polite"
-        className={
-          actions.message?.error ? "mt-2 text-caption text-danger" : "sr-only"
-        }
-      >
-        {actions.message?.text ?? ""}
-      </p>
-    </li>
-  );
-}
-
-function QueueResultBadge({ result }: { result: string | null }) {
-  if (!result) return null;
-  const variant = isWinResult(result) ? "success" : isLossResult(result) ? "danger" : "neutral";
-  return (
-    <Badge size="sm" variant={variant}>
-      {result}
-    </Badge>
   );
 }

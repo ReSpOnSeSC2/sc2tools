@@ -26,8 +26,11 @@ const article: HelpArticle = {
     "planned badge",
     "macro breakdown",
     "change build",
+    "confirm all suggested",
+    "undo check-in",
+    "check-in queue",
   ],
-  updated: "2026-10-27",
+  updated: "2026-11-10",
   body: [
     {
       type: "paragraph",
@@ -75,7 +78,18 @@ const article: HelpArticle = {
         "**Build randomizer.** Click **Randomize** to select and save one build even without an open widget. A retry or another display reuses that saved result. Pick a build yourself to declare your own plan instead. Animation, sounds and spoken results stay in the separate browser or OBS widget. The saved roll can be suggested after the game for you to confirm.",
         "**After the game.** When the game ends, **Which build were you going for?** appears with a best guess already selected and a label saying why: you picked it at loading, it was the randomizer roll, it best matches your replay, it's your closest custom build, or it's your usual build for the matchup. *Replay classified as …* shows what the replay looked like. Press **Confirm**, pick a different build, choose **No set build** (you weren't going for anything in particular; the game keeps the replay's label) or **Later**. Use the notes box for what threw the build off. Ctrl+Enter confirms, Esc means Later. Once your replay has uploaded, the card also shows **Opponent's build** and **Add new build…** (see below).",
         "**Picked at loading?** If the replay matched your pick there's nothing to do. If it didn't, a short **What happened?** card asks for a note: **Done** keeps your pick, **Change build** switches it.",
-        "**Missed one?** The **Build check-ins (N)** chip in the header lists games from the last 72 hours that are waiting: Confirm, Change… or No set build, or Dismiss all. Each game also shows the opponent's build. Every game page also has a **Build check-in** card where you can set or change the planned build, correct the opponent's build and edit your notes at any time. The desktop app's tray menu has **Build check-in…** to reopen a card you closed.",
+        "**Missed one?** The **Build check-ins (N)** chip in the header lists games from the last 72 hours that are waiting. A game with a suggestion offers **Confirm** with the suggested build's name, and **Change…**; a game without one offers **Pick build…**. **No set build** works for both, and **Dismiss all** marks every waiting game as no set build. Every game page also has a **Build check-in** card where you can set or change the planned build, correct the opponent's build and edit your notes at any time. The desktop app's tray menu has **Build check-in…** to reopen a card you closed.",
+      ],
+    },
+    { type: "heading", text: "Work through the queue", anchor: "queue" },
+    {
+      type: "list",
+      items: [
+        "**Confirm all suggested (N)** appears when two or more waiting games have a suggestion. Confirm it once and the games are confirmed one at a time, in list order, each showing its own progress and result. Games without a suggestion are left alone. A summary such as *Confirmed 6 of 7. 1 failed.* offers **Retry** for the rest.",
+        "If you're signed out or make too many changes at once, the run pauses with **Retry remaining (n)**. Closing the queue lets the game being saved finish, then stops.",
+        "After **Confirm** or **No set build**, the game stays in the list with an **Undo** until you close the queue. Undo puts the game back to waiting with its suggestion and keeps your notes.",
+        "**Change…** on a game's *Opponent:* line opens the opponent's build list right in the queue. **Add opponent build…** saves a new one. After a change, **Undo** puts the previous opponent build back.",
+        "Suggested and planned build names are links: your own builds open their page in your library, standard builds open their definition. Following a link closes the queue.",
       ],
     },
     {
