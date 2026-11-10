@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery, describeActiveFilters } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
@@ -27,6 +28,9 @@ import { opponentRace, poolMapRows } from "@/lib/mapVeto";
 import { sumStrength, type StrengthFields } from "@/lib/strengthAdjusted";
 import { StrengthCell, StrengthGuide, StrengthHeader, WinRateRange } from "./StrengthAdjusted";
 import { FormSparkline } from "./charts/FormSparkline";
+import type { MapIntelTarget } from "@/components/maps/MapIntelDrawer";
+
+const MapIntelDrawer = dynamic(() => import("@/components/maps/MapIntelDrawer").then((mod) => mod.MapIntelDrawer), { ssr: false });
 
 type Row = StrengthFields & {
   /** Matchup label ("vs P"). */
@@ -78,6 +82,7 @@ export function BattlefieldTab({ focus: controlledFocus }: { focus?: string | nu
   const { filters, dbRev, seasons } = useFilters();
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_MAPS, 3);
   const [previewMap, setPreviewMap] = useState<string | null>(null);
+  const [intelMap, setIntelMap] = useState<MapIntelTarget | null>(null);
   const [drill, setDrill] = useState<MapGamesDrill | null>(null);
   const [poolPreference, setPoolPreference] = useState<boolean | null>(null);
   const catalog = useSeasons(); const pool = useCurrentMapPool(catalog.data);
@@ -363,6 +368,7 @@ export function BattlefieldTab({ focus: controlledFocus }: { focus?: string | nu
                         />
                       </button>
                       <button type="button" aria-label={`Open larger preview of ${g.map}`} aria-haspopup="dialog" onClick={() => setPreviewMap(g.map)} className="min-h-11 shrink-0 rounded px-2 text-micro text-accent hover:underline">Preview map</button>
+                      <button type="button" aria-label={`Open map intel for ${g.map}: proxies, fights and lost fights`} aria-haspopup="dialog" onClick={() => setIntelMap({ map: g.map, maps: g.maps })} className="min-h-11 shrink-0 rounded px-2 text-micro text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Map intel</button>
                       <span className="ml-auto shrink-0 text-micro text-text-dim">
                         <span className="text-success">{g.wins}W</span> ·{" "}
                         <span className="text-danger">{g.losses}L</span> ·{" "}
@@ -414,6 +420,7 @@ export function BattlefieldTab({ focus: controlledFocus }: { focus?: string | nu
         onClose={() => setPreviewMap(null)}
       />
       {drill ? <MapGamesModal drill={drill} onClose={() => setDrill(null)} /> : null}
+      {intelMap ? <MapIntelDrawer target={intelMap} filterQuery={filtersToQuery(filters)} dbRev={dbRev} onClose={() => setIntelMap(null)} /> : null}
     </div>
   );
 }

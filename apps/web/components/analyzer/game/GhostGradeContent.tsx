@@ -23,8 +23,11 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useArmGhostTarget } from "./useArmGhostTarget";
 export { GHOST_ARMED_EVENT } from "./useArmGhostTarget";
+import Link from "next/link";
 import { ghostMatchupKey, selectGhostTarget } from "@/lib/ghostBuild";
 import { useGhostPractice } from "@/lib/useGhostPractice";
+import { useApi } from "@/lib/clientApi";
+import type { StoredPractice } from "@/lib/practiceLog";
 import {
   gradeExecution,
   type GhostGradeLetter,
@@ -55,18 +58,84 @@ const GRADE_HINT: Record<GhostGradeLetter, string> = {
   D: "That was a different build.",
 };
 
-export function GhostGradeCard({
-  gameId, buildLog,
-  myRace,
-  opponentRace,
-}: {
+type GhostGradeProps = {
   gameId?: string;
   /** Raw my-side ``[m:ss] Name`` lines for THIS game. */
   buildLog: ReadonlyArray<string> | null;
   myRace?: string | null;
   opponentRace?: string | null;
-}) {
+};
+type Practice = ReturnType<typeof useGhostPractice>;
+
+/**
+ * The grade stored when the game uploaded (the practice log) wins over a
+ * live grade against today's target: it was graded against the target armed
+ * when the game was played. Accounts that never used Ghost make no request.
+ */
+export function GhostGradeCard(props: GhostGradeProps) {
   const practice = useGhostPractice();
+  const target = selectGhostTarget(practice.config, props.myRace, props.opponentRace);
+  const isSource = Boolean(target && props.gameId && target.sourceGameId === props.gameId);
+  const stored = Boolean(props.gameId && !isSource && practice.hasConfig && ghostMatchupKey(props.myRace, props.opponentRace));
+  return stored ? <StoredFirstGrade {...props} practice={practice} /> : <LiveGhostGrade {...props} practice={practice} />;
+}
+
+function StoredFirstGrade(props: GhostGradeProps & { practice: Practice }) {
+  const record = useApi<{ practice: StoredPractice | null }>(`/v1/practice/games/${encodeURIComponent(props.gameId!)}`, { revalidateOnFocus: false, shouldRetryOnError: false });
+  const stored = record.data?.practice;
+  if (stored?.grade) return <StoredGradeCard stored={stored} />;
+  // Wait briefly for the stored answer rather than flashing a live grade first.
+  if (record.data === undefined && !record.error) return null;
+  return <LiveGhostGrade {...props} />;
+}
+
+function StoredGradeCard({ stored }: { stored: StoredPractice }) {
+  const grade = stored.grade!;
+  return (
+    <Card title="Ghost Build grade" data-testid="ghost-grade-card">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className={`font-display text-5xl font-bold leading-none ${GRADE_CLASS[grade]}`} aria-label={`Grade ${grade}`}>{grade}</span>
+          <div className="min-w-0">
+            <p className="truncate text-body font-medium text-text" title={stored.targetName}>vs {stored.targetName}</p>
+            <p className="text-caption text-text-muted">{GRADE_HINT[grade]}</p>
+          </div>
+        </div>
+        <dl className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-caption text-text-muted">
+          <div className="flex items-center gap-1.5"><dt className="text-micro uppercase tracking-wider text-text-dim">Steps hit</dt><dd className="tabular-nums text-text">{stored.matched}/{stored.total}</dd></div>
+          <div className="flex items-center gap-1.5"><dt className="text-micro uppercase tracking-wider text-text-dim">Avg drift</dt><dd className="tabular-nums text-text">{stored.avgDrift}s</dd></div>
+          <div className="flex items-center gap-1.5"><dt className="text-micro uppercase tracking-wider text-text-dim">Max drift</dt><dd className="tabular-nums text-text">{stored.maxDrift}s</dd></div>
+        </dl>
+        <p className="text-caption text-text-muted">
+          {stored.firstDivergence
+            ? <>First divergence: <span className="font-medium text-text">{stored.firstDivergence.name}</span> — planned {clock(stored.firstDivergence.expectedT)}, {stored.firstDivergence.actualT === null ? "never executed" : `executed ${clock(stored.firstDivergence.actualT)}`}.</>
+            : "No divergence — the build survived contact with the ladder."}
+        </p>
+        {stored.worstSteps?.length ? (
+          <ul className="space-y-0.5 text-caption" aria-label="Steps furthest off the plan">
+            {stored.worstSteps.map((step) => (
+              <li key={step.i} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-text">{step.name ?? `Step ${step.i + 1}`}</span>
+                <span className="font-mono text-micro tabular-nums">{step.d === null ? <span className="text-danger">missed</span> : `${step.d >= 0 ? "+" : ""}${step.d}s`}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="text-caption text-text-dim">
+          {stored.via === "request" ? "Graded on request against your practice target." : "Graded when this game uploaded, against the target armed at the time."}{" "}
+          <Link href="/practice" className="text-text-muted underline underline-offset-2 hover:text-text">Open your practice log</Link>
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+function LiveGhostGrade({
+  gameId, buildLog,
+  myRace,
+  opponentRace,
+  practice,
+}: GhostGradeProps & { practice: Practice }) {
   const target = selectGhostTarget(practice.config, myRace, opponentRace);
   const [showSteps, setShowSteps] = useState(false);
   const grade = useMemo<GhostGradeResult | null>(() => {

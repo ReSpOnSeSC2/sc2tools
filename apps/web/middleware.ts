@@ -25,6 +25,8 @@ const isProtected = createRouteMatcher([
   "/streaming(.*)",
   "/builds/new(.*)",
   "/builds/(.*)/edit",
+  // The private practice log reads only the signed-in owner's grades.
+  "/practice(.*)",
   // The onboarding wizard mints real pairing codes (POST
   // /v1/device-pairings/start with a Clerk token), so it requires a
   // signed-in user — sign-up redirects here.

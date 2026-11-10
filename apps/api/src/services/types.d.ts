@@ -1259,38 +1259,20 @@ export interface ImportService {
   ): Promise<{ ok: boolean; jobId: string; existing: boolean }>;
 }
 
+export interface SpatialHeatmapOptions {
+  grid?: number;
+  /** Owner-scoped opponent identity clause (OpponentsService.identityClause). */
+  opponent?: Record<string, any> | null;
+}
+
 export interface SpatialService {
   maps(userId: string, filters: object): Promise<object[]>;
-  buildings(
-    userId: string,
-    map: string,
-    filters: object,
-    opts?: { grid?: number },
-  ): Promise<object>;
-  proxy(
-    userId: string,
-    map: string,
-    filters: object,
-    opts?: { grid?: number },
-  ): Promise<object>;
-  battle(
-    userId: string,
-    map: string,
-    filters: object,
-    opts?: { grid?: number },
-  ): Promise<object>;
-  deathZone(
-    userId: string,
-    map: string,
-    filters: object,
-    opts?: { grid?: number },
-  ): Promise<object>;
-  opponentProxies(
-    userId: string,
-    map: string,
-    filters: object,
-    opts?: { grid?: number },
-  ): Promise<object>;
+  buildings(userId: string, map: string, filters: object, opts?: SpatialHeatmapOptions): Promise<object>;
+  proxy(userId: string, map: string, filters: object, opts?: SpatialHeatmapOptions): Promise<object>;
+  battle(userId: string, map: string, filters: object, opts?: SpatialHeatmapOptions): Promise<object>;
+  deathZone(userId: string, map: string, filters: object, opts?: SpatialHeatmapOptions): Promise<object>;
+  opponentProxies(userId: string, map: string, filters: object, opts?: SpatialHeatmapOptions): Promise<object>;
+  invalidateForUser(userId: string): void;
 }
 
 export interface CatalogService {

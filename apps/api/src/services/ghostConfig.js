@@ -1,5 +1,7 @@
 "use strict";
 
+const { targetHash } = require("./practiceGrade");
+
 // Keep the pure model in parity with web/lib/ghostBuild.ts. The account
 // transport additionally caps expanded UTF-8 JSON; legacy compact URLs keep
 // their existing, separate encoded-size limit.
@@ -7,6 +9,11 @@ const MATCHUPS = Object.freeze(["PvP", "PvT", "PvZ", "TvP", "TvT", "TvZ", "ZvP",
 const MAX_GHOST_JSON_BYTES = 64 * 1024;
 const ROOT = "preferences.ghost";
 const REVISION = "preferences.ghostRevision";
+// When each slot's current target was assigned: {hash, at} per matchup,
+// written in the same update as the slot. The practice log grades only games
+// played after their target was armed (services/practiceLog.js). Never part
+// of the synced transport.
+const ARMED_AT = "preferences.ghostArmedAt";
 /** @param {unknown} value */
 const record = value => value !== null && typeof value === "object" && !Array.isArray(value);
 /** @param {unknown} value @param {number} cap */
@@ -67,6 +74,21 @@ function normalizeSyncedGhostBuildConfig(input) {
 /** @param {string} code @param {number} [status] */
 function failure(code, status = 400) { return Object.assign(new Error(code), { code, status }); }
 
+/** Arm-time updates for a slot change: a slot whose target content changed
+ * is stamped ``now``, a cleared slot loses its stamp, an unchanged one keeps
+ * its stamp.
+ * @param {Record<string, any>} before @param {Record<string, any>} after @param {Date} now */
+function armStamps(before, after, now) {
+  /** @type {Record<string, {hash: string, at: Date}>} */ const set = {};
+  /** @type {Record<string, "">} */ const unset = {};
+  for (const [matchup, target] of Object.entries(after)) {
+    const hash = targetHash(target);
+    if (!before[matchup] || targetHash(before[matchup]) !== hash) set[`${ARMED_AT}.${matchup}`] = { hash, at: now };
+  }
+  for (const matchup of Object.keys(before)) if (!after[matchup]) unset[`${ARMED_AT}.${matchup}`] = "";
+  return { set, unset: Object.keys(unset).length > 0 ? { $unset: unset } : {} };
+}
+
 class GhostConfigService {
   /** @param {{db:any, overlayTokens?:any, io?:any}} deps */
   constructor({ db, overlayTokens, io }) {
@@ -93,7 +115,10 @@ class GhostConfigService {
     const clean = normalizeSyncedGhostBuildConfig(input);
     // Reserve the largest legal revision's transport overhead at admission.
     if (!clean || !normalizeSyncedGhostBuildConfig({ ...clean, revision: Number.MAX_SAFE_INTEGER })) throw failure("invalid_ghost_config");
-    const result = await this.db.users.updateOne({ userId: owner }, { $set: { [ROOT]: clean }, $inc: { [REVISION]: 1 } });
+    const row = await this.db.users.findOne({ userId: owner }, { projection: { _id: 0, [ROOT]: 1 } });
+    const previous = normalizeSyncedGhostBuildConfig(row?.preferences?.ghost) || { v: 2, slots: {} };
+    const stamps = armStamps(previous.slots, clean.slots, new Date());
+    const result = await this.db.users.updateOne({ userId: owner }, { $set: { [ROOT]: clean, ...stamps.set }, $inc: { [REVISION]: 1 }, ...stamps.unset });
     if (!result.matchedCount) throw failure("user_not_found", 404);
     await this.changed(owner);
     return this.get(owner);
@@ -127,9 +152,10 @@ class GhostConfigService {
       else delete slots[body.matchup];
       const next = normalizeSyncedGhostBuildConfig({ v: 2, slots });
       if (!next || !normalizeSyncedGhostBuildConfig({ ...next, revision: Number.MAX_SAFE_INTEGER })) throw failure("invalid_ghost_config");
+      const stamps = armStamps(current.slots, next.slots, new Date());
       const result = await this.db.users.updateOne({ userId: owner,
         [ROOT]: raw === undefined ? { $exists: false } : { $eq: raw },
-      }, { $set: { [ROOT]: next }, $inc: { [REVISION]: 1 } });
+      }, { $set: { [ROOT]: next, ...stamps.set }, $inc: { [REVISION]: 1 }, ...stamps.unset });
       if (result.matchedCount) { await this.changed(owner); return this.get(owner); }
     }
     throw failure("ghost_config_changed", 409);

@@ -11,6 +11,26 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Map intel
+
+- Add Map intel heatmaps: on each map in Maps, **Map intel** shows where
+  opponents proxy, where your fights happen, where you lose units and where
+  you build, over the map itself, with an opponent-race filter. Each
+  opponent's dossier adds **Where they proxy / fight on this map** under each
+  map. The heat says how many games it is based on (your latest 300 games
+  with map positions at most), the top five hot zones are listed in words by
+  their nearest base, and a map-wide layer waits for at least three games.
+  Private to you.
+
+### Practice log
+
+- Grade every game you play in a matchup with an armed Ghost Build target when
+  it uploads, and keep the grade. The new private **Practice log** under Build
+  library shows your last 30 grades, a weekly goal, timing for each step, the
+  step where you most often fall off and every graded game. **Grade my last 20
+  games** grades recent games on request. A game page now shows the grade it
+  received when it was played, against the target armed at the time.
+
 ### Share cards
 
 - Fix the link printed on every share card. `sc2tools.com/arcade` now leads to

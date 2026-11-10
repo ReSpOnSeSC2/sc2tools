@@ -4,6 +4,7 @@ import {
   BookOpen,
   CalendarClock,
   Cpu,
+  Crosshair,
   Library,
   MessageSquareText,
   MonitorPlay,
@@ -86,6 +87,7 @@ const SECTION_ENTRIES: NavEntry[] = TABS.map((tab) => ({
 
 const UTILITY_ENTRIES: NavEntry[] = [
   { key: "builds-library", href: "/builds", label: "Build library", description: "Your saved build orders and rules", icon: Library, group: "utility" },
+  { key: "practice", href: "/practice", label: "Practice log", description: "Ghost Build grades and your progress", icon: Crosshair, group: "utility" },
   {
     key: "guides",
     href: "/guides",

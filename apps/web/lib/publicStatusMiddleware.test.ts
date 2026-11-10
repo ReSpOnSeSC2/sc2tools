@@ -58,7 +58,7 @@ describe("public status middleware auth independence", () => {
 describe("existing private request protection", () => {
   it.each([
     "/app", "/app/opponents", "/app/game/private-game", "/admin", "/admin/users", "/settings", "/settings/overlay",
-    "/notifications", "/devices", "/streaming", "/welcome", "/builds/new", "/builds/private-build/edit",
+    "/notifications", "/devices", "/streaming", "/welcome", "/builds/new", "/builds/private-build/edit", "/practice",
     "/players/person/replays/game.one", "/p/person/replays/game.one/",
   ])("retains auth.protect for %s", async pathname => {
     const response = await request(pathname);

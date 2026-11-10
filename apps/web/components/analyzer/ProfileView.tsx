@@ -45,6 +45,7 @@ const DossierAnalysisSection = dynamic(() => import("./DossierAnalysisSection").
 const ScoutingBriefCard = dynamic(() => import("./ScoutingBriefCard").then(module => module.ScoutingBriefCard));
 const OpponentSeriesStrip = dynamic(() => import("./OpponentSeriesStrip").then(module => module.OpponentSeriesStrip));
 const LadderContextCard = dynamic(() => import("./LadderContextCard").then(module => module.LadderContextCard));
+import { DossierMapIntel } from "./opponents/DossierMapIntel";
 import {
   HeadlineMmrChip,
   RaceMmrPanel,
@@ -355,6 +356,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
                     </span>
                   </button>
                   <WrBar wins={m.wins} losses={m.losses} />
+                  {m.name !== "—" ? <DossierMapIntel map={m.name} pulseId={pulseId} mergeLinked={groupByPlayer} filterQuery={profileQuery} dbRev={debouncedDbRev} /> : null}
                 </li>
               ))}
             </ul>

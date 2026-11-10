@@ -27,6 +27,7 @@ import analyzer_glossary from "./analyzer/glossary";
 import analyzer_howAnalysisWorks from "./analyzer/how-analysis-works";
 import analyzer_liveScouting from "./analyzer/live-scouting";
 import analyzer_macro from "./analyzer/macro";
+import analyzer_mapIntel from "./analyzer/map-intel";
 import analyzer_maps from "./analyzer/maps";
 import analyzer_opponents from "./analyzer/opponents";
 import analyzer_readingTheCharts from "./analyzer/reading-the-charts";
@@ -45,6 +46,7 @@ import builds_buildOrdersExport from "./builds/build-orders-export";
 import builds_communityBuilds from "./builds/community-builds";
 import builds_customBuilds from "./builds/custom-builds";
 import builds_practiceGhostBuild from "./builds/practice-ghost-build";
+import builds_practiceLog from "./builds/practice-log";
 import builds_publishCommunityBuilds from "./builds/publish-community-builds";
 import builds_randomizer from "./builds/randomizer";
 import builds_readingGuideStats from "./builds/reading-guide-stats";
@@ -129,6 +131,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_howAnalysisWorks,
   analyzer_liveScouting,
   analyzer_macro,
+  analyzer_mapIntel,
   analyzer_maps,
   analyzer_opponents,
   analyzer_readingTheCharts,
@@ -147,6 +150,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_communityBuilds,
   builds_customBuilds,
   builds_practiceGhostBuild,
+  builds_practiceLog,
   builds_publishCommunityBuilds,
   builds_randomizer,
   builds_readingGuideStats,

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Plus, Library, BookOpen, RefreshCw } from "lucide-react";
+import { Plus, Library, BookOpen, RefreshCw, Crosshair } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
@@ -433,6 +433,9 @@ function BuildsLibraryInner() {
           <div className="flex flex-wrap gap-2">
             <LinkButton href="/definitions" variant="secondary" iconLeft={<BookOpen className="h-4 w-4" aria-hidden />}>
               Definitions
+            </LinkButton>
+            <LinkButton href="/practice" variant="secondary" iconLeft={<Crosshair className="h-4 w-4" aria-hidden />}>
+              Practice log
             </LinkButton>
             {libraryCount > 0 ? (
               <Button
