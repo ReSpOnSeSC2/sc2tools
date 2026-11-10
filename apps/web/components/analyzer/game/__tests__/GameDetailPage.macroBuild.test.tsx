@@ -17,13 +17,16 @@ import { GameDetailPage } from "../GameDetailPage";
 import { loadLazyHelpLink } from "@/components/help/__tests__/loadLazyHelpLink";
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
+// Load every lazy chunk the page renders before the first render. react-dom 19.0.0
+// re-renders forever inside act() while several Suspense boundaries still wait for a
+// chunk (loadLazyHelpLink explains): here the Ghost grade's PracticeLazy boundaries were
+// still loading when releasing the held confirm flushed the build change, and CI hung.
 beforeAll(async () => {
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns"), import("../BuildWorkspaceActions"), import("@/components/battleReport/GameBattleReport"),
+    import("../GameStoryCard"), import("../GhostGradeContent"), import("../replay/ReplayStage"), import("../GameBuildOrderColumns"),
     import("@/components/notes/GameNotesPanel"), import("@/components/notes/GameReviewControl"), import("@/components/notes/GameOpponentNote")]);
 });
-// The page shows several lazy help links (the notes panel adds one): load their chunk
-// before rendering it, as loadLazyHelpLink explains.
 beforeAll(loadLazyHelpLink, 20_000);
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
