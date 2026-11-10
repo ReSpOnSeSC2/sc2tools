@@ -38,8 +38,8 @@ const LIMITS = Object.freeze({
   requestId: 64,
 });
 
-// Browser-source pages carry their credential in the URL.
-const TOKEN_PAGE_SEGMENT = /^\/(overlay|dock)\/[^/?#]+/iu;
+// Browser-source pages and shared-game pages carry their credential in the URL.
+const TOKEN_PAGE_SEGMENT = /^\/(overlay|dock|g)\/[^/?#]+/iu;
 
 /**
  * A page path for a report: no query string or #anchor, browser-source
