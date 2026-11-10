@@ -119,6 +119,8 @@ describe("custom build library and community trust", () => {
       expect(res.body.items[0]).toEqual(expect.objectContaining({ rev: 23, build: expect.objectContaining({ description: "v22" }) }));
       expect(res.body.items.at(-1)).toEqual(expect.objectContaining({ rev: 4, build: expect.objectContaining({ description: "v3" }) }));
       expect(res.body.items[0].build).not.toHaveProperty("isPublic");
+      // Older versions are deleted, not just hidden past the list limit.
+      expect(await db.customBuildRevisions.countDocuments({ slug: "capped" })).toBe(20);
       await get("saver", "/custom-builds/capped/revisions").expect(404);
     });
 
