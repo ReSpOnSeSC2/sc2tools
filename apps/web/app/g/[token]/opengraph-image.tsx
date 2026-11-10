@@ -1,12 +1,15 @@
 import { ImageResponse } from "next/og";
 import { SHARE_TOKEN_RE } from "@/lib/gameShares";
 import { mapThumbnail, truncate } from "@/lib/og/mapThumbnail";
+import { reportPreview, SNAPSHOT_BOX } from "@/lib/og/reportSnapshot";
 import { sharedResultWord, type SharedGameAnalysis } from "@/lib/sharedGame";
 
 /**
- * Link preview card for a shared game: result, matchup, map art, both
- * builds and the macro score, from the same redacted payload as the page
- * (no names, rounded ratings). A missing or turned-off link renders a
+ * Link preview card for a shared game: result, matchup, the battle report's
+ * headline and its turning point (army-value lines), both builds and the
+ * macro score, with the map art when no snapshot can be drawn. Built from
+ * the same redacted payload and share-safe report as the page (no names,
+ * no ratings). A missing or turned-off link renders a
  * neutral card, so the image never reveals whether a link exists. Cached
  * for a minute at most, so a turned-off link stops previewing soon.
  *
@@ -35,6 +38,8 @@ export default async function SharedGameOpenGraphImage({ params }: { params: Pro
   const { token } = await params;
   const share = SHARE_TOKEN_RE.test(token) ? await load(token) : null;
   const game = share?.game ?? null;
+  const preview = share ? safePreview(share, token) : null;
+  const snapshot = preview?.turningPoint ?? null;
   const thumb = game?.map ? await mapThumbnail(game.map) : null;
   const result = game ? sharedResultWord(game.result) : null;
   const accent = game?.result === "Win" ? WIN : game?.result === "Loss" ? LOSS : CYAN;
@@ -43,7 +48,12 @@ export default async function SharedGameOpenGraphImage({ params }: { params: Pro
   return new ImageResponse(
     (
       <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between",
-        background: `radial-gradient(1000px 500px at 100% 0%, rgba(21, 125, 140, 0.3) 0%, ${BG} 55%), ${BG}`, padding: "56px 72px", fontFamily: "sans-serif" }}>
+        background: `radial-gradient(1000px 500px at 100% 0%, rgba(21, 125, 140, 0.3) 0%, ${BG} 55%), ${BG}`, padding: "56px 72px", fontFamily: "sans-serif", position: "relative" }}>
+        {thumb && snapshot ? (
+          // Satori draws plain <img> elements only; next/image does not apply.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={thumb} alt="" width={1200} height={630} style={{ position: "absolute", left: 0, top: 0, width: 1200, height: 630, objectFit: "cover", opacity: 0.14 }} />
+        ) : null}
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ width: 14, height: 40, borderRadius: 6, background: accent, display: "flex" }} />
           <div style={{ display: "flex", fontSize: 28, letterSpacing: 4, color: CYAN, fontWeight: 700, textTransform: "uppercase" }}>
@@ -58,15 +68,26 @@ export default async function SharedGameOpenGraphImage({ params }: { params: Pro
 
         <div style={{ display: "flex", gap: 36, alignItems: "center" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
-            <div style={{ display: "flex", fontSize: 76, fontWeight: 800, color: accent, lineHeight: 1.05 }}>
-              {game ? (result ?? "Game") : "A shared StarCraft II game"}
+            <div style={{ display: "flex", fontSize: 60, fontWeight: 800, color: accent, lineHeight: 1.05 }}>
+              {game ? `${result ?? "Game"}${game.map ? ` on ${truncate(game.map, 28)}` : ""}` : "A shared StarCraft II game"}
             </div>
-            <div style={{ display: "flex", fontSize: 34, fontWeight: 700, color: TEXT }}>
-              {game ? truncate(game.map ? `on ${game.map}` : "Replay analysis", 48) : "Map replay and analysis, no account needed"}
+            <div style={{ display: "flex", fontSize: 34, fontWeight: 700, color: TEXT, lineHeight: 1.2 }}>
+              {preview ? truncate(preview.headline, 70) : game ? "Replay analysis" : "Map replay and analysis, no account needed"}
             </div>
-            {builds ? <div style={{ display: "flex", fontSize: 26, color: MUTED }}>{truncate(builds, 80)}</div> : null}
+            {builds ? <div style={{ display: "flex", fontSize: 24, color: MUTED }}>{truncate(builds, 80)}</div> : null}
           </div>
-          {thumb ? (
+          {snapshot ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 16, borderRadius: 18, background: SURFACE, border: `2px solid ${LINE}` }}>
+              <div style={{ display: "flex", fontSize: 22, color: MUTED }}>{`${snapshot.caption} · ${clock(snapshot.time)}`}</div>
+              <svg width={SNAPSHOT_BOX.width} height={SNAPSHOT_BOX.height} viewBox={`0 0 ${SNAPSHOT_BOX.width} ${SNAPSHOT_BOX.height}`}>
+                <line x1={snapshot.marker} x2={snapshot.marker} y1={0} y2={SNAPSHOT_BOX.height} stroke={MUTED} strokeWidth={2} strokeDasharray="6 6" />
+                {snapshot.opponent ? <path d={snapshot.opponent} fill="none" stroke={LOSS} strokeWidth={4} /> : null}
+                {snapshot.mine ? <path d={snapshot.mine} fill="none" stroke={CYAN} strokeWidth={4} /> : null}
+              </svg>
+              <div style={{ display: "flex", fontSize: 18, color: MUTED }}>Army value · player in cyan, opponent in red</div>
+            </div>
+          ) : null}
+          {thumb && !snapshot ? (
             // Satori draws plain <img> elements only; next/image does not apply.
             // eslint-disable-next-line @next/next/no-img-element
             <img src={thumb} alt="" width={300} height={169} style={{ borderRadius: 18, border: `2px solid ${LINE}`, objectFit: "cover" }} />
@@ -94,6 +115,15 @@ function Stat({ label, value }: { label: string; value: string }) {
 function clock(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** The report preview, or null if a malformed payload can't produce one. */
+function safePreview(share: SharedGameAnalysis, token: string) {
+  try {
+    return reportPreview(share, token);
+  } catch {
+    return null;
+  }
 }
 
 async function load(token: string): Promise<SharedGameAnalysis | null> {

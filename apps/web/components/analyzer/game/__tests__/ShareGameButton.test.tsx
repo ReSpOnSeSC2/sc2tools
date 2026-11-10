@@ -3,6 +3,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { SWRConfig } from "swr";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ShareGameButton } from "../ShareGameButton";
+import gamePageHelp from "@/lib/help/articles/game-page/game-page";
+import sharingHelp from "@/lib/help/articles/game-page/game-page-sharing";
 import type { GameSummary } from "../types";
 
 /**
@@ -68,15 +70,25 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function mount() {
+function mount(props: Partial<Parameters<typeof ShareGameButton>[0]> = {}) {
   return render(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
       <ToastProvider>
-        <ShareGameButton game={GAME} />
+        <ShareGameButton game={GAME} {...props} />
       </ToastProvider>
     </SWRConfig>,
   );
 }
+/** Answer the replay-sharing read (or fail it with a status) and record PUTs. */
+function replaySharing(answer: { enabled: boolean; handle: string | null } | number) {
+  const base = mocks.fetch.getMockImplementation()!;
+  mocks.fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (!String(url).endsWith("/v1/me/replay-sharing")) return base(url, init);
+    if (init?.method === "PUT") return json({ enabled: true, handle: "bob", updatedAt: "2026-11-10T12:00:00Z" });
+    return typeof answer === "number" ? json({ error: { code: "auth_required" } }, answer) : json({ ...answer, updatedAt: null });
+  });
+}
+const PUBLIC_URL = `${window.location.origin}/players/bob/replays/${encodeURIComponent(GAME.gameId)}`;
 const trigger = () => screen.getByRole("button", { name: "Share" });
 function openMenu() {
   fireEvent.click(trigger());
@@ -95,8 +107,9 @@ describe("ShareGameButton menu", () => {
     const menu = openMenu();
     expect(trigger().getAttribute("aria-expanded")).toBe("true");
     expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
-      expect.stringContaining("Copy share link"),
+      expect.stringContaining("Copy link to this game"),
       expect.stringContaining("Save battle card image"),
+      expect.stringContaining("Copy share link"),
       expect.stringContaining("Manage share links"),
       expect.stringContaining("How sharing works"),
     ]);
@@ -112,11 +125,11 @@ describe("ShareGameButton menu", () => {
     fireEvent.keyDown(menu, { key: "ArrowDown" });
     expect(document.activeElement).toBe(items[1]);
     fireEvent.keyDown(menu, { key: "End" });
-    expect(document.activeElement).toBe(items[3]);
+    expect(document.activeElement).toBe(items[items.length - 1]);
     fireEvent.keyDown(menu, { key: "ArrowDown" });
     expect(document.activeElement).toBe(items[0]);
     fireEvent.keyDown(menu, { key: "ArrowUp" });
-    expect(document.activeElement).toBe(items[3]);
+    expect(document.activeElement).toBe(items[items.length - 1]);
     fireEvent.keyDown(menu, { key: "Home" });
     expect(document.activeElement).toBe(items[0]);
     fireEvent.keyDown(menu, { key: "Escape" });
@@ -159,7 +172,7 @@ describe("ShareGameButton menu", () => {
     mocks.writeText.mockRejectedValue(new DOMException("Denied", "NotAllowedError"));
     mount();
     fireEvent.click(within(openMenu()).getByRole("menuitem", { name: /Copy share link/ }));
-    const field = await screen.findByLabelText("Share link");
+    const field = await screen.findByLabelText("Link to copy");
     expect((field as HTMLInputElement).value).toBe(`${window.location.origin}/g/${TOKEN}`);
     expect(screen.queryByText("Link copied")).toBeNull();
   });
@@ -181,6 +194,57 @@ describe("ShareGameButton menu", () => {
     expect(await within(dialog).findByText("This game has no live share link.")).toBeTruthy();
   });
 
+  it("copies a link at the shared clock time, hidden under one second", async () => {
+    const view = mount({ currentTimeSec: 522.7 });
+    fireEvent.click(within(openMenu()).getByRole("menuitem", { name: /Copy link at 8:42/ }));
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(`${window.location.origin}/app/game/${encodeURIComponent(GAME.gameId)}?t=522`));
+    view.unmount();
+    mount({ currentTimeSec: 0.5 });
+    expect(within(openMenu()).queryByRole("menuitem", { name: /Copy link at/ })).toBeNull();
+  });
+
+  it("copies the owner-only link to the game", async () => {
+    mount();
+    fireEvent.click(within(openMenu()).getByRole("menuitem", { name: /Copy link to this game/ }));
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(`${window.location.origin}/app/game/${encodeURIComponent(GAME.gameId)}`));
+  });
+
+  it("copies the exact public replay address while public replays are on", async () => {
+    replaySharing({ enabled: true, handle: "bob" });
+    mount();
+    fireEvent.click(await within(openMenu()).findByRole("menuitem", { name: /Copy public link/ }));
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(PUBLIC_URL));
+    expect(mocks.fetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+  });
+
+  it("asks before turning public replays on, then writes and copies the public link", async () => {
+    replaySharing({ enabled: false, handle: null });
+    mount();
+    fireEvent.click(await within(openMenu()).findByRole("menuitem", { name: /Turn on public replays/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Turn on public replays?" });
+    expect(within(dialog).getByText(/Exactly what visitors can see/)).toBeTruthy();
+    expect(mocks.fetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Turn on and copy link" }));
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(PUBLIC_URL));
+    const put = mocks.fetch.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(JSON.parse(String(put?.[1]?.body))).toEqual({ enabled: true });
+    expect(await screen.findByText("Public replay page is live. Link copied.")).toBeTruthy();
+  });
+
+  it.each([
+    ["a resumed game", { enabled: true, handle: "bob" } as const, { ...GAME, isResumedFromReplay: true }],
+    ["an unreadable sharing status", 401, GAME],
+  ])("hides the public rows for %s and keeps the others", async (_case, answer, game) => {
+    replaySharing(answer);
+    mount({ game });
+    const menu = openMenu();
+    await waitFor(() => expect(mocks.fetch.mock.calls.some(([url]) => String(url).endsWith("/v1/me/replay-sharing"))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(within(menu).queryByRole("menuitem", { name: /public/i })).toBeNull();
+    expect(within(menu).getByRole("menuitem", { name: /Copy link to this game/ })).toBeTruthy();
+    expect(within(menu).getByRole("menuitem", { name: /Save battle card image/ })).toBeTruthy();
+  });
+
   it("reports a link that could not be created", async () => {
     mocks.fetch.mockImplementation(async (_url: string, init?: RequestInit) => init?.method === "POST"
       ? json({ error: { code: "share_limit", message: "You can have at most 200 active share links." } }, 409)
@@ -189,6 +253,20 @@ describe("ShareGameButton menu", () => {
     fireEvent.click(within(openMenu()).getByRole("menuitem", { name: /Copy share link/ }));
     expect(await screen.findByText("Couldn't create a share link")).toBeTruthy();
     expect(mocks.writeText).not.toHaveBeenCalled();
+  });
+});
+
+describe("Help", () => {
+  it("documents every menu row at game-page#sharing and links the full sharing article", () => {
+    const at = gamePageHelp.body.findIndex((block) => block.type === "heading" && block.anchor === "sharing");
+    expect(at).toBeGreaterThan(-1);
+    const section = JSON.stringify(gamePageHelp.body.slice(at, at + 3));
+    for (const row of ["Copy link at m:ss", "Copy link to this game", "Copy public link", "Turn on public replays", "Copy share link", "Save battle card image", "/help/game-page-sharing"]) {
+      expect(section).toContain(row);
+    }
+    expect(section).toMatch(/signs in to see its analysis/);
+    expect(section).toMatch(/private notes are never shown/);
+    expect(sharingHelp.slug).toBe("game-page-sharing");
   });
 });
 

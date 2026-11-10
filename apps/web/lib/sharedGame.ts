@@ -1,6 +1,9 @@
 import type { GameBuildOrderResponse, GameSummary } from "@/components/analyzer/game/types";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import type { BenchmarkMetric, MetricBenchmark } from "./benchmarks";
+import type { BattleReportInput } from "./battleReport/facts";
+import type { MapPlayback } from "./mapReplay";
+import { anonymousOpponent } from "./sharePrivacy";
 
 /**
  * The public, redacted payload of a shared game (GET /v1/shares/:token,
@@ -85,4 +88,55 @@ export function sharedGameTitle(game: SharedGame | null | undefined): string {
   if (!game) return "Shared game";
   if (game.matchup && game.map) return `${game.matchup} on ${game.map}`;
   return game.matchup || game.map || "Shared game";
+}
+
+/**
+ * A battle report input that is safe to show people other than the player
+ * (share pages, report images): the shared voice ("the player"), the
+ * opponent by race only (lib/sharePrivacy.ts), no ratings, no build
+ * check-in or correction (the classifier's labels instead) and no replay
+ * player names. Idempotent.
+ */
+export function shareSafeReportInput(input: BattleReportInput): BattleReportInput {
+  const { game } = input;
+  const oppRace = game.opponent?.race ?? null;
+  return {
+    ...input,
+    voice: "shared",
+    myName: "The player",
+    plannedBuild: null,
+    breakdown: input.breakdown ? { ...input.breakdown, player_stats: undefined } : input.breakdown,
+    game: {
+      gameId: game.gameId,
+      date: game.date,
+      result: game.result,
+      map: game.map,
+      myRace: game.myRace,
+      durationSec: game.durationSec,
+      gameVersion: game.gameVersion,
+      gameBuild: game.gameBuild,
+      macroScore: game.macroScore,
+      myBuild: game.buildPlanned ? game.detectedBuild ?? null : game.myBuild ?? null,
+      opponent: {
+        displayName: anonymousOpponent(oppRace),
+        race: oppRace,
+        strategy: game.oppStrategyPlanned ? game.detectedOppStrategy ?? null : game.opponent?.strategy ?? null,
+      },
+    },
+  };
+}
+
+/**
+ * The share page's battle report input, from the redacted payload only.
+ * ``key`` seeds the wording (a page-local id, never the owner's game id);
+ * only complete inline ``playback`` may supply map stills.
+ */
+export function sharedReportInput(data: SharedGameAnalysis, key: string, playback: MapPlayback | null = null): BattleReportInput {
+  return shareSafeReportInput({
+    game: sharedGameSummary(data.game, key),
+    breakdown: data.macroBreakdown,
+    buildEvents: data.buildOrder?.events,
+    oppBuildEvents: data.buildOrder?.opp_events,
+    playback,
+  });
 }

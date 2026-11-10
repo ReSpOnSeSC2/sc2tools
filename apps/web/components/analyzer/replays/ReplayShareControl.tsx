@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
-import { Check, Copy, ExternalLink, Link2, LockKeyhole, RefreshCcw, Share2, ShieldCheck, Tv2 } from "lucide-react";
+import { Check, Copy, ExternalLink, Link2, LockKeyhole, RefreshCcw, Share2, Tv2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { CopyRecoveryDialog } from "@/components/ui/CopyRecoveryDialog";
 import { useToast } from "@/components/ui/Toast";
-import { apiCall, useApi, useOwnerRequestScope, type ClientApiError } from "@/lib/clientApi";
+import { useApi, useOwnerRequestScope, type ClientApiError } from "@/lib/clientApi";
 import { useCopy } from "@/lib/useCopy";
+import { putReplaySharing, REPLAY_SHARING_PATH, validReplaySharing as validSharing } from "@/lib/useReplaySharing";
+import { ReplaySharingDisclosure } from "./ReplaySharingDisclosure";
 import type { ReplaySharingResponse } from "./types";
 
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -31,11 +33,6 @@ function snapshot(value: ReplaySharingResponse | undefined): Snapshot {
 function matches(a: Snapshot, b: Snapshot) {
   return a.enabled === b.enabled && a.handle === b.handle && a.updatedAt === b.updatedAt;
 }
-function validSharing(value: unknown): value is ReplaySharingResponse {
-  if (!value || typeof value !== "object" || !("enabled" in value) || !("handle" in value)) return false;
-  return typeof value.enabled === "boolean" && (value.handle === null || typeof value.handle === "string")
-    && (!value.enabled || typeof value.handle === "string" && value.handle.length > 0);
-}
 const retired = () => new DOMException("This replay-sharing action is no longer current.", "AbortError");
 const isAbort = (error: unknown) => !!error && typeof error === "object" && "name" in error && error.name === "AbortError";
 
@@ -50,7 +47,7 @@ export function ReplayShareControl() {
 function OwnerReplayShareControl({ ownerId, getToken }: { ownerId: string | null; getToken: () => Promise<string | null> }) {
   const runOwned = useOwnerRequestScope(ownerId, getToken);
   const { toast } = useToast();
-  const sharingReq = useApi<ReplaySharingResponse>("/v1/me/replay-sharing",
+  const sharingReq = useApi<ReplaySharingResponse>(REPLAY_SHARING_PATH,
     { revalidateOnFocus: false, revalidateOnMount: false, revalidateOnReconnect: false, shouldRetryOnError: false,
       onSuccess: data => {
         const read = refreshOperation.current;
@@ -177,10 +174,9 @@ function OwnerReplayShareControl({ ownerId, getToken }: { ownerId: string | null
       const next = await runOwned(requestOwner, async (scopedToken, signal, assertOwner) => {
         const token = await scopedToken(); assertIntent();
         job.sent = true;
-        const result = await apiCall<ReplaySharingResponse>(() => Promise.resolve(token), "/v1/me/replay-sharing",
-          { method: "PUT", body: JSON.stringify({ enabled }), signal });
+        // The shared consent write (lib/useReplaySharing) also confirms the state.
+        const result = await putReplaySharing(() => Promise.resolve(token), enabled, signal);
         assertOwner(); assertIntent();
-        if (!validSharing(result) || result.enabled !== enabled) throw new Error("Sharing status could not be confirmed.");
         job.expected = snapshot(result);
         await sharingReq.mutate(() => {
           assertOwner(); assertIntent();
@@ -352,18 +348,7 @@ function OwnerReplayShareControl({ ownerId, getToken }: { ownerId: string | null
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h3 className="flex items-center gap-2 text-caption font-semibold text-text"><ShieldCheck className="h-4 w-4 text-accent-cyan" aria-hidden /> Exactly what visitors can see</h3>
-              <p className="text-caption leading-relaxed text-text-muted">
-                Turning this on shares every synced replay in this archive—not only games visible under your current dashboard filters. Anyone can see replay dates, maps, results, player display names and races, game-time MMR, detected builds and strategies, macro scores, matched Twitch or YouTube VOD links, and download archived original replay files. Replay Analysis and the full Macro breakdown require the visitor to sign in to SC2 Tools.
-              </p>
-              <p className="text-caption leading-relaxed text-text-muted">
-                An original .SC2Replay can contain player/account identifiers, chat, team information, and other data Blizzard embeds in the file. Starting a download also gives that visitor a temporary storage URL, which can reveal the storage host and object path until it expires in about one minute.
-              </p>
-              <p className="text-caption leading-relaxed text-text-muted">
-                Turn sharing off at any time to disable the page, analysis access and new downloads. Your player replay address stays assigned to you and becomes available again if you re-enable sharing. A download URL already issued before sharing is disabled can continue working until its one-minute expiry.
-              </p>
-            </div>
+            <ReplaySharingDisclosure />
           </div>
         )}
         {recoveryInside ? recovery : null}
