@@ -196,3 +196,20 @@ test("requested artifact completion creates one durable private notification; re
     expect(await db.notifications.countDocuments({})).toBe(1);
   } finally { await db.close(); await mongo.stop(); }
 });
+
+test("segment links are presigned only for the current completed artifact's segments", async () => {
+  const { service } = setup();
+  const signer = jest.fn(async (/** @type {any} */ _client, /** @type {any} */ command, /** @type {any} */ opts) => `https://r2.example/${command.input.Key}?X-Amz-Expires=${opts.expiresIn}`);
+  service.signer = /** @type {any} */ (signer);
+  const { manifest, body } = fixture();
+  const { artifactId } = await service.prepare("owner", "game", manifest);
+  await service.upload("owner", "game", artifactId, 0, body);
+  await expect(service.signSegment("owner", "game", artifactId, 0, 60)).rejects.toMatchObject({ status: 404 });
+  await service.complete("owner", "game", artifactId);
+  const link = await service.signSegment("owner", "game", artifactId, 0, 60);
+  expect(link).toEqual({ url: `https://r2.example/${service.key("owner", "game", artifactId, "0.json")}?X-Amz-Expires=60`, expiresIn: 60 });
+  await expect(service.signSegment("owner", "game", artifactId, 1, 60)).rejects.toMatchObject({ status: 404 });
+  await expect(service.signSegment("owner", "game", "d".repeat(64), 0, 60)).rejects.toMatchObject({ status: 404 });
+  await expect(service.signSegment("other", "game", artifactId, 0, 60)).rejects.toMatchObject({ status: 404 });
+  expect(signer).toHaveBeenCalledTimes(1);
+});

@@ -131,3 +131,38 @@ describe("lazy playback segment host", () => {
     await screen.findByTestId("host"); expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("shared-game segment delivery", () => {
+  it("reads a segment from its short-lived storage link, then falls back to the API for the rest of the visit", async () => {
+    const { manifest, bytes } = makeSegmentFixture();
+    const base = "/v1/shares/AbCdEfGhIjKlMnOp/map-playback/artifacts";
+    const calls: string[] = [];
+    const fetcher = vi.fn(async (url: string) => {
+      calls.push(url);
+      const index = Number(/segments\/(\d+)/.exec(url)?.[1] ?? /storage\.test\/(\d+)/.exec(url)?.[1]);
+      if (url.endsWith("/link")) return new Response(JSON.stringify({ url: `https://storage.test/${index}.json`, expiresIn: 60 }));
+      if (url.startsWith("https://storage.test/")) {
+        if (index === 0) return new Response(bytes[0]);
+        throw new TypeError("Failed to fetch");
+      }
+      return new Response(bytes[index]);
+    });
+    vi.stubGlobal("fetch", fetcher);
+    render(<SegmentedReplayHost gameId="share" manifest={manifest} anonymous
+      segmentPath={(artifactId, index) => `${base}/${artifactId}/segments/${index}`}
+      segmentLinkPath={(artifactId, index) => `${base}/${artifactId}/segments/${index}/link`} />);
+    await screen.findByTestId("host");
+    expect(calls).toEqual([`http://local-api${base}/${manifest.artifactId}/segments/0/link`, "https://storage.test/0.json"]);
+    expect(auth.getToken).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Seek 60" }));
+    await waitFor(() => expect(screen.getByTestId("host").getAttribute("data-start")).toBe("60"));
+    expect(calls.slice(2, 5)).toEqual([
+      `http://local-api${base}/${manifest.artifactId}/segments/1/link`,
+      "https://storage.test/1.json",
+      `http://local-api${base}/${manifest.artifactId}/segments/1`,
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Seek 120" }));
+    await waitFor(() => expect(screen.getByTestId("host").getAttribute("data-start")).toBe("120"));
+    expect(calls.filter((url) => url.includes("/segments/2"))).toEqual([`http://local-api${base}/${manifest.artifactId}/segments/2`]);
+  });
+});

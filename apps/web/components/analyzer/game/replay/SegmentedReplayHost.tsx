@@ -15,12 +15,14 @@ type Props = {
   myRace?: string | null; oppRace?: string | null; buildName?: string | null; buildMatchPct?: number | null;
   /** Review routes use their existing scoped grant instead of owner URLs. */
   segmentPath?: (artifactId: string, index: number) => string;
+  /** Share pages: a short-lived direct storage link per segment, ``segmentPath`` as the fallback. */
+  segmentLinkPath?: (artifactId: string, index: number) => string;
   anonymous?: boolean;
   onPlaybackTimeChange?: (time: number) => void;
 } & Pick<ComponentProps<typeof ReplayStage>,
   "seekRequest" | "mapMarkers" | "onWorldClick" | "onMarkerClick" | "commentMarkers" | "onCommentMarker" | "mobileCompact" | "defaultShowProduction" | "patchEra" | "onPlaybackStateChange" | "onStageSeek" | "banked" | "upgrades" | "clockLink">;
 
-export function SegmentedReplayHost({ manifest, compact, segmentPath, anonymous = false, onPlaybackTimeChange: onHostTime, ...props }: Props) {
+export function SegmentedReplayHost({ manifest, compact, segmentPath, segmentLinkPath, anonymous = false, onPlaybackTimeChange: onHostTime, ...props }: Props) {
   const { userId } = useAuth();
   const scope = `${anonymous ? "public" : userId ?? ""}:${props.gameId}:${manifest.artifactId}`;
   const initialTime = clampReplayTime(props.initialTimeSec, manifest.gameLength) ?? 0;
@@ -29,7 +31,7 @@ export function SegmentedReplayHost({ manifest, compact, segmentPath, anonymous 
   const previous = useRef({ scope, time });
   const [speed, setSpeed] = useState(8);
   const { current, buffering, error, retry, castMarkers } = usePlaybackSegments({ manifest, gameId: props.gameId,
-    time, speed, backwards: clock.scope === scope && clock.backwards, anonymous, segmentPath });
+    time, speed, backwards: clock.scope === scope && clock.backwards, anonymous, segmentPath, segmentLinkPath });
   const onPlaybackTimeChange = useCallback((next: number) => {
     const backwards = previous.current.scope === scope && next < previous.current.time;
     previous.current = { scope, time: next };
