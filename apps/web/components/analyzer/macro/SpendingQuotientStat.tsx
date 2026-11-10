@@ -21,6 +21,11 @@ export interface SpendingQuotientStatProps {
   unit?: string;
   /** Render value with one decimal (e.g. SQ scores 80.5). */
   decimals?: 0 | 1;
+  /**
+   * "pXX · League MU" from a league table (lib/leagueTargets.ts
+   * percentileTag). Replaces the fixed SQ tier label when present.
+   */
+  benchmark?: string | null;
 }
 
 const TONE_CLASS: Record<NonNullable<SpendingQuotientStatProps["tone"]>, string> = {
@@ -44,9 +49,10 @@ export function SpendingQuotientStat({
   glow = false,
   unit,
   decimals = 0,
+  benchmark = null,
 }: SpendingQuotientStatProps) {
   const formatted = formatValue(value, decimals);
-  const tier = tone === "cyan" ? tierFromSq(typeof value === "number" && Number.isFinite(value) ? value : null) : null;
+  const tier = tone === "cyan" && !benchmark ? tierFromSq(typeof value === "number" && Number.isFinite(value) ? value : null) : null;
 
   const card = (
     <div
@@ -67,7 +73,9 @@ export function SpendingQuotientStat({
         {formatted}
         {unit ? <span className="ml-0.5 text-body font-normal text-text-muted">{unit}</span> : null}
       </div>
-      {tier ? (
+      {benchmark ? (
+        <div className="text-caption font-medium text-accent-cyan">{benchmark}</div>
+      ) : tier ? (
         <div className="text-caption font-medium text-accent-cyan">{tier} tier</div>
       ) : null}
       {hint ? <div className="text-caption text-text-muted">{hint}</div> : null}

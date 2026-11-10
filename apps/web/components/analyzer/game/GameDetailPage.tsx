@@ -305,6 +305,7 @@ function GameDetailContent({
           error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()}
           onSeek={setScrubTime}
           recomputeAction={recomputeAction} seekTarget="replay" currentTime={clock.t}
+          league={contextReq.data?.league?.table ?? null}
         /><GameContextCard game={game} context={contextReq.data} error={contextReq.error} loading={contextReq.isLoading} onRetry={() => void contextReq.mutate()} /></div>} lossAutopsy={loss && autopsyGame ? (
           <LossAutopsyCard game={autopsyGame} personalMedians={contextReq.data?.personal} seekTarget="replay" recomputeAction={recomputeAction} onSeek={setScrubTime} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} />
         ) : undefined} /></SectionBoundary>
@@ -336,7 +337,7 @@ function GameDetailContent({
         <SectionBoundary key={`notes:${game.gameId}`} label="game notes" title="Game notes hit a problem"><NotesPanel target={{ kind: "game", id: game.gameId }} workspace={noteWorkspace} currentTime={clock.t} onSeek={setScrubTime} /></SectionBoundary>
       </section>
       <section data-tour="game-macro" id="macro" className="scroll-mt-[var(--game-section-offset,8rem)]" aria-label="Macro breakdown">
-        <SectionBoundary key={`macro:${game.gameId}`} label="the macro breakdown" title="The macro breakdown hit a problem"><GameMacroSection onBuildChanged={() => void gameReq.mutate()} inspectionTime={clock.t} onSeek={setScrubTime} onInspectTime={inspectMacroTime} gameId={game.gameId} data={breakdown} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} action={recomputeAction} onRecompute={() => void macroReq.recompute()} recomputing={macroReq.recomputing} headerMeta={{ playerName: myName, opponentName: oppName, myRace: ghostMyRace, opponentRace: ghostOpponentRace, dateIso: game.date, gameVersion: game.gameVersion, gameBuild: game.gameBuild }} /></SectionBoundary>
+        <SectionBoundary key={`macro:${game.gameId}`} label="the macro breakdown" title="The macro breakdown hit a problem"><GameMacroSection league={contextReq.data?.league?.table ?? null} onBuildChanged={() => void gameReq.mutate()} inspectionTime={clock.t} onSeek={setScrubTime} onInspectTime={inspectMacroTime} gameId={game.gameId} data={breakdown} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} action={recomputeAction} onRecompute={() => void macroReq.recompute()} recomputing={macroReq.recomputing} headerMeta={{ playerName: myName, opponentName: oppName, myRace: ghostMyRace, opponentRace: ghostOpponentRace, dateIso: game.date, gameVersion: game.gameVersion, gameBuild: game.gameBuild }} /></SectionBoundary>
       </section>
       <section data-tour="game-builds" id="builds" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]" aria-labelledby="game-builds-heading">
         <h2 id="game-builds-heading" className="font-display text-h3 font-bold">Builds <LazyHelpLink slug="game-page" anchor="build-orders">Help</LazyHelpLink></h2>

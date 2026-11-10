@@ -16,6 +16,8 @@ import {
 import type { GameSummary } from "./types";
 import { formatApm } from "@/lib/apm";
 import { RECOMPUTE_ANALYSIS_HINT } from "@/lib/analysisRecompute";
+import type { LeagueBenchmark } from "@/lib/benchmarks";
+import { percentileTag } from "@/lib/leagueTargets";
 
 /** Labels hold their help control inside the ``dt``, so each row keeps
  * exactly one ``dt`` and one ``dd``. */
@@ -36,6 +38,8 @@ export interface MechanicsPanelProps {
   seekTarget?: "replay" | "timeline";
   /** Public analysis can share its archive score bands without changing analyzer defaults. */
   macroScoreToneClassName?: string;
+  /** The game's league table: the SQ hint reads "pXX · League MU" instead of a fixed tier. */
+  league?: LeagueBenchmark | null;
 }
 
 /**
@@ -62,6 +66,7 @@ export function MechanicsPanel({
   recomputeAction,
   seekTarget = "timeline",
   macroScoreToneClassName,
+  league = null,
 }: MechanicsPanelProps) {
   const raw = breakdown?.raw;
   const race = computeEffectiveRace(breakdown?.race ?? game?.myRace, raw);
@@ -178,6 +183,7 @@ export function MechanicsPanel({
   }
 
   const sqTier = tierFromSq(sq);
+  const sqHint = percentileTag(league, "spq", sq) ?? (sqTier ? `${sqTier}-tier spending` : undefined);
 
   return (
     <Card title="Mechanics" right={recomputeAction} data-testid="mechanics-panel">
@@ -193,7 +199,7 @@ export function MechanicsPanel({
             label="SQ (Spending Quotient)"
             info={<InfoTip termId="spending-quotient" label="SQ (Spending Quotient)" />}
             value={sq !== null ? Math.round(sq) : "—"}
-            hint={sqTier ? `${sqTier}-tier spending` : undefined}
+            hint={sqHint}
           />
         </dl>
 

@@ -338,6 +338,7 @@ async function main() {
   const leaguePercentilesJob = buildLeaguePercentilesRecomputeJob({
     jobLedger: /** @type {any} */ (services).jobLedger,
     leaguePercentiles: /** @type {any} */ (services).leaguePercentiles,
+    leagueTimingPercentiles: /** @type {any} */ (services).leagueTimingPercentiles,
     logger,
   });
   leaguePercentilesJob.start();
