@@ -16,6 +16,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from sc2tools_agent.ui import theme
 from sc2tools_agent.ui.companion_page import _keep_live_history, _live_context, build_companion_page
 from sc2tools_agent.ui.companion_speech import build_scouting_report
+from tests._contrast import contrast
 from tests._gui_offscreen import run_gui_check
 from tests.test_companion_build_range_scope import build_calls, desk_factory, replay, stored_order, wait_until
 from tests.test_companion_page import companion
@@ -197,23 +198,12 @@ def test_an_opponent_not_identified_yet_is_not_called_a_first_meeting(report):
     assert panel.source_status.toolTip() == "Stored replay events" + DOT + "You: 0" + DOT + "Opponent: not identified yet. Older uploads may be incomplete."
 
 
-def _luminance(color):
-    channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
-    linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4 for value in channels]
-    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
-
-
-def _contrast(first, second):
-    light, dark = sorted((_luminance(first), _luminance(second)), reverse=True)
-    return (light + 0.05) / (dark + 0.05)
-
-
 def test_the_chosen_row_is_as_readable_as_the_others(report):
     panel, app = report
     style = panel.recent_builds.styleSheet()
     chosen = re.search(r"QPushButton:checked \{ background: (#[0-9a-fA-F]{6})", style).group(1)
     for text in (theme.SUCCESS, theme.DANGER, theme.TEXT_MUTED, theme.ACCENT_CYAN):
-        assert _contrast(text, chosen) >= 4.5, (text, chosen)
+        assert contrast(text, chosen) >= 4.5, (text, chosen)
 
 
 def test_a_game_against_this_opponent_previews_its_milestones_until_stored_events_load(report):

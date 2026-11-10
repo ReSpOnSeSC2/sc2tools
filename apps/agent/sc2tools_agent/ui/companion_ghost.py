@@ -21,6 +21,7 @@ QWidget#ghostDesk QTreeWidget, QWidget#ghostPanel QTreeWidget {{
     background: {theme.ELEVATED}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG};
     border-radius: 5px; padding: 5px; selection-background-color: {theme.BUTTON_CHECKED};
 }}
+QWidget#ghostDesk QLineEdit, QWidget#ghostDesk QComboBox {{ border-color: {theme.BORDER_CONTROL}; }}
 QWidget#ghostDesk QPushButton {{
     background: {theme.BUTTON}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG};
     border-radius: 5px; padding: 7px 10px;

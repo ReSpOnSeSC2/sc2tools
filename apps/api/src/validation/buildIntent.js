@@ -23,7 +23,7 @@ const Ajv = /** @type {any} */ (AjvModule).default || AjvModule;
 const ajv = new Ajv({ allErrors: false });
 
 const LIVE_ACTIONS = Object.freeze(["register", "declare", "undeclare", "release", "postgame"]);
-const GAME_ACTIONS = Object.freeze(["confirm", "skip", "defer", "notes", "opponent"]);
+const GAME_ACTIONS = Object.freeze(["confirm", "skip", "defer", "notes", "opponent", "reopen"]);
 const OPTION_SIDES = Object.freeze(["you", "opponent"]);
 // Raw notes may carry control characters that sanitising strips; anything
 // this long cannot sanitise to <= 1000 characters of text worth keeping.
