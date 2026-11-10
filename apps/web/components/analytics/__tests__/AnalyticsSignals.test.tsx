@@ -74,7 +74,10 @@ describe("SignUpTracker", () => {
   it("sends sign_up once for a brand-new account", () => {
     mocks.user = { id: "user_1", createdAt: new Date(Date.now() - 60_000), externalAccounts: [{ provider: "google" }] };
     render(<SignUpTracker />);
-    expect(gtag).toHaveBeenCalledWith("event", "sign_up", { method: "google" });
+    expect(gtag).toHaveBeenCalledWith("event", "sign_up", {
+      method: "google",
+      page_location: `${window.location.origin}/`,
+    });
     cleanup();
     render(<SignUpTracker />);
     expect(gtag).toHaveBeenCalledTimes(1);

@@ -6,20 +6,19 @@
  * results or any text from the card. `gaEvent` is a no-op until the
  * visitor consents to analytics.
  *
- * The event also states its own page, normalized the same way page views
- * are (lib/analytics/pageLocation). Left to itself gtag would attach the
- * browser's address, and a battle card is shared from /app/game/<gameId>,
- * where the id can contain the opponent's name.
+ * `gaEvent` states the page on every event, normalized the same way page
+ * views are (lib/analytics/pageLocation), and sends nothing from an
+ * untracked surface. That matters here: a battle card is shared from
+ * /app/game/<gameId>, where the id can contain the opponent's name.
  *
  * The parameter names are GA4's standard ones (`content_type`, `method`,
- * `content_id`, `page_location`).
+ * `content_id`).
  *
  * Example:
  *   trackCardShared({ card: "battle_card", method: "web_share" });
  *   trackCardShared({ card: "arcade_round", method: "download", modeId: "buildle" });
  */
 import { gaEvent } from "@/lib/analytics/gtag";
-import { analyticsPageLocation, isUntrackedPath } from "@/lib/analytics/pageLocation";
 
 /** The share surfaces that produce a card. */
 export type SharedCardKind = "arcade_round" | "season_recap" | "battle_card";
@@ -46,13 +45,9 @@ export function trackCardShared(params: {
   method: CardShareMethod;
   modeId?: string;
 }): void {
-  if (typeof window === "undefined") return;
-  const { origin, pathname, search } = window.location;
-  if (isUntrackedPath(pathname)) return;
   const event: Record<string, string> = {
     content_type: params.card,
     method: params.method,
-    page_location: analyticsPageLocation(origin, pathname, search),
   };
   if (params.modeId && MODE_ID.test(params.modeId)) {
     event.content_id = params.modeId;

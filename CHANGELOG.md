@@ -24,6 +24,22 @@ corresponding GitHub Release.
 - Count delivered share cards by card type and delivery path, with nothing from
   the card itself.
 
+### Analytics privacy
+
+- Stop reporting raw page addresses to Google Analytics as the page of an event,
+  for visitors who accepted analytics. Custom events and the events Google's
+  script raises on its own (time on page, outbound clicks, downloads, form use)
+  now report the same generalized page that page views already did. A game page
+  is `/app/game/:gameId` and an opponent page is `/app/opponents/:pulseId`,
+  with no ids, names, tabs or filters. The referrer is generalized the same way.
+- Pause analytics on admin screens, overlay and dock pages and shared replay
+  archives. Moving there from another page used to skip the page view but keep
+  measuring clicks and time spent.
+- Known gap: two Google Analytics options, Form interactions and Site search,
+  read the browser's address themselves. A form's destination and a `?q=` search
+  term still reach Google until those two options are switched off in the Google
+  Analytics stream settings.
+
 ### Agent 0.24.11
 
 - Add an independent game-start title refresh with current opponent, known alias,

@@ -17,6 +17,8 @@
  *   - ``"denied"``  — opted out → never load GA.
  */
 
+import { isUntrackedPath } from "./pageLocation";
+
 export type ConsentState = "unset" | "granted" | "denied";
 
 const STORAGE_KEY = "sc2tools.analyticsConsent.v1";
@@ -55,6 +57,27 @@ export function readConsent(): ConsentState {
 }
 
 /**
+ * Set Google's opt-out flag for this visitor on this page, and return
+ * it (true = nothing may be sent).
+ *
+ * The flag blocks gtag.js's automatic hits as well as our own events, so
+ * it is the one switch that silences an already loaded tracker. It is on
+ * unless the visitor opted in AND the page may be measured: gtag.js
+ * stays loaded after a client-side move onto an untracked surface (an
+ * admin screen, someone's shared replays; see ``./pageLocation``), where
+ * it would otherwise keep reporting clicks, form use and time spent.
+ *
+ * ``state`` defaults to the stored choice; ``setConsent`` passes the new
+ * one because it is not stored yet.
+ */
+export function syncAnalyticsOptOut(state: ConsentState = readConsent()): boolean {
+  if (typeof window === "undefined") return true;
+  const off = state !== "granted" || isUntrackedPath(window.location.pathname);
+  window[`ga-disable-${GA_MEASUREMENT_ID}`] = off;
+  return off;
+}
+
+/**
  * Persist a decision and notify subscribers. Passing ``"granted"`` or
  * ``"denied"`` records the choice; the banner and Settings → Misc call
  * this on click.
@@ -69,7 +92,7 @@ export function setConsent(state: Exclude<ConsentState, "unset">): void {
   if (typeof window === "undefined") return;
   // gtag.js stays loaded after its Script component unmounts. Google's
   // opt-out flag blocks automatic hits as well as our own events.
-  window[`ga-disable-${GA_MEASUREMENT_ID}`] = state !== "granted";
+  syncAnalyticsOptOut(state);
   try {
     window.localStorage.setItem(STORAGE_KEY, state);
     memoryOnly = false;
@@ -137,7 +160,7 @@ export function subscribeConsent(callback: () => void): () => void {
   const onCustom = () => callback();
   const onStorage = (e: StorageEvent) => {
     if (e.key === STORAGE_KEY || e.key === null) {
-      window[`ga-disable-${GA_MEASUREMENT_ID}`] = readConsent() !== "granted";
+      syncAnalyticsOptOut();
       callback();
     }
   };

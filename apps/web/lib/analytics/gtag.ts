@@ -13,14 +13,30 @@
  * Every event from a browser flagged as internal (an admin signed in
  * there, see ``./internalTraffic``) carries ``traffic_type: "internal"``
  * so the GA4 Internal Traffic data filter can drop it.
+ *
+ * Every event also reports its page in the normalized form of
+ * ``./pageLocation``. Left alone, gtag.js fills in the browser's real
+ * address on any event that does not state one — its own automatic
+ * events included (engagement time, outbound clicks, file downloads,
+ * form use) — and repeats the browser's referrer on all of them. Either
+ * can hold a game id, an opponent id or a player's name. So these
+ * wrappers keep gtag's page state normalized (``syncAnalyticsPage``),
+ * attach the location to custom events themselves, and send nothing at
+ * all from an untracked surface (Google's opt-out flag, see
+ * ``syncAnalyticsOptOut``). Measured in docs/handoff/growth/X1.md;
+ * decided in ADR 0076.
  */
 
-import { GA_MEASUREMENT_ID, readConsent } from "./consent";
+import { GA_MEASUREMENT_ID, syncAnalyticsOptOut } from "./consent";
 import {
   INTERNAL_TRAFFIC_TYPE,
   isInternalBrowser,
 } from "./internalTraffic";
-import { analyticsPageLocation, isUntrackedPath } from "./pageLocation";
+import {
+  analyticsPageLocation,
+  analyticsReferrer,
+  isUntrackedPath,
+} from "./pageLocation";
 
 type GtagFn = (...args: unknown[]) => void;
 
@@ -32,10 +48,15 @@ declare global {
   }
 }
 
-/** Safe accessor for the global gtag fn. */
+/**
+ * Safe accessor for the global gtag fn: null until gtag.js is set up,
+ * and whenever nothing may be sent (no consent, or an untracked page).
+ * Asking also brings Google's opt-out flag up to date with the address,
+ * so every wrapper is right at the moment it is called.
+ */
 function gtag(): GtagFn | null {
-  if (typeof window === "undefined") return null;
-  if (readConsent() !== "granted" || !GA_MEASUREMENT_ID || window[`ga-disable-${GA_MEASUREMENT_ID}`]) return null;
+  if (typeof window === "undefined" || !GA_MEASUREMENT_ID) return null;
+  if (syncAnalyticsOptOut()) return null;
   return typeof window.gtag === "function" ? window.gtag : null;
 }
 
@@ -54,40 +75,102 @@ function withTrafficType(
 }
 
 /**
+ * The page state gtag.js applies to every event that does not state its
+ * own: the normalized location and, when there is one, the normalized
+ * referrer. Defaults to the browser's current address.
+ *
+ * Example (on /app/game/abc?tab=macro, opened from an opponent's page):
+ *   analyticsPageState();
+ *   // -> { page_location: ".../app/game/:gameId",
+ *   //      page_referrer: ".../app/opponents/:pulseId" }
+ */
+export function analyticsPageState(
+  pathname: string = window.location.pathname,
+  search: string = window.location.search,
+): Record<string, string> {
+  const origin = window.location.origin;
+  const state: Record<string, string> = {
+    page_location: analyticsPageLocation(origin, pathname, search),
+  };
+  const referrer = analyticsReferrer(document.referrer, origin);
+  if (referrer) state.page_referrer = referrer;
+  return state;
+}
+
+/**
+ * Keep gtag.js pointed at the page the visitor is on. Called on every
+ * navigation, whether or not a page view is sent for it.
+ *
+ * On a tracked page this replaces gtag's page state, which its automatic
+ * events inherit. On an untracked one it only raises Google's opt-out
+ * flag (through the accessor), so an already loaded gtag.js stays quiet
+ * until the visitor is back on a tracked page.
+ *
+ * Example:
+ *   syncAnalyticsPage("/app/opponents/1-S2-1-123", "?tab=games");
+ *   // gtag("set", { page_location: ".../app/opponents/:pulseId" })
+ */
+export function syncAnalyticsPage(pathname: string, search = ""): void {
+  const fn = gtag();
+  if (!fn || isUntrackedPath(pathname)) return;
+  fn("set", analyticsPageState(pathname, search));
+}
+
+/**
  * Record a SPA page view. The App Router does client-side navigation,
  * so we send these manually on route change (the stream's "page changes
  * based on browser history events" option is off, so this is the only
  * page_view source after the first load).
  *
- * Only ``page_location`` is sent: GA4 derives the page path and query
- * from it. (Sending ``page_path`` with a query string as well made GA
- * report "/?source=pwa?source=pwa"-style duplicated queries.) The
- * location is normalized by ``analyticsPageLocation`` and untracked
- * surfaces are skipped entirely.
+ * The page state is replaced first, so the automatic events that follow
+ * on this page inherit the same normalized location. Only
+ * ``page_location`` is sent with the event itself: GA4 derives the page
+ * path and query from it. (Sending ``page_path`` with a query string as
+ * well made GA report "/?source=pwa?source=pwa"-style duplicated
+ * queries.) Untracked surfaces are skipped entirely.
  *
  * Example:
  *   pageview("/app/game/abc", "?tab=macro"); // page_location ".../app/game/:gameId"
  */
 export function pageview(pathname: string, search = ""): void {
   const fn = gtag();
-  if (!fn || !GA_MEASUREMENT_ID || isUntrackedPath(pathname)) return;
+  if (!fn || isUntrackedPath(pathname)) return;
+  const state = analyticsPageState(pathname, search);
+  fn("set", state);
   fn(
     "event",
     "page_view",
-    withTrafficType({
-      page_location: analyticsPageLocation(window.location.origin, pathname, search),
-    }),
+    withTrafficType({ page_location: state.page_location }),
   );
 }
 
-/** Record an arbitrary custom event. */
+/**
+ * Record an arbitrary custom event from the page the visitor is on.
+ *
+ * The event states its own normalized location instead of leaning on
+ * gtag's page state: a component can fire one while a navigation is
+ * still settling, before the new page's state is in place. A caller
+ * cannot override it, and nothing is sent from an untracked surface.
+ *
+ * Example (on /app/game/abc?tab=macro):
+ *   gaEvent("review_requested", { level: "gold" });
+ *   // page_location ".../app/game/:gameId"
+ */
 export function gaEvent(
   action: string,
   params: Record<string, unknown> = {},
 ): void {
   const fn = gtag();
   if (!fn) return;
-  fn("event", action, withTrafficType(params));
+  const { origin, pathname, search } = window.location;
+  fn(
+    "event",
+    action,
+    withTrafficType({
+      ...params,
+      page_location: analyticsPageLocation(origin, pathname, search),
+    }),
+  );
 }
 
 /**

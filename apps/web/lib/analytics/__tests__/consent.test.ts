@@ -5,6 +5,7 @@ import {
   readConsent,
   setConsent,
   subscribeConsent,
+  syncAnalyticsOptOut,
 } from "@/lib/analytics/consent";
 
 /**
@@ -18,6 +19,7 @@ describe("analytics consent store", () => {
     window.localStorage.clear();
     vi.restoreAllMocks();
     delete window[`ga-disable-${GA_MEASUREMENT_ID}`];
+    window.history.pushState({}, "", "/");
   });
 
   it("defaults to 'unset' so nothing tracks before a choice", () => {
@@ -111,5 +113,47 @@ describe("changing consent mid-visit", () => {
     expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(true);
     expect(callback).toHaveBeenCalledTimes(1);
     unsubscribe();
+  });
+
+  describe("Google's opt-out flag", () => {
+    const flag = () => window[`ga-disable-${GA_MEASUREMENT_ID}`];
+
+    it("is off only for an opted-in visitor on a page that may be measured", () => {
+      expect(syncAnalyticsOptOut()).toBe(true);
+      setConsent("granted");
+      expect(syncAnalyticsOptOut()).toBe(false);
+      expect(flag()).toBe(false);
+      setConsent("denied");
+      expect(syncAnalyticsOptOut()).toBe(true);
+      expect(flag()).toBe(true);
+    });
+
+    it.each(["/admin/users", "/overlay/secret-token", "/dock/secret-token", "/players/abc/replays"])(
+      "stays on for an opted-in visitor on an untracked page (%s)",
+      (path) => {
+        setConsent("granted");
+        window.history.pushState({}, "", path);
+        expect(syncAnalyticsOptOut()).toBe(true);
+        expect(flag()).toBe(true);
+        window.history.pushState({}, "", "/guides");
+        expect(syncAnalyticsOptOut()).toBe(false);
+        expect(flag()).toBe(false);
+      },
+    );
+
+    it("is not lowered by accepting analytics on an untracked page", () => {
+      window.history.pushState({}, "", "/admin/users");
+      setConsent("granted");
+      expect(flag()).toBe(true);
+    });
+
+    it("is not lowered on an untracked page when another tab accepts", () => {
+      window.history.pushState({}, "", "/admin/users");
+      const unsubscribe = subscribeConsent(() => {});
+      window.localStorage.setItem("sc2tools.analyticsConsent.v1", "granted");
+      window.dispatchEvent(new StorageEvent("storage", { key: "sc2tools.analyticsConsent.v1", newValue: "granted" }));
+      expect(flag()).toBe(true);
+      unsubscribe();
+    });
   });
 });
