@@ -37,6 +37,7 @@ import {
   OpponentNotesCard,
 } from "../OpponentNotesCard";
 import { UnsavedNoteProvider } from "../UnsavedNoteContext";
+import type { NoteDto } from "@/lib/notes";
 
 beforeEach(() => {
   harness.apiCall.mockReset();
@@ -242,7 +243,7 @@ describe("OpponentNotesCard", () => {
     });
   });
 
-  const note = (overrides = {}) => ({
+  const note = (overrides: Partial<NoteDto> = {}): NoteDto => ({
     id: "n1", target: { kind: "opponent", id: "opp-9" }, text: "Hides a proxy", tags: [], visibility: "private", scope: "account",
     pinned: false, readAloud: false, streamEligible: false, migrated: false, createdAt: "2026-11-01T00:00:00.000Z", updatedAt: "2026-11-01T00:00:00.000Z",
     ...overrides,

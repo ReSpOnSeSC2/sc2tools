@@ -423,7 +423,7 @@ class NotesService {
     const names = new Map((linked?.identities || []).map((row) => [row?.pulseId, String(row?.displayNameSample || row?.revealedName || "").trim().slice(0, 120)]));
     return {
       note: /** @type {NoteDoc|null} */ (note),
-      linked: others.map((doc) => ({ ...doc, ...(names.get(doc.target?.id) ? { account: names.get(doc.target?.id) } : {}) })),
+      linked: /** @type {NoteDoc[]} */ (others).map((doc) => ({ ...doc, ...(names.get(doc.target?.id) ? { account: names.get(doc.target?.id) } : {}) })),
     };
   }
 
