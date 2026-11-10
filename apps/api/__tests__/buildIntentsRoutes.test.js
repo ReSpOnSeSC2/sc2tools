@@ -465,6 +465,59 @@ describe("build check-in routes", () => {
       expect(again.body.notes).toBe("second thought");
     });
 
+    test("reopen undoes a confirmed or skipped decision and keeps notes and the suggestion", async () => {
+      const user = await newUser();
+      const suggestion = { key: ROBO_KEY, name: "PvZ - Robo Opener", slug: null, source: "catalog", reason: "usual", passedRules: null, ruleCount: null };
+      await addGame(h.db, user.userId, "undo-me", {
+        myBuild: UNCLASSIFIED,
+        buildIntent: {
+          status: "pending", build: null, applied: false, detected: null, suggestion,
+          randomizer: null, origin: null, via: null, notes: "", confirmedAt: null, updatedAt: new Date(),
+        },
+      });
+      await putIntent(user.web, "undo-me", { action: "confirm", buildKey: PHOENIX_KEY, notes: "keep me" }).expect(200);
+      expect((await h.db.games.findOne({ userId: user.userId, gameId: "undo-me" })).myBuild).toBe(PHOENIX);
+      h.io.clear();
+
+      const reopened = await putIntent(user.web, "undo-me", { action: "reopen" }).expect(200);
+      expect(reopened.body).toEqual(expect.objectContaining({
+        status: "pending", applied: false, build: null, confirmedAt: null, notes: "keep me",
+        suggestion: expect.objectContaining({ key: ROBO_KEY, reason: "usual" }),
+      }));
+      let row = await h.db.games.findOne({ userId: user.userId, gameId: "undo-me" });
+      expect(row.myBuild).toBe(UNCLASSIFIED);
+      expect(row._customBuildSlug).toBeUndefined();
+      expect(row.buildIntent).toEqual(expect.objectContaining({ status: "pending", applied: false, detected: null, build: null }));
+      expect(h.io.events("games:changed")).toHaveLength(1);
+      expect(h.io.events("build-intent:changed")).toEqual([
+        { room: `user:${user.userId}`, event: "build-intent:changed", payload: { gameId: "undo-me" } },
+      ]);
+      const queue = await request(h.app).get("/v1/build-intents/pending").set("authorization", user.web).expect(200);
+      expect(queue.body.items.map((i) => i.gameId)).toContain("undo-me");
+
+      await putIntent(user.web, "undo-me", { action: "skip" }).expect(200);
+      const fromSkipped = await putIntent(user.web, "undo-me", { action: "reopen", notes: "second look" }).expect(200);
+      expect(fromSkipped.body).toEqual(expect.objectContaining({ status: "pending", notes: "second look" }));
+
+      const undecided = await putIntent(user.web, "undo-me", { action: "reopen" }).expect(409);
+      expect(undecided.body.error.code).toBe("not_reopenable");
+      await addGame(h.db, user.userId, "never-decided");
+      const none = await putIntent(user.web, "never-decided", { action: "reopen" }).expect(409);
+      expect(none.body.error.code).toBe("not_reopenable");
+      row = await h.db.games.findOne({ userId: user.userId, gameId: "never-decided" });
+      expect(row.buildIntent === undefined || row.buildIntent.status === "none").toBe(true);
+    });
+
+    test("reopen refuses ineligible games even when they were skipped", async () => {
+      const user = await newUser();
+      await addGame(h.db, user.userId, "short-undo", { durationSec: 20 });
+      await putIntent(user.web, "short-undo", { action: "skip" }).expect(200);
+      const res = await putIntent(user.web, "short-undo", { action: "reopen" }).expect(409);
+      expect(res.body.error).toEqual(expect.objectContaining({ code: "not_eligible", reason: "too_short" }));
+      const row = await h.db.games.findOne({ userId: user.userId, gameId: "short-undo" });
+      expect(row.buildIntent.status).toBe("skipped");
+    });
+
     test("a confirmed custom build that was deleted is reported as deleted", async () => {
       const user = await newUser();
       await addCustomBuild(h.db, user.userId, "short-lived", { name: "Short Lived" });

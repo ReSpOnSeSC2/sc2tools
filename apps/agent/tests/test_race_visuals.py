@@ -16,7 +16,7 @@ def test_options_are_optional_and_imports_remain_qt_free():
     imports = [node for node in ast.walk(ast.parse(Path(race_visuals.__file__).read_text()))
                if isinstance(node, (ast.Import, ast.ImportFrom))]
     assert not any("PySide" in ast.unparse(node) or "PyQt" in ast.unparse(node) for node in imports)
-    assert 250 <= EXPAND_DURATION_MS <= 500
+    assert EXPAND_DURATION_MS == theme.MOTION_EXPAND_MS <= 300
 
 
 @pytest.mark.parametrize("value,expected", [(None, "default"), ({}, "default"), (True, "default"),
@@ -39,16 +39,18 @@ def test_default_is_an_exact_stylesheet_noop_and_race_overrides_leave_semantics_
     assert css_for_skin("default") == css_for_skin(None) == css_for_skin("bad") == ""
     for skin in ("protoss", "terran", "zerg"):
         style = css_for_skin(skin)
+        colors = theme.SKINS[skin]
         assert style.count("{") == style.count("}")
+        assert style.startswith(theme.skin_layer(skin))
         assert "QFrame#agentFrame" in style and "QFrame#companionConsole" in style
-        assert "QFrame#consoleDisplay" in style and "QFrame#card" in style
-        assert "QCheckBox::indicator:checked" in style
-        assert "QTableView::item:selected" in style
-        assert palette_for_skin(skin)["border"] in style
-        assert not any(selector in style for selector in ("#badgeErr", "#badgeOk", 'tone="success"', 'tone="danger"'))
-        assert "QPushButton#danger:hover" in style and "QToolButton#windowClose:hover" in style
-        assert "background: #8c345d; border-color: " + theme.DANGER in style
-        assert all(theme.DANGER in line for line in style.splitlines() if re.search(r"(?<!-)\bcolor:", line))
+        assert "QPushButton#navItem:checked" in style and "QCheckBox::indicator:checked" in style
+        assert "QTableView::item:selected" in style and colors.accent in style
+        assert "gradient" not in style and palette_for_skin(skin)["border"] not in style
+        assert not any(selector in style for selector in ("#badgeErr", "#badgeOk", 'tone="good"', 'tone="live"'))
+        assert theme.DANGER not in style and theme.DANGER_SOLID not in style
+        properties = set(re.findall(r"([a-z-]+):", re.sub(r"[^{}]*\{", "{", style)))
+        assert properties <= {"background", "color", "border-color", "border-left-color", "border-bottom-color",
+                              "selection-background-color", "selection-color"}, properties
 
 
 def test_effects_are_child_only_mouse_transparent_and_never_run_an_idle_timer(tmp_path):
@@ -167,6 +169,25 @@ window.close()
 ''')
 
 
+def test_windows_animation_effects_off_stops_the_expansion_even_when_the_player_allows_it(tmp_path):
+    run_gui_check(tmp_path, '''
+from sc2tools_agent.ui.race_visuals import create_race_effects
+window = QtWidgets.QWidget()
+window.resize(340, 78)
+window.show()
+app.processEvents()
+effects = create_race_effects(window, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+effects.apply_skin("protoss")
+system_motion.animations_enabled = lambda: False
+assert effects.motion_enabled and not effects.play_expand()
+assert not effects.timer.isActive() and effects.overlay.progress is None and effects.overlay.isVisible()
+system_motion.animations_enabled = lambda: True
+assert effects.play_expand()
+effects.shutdown()
+window.close()
+''')
+
+
 def test_frame_target_tracks_the_real_bezel_without_painting_captions_below_it(tmp_path):
     run_gui_check(tmp_path, '''
 from sc2tools_agent.ui.race_visuals import create_race_effects
@@ -215,7 +236,7 @@ from types import SimpleNamespace
 from sc2tools_agent.ui import race_visuals
 from sc2tools_agent.ui.race_visuals import create_race_effects, css_for_skin
 race_visuals.create_race_artwork = lambda **kwargs: SimpleNamespace(paint=lambda *args: False)
-assert "stop:0 #242329" in css_for_skin("protoss")
+assert "gradient" not in css_for_skin("protoss")
 window = QtWidgets.QWidget()
 window.resize(520, 480)
 window.show()

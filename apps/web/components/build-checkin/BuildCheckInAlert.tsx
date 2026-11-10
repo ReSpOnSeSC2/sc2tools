@@ -7,6 +7,9 @@ import { usePendingIntents } from "@/lib/buildIntent";
 import { useBuildCheckInLive, useBuildCheckInRevision } from "./BuildCheckInProvider";
 import { BuildCheckInQueue } from "./BuildCheckInQueue";
 
+/** 6px on every side of the 32px chip: a 44px touch target. */
+export const CHIP_HIT_AREA = "before:absolute before:-inset-1.5 before:rounded-full before:content-['']";
+
 /**
  * Header chip "Build check-ins (N)" — the any-page entry point to the
  * check-in queue, in the CoachingBookingAlert pattern. Hidden when nothing
@@ -47,7 +50,10 @@ export function BuildCheckInAlert({ compact = false }: { compact?: boolean }) {
             "hard-press relative inline-flex items-center justify-center gap-2 rounded-full",
             "border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+            // A 32px chip keeps the compact header; the inset pseudo-element
+            // grows its hit area to 44px without moving anything.
             "h-8 min-w-8 px-2",
+            CHIP_HIT_AREA,
           ].join(" ")}
         >
           <ClipboardCheck className="h-4 w-4 text-accent" aria-hidden />

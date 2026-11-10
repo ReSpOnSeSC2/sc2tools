@@ -316,16 +316,17 @@ def test_session_panel_all_race_borders_restore_default_without_clipping_or_idle
 @pytest.mark.parametrize("skin", ["default", "protoss", "terran", "zerg"])
 def test_saved_session_race_chrome_is_correct_when_applied_before_first_enable(tmp_path, skin):
     run_session_check(tmp_path, f'''
-        from sc2tools_agent.ui.race_visuals import palette_for_skin
+        from sc2tools_agent.ui.race_visuals import css_for_skin
         panel.set_appearance({skin!r}, True)
         panel.update_session(source)
         assert not panel.isVisible()
         panel.set_enabled(True)
         app.processEvents()
-        expected = palette_for_skin({skin!r})["frame"]
+        assert panel.window_controls.styleSheet() == theme.WINDOW_CONTROLS_STYLE + css_for_skin({skin!r})
         for button in (panel.window_controls.minimize_button, panel.window_controls.close_button):
             image = button.grab().toImage()
-            assert image.pixelColor(8, 8).name() == expected
+            # Window controls are quiet glyphs with no fill of their own, in every skin.
+            assert image.pixelColor(8, 8).alpha() == 0
         assert panel._race_effects.skin == {skin!r}
         assert panel.size().toTuple() == (150, 138)
         assert panel.wins_label.text() == "0W" and panel.losses_label.text() == "1L"

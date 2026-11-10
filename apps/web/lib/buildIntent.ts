@@ -13,6 +13,7 @@
 
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import type { CheckInSide } from "@/lib/buildIntentLinks";
+import { definitionHref } from "@/lib/definition-links";
 
 export {
   NEW_BUILD_QUERY_PARAM,
@@ -163,7 +164,8 @@ export interface DismissPendingResponse {
   dismissed: number;
 }
 
-export type GameIntentAction = "confirm" | "skip" | "defer" | "notes" | "opponent";
+/** "reopen" undoes a confirmed or skipped decision (back to pending). */
+export type GameIntentAction = "confirm" | "skip" | "defer" | "notes" | "opponent" | "reopen";
 
 /**
  * `PUT /v1/games/:gameId/build-intent` body; omitted `notes` = unchanged.
@@ -382,6 +384,19 @@ export function setOpponentBuild(
   }, options);
 }
 
+/**
+ * Undo a confirmed or "No set build" decision: the game goes back to
+ * pending with its suggestion, the label returns to the replay's own and
+ * the notes stay. Undecided games answer 409 `not_reopenable`.
+ */
+export function reopenGameIntent(
+  getToken: TokenGetter,
+  gameId: string,
+  options?: { signal?: AbortSignal },
+): Promise<GameIntentState> {
+  return putGameIntent(getToken, gameId, { action: "reopen" }, options);
+}
+
 export function saveGameIntentNotes(
   getToken: TokenGetter,
   gameId: string,
@@ -449,6 +464,7 @@ const ERROR_COPY: Record<string, string> = {
   declare_window_closed:
     "The game is already underway. Set the build once it ends.",
   not_found: "This game isn't in your synced history any more.",
+  not_reopenable: "This check-in was already undone or changed elsewhere. Refresh to see where it stands.",
   rate_limited: "Too many check-in changes at once. Wait a moment and try again.",
 };
 
@@ -548,6 +564,25 @@ export function winRateText(wins: number, losses: number): string | null {
 export function checkinsText(count: number | null | undefined): string | null {
   if (!count || !Number.isFinite(count) || count <= 0) return null;
   return count === 1 ? "incl. 1 check-in" : `incl. ${Math.round(count)} check-ins`;
+}
+
+/**
+ * Where a build option's name links: your own builds open their library
+ * page, catalog builds their definition when the catalog has one.
+ *
+ * Example: `buildOptionHref("custom:dt-3-gate", "DT into 3 Gate")` →
+ * "/builds/dt-3-gate"; an unknown catalog name → null.
+ */
+export function buildOptionHref(
+  key: string | null | undefined,
+  name: string | null | undefined,
+): string | null {
+  if (!key) return null;
+  if (key.startsWith("custom:")) {
+    const slug = key.slice("custom:".length);
+    return slug ? `/builds/${encodeURIComponent(slug)}` : null;
+  }
+  return name ? definitionHref(name) : null;
 }
 
 /** Tooltip copy for a "Planned" marker. */

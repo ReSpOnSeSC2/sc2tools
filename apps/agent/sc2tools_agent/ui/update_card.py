@@ -21,6 +21,8 @@ def build_update_card(parent, *, QtCore, QtWidgets, install, later, download, he
             super().__init__(parent)
             self.setObjectName("cardElevated")
             layout = QtWidgets.QVBoxLayout(self)
+            # The same inset as the status and archive cards above and below it.
+            layout.setContentsMargins(20, 18, 20, 18)
             self.title = QtWidgets.QLabel()
             self.title.setObjectName("h2")
             layout.addWidget(self.title)
