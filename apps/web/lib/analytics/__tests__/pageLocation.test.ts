@@ -44,6 +44,7 @@ describe("normalizePagePath", () => {
     expect(normalizePagePath("/builds/private-build-name")).toBe("/builds/:slug");
     expect(normalizePagePath("/community/opponents/2-S2-1-6910729")).toBe("/community/opponents/:pulseId");
     expect(normalizePagePath("/community/authors/user_2abc")).toBe("/community/authors/:userId");
+    expect(normalizePagePath("/g/AbCdEfGhIjKlMnOp")).toBe("/g/:token");
   });
 
   it("leaves list pages and public content untouched", () => {

@@ -144,6 +144,10 @@ const COLLECTIONS = Object.freeze({
   // Personal goals with automatic progress (services/playerGoals.js): one
   // row per goal; at most 8 active per user via a unique {userId, slot}.
   PLAYER_GOALS: "player_goals",
+  // Revocable single-game share links: the ``_id`` is the unguessable
+  // 16-character token in the public ``/g/<token>`` URL. At most
+  // GAME_SHARES.MAX_ACTIVE live per user; see services/gameShares.js.
+  GAME_SHARES: "game_shares",
 });
 
 const LIMITS = Object.freeze({
