@@ -31,7 +31,7 @@ const article: HelpArticle = {
     },
     {
       "type": "paragraph",
-      "text": "Right-click the tray icon and choose **Open SC2 Tools**, or double-click the icon. **Open dashboard** opens your account in a browser. Closing the window keeps syncing; use **Quit** to fully exit. The window also has **Quit SC2 Tools** below **Help & support**."
+      "text": "Right-click the tray icon and choose **Open SC2 Tools**, or double-click the icon. **Open dashboard** opens your account in a browser. Closing the window keeps syncing; use **Quit** to fully exit. The window also has **Quit SC2 Tools** below **Help and support**."
     },
     {
       "type": "paragraph",

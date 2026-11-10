@@ -290,7 +290,7 @@ class TrayUI:
         items.append(pystray.MenuItem("Open dashboard", self._open_dashboard))
         if self._on_build_checkin_cb:
             items.append(pystray.MenuItem("Build check-in…", self._build_checkin_clicked))
-        items.append(pystray.MenuItem("Help & troubleshooting", self._support_help_clicked))
+        items.append(pystray.MenuItem("Help and troubleshooting", self._support_help_clicked))
         items.append(pystray.MenuItem("Copy support info", self._support_copy_clicked, enabled=self._support_enabled))
         items.append(pystray.MenuItem(self._pause_label, self._toggle_pause))
         if self._on_pause_for:

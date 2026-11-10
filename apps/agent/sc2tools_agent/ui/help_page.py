@@ -1,6 +1,7 @@
 """Native support page. Widgets/clipboard are touched only on the Qt thread."""
 from __future__ import annotations
 
+from . import theme
 from ..support_diagnostics import ROW_IDS, diagnostic_bytes
 from .support_actions import support_mailto
 from .qt_helpers import build_flow_layout
@@ -32,13 +33,14 @@ def build_help_page(parent, *, QtCore, QtWidgets, service, deliver, open_help, o
             scroll.setWidgetResizable(True)
             body = QtWidgets.QWidget()
             layout = QtWidgets.QVBoxLayout(body)
-            layout.setContentsMargins(28, 24, 28, 24)
-            title = QtWidgets.QLabel("Help & troubleshooting")
+            layout.setContentsMargins(theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y, theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y)
+            title = QtWidgets.QLabel("Help and troubleshooting")
             title.setObjectName("h1")
             title.setWordWrap(True)
             layout.addWidget(title)
             intro = QtWidgets.QLabel("Run a read-only check, copy redacted support info, or review a local support bundle before saving it.")
             intro.setWordWrap(True)
+            intro.setObjectName("muted")
             layout.addWidget(intro)
             links_widget = QtWidgets.QWidget()
             links = build_flow_layout(links_widget, QtCore=QtCore, QtWidgets=QtWidgets)
@@ -70,13 +72,18 @@ def build_help_page(parent, *, QtCore, QtWidgets, service, deliver, open_help, o
             self.email_button.clicked.connect(lambda: self.start("email"))
             self.status = QtWidgets.QLabel("Checks run only when you ask. No replay is uploaded and StarCraft II is never launched.")
             self.status.setWordWrap(True)
+            self.status.setObjectName("muted")
             layout.addWidget(self.status)
-            body_layout = layout
+            checks_card = QtWidgets.QFrame()
+            checks_card.setObjectName("card")
+            checks_layout = QtWidgets.QVBoxLayout(checks_card)
+            checks_layout.setContentsMargins(theme.SPACE_L, theme.SPACE_M, theme.SPACE_L, theme.SPACE_M)
+            checks_layout.setSpacing(theme.SPACE_XS)
             self.rows = {}
             for row_id in ROW_IDS:
                 row = QtWidgets.QWidget()
                 line = QtWidgets.QHBoxLayout(row)
-                line.setContentsMargins(0, 2, 0, 2)
+                line.setContentsMargins(0, theme.SPACE_XS, 0, theme.SPACE_XS)
                 label = QtWidgets.QLabel(_TITLES[row_id] + ": Unavailable")
                 label.setWordWrap(True)
                 label.setMinimumWidth(0)
@@ -86,8 +93,10 @@ def build_help_page(parent, *, QtCore, QtWidgets, service, deliver, open_help, o
                 action.hide()
                 line.addWidget(action)
                 action.clicked.connect(lambda _checked=False, key=row_id: self.fix(key))
-                body_layout.addWidget(row)
+                checks_layout.addWidget(row)
                 self.rows[row_id] = label, action
+            layout.addWidget(checks_card)
+            body_layout = layout
             self.folder_details = QtWidgets.QLabel()
             self.folder_details.setWordWrap(True)
             body_layout.addWidget(self.folder_details)

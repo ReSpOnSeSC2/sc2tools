@@ -88,10 +88,10 @@ def test_standard_agent_pages_keep_navigation_drafts_and_window_controls_at_smal
             if page != "companion":
                 assert win._agent_menu_button.isVisible()
                 actions = {action.text(): action for action in win._agent_menu_button.menu().actions()}
-                assert {"Help", "Help && troubleshooting", "Check for updates", "Quit SC2 Tools"} <= actions.keys()
+                assert {"Help", "Help and troubleshooting", "Check for updates", "Quit SC2 Tools"} <= actions.keys()
                 if page == "help":
                     win._go_to_page("dashboard")
-                    actions["Help && troubleshooting"].trigger()
+                    actions["Help and troubleshooting"].trigger()
                     app.processEvents()
                     assert win._stack.currentWidget() is pages[6] and win._nav_group.button(6).isChecked()
                     assert win.geometry() == geometry

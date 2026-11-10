@@ -181,7 +181,7 @@ installed agent through the existing update flow; a second installation or
 pairing is not needed. OBS browser sources and Build check-in remain available.
 
 The **Agent** dropdown is shared by Companion and every Agent page. It includes
-navigation, **Border & animations…**, **Help & support**, **Check for updates** and
+navigation, **Border and animations…**, **Help and support**, **Check for updates** and
 **Quit SC2 Tools**. Update checks open the Dashboard so progress and results are visible.
 
 The **Build selectors** screen contains the pre-game plan and post-game check-in.
@@ -303,7 +303,7 @@ public API can omit its title while offline, so an accepted offline save does
 not claim verified readback or disconnect the account.
 
 Edit the **YouTube description** directly below the shared title, then click
-**Save title & description**. The description applies to both YouTube formats
+**Save title and description**. The description applies to both YouTube formats
 and is saved for future sessions. A current unfinished pair is updated when
 its ownership can be verified; the vertical description automatically includes
 the horizontal partner's watch link. Unsaved edits survive page refreshes,
@@ -365,7 +365,7 @@ scope and enough shared project quota; packaging alone does not deploy the API.
 The controller prepares metadata and sessions; OBS/Aitum sends the video.
 It never starts a stream when the agent launches or when a game changes scenes.
 
-The sidebar **Help & support** link opens the desktop guide. The round **?** buttons beside sync range, replay folders, OBS, build check-in and Activity log open their matching how-to. Closing the window keeps syncing in the tray; use the tray **Quit** action to stop it.
+The sidebar **Help and support** link opens the desktop guide. The round **?** buttons beside sync range, replay folders, OBS, build check-in and Activity log open their matching how-to. Closing the window keeps syncing in the tray; use the tray **Quit** action to stop it.
 
 ### Preview and place check-in cards
 

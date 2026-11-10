@@ -14,20 +14,21 @@ import pytest
 
 UI = Path(__file__).resolve().parents[1] / "sc2tools_agent" / "ui"
 CONVERTED = {
+    "activity_log.py": None,
     "brand_mark.py": None,
+    "folder_rows.py": None,
     "game_dashboard.py": None,
+    "gui.py": None,
     "health_card.py": None,
     "help_links.py": None,
+    "help_page.py": None,
     "pairing_card.py": None,
+    "recent_games.py": None,
     "service_notice.py": None,
     "system_motion.py": None,
     "update_card.py": None,
     "window_chrome.py": None,
     "race_visuals.py": ("css_for_skin", "_companion_layer"),
-    "gui.py": ("_build_layout", "_build_sidebar", "_build_dashboard", "_build_replay_archive_card",
-               "_build_status_card", "_build_pairing_card", "_build_stats_row", "_make_stat_card",
-               "_build_action_row", "_update_responsive_chrome", "_apply_window_appearance",
-               "_apply_window_chrome"),
 }
 HEX_COLOUR = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b")
 STYLE_LITERAL = re.compile(r"\b(?:rgba?|hsla?)\s*\(|font-size|\bfont\s*:", re.IGNORECASE)

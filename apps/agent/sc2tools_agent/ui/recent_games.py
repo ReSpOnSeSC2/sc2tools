@@ -6,6 +6,8 @@ from difflib import SequenceMatcher
 import html
 
 from ..recent_games import MAX_RECENT_GAMES, parse_time
+from . import theme
+from .qt_helpers import scrolling_page
 
 COLUMNS = ("When", "Result", "Matchup", "Opponent", "Map", "Length", "MMR", "Status")
 
@@ -82,7 +84,7 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             if role == QtCore.Qt.ForegroundRole and column in (1, 7):
                 success = row.get("result") == "Victory" if column == 1 else row.get("status") == "uploaded"
                 failure = row.get("result") == "Defeat" if column == 1 else row.get("status") == "problem"
-                return QtGui.QColor("#57c793") if success else QtGui.QColor("#e77777") if failure else None
+                return QtGui.QColor(theme.SUCCESS) if success else QtGui.QColor(theme.DANGER) if failure else None
             if role != QtCore.Qt.DisplayRole:
                 return None
             races = row.get("races") or {}
@@ -149,13 +151,13 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             self.rows = self.rows[:MAX_RECENT_GAMES]
             self._update_view()
 
-    class RecentGames(QtWidgets.QWidget):
+    class RecentGames(QtWidgets.QScrollArea):
         def __init__(self):
             super().__init__(parent)
             self.model = GamesModel()
             self.unknown_skipped = 0
-            layout = QtWidgets.QVBoxLayout(self)
-            layout.setContentsMargins(28, 24, 28, 24)
+            layout = QtWidgets.QVBoxLayout(scrolling_page(self, QtWidgets=QtWidgets))
+            layout.setContentsMargins(theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y, theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y)
             title = QtWidgets.QLabel("Recent games")
             title.setObjectName("h1")
             layout.addWidget(title)
@@ -197,7 +199,7 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
                     delegate.initStyleOption(background, index)
                     background.text = ""
                     option.widget.style().drawControl(QtWidgets.QStyle.CE_ItemViewItem, background, painter, option.widget)
-                    color = QtGui.QColor("#57c793" if result == "Victory" else "#e77777" if result == "Defeat" else "#c4c9d4")
+                    color = QtGui.QColor(theme.SUCCESS if result == "Victory" else theme.DANGER if result == "Defeat" else theme.TEXT_MUTED)
                     fill = QtGui.QColor(color)
                     fill.setAlpha(32)
                     rect = option.rect.adjusted(4, 3, -4, -3)
@@ -225,6 +227,7 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             self.table.doubleClicked.connect(self._activate)
             self.table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
             self.table.customContextMenuRequested.connect(self._context)
+            self.table.setMinimumHeight(theme.PAGE_LIST_MIN_HEIGHT)
             layout.addWidget(self.table, 1)
             self.empty = QtWidgets.QLabel("No recent games yet. Synced games appear here and remain after restarting the app.")
             self.empty.setWordWrap(True)
@@ -242,7 +245,8 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             widgets = [*self.filters.values(), self.date]
             spacing = max(0, self._controls_layout.horizontalSpacing())
             required = sum(widget.minimumSizeHint().width() for widget in widgets) + spacing * (len(widgets) - 1)
-            available = max(1, self.width() - self.layout().contentsMargins().left() - self.layout().contentsMargins().right())
+            margins = self.widget().layout().contentsMargins()
+            available = max(1, self.viewport().width() - margins.left() - margins.right())
             narrow = available < required
             if narrow == self._controls_narrow:
                 return

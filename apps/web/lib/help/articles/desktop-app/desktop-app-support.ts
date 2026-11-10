@@ -13,7 +13,7 @@ const article: HelpArticle = {
     { type: "callout", tone: "info", title: "Desktop version availability", text: "These native Help tools are part of the next desktop release. They are not in the published 0.24.7 installer. Check [Desktop app updates](/help/desktop-app-updates) for availability; this article does not announce a new installer." },
     { type: "heading", text: "Run the system check", anchor: "system-check" },
     { type: "steps", items: [
-      "In SC2 Tools, open **Help** or use **Help & troubleshooting** from the tray menu.",
+      "In SC2 Tools, open **Help** or use **Help and troubleshooting** from the tray menu.",
       "Select **Run system check**. It checks the data folder, replay folders, analyzer and bundled sample replay, agent version, website, account link, StarCraft II client API, OBS when enabled, and current sync queues.",
       "Use **Retry**, **Open Settings** or **Link again** beside a row that needs attention. Retry runs another check. It does not re-sync your replay library, install an update or change OBS scenes.",
     ] },
