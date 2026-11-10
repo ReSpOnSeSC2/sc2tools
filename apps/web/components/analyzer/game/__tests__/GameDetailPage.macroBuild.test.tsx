@@ -15,6 +15,8 @@ vi.mock("@/lib/useUserSocket", () => ({ useUserSocket: () => undefined }));
 import { BuildCheckInProvider } from "@/components/build-checkin/BuildCheckInProvider";
 import { GameDetailPage } from "../GameDetailPage";
 import { loadLazyHelpLink } from "@/components/help/__tests__/loadLazyHelpLink";
+import { diag, startHangWatchdog } from "./hangWatchdog";
+startHangWatchdog(__filename.split(/[\\/]/).pop() ?? "macroBuild");
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
 beforeAll(async () => {
@@ -58,44 +60,84 @@ function renderGame() {
 
 describe("Game Macro build editing with real SWR, card and action consumers", () => {
   it("changes the planned build from Macro and updates the original card and real game header", async () => {
+    diag("test start: changes the planned build from Macro and");
+    diag("step 1 begin");
     renderGame();
+    diag("step 1 end");
+    diag("step 2 begin");
     await screen.findByRole("button", { name: "Change build" });
+    diag("step 2 end");
     const overview = document.getElementById("overview")!;
     expect(within(overview).getByText("Replay classified opener")).toBeTruthy();
     const initialSummaryReads = h.reads.filter(path => path === "/v1/games/g1").length;
+    diag("step 3 begin");
     fireEvent.click(screen.getByRole("button", { name: "Change build" }));
+    diag("step 3 end");
     const macro = document.getElementById("macro")!;
+    diag("step 4 begin");
     const card = await within(macro).findByTestId("build-checkin-card");
+    diag("step 4 end");
     expect(within(card).getByRole("heading", { name: "Build check-in", level: 4 })).toBeTruthy();
+    diag("step 5 begin");
     fireEvent.click(within(card).getByRole("button", { name: "Change…" }));
+    diag("step 5 end");
+    diag("step 6 begin");
     fireEvent.click(within(card).getAllByRole("option").find(node => node.getAttribute("data-build-key") === "custom:dt-3-gate")!);
+    diag("step 6 end");
     h.hold = true;
+    diag("step 7 begin");
     fireEvent.click(within(card).getByRole("button", { name: "Confirm DT into 3 Gate" }));
+    diag("step 7 end");
+    diag("step 8 begin");
     await waitFor(() => expect(h.release).toBeTypeOf("function"));
+    diag("step 8 end");
     const originalCard = screen.getAllByTestId("build-checkin-card").find(node => !macro.contains(node))!;
     expect((within(originalCard).getByRole("button", { name: "Confirm" }) as HTMLButtonElement).disabled).toBe(true);
     expect((within(card).getByRole("button", { name: "Confirm DT into 3 Gate" }) as HTMLButtonElement).disabled).toBe(true);
+    diag("step 9 begin");
     fireEvent.click(within(originalCard).getByRole("button", { name: "No set build" }));
+    diag("step 9 end");
     expect(h.writes).toHaveLength(1);
+    diag("step 10 begin");
     await act(async () => { h.release?.(); });
+    diag("step 10 end");
+    diag("step 11 begin");
     await waitFor(() => expect(within(overview).getByText("DT into 3 Gate")).toBeTruthy());
+    diag("step 11 end");
     expect(within(overview).getByTestId("planned-badge").getAttribute("title")).toBe("Replay classified as Replay classified opener");
+    diag("step 12 begin");
     await waitFor(() => expect(screen.getByTestId("build-checkin-summary").textContent).toContain("DT into 3 Gate"));
+    diag("step 12 end");
     expect(h.writes).toEqual([{ action: "confirm", buildKey: "custom:dt-3-gate" }]);
     expect(h.reads.filter(path => path === "/v1/games/g1").length).toBeGreaterThan(initialSummaryReads);
+    diag("test end");
   });
 
   it("uses No set build inside Macro and refreshes both cards and header without changing the classifier", async () => {
+    diag("test start: uses No set build inside Macro and refre");
+    diag("step 13 begin");
     renderGame();
+    diag("step 13 end");
+    diag("step 14 begin");
     fireEvent.click(await screen.findByRole("button", { name: "Change build" }));
+    diag("step 14 end");
     const macro = document.getElementById("macro")!;
+    diag("step 15 begin");
     const card = await within(macro).findByTestId("build-checkin-card");
+    diag("step 15 end");
+    diag("step 16 begin");
     fireEvent.click(within(card).getByRole("button", { name: "No set build" }));
+    diag("step 16 end");
+    diag("step 17 begin");
     await waitFor(() => expect(h.writes).toEqual([{ action: "skip" }]));
+    diag("step 17 end");
+    diag("step 18 begin");
     await waitFor(() => expect(screen.getAllByText("No set build. This game keeps the replay's own label.")).toHaveLength(2));
+    diag("step 18 end");
     const overview = document.getElementById("overview")!;
     expect(within(overview).queryByTestId("planned-badge")).toBeNull();
     expect(within(overview).getByText("Replay classified opener")).toBeTruthy();
+    diag("test end");
   });
 });
 
