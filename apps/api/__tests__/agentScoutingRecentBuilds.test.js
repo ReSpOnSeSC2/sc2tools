@@ -68,6 +68,12 @@ describe("recent builds on the device brief", () => {
     expect(brief.recentBuilds.mine).toHaveLength(3);
   });
 
+  test("an opponent whose account is unknown keeps an unknown list, not a first meeting", () => {
+    const brief = buildScoutingBrief(envelope({ recentBuilds: { ...recentBuilds(3, 0), theirs: null } }));
+    expect(brief.recentBuilds.theirs).toBeNull();
+    expect(brief.recentBuilds.mine).toHaveLength(3);
+  });
+
   test("an enrichment without the lists sends today's brief unchanged", () => {
     const brief = buildScoutingBrief(envelope());
     expect(brief).not.toBeNull();
@@ -86,7 +92,8 @@ describe("recent builds on the device brief", () => {
     expect(brief.recentBuilds).toEqual({
       matchup: null,
       mine: [{ result: null, build: "x".repeat(80) }, { result: "Loss", build: "" }],
-      theirs: [],
+      // A malformed opponent list is unknown, never a first meeting.
+      theirs: null,
     });
     for (const matchup of ["PvZ and more", " PvZ", "pvz", 5, null]) {
       expect(buildScoutingBrief(envelope({ recentBuilds: { matchup, mine: [], theirs: [] } })).recentBuilds.matchup).toBeNull();

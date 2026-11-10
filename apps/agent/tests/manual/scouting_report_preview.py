@@ -5,9 +5,9 @@ Run from any directory with the desktop development Python:
     python apps/agent/tests/manual/scouting_report_preview.py [output folder]
 
 It saves the Companion's floating scouting report (five games on each side,
-fewer than five, a first meeting, an older server without the lists, the
-smallest window size and one race skin), the loading-screen strip and the
-setting. No paired account, service, runner or user settings are loaded.
+fewer than five, a first meeting, an opponent not identified yet, an older
+server without the lists, the smallest window size and one race skin), the
+loading-screen strip and the setting. No paired account, service, runner or user settings are loaded.
 """
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -74,11 +74,13 @@ def _legacy_games(count):
 
 
 def context(mine, theirs, *, lists=True):
-    """A live opponent as the Companion sees it; ``lists`` off is an older server."""
+    """A live opponent as the Companion sees it. ``lists`` off is an older
+    server; ``theirs`` None is an opponent whose account is not known yet."""
+    their_rows = None if theirs is None else _rows(THEIR_GAMES, "opp", theirs)
     history = {"recentBuilds": {"matchup": "PvZ", "mine": _rows(MY_GAMES, "my", mine),
-                                "theirs": _rows(THEIR_GAMES, "opp", theirs)}} if lists else {}
+                                "theirs": their_rows}} if lists else {}
     return {"name": "NorthStar", "race": "Zerg", "league": "Master", "region": "US", "mmr": 4310,
-            "headToHead": {"wins": 3, "losses": 2}, "last5GamesScouting": _legacy_games(theirs), **history}
+            "headToHead": {"wins": 3, "losses": 2}, "last5GamesScouting": _legacy_games(theirs or 0), **history}
 
 
 def _load_stored_events(page, panel):
@@ -107,6 +109,7 @@ def render_report(folder):
         ("scouting-report-fewer-than-five", context(2, 3), DEFAULT, "default"),
         ("scouting-report-first-meeting", context(5, 0), DEFAULT, "default"),
         ("scouting-report-first-meeting-smallest", context(5, 0), SMALLEST, "default"),
+        ("scouting-report-not-identified", context(5, None), DEFAULT, "default"),
         ("scouting-report-older-server", context(0, 2, lists=False), DEFAULT, "default"),
     )
     for name, live, size, skin in states:
@@ -127,13 +130,6 @@ def render_report(folder):
 
 
 def render_strip(folder):
-    card = QtWidgets.QFrame()
-    card.setObjectName("card")
-    card.setStyleSheet(card_stylesheet())
-    card.setFixedWidth(320)
-    layout = QtWidgets.QVBoxLayout(card)
-    strip = ScoutingStrip()
-    layout.addWidget(strip)
     brief = {"gameKey": "preview", "oppName": "NorthStar", "pulseId": "1-S2-1-42", "h2h": {"w": 3, "l": 2},
              "lastMet": {"at": _date(1), "result": "Loss", "map": "Lightshade LE"},
              "forecast": {"name": "12 Pool", "share": 0.4, "samples": 2, "n": 5},
@@ -141,11 +137,18 @@ def render_strip(folder):
     for name, payload in (("scouting-strip-five-games", brief),
                           ("scouting-strip-first-meeting", {**brief, "h2h": {"w": 0, "l": 0}, "lastMet": None, "forecast": None,
                                                            "recentBuilds": {**brief["recentBuilds"], "theirs": []}})):
+        # A fresh card per state, sized from its own content as on a real game start.
+        card = QtWidgets.QFrame()
+        card.setObjectName("card")
+        card.setStyleSheet(card_stylesheet())
+        card.setFixedWidth(320)
+        strip = ScoutingStrip()
+        QtWidgets.QVBoxLayout(card).addWidget(strip)
         strip.set_model(scouting_model(parse_scouting_brief(payload, "preview"), NOW.timestamp()))
         card.show()
         card.adjustSize()
         _save(card, folder, name)
-    card.deleteLater()
+        card.deleteLater()
 
 
 def capture(folder):

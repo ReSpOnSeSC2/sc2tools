@@ -154,6 +154,42 @@ def _history_source_signature(game, stored):
             for name in ("myTechMilestones", "oppTechMilestones", "myBuildOrder", "oppBuildOrder")))
 
 
+def _opponent_name(envelope):
+    opponent = envelope.get("opponent") or {}
+    name = opponent.get("name")
+    if not isinstance(name, str) or not name.strip():
+        name = opponent.get("revealedName")
+    return name.strip().casefold() if isinstance(name, str) and name.strip() else None
+
+
+def _keep_live_history(snapshot, kept):
+    """``(snapshot, kept)`` with the live game's last enrichment carried over.
+
+    The server's snapshot can hold a tick before its enrichment resolves.
+    Without this, one such poll would close an open pinned report or swap
+    its lists for the one-replay picker. Like the web overlay's
+    ``mergeLiveGameStreamerHistory``, the kept enrichment joins only a tick
+    of the same account, game and opponent.
+    """
+    envelope = snapshot.get("liveGame")
+    game_key = envelope.get("gameKey") if isinstance(envelope, dict) else None
+    if not isinstance(game_key, str) or not game_key:
+        return snapshot, None
+    game, opponent = (snapshot.get("accountKey"), game_key), _opponent_name(envelope)
+    history = envelope.get("streamerHistory")
+    if isinstance(history, dict):
+        name = history.get("oppName")
+        agreed = opponent is not None and isinstance(name, str) and name.strip().casefold() == opponent
+        return snapshot, (game, opponent, history) if agreed else None
+    if kept is None or kept[0] != game:
+        return snapshot, None
+    if opponent is None:
+        return snapshot, kept
+    if opponent != kept[1]:
+        return snapshot, None
+    return {**snapshot, "liveGame": {**envelope, "streamerHistory": kept[2]}}, kept
+
+
 def _live_context(snapshot):
     envelope = snapshot.get("liveGame") or {}
     active = envelope.get("phase") in {"match_loading", "match_started", "match_in_progress"} and not envelope.get("isReplay")
@@ -278,6 +314,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
             self._context = {}
             self._scope = None
+            self._builds_scope = None
             self._source_id = None
             self._games = []
             # None on an older payload: both cards then share one replay.
@@ -491,18 +528,22 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 if match >= 0:
                     self.games.setCurrentIndex(match)
                 del blocked
-                self._show_recent_builds(history, context, keep_selection=not changed)
+                self._show_recent_builds(history, context)
                 self._game_changed()
             self.render_build_data()
 
-        def _show_recent_builds(self, history, context, *, keep_selection):
+        def _show_recent_builds(self, history, context):
             # Each player's last five games replace the one-replay picker of an older payload.
             self._history = history
             self.games.setVisible(history is None)
             self.recent_builds.setVisible(history is not None)
             if history is not None:
                 columns = recent_build_columns(history, time.time(), context.get("race") or context.get("oppRace"))
-                self.recent_builds.set_columns(columns, keep_selection=keep_selection)
+                # A pick survives a refresh within one game. The first lists of
+                # another game open at its newest games, even when that game's
+                # first context arrived without lists.
+                self.recent_builds.set_columns(columns, keep_selection=self._builds_scope == self._scope)
+                self._builds_scope = self._scope
 
         def _side_games(self):
             """The earlier game behind each card.
@@ -600,10 +641,15 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             elif any(game and stored[side] is None for side, game in self._sides.items()):
                 status = "Scouting preview · stored replay load failed. Retry to load all steps." if failed else "Scouting preview · loading stored replay events. Later and repeated steps may be omitted."
             else:
-                counts = " · ".join(title + ": " + (str(len(stored[side][side])) if stored[side] is not None else "no earlier game")
-                                    for side, title in (("my", "You"), ("opp", "Opponent")))
+                counts = " · ".join(title + ": " + self._stored_count(stored, side) for side, title in (("my", "You"), ("opp", "Opponent")))
                 status = "Stored replay events · " + counts + ". Older uploads may be incomplete."
             self.source_status.setText(status)
+
+        def _stored_count(self, stored, side):
+            if stored[side] is not None:
+                return str(len(stored[side][side]))
+            unknown = side == "opp" and self._history is not None and self._history.theirs is None
+            return "not identified yet" if unknown else "no earlier game"
 
     def _game_title(game, index):
         return f"{index + 1}. {str(game.get('result') or 'Game').upper()} · {_time(game.get('durationSec'))} · {game.get('map') or 'Unknown map'} · {str(game.get('date') or '')[:10]}"
@@ -647,6 +693,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._detail = {}
             self._drafts = {}
             self._snapshot = {}
+            self._kept_live_history = None
             self._snapshot_healthy = False
             self._account_key = None
             self.team_roster_state = TeamRoster()
@@ -2095,7 +2142,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 if self._account_key is not None and account_key != self._account_key:
                     self._clear_library()
                 self._account_key = account_key
-                self._snapshot = result
+                self._snapshot, self._kept_live_history = _keep_live_history(result, self._kept_live_history)
                 self._snapshot_healthy = True
                 paired = bool(result.get("paired"))
                 if self._paired and not paired:

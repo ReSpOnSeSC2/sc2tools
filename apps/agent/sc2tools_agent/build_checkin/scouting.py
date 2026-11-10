@@ -14,10 +14,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from ..live.types import normalise_live_race
+
 RECENT_BUILDS_LIMIT = 5
 UNCLASSIFIED_BUILD = "Unclassified build"
+# The strip's short form cuts a longer build name, so all five games fit the card.
+STRIP_BUILD_NAME_LIMIT = 22
 _RESULT_LETTERS = {"Win": "W", "Loss": "L", "Tie": "Tie"}
-_RACE_NAMES = {"p": "Protoss", "t": "Terran", "z": "Zerg", "r": "Random"}
 
 
 def plain_text(value: Any, limit: int, *, trim: bool = True) -> str:
@@ -41,7 +44,7 @@ def _record(raw: Any) -> Optional[tuple[int, int]]:
 
 def _race_name(value: Any) -> str:
     """The full name for "zerg", "Z" or "Zerg"; empty when the race is unknown."""
-    return _RACE_NAMES.get(plain_text(value, 20)[:1].casefold(), "")
+    return normalise_live_race(value) or ""
 
 
 def toon_identity(value: Any) -> Optional[str]:
@@ -80,10 +83,11 @@ class RecentBuilds:
 
     ``mine`` is the owner's games in this matchup. ``theirs`` is the owner's
     games against this player, the only games the app knows the player's
-    builds from; it is empty on a first meeting.
+    builds from; it is empty on a first meeting and None while the server
+    cannot tell which account the player is.
     """
     mine: tuple[RecentBuild, ...] = ()
-    theirs: tuple[RecentBuild, ...] = ()
+    theirs: Optional[tuple[RecentBuild, ...]] = ()
     matchup: str = ""
 
 
@@ -161,14 +165,16 @@ def parse_recent_builds(raw: Any) -> Optional[RecentBuilds]:
     """Both lists, or None when the server sent none.
 
     None is an older server: callers then draw exactly what they drew before.
-    Two empty lists are a real answer, not a missing one.
+    Two empty lists are a real answer, not a missing one. A missing opponent
+    list means the player's account is not known yet.
     """
     if not isinstance(raw, dict):
         return None
     matchup = raw.get("matchup")
+    theirs = raw.get("theirs")
     return RecentBuilds(
         mine=_recent_build_rows(raw.get("mine")),
-        theirs=_recent_build_rows(raw.get("theirs")),
+        theirs=_recent_build_rows(theirs) if isinstance(theirs, list) else None,
         matchup=matchup if isinstance(matchup, str) and re.fullmatch(r"[PTZR]v[PTZR]", matchup) else "",
     )
 
@@ -200,25 +206,32 @@ def _row_model(row: RecentBuild, now: float, preposition: str, current_race: str
 def recent_build_columns(builds: RecentBuilds, now: float, opponent_race: Any = None) -> dict[str, BuildColumnModel]:
     """The floating report's two columns, keyed like its cards: ``my`` and ``opp``."""
     mine = tuple(_row_model(row, now, "with", "") for row in builds.mine)
-    theirs = tuple(_row_model(row, now, "against", _race_name(opponent_race)) for row in builds.theirs)
+    theirs = tuple(_row_model(row, now, "against", _race_name(opponent_race)) for row in builds.theirs or ())
     you = " · ".join(part for part in ("YOU", builds.matchup) if part)
+    if builds.theirs is None:
+        opponent = BuildColumnModel("OPPONENT · NOT IDENTIFIED YET",
+                                    "Their earlier games appear once this player's account is confirmed.", ())
+    else:
+        # The app knows a player's builds only from the owner's games against them.
+        opponent = BuildColumnModel(
+            f"OPPONENT · {recent_games_label(len(theirs)).upper()} VS YOU" if theirs else "OPPONENT · FIRST MEETING",
+            "" if theirs else "No earlier games against this player in your library.",
+            theirs)
     return {
         "my": BuildColumnModel(
             f"{you} · {recent_games_label(len(mine)).upper()}" if mine else f"{you} · NO EARLIER GAMES",
             "" if mine else "You have no earlier games in this matchup." if builds.matchup else "You have no earlier games.",
             mine),
-        # The app knows a player's builds only from the owner's games against them.
-        "opp": BuildColumnModel(
-            f"OPPONENT · {recent_games_label(len(theirs)).upper()} VS YOU" if theirs else "OPPONENT · FIRST MEETING",
-            "" if theirs else "No earlier games against this player in your library.",
-            theirs),
+        "opp": opponent,
     }
 
 
 def _short_build(build: str, redundant: tuple[str, ...]) -> str:
-    """Drop a prefix that only repeats this matchup: "Zerg - 12 Pool" -> "12 Pool"."""
+    """Drop a prefix that only repeats this matchup ("Zerg - 12 Pool" -> "12 Pool")
+    and cut a long name, so five games fit the card."""
     prefix, separator, name = build.partition(" - ")
-    return name if separator and name.strip() and prefix.strip().casefold() in redundant else build
+    name = name.strip() if separator and name.strip() and prefix.strip().casefold() in redundant else build
+    return name if len(name) <= STRIP_BUILD_NAME_LIMIT else name[:STRIP_BUILD_NAME_LIMIT].rstrip() + "…"
 
 
 def _builds_line(owner: str, preposition: str, rows: tuple[RecentBuild, ...], redundant: tuple[str, ...]) -> str:
@@ -237,9 +250,9 @@ def _strip_build_lines(builds: RecentBuilds) -> tuple[str, str]:
     # on a Zerg opponent's say nothing new on a card that already names the
     # matchup. A build from another race keeps its prefix.
     own_view, their_view = builds.matchup, builds.matchup[::-1]
-    own_prefixes = tuple(name.casefold() for name in (own_view, _race_name(own_view)) if name)
-    their_prefixes = tuple(name.casefold() for name in (their_view, _race_name(their_view)) if name)
-    return (_builds_line("Their", "vs", builds.theirs, their_prefixes),
+    own_prefixes = tuple(name.casefold() for name in (own_view, _race_name(own_view[:1])) if name)
+    their_prefixes = tuple(name.casefold() for name in (their_view, _race_name(their_view[:1])) if name)
+    return (_builds_line("Their", "vs", builds.theirs or (), their_prefixes),
             _builds_line("Your", "with", builds.mine, own_prefixes))
 
 

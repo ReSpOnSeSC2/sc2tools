@@ -35,8 +35,10 @@ const NEWEST_FIRST = Object.freeze({ date: -1, _id: -1 });
  * @typedef {{
  *   matchup: string|null,
  *   mine: RecentBuildRow[],
- *   theirs: Array<RecentBuildRow & {race: string}>,
+ *   theirs: Array<RecentBuildRow & {race: string}>|null,
  * }} RecentBuilds
+ * ``theirs`` is null while the opponent's account is unknown, so only an
+ * identified player with no earlier game reads as a first meeting.
  */
 
 /** @param {string} userId @returns {Record<string, any>} */
@@ -46,12 +48,15 @@ function ownStatsGames(userId) {
 
 /**
  * Match a stored race by its initial, as the sibling live aggregations do.
+ * A stored game keeps the race each player spawned as, never Random, so a
+ * Random pick narrows nothing.
  * @param {unknown} race
- * @returns {{$regex: string, $options: string}|null} null when the race is unknown
+ * @returns {{$regex: string, $options: string}|null} null when the race is
+ *   unknown or Random
  */
 function raceInitialMatch(race) {
-  const initial = typeof race === "string" ? race.trim().charAt(0) : "";
-  return initial ? { $regex: `^${escapeRegex(initial)}`, $options: "i" } : null;
+  const initial = typeof race === "string" ? race.trim().charAt(0).toUpperCase() : "";
+  return initial && initial !== "R" ? { $regex: `^${escapeRegex(initial)}`, $options: "i" } : null;
 }
 
 /** @param {unknown} value @returns {string} */
@@ -84,7 +89,7 @@ function buildRow(game, build) {
 
 /**
  * The owner's newest games in one matchup, whoever the opponent was.
- * An unknown race never narrows the set (mirrors ``recentGamesForOpponent``).
+ * An unknown or Random race never narrows the set.
  *
  * @param {import('mongodb').Collection} games
  * @param {string} userId
@@ -118,12 +123,12 @@ async function ownRecentBuilds(games, userId, myRace, oppRace) {
  * @param {import('mongodb').Collection} games
  * @param {string} userId
  * @param {Record<string, any>|null|undefined} identity
- * @returns {Promise<Array<RecentBuildRow & {race: string}>>}
+ * @returns {Promise<Array<RecentBuildRow & {race: string}>|null>} null when
+ *   the identity names no account: an empty list would claim a first meeting
  */
 async function opponentRecentBuilds(games, userId, identity) {
-  if (!userId || !identity) return [];
-  const filter = attachScoutingIdsToFilter(ownStatsGames(userId), identity);
-  if (!filter) return [];
+  const filter = userId && identity ? attachScoutingIdsToFilter(ownStatsGames(userId), identity) : null;
+  if (!filter) return null;
   const rows = await games
     .find(filter, { projection: {
       _id: 0,

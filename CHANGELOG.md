@@ -47,7 +47,8 @@ corresponding GitHub Release.
   in this matchup and the last five games in your library against the opponent,
   linked accounts included. Each row has your result, the map and how long ago
   it was; fewer than five says how many there are, and a row opens its build
-  order. A first meeting says so instead of guessing.
+  order. A first meeting says so instead of guessing, and an opponent whose
+  account is not confirmed yet is never called one.
 - Add **Keep scouting closed on a first meeting**, on by default: a pinned
   report opens only when there is an earlier game against the opponent. The
   Scouting button still opens it.

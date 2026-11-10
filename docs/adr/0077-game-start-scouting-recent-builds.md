@@ -28,14 +28,19 @@ or infrastructure change.
 
 1. **Two lists, newest first, five games at most each**
    (`services/scouting/recentBuilds.js`). "You" is the owner's games in this
-   matchup, whoever the opponent was. "Opponent" is the owner's games against
+   matchup, whoever the opponent was; a Random pick on either side narrows
+   nothing, because a stored game keeps the race each player spawned as.
+   "Opponent" is the owner's games against
    this player in every matchup, with linked accounts included; each row
    carries the race the player used. A row has the owner's result, the map,
    the date, the build and the game id that opens its build order.
 2. **Never a guess.** The opponent's list is matched by toon handle or
    character id only. A display name alone matches nothing, so a barcode never
-   borrows another account's games. No earlier game is an empty list, and both
-   views say "First meeting". A read that fails leaves the lists out instead:
+   borrows another account's games. No earlier game of an identified player is
+   an empty list, and both views say "First meeting". While the account is not
+   known (SC2Pulse has not named it yet, or only the display name matched), the
+   opponent's list is null and the report says "Not identified yet". A read
+   that fails leaves the lists out instead:
    the agent then draws the single-game report, and a known opponent is never
    called a first meeting. Nothing comes from other users or from SC2Pulse.
 3. **The lists stay on the device.** They ride in `streamerHistory.recentBuilds`
@@ -45,14 +50,18 @@ or infrastructure change.
 4. **The device brief carries a short form:** the result and the build of each
    game, names cut at 80 characters. Over the byte cap the lists are dropped
    before anything else, so they can never cost a player the strip an older
-   agent already drew.
+   agent already drew. The strip cuts names at 22 characters and gives each
+   list four lines, so all five games read in full on the 320 px card.
 5. **Compatible both ways.** The change only adds a field. An older agent
    ignores it. The new agent tells a missing field (an older server: it draws
    the single-game report as before) from two empty lists (a real answer).
 6. **A pinned report with nothing to say stays closed.** The new Companion
    setting "Keep scouting closed on a first meeting" starts on. It only gates
    the pinned report's own opening; the Scouting button still opens it, with
-   the owner's five games and "First meeting" for the opponent.
+   the owner's five games and "First meeting" for the opponent. A snapshot
+   polled before the server's enrichment resolves keeps the game's last
+   enrichment, as the web overlay does, so one such poll neither closes an
+   open report nor swaps its lists for the single-game picker.
 7. **The agent version on `main` may run ahead of the published release.**
    `__version__` is 0.25.0 from this change on, so later agent work lands under
    one version. `FALLBACK_LATEST_AGENT_VERSION`, which the website shows as the

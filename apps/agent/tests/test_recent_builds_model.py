@@ -35,7 +35,15 @@ def test_a_payload_without_the_lists_is_an_older_server_not_two_empty_lists(payl
 
 def test_two_empty_lists_are_an_answer():
     assert parse_recent_builds({"matchup": "PvZ", "mine": [], "theirs": []}) == RecentBuilds(matchup="PvZ")
-    assert parse_recent_builds({}) == RecentBuilds()
+
+
+@pytest.mark.parametrize("theirs", [None, "missing"])
+def test_an_opponent_list_the_server_could_not_answer_is_unknown_not_empty(theirs):
+    payload = {"matchup": "PvZ", "mine": [row(0)]}
+    if theirs != "missing":
+        payload["theirs"] = theirs
+    builds = parse_recent_builds(payload)
+    assert builds.theirs is None and len(builds.mine) == 1
 
 
 def test_rows_keep_the_server_order_and_every_field():
@@ -58,7 +66,7 @@ def test_five_games_at_most_are_kept_on_each_side():
 def test_malformed_fields_cannot_crash_or_invent_a_detail(bad):
     game = row(0, result=bad, map=bad, build=bad, date=bad, gameId=bad, race=bad)
     builds = parse_recent_builds({"matchup": bad, "theirs": bad, "mine": [bad, "not a game", game]})
-    assert builds.matchup == "" and builds.theirs == ()
+    assert builds.matchup == "" and builds.theirs == (() if isinstance(bad, list) else None)
     assert builds.mine == (RecentBuild(),)
 
 
@@ -66,6 +74,12 @@ def test_text_is_bounded_and_identifiers_are_trimmed():
     game = parse_recent_builds({"mine": [row(0, build="x" * 500, map="y" * 500, gameId="  spaced-id  ", result="Victory", race="zerg")]}).mine[0]
     assert (len(game.build), len(game.map_name), game.game_id, game.result, game.race) == (160, 120, "spaced-id", "", "Zerg")
     assert parse_recent_builds({"matchup": "Protoss v Zerg"}).matchup == ""
+
+
+@pytest.mark.parametrize("race,name", [("Z", "Zerg"), ("prot", "Protoss"), ("TERRAN", "Terran"), ("rand", "Random"),
+                                       ("Zergling", ""), ("Pulse", ""), ("U", ""), ("", "")])
+def test_a_race_is_named_only_from_a_known_spelling(race, name):
+    assert parse_recent_builds({"theirs": [row(0, race=race)]}).theirs[0].race == name
 
 
 @pytest.mark.parametrize("count,label", [(5, "Last 5 games"), (9, "Last 5 games"), (4, "4 earlier games"),
@@ -101,6 +115,16 @@ def test_a_first_meeting_lists_your_games_and_says_so_for_the_opponent():
     assert both["opp"].empty_text == "No earlier games against this player in your library."
     assert both["opp"].rows == ()
     assert len(both["my"].rows) == 5
+
+
+def test_an_opponent_not_identified_yet_is_never_called_a_first_meeting():
+    builds = parse_recent_builds({**lists(5, 0), "theirs": None})
+    both = recent_build_columns(builds, NOW, "Zerg")
+    assert both["opp"].heading == "OPPONENT" + DOT + "NOT IDENTIFIED YET"
+    assert both["opp"].empty_text == "Their earlier games appear once this player's account is confirmed."
+    assert both["opp"].rows == () and len(both["my"].rows) == 5
+    model = scouting_model(brief({**lists(1, 0), "theirs": None}), NOW)
+    assert model.their_builds == "" and model.your_builds == "Your 1 earlier game: W with Build 0"
 
 
 def test_no_earlier_game_of_your_own_is_said_for_the_matchup_when_it_is_known():
@@ -151,9 +175,15 @@ def test_the_strip_lists_both_players_builds_in_short_form_newest_first():
 def test_the_strip_says_last_five_and_keeps_a_prefix_that_names_another_race():
     games = [{"result": "Win", "build": name} for name in ("Terran - Proxy Barracks", "Zerg - 12 Pool", "Roach - Timing", "Zerg - ", "PvZ - Cannon Rush")]
     model = scouting_model(brief({"matchup": "PvZ", "mine": [], "theirs": games}), NOW)
-    assert model.their_builds == ("Their last 5 games: W vs Terran - Proxy Barracks" + DOT + "W vs 12 Pool" + DOT + "W vs Roach - Timing"
-                                  + DOT + "W vs Zerg -" + DOT + "W vs PvZ - Cannon Rush")
+    assert model.their_builds == ("Their last 5 games: W vs Terran - Proxy Barrack\N{HORIZONTAL ELLIPSIS}" + DOT + "W vs 12 Pool"
+                                  + DOT + "W vs Roach - Timing" + DOT + "W vs Zerg -" + DOT + "W vs PvZ - Cannon Rush")
     assert model.your_builds == ""
+
+
+def test_the_strip_cuts_a_long_name_after_22_characters_so_five_games_fit():
+    games = [{"result": "Loss", "build": "Zerg - Hatch First into Roach Timing"}, {"result": "Win", "build": "Zerg - " + "x" * 22}]
+    model = scouting_model(brief({"matchup": "PvZ", "mine": [], "theirs": games}), NOW)
+    assert model.their_builds == ("Their 2 earlier games: L vs Hatch First into Roach\N{HORIZONTAL ELLIPSIS}" + DOT + "W vs " + "x" * 22)
 
 
 def test_without_a_known_matchup_the_strip_keeps_every_name_whole():

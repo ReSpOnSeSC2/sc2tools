@@ -112,6 +112,18 @@ describe("your recent builds in this matchup", () => {
     expect(rows.map((row) => row.gameId)).toEqual(["game-0", "game-1"]);
   });
 
+  test("a Random pick on either side does not narrow the list, since games keep the spawned race", async () => {
+    await db.games.insertMany([
+      versusStranger(0, { opponent: { race: "Terran" } }),
+      versusStranger(1, { myRace: "Zerg", myLadderRace: "Random" }),
+      versusStranger(2),
+    ]);
+    const versusRandom = await ownRecentBuilds(db.games, OWNER, "Protoss", "Random");
+    expect(versusRandom.map((row) => row.gameId)).toEqual(["game-0", "game-2"]);
+    const asRandom = await ownRecentBuilds(db.games, OWNER, "Random", "Zerg");
+    expect(asRandom.map((row) => row.gameId)).toEqual(["game-1", "game-2"]);
+  });
+
   test("an unclassified game is listed with an empty build and an unknown result stays unknown", async () => {
     await db.games.insertOne(versusStranger(0, { myBuild: null, result: "Unknown", map: null, gameId: "x".repeat(201) }));
     expect(await ownRecentBuilds(db.games, OWNER, "Protoss", "Zerg")).toEqual([
@@ -156,10 +168,11 @@ describe("the opponent's recent builds against you", () => {
     expect(rows.map((row) => row.gameId)).toEqual(["game-0", "game-1"]);
   });
 
-  test("a display name alone never identifies the player", async () => {
+  test("a display name alone never identifies the player, so the list is unknown rather than empty", async () => {
     await db.games.insertOne(game(0));
-    expect(await opponentRecentBuilds(db.games, OWNER, { displayName: "Rival" })).toEqual([]);
-    expect(await opponentRecentBuilds(db.games, OWNER, null)).toEqual([]);
+    expect(await opponentRecentBuilds(db.games, OWNER, { displayName: "Rival" })).toBeNull();
+    expect(await opponentRecentBuilds(db.games, OWNER, { pulseId: null, pulseCharacterId: null })).toBeNull();
+    expect(await opponentRecentBuilds(db.games, OWNER, null)).toBeNull();
   });
 
   test("another account's games against the same player are never read", async () => {
@@ -220,5 +233,18 @@ describe("both lists for one live game", () => {
     const history = await new OverlayLiveService(db).buildFromOpponentName(OWNER, "IIIIIIIIIIII", "Zerg", 8888, "Protoss", "1-S2-1-8888");
     expect(history.opponentIdentityMatched).toBe(false);
     expect(history.recentBuilds.theirs).toEqual([]);
+  });
+
+  test("a known opponent seen by name only is never called a first meeting", async () => {
+    await db.opponents.insertOne({
+      userId: OWNER, pulseId: RIVAL.pulseId, pulseCharacterId: RIVAL.pulseCharacterId,
+      displayNameSample: "Rival", race: "Zerg", gameCount: 3, wins: 2, losses: 1,
+    });
+    await db.games.insertMany([game(0), game(1), game(2)]);
+    // SC2Pulse has not named the account yet: the live envelope carries the name alone.
+    const history = await new OverlayLiveService(db).buildFromOpponentName(OWNER, "Rival", "Zerg", null, "Protoss", null);
+    expect(history.opponentIdentityMatched).toBe(false);
+    expect(history.recentBuilds.theirs).toBeNull();
+    expect(history.recentBuilds.mine.map((row) => row.gameId)).toEqual(["game-0", "game-1", "game-2"]);
   });
 });

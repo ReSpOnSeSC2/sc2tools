@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import os
+import re
 import time
 
 import pytest
@@ -12,11 +13,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from sc2tools_agent.ui.companion_page import _live_context, build_companion_page
+from sc2tools_agent.ui import theme
+from sc2tools_agent.ui.companion_page import _keep_live_history, _live_context, build_companion_page
 from sc2tools_agent.ui.companion_speech import build_scouting_report
 from tests._gui_offscreen import run_gui_check
 from tests.test_companion_build_range_scope import build_calls, desk_factory, replay, stored_order, wait_until
 from tests.test_companion_page import companion
+from tests.test_companion_team_roster import confirm, team_snapshot
 
 DOT = " \N{MIDDLE DOT} "
 
@@ -164,6 +167,53 @@ def test_a_refresh_keeps_the_chosen_game_and_a_new_opponent_starts_at_the_newest
     panel.update_context({**context(), "name": "Somebody else"})
     assert [row.isChecked() for row in columns["opp"].rows()] == [True, False, False, False, False]
     assert panel.comparison.chain_labels["opp"].text() == "opp build 0"
+
+
+def test_a_new_game_opens_at_its_newest_games_when_its_first_context_had_no_lists(report):
+    panel, app = report
+    columns = shown(panel, app, context())
+    panel.update_context(context(), scope="game-1")
+    columns["my"].rows()[1].click()
+    columns["opp"].rows()[2].click()
+    # The next game's first snapshot arrives before its enrichment; a rematch
+    # then brings the same earlier games.
+    panel.update_context({"name": "NorthStar", "race": "Zerg"}, scope="game-2")
+    panel.update_context(context(), scope="game-2")
+    for side in ("my", "opp"):
+        assert [row.isChecked() for row in columns[side].rows()] == [True, False, False, False, False]
+    assert panel.comparison.chain_labels["opp"].text() == "opp build 0"
+
+
+def test_an_opponent_not_identified_yet_is_not_called_a_first_meeting(report):
+    panel, app = report
+    live = context()
+    live["recentBuilds"]["theirs"] = None
+    columns = shown(panel, app, live)
+    assert columns["opp"].heading.text() == "OPPONENT" + DOT + "NOT IDENTIFIED YET"
+    assert columns["opp"].empty.isVisible() and columns["opp"].rows() == []
+    assert len(columns["my"].rows()) == 5
+    panel.owner._build_order_cache[panel._keys["my"]] = {"my": [], "opp": [], "statuses": {"my": "ok", "opp": "ok"}}
+    panel.render_build_data()
+    assert panel.source_status.toolTip() == "Stored replay events" + DOT + "You: 0" + DOT + "Opponent: not identified yet. Older uploads may be incomplete."
+
+
+def _luminance(color):
+    channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+    linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4 for value in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def _contrast(first, second):
+    light, dark = sorted((_luminance(first), _luminance(second)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+def test_the_chosen_row_is_as_readable_as_the_others(report):
+    panel, app = report
+    style = panel.recent_builds.styleSheet()
+    chosen = re.search(r"QPushButton:checked \{ background: (#[0-9a-fA-F]{6})", style).group(1)
+    for text in (theme.SUCCESS, theme.DANGER, theme.TEXT_MUTED, theme.ACCENT_CYAN):
+        assert _contrast(text, chosen) >= 4.5, (text, chosen)
 
 
 def test_a_game_against_this_opponent_previews_its_milestones_until_stored_events_load(report):
@@ -325,6 +375,64 @@ def test_an_older_server_counts_its_own_list_of_earlier_games(desk_factory):
     page._snapshot["liveGame"]["streamerHistory"]["last5GamesScouting"] = [replay("earlier")]
     page._update_overlays()
     assert panel.isVisible() and panel.games.isVisible()
+
+
+def deliver(page, live):
+    page._requests["snapshot"] = request = object()
+    page._completed({"channel": "snapshot", "request": request, "payload": {"action": "snapshot"},
+                     "result": {"paired": True, "accountKey": "fixture-owner", "liveGame": live}})
+
+
+def test_a_poll_before_the_enrichment_resolves_keeps_an_open_report_and_its_lists(desk_factory):
+    page, state, app = desk_factory()
+    page._preferences.update(overlaysEnabled=True, scoutingOverlay=True)
+    panel = page.overlays["scouting"]
+    deliver(page, live_game({"recentBuilds": lists(5, 3)}))
+    assert panel.isVisible() and panel.recent_builds.isVisible()
+    bare = live_game({})
+    del bare["streamerHistory"]
+    deliver(page, bare)
+    assert panel.isVisible() and panel.recent_builds.isVisible() and not panel.games.isVisible()
+    assert len(panel.recent_builds.columns["opp"].rows()) == 3
+    deliver(page, {**bare, "gameKey": "next-match"})
+    assert not panel.isVisible()
+
+
+def test_a_kept_enrichment_joins_only_the_same_account_game_and_opponent():
+    enriched = {"accountKey": "me", "liveGame": live_game({"recentBuilds": lists()})}
+    _, kept = _keep_live_history(enriched, None)
+    bare = live_game({})
+    del bare["streamerHistory"]
+    joined, still = _keep_live_history({"accountKey": "me", "liveGame": bare}, kept)
+    assert joined["liveGame"]["streamerHistory"]["recentBuilds"] == lists() and still is kept
+    assert "streamerHistory" not in bare
+    nameless = {**bare, "opponent": {"race": "Zerg"}}
+    unnamed, waiting = _keep_live_history({"accountKey": "me", "liveGame": nameless}, kept)
+    assert "streamerHistory" not in unnamed["liveGame"] and waiting is kept
+    for changed in ({"accountKey": "someone else", "liveGame": bare},
+                    {"accountKey": "me", "liveGame": {**bare, "gameKey": "next-match"}},
+                    {"accountKey": "me", "liveGame": {**bare, "opponent": {"name": "Rematch rival"}}}):
+        result, dropped = _keep_live_history(changed, kept)
+        assert "streamerHistory" not in result["liveGame"] and dropped is None
+    mismatched = live_game({"recentBuilds": lists()})
+    mismatched["streamerHistory"]["oppName"] = "Previous opponent"
+    assert _keep_live_history({"accountKey": "me", "liveGame": mismatched}, kept)[1] is None
+
+
+def test_in_a_team_game_the_pinned_report_follows_the_selected_enemys_history(companion):
+    page, state, app = companion
+    team_snapshot(state)
+    page.refresh()
+    wait_until(app, lambda: bool(page.team_roster_state.candidate))
+    keys = confirm(page)
+    wait_until(app, lambda: set(page._team_details) == {"one", "two"})
+    panel = page.overlays["scouting"]
+    assert page._preferences["scoutingSkipFirstMeeting"] is True
+    assert page.team_roster_state.selected_key == keys["Library one"] and panel.isVisible()
+    page._select_team_enemy(keys["Library two"])
+    assert not panel.isVisible()
+    page._select_team_enemy(keys["Library one"])
+    assert panel.isVisible()
 
 
 def test_the_setting_is_on_by_default_explained_and_saved_like_the_other_choices(companion):

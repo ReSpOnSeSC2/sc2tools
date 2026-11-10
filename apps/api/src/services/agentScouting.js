@@ -57,8 +57,9 @@ function briefBuildRows(rows) {
  * are read from the enrichment even when a name-only match set its other
  * records aside.
  * @param {unknown} value ``streamerHistory.recentBuilds``
- * @returns {{matchup: string|null, mine: object[], theirs: object[]}|null}
- *   null when the enrichment carries no lists, so the brief omits the field
+ * @returns {{matchup: string|null, mine: object[], theirs: object[]|null}|null}
+ *   null when the enrichment carries no lists, so the brief omits the field;
+ *   ``theirs`` stays null while the opponent's account is unknown
  */
 function briefRecentBuilds(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -67,7 +68,7 @@ function briefRecentBuilds(value) {
   return {
     matchup: typeof matchup === "string" && /^[PTZR]v[PTZR]$/.test(matchup) ? matchup : null,
     mine: briefBuildRows(builds.mine),
-    theirs: briefBuildRows(builds.theirs),
+    theirs: Array.isArray(builds.theirs) ? briefBuildRows(builds.theirs) : null,
   };
 }
 /** @param {object} brief @returns {boolean} */

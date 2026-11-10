@@ -99,7 +99,7 @@ describe("Companion release documentation", () => {
     const section = article.body.slice(start, end);
     const text = section.map(helpBlockText).join(" ");
     for (const phrase of ["previous five games, newest first", "your result in that game", "your last five games in this matchup",
-      "in your library against this player", "linked accounts", "another race", "2 EARLIER GAMES", "FIRST MEETING",
+      "in your library against this player", "linked accounts", "another race", "2 EARLIER GAMES", "FIRST MEETING", "NOT IDENTIFIED YET",
       "never a guess", "knows a build only from a game you played", "Keep scouting closed on a first meeting",
       "on by default", "Scouting button still opens it", "short form"]) {
       expect(text).toContain(phrase);
@@ -120,5 +120,6 @@ describe("Companion release documentation", () => {
     expect(strip).toContain("Their last 5 games");
     expect(strip).toContain("arrive with agent 0.25.0");
     expect(strip).toContain("a first meeting has none");
+    expect(strip).toContain("all five games fit");
   });
 });

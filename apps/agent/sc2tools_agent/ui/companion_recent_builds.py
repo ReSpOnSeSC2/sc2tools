@@ -18,6 +18,10 @@ STACK_BELOW_WIDTH = 440
 SIDE_BY_SIDE = ("my", "opp")
 STACKED = ("opp", "my")
 RESULT_COLUMN_WIDTH = 30
+# The chosen row keeps a dark fill, so its red, green and muted text stay as
+# readable as on the other rows; the cyan border, bar and name mark it.
+CHOSEN_ROW_BACKGROUND = theme.SUBTLE
+CHOSEN_ROW_BORDER = theme.ACCENT_CYAN
 
 # Type selectors on purpose. A race skin appends its button colours to this
 # sheet and must win over these: an id selector here would leave the chosen
@@ -28,7 +32,7 @@ QPushButton {{
     padding: 0; text-align: left;
 }}
 QPushButton:hover {{ background: {theme.SUBTLE}; border-color: {theme.BORDER_STRONG}; }}
-QPushButton:checked {{ background: {theme.BUTTON_CHECKED}; border-color: {theme.ACCENT_HOVER}; }}
+QPushButton:checked {{ background: {CHOSEN_ROW_BACKGROUND}; border-color: {CHOSEN_ROW_BORDER}; }}
 QPushButton:focus {{ border-color: {theme.FOCUS}; }}
 QFrame#recentBuildMarker {{ background: transparent; border: none; border-radius: 1px; }}
 QFrame#recentBuildMarker[selected="true"] {{ background: {theme.ACCENT_CYAN}; }}
