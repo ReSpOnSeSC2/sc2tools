@@ -31,10 +31,11 @@ const SAFE_RESPONSE_HEADER_NAMES = Object.freeze([
 ]);
 
 // ``build-intents/live/<gameKey>``: a live game key holds both players'
-// names, which never belong in request logs.
+// names, which never belong in request logs. ``shares/<token>``: a game
+// share token is the bearer credential of its public page.
 // ``calendar/<secret>.ics``: the private coaching calendar feed's bearer secret.
 const CREDENTIAL_PATH_SEGMENT =
-  /\/(multichat|chatbot|overlay-tokens|device-pairings|build-intents\/live|calendar)\/[^/?#]+/giu;
+  /\/(multichat|chatbot|overlay-tokens|device-pairings|build-intents\/live|shares|calendar)\/[^/?#]+/giu;
 const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|token)/iu;
 const OAUTH_CALLBACK_PATH =
   /^\/v1\/integrations\/(?:twitch|kick|youtube)\/callback\/?$/iu;

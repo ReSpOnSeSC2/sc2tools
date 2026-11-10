@@ -16,7 +16,7 @@ async function dataInventory(db, userId) {
     publishedBuilds: ["communityBuilds", "ownerUserId"], reports: ["communityReports", "reporterUserId"],
     connectedAccounts: ["platformConnections", "userId"], notifications: ["notifications", "userId"],
     reviewRequests: ["reviewRequests", "userId"], playerChannels: ["playerChannels", "ownerUserId"],
-    ghostExamples: ["ghostExamples", "ownerUserId"], streamReports: ["streamSessions", "userId"],
+    ghostExamples: ["ghostExamples", "ownerUserId"], gameShares: ["gameShares", "userId"], streamReports: ["streamSessions", "userId"],
     discordWebhooks: ["discordHooks", "userId"], pushDevices: ["pushSubscriptions", "userId"],
   };
   await Promise.all(Object.entries(fields).map(async ([label, [key, field]]) => {

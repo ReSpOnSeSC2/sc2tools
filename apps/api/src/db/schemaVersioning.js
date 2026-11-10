@@ -360,6 +360,12 @@ const REGISTRY = Object.freeze({
   [COLLECTIONS.DISCORD_HOOKS]: { collection: COLLECTIONS.DISCORD_HOOKS, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.DISCORD_OUTBOX]: { collection: COLLECTIONS.DISCORD_OUTBOX, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.PUSH_SUBSCRIPTIONS]: { collection: COLLECTIONS.PUSH_SUBSCRIPTIONS, currentVersion: 1, versionKey: VERSION_KEY },
+  // Revocable single-game share links (services/gameShares.js).
+  [COLLECTIONS.GAME_SHARES]: {
+    collection: COLLECTIONS.GAME_SHARES,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
 });
 
 /** @type {{collection:string,fromVersion:number,toVersion:number,forward:Function,backward:Function,description?:string}[]} */

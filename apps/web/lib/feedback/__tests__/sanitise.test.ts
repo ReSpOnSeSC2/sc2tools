@@ -55,6 +55,8 @@ describe("sanitisePagePath", () => {
     ["/settings?tab=overlay&token=abc", "/settings"],
     ["/overlay/secret-token/widget/scout", "/overlay/[redacted]/widget/scout"],
     ["/dock/secret-token?x=1", "/dock/[redacted]"],
+    ["/g/AbCdEfGhIjKlMnOp?t=5#battle-report", "/g/[redacted]"],
+    ["/v1/shares/AbCdEfGhIjKlMnOp/map-playback", "/v1/shares/[redacted]/map-playback"],
     ["https://sc2tools.com/app", ""],
   ])("%s → %s", (input, expected) => {
     expect(sanitisePagePath(input)).toBe(expected);

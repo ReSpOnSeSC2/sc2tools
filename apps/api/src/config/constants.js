@@ -150,6 +150,10 @@ const COLLECTIONS = Object.freeze({
   DISCORD_HOOKS: "discord_hooks",
   DISCORD_OUTBOX: "discord_outbox",
   PUSH_SUBSCRIPTIONS: "push_subscriptions",
+  // Revocable single-game share links: the ``_id`` is the unguessable
+  // 16-character token in the public ``/g/<token>`` URL. At most
+  // GAME_SHARES.MAX_ACTIVE live per user; see services/gameShares.js.
+  GAME_SHARES: "game_shares",
 });
 
 const LIMITS = Object.freeze({

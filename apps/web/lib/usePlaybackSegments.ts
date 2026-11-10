@@ -9,10 +9,16 @@ import { replayCastMarkers, mergeMarkers, type TimelineMarker } from "./replayHu
 
 type Loaded = { scope: string; entry: PlaybackSegmentEntry; playback: MapPlayback };
 
-/** One foreground read and one abortable neighbor prefetch; no SWR heavy cache. */
-export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, anonymous, segmentPath }: {
+/** One foreground read and one abortable neighbor prefetch; no SWR heavy cache.
+ * ``segmentLinkPath`` (anonymous share pages) first asks the API for a
+ * short-lived storage URL and reads the bytes from storage directly; if that
+ * read fails (for example storage refuses the browser's origin), this visit
+ * uses ``segmentPath`` through the API instead. Every byte is still checked
+ * against the manifest's SHA-256. */
+export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, anonymous, segmentPath, segmentLinkPath }: {
   manifest: PlaybackManifest; gameId: string; time: number; speed: number; backwards: boolean;
   anonymous: boolean; segmentPath?: (artifactId: string, index: number) => string;
+  segmentLinkPath?: (artifactId: string, index: number) => string;
 }) {
   const { getToken, userId } = useAuth();
   const scope = `${anonymous ? "public" : userId ?? ""}:${gameId}:${manifest.artifactId}`;
@@ -24,6 +30,7 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
   const [revision, setRevision] = useState(0);
   const desired = segmentAt(manifest, time);
   const tokenGetter = useRef(getToken); tokenGetter.current = getToken;
+  const directUnavailable = useRef(false);
   const key = (index: number) => `${manifest.artifactId}:${index}`;
   const cached = store.current.cache.get(key(desired.index));
   const current = cached ? { scope, entry: desired, playback: cached } : loaded?.scope === scope ? loaded : null;
@@ -43,8 +50,14 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
     }
     const path = segmentPath ? segmentPath(manifest.artifactId, entry.index)
       : `/v1/games/${encodeURIComponent(gameId)}/map-playback/artifacts/${manifest.artifactId}/segments/${entry.index}`;
-    const response = await fetch(`${API_BASE}${path}`, { headers, cache: "default", signal: controller.signal });
-    const bytes = await readBoundedSegment(response, entry.sizeBytes);
+    let bytes = segmentLinkPath && !directUnavailable.current
+      ? await readDirect(segmentLinkPath(manifest.artifactId, entry.index), entry.sizeBytes, controller.signal)
+      : null;
+    if (!bytes) {
+      if (segmentLinkPath) directUnavailable.current = true;
+      const response = await fetch(`${API_BASE}${path}`, { headers, cache: "default", signal: controller.signal });
+      bytes = await readBoundedSegment(response, entry.sizeBytes);
+    }
     const playback = await decodePlaybackSegment(bytes, manifest, entry);
     controller.signal.throwIfAborted();
     if (store.current.scope !== scope) throw new DOMException("Replay changed", "AbortError");
@@ -54,7 +67,7 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
     store.current.casts.set(entry.index, replayCastMarkers(playback.casts ?? []));
     setRevision(value => value + 1);
     return playback;
-  }, [manifest, anonymous, userId, segmentPath, gameId, scope]);
+  }, [manifest, anonymous, userId, segmentPath, segmentLinkPath, gameId, scope]);
 
   useEffect(() => {
     const controller = new AbortController(); let cancelled = false;
@@ -85,4 +98,20 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
   return { scope, current, buffering, castMarkers: casts.current.value,
     error: failure.scope === scope && failure.index === desired.index ? failure.message : "",
     retry: () => setAttempt(value => value + 1) };
+}
+
+/** Bytes from a presigned storage URL, or null when that path is unavailable
+ * (no link, a refused cross-origin read, an expired URL). An abort is the
+ * caller's and propagates. */
+async function readDirect(linkPath: string, sizeBytes: number, signal: AbortSignal): Promise<Uint8Array | null> {
+  try {
+    const link = await fetch(`${API_BASE}${linkPath}`, { cache: "no-store", signal });
+    if (!link.ok) return null;
+    const { url } = (await link.json()) as { url?: unknown };
+    if (typeof url !== "string" || !/^https?:$/.test(new URL(url).protocol)) return null;
+    return await readBoundedSegment(await fetch(url, { cache: "no-store", signal }), sizeBytes);
+  } catch (error) {
+    if (signal.aborted) throw error;
+    return null;
+  }
 }

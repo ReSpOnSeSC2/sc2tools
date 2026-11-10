@@ -175,8 +175,12 @@ test("signing uses an explicit rounded60s lifetime and held expired URLs are dis
 
 test("late slow slots expire earlier completed URLs again immediately before body publication", async () => {
   const ids = await Promise.all(Array.from({ length: 5 }, () => seed())); let now = 1_800_000_000_000;
+  // Every earlier slot must take its issue time before the late slot moves the clock, whatever order the
+  // four workers reach the signer in; otherwise a slow runner signs an earlier slot after the jump.
+  const earlierSigned = deferred(); let earlier = 0;
   const { service } = store(undefined, async (_client, command) => {
-    if (command.input.Key.endsWith(`${ids[4]}.SC2Replay`)) now += 60_000;
+    if (command.input.Key.endsWith(`${ids[4]}.SC2Replay`)) { await earlierSigned.promise; now += 60_000; }
+    else if (++earlier === 4) earlierSigned.resolve();
     return "https://fixture.invalid/private";
   });
   const result = await service.prepareDownloadBatch("owner-a", ids, { now: () => now });

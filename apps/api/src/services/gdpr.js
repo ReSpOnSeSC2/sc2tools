@@ -43,6 +43,9 @@ const GDPR_CLASSIFICATION = Object.freeze({
   // redacted, push endpoints/keys included) and purged with the owner.
   STREAM_SESSIONS: "purge_only", DISCORD_HOOKS: "purge_only", DISCORD_OUTBOX: "purge_only",
   PUSH_SUBSCRIPTIONS: "purge_only",
+  // Share links are exported (without their tokens) and deleted, but never
+  // restored: a snapshot must not revive a link revoked after it was taken.
+  GAME_SHARES: "purge_only",
   // The independently stacked What's New feature adds this global config.
   ...(Object.hasOwn(COLLECTIONS, "SITE_CONFIG") ? { SITE_CONFIG: "global" } : {}),
 });
@@ -115,6 +118,8 @@ const PURGE_ONLY_COLLECTIONS = [
   ["discordHooks", "userId"],
   ["pushSubscriptions", "userId"],
   ["streamSessions", "userId"],
+  // Revocable single-game share links. A restore must never revive one.
+  ["gameShares", "userId"],
 ];
 
 class GdprService {

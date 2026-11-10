@@ -105,10 +105,14 @@ function privateSearchSentryCallbacks() {
   return { beforeSend: beforeSendPrivateSearch, beforeSendTransaction: beforeSendPrivateSearch };
 }
 
+// A game share token in the path is the public page's bearer credential.
+const SHARE_TOKEN_PATH = /^\/v1\/shares\//u;
+
 /**
  * Pass to the existing SDK Http integration before app/parser creation.
  * Avoids pre-parser body capture for this route, and incoming server spans for
- * it and for request URLs whose query carries typed search text.
+ * it, for request URLs whose query carries typed search text and for game
+ * share URLs (their path carries the share token).
  * Example: sdk.httpIntegration(privateSearchHttpOptions()) during optional init.
  */
 function privateSearchHttpOptions() {
@@ -116,7 +120,8 @@ function privateSearchHttpOptions() {
     /** @param {string} urlPath */
     ignoreIncomingRequestBody: urlPath => isPrivateSearchPath(urlPath) || isPrivateBodyPath(urlPath),
     /** @param {string} urlPath the path and query string */
-    ignoreIncomingRequests: urlPath => isPrivateSearchPath(urlPath) || isReplayDownloadBatchPath(urlPath) || isSearchQueryUrl(urlPath),
+    ignoreIncomingRequests: urlPath => isPrivateSearchPath(urlPath) || isReplayDownloadBatchPath(urlPath) || isSearchQueryUrl(urlPath)
+      || SHARE_TOKEN_PATH.test(urlPath),
   };
 }
 
