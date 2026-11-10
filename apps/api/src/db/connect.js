@@ -75,6 +75,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   guideNotes: import('mongodb').Collection,
  *   guideVideos: import('mongodb').Collection<any>,
  *   buildIntentLive: import('mongodb').Collection<any>,
+ *   gameShares: import('mongodb').Collection<any>,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -185,7 +186,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     guideStats: db.collection(COLLECTIONS.GUIDE_STATS),
     guideNotes: db.collection(COLLECTIONS.GUIDE_NOTES),
     guideVideos: db.collection(COLLECTIONS.GUIDE_VIDEOS),
-    buildIntentLive: db.collection(COLLECTIONS.BUILD_INTENT_LIVE),
+    buildIntentLive: db.collection(COLLECTIONS.BUILD_INTENT_LIVE), gameShares: db.collection(COLLECTIONS.GAME_SHARES),
     close: () => client.close(),
   };
   await ensureIndexes(ctx, { logger, awaitBackground: awaitBackgroundIndexes });
@@ -807,6 +808,12 @@ async function ensureReviewIndexes(ctx) {
 
   await ctx.reviewBlocks.createIndex({ blockerId: 1, blockedId: 1 }, { unique: true });
   await ctx.reviewBlocks.createIndex({ blockedId: 1 });
+
+  // Game share links: ``activeKey`` exists only while a link is live, so
+  // one game has at most one active link (services/gameShares.js).
+  await ctx.gameShares.createIndex({ activeKey: 1 }, { unique: true, sparse: true });
+  await ctx.gameShares.createIndex({ userId: 1, gameId: 1, createdAt: -1 });
+  await ctx.gameShares.createIndex({ userId: 1, revokedAt: 1 });
 
   await ctx.notifications.createIndex({ userId: 1, createdAt: -1 });
   await ctx.notifications.createIndex({ userId: 1, readAt: 1 });

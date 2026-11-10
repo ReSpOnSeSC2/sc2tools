@@ -3,6 +3,7 @@ const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 
 const { createHash } = require("crypto");
 const { PutObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { validateManifest, validateSegment, MAX_SEGMENT_BYTES, MAX_MANIFEST_BYTES, SHA } = require("../validation/playbackArtifact");
 const { getPlaybackJob } = require("./replayPlaybackJobs");
 /** @param {Buffer} body */
@@ -11,12 +12,13 @@ const digest = (body) => createHash("sha256").update(body).digest("hex");
 const error = (status, code) => Object.assign(new Error(code), { status, code });
 
 class PlaybackArtifactsService {
-  /** @param {{client: import('@aws-sdk/client-s3').S3Client, bucket: string, games: import('mongodb').Collection, notifications?:Pick<import('./notifications').NotificationsService,'notify'>}} options */
-  constructor({ client, bucket, games, notifications }) {
+  /** @param {{client: import('@aws-sdk/client-s3').S3Client, bucket: string, games: import('mongodb').Collection, notifications?:Pick<import('./notifications').NotificationsService,'notify'>, signer?: typeof getSignedUrl}} options */
+  constructor({ client, bucket, games, notifications, signer }) {
     this.client = client;
     this.bucket = bucket;
     this.games = games;
     this.notifications = notifications;
+    this.signer = signer || getSignedUrl;
     this.activeReads = 0;
     this.activeWrites = 0;
   }
@@ -190,6 +192,24 @@ class PlaybackArtifactsService {
       if (body.length !== d.sizeBytes || digest(body) !== d.sha256) throw error(502, "playback_artifact_corrupt");
       return body;
     });
+  }
+
+  /**
+   * A short-lived presigned GET for one segment of the game's current
+   * completed artifact, so a browser downloads the bytes from storage
+   * directly instead of through the API. The completion marker's
+   * ``segmentCount`` bounds the index, so no manifest is read here; the
+   * browser still checks every byte against the manifest's SHA-256.
+   * @param {string} userId @param {string} gameId @param {string} artifactId @param {number} index @param {number} expiresIn seconds
+   * @returns {Promise<{url: string, expiresIn: number}>}
+   */
+  async signSegment(userId, gameId, artifactId, index, expiresIn) {
+    const game = await this.owned(userId, gameId);
+    const marker = game.playbackArtifact;
+    if (!marker || marker.artifactId !== artifactId || !Number.isInteger(index) || index < 0
+        || !Number.isInteger(marker.segmentCount) || index >= marker.segmentCount) throw error(404, "playback_artifact_not_found");
+    const command = new GetObjectCommand({ Bucket: this.bucket, Key: this.key(userId, gameId, artifactId, `${index}.json`) });
+    return { url: await this.signer(this.client, command, { expiresIn }), expiresIn };
   }
 
   /** @param {string} prefix */
