@@ -1653,10 +1653,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._stat_last = self._make_stat_card("Last upload", "—")
             self._stat_failed = self._make_stat_card("Failed (24 h)", "0")
             failures = QtWidgets.QPushButton("View problems")
+            failures.setObjectName("statAction")
             failures.setFlat(True)
             failures.clicked.connect(self._show_recent_problems)
             # Below the stretch, so every card's number and caption share one line.
-            self._stat_failed["frame"].layout().addWidget(failures, 0, QtCore.Qt.AlignLeft)
+            self._stat_failed["frame"].layout().addWidget(failures)
 
             self._stat_cards = (self._stat_synced, self._stat_queued, self._stat_last, self._stat_failed)
             for column, card in enumerate(self._stat_cards):

@@ -244,6 +244,7 @@ QLabel#h2 {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
 QLabel#muted {{ color: {TEXT_MUTED}; }}
 QLabel#dim {{ color: {TEXT_DIM}; }}
 QLabel#stat {{ font-family: {FONT_FAMILY_DISPLAY}; font-size: {TYPE_HEADLINE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QPushButton#statAction {{ text-align: left; }}
 QLabel#settingsToastOk {{ color: {SUCCESS}; }}
 QLabel#settingsToastErr, QLabel#fieldError, QLabel#error {{ color: {DANGER}; }}
 QLabel#code {{

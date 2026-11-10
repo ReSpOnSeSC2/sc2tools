@@ -71,7 +71,11 @@ for part in ("value", "label"):
     assert len(rows) == 1, (part, rows)
 problems = win._stat_failed["frame"].findChild(QtWidgets.QPushButton)
 assert problems.text() == "View problems" and problems.x() == win._stat_failed["label"].x()
-assert problems.width() == problems.sizeHint().width(), "View problems is left-aligned, not stretched"
+image, rect = win._stat_failed["frame"].grab().toImage(), problems.geometry()
+ink = [x for x in range(rect.left(), rect.right())
+       if any(image.pixelColor(x, y).lightness() > 80 for y in range(rect.top(), rect.bottom()))]
+# Its text starts at the button's own padding, like the caption above it, not centred.
+assert ink and ink[0] - rect.left() <= 16, (ink[:1], rect.getRect())
 texts = [*(button.text() for button in win.findChildren(QtWidgets.QAbstractButton)),
          *(action.text() for action in win.findChildren(QtGui.QAction))]
 # An "&" before a space makes the space an access key, so "Help & support" draws as "Help  support".
