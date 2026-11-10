@@ -8,6 +8,7 @@ import {
   buildIntentErrorCode,
   buildIntentErrorMessage,
   confirmGameIntent,
+  reopenGameIntent,
   saveGameIntentNotes,
   setOpponentBuild,
   skipGameIntent,
@@ -32,7 +33,34 @@ export interface CheckInOutcome {
   state: GameIntentState | null;
   /** API error code on failure (e.g. "not_eligible", "unknown_build"). */
   errorCode: string | null;
+  /** HTTP status of a failed response (401 = signed out, 429 = rate limited). */
+  status?: number;
+  /** The success line shown for this write. */
+  text?: string;
 }
+
+/** The outcome line of a confirmed check-in. */
+export function confirmedText(state: GameIntentState, buildName: string): string {
+  const name = state.build?.name ?? buildName;
+  return state.applied ? `Counted toward ${name}` : `Check-in saved: ${name}`;
+}
+
+/** HTTP status of a failed response; undefined for network errors and timeouts. */
+export function checkInErrorStatus(error: unknown): number | undefined {
+  if (error && typeof error === "object" && "status" in error) {
+    const status = (error as { status?: unknown }).status;
+    return typeof status === "number" && status > 0 ? status : undefined;
+  }
+  return undefined;
+}
+
+const FAILURE_TITLE: Record<Exclude<CheckInBusy, null>, string> = {
+  confirm: "Couldn't save your check-in",
+  skip: "Couldn't save your check-in",
+  notes: "Couldn't save your notes",
+  opponent: "Couldn't save the opponent's build",
+  reopen: "Couldn't undo the check-in",
+};
 
 export interface CheckInMessage {
   text: string;
@@ -137,7 +165,7 @@ export function useCheckInActions(
         toastContext?.toast.success(text);
         if (!current()) return RETIRED_OUTCOME;
         onUpdatedRef.current?.(state);
-        return current() ? { state, errorCode: null } : RETIRED_OUTCOME;
+        return current() ? { state, errorCode: null, text } : RETIRED_OUTCOME;
       } catch (error) {
         if (!current() || isAborted(error)) return RETIRED_OUTCOME;
         const errorCode = buildIntentErrorCode(error);
@@ -145,19 +173,16 @@ export function useCheckInActions(
           ? "Saving your check-in took too long. Refresh the game before trying again."
           : buildIntentErrorMessage(error);
         const failure = copy?.failure?.(errorCode, text) ?? {
-          title:
-            kind === "notes"
-              ? "Couldn't save your notes"
-              : kind === "opponent"
-                ? "Couldn't save the opponent's build"
-                : "Couldn't save your check-in",
+          title: FAILURE_TITLE[kind],
           description: text,
           inline: text,
         };
         if (!current()) return RETIRED_OUTCOME;
         setFeedback({ scope, message: { text: failure.inline, error: true, kind } });
         toastContext?.toast.error(failure.title, { description: failure.description });
-        return current() ? { state: null, errorCode } : RETIRED_OUTCOME;
+        if (!current()) return RETIRED_OUTCOME;
+        const status = checkInErrorStatus(error);
+        return status === undefined ? { state: null, errorCode } : { state: null, errorCode, status };
       } finally {
         callerSignal?.removeEventListener("abort", abort);
         release();
@@ -180,10 +205,7 @@ export function useCheckInActions(
       run(
         "confirm",
         (token, signal) => confirmGameIntent(token, gameId, buildKey, notes, { ...opts, signal }),
-        (state) =>
-          state.applied
-            ? `Counted toward ${state.build?.name ?? buildName}`
-            : `Check-in saved: ${state.build?.name ?? buildName}`,
+        (state) => confirmedText(state, buildName),
         opts?.copy,
         opts?.signal,
       ),
@@ -225,6 +247,17 @@ export function useCheckInActions(
     [run, gameId],
   );
 
+  /** Undo a confirmed or "No set build" decision: the game is pending again. */
+  const reopen = useCallback(
+    () =>
+      run(
+        "reopen",
+        (token, signal) => reopenGameIntent(token, gameId, { signal }),
+        () => "Check-in undone. The game is waiting again",
+      ),
+    [run, gameId],
+  );
+
   const saveNotes = useCallback(
     (notes: string) =>
       run(
@@ -239,7 +272,7 @@ export function useCheckInActions(
     if (scope.active && scopeRef.current === scope) setFeedback({ scope, message: null });
   }, [scope]);
 
-  return { busy, message, clearMessage, confirm, skip, setOpponent, saveNotes };
+  return { busy, message, clearMessage, confirm, skip, setOpponent, reopen, saveNotes };
 }
 
 export type CheckInActions = ReturnType<typeof useCheckInActions>;

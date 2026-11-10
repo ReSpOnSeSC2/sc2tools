@@ -2,6 +2,8 @@
 from datetime import datetime, timezone
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
+from . import theme
+
 
 def pairing_url(dashboard_url, code):
     parsed = urlsplit(dashboard_url)
@@ -94,7 +96,7 @@ def build_pairing_card(parent, *, QtCore, QtWidgets, open_browser, copy_text,
             }
             message, button = labels[self.kind]
             self.message.setText(message)
-            self.message.setStyleSheet("color: #55ce89" if self.kind == "paired" else "")
+            self.message.setStyleSheet("color: " + theme.SUCCESS if self.kind == "paired" else "")
             self.primary.setText(button)
             self.primary.setEnabled(self.kind not in ("requesting", "paired"))
             self.spinner.setVisible(self.kind == "requesting")

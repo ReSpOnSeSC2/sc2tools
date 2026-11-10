@@ -27,6 +27,7 @@ import {
   type CheckInNotesDraft,
 } from "./CheckInNotes";
 import {
+  BuildNameLink,
   CheckInStatusBadge,
   DetectedLine,
   ReasonChip,
@@ -292,7 +293,7 @@ function IneligibleLine({ state }: { state: GameIntentState }) {
         {reason ? INELIGIBLE_REASON_COPY[reason] : "This game can't take a check-in."}
         {planned ? (
           <>
-            {" "}You planned <span className="font-semibold text-text">{planned.name}</span>;
+            {" "}You planned <BuildNameLink build={planned} />;
             it isn&apos;t counted.
           </>
         ) : null}
@@ -655,9 +656,7 @@ function StatusSummary({
             Suggested
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span className="font-display text-body-lg font-bold text-text">
-              {suggestion.name}
-            </span>
+            <BuildNameLink build={suggestion} className="font-display text-body-lg font-bold text-text" />
             <ReasonChip suggestion={suggestion} matchup={state.matchup} />
           </div>
           {state.randomizerDeviated && state.randomizer ? (
@@ -707,8 +706,8 @@ function StatusSummary({
           <p className="text-micro font-bold uppercase tracking-[0.12em] text-text-dim">
             Planned build
           </p>
-          <p className="mt-1 font-display text-body-lg font-bold text-text">
-            {state.build.name}
+          <p className="mt-1">
+            <BuildNameLink build={state.build} className="font-display text-body-lg font-bold text-text" />
           </p>
           <p className="mt-0.5 text-caption text-text-muted">
             {state.applied
