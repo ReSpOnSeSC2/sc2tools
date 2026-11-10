@@ -240,6 +240,11 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.REANALYSIS_JOBS]: {
+    collection: COLLECTIONS.REANALYSIS_JOBS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.AGENT_RELEASES]: {
     collection: COLLECTIONS.AGENT_RELEASES,
     currentVersion: 1,

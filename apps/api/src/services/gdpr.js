@@ -15,6 +15,7 @@ const { dataInventory } = require("./dataInventory");
 const { USER_SCOPED_COLLECTIONS } = require("./accountExportPolicy");
 const { collectAccountExport } = require("./accountExportData");
 const { accountExportStream } = require("./accountExportStream");
+const { retireReanalysisJobs } = require("./reanalysis");
 
 // Every registered collection needs an explicit disposition. Shared/public
 // records use dedicated scrubbers; this map is audited by a coverage test and
@@ -28,7 +29,7 @@ const GDPR_CLASSIFICATION = Object.freeze({
   PLATFORM_CONNECTIONS: "purge_only", PUBLIC_YOUTUBE_ARCHIVES: "global", PLATFORM_OAUTH_STATES: "ttl_ephemeral",
   YOUTUBE_CREATE_OPERATIONS: "purge_only", PLATFORM_WEBHOOK_RECEIPTS: "ttl_ephemeral", PLATFORM_EVENTS: "purge_only",
   TWITCH_AUTOMATION_RECEIPTS: "purge_only",
-  IMPORT_JOBS: "user_scoped", MACRO_JOBS: "user_scoped", AGENT_RELEASES: "global", COMMUNITY_BUILDS: "purge_only",
+  IMPORT_JOBS: "user_scoped", MACRO_JOBS: "user_scoped", REANALYSIS_JOBS: "purge_only", AGENT_RELEASES: "global", COMMUNITY_BUILDS: "purge_only",
   COMMUNITY_REPORTS: "purge_only", USER_BACKUPS: "user_scoped", BACKUP_RESTORE_STAGING: "ttl_ephemeral",
   PENDING_IDENTITY_DELETIONS: "ttl_ephemeral", ARCADE_LEADERBOARD: "purge_only", ADMIN_EVENTS: "purge_only",
   SUPPORT_EMAIL_SYNC: "global", SITE_PRESENCE: "ttl_ephemeral", COACHING: "user_scoped",
@@ -103,6 +104,9 @@ const PURGE_ONLY_COLLECTIONS = [
   // must never replay. Bound answers already live on games.buildIntent.
   ["buildIntentLive", "userId"],
   ["multichatSounds", "userId"],
+  // Re-analysis runs are live operational work: deleted with the account,
+  // never exported or restored (a restore must not revive a queue).
+  ["reanalysisJobs", "userId"],
 ];
 
 class GdprService {
@@ -877,6 +881,8 @@ class GdprService {
     }
     await gdprFence.assert();
     const macroJobsRes = await this.db.macroJobs.deleteMany({ userId });
+    // A running re-analysis batch could otherwise re-upload wiped games.
+    await retireReanalysisJobs(this.db.reanalysisJobs, this.io, userId);
 
     // A review request's scoped grant points at one game; once that game
     // is gone the request closes (its thread text stays).

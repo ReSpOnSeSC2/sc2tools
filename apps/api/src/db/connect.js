@@ -45,6 +45,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   twitchAutomationReceipts: import('mongodb').Collection<any>,
  *   importJobs: import('mongodb').Collection,
  *   macroJobs: import('mongodb').Collection,
+ *   reanalysisJobs: import('mongodb').Collection,
  *   agentReleases: import('mongodb').Collection,
  *   communityBuilds: import('mongodb').Collection,
  *   communityReports: import('mongodb').Collection,
@@ -153,6 +154,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     twitchAutomationReceipts: db.collection(COLLECTIONS.TWITCH_AUTOMATION_RECEIPTS),
     importJobs: db.collection(COLLECTIONS.IMPORT_JOBS),
     macroJobs: db.collection(COLLECTIONS.MACRO_JOBS),
+    reanalysisJobs: db.collection(COLLECTIONS.REANALYSIS_JOBS),
     agentReleases: db.collection(COLLECTIONS.AGENT_RELEASES),
     communityBuilds: db.collection(COLLECTIONS.COMMUNITY_BUILDS),
     communityReports: db.collection(COLLECTIONS.COMMUNITY_REPORTS),
@@ -641,6 +643,10 @@ async function ensureIndexes(ctx, opts = {}) {
 
   await ctx.importJobs.createIndex({ userId: 1, createdAt: -1 });
   await ctx.macroJobs.createIndex({ userId: 1, createdAt: -1 });
+  // One active re-analysis per owner; finished runs expire after 90 days.
+  await ctx.reanalysisJobs.createIndex({ userId: 1 }, { unique: true, partialFilterExpression: { active: true }, name: "reanalysis_one_active" });
+  await ctx.reanalysisJobs.createIndex({ userId: 1, createdAt: -1 });
+  await ctx.reanalysisJobs.createIndex({ completedAt: 1 }, { expireAfterSeconds: 90 * 86400 });
 
   await ctx.agentReleases.createIndex({ channel: 1, version: 1 }, { unique: true });
   await ctx.agentReleases.createIndex({ channel: 1, publishedAt: -1 });

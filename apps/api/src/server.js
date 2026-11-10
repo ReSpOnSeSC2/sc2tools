@@ -169,6 +169,8 @@ async function main() {
       /** @type {any} */ (services).buildIntents.overlayStateForCurrentGame(userId),
     onRandomizerRolled: (userId, token, payload) =>
       /** @type {any} */ (services).buildIntents.handleRandomizerRoll(userId, token, payload),
+    // Managed re-analysis: resume work when an agent connects; record outcomes.
+    reanalysis: /** @type {any} */ (services).reanalysis,
     // Replayed to Browser Sources on connect/resync. Live Stream Dock pushes
     // are still immediate; this persisted read closes the reconnect gap for
     // the manual Starting Soon / BRB cover.

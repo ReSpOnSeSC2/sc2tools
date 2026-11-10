@@ -9,6 +9,7 @@ const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { protectDeletedSnapshotGames, liveBackupGamesMatch } = require("./backupGameDeletion");
+const { retireReanalysisJobs } = require("./reanalysis");
 
 // Credentials and work queues are live state, not restore points. Restoring a
 // snapshot must not revive an unlinked PC or restart an old import/classifier.
@@ -258,6 +259,7 @@ class UserBackupsService {
       for await (const row of this.missingGames(userId, staged.operationId)) { removed.push(row.gameId); if (removed.length >= BATCH) await purge(); }
       if (removed.length) await purge();
       await this.db.macroJobs.deleteMany({ userId });
+      await retireReanalysisJobs(this.db.reanalysisJobs, this.gdpr.io, userId);
       for (const [dbKey, key] of RESTORABLE) {
         await fence.assert(); const collection = /** @type {any} */ (this.db)[dbKey]; if (!collection) continue;
         // Keep the historical section readable for existing snapshot formats,

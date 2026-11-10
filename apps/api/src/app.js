@@ -217,6 +217,8 @@ const { buildPlaybackArtifactsRouter } = require("./routes/playbackArtifacts");
 const { buildBotLabRouter } = require("./routes/botLab");
 const { buildObsSourcesRouter } = require("./routes/obsSources");
 const { buildSyncHealthActionsRouter } = require("./routes/syncHealthActions");
+const { buildReanalysisRouter } = require("./routes/reanalysis");
+const { ReanalysisService } = require("./services/reanalysis");
 const {
   buildInfrastructureCostsRouter,
 } = require("./routes/infrastructureCosts");
@@ -798,6 +800,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const ghostReferences = new GhostReferencesService({ db: deps.db, gameDetails });
   const ghostConfig = new GhostConfigService({ db: deps.db, overlayTokens, io: deps.io });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
+  const reanalysis = new ReanalysisService({ db: deps.db, io: deps.io, pairings, notifications, logger: deps.logger });
   const imports = new ImportService(deps.db, { io: deps.io, notifications, logger: deps.logger });
   const spatial = new SpatialService(deps.db);
   // The GitHub feed makes an `agent-v*` tag push a complete release:
@@ -1088,6 +1091,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     catalog,
     perGame,
     macroBackfill,
+    reanalysis,
     imports,
     spatial,
     agentVersion,
@@ -1453,6 +1457,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     enabled: process.env.BOT_LAB_ENABLED === "true" }));
   app.use("/v1/devices/obs", buildObsSourcesRouter({ auth, io: deps.io }));
   app.use("/v1/me/sync-health", buildSyncHealthActionsRouter({ auth, users: deps.db.users, pairings: services.pairings, io: deps.io }));
+  app.use("/v1/me/reanalysis", buildReanalysisRouter({ auth, reanalysis: services.reanalysis }));
   app.use(SERVICE.ROUTE_PREFIX, buildPlaybackArtifactsRouter({ playbackArtifacts: services.playbackArtifacts, auth }));
   app.use(SERVICE.ROUTE_PREFIX, buildSessionsRouter({ sessionHistory: services.sessionHistory, auth }));
   // Email allowlist — the deterministic admin path. Lower-cased at load;

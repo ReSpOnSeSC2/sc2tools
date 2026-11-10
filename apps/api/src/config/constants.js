@@ -73,6 +73,9 @@ const COLLECTIONS = Object.freeze({
   TWITCH_AUTOMATION_RECEIPTS: "twitch_automation_receipts",
   IMPORT_JOBS: "import_jobs",
   MACRO_JOBS: "macro_jobs",
+  // Managed re-analysis runs (services/reanalysis.js): one active per owner,
+  // a bounded current batch, never a history-sized id list.
+  REANALYSIS_JOBS: "reanalysis_jobs",
   AGENT_RELEASES: "agent_releases",
   COMMUNITY_BUILDS: "community_builds",
   COMMUNITY_REPORTS: "community_reports",
