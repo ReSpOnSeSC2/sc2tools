@@ -163,6 +163,10 @@ const {
   LeaguePercentilesService,
 } = require("./services/leaguePercentiles");
 const { buildBenchmarksRouter } = require("./routes/benchmarks");
+const { PlayerGoalsService } = require("./services/playerGoals");
+const { LeagueTimingPercentilesService } = require("./services/leagueTimingPercentiles");
+const { LeagueTargetsService } = require("./services/leagueTargets");
+const { buildGoalsRouter } = require("./routes/goals");
 const { LadderMetaService } = require("./services/ladderMeta");
 const { buildLadderMetaRouter } = require("./routes/ladderMeta");
 const { PublicProfileService } = require("./services/publicProfile");
@@ -376,6 +380,26 @@ function buildApp(deps) {
 }
 
 /**
+ * Personal goals (services/playerGoals.js) and the Targets card services:
+ * the build-timing deciles per league band (guide_samples only, rebuilt by
+ * the nightly league-percentiles job) and the player's own side, whose
+ * timings come from their own pseudonymous guide samples.
+ *
+ * @param {AppDeps} deps
+ * @param {import('./services/notifications').NotificationsService} notifications
+ * @param {import('./services/guideSamples').GuideSamplesService} guideSamples
+ */
+function buildProgressServices(deps, notifications, guideSamples) {
+  const playerGoals = new PlayerGoalsService(deps.db, { notifications, logger: deps.logger });
+  const leagueTimingPercentiles = new LeagueTimingPercentilesService(deps.db, { logger: deps.logger });
+  const leagueTargets = new LeagueTargetsService(deps.db, {
+    timings: leagueTimingPercentiles,
+    userHash: (userId) => guideSamples.userHash(userId),
+  });
+  return { playerGoals, leagueTimingPercentiles, leagueTargets };
+}
+
+/**
  * @param {AppDeps} deps
  * @param {import('./services/clerkClient').ClerkClient} clerk
  * @param {Set<string>} adminClerkIds
@@ -499,9 +523,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   // League-percentile benchmark tables — nightly aggregate over slim
   // game rows (jobs/leaguePercentilesRecomputeJob), served by
   // routes/benchmarks.js for the Macro tab's percentile framing.
-  const leaguePercentiles = new LeaguePercentilesService(deps.db, {
-    logger: deps.logger,
-  });
+  const leaguePercentiles = new LeaguePercentilesService(deps.db, { logger: deps.logger });
   const mmrExpectation = new MmrExpectationService(deps.db);
   const gameContext = new GameContextService(deps.db, { leaguePercentiles, gameDetails });
   // Ladder Meta Radar — effectiveness-weighted opener meta by league
@@ -794,7 +816,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     buildIntents.invalidateOptions(userId);
     gameExecution.invalidateForUser(userId);
   };
-  buildIntents.notifier.onGamesChanged = (userId) => gameExecution.invalidateForUser(userId);
+  // A check-in rewrites a game's effective build, which build goals count.
+  buildIntents.notifier.onGamesChanged = (userId) => { gameExecution.invalidateForUser(userId); playerGoals.invalidateForUser(userId); };
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const ghostExamples = new GhostExamplesService({ db: deps.db, gameDetails });
   const ghostReferences = new GhostReferencesService({ db: deps.db, gameDetails });
@@ -849,6 +872,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     pepper: deps.config.serverPepper,
     logger: deps.logger,
   });
+  // Personal goals and the Targets card's timing tables + personal side.
+  const { playerGoals, leagueTimingPercentiles, leagueTargets } = buildProgressServices(deps, notifications, guideSamples);
   const guideSamplesBackfill = buildGuideSamplesBackfillJob({
     db: deps.db,
     guideSamples,
@@ -1018,7 +1043,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const invalidatePrivateGameCaches = (/** @type {string} */ userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, rivals, gameContext, gameExecution, tickerFacts, chatStats, aggregations.trendsRequests, streamSeries]) {
+    for (const service of [overlayLive, rivals, gameContext, gameExecution, tickerFacts, chatStats, aggregations.trendsRequests, streamSeries, playerGoals]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
@@ -1112,6 +1137,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     pulseIntel,
     pulseLinks,
     leaguePercentiles,
+    playerGoals, leagueTimingPercentiles, leagueTargets,
     mmrExpectation,
     gameContext,
     gameExecution,
@@ -1685,13 +1711,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       maxPerWindow: deps.config.maxUserMessagesPerWindow,
     }),
   );
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildBenchmarksRouter({
-      leaguePercentiles: services.leaguePercentiles,
-      auth,
-    }),
-  );
+  app.use(SERVICE.ROUTE_PREFIX, buildGoalsRouter({ goals: services.playerGoals, auth }));
+  app.use(SERVICE.ROUTE_PREFIX, buildBenchmarksRouter({ leaguePercentiles: services.leaguePercentiles,
+    leagueTimings: services.leagueTimingPercentiles, leagueTargets: services.leagueTargets, auth }));
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildFingerprintRouter({
@@ -1779,6 +1801,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       browserIngestQuota: services.browserIngestQuota,
       runtimeCapacityRegistry: deps.runtimeCapacityRegistry,
       weeklyBackup: async (userId) => { await services.gdpr.backups?.weekly(userId); },
+      goals: services.playerGoals,
     }),
   );
   // Build check-in routes (per-route auth; /games/:gameId/build-intent does

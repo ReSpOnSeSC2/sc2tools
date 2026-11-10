@@ -11,6 +11,24 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Goals
+
+- Set personal goals on the new Goals page: games played, win rate, MMR, macro
+  score, SQ, APM or a build to practise, each day, week, month, ladder season
+  or one date range in your timezone. Progress fills in from your replays,
+  a win rate or average waits for its minimum number of games, and you get one
+  notification when a goal is reached. Pin up to three goals to Today.
+
+### League targets
+
+- See where your last 20 ranked games in a matchup sit against your league and
+  the next one: SQ, macro score, APM and game length as league bars, natural,
+  third, first upgrade and key tech timing gaps, and a season goal estimate,
+  at the top of the Macro tab with a short summary on Today. Choose your league
+  if your MMR is missing, and open the games below each target.
+- A game's SQ now shows its percentile for its league and matchup, such as
+  "p38 · Diamond PvZ", where that table has enough games.
+
 ### Game share links
 
 - Share one game by link from its new Share menu, on the game page and on each

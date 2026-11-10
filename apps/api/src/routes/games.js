@@ -217,6 +217,7 @@ function analysisCorpusPage(analysisCorpusAdmission, prepare, load) {
  *   testOnlyAllowMissingReplayIngestAdmission?: boolean,
  *   runtimeCapacityRegistry?: import('../services/runtimeCapacity').RuntimeCapacityRegistry,
  *   weeklyBackup?: (userId: string) => Promise<void>,
+ *   goals?: Pick<import('../services/playerGoals').PlayerGoalsService, 'afterIngest'>,
  *   corpusChanges?: import('../services/analysisCorpusChanges').AnalysisCorpusChanges,
  * }} deps
  */
@@ -1009,6 +1010,11 @@ function buildGamesRouter(deps) {
         try { await deps.series.ingest(userId, competitiveIncoming.filter(game => eligible.has(game.gameId))); }
         catch (err) { req.log?.warn({ err }, "series_ingest_failed"); }
       }
+      // Cheap goal check, fire-and-forget: one indexed read without active goals;
+      // a met goal claims its notify-once key (services/playerGoals.js). Its
+      // synchronous first step drops the goals memo, so the refetch that the
+      // games:changed nudge below triggers never reads stale progress.
+      if (deps.goals && competitiveAccepted.length > 0) void deps.goals.afterIngest(userId).catch((err) => req.log?.warn({ err, userId }, "goal_check_failed"));
       // Realtime nudge so an open SPA tab refreshes without polling.
       if (deps.io && accepted.length > 0) {
         // Reuse the same freshness gate for the session MMR refresh and
@@ -1084,10 +1090,7 @@ function buildGamesRouter(deps) {
               }
             });
           } else if (req.log) {
-            req.log.debug(
-              { userId, accepted: accepted.length },
-              "overlay_live_skipped_stale_batch",
-            );
+            req.log.debug({ userId, accepted: accepted.length }, "overlay_live_skipped_stale_batch");
           }
           // Invalidate the pre-game scouting cache for every opponent
           // touched by this ingest. Without this, a rematch against the
