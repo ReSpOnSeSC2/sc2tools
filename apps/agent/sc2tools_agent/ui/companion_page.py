@@ -8,6 +8,7 @@ import re
 import threading
 import time
 
+from ..build_checkin.scouting import parse_recent_builds, recent_build_columns
 from ..companion_modes import build_companion_modes, effective_mode_features, normalize_modes, verified_one_on_one
 from ..team_roster import TeamRoster, TEAM_FEATURES, roster_candidate
 from .opponent_card import opponent_record
@@ -174,8 +175,12 @@ def _live_context(snapshot):
         if not isinstance(current_name, str) or not current_name.strip():
             current_name = opponent.get("revealedName")
         mismatched_name = isinstance(history_name, str) and history_name.strip() and (not isinstance(current_name, str) or history_name.strip().casefold() != current_name.strip().casefold())
-        if history.get("opponentIdentityMatched") is False or mismatched_name:
+        if mismatched_name:
             history = {"opponentIdentityMatched": False}
+        elif history.get("opponentIdentityMatched") is False:
+            # The server matches recent builds by exact account, never by
+            # display name, so they stay true when the name-matched record is dropped.
+            history = {key: history[key] for key in ("opponentIdentityMatched", "recentBuilds") if key in history}
         profile = opponent.get("profile") or {}
         return active, {
             **history,
@@ -186,6 +191,12 @@ def _live_context(snapshot):
             "elapsed": envelope.get("displayTime"),
         }
     return False, post
+
+
+def _opponent_history_known(context):
+    """Whether the scouting report has an earlier game of this opponent to show."""
+    history = parse_recent_builds(context.get("recentBuilds"))
+    return bool(history.theirs if history is not None else context.get("last5GamesScouting"))
 
 
 def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
@@ -268,8 +279,11 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._context = {}
             self._scope = None
             self._source_id = None
-            self._key = None
             self._games = []
+            # None on an older payload: both cards then share one replay.
+            self._history = None
+            self._sides = {"my": {}, "opp": {}}
+            self._keys = {"my": None, "opp": None}
             self._render_signature = None
             self._render_source = None
             self.setObjectName("companionPanel")
@@ -328,6 +342,11 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.games = QtWidgets.QComboBox()
                 self.games.currentIndexChanged.connect(self._game_changed)
                 body_layout.addWidget(self.games)
+                from .companion_recent_builds import RecentBuilds
+                self.recent_builds = RecentBuilds(body)
+                self.recent_builds.gameSelected.connect(self._game_changed)
+                self.recent_builds.hide()
+                body_layout.addWidget(self.recent_builds)
                 from .qt_helpers import build_flow_layout
                 controls = QtWidgets.QWidget()
                 actions = build_flow_layout(controls, QtCore=QtCore, QtWidgets=QtWidgets)
@@ -350,7 +369,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.include_workers_supply.toggled.connect(self._range_changed)
                 actions.addWidget(self.options_button)
                 self.retry = QtWidgets.QPushButton("Retry")
-                self.retry.clicked.connect(lambda: owner._retry_build_order(self._key))
+                self.retry.clicked.connect(self._retry_failed)
                 self.retry.hide()
                 actions.addWidget(self.retry)
                 body_layout.addWidget(controls)
@@ -457,9 +476,11 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             changed = scope != self._scope
             self._scope = scope
             self._source_id = str(context.get("pulseId") or ("live:" + repr(scope)))
-            self.detail.setText("Previous games against this opponent · replay timings")
             games = context.get("last5GamesScouting") or []
-            if changed or games != self._games:
+            history = parse_recent_builds(context.get("recentBuilds"))
+            self.detail.setText("Previous games against this opponent · replay timings" if history is None else
+                                "Results are yours · choose a game to see its build order")
+            if changed or games != self._games or history != self._history:
                 selected = None if changed else self.games.currentData()
                 self._games = games
                 blocked = QtCore.QSignalBlocker(self.games)
@@ -470,13 +491,41 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 if match >= 0:
                     self.games.setCurrentIndex(match)
                 del blocked
+                self._show_recent_builds(history, context, keep_selection=not changed)
                 self._game_changed()
             self.render_build_data()
 
-        def _game_changed(self):
-            index = self.games.currentIndex()
-            game = self._games[index] if 0 <= index < len(self._games) else {}
-            self._key = (self._source_id, str(game["gameId"])) if game.get("gameId") else None
+        def _show_recent_builds(self, history, context, *, keep_selection):
+            # Each player's last five games replace the one-replay picker of an older payload.
+            self._history = history
+            self.games.setVisible(history is None)
+            self.recent_builds.setVisible(history is not None)
+            if history is not None:
+                columns = recent_build_columns(history, time.time(), context.get("race") or context.get("oppRace"))
+                self.recent_builds.set_columns(columns, keep_selection=keep_selection)
+
+        def _side_games(self):
+            """The earlier game behind each card.
+
+            An older payload has one replay for both cards. Otherwise each card
+            shows its own player's chosen game, and the two may differ.
+            """
+            if self._history is None:
+                index = self.games.currentIndex()
+                game = self._games[index] if 0 <= index < len(self._games) else {}
+                return {"my": game, "opp": game}
+            # A game against this opponent shows its tech milestones while its stored events load.
+            previews = {game["gameId"]: game for game in self._games if game.get("gameId")}
+            sides = {}
+            for side, build_field in (("my", "myBuild"), ("opp", "oppStrategy")):
+                row = self.recent_builds.selected(side)
+                sides[side] = {**previews.get(row.game_id, {}), "gameId": row.game_id, build_field: row.build} if row else {}
+            return sides
+
+        def _game_changed(self, *_selection):
+            self._sides = self._side_games()
+            self._keys = {side: (self._source_id, str(game["gameId"])) if game.get("gameId") else None
+                          for side, game in self._sides.items()}
             self.render_build_data()
             self.owner._ensure_build_order()
 
@@ -495,41 +544,66 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.render_build_data()
 
         def _save_reference(self, side):
-            if self._key:
-                self.owner._save_ghost_reference_for(self._key[1], side)
+            key = self._keys["my" if side == "you" else "opp"]
+            if key:
+                self.owner._save_ghost_reference_for(key[1], side)
+
+        def _retry_failed(self, *_clicked):
+            failed = [key for key in self._keys.values() if key in self.owner._build_order_failures]
+            for key in failed:
+                self.owner._build_order_failures.pop(key, None)
+            if failed:
+                self.owner._retry_build_order(failed[0])
+
+        def _build_name(self, side):
+            game = self._sides[side]
+            if not game and self._history is not None:
+                return "No earlier game"
+            return game.get("myBuild") if side == "my" else game.get("oppStrategy") or game.get("oppBuild")
+
+        def _comparison_title(self):
+            if self._history is not None:
+                return "BUILD ORDERS · SELECTED GAMES" if any(self._sides.values()) else "No earlier game to show"
+            game = self._sides["opp"]
+            return "BUILD VS BUILD · " + str(game.get("map") or "Previous encounter") if game else "No previous replay scouting available"
 
         def render_build_data(self):
             if self.kind != "scouting":
                 return
-            index = self.games.currentIndex()
-            game = self._games[index] if 0 <= index < len(self._games) else {}
-            stored = self.owner._build_order_cache.get(self._key)
-            self.comparison_title.setText("BUILD VS BUILD · " + str(game.get("map") or "Previous encounter") if game else "No previous replay scouting available")
+            stored = {side: self.owner._build_order_cache.get(key) for side, key in self._keys.items()}
+            self.comparison_title.setText(self._comparison_title())
             if _history_exposed(self):
-                signature = (self.owner._account_key, self._key, _history_source_signature(game, stored),
-                             self.build_time_range.currentData(), self.include_workers_supply.isChecked(),
-                             game.get("myBuild"), game.get("oppStrategy"), game.get("oppBuild"))
+                horizon, supply = self.build_time_range.currentData(), self.include_workers_supply.isChecked()
+                signature = (self.owner._account_key, horizon, supply, self._history is None, *(
+                    (self._keys[side], _history_source_signature(game, stored[side]),
+                     game.get("myBuild"), game.get("oppStrategy"), game.get("oppBuild"))
+                    for side, game in self._sides.items()))
                 if signature != self._render_signature:
-                    for side, field in (("my", "myBuild"), ("opp", "oppStrategy")):
-                        source = stored[side] if stored is not None else _events(game, side)
-                        source = _filter_build_events(source, include_workers_supply=self.include_workers_supply.isChecked())
-                        name = game.get(field) or (game.get("oppBuild") if side == "opp" else None)
-                        self.comparison.set_side(side, name, source, self.build_time_range.currentData())
+                    for side, game in self._sides.items():
+                        source = stored[side][side] if stored[side] is not None else _events(game, side)
+                        self.comparison.set_side(side, self._build_name(side),
+                                                 _filter_build_events(source, include_workers_supply=supply), horizon)
                     self._render_signature, self._render_source = signature, stored
-            failed = self._key in self.owner._build_order_failures
-            self.retry.setVisible(bool(self._key and failed))
+            self._render_source_status(stored)
+            for side, reference in (("my", "you"), ("opp", "opponent")):
+                game_id = self._keys[side][1] if self._keys[side] else None
+                self.comparison.set_reference(reference, selected=self.owner._is_ghost_reference_for(game_id, reference),
+                    enabled=bool(game_id and self.owner._paired and "ghost_reference" not in self.owner._requests))
+
+        def _render_source_status(self, stored):
+            failed = any(key in self.owner._build_order_failures for key in self._keys.values() if key)
+            self.retry.setVisible(failed)
             self.retry.setEnabled(self.owner._build_order_inflight is None)
-            if not game:
-                status = "No earlier encounter is available for this opponent."
-            elif stored is None:
+            if not any(self._sides.values()):
+                status = ("No earlier encounter is available for this opponent." if self._history is None
+                          else "No earlier game is available for either player.")
+            elif any(game and stored[side] is None for side, game in self._sides.items()):
                 status = "Scouting preview · stored replay load failed. Retry to load all steps." if failed else "Scouting preview · loading stored replay events. Later and repeated steps may be omitted."
             else:
-                status = "Stored replay events · You: " + str(len(stored["my"])) + " · Opponent: " + str(len(stored["opp"])) + ". Older uploads may be incomplete."
+                counts = " · ".join(title + ": " + (str(len(stored[side][side])) if stored[side] is not None else "no earlier game")
+                                    for side, title in (("my", "You"), ("opp", "Opponent")))
+                status = "Stored replay events · " + counts + ". Older uploads may be incomplete."
             self.source_status.setText(status)
-            for side, button in self.comparison.chain_reference_buttons.items():
-                selected = bool(self._key and self.owner._is_ghost_reference_for(self._key[1], side))
-                self.comparison.set_reference(side, selected=selected,
-                    enabled=bool(self._key and self.owner._paired and "ghost_reference" not in self.owner._requests))
 
     def _game_title(game, index):
         return f"{index + 1}. {str(game.get('result') or 'Game').upper()} · {_time(game.get('durationSec'))} · {game.get('map') or 'Unknown map'} · {str(game.get('date') or '')[:10]}"
@@ -577,7 +651,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._account_key = None
             self.team_roster_state = TeamRoster()
             self._team_details = {}
-            self._preferences = {"overlaysEnabled": False, "opponentOverlay": False, "scoutingOverlay": False, "scoutingReadAloud": False}
+            self._preferences = {"overlaysEnabled": False, "opponentOverlay": False, "scoutingOverlay": False,
+                                 "scoutingSkipFirstMeeting": True, "scoutingReadAloud": False}
             self._rendering_notes = False
             self._games = []
             self._game_selections = {}
@@ -687,8 +762,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 "overlaysEnabled": "Master switch for native pinned panels, spoken scouting, build selectors and Ghost. Off hides or stops native assistance; replay syncing and browsing continue. Randomize selects a shared build from check-in. Its animation and audio stay in the separate overlay widget, controlled by its own settings.",
                 "opponentOverlay": "Keep the current opponent card above other windows during a game, even when the main window is minimized. Requires In-game assistance and a mode that allows the opponent panel.",
                 "scoutingOverlay": "Keep previous encounters, build-vs-build and recorded replay timings above other windows during a game. Historical scouting only—not live enemy tracking. Requires In-game assistance and an allowed mode.",
+                "scoutingSkipFirstMeeting": "When your library has no earlier game against the current opponent, the pinned scouting report stays closed, because it has nothing to say about them. The Scouting button still opens it with your own last five games. Turn this off to open the report in every game.",
             }
-            for key, title in [("overlaysEnabled", "In-game assistance"), ("opponentOverlay", "Keep opponent on top"), ("scoutingOverlay", "Keep scouting on top")]:
+            for key, title in [("overlaysEnabled", "In-game assistance"), ("opponentOverlay", "Keep opponent on top"), ("scoutingOverlay", "Keep scouting on top"),
+                               ("scoutingSkipFirstMeeting", "Keep scouting closed on a first meeting")]:
                 checkbox = QtWidgets.QCheckBox(title)
                 checkbox.setToolTip(assistance_tooltips[key])
                 checkbox.setChecked(self._preferences[key])
@@ -1393,7 +1470,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             if not self._paired or not callable(handler) or self._build_order_inflight is not None:
                 return
             panel = self.overlays.get("scouting") if hasattr(self, "overlays") else None
-            keys = [panel._key if panel is not None and panel.isVisible() else None, self._current_build_key()]
+            # The opponent's game first: it is what the report is opened for.
+            panel_keys = (panel._keys["opp"], panel._keys["my"]) if panel is not None and panel.isVisible() else ()
+            keys = [*panel_keys, self._current_build_key()]
             for key in keys:
                 if key in self._build_order_cache:
                     self._build_order_cache.move_to_end(key)
@@ -2502,7 +2581,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             for kind, panel in self.overlays.items():
                 selected = self._preferences[kind + "Overlay"]
                 if kind == "scouting" and active:
-                    selected = (selected and not self._manual_scouting_dismissed) or self._manual_scouting_open
+                    # A pinned report with nothing to say about the opponent stays
+                    # closed; the Scouting button still opens it for this game.
+                    silent = self._preferences["scoutingSkipFirstMeeting"] and not _opponent_history_known(context)
+                    selected = (selected and not silent and not self._manual_scouting_dismissed) or self._manual_scouting_open
                 visible = enabled and selected and gates[kind + "Overlay"] and (active or preview)
                 if visible:
                     panel.update_context(context, scope=scope)

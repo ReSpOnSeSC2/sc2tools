@@ -60,16 +60,24 @@ class ScoutingStrip(QtWidgets.QFrame):
         layout.setSpacing(4)
         self.record = ElidedText()
         self.opening = ElidedText()
+        # Each player's recent builds, newest first. Two lines keep about
+        # four names readable on the 320 px card; the rest is elided.
+        self.their_builds = ElidedText(lines=2)
+        self.your_builds = ElidedText(lines=2)
         self.note = ElidedText(lines=2)
         self.dossier = link("Open dossier", focusable=False)
         self.dossier.clicked.connect(self.open_requested.emit)
-        for widget in (self.record, self.opening, self.note, self.dossier):
+        for widget in (self.record, self.opening, self.their_builds, self.your_builds, self.note, self.dossier):
             layout.addWidget(widget)
 
     def set_model(self, model: Optional[ScoutingStripModel]) -> None:
         self.record.set_full_text(model.record_line if model else "Scouting isn't available yet.")
         self.opening.set_full_text(model.opening_line if model else "")
         self.opening.setVisible(model is not None)
+        for label, text in ((self.their_builds, model.their_builds if model else ""),
+                            (self.your_builds, model.your_builds if model else "")):
+            label.set_full_text(text)
+            label.setVisible(bool(text))
         self.note.set_full_text(model.note if model else "")
         self.note.setVisible(bool(model and model.note))
         self.dossier.setVisible(model is not None)

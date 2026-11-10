@@ -43,7 +43,7 @@ def test_scouting_panel_uses_its_live_replay_and_detailed_cards_while_library_se
     selected = page.game_select.currentData()
     page.compact_card.scouting_button.click()
     panel = page.overlays["scouting"]
-    wait_until(app, lambda: panel._key in page._build_order_cache)
+    wait_until(app, lambda: panel._keys["opp"] in page._build_order_cache)
     assert panel.games.currentData() == "live-replay"
     assert page.game_select.currentData() == selected == "replay-0"
     assert panel.comparison.chain_labels["my"].text() == "Live scouting build"
@@ -81,7 +81,7 @@ def test_ending_or_losing_a_live_match_clears_opponent_fields_and_keeps_expand_a
         assert not page.compact_card.scouting_button.isCheckable()
         assert not any(panel.isVisible() for panel in page.overlays.values())
         assert page.overlays["opponent"].identity_card.identity["name"] == "—"
-        assert page.overlays["scouting"]._key is None
+        assert page.overlays["scouting"]._keys["opp"] is None
     page._snapshot["liveGame"].update(phase="match_in_progress", capturedAt=time.time() - 31)
     page._update_overlays()
     assert page.compact_card.scouting_button.isEnabled()
@@ -146,14 +146,14 @@ def test_scouting_panel_retry_reloads_its_own_replay_and_reports_loading(desk_fa
     page._update_overlays()
     page.compact_card.scouting_button.click()
     panel = page.overlays["scouting"]
-    wait_until(app, lambda: panel._key in page._build_order_failures)
+    wait_until(app, lambda: panel._keys["opp"] in page._build_order_failures)
     assert panel.retry.isVisible() and panel.retry.isEnabled()
     assert "load failed" in panel.source_status.toolTip()
     state["errors"].clear()
     panel.retry.click()
     assert not panel.retry.isEnabled()
     assert "loading stored replay events" in panel.source_status.toolTip()
-    wait_until(app, lambda: panel._key in page._build_order_cache)
+    wait_until(app, lambda: panel._keys["opp"] in page._build_order_cache)
     assert not panel.retry.isVisible()
     assert "Stored replay events" in panel.source_status.toolTip()
     assert page.game_select.currentData() == "replay-0"

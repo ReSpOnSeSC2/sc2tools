@@ -7,8 +7,9 @@
 # A drift here means the engine reports a version that disagrees with the
 # canonical file, or the lookup fell back to the unknown sentinel, so we
 # hard-fail PRs the moment the two values diverge.
-# Also keeps the website's loading-state agent label aligned with the agent
-# package version so a release cannot leave an old version in that fallback.
+# Also keeps the website's loading-state agent label on a version players can
+# download: the agent package version, or the release before it while the
+# package version is still being prepared on main (see the check below).
 # And pins the in-browser engine (Instant Analysis): INSTANT_ENGINE_VERSION in
 # apps/web/lib/instant/engineVersion.ts must equal apps/replay-engine/VERSION,
 # and PYODIDE_VERSION must equal the exact pyodide pin in apps/web/package.json
@@ -22,6 +23,7 @@ on:
       - 'apps/replay-engine/VERSION'
       - 'apps/replay-engine/__init__.py'
       - 'apps/agent/sc2tools_agent/__init__.py'
+      - 'apps/agent/CHANGELOG.md'
       - 'apps/web/lib/agentNotice.ts'
       - 'apps/web/lib/instant/engineVersion.ts'
       - 'apps/web/package.json'
@@ -90,9 +92,23 @@ jobs:
           web_match = re.search(r'^export const FALLBACK_LATEST_AGENT_VERSION\s*=\s*"(\d+\.\d+\.\d+)"', web_notice, re.MULTILINE)
           if not agent_match or not web_match:
               sys.exit('ERROR: missing agent package version or web fallback version')
-          if agent_match[1] != web_match[1]:
-              sys.exit(f'ERROR: agent version drift -- package {agent_match[1]}, web fallback {web_match[1]}')
-          print('OK -- agent package and web fallback agree on', agent_match[1])
+          # The website names the fallback before release metadata loads, and
+          # main deploys on every merge while an agent release is cut later
+          # from a tag. So the fallback may stay on the release before the
+          # package version (the next "## X.Y.Z" section of the agent
+          # changelog) until that version is published. It may never run
+          # ahead of the package, nor fall further behind than that.
+          package_version, web_version = agent_match[1], web_match[1]
+          agent_changelog = Path('apps/agent/CHANGELOG.md').read_text(encoding='utf-8')
+          releases = re.findall(r'^## (\d+\.\d+\.\d+)\s*$', agent_changelog, re.MULTILINE)
+          previous = releases[releases.index(package_version) + 1:][:1] if package_version in releases else []
+          if web_version == package_version:
+              print('OK -- agent package and web fallback agree on', package_version)
+          elif web_version in previous:
+              print(f'OK -- web fallback {web_version} is the release before agent {package_version}, which is in preparation')
+          else:
+              sys.exit(f'ERROR: agent version drift -- package {package_version}, web fallback {web_version}, '
+                       f'release before the package version {previous[0] if previous else "unknown"}')
 
           engine_ts = Path('apps/web/lib/instant/engineVersion.ts').read_text(encoding='utf-8')
           engine_match = re.search(r'^export const INSTANT_ENGINE_VERSION\s*=\s*"([^"]+)";', engine_ts, re.MULTILINE)

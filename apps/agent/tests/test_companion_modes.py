@@ -74,7 +74,8 @@ def test_local_modes_persist_offline_without_mutating_pairing_or_account_prefere
     assert client.action({"action": "companion_modes", "modes": modes}) == {"modes": modes}
     assert client.action({"action": "snapshot"})["modes"] == modes
     assert client.action({"action": "companion_modes"}) == {
-        "modes": modes, "preferences": {"overlaysEnabled": False, "opponentOverlay": False, "scoutingOverlay": False, "scoutingReadAloud": False},
+        "modes": modes, "preferences": {"overlaysEnabled": False, "opponentOverlay": False, "scoutingOverlay": False,
+                                        "scoutingSkipFirstMeeting": True, "scoutingReadAloud": False},
         "sessionEnabled": False,
     }
     loaded = load_state(tmp_path)

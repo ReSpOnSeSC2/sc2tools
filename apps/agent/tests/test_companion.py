@@ -256,7 +256,7 @@ def test_overlay_preferences_persist_without_repairing_or_network(tmp_path):
     loaded = load_state(tmp_path)
     assert loaded.companion_preferences == {
         "overlaysEnabled": False, "opponentOverlay": False, "scoutingOverlay": True,
-        "scoutingReadAloud": True,
+        "scoutingSkipFirstMeeting": True, "scoutingReadAloud": True,
     }
     assert loaded.device_token == "same-pairing"
     assert loaded.uploaded == state.uploaded

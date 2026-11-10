@@ -67,6 +67,28 @@ def test_actual_loading_card_keeps_plain_scouting_visible_when_locked(native, ap
     assert window.bar.isVisible() and window.scouting.isVisible()
 
 
+def test_loading_strip_lists_each_players_recent_builds_in_two_plain_lines_at_most(native, app):
+    host, _, _ = native
+    theirs = "Their last 5 games: " + " · ".join(f"W vs <i>Opening number {index}</i>" for index in range(5))
+    model = loading_model(scouting=replace(strip(), their_builds=theirs, your_builds="Your 1 earlier game: W with Blink"))
+    host.dispatch("show_loading", (model,)); app.processEvents()
+    window = host.existing_window(LOADING)
+    their_line, your_line = window.scouting.their_builds, window.scouting.your_builds
+    assert window.width() == 320
+    assert their_line.isVisible() and your_line.isVisible()
+    assert their_line.textFormat() == QtCore.Qt.PlainText
+    assert their_line.accessibleName() == theirs and "W vs <i>Opening" in their_line.text()
+    assert len(their_line.text().splitlines()) == 2 and their_line.text().endswith("…")
+    assert your_line.text() == "Your 1 earlier game: W with Blink"
+    layout = window.scouting.layout()
+    assert layout.indexOf(window.scouting.opening) < layout.indexOf(their_line) < layout.indexOf(your_line) < layout.indexOf(window.scouting.note)
+    # A first meeting has no opponent line; an older brief has neither.
+    window.update_model(replace(model, scouting=replace(strip(), your_builds="Your 1 earlier game: W with Blink")))
+    assert not their_line.isVisible() and your_line.isVisible()
+    window.update_model(replace(model, scouting=strip()))
+    assert not their_line.isVisible() and not your_line.isVisible()
+
+
 def test_loading_scouting_preserves_non_activation_contract_capture_and_local_close(native, app, monkeypatch):
     host, recorder, excluded = native
     activation_requests = []
