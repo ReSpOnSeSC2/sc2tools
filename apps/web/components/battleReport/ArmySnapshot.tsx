@@ -1,5 +1,6 @@
 import type { StatsEvent } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import { formatGameClock } from "@/lib/macro";
+import { formatNumber } from "@/lib/i18n/format";
 
 const WIDTH = 400, HEIGHT = 190, PAD = 22;
 const known = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
@@ -31,7 +32,7 @@ export function ArmySnapshot({ time, duration, mine, opponent }: { time: number;
     <line x1={PAD} x2={WIDTH - PAD} y1={HEIGHT - PAD} y2={HEIGHT - PAD} stroke="rgb(var(--border-strong))" />
     <line x1={x(time)} x2={x(time)} y1={PAD} y2={HEIGHT - PAD} stroke="rgb(var(--text-dim))" strokeDasharray="4 4" />
     {[{ rows: me, color: "rgb(var(--player-you))" }, { rows: opp, color: "rgb(var(--player-opp))" }].map((side) => segments(side.rows, x, y).map((group, index) => group.length === 1 ? <circle key={`${side.color}:${index}`} cx={group[0].x} cy={group[0].y} r={3} fill={side.color} /> : <path key={`${side.color}:${index}`} d={group.map((point, i) => `${i ? "L" : "M"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ")} fill="none" stroke={side.color} strokeWidth={2.5} strokeLinecap="round" />))}
-    <text x={PAD} y={14} fill="rgb(var(--text-muted))" fontSize={10}>{Math.round(maximum).toLocaleString()} army value</text>
+    <text x={PAD} y={14} fill="rgb(var(--text-muted))" fontSize={10}>{formatNumber(Math.round(maximum))} army value</text>
     <text x={PAD} y={HEIGHT - 6} fill="rgb(var(--text-dim))" fontSize={10}>{formatGameClock(from)}</text><text x={WIDTH - PAD} y={HEIGHT - 6} textAnchor="end" fill="rgb(var(--text-dim))" fontSize={10}>{formatGameClock(until)}</text>
   </svg>;
 }

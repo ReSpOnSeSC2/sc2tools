@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { BackupRetention } from "@/components/legal/BackupRetention";
+import { formatNumber } from "@/lib/i18n/format";
 
 type Inventory = { removed: Record<string, number>; anonymized: Record<string, number>; countedAt: string };
 const LABELS: Record<string, string> = {
@@ -95,5 +96,5 @@ export default function AccountDeleteDialog({ onClose, onExport, exportStatus }:
 }
 
 function InventoryList({ title, counts }: { title: string; counts: Record<string, number> }) {
-  return <section><h4 className="mb-2 font-semibold">{title}</h4><dl className="space-y-1 text-body-sm">{Object.entries(counts).map(([key, count]) => <div key={key} className="flex justify-between gap-3"><dt className="min-w-0">{LABELS[key] || key}</dt><dd className="shrink-0 tabular-nums">{count.toLocaleString()}</dd></div>)}</dl></section>;
+  return <section><h4 className="mb-2 font-semibold">{title}</h4><dl className="space-y-1 text-body-sm">{Object.entries(counts).map(([key, count]) => <div key={key} className="flex justify-between gap-3"><dt className="min-w-0">{LABELS[key] || key}</dt><dd className="shrink-0 tabular-nums">{formatNumber(count)}</dd></div>)}</dl></section>;
 }

@@ -1,0 +1,4 @@
+{
+  "$comment": "Owner-maintained monthly donation totals for the /donate coverage meter. Enter what actually arrived from your own Streamlabs and PayPal records (USD, after fees); no payment provider is called. One entry per month: month (YYYY-MM, UTC), receivedUsd (>= 0), supporterCount (whole people who gave that month, not names) and updatedAt (YYYY-MM-DD). The meter shows the newest month and hides itself once updatedAt is more than 45 days old. See docs/DEPLOYMENT_GUIDE.md, Updating monthly donations.",
+  "months": []
+}

@@ -28,6 +28,7 @@ import {
 import { clientTimezone } from "@/lib/timeseries";
 import { NetMmrRaceOpponentsModal } from "./NetMmrRaceOpponentsModal";
 import { ChartTooltip } from "./ChartTooltip";
+import { formatNumber } from "@/lib/i18n/format";
 
 type MatchupRow = {
   matchup: NetMmrMatchup;
@@ -83,7 +84,7 @@ const SMALL_SAMPLE_GAMES = 20;
 
 function formatMmr(value: number | null, perGame: boolean): string {
   if (value === null) return "—";
-  return `${value > 0 ? "+" : ""}${(value || 0).toLocaleString(undefined, { minimumFractionDigits: perGame ? 1 : 0, maximumFractionDigits: perGame ? 1 : 0 })}`;
+  return `${value > 0 ? "+" : ""}${formatNumber(value || 0, { minimumFractionDigits: perGame ? 1 : 0, maximumFractionDigits: perGame ? 1 : 0 })}`;
 }
 
 function untrustedMmrMessage(count: number): string {
@@ -289,7 +290,7 @@ export function NetMmrByMatchupChart() {
                 const row = rows.find((entry) => entry.matchup === payload.value);
                 return <text x={x} y={y} textAnchor="end" fill={COLOR_TEXT_DIM} fontSize={12}>
                   <tspan x={x} dy={-3}>{payload.value}</tspan>
-                  <tspan x={x} dy={14} fontSize={10}>{row?.pairs.toLocaleString(undefined, { notation: "compact", maximumFractionDigits: 1 })} measured</tspan>
+                  <tspan x={x} dy={14} fontSize={10}>{row ? formatNumber(row.pairs, { notation: "compact", maximumFractionDigits: 1 }) : null} measured</tspan>
                 </text>;
               }}
             />
@@ -319,7 +320,7 @@ export function NetMmrByMatchupChart() {
                   label: metric === "avgDelta" ? "MMR per measured game" : "Net MMR",
                   value: formatMmr(value, perGame),
                   dot: value >= 0 ? COLOR_SUCCESS : COLOR_DANGER,
-                }, { label: "Measured games", value: row.pairs.toLocaleString() }]} />;
+                }, { label: "Measured games", value: formatNumber(row.pairs) }]} />;
               }}
             />
             <Bar dataKey={metric} radius={[4, 4, 4, 4]} isAnimationActive={false}>
@@ -335,7 +336,7 @@ export function NetMmrByMatchupChart() {
         </ResponsiveContainer>
       </div>
       {scaleLeader && <p role="status" className="mt-2 rounded-lg border border-border bg-bg-elevated/50 px-3 py-2 text-micro leading-relaxed text-text-muted">
-        {scaleLeader.matchup} sets the scale at {formatMmr(scaleLeader.avgDelta, true)} MMR/game from {scaleLeader.pairs.toLocaleString()} measured {scaleLeader.pairs === 1 ? "game" : "games"}.
+        {scaleLeader.matchup} sets the scale at {formatMmr(scaleLeader.avgDelta, true)} MMR/game from {formatNumber(scaleLeader.pairs)} measured {scaleLeader.pairs === 1 ? "game" : "games"}.
         {scaleLeader.pairs < SMALL_SAMPLE_GAMES ? " Small sample; this average can change sharply." : " Smaller averages sit close to zero."}
       </p>}
       <details className="mt-3 text-micro text-text-dim">

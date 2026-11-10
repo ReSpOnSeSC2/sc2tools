@@ -190,6 +190,8 @@ const { buildPulseResolver } = require("./services/pulseResolver");
 const { PulseDirectoryService } = require("./services/pulseDirectory");
 const { PlayerChannelsService } = require("./services/playerChannels");
 const { buildPlayerChannelsRouter } = require("./routes/playerChannels");
+const { SupporterWallService } = require("./services/supporterWall");
+const { buildSupporterWallRouter } = require("./routes/supporterWall");
 const { PlayerIdentitiesService } = require("./services/playerIdentities");
 const { buildPlayerIdentitiesRouter } = require("./routes/playerIdentities");
 const { NotificationsService } = require("./services/notifications");
@@ -492,6 +494,7 @@ function makeServices(deps, clerk, adminClerkIds) {
       logger: deps.logger,
     });
   const playerChannels = new PlayerChannelsService(deps.db, { pulseLinks });
+  const supporterWall = new SupporterWallService(deps.db);
   const playerIdentities = new PlayerIdentitiesService(deps.db);
   playerChannels.playerIdentities = playerIdentities;
   // League-percentile benchmark tables — nightly aggregate over slim
@@ -1134,6 +1137,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     chatbot,
     pulseDirectory,
     playerChannels,
+    supporterWall,
     playerIdentities,
     notifications,
     supportMessages,
@@ -1473,6 +1477,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildPlayerChannelsRouter({ playerChannels: services.playerChannels, auth, isAdmin }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildSupporterWallRouter({ supporterWall: services.supporterWall, auth, isAdmin }));
   app.use(SERVICE.ROUTE_PREFIX, buildPlayerIdentitiesRouter({ playerIdentities: services.playerIdentities, auth, isAdmin }));
   app.use(
     SERVICE.ROUTE_PREFIX,

@@ -19,6 +19,7 @@ import type {
   PublicProfileSignatureBuild,
   PublicReviewerSection,
 } from "./types";
+import { formatNumber } from "@/lib/i18n/format";
 
 export interface PublicProfileProps {
   profile: PublicPlayerProfile;
@@ -99,7 +100,7 @@ export function PublicProfile({ profile, showHero = true, showReviewer = true }:
             title={profile.displayName}
             description={
               hasGames
-                ? `${games.toLocaleString()} games tracked · ${wins}–${losses} · ${pct(winRate)} win rate`
+                ? `${formatNumber(games)} games tracked · ${wins}–${losses} · ${pct(winRate)} win rate`
                 : "Public build library on SC2 Tools"
             }
           />
@@ -107,7 +108,7 @@ export function PublicProfile({ profile, showHero = true, showReviewer = true }:
       </Card> : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Games" value={games.toLocaleString()} />
+        <StatCard label="Games" value={formatNumber(games)} />
         <StatCard
           label="Record"
           value={

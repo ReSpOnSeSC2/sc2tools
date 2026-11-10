@@ -61,6 +61,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   pulseAccounts: import('mongodb').Collection,
  *   pulseCharacterLinks: import('mongodb').Collection,
  *   playerChannels: import('mongodb').Collection,
+ *   supporters: import('mongodb').Collection,
  *   playerIdentities: import('mongodb').Collection,
  *   playerIdentitySubmissions: import('mongodb').Collection,
  *   playerIdentityDirectory: import('mongodb').Collection,
@@ -172,6 +173,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
     pulseCharacterLinks: db.collection(COLLECTIONS.PULSE_CHARACTER_LINKS),
     playerChannels: db.collection(COLLECTIONS.PLAYER_CHANNELS),
+    supporters: db.collection(COLLECTIONS.SUPPORTERS),
     playerIdentities: db.collection(COLLECTIONS.PLAYER_IDENTITIES),
     playerIdentitySubmissions: db.collection(COLLECTIONS.PLAYER_IDENTITY_SUBMISSIONS),
     playerIdentityDirectory: db.collection(COLLECTIONS.PLAYER_IDENTITY_DIRECTORY),
@@ -374,6 +376,9 @@ async function ensureIndexes(ctx, opts = {}) {
   // Tombstones retain their identities; a refresh can never resurrect removed channels.
   await ctx.playerChannels.createIndex({ identityKeys: 1 }, { unique: true });
   await ctx.playerChannels.createIndex({ ownerUserId: 1 }, { sparse: true });
+  // One supporter-wall entry per account; the public wall reads approved rows newest first.
+  await ctx.supporters.createIndex({ userId: 1 }, { unique: true });
+  await ctx.supporters.createIndex({ status: 1, month: -1, reviewedAt: -1 });
   await ctx.playerChannels.createIndex({ removed: 1, displayName: 1, id: 1 });
   await ctx.users.createIndex({ clerkUserId: 1 }, { unique: true });
   // Internal UUIDs remain unique account keys, but public replay links use a

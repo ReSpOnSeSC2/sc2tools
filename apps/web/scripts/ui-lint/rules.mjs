@@ -15,6 +15,11 @@ export const HEX_ALLOWLIST = {
   ],
 };
 
+// Bare locale formatting ignores the account's language, clock and week
+// start; lib/i18n/format is the one place allowed to call these.
+const LOCALE_METHODS = new Set(["toLocaleString", "toLocaleDateString", "toLocaleTimeString"]);
+const LOCALE_FORMAT_HOME = "lib/i18n/";
+
 const printer = ts.createPrinter({ removeComments: true, newLine: ts.NewLineKind.LineFeed });
 const pathName = (path) => path.replaceAll("\\", "/");
 const isLiteral = (node) => ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node);
@@ -179,6 +184,7 @@ export function analyzeSource(file, text) {
     return false;
   };
   const hexAllowed = HEX_ALLOWLIST.prefixes.some((prefix) => file.startsWith(prefix)) || HEX_ALLOWLIST.files.includes(file);
+  const localeFormatAllowed = file.startsWith(LOCALE_FORMAT_HOME);
   const found = [];
   function report(rule, node) {
     const normalized = normalize(node, source);
@@ -188,6 +194,8 @@ export function analyzeSource(file, text) {
   function visit(node) {
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)
       && ["confirm", "prompt"].includes(node.expression.text) && !isShadowed(node, node.expression.text)) report("native-confirm-prompt", node);
+    if (!localeFormatAllowed && ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && LOCALE_METHODS.has(node.expression.name.text)) report("bare-tolocale", node);
     if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
       const base = node.expression;
       const name = ts.isPropertyAccessExpression(node) ? node.name.text : node.argumentExpression && propertyName(node.argumentExpression);

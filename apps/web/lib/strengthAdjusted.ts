@@ -1,3 +1,4 @@
+import { formatNumber } from "@/lib/i18n/format";
 export type StrengthFields = {
   ratedGames?: number;
   ratedWins?: number;
@@ -21,9 +22,9 @@ export function strengthDescription(row: StrengthFields): string {
   const rated = row.ratedGames ?? 0;
   if (!rated || row.expectedWins == null || row.winsAboveExpected == null) return `Vs expected unavailable: no decided ranked 1v1 games with both replay-time ratings. ${row.excludedNoMmr ?? 0} missing paired ratings; ${row.excludedIneligible ?? 0} other ineligible records.`;
   const model = row.expectation?.method === "calibrated"
-    ? `Calibrated from ${row.expectation.sampleGames.toLocaleString()} original games in ${row.expectation.supportedBins} supported bins.`
+    ? `Calibrated from ${formatNumber(row.expectation.sampleGames)} original games in ${row.expectation.supportedBins} supported bins.`
     : `Elo fallback, scale ${row.expectation?.eloScale ?? 400}.`;
-  const performance = row.perfRating === undefined ? "" : row.perfRating === null ? "No finite performance rating for an all-win or all-loss rated sample." : `Performance rating ${Math.round(row.perfRating).toLocaleString()}.`;
+  const performance = row.perfRating === undefined ? "" : row.perfRating === null ? "No finite performance rating for an all-win or all-loss rated sample." : `Performance rating ${formatNumber(Math.round(row.perfRating))}.`;
   return `${row.ratedWins ?? 0} rated wins − ${row.expectedWins.toFixed(2)} expected wins = ${signedWins(row.winsAboveExpected)} wins, given who you played. ${rated} paired replay-rated games; ${row.excludedNoMmr ?? 0} missing paired ratings; ${row.excludedIneligible ?? 0} other ineligible records. ${performance} ${model}`;
 }
 

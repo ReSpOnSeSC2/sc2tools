@@ -16,17 +16,18 @@ import {
   type ConsentState,
 } from "@/lib/analytics/consent";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
+import { InstantBadge } from "@/components/ui/InstantBadge";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Field } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
-import { SaveBar } from "@/components/ui/SaveBar";
 import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { TODAY_DEFAULT_TAB } from "@/components/analyzer/tabs";
-import { usePublishDirty } from "./SettingsContext";
+import { useSaveSource } from "./SettingsContext";
 import { RestoreSetupChecklist } from "./RestoreSetupChecklist";
+import { SettingsAppearance } from "./SettingsAppearance";
 import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 type Misc = {
@@ -83,10 +84,11 @@ export function SettingsMisc() {
     DEFAULT_MISC,
   );
 
-  usePublishDirty("preferences", dirty);
+  useSaveSource("preferences", { label: "preferences", dirty, save, reset, order: 0 }, "app-preferences");
 
-  async function save() {
-    if (saving) return;
+  async function save(): Promise<boolean> {
+    if (!dirty) return true;
+    if (saving) return false;
     setSaving(true);
     const previous = data;
     const body = miscForSave(draft);
@@ -99,11 +101,13 @@ export function SettingsMisc() {
       await mutate();
       markSaved();
       toast.success("Preferences saved");
+      return true;
     } catch (err) {
       await mutate(previous, { revalidate: false });
       const message =
         (err as ClientApiError | undefined)?.message ?? "Please try again.";
       toast.error("Couldn't save preferences", { description: message });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -143,6 +147,8 @@ export function SettingsMisc() {
         </Card>
       </Section>
 
+      <SettingsAppearance />
+
       <Section id="setup-privacy" className="scroll-mt-28" title="Setup & privacy">
         <Card>
           <div className="divide-y divide-border">
@@ -168,12 +174,6 @@ export function SettingsMisc() {
       </Section>
 
       <NotificationPreferences />
-      <SaveBar
-        visible={dirty}
-        saving={saving}
-        onSave={save}
-        onReset={reset}
-      />
     </>
   );
 }
@@ -210,6 +210,7 @@ function AnalyticsCookiesRow() {
   return (
     <SettingRow
       title="Analytics cookies"
+      instant
       status={status}
       description={
         <>
@@ -269,11 +270,14 @@ function AnalyticsCookiesRow() {
 
 function SettingRow({
   title,
+  instant = false,
   status,
   description,
   action,
 }: {
   title: string;
+  /** Applies the moment it changes, not through Save. */
+  instant?: boolean;
   /** Current state, announced when it changes. */
   status?: { label: string; variant: BadgeVariant };
   description: ReactNode;
@@ -284,6 +288,7 @@ function SettingRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-body font-medium text-text">{title}</h3>
+          {instant ? <InstantBadge /> : null}
           {status ? (
             <span role="status">
               <span className="sr-only">{title}: </span>

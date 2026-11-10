@@ -33,6 +33,7 @@ import { ReviewReplayPanel } from "./ReviewReplayPanel";
 import { ReviewShareMenu } from "./ReviewShareMenu";
 import { REPORT_REASONS, ReviewMenu } from "./ReviewMenu";
 import { ReviewThread } from "./ReviewThread";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * /reviews/[id] — one review request: the replay on the left (pinned at
@@ -337,7 +338,7 @@ export function RequestHeader({ data, onChanged, onClosed }: { data: ReviewPageD
         <h1 className="break-words font-display text-h2 font-bold text-text">{headline}</h1>
         <p className="text-caption text-text-muted">
           Asked by <strong className="text-text">{r.asker.label}</strong>
-          {r.asker.band ? <> · {r.asker.band.label}{r.asker.mmr ? ` (~${r.asker.mmr.toLocaleString("en-US")} MMR)` : ""}</> : null}
+          {r.asker.band ? <> · {r.asker.band.label}{r.asker.mmr ? ` (~${formatNumber(r.asker.mmr)} MMR)` : ""}</> : null}
           {" "}vs {r.opponent.label}
           {r.game.map ? <> · {r.game.map}</> : null}
           {r.game.durationSec ? <> · {formatClock(r.game.durationSec)}</> : null}

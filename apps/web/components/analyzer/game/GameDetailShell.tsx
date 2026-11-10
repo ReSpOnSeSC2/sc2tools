@@ -27,6 +27,7 @@ import {
   opponentProfileHref,
   type OpponentNavigationContext,
 } from "@/lib/opponentNavigation";
+import { formatDateTime } from "@/lib/i18n/format";
 
 /**
  * GameDetailShell — header + responsive layout for the per-game
@@ -139,7 +140,7 @@ export function GameDetailShell({
             </div>
 
             <dl className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-caption text-text-muted">
-              <MetaItem label="Played"><time dateTime={game.date || undefined} title={game.date && Number.isFinite(Date.parse(game.date)) ? new Date(game.date).toLocaleString() : undefined}>{fmtGameDate(game.date)}</time></MetaItem>
+              <MetaItem label="Played"><time dateTime={game.date || undefined} title={game.date && Number.isFinite(Date.parse(game.date)) ? formatDateTime(new Date(game.date)) : undefined}>{fmtGameDate(game.date)}</time></MetaItem>
               {game.durationSec ? <MetaItem label="Length">{fmtMinutes(game.durationSec)}</MetaItem> : null}
               {game.myMmr != null || game.opponent?.mmr != null ? <MetaItem label="MMR">
                 <span className="tabular-nums">

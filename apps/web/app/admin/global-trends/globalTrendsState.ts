@@ -1,4 +1,5 @@
 import type { AnalyzerFilters } from "@/lib/filterContext";
+import { formatNumber } from "@/lib/i18n/format";
 
 export const ALL_GAME_FILTERS: AnalyzerFilters = {
   preset: "all", map_pool: "all", game_size: "all", exclude_too_short: false,
@@ -88,6 +89,6 @@ export function selectPlayers(p: Population, ids: string[], selected: boolean): 
 }
 
 export function selectionLabel(p: Population): string {
-  if (p.selection === "include") return `${p.playerIds.length.toLocaleString()} selected`;
-  return p.playerIds.length ? `${p.playerIds.length.toLocaleString()} excluded` : "All players";
+  if (p.selection === "include") return `${formatNumber(p.playerIds.length)} selected`;
+  return p.playerIds.length ? `${formatNumber(p.playerIds.length)} excluded` : "All players";
 }

@@ -6,6 +6,7 @@ import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { clientTimezone } from "@/lib/timeseries";
+import { formatNumber } from "@/lib/i18n/format";
 
 type HeatmapCell = { dow: number; hour: number; wins: number; losses: number; total: number; winRate: number };
 type HeatmapResponse = { timezone: string; cells: HeatmapCell[]; totalGames: number };
@@ -101,8 +102,8 @@ export function TimeOfDayHeatmap() {
                 <button type="button" ref={(node) => { cellRefs.current[index] = node; }} aria-label={`${day} ${labels[block]}: ${details}`} aria-pressed={index === selectedIndex} tabIndex={index === selectedIndex ? 0 : -1} onFocus={() => setSelection(index)} onClick={() => setSelection(index)} onKeyDown={(event) => onCellKeyDown(event, index)}
                   className={`relative flex min-h-11 w-full flex-col items-center justify-center overflow-hidden rounded-md border text-micro tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${index === selectedIndex ? "border-text" : "border-transparent"} ${mode === "wr" && ready ? rateClass(rate) : "bg-bg-elevated text-text"}`}>
                   {mode === "volume" && !empty && <span aria-hidden="true" className="absolute inset-0 bg-accent" style={{ opacity: 0.1 + cell.total / maxTotal * 0.5 }} />}
-                  <span className="relative font-semibold">{empty ? "·" : mode === "volume" ? cell.total.toLocaleString() : ready ? `${Math.round(rate * 100)}%` : "—"}</span>
-                  {mode === "wr" && !empty && <span className="relative text-[10px] leading-3 text-text-muted">{cell.total.toLocaleString()} {isGlobal ? "rec" : "g"}</span>}
+                  <span className="relative font-semibold">{empty ? "·" : mode === "volume" ? formatNumber(cell.total) : ready ? `${Math.round(rate * 100)}%` : "—"}</span>
+                  {mode === "wr" && !empty && <span className="relative text-[10px] leading-3 text-text-muted">{formatNumber(cell.total)} {isGlobal ? "rec" : "g"}</span>}
                 </button>
               </td>;
             })}
@@ -110,7 +111,7 @@ export function TimeOfDayHeatmap() {
         </table>
       </div>
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 text-micro text-text-muted" aria-label="Color legend">
-        {mode === "volume" ? <span>Few → many · busiest cell: {maxTotal.toLocaleString()} {recordLabel}</span> : <>
+        {mode === "volume" ? <span>Few → many · busiest cell: {formatNumber(maxTotal)} {recordLabel}</span> : <>
           <span className="rounded bg-warning/25 px-2 py-1 text-text">Below 45%</span>
           <span className="rounded bg-border px-2 py-1 text-text">45–55%</span>
           <span className="rounded bg-accent-cyan/30 px-2 py-1 text-text">Above 55%</span>
@@ -118,7 +119,7 @@ export function TimeOfDayHeatmap() {
         </>}
       </div>
       <div role="status" aria-live="polite" aria-atomic="true" className="mt-3 rounded-lg border border-border bg-bg-elevated/50 p-3 text-caption">
-        <div className="flex flex-wrap items-baseline justify-between gap-2"><strong className="text-text">{selectedLabel}</strong><span className="tabular-nums text-text-muted">{selected.total.toLocaleString()} {recordLabel}</span></div>
+        <div className="flex flex-wrap items-baseline justify-between gap-2"><strong className="text-text">{selectedLabel}</strong><span className="tabular-nums text-text-muted">{formatNumber(selected.total)} {recordLabel}</span></div>
         {selected.total ? <p className="mt-1 tabular-nums text-text-muted">{selected.wins}W · {selected.losses}L{selected.total > selected.wins + selected.losses ? ` · ${selected.total - selected.wins - selected.losses} other` : ""} · {(selected.wins / selected.total * 100).toFixed(1)}% win rate{selected.total < MIN_RATE_GAMES ? " · Small sample" : ""}</p> : <p className="mt-1 text-text-muted">No selected games in this time block.</p>}
       </div>
       <p className="mt-2 text-micro leading-relaxed text-text-muted">These are observed results, not a best-time recommendation. Opponents and matchups can vary by time.{isGlobal ? " Results combine the selected players." : ""} Use arrow keys to explore the grid.</p>

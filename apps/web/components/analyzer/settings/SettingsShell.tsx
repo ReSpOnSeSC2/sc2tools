@@ -36,6 +36,7 @@ import {
   useSettingsContext,
 } from "./SettingsContext";
 import { revealSectionAnchor } from "./revealSectionAnchor";
+import { SettingsSaveBar } from "./SettingsSaveBar";
 import { settingsSectionsForTab } from "@/lib/settingsIndex";
 import { SettingsSectionNav } from "./SettingsSectionNav";
 import { OverlayManagerNav } from "./OverlayManagerNav";
@@ -380,6 +381,11 @@ function SettingsShellInner({
         })()}
         </div>
       </Tabs>
+
+      {/* The tab's one SaveBar: forms register with useSaveSource and never
+          render their own, so bars can't stack. Keyed so a result from one
+          tab never shows on another. */}
+      <SettingsSaveBar key={active} tabId={active} />
 
       <ConfirmDialog
         open={pending !== null}

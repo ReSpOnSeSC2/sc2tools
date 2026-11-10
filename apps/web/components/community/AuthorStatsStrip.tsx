@@ -3,6 +3,7 @@ import { StatCard } from "@/components/ui/Stat";
 import { Icon } from "@/components/ui/Icon";
 import { publicDate } from "@/lib/seo/publicDate";
 import { coerceRace, raceIconName } from "@/lib/race";
+import { formatNumber } from "@/lib/i18n/format";
 
 export interface AuthorStatsStripProps {
   totalBuilds: number;
@@ -39,7 +40,7 @@ export function AuthorStatsStrip({
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       <StatCard
         label="Builds published"
-        value={totalBuilds.toLocaleString()}
+        value={formatNumber(totalBuilds)}
         hint={
           <span className="inline-flex items-center gap-1">
             <BookMarked className="h-3 w-3" aria-hidden />
@@ -52,7 +53,7 @@ export function AuthorStatsStrip({
         value={
           <span className={voteTone}>
             {totalVotes > 0 ? "+" : ""}
-            {totalVotes.toLocaleString()}
+            {formatNumber(totalVotes)}
           </span>
         }
         hint="Across all builds"

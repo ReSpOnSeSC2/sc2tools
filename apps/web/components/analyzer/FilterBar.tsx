@@ -32,6 +32,7 @@ import { listSeasons, currentSeason, seasonRange, formatSeasonRange } from "@/li
 import type { LogicalSeason } from "@/lib/useSeasons";
 import { AnalyzerViewsButton } from "./AnalyzerViewsButton";
 import { AccountFilterPicker } from "./AccountFilterPicker";
+import { formatDate } from "@/lib/i18n/format";
 
 const SEASONS_TO_SHOW = 16;
 
@@ -241,13 +242,13 @@ function DateFilter() {
       {filters.since || filters.until || eightWorker ? (
         <span className="text-xs text-text-dim">
           {filters.since
-            ? new Date(filters.since).toLocaleDateString()
+            ? formatDate(new Date(filters.since))
             : eightWorker
               ? "5.0.16"
               : "—"}{" "}
           →{" "}
           {filters.until
-            ? new Date(filters.until).toLocaleDateString()
+            ? formatDate(new Date(filters.until))
             : eightWorker
               ? "5.0.17"
               : "now"}
@@ -696,7 +697,7 @@ function SeasonRow({
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, {
+  return formatDate(d, {
     month: "short",
     day: "numeric",
     year: "numeric",

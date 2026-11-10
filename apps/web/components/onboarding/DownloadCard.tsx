@@ -24,6 +24,7 @@ import type { DetectedOS } from "./types";
 import { Button } from "@/components/ui/Button";
 import { CODE_LOCATION, smartScreenNote, sourceInstallSnippet } from "@/lib/agentInstallerCopy";
 import { MiniMarkdown } from "@/components/ui/MiniMarkdown";
+import { formatDate } from "@/lib/i18n/format";
 
 const OS_LABEL: Record<Exclude<DetectedOS, "unknown">, string> = {
   windows: "Windows",
@@ -356,7 +357,7 @@ function formatDate(iso: string): string {
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString(undefined, {
+    return formatDate(d, {
       year: "numeric",
       month: "short",
       day: "numeric",

@@ -16,6 +16,7 @@ import type {
   AdminInfrastructureResp,
   HealthResp,
 } from "../components/adminTypes";
+import { formatDateTime } from "@/lib/i18n/format";
 
 /**
  * /admin/health — provider costs, capacity, and dependency health.
@@ -72,7 +73,7 @@ export default function AdminHealthPage() {
               <StatusTile label="Original replay store" tone={data.runtime.replayFilesStore === "r2" ? "ok" : "error"} primary={backendLabel(data.runtime.replayFilesStore)} secondary={data.runtime.replayFilesStore === "r2" ? "Original replay uploads and signed downloads enabled" : "Original replay files are not being archived"} />
               <BrowserBackupTile runtime={data.runtime} />
               <StatusTile label="Game-details store" tone="ok" primary={backendLabel(data.runtime.gameDetailsStore)} secondary={data.runtime.gameDetailsStore === "r2" ? "Cloudflare R2 / S3-compatible" : "MongoDB game_details collection"} />
-              <StatusTile label="Uptime" tone="ok" primary={formatDuration(data.uptime.uptimeSeconds)} secondary={"since " + new Date(data.uptime.startedAt).toLocaleString()} />
+              <StatusTile label="Uptime" tone="ok" primary={formatDuration(data.uptime.uptimeSeconds)} secondary={"since " + formatDateTime(new Date(data.uptime.startedAt))} />
               <PersonalChartCacheTile snapshot={data.personalChartCache} />
             </div>}
       </section>
@@ -231,5 +232,5 @@ function formatWhen(value: string | null): string {
   if (!value) return "at an unknown time";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "at an unknown time";
-  return date.toLocaleString();
+  return formatDateTime(date);
 }

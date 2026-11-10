@@ -25,6 +25,7 @@ import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
 import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
 import { BuildStartCards, type BuildStartChoice } from "./BuildStartCards";
 import { buildVariantContinuationHref, knownBuildVariantId } from "@/lib/buildVariantIntent";
+import { formatNumber } from "@/lib/i18n/format";
 
 // Editors and charts are only needed after a library action. Keep them out
 // of the route's first load, including for signed-out visitors.
@@ -627,9 +628,9 @@ function describeCompletedReclassify(
   const tagged = Math.max(0, Number(progress.tagged) || 0);
   const cleared = Math.max(0, Number(progress.cleared) || 0);
   const deferred = Math.max(0, Number(progress.deferred) || 0);
-  const applied = `${tagged.toLocaleString()} games matched · ${cleared.toLocaleString()} old matches removed.`;
+  const applied = `${formatNumber(tagged)} games matched · ${formatNumber(cleared)} old matches removed.`;
   return deferred > 0
-    ? `${applied} ${deferred.toLocaleString()} replay${deferred === 1 ? " was" : "s were"} left unchanged because analysis data was unavailable; re-sync the desktop app to repair ${deferred === 1 ? "it" : "them"}.`
+    ? `${applied} ${formatNumber(deferred)} replay${deferred === 1 ? " was" : "s were"} left unchanged because analysis data was unavailable; re-sync the desktop app to repair ${deferred === 1 ? "it" : "them"}.`
     : applied;
 }
 
@@ -676,7 +677,7 @@ function ReclassifyStatusPanel({
         <p className="text-caption text-text-muted">
           {failed
             ? describeReclassifyFailure(status.error)
-            : `${scanned.toLocaleString()}${total > 0 ? ` of ${total.toLocaleString()}` : ""} replays checked${total > 0 ? "" : " so far"}${deferred > 0 ? ` · ${deferred.toLocaleString()} waiting for replay data` : ""}`}
+            : `${formatNumber(scanned)}${total > 0 ? ` of ${formatNumber(total)}` : ""} replays checked${total > 0 ? "" : " so far"}${deferred > 0 ? ` · ${formatNumber(deferred)} waiting for replay data` : ""}`}
         </p>
         {!failed && total > 0 ? <div role="progressbar" aria-label="Replays checked" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(scanned, total)} className="mt-2 h-2 rounded bg-bg-elevated"><div className="h-2 rounded bg-accent" style={{ width: `${Math.min(100, scanned / total * 100)}%` }} /></div> : null}
         {status.requestId ? <p className="text-caption">Error ID: {status.requestId}</p> : null}

@@ -15,13 +15,14 @@ import { useAdminQueryState } from "../components/useAdminQueryState";
 import { AdminDate } from "../components/AdminDate";
 import { AdminUsersExport } from "../components/AdminUsersExport";
 import type { AdminUserRow, UsersListResp } from "../components/adminTypes";
+import { formatNumber } from "@/lib/i18n/format";
 
 const filters = [{ value: "all", label: "All" }, { value: "with_games", label: "Has games" }, { value: "no_games", label: "No games yet" }, { value: "with_agent", label: "Has agent" }, { value: "signed_up_7d", label: "Signed up in 7 days" }, { value: "agent_inactive_14d", label: "Agent inactive 14 days" }, { value: "admins", label: "Admins" }];
 const columns: AdminColumn<AdminUserRow>[] = [
   { key: "user", label: "User", mobile: "title", render: row => <><span className="[overflow-wrap:anywhere]">{row.email || "(no email on file)"}</span><span className="block break-all font-mono text-caption text-text-muted">{row.clerkUserId || row.userId}</span><span className="mt-1 inline-flex flex-wrap gap-1">{row.isAdmin ? <Badge size="sm" variant="accent">Admin</Badge> : null}{row.hasAgent ? <Badge size="sm" variant="neutral">Agent paired</Badge> : null}</span></> },
   { key: "createdAt", label: "Signed up", sortKey: "createdAt", kind: "date", align: "right", mobile: "field", render: row => <AdminDate value={row.createdAt} /> },
-  { key: "games", label: "Games", sortKey: "games", kind: "number", align: "right", mobile: "field", render: row => row.gameCount.toLocaleString() },
-  { key: "opponents", label: "Opponents", sortKey: "opponents", kind: "number", align: "right", mobile: "field", render: row => row.opponentCount.toLocaleString() },
+  { key: "games", label: "Games", sortKey: "games", kind: "number", align: "right", mobile: "field", render: row => formatNumber(row.gameCount) },
+  { key: "opponents", label: "Opponents", sortKey: "opponents", kind: "number", align: "right", mobile: "field", render: row => formatNumber(row.opponentCount) },
   { key: "lastActivity", label: "Last activity", sortKey: "lastActivity", kind: "date", align: "right", mobile: "field", render: row => <AdminDate value={row.lastActivity} /> },
   { key: "agentLastSeen", label: "Agent last seen", sortKey: "agentLastSeen", kind: "date", align: "right", mobile: "field", render: row => <AdminDate value={row.agentLastSeenAt} /> },
 ];
@@ -44,7 +45,7 @@ function UsersBody() {
     <AdminMobileSort columns={columns} sort={sort} />
     <AdminTable columns={columns} rows={rows} sort={sort} rowKey={row => row.userId} rowHref={row => `/admin/users/${encodeURIComponent(row.userId)}`} loading={!data && request.isLoading} updating={!!data && request.isValidating} caption="User accounts"
       error={request.error ? <RequestError error={request.error} onRetry={() => request.mutate()} /> : null} empty={<Card padded><EmptyStatePanel title="No matching users" description="Try a wider search or another account filter." action={<Button variant="secondary" onClick={() => { set({ q: "", filter: "all" }); void request.mutate(); }}>Clear filters</Button>} /></Card>} />
-    <AdminPagination hasPrev={page > 1 || !!state.before} hasNext={!!(data?.hasMore ?? data?.nextBefore)} onPrev={() => set({ page: Math.max(1, page - 1), before: "" })} onNext={() => set({ page: page + 1, before: "" })} label={state.before ? `${rows.length} of ${total.toLocaleString()} users · legacy activity page` : `${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()} users`} loading={request.isValidating} itemCount={rows.length} />
+    <AdminPagination hasPrev={page > 1 || !!state.before} hasNext={!!(data?.hasMore ?? data?.nextBefore)} onPrev={() => set({ page: Math.max(1, page - 1), before: "" })} onNext={() => set({ page: page + 1, before: "" })} label={state.before ? `${rows.length} of ${formatNumber(total)} users · legacy activity page` : `${formatNumber(start)}–${formatNumber(end)} of ${formatNumber(total)} users`} loading={request.isValidating} itemCount={rows.length} />
   </div>;
 }
 export default function AdminUsersPage() { return <Suspense fallback={<LoadingRows rows={8} />}><UsersBody /></Suspense>; }

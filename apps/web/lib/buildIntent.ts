@@ -13,6 +13,7 @@
 
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import type { CheckInSide } from "@/lib/buildIntentLinks";
+import { formatNumber } from "@/lib/i18n/format";
 
 export {
   NEW_BUILD_QUERY_PARAM,
@@ -442,7 +443,7 @@ const ERROR_COPY: Record<string, string> = {
   slug_taken: "You already have a build called that — pick another name",
   already_bound:
     "That game has already been uploaded. Set its build from the game page instead.",
-  invalid_notes: `Notes can be at most ${BUILD_INTENT_NOTES_MAX_LENGTH.toLocaleString("en-US")} characters.`,
+  invalid_notes: `Notes can be at most ${formatNumber(BUILD_INTENT_NOTES_MAX_LENGTH)} characters.`,
   invalid_action: "That change isn't supported. Refresh the page and try again.",
   invalid_matchup: "That matchup isn't valid.",
   matchup_unknown: "The matchup isn't known yet, so no build can be matched.",

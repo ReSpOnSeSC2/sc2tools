@@ -19,7 +19,7 @@ import { apiCall, boundedApiRequest, useApi } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
 import { Toggle } from "@/components/ui/Toggle";
 import { useToast } from "@/components/ui/Toast";
-import { usePublishDirty } from "./SettingsContext";
+import { useSaveSource } from "./SettingsContext";
 
 interface BotView {
   enabled: boolean;
@@ -87,8 +87,6 @@ function OwnerChatBotCard({ twitchChannel, getToken, isCurrent }: { twitchChanne
   const [hasToken, setHasToken] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  // Its own Save button: unsaved bot edits guard a tab switch too.
-  usePublishDirty("chat", dirty);
 
   useEffect(() => {
     if (!data || dirty) return;
@@ -110,8 +108,14 @@ function OwnerChatBotCard({ twitchChannel, getToken, isCurrent }: { twitchChanne
     setDraft((d) => ({ ...d, ...patch }));
   }, []);
 
-  const save = async () => {
-    if (!live.current || !isCurrent() || operation.current || !dirty) return;
+  const discard = () => {
+    revision.current += 1;
+    setDirty(false);
+  };
+
+  const save = async (): Promise<boolean> => {
+    if (!dirty) return true;
+    if (!live.current || !isCurrent() || operation.current) return false;
     const controller = new AbortController(); operation.current = controller;
     const sentRevision = revision.current;
     const admitted = () => live.current && isCurrent() && operation.current === controller && !controller.signal.aborted;
@@ -125,9 +129,9 @@ function OwnerChatBotCard({ twitchChannel, getToken, isCurrent }: { twitchChanne
           channel: draft.channel || twitchChannel || draft.username,
         }),
       }), 20_000, controller.signal);
-      if (!admitted()) return;
+      if (!admitted()) return false;
       await mutate(previous => admitted() ? res : previous, { revalidate: false });
-      if (!admitted()) return;
+      if (!admitted()) return false;
       setHasToken(res.hasToken);
       if (revision.current === sentRevision) {
         setDirty(false);
@@ -137,13 +141,18 @@ function OwnerChatBotCard({ twitchChannel, getToken, isCurrent }: { twitchChanne
           : "Chat bot saved.",
         );
       }
+      return true;
     } catch (err) {
       if (admitted()) toast.error(err instanceof Error ? err.message : "Save failed.");
+      return false;
     } finally {
       if (admitted()) setSaving(false);
       if (operation.current === controller) operation.current = null;
     }
   };
+
+  // Saved by the Chat tab's one SaveBar, after the chat settings.
+  useSaveSource("chat", { label: "bot settings", dirty, save, reset: discard, order: 1 }, "chat-bot");
 
   const status = data?.status ?? {
     state: "off",
@@ -256,18 +265,17 @@ function OwnerChatBotCard({ twitchChannel, getToken, isCurrent }: { twitchChanne
         </label>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-body text-text">
           <Toggle
             checked={draft.enabled}
             onChange={(on) => set({ enabled: on })}
+            disabled={saving}
             label="Enable chat bot"
           />
           Enable
         </label>
-        <Button size="sm" disabled={saving || !dirty} onClick={() => void save()}>
-          {saving ? "Saving…" : "Save bot settings"}
-        </Button>
+        {dirty ? <span className="text-caption text-text-muted">Unsaved bot changes. Press Save at the bottom of the page.</span> : null}
       </div>
     </div>
   );

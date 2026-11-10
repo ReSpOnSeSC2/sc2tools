@@ -3,6 +3,7 @@
 import { Crosshair, TrendingDown, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import type { LeakRow, MacroReportData } from "./types";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * "Fix this first" — the single highest-EV improvement in the
@@ -42,7 +43,7 @@ function TrendNote({ leak }: { leak: LeakRow }) {
     >
       <Icon className="h-3.5 w-3.5" aria-hidden />
       {improving ? "improving" : "getting worse"} ·{" "}
-      {Math.abs(Math.round(delta)).toLocaleString()} min/game vs the older
+      {formatNumber(Math.abs(Math.round(delta)))} min/game vs the older
       half of this range
     </span>
   );
@@ -73,7 +74,7 @@ export function FocusCard({ report }: { report: MacroReportData }) {
             Appears in {pct(leak.share)} of your scored games and costs you
             about{" "}
             <span className="font-semibold tabular-nums text-text">
-              {leak.mineralsPerGame.toLocaleString()} minerals
+              {formatNumber(leak.mineralsPerGame)} minerals
             </span>{" "}
             per affected game
             {wrDelta != null && wrDelta > 0 ? (
@@ -97,9 +98,9 @@ export function FocusCard({ report }: { report: MacroReportData }) {
           report.trend.previousAvgScore != null ? (
             <p className="mt-1.5 text-micro text-text-dim">
               Overall macro score: {report.trend.currentAvgScore} over your
-              last {report.trend.currentGames.toLocaleString()} scored games,
+              last {formatNumber(report.trend.currentGames)} scored games,
               vs {report.trend.previousAvgScore} over the{" "}
-              {report.trend.previousGames.toLocaleString()} before that.
+              {formatNumber(report.trend.previousGames)} before that.
             </p>
           ) : null}
         </div>

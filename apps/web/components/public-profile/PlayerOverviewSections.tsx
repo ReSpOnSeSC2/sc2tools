@@ -2,11 +2,12 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { publicDate } from "@/lib/seo/publicDate";
 import type { PublicPlayerProfile } from "./types";
+import { formatNumber } from "@/lib/i18n/format";
 
 /** All optional sections have already passed their independent API switches. */
 export function PlayerOverviewSections({ profile }: { profile: PublicPlayerProfile }) {
   return <div className="grid min-w-0 gap-5 lg:grid-cols-2">
-    {profile.sections?.showReplays && profile.replayArchive ? <Card title="Shared replays" padded><p className="mb-3 text-caption text-text-muted">Original replays shared separately by this player.</p><Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/players/${encodeURIComponent(profile.replayArchive.handle)}/replays`}>Browse {profile.replayArchive.total.toLocaleString("en-US")} replays</Link></Card> : null}
+    {profile.sections?.showReplays && profile.replayArchive ? <Card title="Shared replays" padded><p className="mb-3 text-caption text-text-muted">Original replays shared separately by this player.</p><Link className="inline-flex min-h-11 items-center font-semibold text-accent underline" href={`/players/${encodeURIComponent(profile.replayArchive.handle)}/replays`}>Browse {formatNumber(profile.replayArchive.total)} replays</Link></Card> : null}
     {profile.sections?.showRecentForm && (profile.recentForm?.length || 0) >= 3 ? <RecentForm profile={profile} /> : null}
     {profile.sections?.showChannels && profile.channels?.length ? <Card title="Channels" padded><ul className="space-y-2">{profile.channels.map(channel => <li key={channel.url}><a href={channel.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center font-semibold capitalize text-accent underline">{channel.platform}<span className="sr-only"> (opens in a new tab)</span></a></li>)}</ul></Card> : null}
     {profile.sections?.showMmrHistory && profile.mmrHistory?.length ? <MmrHistory rows={profile.mmrHistory} /> : null}

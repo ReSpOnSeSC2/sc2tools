@@ -4,7 +4,13 @@ const THEME_KEYS = new Set(["accent", "scale", "opacity", "radius", "font", "sty
 const plain = (/** @type {unknown} */ value) => !!value && typeof value === "object" && !Array.isArray(value)
   && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 const invalid = () => Object.assign(new Error("Use a valid overlay profile, theme and display time."), { status: 400, code: "invalid_overlay_profile" });
-/** @returns {{v:1,theme:Record<string,any>,widgetOptions:Record<string,{durationSec:number|null}>}} */
+/** Account-wide overlay choices Settings bakes into copied URLs. Absent
+ * means "not chosen yet" (credit shown, Ghost voice off), so Settings can
+ * move an older per-browser choice in once. */
+const FLAG_KEYS = /** @type {const} */ (["credit", "ghostVoice"]);
+const PROFILE_KEYS = new Set(["v", "theme", "widgetOptions", ...FLAG_KEYS]);
+/** @typedef {{v:1,theme:Record<string,any>,widgetOptions:Record<string,{durationSec:number|null}>,credit?:boolean,ghostVoice?:boolean}} OverlayProfile */
+/** @returns {OverlayProfile} */
 function defaultOverlayProfile() { return { v: 1, theme: {}, widgetOptions: {} }; }
 
 /** API writes reject hostile fields; opacity alone follows the existing clamp.
@@ -38,11 +44,13 @@ function validateProfileTheme(raw) {
 
 /** A bounded allowlist on the existing token; null clears a timed override.
  * Persistent sources have no event timer and cannot acquire inert overrides.
- * @param {unknown} raw */
+ * `credit` and `ghostVoice` are optional booleans; anything else is rejected.
+ * @param {unknown} raw @returns {OverlayProfile} */
 function validateOverlayProfile(raw) {
   if (!plain(raw)) throw invalid();
   const input = /** @type {Record<string,any>} */ (raw);
-  if (input.v !== rules.version || Object.keys(input).some(key => !["v", "theme", "widgetOptions"].includes(key)) || !plain(input.widgetOptions)) throw invalid();
+  if (input.v !== rules.version || Object.keys(input).some(key => !PROFILE_KEYS.has(key)) || !plain(input.widgetOptions)) throw invalid();
+  if (FLAG_KEYS.some(key => Object.hasOwn(input, key) && typeof input[key] !== "boolean")) throw invalid();
   const theme = validateProfileTheme(input.theme), widgetOptions = /** @type {Record<string,{durationSec:number|null}>} */ ({});
   const defaults = /** @type {Record<string,number|null>} */ (rules.widgetDurationMs);
   const entries = Object.entries(input.widgetOptions);
@@ -53,7 +61,10 @@ function validateOverlayProfile(raw) {
     if (seconds !== null && (defaults[id] === null || !rules.durationSeconds.includes(seconds))) throw invalid();
     if (seconds !== null) widgetOptions[id] = { durationSec: seconds };
   }
-  return { v: /** @type {1} */ (1), theme, widgetOptions };
+  /** @type {OverlayProfile} */
+  const profile = { v: /** @type {1} */ (1), theme, widgetOptions };
+  for (const key of FLAG_KEYS) if (Object.hasOwn(input, key)) profile[key] = input[key];
+  return profile;
 }
 
 /** Missing/corrupt old records use safe defaults without a migration.

@@ -66,6 +66,7 @@ import {
   DossierSkeleton,
   OpponentNotFound,
 } from "./OpponentDossierStates";
+import { formatDate } from "@/lib/i18n/format";
 
 
 /**
@@ -312,7 +313,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
 
       <div className="flex flex-wrap items-center gap-2 text-caption text-text-muted"><span>Showing {summarizeFilters(filters, seasons)}</span><Button variant="ghost" onClick={() => setAllTime(value => !value)}>{allTime ? "Use analyzer dates" : "Show all time"}</Button><LazyHelpLink slug="opponent-dossier">How to read this page</LazyHelpLink></div>
       <GroupingPreference preference={grouping} />
-      {data.games?.length === 0 && !!data.series?.games.length ? <p className="text-caption text-text-muted">No games in this range.{data.series.lastSeen ? ` You last met on ${new Date(data.series.lastSeen).toLocaleDateString()}.` : ""} <button type="button" className="min-h-11 px-2 text-accent underline" onClick={() => setAllTime(true)}>Show all time</button></p> : null}
+      {data.games?.length === 0 && !!data.series?.games.length ? <p className="text-caption text-text-muted">No games in this range.{data.series.lastSeen ? ` You last met on ${formatDate(new Date(data.series.lastSeen))}.` : ""} <button type="button" className="min-h-11 px-2 text-accent underline" onClick={() => setAllTime(true)}>Show all time</button></p> : null}
       {profile.error ? <div role="status" className="flex items-center gap-3 text-caption text-warning">
         <span>Couldn't refresh after your last game</span><Button variant="ghost" size="sm" onClick={() => mutate()}>Retry</Button>
       </div> : null}

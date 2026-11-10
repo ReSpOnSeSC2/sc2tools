@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { CHECKING, INITIAL_CHECK, checkPublicReachability, publicApiPingUrl, type CheckResult, type Reachability } from "./reachability";
+import { formatDateTime } from "@/lib/i18n/format";
 
 type Service = "website" | "api";
 type Results = Record<Service, CheckResult>;
@@ -57,7 +58,7 @@ function ServiceCard({ id, name, result }: { id: Service; name: string; result: 
     </Card.Header>
     <Card.Body className="space-y-3">
       <p className="text-body text-text">{result.message}</p>
-      <p className="text-caption text-text-muted">{result.checkedAt ? <>Checked <time dateTime={result.checkedAt}>{new Date(result.checkedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short" })}</time></> : result.state === "checking" ? "Check in progress." : "Not checked yet."}</p>
+      <p className="text-caption text-text-muted">{result.checkedAt ? <>Checked <time dateTime={result.checkedAt}>{formatDateTime(new Date(result.checkedAt), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short" })}</time></> : result.state === "checking" ? "Check in progress." : "Not checked yet."}</p>
     </Card.Body>
   </Card>;
 }

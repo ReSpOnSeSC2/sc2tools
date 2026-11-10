@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { chatEventIdentity, type ChatEvent } from "./events";
 import { CHAT_PLATFORMS, type ChatPlatform } from "./types";
+import { formatNumber } from "@/lib/i18n/format";
 
 /** Poll cadence — viewer counts move slowly; the server caches ~20s. */
 const REFRESH_MS = 45_000;
@@ -120,7 +121,7 @@ export function sanitizeViewerCounts(raw: unknown): ViewerCounts {
  * reflows the header on a busy stream.
  */
 export function formatViewers(n: number): string {
-  if (n < 10_000) return n.toLocaleString("en-US");
+  if (n < 10_000) return formatNumber(n);
   if (n < 1_000_000) return `${trim1(n / 1_000)}K`;
   return `${trim1(n / 1_000_000)}M`;
 }

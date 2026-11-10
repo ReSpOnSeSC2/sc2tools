@@ -38,7 +38,7 @@ const GDPR_CLASSIFICATION = Object.freeze({
   BROWSER_INGEST_DAILY: "ttl_ephemeral", GUIDE_SAMPLES: "purge_only", GUIDE_STATS: "global", GUIDE_NOTES: "global",
   JOB_RUNS: "global", ADMIN_AUDIT: "purge_only",
   GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
-  GHOST_EXAMPLES: "purge_only",
+  GHOST_EXAMPLES: "purge_only", SUPPORTERS: "purge_only",
   // The independently stacked What's New feature adds this global config.
   ...(Object.hasOwn(COLLECTIONS, "SITE_CONFIG") ? { SITE_CONFIG: "global" } : {}),
 });
@@ -94,6 +94,8 @@ const PURGE_ONLY_COLLECTIONS = [
   ["platformEvents", "userId"],
   // Public self-submitted links are deleted with their owner; never restore public claims from a backup.
   ["playerChannels", "ownerUserId"],
+  // A public supporter-wall listing needs fresh consent: deleted with its owner, never restored.
+  ["supporters", "userId"],
   // Moderation state must not be restored from a client backup.
   ["playerIdentitySubmissions", "userId"],
   // Short-lived browser-ingest quota counters: operational state, never

@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/Card";
 import { useApi } from "@/lib/clientApi";
 import { FILTER_LABELS } from "@/lib/filterContext";
 import type { BuildPhasePayload, CompositionGame } from "@/lib/serverApi";
+import { formatDate } from "@/lib/i18n/format";
 
 const focus = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
 const phases: Record<Phase, string> = { early: "Early", earlyMid: "Early/Mid", mid: "Mid", midLate: "Mid/Late", late: "Late" };
@@ -22,7 +23,7 @@ export function compositionComparisonPath(apiPath: string, gameId: string) {
 function dateLabel(date: string | null) {
   if (!date) return null;
   const parsed = new Date(date);
-  return Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : null;
+  return Number.isFinite(parsed.getTime()) ? formatDate(parsed, { year: "numeric", month: "short", day: "numeric" }) : null;
 }
 
 function gameLabel(game: CompositionGame, index: number) {

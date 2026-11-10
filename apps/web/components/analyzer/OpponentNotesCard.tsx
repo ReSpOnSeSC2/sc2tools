@@ -9,6 +9,7 @@ import { Card, Skeleton } from "@/components/ui/Card";
 import { Toggle } from "@/components/ui/Toggle";
 import { useToastOptional } from "@/components/ui/Toast";
 import { useOpponentNoteDraft } from "./useOpponentNoteDraft";
+import { formatNumber } from "@/lib/i18n/format";
 
 export const OPPONENT_NOTES_MAX_LENGTH = 500;
 
@@ -201,7 +202,7 @@ function OpponentNotesEditor({
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-xs text-text-dim">
           {remaining < 100 ? <span className={`tabular-nums ${remaining === 0 ? "text-danger" : ""}`}>
-            {remaining.toLocaleString()} characters left
+            {formatNumber(remaining)} characters left
           </span> : null}
           <span>{macShortcut ? "⌘+Enter" : "Ctrl+Enter"} to save</span>
           <span

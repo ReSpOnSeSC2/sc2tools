@@ -14,6 +14,7 @@ import { useApi } from "@/lib/clientApi";
 import { Card, Skeleton, Stat } from "@/components/ui/Card";
 import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import type { GlobalPlayerIdentity } from "@/lib/opponentGroups";
+import { formatDate } from "@/lib/i18n/format";
 
 /**
  * SC2Pulse ladder context for one opponent — the screen players used
@@ -236,7 +237,7 @@ export function LadderContextCard({ pulseId, confirmedIdentity, children }: {
                       const d = new Date(String(label));
                       return Number.isNaN(d.getTime())
                         ? ""
-                        : d.toLocaleDateString();
+                        : formatDate(d);
                     }}
                     contentStyle={{
                       background: "rgb(var(--bg-elevated))",

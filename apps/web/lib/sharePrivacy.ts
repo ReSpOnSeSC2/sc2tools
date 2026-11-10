@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/i18n/format";
 /**
  * What a share card may say about other players.
  *
@@ -95,7 +96,7 @@ export function sharedDay(iso: string | number | Date | null | undefined): strin
   if (iso === null || iso === undefined || iso === "") return "—";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString(undefined, {
+  return formatDate(date, {
     year: "numeric",
     month: "short",
     day: "numeric",

@@ -53,6 +53,7 @@ import { ME_ARMY, OPP_ARMY, STAGE_VIEWPORT_FRACTION, STAGE_MIN_H_PX, STAGE_MAX_H
 export type { ReplayMapMarker };
 
 import { REPLAY_SPEEDS as SPEEDS } from "@/lib/replayControls";
+import { formatNumber } from "@/lib/i18n/format";
 
 /** A pointer that travelled further than this is a drag, not a tap. */
 const TAP_SLOP_PX = 6;
@@ -960,8 +961,8 @@ function LossPanel({
         </span>
       </div>
       <div className="mt-1 text-caption tabular-nums text-text">
-        {losses.count} units · {losses.minerals.toLocaleString()} minerals ·{" "}
-        {losses.gas.toLocaleString()} gas
+        {losses.count} units · {formatNumber(losses.minerals)} minerals ·{" "}
+        {formatNumber(losses.gas)} gas
       </div>
       {shown.length > 0 && (
         <ul className="mt-1.5 flex flex-wrap gap-1.5">
@@ -971,7 +972,7 @@ function LossPanel({
               <li
                 key={g.name}
                 className="inline-flex items-center gap-1 rounded border border-border bg-bg-elevated px-1.5 py-0.5 text-micro tabular-nums text-text-muted"
-                title={`${g.count}× ${g.name} — ${g.minerals.toLocaleString()} minerals, ${g.gas.toLocaleString()} gas`}
+                title={`${g.count}× ${g.name} — ${formatNumber(g.minerals)} minerals, ${formatNumber(g.gas)} gas`}
               >
                 {icon ? (
                   // eslint-disable-next-line @next/next/no-img-element

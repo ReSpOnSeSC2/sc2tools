@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/Select";
 import { INPUT } from "./GlobalGameFilters";
 import { ALL_PLAYERS, RACES, isPlayerSelected, mmrRangeError, populationQuery, selectionLabel, selectPlayers,
   type Population, type TrendPlayer, type TrendPlayersResponse } from "./globalTrendsState";
+import { formatDate, formatNumber } from "@/lib/i18n/format";
 
 const PAGE_SIZE = 50;
 const CHECKBOX = "h-4 w-4 shrink-0 cursor-pointer accent-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent";
@@ -16,7 +17,7 @@ const CHECKBOX = "h-4 w-4 shrink-0 cursor-pointer accent-accent focus-visible:ou
 function dateLabel(value: string | null) {
   if (!value) return "Date unavailable";
   const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date.toLocaleDateString() : "Date unavailable";
+  return Number.isFinite(date.getTime()) ? formatDate(date) : "Date unavailable";
 }
 
 export function GlobalPlayerPicker({ population, onApply, revision }: {
@@ -56,7 +57,7 @@ export function GlobalPlayerPicker({ population, onApply, revision }: {
             <p className="mt-1 text-caption text-text-muted">Choose whose games contribute, then apply your selection.</p>
           </div>
           <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-caption font-medium text-accent" aria-live="polite">
-            {players.data && !players.error ? `${players.data.selectedTotal.toLocaleString()} of ${(players.data.rosterTotal ?? players.data.total).toLocaleString()} players included` : selectionLabel(population)}
+            {players.data && !players.error ? `${formatNumber(players.data.selectedTotal)} of ${formatNumber(players.data.rosterTotal ?? players.data.total)} players included` : selectionLabel(population)}
           </span>
         </div>
         <fieldset>
@@ -84,7 +85,7 @@ export function GlobalPlayerPicker({ population, onApply, revision }: {
       </div>
 
       <details open className="border-t border-border">
-        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-5">Player directory <span className="ml-2 font-normal text-text-muted">{players.data ? `${players.data.total.toLocaleString()}${search ? " matching" : " total"}` : ""}</span></summary>
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-5">Player directory <span className="ml-2 font-normal text-text-muted">{players.data ? `${formatNumber(players.data.total)}${search ? " matching" : " total"}` : ""}</span></summary>
         <div className="space-y-3 px-4 pb-4 sm:px-5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_9rem]">
             <label className="relative"><span className="sr-only">Search players</span><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-text-dim" aria-hidden />
@@ -118,7 +119,7 @@ export function GlobalPlayerPicker({ population, onApply, revision }: {
             </div>
           ) : <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-text-muted">{search ? "No players match this search. Try a name or account ID." : "No player histories have been uploaded yet."}</p>}
           {players.data && !players.error && <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-caption text-text-muted">{players.data.total ? `${(page * PAGE_SIZE + 1).toLocaleString()}–${Math.min((page + 1) * PAGE_SIZE, players.data.total).toLocaleString()} of ${players.data.total.toLocaleString()}` : "0 players"}</span>
+            <span className="text-caption text-text-muted">{players.data.total ? `${formatNumber(page * PAGE_SIZE + 1)}–${formatNumber(Math.min((page + 1) * PAGE_SIZE, players.data.total))} of ${formatNumber(players.data.total)}` : "0 players"}</span>
             <div className="flex gap-2"><Button variant="secondary" size="sm" disabled={page === 0 || players.isLoading} onClick={() => setPage((p) => p - 1)}>Previous</Button><Button variant="secondary" size="sm" disabled={!players.data.hasMore || players.isLoading} onClick={() => setPage((p) => p + 1)}>Next</Button></div>
           </div>}
           <p className="text-caption text-text-dim">MMR shows the latest available ladder rating, with its source and date. Each account is listed separately; older unidentified histories are grouped by uploader.</p>
@@ -152,8 +153,8 @@ function PlayerRow({ player, selected, onSelect, onOnly }: {
       <span className={`mt-1 block text-xs ${player.included ? "text-success" : "text-text-dim"}`}>{player.included ? "Included" : "Filtered out"}</span>
     </td>
     <td className="p-3 text-caption text-text-muted">{race}</td>
-    <td className="whitespace-nowrap p-3 text-right"><span className="font-semibold tabular-nums">{player.currentMmr == null ? "Unavailable" : player.currentMmr.toLocaleString()}</span>{player.currentMmr != null && <span className="block text-xs text-text-dim">{source} · {dateLabel(player.mmrUpdatedAt)}</span>}</td>
-    <td className="p-3 text-right tabular-nums">{player.gameCount.toLocaleString()}</td>
+    <td className="whitespace-nowrap p-3 text-right"><span className="font-semibold tabular-nums">{player.currentMmr == null ? "Unavailable" : formatNumber(player.currentMmr)}</span>{player.currentMmr != null && <span className="block text-xs text-text-dim">{source} · {dateLabel(player.mmrUpdatedAt)}</span>}</td>
+    <td className="p-3 text-right tabular-nums">{formatNumber(player.gameCount)}</td>
     <td className="p-2"><Button variant="ghost" size="sm" aria-label={`Only include ${player.displayName}`} onClick={onOnly}>Only</Button></td>
   </tr>;
 }

@@ -77,7 +77,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Configuration"
         title="Settings"
-        description="Account, overlay tokens, voice notifications, and personal preferences. Edits stay in draft until you save."
+        description="Account, overlay tokens, voice notifications, and personal preferences. Most changes save when you press Save. Controls marked Instant apply right away."
         actions={
           // Lazy: HelpLink carries the help articles, which would otherwise
           // ride along with the Settings page's first load.
