@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
 import { usePathname } from "next/navigation";
 import { CookieBanner } from "@/components/CookieBanner";
@@ -13,6 +13,7 @@ import { clerkAppearanceBase } from "@/lib/clerk-appearance";
 import { isTokenAuthRoute } from "@/lib/tokenAuthRoutes";
 import { isPublicStatusRoute } from "@/lib/publicStatusRoute";
 import { isUntrackedPath } from "@/lib/analytics/pageLocation";
+import { syncAnalyticsPage } from "@/lib/analytics/gtag";
 import { AppChrome } from "@/components/chrome/AppChrome";
 import { isAppSurfacePath } from "@/components/chrome/appNav";
 import { SiteStats } from "@/components/chrome/SiteStats";
@@ -58,6 +59,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   // provider; the /p form remains during the legacy-link redirect window)
   // and the operator-only /admin screens. See lib/analytics/pageLocation.
   const analyticsAllowed = !isUntrackedPath(pathname);
+  // gtag.js outlives the page that loaded it. After a client-side move it
+  // must report the new page in its normalized form, and go silent on an
+  // untracked surface, where <GoogleAnalytics> is no longer mounted to say
+  // so. A no-op until analytics is running (lib/analytics/gtag).
+  useEffect(() => {
+    if (pathname) syncAnalyticsPage(pathname, window.location.search);
+  }, [pathname]);
 
   // Reachability checks must work even when authentication or app APIs fail.
   if (isPublicStatusRoute(pathname)) return <>{children}</>;

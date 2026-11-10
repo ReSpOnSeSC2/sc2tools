@@ -1,18 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { gaEvent } = vi.hoisted(() => ({ gaEvent: vi.fn() }));
-// Mock: capture GA4 events instead of touching window.gtag.
-vi.mock("@/lib/analytics/gtag", () => ({ gaEvent }));
-
+import { GA_MEASUREMENT_ID, setConsent } from "@/lib/analytics/consent";
 import { trackCardShared } from "../shareEvents";
+
+// The real `gaEvent` runs, so these tests see exactly what reaches gtag:
+// the share parameters plus the page that `gaEvent` states on every event.
+const gtag = vi.fn();
 
 function visit(path: string) {
   window.history.pushState({}, "", path);
 }
 
-beforeEach(() => visit("/app/arcade"));
+beforeEach(() => {
+  setConsent("granted");
+  window.gtag = gtag;
+  visit("/app/arcade");
+});
 afterEach(() => {
-  gaEvent.mockReset();
+  gtag.mockReset();
+  delete window.gtag;
+  delete window[`ga-disable-${GA_MEASUREMENT_ID}`];
+  window.localStorage.clear();
   visit("/");
 });
 
@@ -22,22 +30,23 @@ describe("trackCardShared", () => {
   it("sends the card kind, the delivery path and the page, and nothing else", () => {
     trackCardShared({ card: "season_recap", method: "download" });
     trackCardShared({ card: "battle_card", method: "web_share" });
-    expect(gaEvent.mock.calls).toEqual([
-      ["card_shared", { content_type: "season_recap", method: "download", page_location: ARCADE }],
-      ["card_shared", { content_type: "battle_card", method: "web_share", page_location: ARCADE }],
+    expect(gtag.mock.calls).toEqual([
+      ["event", "card_shared", { content_type: "season_recap", method: "download", page_location: ARCADE }],
+      ["event", "card_shared", { content_type: "battle_card", method: "web_share", page_location: ARCADE }],
     ]);
   });
 
   it("adds the built-in mode id for an Arcade round", () => {
     trackCardShared({ card: "arcade_round", method: "clipboard_image", modeId: "rivalry-ranker" });
-    expect(gaEvent.mock.calls).toEqual([
+    expect(gtag.mock.calls).toEqual([
       [
+        "event",
         "card_shared",
         {
           content_type: "arcade_round",
           method: "clipboard_image",
-          page_location: ARCADE,
           content_id: "rivalry-ranker",
+          page_location: ARCADE,
         },
       ],
     ]);
@@ -47,8 +56,9 @@ describe("trackCardShared", () => {
     "drops a mode id that is not shaped like a built-in one (%j)",
     (modeId) => {
       trackCardShared({ card: "arcade_round", method: "clipboard_text", modeId });
-      expect(gaEvent.mock.calls).toEqual([
+      expect(gtag.mock.calls).toEqual([
         [
+          "event",
           "card_shared",
           { content_type: "arcade_round", method: "clipboard_text", page_location: ARCADE },
         ],
@@ -63,12 +73,12 @@ describe("trackCardShared", () => {
 
     trackCardShared({ card: "battle_card", method: "web_share" });
 
-    expect(gaEvent).toHaveBeenCalledTimes(1);
-    const [, params] = gaEvent.mock.calls[0];
+    expect(gtag).toHaveBeenCalledTimes(1);
+    const [, , params] = gtag.mock.calls[0];
     expect(params.page_location).toBe(
       `${window.location.origin}/app/game/:gameId?utm_source=discord`,
     );
-    const sent = JSON.stringify(params);
+    const sent = JSON.stringify(gtag.mock.calls);
     expect(sent).not.toContain("SecretFoe");
     expect(sent).not.toContain("9988776");
     expect(sent).not.toContain("Alcyone");
@@ -79,6 +89,6 @@ describe("trackCardShared", () => {
       visit(path);
       trackCardShared({ card: "arcade_round", method: "download", modeId: "buildle" });
     }
-    expect(gaEvent).not.toHaveBeenCalled();
+    expect(gtag).not.toHaveBeenCalled();
   });
 });
