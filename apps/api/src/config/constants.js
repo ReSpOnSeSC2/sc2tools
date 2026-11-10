@@ -141,6 +141,9 @@ const COLLECTIONS = Object.freeze({
   // pre-game declaration, randomizer roll, post-game answer) until the
   // uploaded replay binds it. TTL-reaped; see services/buildIntentLive.js.
   BUILD_INTENT_LIVE: "build_intent_live",
+  // Personal goals with automatic progress (services/playerGoals.js): one
+  // row per goal; at most 8 active per user via a unique {userId, slot}.
+  PLAYER_GOALS: "player_goals",
 });
 
 const LIMITS = Object.freeze({

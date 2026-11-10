@@ -40,6 +40,8 @@ const REGION_CODES = new Set(REGION_LABELS);
  *   leak?: string,
  *   macroMin?: number,
  *   macroMax?: number,
+ *   sqMax?: number,
+ *   apmMax?: number,
  *   minMinutes?: number,
  *   maxMinutes?: number,
  *   excludeTooShort?: boolean,
@@ -112,6 +114,7 @@ function parseFilters(q) {
   if (macroMin !== undefined) out.macroMin = macroMin;
   const macroMax = parseFiniteInt(q.macro_max);
   if (macroMax !== undefined) out.macroMax = macroMax;
+  Object.assign(out, parseMetricCeilings(q));
   // Global "Game length" filter. Bounds arrive as whole minutes and are
   // applied against ``durationSec`` -- the SAME field the Macro Report
   // buckets its game-length segments on (macroReport.js
@@ -195,6 +198,41 @@ function parseMinuteBounds(rawMin, rawMax) {
   return out;
 }
 
+/**
+ * Targets card drilldowns ("games below the Master PvZ median SQ"):
+ * ``sq_max`` / ``apm_max`` are EXCLUSIVE upper bounds on the slim row's
+ * ``spq`` / ``apm``, like macro_max. Non-positive bounds are dropped.
+ *
+ * Example: `parseMetricCeilings({ sq_max: "72" })` → `{ sqMax: 72 }`.
+ *
+ * @param {Record<string, unknown>} q
+ * @returns {{sqMax?: number, apmMax?: number}}
+ */
+function parseMetricCeilings(q) {
+  /** @type {{sqMax?: number, apmMax?: number}} */
+  const out = {};
+  const sqMax = parseFiniteInt(q.sq_max);
+  if (sqMax !== undefined && sqMax > 0) out.sqMax = sqMax;
+  const apmMax = parseFiniteInt(q.apm_max);
+  if (apmMax !== undefined && apmMax > 0) out.apmMax = apmMax;
+  return out;
+}
+
+/**
+ * Match clauses for ``parseMetricCeilings``. A row without the metric falls
+ * out: it cannot be below a bound it never measured.
+ *
+ * @param {{sqMax?: number, apmMax?: number}} f
+ * @returns {Record<string, any>}
+ */
+function metricCeilingMatch(f) {
+  /** @type {Record<string, any>} */
+  const out = {};
+  if (typeof f.sqMax === "number") out.spq = { $lt: f.sqMax };
+  if (typeof f.apmMax === "number") out.apm = { $lt: f.apmMax };
+  return out;
+}
+
 /** @param {number|undefined} value @returns {number|undefined} */
 function clampMinutes(value) {
   if (value === undefined || !Number.isFinite(value) || value < 0) {
@@ -258,12 +296,8 @@ function gamesMatchStage(userId, filters) {
   if (f.patchEra) {
     addAndClause(match, buildEraMatch(f.patchEra));
   }
-  if (f.race) {
-    match.myRace = raceMatcher(f.race);
-  }
-  if (f.oppRace) {
-    match["opponent.race"] = raceMatcher(f.oppRace);
-  }
+  if (f.race) match.myRace = raceMatcher(f.race);
+  if (f.oppRace) match["opponent.race"] = raceMatcher(f.oppRace);
   if (f.mapExact !== undefined) {
     match.map = { $in: parseExactMapNames(JSON.stringify(f.mapExact)) };
   } else if (f.map) {
@@ -293,6 +327,7 @@ function gamesMatchStage(userId, filters) {
     if (typeof f.macroMax === "number") score.$lt = f.macroMax;
     match.macroScore = score;
   }
+  Object.assign(match, metricCeilingMatch(f));
   // "Game length" filter, driving every analyzer tab. Minutes convert
   // to seconds because ``durationSec`` is the stored unit -- and is the
   // same field the Macro Report's game-length segments bucket on, so

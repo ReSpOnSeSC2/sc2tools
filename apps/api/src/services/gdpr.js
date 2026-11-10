@@ -38,7 +38,7 @@ const GDPR_CLASSIFICATION = Object.freeze({
   BROWSER_INGEST_DAILY: "ttl_ephemeral", GUIDE_SAMPLES: "purge_only", GUIDE_STATS: "global", GUIDE_NOTES: "global",
   JOB_RUNS: "global", ADMIN_AUDIT: "purge_only",
   GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
-  GHOST_EXAMPLES: "purge_only",
+  GHOST_EXAMPLES: "purge_only", PLAYER_GOALS: "purge_only",
   // The independently stacked What's New feature adds this global config.
   ...(Object.hasOwn(COLLECTIONS, "SITE_CONFIG") ? { SITE_CONFIG: "global" } : {}),
 });
@@ -103,6 +103,9 @@ const PURGE_ONLY_COLLECTIONS = [
   // must never replay. Bound answers already live on games.buildIntent.
   ["buildIntentLive", "userId"],
   ["multichatSounds", "userId"],
+  // Personal goals are derived training targets; a restore must not
+  // resurrect goals (and their notify claims) deleted in between.
+  ["playerGoals", "userId"],
 ];
 
 class GdprService {

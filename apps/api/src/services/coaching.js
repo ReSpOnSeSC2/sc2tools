@@ -25,6 +25,18 @@ const { detectorLabelMatch } = require("./buildIntentReaders");
 const { randomUUID } = require("node:crypto");
 const { deliverCoachingNotification } = require("./notificationDelivery");
 const { ASSIGNMENT_STATES, assignmentStateMatch, assignmentStateCounts } = require("./coachingAssignmentState");
+const {
+  canonicalTimeZone,
+  zonedParts,
+  zonedLocalToUtc,
+  parsePlainDate,
+  plainDateSerial: plainAssignmentDateSerial,
+  addPlainDays: addPlainAssignmentDays,
+  plainDateString: plainAssignmentDateString,
+  recurrenceBuckets,
+  recurrenceGroupExpression,
+  bucketKeyFor,
+} = require("../util/recurrenceBuckets");
 
 const DOC_ID = "locker";
 const CALENDAR_PREFIX = "calendar:";
@@ -49,8 +61,6 @@ const ASSIGNMENT_MAX_REQUIRED_GAMES = 1000;
 const ASSIGNMENT_RECURRENCES = new Set(["once", "daily", "weekly", "monthly"]);
 const PRACTICE_SHARING_POLICY_VERSION = "practice-replays-v1";
 const COACHING_MUTATION_LEASE_MS = 15 * 60 * 1000;
-/** @type {Map<string, Intl.DateTimeFormat>} */
-const ZONE_PART_FORMATTERS = new Map();
 
 class CoachingService {
   /**
@@ -2219,45 +2229,14 @@ function normalizeGameRequirement(value) {
   return requirement;
 }
 
-/** @param {unknown} value @param {string} field */
+/** Shared local-date parser (util/recurrenceBuckets.js) with coaching's codes.
+ * @param {unknown} value @param {string} field */
 function parsePlainAssignmentDate(value, field) {
-  const text = safeIdentity(value);
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-  if (!match) {
-    throw coachingError(400, "invalid_assignment_window", `${field} must use YYYY-MM-DD.`);
+  try {
+    return parsePlainDate(value, field);
+  } catch (error) {
+    throw coachingError(400, "invalid_assignment_window", /** @type {Error} */ (error).message);
   }
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const serial = new Date(Date.UTC(year, month - 1, day));
-  if (
-    serial.getUTCFullYear() !== year
-    || serial.getUTCMonth() + 1 !== month
-    || serial.getUTCDate() !== day
-  ) {
-    throw coachingError(400, "invalid_assignment_window", `${field} is not a valid calendar date.`);
-  }
-  return { year, month, day };
-}
-
-/** @param {{year:number,month:number,day:number}} value */
-function plainAssignmentDateSerial(value) {
-  return Date.UTC(value.year, value.month - 1, value.day);
-}
-
-/** @param {{year:number,month:number,day:number}} value @param {number} days */
-function addPlainAssignmentDays(value, days) {
-  const date = new Date(plainAssignmentDateSerial(value) + days * 86400000);
-  return {
-    year: date.getUTCFullYear(),
-    month: date.getUTCMonth() + 1,
-    day: date.getUTCDate(),
-  };
-}
-
-/** @param {{year:number,month:number,day:number}} value */
-function plainAssignmentDateString(value) {
-  return `${String(value.year).padStart(4, "0")}-${String(value.month).padStart(2, "0")}-${String(value.day).padStart(2, "0")}`;
 }
 
 /** @param {any} requirement */
@@ -2317,72 +2296,23 @@ function assignmentDateIso(value) {
   return date.getTime() > 0 ? date.toISOString() : null;
 }
 
-/** @param {any} requirement */
+/** Shared bucket math (util/recurrenceBuckets.js), with coaching's error codes.
+ * @param {any} requirement */
 function assignmentBuckets(requirement) {
-  const timeZone = canonicalTimeZone(requirement.timeZone) || "UTC";
-  const start = parsePlainAssignmentDate(requirement.startsOn, "startsOn");
-  const end = parsePlainAssignmentDate(requirement.endsOn, "endsOn");
-  const endExclusive = addPlainAssignmentDays(end, 1);
-  if (requirement.recurrence === "once") {
-    return [{
-      key: "once",
-      startsAt: assignmentDateIso(requirement.startsAt),
-      endsAt: assignmentDateIso(requirement.endsAt),
-    }];
-  }
-
-  let cursor = start;
-  let step = 1;
-  if (requirement.recurrence === "weekly") {
-    const day = new Date(plainAssignmentDateSerial(start)).getUTCDay();
-    cursor = addPlainAssignmentDays(start, -((day + 6) % 7));
-    step = 7;
-  } else if (requirement.recurrence === "monthly") {
-    cursor = { year: start.year, month: start.month, day: 1 };
-  }
-  const assignmentStart = toDate(requirement.startsAt);
-  const assignmentEnd = toDate(requirement.endsAt);
-  const out = [];
-  while (plainAssignmentDateSerial(cursor) < plainAssignmentDateSerial(endExclusive)) {
-    let next;
-    let key;
-    if (requirement.recurrence === "monthly") {
-      next = cursor.month === 12
-        ? { year: cursor.year + 1, month: 1, day: 1 }
-        : { year: cursor.year, month: cursor.month + 1, day: 1 };
-      key = plainAssignmentDateString(cursor).slice(0, 7);
-    } else {
-      next = addPlainAssignmentDays(cursor, step);
-      key = plainAssignmentDateString(cursor);
-    }
-    const rawStart = zonedLocalToUtc(cursor.year, cursor.month, cursor.day, 0, timeZone, true);
-    const rawEnd = zonedLocalToUtc(next.year, next.month, next.day, 0, timeZone, true);
-    if (!rawStart || !rawEnd) {
+  try {
+    return recurrenceBuckets(requirement);
+  } catch (error) {
+    const failure = /** @type {Error & {reason?: string}} */ (error);
+    if (failure.reason === "unresolved") {
       throw coachingError(500, "invalid_assignment_window", "Stored assignment dates could not be resolved.");
     }
-    const startsAt = rawStart > assignmentStart ? rawStart : assignmentStart;
-    const endsAt = rawEnd < assignmentEnd ? rawEnd : assignmentEnd;
-    if (startsAt < endsAt) {
-      out.push({ key, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() });
-    }
-    cursor = next;
+    throw coachingError(400, "invalid_assignment_window", failure.message);
   }
-  return out;
 }
 
 /** @param {any} requirement */
 function assignmentGroupExpression(requirement) {
-  if (requirement.recurrence === "once") return null;
-  const unit = requirement.recurrence === "daily"
-    ? "day" : requirement.recurrence === "weekly" ? "week" : "month";
-  return {
-    $dateTrunc: {
-      date: assignmentGameStartExpression(),
-      unit,
-      timezone: canonicalTimeZone(requirement.timeZone) || "UTC",
-      ...(unit === "week" ? { startOfWeek: "monday" } : {}),
-    },
-  };
+  return recurrenceGroupExpression(requirement, assignmentGameStartExpression());
 }
 
 /** @param {any} requirement @param {any[]} rows */
@@ -2393,12 +2323,8 @@ function assignmentCountsByBucket(requirement, rows) {
     return counts;
   }
   for (const row of Array.isArray(rows) ? rows : []) {
-    const date = toDate(row && row._id);
-    if (date.getTime() <= 0) continue;
-    const parts = zonedParts(date, canonicalTimeZone(requirement.timeZone) || "UTC");
-    const local = plainAssignmentDateString(parts);
-    const key = requirement.recurrence === "monthly" ? local.slice(0, 7) : local;
-    counts.set(key, nonNegativeInteger(row.playedGames));
+    const key = bucketKeyFor(requirement, row && row._id);
+    if (key) counts.set(key, nonNegativeInteger(row.playedGames));
   }
   return counts;
 }
@@ -2637,18 +2563,6 @@ function parseClock(value) {
 }
 
 /** @param {unknown} value */
-function canonicalTimeZone(value) {
-  if (typeof value !== "string" || value.length < 1 || value.length > 100) return null;
-  try {
-    return new Intl.DateTimeFormat("en-US", { timeZone: value })
-      .resolvedOptions()
-      .timeZone;
-  } catch {
-    return null;
-  }
-}
-
-/** @param {unknown} value */
 function validTimeZone(value) {
   return Boolean(canonicalTimeZone(value));
 }
@@ -2722,67 +2636,6 @@ function buildAvailableSlots(availability, bookings, from) {
   return slots.sort((a, b) =>
     a.startAt.localeCompare(b.startAt) || a.durationMinutes - b.durationMinutes,
   );
-}
-
-/** @param {Date} value @param {string} timeZone */
-function zonedParts(value, timeZone) {
-  let formatter = ZONE_PART_FORMATTERS.get(timeZone);
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-    });
-    ZONE_PART_FORMATTERS.set(timeZone, formatter);
-  }
-  const parts = formatter.formatToParts(value);
-  /** @type {Record<string,number>} */
-  const out = {};
-  for (const part of parts) {
-    if (part.type !== "literal") out[part.type] = Number(part.value);
-  }
-  return /** @type {{year:number,month:number,day:number,hour:number,minute:number,second:number}} */ (out);
-}
-
-/**
- * Convert an IANA-zone local wall-clock value to UTC without a date library.
- * Two offset passes handle DST boundaries; a final round-trip rejects local
- * times that do not exist during a spring-forward transition.
- */
-/**
- * @param {number} year @param {number} month @param {number} day
- * @param {number} minuteOfDay @param {string} timeZone
- * @param {boolean} [nextValidOnDate]
- */
-function zonedLocalToUtc(year, month, day, minuteOfDay, timeZone, nextValidOnDate = false) {
-  const hour = Math.floor(minuteOfDay / 60);
-  const minute = minuteOfDay % 60;
-  const wall = Date.UTC(year, month - 1, day, hour, minute, 0);
-  let candidate = new Date(wall);
-  for (let i = 0; i < 3; i += 1) {
-    const seen = zonedParts(candidate, timeZone);
-    const seenWall = Date.UTC(seen.year, seen.month - 1, seen.day, seen.hour, seen.minute, seen.second || 0);
-    const delta = wall - seenWall;
-    if (delta === 0) break;
-    candidate = new Date(candidate.getTime() + delta);
-  }
-  const roundTrip = zonedParts(candidate, timeZone);
-  if (
-    nextValidOnDate
-    && roundTrip.year === year
-    && roundTrip.month === month
-    && roundTrip.day === day
-    && roundTrip.hour * 60 + roundTrip.minute > minuteOfDay
-  ) return candidate;
-  if (roundTrip.year !== year || roundTrip.month !== month || roundTrip.day !== day || roundTrip.hour !== hour || roundTrip.minute !== minute) {
-    return null;
-  }
-  return candidate;
 }
 
 /**

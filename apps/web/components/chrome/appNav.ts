@@ -9,6 +9,7 @@ import {
   MonitorPlay,
   ShieldCheck,
   SlidersHorizontal,
+  Target,
   Users2,
   Zap,
 } from "lucide-react";
@@ -126,6 +127,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   TODAY_ENTRY,
   ...SECTION_ENTRIES,
   { key: "sessions", href: "/app/sessions", label: "Sessions", description: "Review complete sessions and recorded ratings", icon: CalendarClock, group: "section" },
+  { key: "goals", href: "/app/goals", label: "Goals", description: "Targets that track themselves from your replays", icon: Target, group: "section" },
   ...UTILITY_ENTRIES,
 ];
 

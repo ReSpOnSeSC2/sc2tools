@@ -8,7 +8,10 @@ const { observeJob } = require("../util/jobLedger");
  * services/leaguePercentiles.js) on a fixed interval so "your worker
  * count is 38th percentile for Diamond ZvP" framing stays current as
  * games flow in. A full rebuild is one aggregation pass over slim game
- * rows — cheap enough to run daily without coordination.
+ * rows — cheap enough to run daily without coordination. The same tick
+ * then rebuilds ``league_timing_percentiles``
+ * (services/leagueTimingPercentiles.js), one pass over guide_samples; a
+ * failure in either rebuild never skips the other.
  *
  * Modeled on jobs/ladderMapPoolRefreshJob.js: setInterval (no
  * node-cron dep), single-flight guard, same disable-knob convention.
@@ -27,6 +30,7 @@ const MIN_INTERVAL_MS = 60 * 60 * 1000; // hourly floor — it's a full scan
  * @param {{
  *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   leaguePercentiles: import('../services/leaguePercentiles').LeaguePercentilesService,
+ *   leagueTimingPercentiles?: Pick<import('../services/leagueTimingPercentiles').LeagueTimingPercentilesService, "recompute">,
  *   logger: import('pino').Logger,
  *   intervalMs?: number,
  *   runOnStart?: boolean,
@@ -62,14 +66,10 @@ function buildLeaguePercentilesRecomputeJob(deps) {
     if (inflight) return;
     inflight = (async () => {
       try {
-        const res = await deps.leaguePercentiles.recompute();
-        logger.info({ bands: res.bands }, "league_percentiles_recomputed");
-      } catch (err) {
-        tick.failed(err);
-        logger.warn(
-          { err: err instanceof Error ? err.message : String(err) },
-          "league_percentiles_recompute_error",
-        );
+        await recomputeOne(deps.leaguePercentiles, "league_percentiles", logger, tick);
+        if (deps.leagueTimingPercentiles) {
+          await recomputeOne(deps.leagueTimingPercentiles, "league_timing_percentiles", logger, tick);
+        }
       } finally {
         inflight = null;
       }
@@ -97,6 +97,24 @@ function buildLeaguePercentilesRecomputeJob(deps) {
       if (inflight) await inflight;
     },
   };
+}
+
+/**
+ * One rebuild; a failure is recorded and logged but never stops the next.
+ *
+ * @param {{ recompute: () => Promise<{ bands: number }> }} service
+ * @param {string} name log event prefix
+ * @param {import('pino').Logger} logger
+ * @param {{ failed: (err: unknown) => void }} tick
+ */
+async function recomputeOne(service, name, logger, tick) {
+  try {
+    const res = await service.recompute();
+    logger.info({ bands: res.bands }, `${name}_recomputed`);
+  } catch (err) {
+    tick.failed(err);
+    logger.warn({ err: err instanceof Error ? err.message : String(err) }, `${name}_recompute_error`);
+  }
 }
 
 /** @param {string | undefined} raw @returns {number | null} */

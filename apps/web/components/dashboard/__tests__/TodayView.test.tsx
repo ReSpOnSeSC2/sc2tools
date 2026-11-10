@@ -55,6 +55,9 @@ vi.mock("@/components/analyzer/LadderPulse", () => ({
   LadderPulse: () => <section data-testid="ladder-pulse" />,
 }));
 
+vi.mock("@/components/goals/GoalsTodayCard", () => ({ GoalsTodayCard: () => <section data-testid="today-goals" /> }));
+vi.mock("@/components/analyzer/macro/targets/TargetsStrip", () => ({ TargetsStrip: () => <div data-testid="today-targets" /> }));
+
 beforeEach(() => {
   mocks.replace.mockReset();
   window.sessionStorage.clear();
@@ -94,6 +97,16 @@ describe("TodayView", () => {
     expect(
       daily.compareDocumentPosition(ladder) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it("shows the goals card and the targets strip between the summary and Daily Pulse", async () => {
+    render(<TodayView />);
+    const goals = await screen.findByTestId("today-goals");
+    const targets = await screen.findByTestId("today-targets");
+    const kpi = screen.getByTestId("kpi-strip"), daily = screen.getByTestId("daily-pulse");
+    expect(kpi.compareDocumentPosition(goals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(goals.compareDocumentPosition(targets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(targets.compareDocumentPosition(daily) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
