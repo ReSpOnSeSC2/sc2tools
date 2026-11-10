@@ -846,7 +846,8 @@ describe("community + gdpr integration", () => {
         sourceSlug,
         { title: "Owner Removal Test (restored)" },
       );
-      expect(republished).toEqual({ slug: publicSlug, created: false });
+      // The new title is a content change, so savers see version 2.
+      expect(republished).toEqual({ slug: publicSlug, created: false, version: 2 });
       const restored = await db.communityBuilds.findOne({
         slug: publicSlug,
       });

@@ -22,6 +22,14 @@ export interface CommunityBuildListItem {
   /** Fresh public-profile capability; absence means render a name, not a link. */
   authorProfileHandle?: string;
   votes: number;
+  /** Accounts that saved it to their library (each counts once). */
+  saves?: number;
+  /** Bumped each time the author publishes a content change. */
+  version?: number;
+  /** When the author last changed what savers get (else publishedAt). */
+  contentUpdatedAt?: string;
+  /** The author's record with it; present only when the author opted in. */
+  authorRecord?: { wins: number; losses: number };
   publishedAt: string;
   updatedAt?: string;
   build?: Partial<CustomBuild>;
@@ -39,7 +47,7 @@ export interface CommunityBuildDetail extends CommunityBuildListItem {
   build: Partial<CustomBuild>;
 }
 
-export type CommunitySort = "top" | "new" | "controversial" | "updated";
+export type CommunitySort = "top" | "new" | "controversial" | "updated" | "saves";
 
 export const COMMUNITY_SORTS: ReadonlyArray<{
   value: CommunitySort;
@@ -49,6 +57,7 @@ export const COMMUNITY_SORTS: ReadonlyArray<{
   { value: "top", label: "Top", hint: "Highest-voted first" },
   { value: "new", label: "New", hint: "Most recently published" },
   { value: "updated", label: "Recently updated", hint: "Most recently updated first" },
+  { value: "saves", label: "Most saved", hint: "Saved to the most libraries first" },
   {
     value: "controversial",
     label: "Controversial",

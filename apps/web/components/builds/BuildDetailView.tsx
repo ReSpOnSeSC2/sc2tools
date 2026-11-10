@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import {
   ArrowLeft,
   Eye,
+  History,
   Library,
   Pencil,
   Send,
@@ -39,6 +41,9 @@ import { BuildKebab } from "./BuildCard";
 import { SavedBuildExportMenu } from "./SavedBuildExportMenu";
 import { PracticeButton } from "@/components/practice/PracticeButton";
 import type { CustomBuild } from "./types";
+import { UNDO_WINDOW_MS, restoreDeletedBuild } from "@/lib/buildLibrary";
+
+const BuildHistorySheet = dynamic(() => import("./library/BuildHistorySheet").then((module) => module.BuildHistorySheet));
 
 const BACK_LINK_CLASS =
   "inline-flex min-h-[44px] items-center gap-1.5 text-caption font-medium text-text-muted hover:text-text";
@@ -90,6 +95,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const [publishOpen, setPublishOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // The server title is generic (and noindex): build names are private.
   // "Proxy Gateway · Custom build · SC2 Tools", like every other tab title.
@@ -111,7 +117,23 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         `/v1/custom-builds/${encodeURIComponent(slug)}`,
         { method: "DELETE" },
       );
-      toast.success("Build deleted.");
+      const name = buildSwr.data?.name || "build";
+      const wasPublic = !!buildSwr.data?.isPublic;
+      let toastId = "";
+      const undo = async () => {
+        toast.dismiss(toastId);
+        try {
+          await restoreDeletedBuild(getToken, slug);
+          toast.success(wasPublic ? "Restored privately. Publish again to relist it." : `Restored “${name}”`);
+          router.push(`/builds/${encodeURIComponent(slug)}`);
+        } catch {
+          toast.error("Couldn’t restore the build", { description: "Open Recently deleted in your library to try again." });
+        }
+      };
+      toastId = toast.success(`Deleted “${name}”`, {
+        duration: UNDO_WINDOW_MS,
+        description: <button type="button" onClick={() => void undo()} className="min-h-11 font-semibold text-accent-cyan underline-offset-2 hover:underline">Undo</button>,
+      });
       // Client navigation keeps the app shell (and its toast) mounted.
       router.push("/builds");
     } catch (err: unknown) {
@@ -123,7 +145,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
       setDeletePending(false);
       setDeleteOpen(false);
     }
-  }, [slug, toast, getToken, router]);
+  }, [slug, toast, getToken, router, buildSwr.data]);
 
   if (buildSwr.error?.status === 404) {
     return <NotFoundView slug={slug} />;
@@ -201,6 +223,13 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
               {build.isPublic ? "Update listing" : "Publish…"}
             </Button>
             <Button
+              variant="secondary"
+              onClick={() => setHistoryOpen(true)}
+              iconLeft={<History className="h-4 w-4" aria-hidden />}
+            >
+              History
+            </Button>
+            <Button
               variant="danger"
               onClick={() => setDeleteOpen(true)}
               iconLeft={<Trash2 className="h-4 w-4" aria-hidden />}
@@ -244,6 +273,15 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
           await buildSwr.mutate();
         }}
       />
+      {historyOpen ? (
+        <BuildHistorySheet
+          open={historyOpen}
+          slug={slug}
+          current={build}
+          onClose={() => setHistoryOpen(false)}
+          onRestored={() => { void buildSwr.mutate(); }}
+        />
+      ) : null}
       <ConfirmDialog
         open={deleteOpen}
         onClose={() => (deletePending ? undefined : setDeleteOpen(false))}

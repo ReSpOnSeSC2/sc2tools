@@ -6,6 +6,18 @@ const { evaluateRules } = require("../services/buildRulesEvaluator");
 const { parseFilters } = require("../util/parseQuery");
 const { parseComparisonGameId } = require("../util/parseComparisonGameId");
 const { parseBuildPageOptions, invalidPage } = require("../services/customBuildPages");
+const { registerCustomBuildLibraryRoutes } = require("./customBuildLibrary");
+const { CustomBuildLibraryService } = require("../services/customBuildLibrary");
+
+/**
+ * The library service over the builds service's own database handles;
+ * null for narrow test doubles without a revisions collection.
+ * @param {any} service
+ */
+function libraryFor(service) {
+  const db = service && service.db;
+  return db && db.customBuilds && db.customBuildRevisions ? new CustomBuildLibraryService(db) : undefined;
+}
 
 const PREVIEW_TRUNCATION_LIMIT = 200;
 const PREVIEW_GAME_SCAN_CAP = 600;
@@ -90,14 +102,22 @@ function raceMatches(actual, requested, buildName, bucketPos) {
  *   customBuilds: import('../services/types').CustomBuildsService,
  *   perGame?: import('../services/types').PerGameComputeService,
  *   community?: import('../services/community').CommunityService,
+ *   customBuildLibrary?: import('../services/customBuildLibrary').CustomBuildLibraryService,
  *   slugTaken?: (userId: string, slug: string) => Promise<boolean>,
  *   auth: import('express').RequestHandler,
  * }} deps ``slugTaken``: does a live or soft-deleted build hold the slug
- *   (``createOnly`` saves); without it only live builds count
+ *   (``createOnly`` saves); without it only live builds count.
+ *   ``customBuildLibrary`` adds version history, the trash, pin/tags and
+ *   import/export (routes/customBuildLibrary.js)
  */
 function buildCustomBuildsRouter(deps) {
   const router = express.Router();
   router.use(deps.auth);
+  const ctx = { deps: { ...deps, customBuildLibrary: deps.customBuildLibrary || libraryFor(deps.customBuilds) }, phaseCacheBust };
+  /** @type {(req: import('express').Request, userId: string, slug: string, value: Record<string, any>, opts: Parameters<typeof persistCustomBuild>[5]) => ReturnType<typeof persistCustomBuild>} */
+  const persistBuild = (req, userId, slug, value, opts) => persistCustomBuild(ctx, req, userId, slug, value, opts);
+  // Literal paths (/trash, /export) must precede the /:slug reads below.
+  registerCustomBuildLibraryRoutes(router, { deps: ctx.deps, persistBuild, phaseCacheBust });
 
   // Custom-build previews are detail-store reads, not cheap metadata calls.
   // Bound them independently of replay ingest and supersede an older preview
@@ -1002,80 +1022,24 @@ function buildCustomBuildsRouter(deps) {
         });
         return;
       }
-      await deps.customBuilds.upsert(
-        auth.userId,
-        /** @type {any} */ (validation.value),
-      );
-      // The key tracks replay freshness, not build edits. Invalidate now so a
-      // rule/name change cannot serve the prior phase analysis for 60 seconds.
-      phaseCacheBust(auth.userId, slug);
-      // Cloud-side reclassify so the saved definition's declared replay axis
-      // stays in sync with its rules. Without this, the BuildDetail preview
-      // and the replay/strategy analytics drift apart. Skipped when perGame isn't
-      // wired (e.g. tests bootstrapping without it) so the save itself
-      // never fails on a missing dependency.
-      let reclassify = null;
-      let reclassifyError = null;
-      if (reclassifyRequested && deps.perGame) {
-        try {
-          reclassify = await deps.customBuilds.enqueueReclassify(auth.userId, slug, {
-            replace: true,
-            previousNames: previousBuild && previousBuild.name
-              ? [previousBuild.name]
-              : [],
-          });
-        } catch (e) {
-          reclassifyError = "reclassify_queue_failed";
-          if (req.log) {
-            req.log.warn(
-              { err: e, slug, userId: auth.userId },
-              "custom_build_upsert_reclassify_failed",
-            );
-          }
-        }
-      } else if (reclassifyRequested && reclassifyExplicit) {
-        reclassifyError = "reclassify_unavailable";
-      }
-      // Honour the build's community-share state on every save. This is
-      // what makes the editor's "Share with community" toggle (and the
-      // sheet's "Build is public" toggle) actually do something — without
-      // it the flag was stored on the doc and silently ignored, so a
-      // build "shared" from a replay never reached the community tab.
-      //
-      // Community is authoritative; `isPublic` on the private document is a
-      // library-display mirror. A publish hiccup is reported in the response
-      // but never fails the save itself (the private build is already durable).
-      // validateCustomBuild types ``value`` as plain ``object``;
-      // BUILD_SCHEMA guarantees ``name`` (required string) and
-      // ``description`` (optional string), so narrow the two fields
-      // the share payload reads.
-      const validated = /** @type {{
-       *   name: string,
-       *   description?: string,
-       *   communityAuthorName?: string,
-       *   publishAnonymously?: boolean,
-       * }} */ (
-        validation.value
-      );
-      const community = await applyShareState(deps, auth.userId, slug, {
-        wantPublic: desiredShareState(req.body),
-        title: validated.name,
-        description: validated.description,
-        authorName: validated.communityAuthorName,
-        publishAnonymously: validated.publishAnonymously,
-        log: req.log,
-      });
-      const payload = {
-        ok: reclassifyError === null,
-        saved: true,
+      const value = /** @type {Record<string, any>} */ (validation.value);
+      const payload = await persistBuild(req, auth.userId, slug, value, {
+        previousBuild,
         reclassifyRequested,
-        reclassify,
-        reclassifyError,
-        community,
-      };
-      // The private build is already durable. Keep this a 200 partial-success
-      // contract so clients do not tell the user their save failed; `ok:false`
-      // and `reclassifyError` make the matching failure explicit and retryable.
+        reclassifyExplicit,
+        wantPublic: desiredShareState(req.body),
+      });
+      // A first copy of a community build counts once toward its saves.
+      const forkedFrom = value.forkedFrom && typeof value.forkedFrom.communitySlug === "string"
+        ? value.forkedFrom.communitySlug
+        : null;
+      if (!previousBuild && forkedFrom && deps.community && typeof deps.community.recordSave === "function") {
+        try {
+          await deps.community.recordSave(auth.userId, forkedFrom);
+        } catch (e) {
+          if (req.log) req.log.warn({ err: e, userId: auth.userId }, "community_save_count_failed");
+        }
+      }
       res.status(200).json(payload);
     } catch (err) {
       next(err);
@@ -1209,6 +1173,107 @@ function desiredShareState(body) {
   }
   if (typeof body.isPublic === "boolean") return body.isPublic;
   return undefined;
+}
+
+/**
+ * The one save path for build content (PUT, restores, author updates,
+ * imports): upsert, keep the replaced version in history, refresh the
+ * phase cache, queue replay matching, then honour the share state.
+ *
+ * @param {{
+ *   deps: Parameters<typeof buildCustomBuildsRouter>[0],
+ *   phaseCacheBust: (userId: string, slug: string) => void,
+ * }} ctx
+ * @param {import('express').Request} req
+ * @param {string} userId
+ * @param {string} slug
+ * @param {Record<string, any>} value a validated build
+ * @param {{
+ *   previousBuild: {name?: string}|null,
+ *   reclassifyRequested: boolean,
+ *   reclassifyExplicit?: boolean,
+ *   wantPublic?: boolean,
+ * }} opts
+ */
+async function persistCustomBuild(ctx, req, userId, slug, value, opts) {
+  const { deps, phaseCacheBust } = ctx;
+  const library = deps.customBuildLibrary;
+  /** @type {Record<string, any>|null} */
+  let previousDefinition = null;
+  if (library) {
+    try {
+      previousDefinition = await library.readDefinition(userId, slug);
+    } catch (e) {
+      if (req.log) req.log.warn({ err: e, slug, userId }, "custom_build_revision_read_failed");
+    }
+  }
+  await deps.customBuilds.upsert(userId, /** @type {any} */ (value));
+  // History is a convenience: a failure never fails the durable save.
+  if (library && previousDefinition) {
+    try {
+      await library.recordRevision(userId, slug, previousDefinition, value);
+    } catch (e) {
+      if (req.log) req.log.warn({ err: e, slug, userId }, "custom_build_revision_record_failed");
+    }
+  }
+  // The key tracks replay freshness, not build edits. Invalidate now so a
+  // rule/name change cannot serve the prior phase analysis for 60 seconds.
+  phaseCacheBust(userId, slug);
+  // Cloud-side reclassify so the saved definition's declared replay axis
+  // stays in sync with its rules. Without this, the BuildDetail preview
+  // and the replay/strategy analytics drift apart. Skipped when perGame isn't
+  // wired (e.g. tests bootstrapping without it) so the save itself
+  // never fails on a missing dependency.
+  let reclassify = null;
+  let reclassifyError = null;
+  if (opts.reclassifyRequested && deps.perGame) {
+    try {
+      reclassify = await deps.customBuilds.enqueueReclassify(userId, slug, {
+        replace: true,
+        previousNames: opts.previousBuild && opts.previousBuild.name
+          ? [opts.previousBuild.name]
+          : [],
+      });
+    } catch (e) {
+      reclassifyError = "reclassify_queue_failed";
+      if (req.log) {
+        req.log.warn(
+          { err: e, slug, userId },
+          "custom_build_upsert_reclassify_failed",
+        );
+      }
+    }
+  } else if (opts.reclassifyRequested && opts.reclassifyExplicit) {
+    reclassifyError = "reclassify_unavailable";
+  }
+  // Honour the build's community-share state on every save. This is
+  // what makes the editor's "Share with community" toggle (and the
+  // sheet's "Build is public" toggle) actually do something — without
+  // it the flag was stored on the doc and silently ignored, so a
+  // build "shared" from a replay never reached the community tab.
+  //
+  // Community is authoritative; `isPublic` on the private document is a
+  // library-display mirror. A publish hiccup is reported in the response
+  // but never fails the save itself (the private build is already durable).
+  const community = await applyShareState(deps, userId, slug, {
+    wantPublic: opts.wantPublic,
+    title: value.name,
+    description: value.description,
+    authorName: value.communityAuthorName,
+    publishAnonymously: value.publishAnonymously,
+    log: req.log,
+  });
+  // The private build is already durable. Keep this a 200 partial-success
+  // contract so clients do not tell the user their save failed; `ok:false`
+  // and `reclassifyError` make the matching failure explicit and retryable.
+  return {
+    ok: reclassifyError === null,
+    saved: true,
+    reclassifyRequested: opts.reclassifyRequested,
+    reclassify,
+    reclassifyError,
+    community,
+  };
 }
 
 /**

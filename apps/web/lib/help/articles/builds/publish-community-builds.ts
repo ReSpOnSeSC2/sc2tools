@@ -22,8 +22,9 @@ const article: HelpArticle = {
     "game plan",
     "skill level",
     "mine", "my published builds", "publish picker", "publish update", "private record",
+    "author updated", "review update", "apply update", "saves", "most saved", "show my record",
   ],
-  updated: "2026-10-23",
+  updated: "2026-11-10",
   body: [
     {
       type: "paragraph",
@@ -86,6 +87,13 @@ const article: HelpArticle = {
       "**Edit in library** opens your private source build. **Publish update** opens its current listing for review. The public address and votes stay with that listing after an update.",
       "On a Community card, **Your build options** offers Edit in library, Publish update and Remove from Community. Removal keeps both confirmation steps and leaves your private copy, notes and replay record intact.",
       "Mine labels a listing you took down as **Not published**, and a moderation removal as **Removed by a moderator**. Neither removal deletes your private library build.",
+    ] },
+    { type: "heading", text: "When the author updates a build", anchor: "updates" },
+    { type: "list", items: [
+      "Each time an author publishes a change to a build's rules, title or description, its version goes up. Republishing without a change keeps the version.",
+      "A copy you saved shows **Author updated** on its library card when a newer version exists. **Review update** lists the rule changes. **Apply update** takes the author's rules and description and keeps your name, notes and skill level; the version it replaces stays in the build's **History**. **Dismiss** keeps your copy as it is until the next update.",
+      "Cards and pages show how many players saved a build (each account counts once, and the author's own saves don't count) and when the author last changed it. Sort Community by **Most saved** to see the most-kept builds first.",
+      "**Show my record with this build publicly** in the publish window is off by default. Turn it on to show your wins and losses with the build on its card and page; game details and opponents are never shown.",
     ] },
   ],
   related: ["custom-builds", "rules-explained"],

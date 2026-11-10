@@ -22,6 +22,7 @@ const { accountExportStream } = require("./accountExportStream");
 const GDPR_CLASSIFICATION = Object.freeze({
   USERS: "user_scoped", PROFILES: "user_scoped", OPPONENTS: "user_scoped", OPPONENT_NOTES: "user_scoped",
   GAMES: "user_scoped", GAME_DETAILS: "user_scoped", CUSTOM_BUILDS: "user_scoped", CUSTOM_BUILD_JOBS: "purge_only",
+  CUSTOM_BUILD_REVISIONS: "purge_only", COMMUNITY_SAVES: "purge_only",
   DEVICE_PAIRINGS: "ttl_ephemeral", DEVICE_TOKENS: "user_scoped", OVERLAY_TOKENS: "user_scoped",
   MULTICHAT_STUDIO: "overlay_token_scoped", MULTICHAT_SOUNDS: "purge_only", MULTICHAT_ENGAGEMENT_EVENTS: "overlay_token_scoped",
   MULTICHAT_VIEWERS: "overlay_token_scoped", MULTICHAT_PREDICTIONS: "overlay_token_scoped", MULTICHAT_CLIP_MOMENTS: "overlay_token_scoped",
@@ -80,6 +81,10 @@ const PURGE_ONLY_COLLECTIONS = [
   // Ephemeral background work must never be exported/restored: doing so could
   // resurrect a completed classifier after an account recovery.
   ["customBuildJobs", "userId"],
+  // Build version history and community save markers: derived from the
+  // exported builds, so a restore starts a fresh history.
+  ["customBuildRevisions", "userId"],
+  ["communitySaves", "userId"],
   ["arcadeLeaderboard", "userId"],
   ["communityBuilds", "ownerUserId"],
   ["communityReports", "reporterUserId"],

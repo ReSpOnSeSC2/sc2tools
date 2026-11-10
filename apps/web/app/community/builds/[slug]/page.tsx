@@ -251,7 +251,7 @@ export default async function CommunityBuildPage({
                 build={data.build}
                 title={data.title}
                 communitySlug={data.slug}
-                version={data.updatedAt || data.publishedAt}
+                version={String(data.version ?? 1)}
               />
               <ShareLinkButton path={`/community/builds/${data.slug}`} />
               <SavedBuildExportMenu build={build} meta={{ title: data.title, matchup: data.matchup, author: data.authorName, sourceUrl: `/community/builds/${encodeURIComponent(data.slug)}` }} />
