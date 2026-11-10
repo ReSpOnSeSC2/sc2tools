@@ -173,13 +173,29 @@ describe("/community/builds/[slug]", () => {
     expect(screen.queryByText("private scouting notes")).toBeNull();
   });
 
-  it("hands Save to my library the public slug and version", async () => {
-    await renderPage("Saveable", { rules: RULES });
-    expect(mocks.saveProps[0]).toMatchObject({
-      communitySlug: "build-fixture0001",
-      version: "2026-09-10T00:00:00.000Z",
-      title: "Saveable",
+  it("hands both Save to my library buttons the public slug and published version", async () => {
+    mocks.getJsonWithStatus.mockResolvedValue({ data: { ...detail("Saveable", { rules: RULES }), version: 3 }, status: 200 });
+    render(await CommunityBuildPage({ params: Promise.resolve({ slug: "build-fixture0001" }) }));
+    expect(mocks.saveProps).toHaveLength(2);
+    for (const props of mocks.saveProps) {
+      expect(props).toMatchObject({ communitySlug: "build-fixture0001", version: "3", title: "Saveable" });
+    }
+    cleanup();
+    mocks.saveProps.length = 0;
+    await renderPage("Never republished", { rules: RULES });
+    expect(mocks.saveProps.map((props) => props.version)).toEqual(["1", "1"]);
+  });
+
+  it("shows how many players saved it, and the author's record only when shared", async () => {
+    mocks.getJsonWithStatus.mockResolvedValue({
+      data: { ...detail("Trusted", { rules: RULES }), saves: 1, authorRecord: { wins: 7, losses: 3 } },
+      status: 200,
     });
+    render(await CommunityBuildPage({ params: Promise.resolve({ slug: "build-fixture0001" }) }));
+    const details = screen.getByLabelText("Build details");
+    expect(Array.from(details.querySelectorAll("dt")).slice(-2).map((node) => node.textContent)).toEqual(["Saved by", "Author’s record"]);
+    expect(within(details).getByText("1 player")).toBeTruthy();
+    expect(within(details).getByText("7–3")).toBeTruthy();
   });
 
   it("places phone actions before rules, hides desktop action cards and removes duplicate meta", async () => {
@@ -188,7 +204,8 @@ describe("/community/builds/[slug]", () => {
     expect(actions.className).toContain("lg:hidden");
     expect(actions.compareDocumentPosition(screen.getByRole("heading", { name: "Build order" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const labels = Array.from(screen.getByLabelText("Build details").querySelectorAll("dt")).map((node) => node.textContent);
-    expect(labels).toEqual(["Matchup", "Type", "Rules", "Skill level", "Published", "Updated"]);
+    expect(labels).toEqual(["Matchup", "Type", "Rules", "Skill level", "Published", "Updated", "Saved by"]);
+    expect(within(screen.getByLabelText("Build details")).getByText("0 players")).toBeTruthy();
     expect(screen.getByText("Protoss", { exact: false })).toBeTruthy();
     expect(screen.getByText("Opponent build to scout")).toBeTruthy();
     expect(container.querySelectorAll("aside > .hidden.lg\\:block")).toHaveLength(3);
