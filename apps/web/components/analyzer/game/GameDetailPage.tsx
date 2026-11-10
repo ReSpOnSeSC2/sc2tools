@@ -35,6 +35,7 @@ const BuildWorkspaceActions = dynamic(() => import("./BuildWorkspaceActions").th
 const GameDataMenu = dynamic(() => import("./GameDataMenu").then(value => value.GameDataMenu));
 const GameMacroSection = dynamic(() => import("./GameMacroSection").then((value) => value.GameMacroSection), { loading: () => <div role="status" aria-label="Loading macro breakdown" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
 const GameBattleReport = dynamic(() => import("@/components/battleReport/GameBattleReport").then((value) => value.GameBattleReport), { loading: () => <div role="status" aria-label="Loading battle report" className="h-52 animate-pulse rounded-lg bg-bg-elevated" /> });
+const ShareReportButton = dynamic(() => import("@/components/battleReport/ShareReportButton").then((value) => value.ShareReportButton));
 import { LossAutopsyCard } from "./LossAutopsyCard";
 import { GameStoryPanel } from "./GameStoryPanel";
 import type { GameStoryInput } from "@/lib/gameStory";
@@ -261,6 +262,7 @@ function GameDetailContent({
     <GuidedTours id="game" recordKey={gameId} ready={!gameReq.error && !gameReq.isLoading && !gameReq.isPreviousData && game.gameId === gameId}><GameDetailShell
       source={source}
       game={game}
+      shareTimeSec={clock.t}
       exportAction={<><GameExportMenu game={game} buildOrders={buildReq.data} macroBreakdown={breakdown} pending={buildStatus === "loading" || macroStatus === "loading"} /><GameDataMenu game={game} onComplete={async changes => { if (changes.some(change => change.deleted)) router.replace(source?.href || "/app/replays"); else await gameReq.mutate(); }} /></>}
       opponentContext={opponentContext}
       streamLinks={streamLinks}
@@ -283,6 +285,7 @@ function GameDetailContent({
         playback={playbackController.playback} segmented={!!playbackController.manifest}
         pending={macroStatus === "loading" || buildStatus === "loading" || intentReq.isPreviousData || playbackController.isLoading}
         onSeek={setScrubTime}
+        actions={game.isResumedFromReplay ? undefined : <ShareReportButton gameId={game.gameId} />}
       /></SectionBoundary>
 
       <SectionBoundary key={`mechanics:${game.gameId}`} label="mechanics" title="Mechanics hit a problem"><GameStoryPanel input={storyInput} onSeek={setScrubTime} mechanics={<div className="space-y-4"><MechanicsPanel

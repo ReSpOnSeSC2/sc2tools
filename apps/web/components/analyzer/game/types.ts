@@ -47,6 +47,8 @@ export interface GameSummary {
   oppStrategyPlanned?: boolean;
   /** The classifier's own opponent label while that correction is applied. */
   detectedOppStrategy?: string | null;
+  /** A game resumed from a replay: kept out of stats and the public replay page. */
+  isResumedFromReplay?: boolean;
   /** Flattened replay fields used by opponent-history projections. */
   replayAvailable?: boolean;
   replayFilename?: string | null;

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { Gauge, Swords } from "lucide-react";
 import { BenchmarkStrip } from "@/components/analyzer/game/BenchmarkStrip";
 import { BuildOrderColumns } from "@/components/analyzer/game/BuildOrderColumns";
@@ -12,19 +13,36 @@ import { Card } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { BENCHMARK_METRICS, percentileOf, type BenchmarkMetric } from "@/lib/benchmarks";
 import { macroScoreTone } from "@/lib/format";
-import { sharedGameSummary, type SharedGameAnalysis } from "@/lib/sharedGame";
+import { shareApiPath } from "@/lib/gameShares";
+import { sanitizeMapPlayback } from "@/lib/mapReplay";
+import { sharedGameSummary, sharedReportInput, type SharedGameAnalysis } from "@/lib/sharedGame";
+import { usePublicApi } from "@/lib/usePublicApi";
 import { SharedGameReplay } from "./SharedGameReplay";
+
+const BattleReportSection = dynamic(() => import("@/components/battleReport/BattleReportSection").then((value) => value.BattleReportSection), {
+  loading: () => <div role="status" aria-label="Loading battle report" className="h-52 animate-pulse rounded-lg bg-bg-elevated motion-reduce:animate-none" />,
+});
 
 const METRIC_LABELS: Record<BenchmarkMetric, string> = { macroScore: "Macro score", apm: "APM", spq: "Spending quotient", durationSec: "Length" };
 
 export function SharedGameDetails({ token, data, seekRequest, onSeek, initialTimeSec }: {
   token: string; data: SharedGameAnalysis; seekRequest: { t: number; seq: number } | null;
-  onSeek: (t: number) => void; initialTimeSec: number | null;
+  /** Seek the map replay; ``reveal`` also scrolls it into view. */
+  onSeek: (t: number, reveal?: boolean) => void; initialTimeSec: number | null;
 }) {
   const { game, macroBreakdown, buildOrder, benchmark } = data;
   const [scrubTime, setScrubTime] = useState<number | null>(initialTimeSec);
-  const summary = useMemo(() => sharedGameSummary(game, `share-${token}`), [game, token]);
-  const seek = (t: number) => { setScrubTime(t); onSeek(t); };
+  const key = `share-${token}`;
+  const summary = useMemo(() => sharedGameSummary(game, key), [game, key]);
+  // The same request the replay makes (SWR shares it): only complete inline
+  // playback can give the report map stills.
+  const inlineReq = usePublicApi<Record<string, unknown>>(data.playback.mode === "inline" ? `${shareApiPath(token)}/map-playback` : null,
+    { revalidateOnFocus: false, shouldRetryOnError: false });
+  const inline = useMemo(() => (inlineReq.data ? sanitizeMapPlayback(inlineReq.data) : null), [inlineReq.data]);
+  const reportInput = useMemo(() => sharedReportInput(data, key, inline), [data, key, inline]);
+  const timeHref = useCallback((t: number) => `/g/${encodeURIComponent(token)}?t=${Math.floor(t)}#replay`, [token]);
+  const seek = (t: number) => { setScrubTime(t); onSeek(t, true); };
+  const scrub = (t: number) => { setScrubTime(t); onSeek(t); };
   const timelineAvailable = Boolean(macroBreakdown?.stats_events?.length || macroBreakdown?.opp_stats_events?.length);
   const strips = benchmark?.league && benchmark.matchup ? BENCHMARK_METRICS.flatMap((metric) => {
     const table = benchmark.metrics[metric];
@@ -32,6 +50,9 @@ export function SharedGameDetails({ token, data, seekRequest, onSeek, initialTim
     return percentile && table ? [{ metric, percentile, n: table.n }] : [];
   }) : [];
   return <div className="space-y-6">
+    <BattleReportSection input={reportInput} onSeek={seek} segmented={data.playback.mode === "segmented"}
+      pending={data.playback.mode === "inline" && inlineReq.isLoading} timeHref={timeHref} />
+
     <section id="replay" aria-labelledby="shared-replay-title" className="scroll-mt-24 space-y-3">
       <h2 id="shared-replay-title" className="font-display text-h3 font-bold text-text">Map replay</h2>
       <SharedGameReplay token={token} data={data} seekRequest={seekRequest} initialTimeSec={initialTimeSec} onTimeChange={setScrubTime} />
@@ -54,7 +75,7 @@ export function SharedGameDetails({ token, data, seekRequest, onSeek, initialTim
         oppStatsEvents={macroBreakdown?.opp_stats_events}
         gameLengthSec={game.durationSec ?? macroBreakdown?.game_length_sec ?? null}
         scrubTime={scrubTime}
-        onScrub={seek}
+        onScrub={scrub}
         myName={game.playerLabel}
         oppName={game.opponentLabel}
         perspectiveLabel={game.playerLabel}

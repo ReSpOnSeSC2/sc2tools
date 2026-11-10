@@ -54,6 +54,17 @@ const article: HelpArticle = {
         "When you or your opponent streamed the game, a link jumps to that moment in the recording.",
       ],
     },
+    { type: "heading", text: "Share this game", anchor: "sharing" },
+    { type: "paragraph", text: "**Share** in the header opens the share menu. Each row says who can open what. [Sharing a game](/help/game-page-sharing) covers share links in full." },
+    {
+      type: "list",
+      items: [
+        "**Copy link at m:ss** and **Copy link to this game** are your own addresses. A link at a moment opens the replay at that time. Only you can open them, signed in to your account.",
+        "**Copy public link** opens this game on your public replay page. It needs public replays turned on: **Turn on public replays…** explains what that page shows and asks first. Anyone with the link sees the game there and signs in to see its analysis; your private notes are never shown. Games resumed from a replay are not on that page, so the row is hidden for them.",
+        "**Copy share link** gives a link to this one game that anyone can open without an account, with the map replay and no opponent names. **Manage share links…** turns it off.",
+        "**Save battle card image** saves a picture of the result. It names no opponent and rounds the rating gap to 100.",
+      ],
+    },
     { type: "heading", text: "Down the page", anchor: "cards" },
     {
       type: "table",

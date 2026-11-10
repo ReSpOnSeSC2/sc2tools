@@ -20,6 +20,12 @@ corresponding GitHub Release.
 - Manage share links: copy a link, see how often it was opened, or turn it off,
   which ends access at once. Deleting the game or your account turns its links
   off. Links get a preview card when posted and are kept out of search engines.
+- The Share menu also copies links only you can open, one at the replay's
+  current moment, and the game's public replay page link. Turning public
+  replays on from the menu shows the same explanation as Replays first.
+- Share a battle report: a shared game shows its report, written without
+  names or ratings, its link preview shows the headline and turning point, and
+  Save as image downloads the report as a picture that names no one.
 
 ### Share cards
 

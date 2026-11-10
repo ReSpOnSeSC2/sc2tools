@@ -8,8 +8,8 @@ const article: HelpArticle = {
   audience: "player",
   signedInOnly: true,
   order: 4,
-  updated: "2026-10-25",
-  keywords: ["battle report", "story", "caster", "tactical", "snapshots", "copy report", "Markdown", "match recap", "turning point"],
+  updated: "2026-11-10",
+  keywords: ["battle report", "story", "caster", "tactical", "snapshots", "copy report", "Markdown", "match recap", "turning point", "share report", "report image", "save as image", "discord", "link preview"],
   body: [
     { type: "paragraph", text: "Open a game from [Replays](/app/replays) or an opponent's dossier, then find Battle report near the top of its game page. It turns that replay's recorded events into one to four paragraphs, with captioned moments between them." },
     { type: "heading", text: "How this is written", anchor: "how-written" },
@@ -36,8 +36,16 @@ const article: HelpArticle = {
       "Copy Markdown adds a Markdown heading and timestamp links back to this game. Opening those links still requires access to the game.",
       "If clipboard access is unavailable, the report appears in a selected text field so you can copy it yourself.",
     ] },
+    { type: "heading", text: "Share a report", anchor: "share" },
+    { type: "paragraph", text: "**Share report…** under the report shares it through this game's share link. It shows a preview of exactly what viewers will read, then **Copy report link** copies a link that opens the shared game at its report. Anyone with the link can read it and open the game's analysis and map replay without an account. See [Sharing a game](/help/game-page-sharing)." },
+    { type: "list", items: [
+      "A shared report is written for readers who are not you: it says \"the player\" and \"the opponent\", names no one and leaves out ratings, your build check-in and corrections. The wording can differ slightly from your own copy; the facts are the same.",
+      "When the link is posted in a chat or forum, its preview card shows the result, matchup, the report's headline and the turning point as army-value lines.",
+      "**Save as image** downloads the headline, the first paragraph and two snapshot charts as a picture. It is made in your browser and names no one, whoever saves it.",
+      "To stop sharing the report, turn the link off in **Share → Manage share links…**. The shared page, report and preview stop working at once. A saved image or a copied text cannot be recalled.",
+    ] },
   ],
-  related: ["game-page", "game-page-replay", "reading-the-charts"],
+  related: ["game-page", "game-page-sharing", "game-page-replay", "reading-the-charts"],
 };
 
 export default article;

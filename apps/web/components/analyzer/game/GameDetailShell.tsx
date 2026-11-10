@@ -51,8 +51,11 @@ export function GameDetailShell({
   oppCorrected,
   exportAction,
   source,
+  shareTimeSec,
 }: {
   game: GameSummary;
+  /** The shared replay clock, for the Share menu's "Copy link at m:ss". */
+  shareTimeSec?: number | null;
   source?: GameSource | null;
   children: ReactNode;
   exportAction?: ReactNode;
@@ -158,7 +161,7 @@ export function GameDetailShell({
               aria-label="Game actions"
               className="flex min-h-9 w-full flex-wrap items-center justify-end gap-2"
             >
-              <ShareGameButton game={game} />
+              <ShareGameButton game={game} currentTimeSec={shareTimeSec} />
               {exportAction}
               <ReplayDownloadButton
                 gameId={game.gameId}
