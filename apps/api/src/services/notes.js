@@ -625,12 +625,13 @@ class NotesService {
     let removed = 0;
     let after = "";
     for (;;) {
-      const ids = (await this.db.notes.aggregate([
-        { $match: { userId, "target.kind": "game", "target.id": { $gt: after } } },
-        { $group: { _id: "$target.id" } },
-        { $sort: { _id: 1 } },
-        { $limit: ORPHAN_BATCH },
-      ]).toArray()).map((row) => String(row._id));
+      // Pages the {userId, target.kind, target.id} index. A game split across
+      // two pages is classified whole: deleteMany below takes all its notes.
+      const rows = await this.db.notes.find(
+        { userId, "target.kind": "game", "target.id": { $gt: after } },
+        { projection: { _id: 0, "target.id": 1 }, sort: { "target.id": 1 }, limit: ORPHAN_BATCH },
+      ).toArray();
+      const ids = [...new Set(rows.map((row) => String(row.target?.id || "")).filter(Boolean))];
       if (!ids.length) return removed;
       const live = new Set((await this.db.games
         .find({ userId, gameId: { $in: ids }, ...LIVE_GAME }, { projection: { _id: 0, gameId: 1 } })
@@ -641,7 +642,7 @@ class NotesService {
         removed += res.deletedCount || 0;
       }
       after = ids[ids.length - 1];
-      if (ids.length < ORPHAN_BATCH) return removed;
+      if (rows.length < ORPHAN_BATCH) return removed;
     }
   }
 
