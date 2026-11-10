@@ -222,6 +222,30 @@ function deferPipeline(notesPatch, now) {
 }
 
 /**
+ * "Undo" of a decision: a confirmed or skipped game goes back to pending
+ * with the override cleared (the label returns to the replay's detection)
+ * while its notes and cached suggestion stay. Undecided games have nothing
+ * to undo (409 ``not_reopenable``); ``defer`` never undoes a decision.
+ * @param {Record<string, any>} row the game as read before the write
+ * @param {IneligibleReason|null} reason
+ * @param {{ notes?: string }} notesPatch
+ * @param {Date} now
+ * @returns {Array<Record<string, any>>}
+ */
+function reopenPipeline(row, reason, notesPatch, now) {
+  const intent = row.buildIntent && typeof row.buildIntent === "object" ? row.buildIntent : null;
+  const status = intent && typeof intent.status === "string" ? intent.status : "none";
+  if (status !== "confirmed" && status !== "skipped") {
+    throw new BuildIntentError(409, "not_reopenable", "Only a confirmed or skipped check-in can be undone.");
+  }
+  // Pending is a queue state, and only eligible games join the queue.
+  if (reason) throw notEligible(reason);
+  return clearOverridePipeline({
+    ...notesPatch, status: "pending", build: null, confirmedAt: null, updatedAt: now,
+  });
+}
+
+/**
  * ``buildIntent.opponent`` after a correction is withdrawn.
  * @param {Date} now
  */
@@ -393,6 +417,9 @@ class BuildIntentGameState {
           throw new BuildIntentError(400, "invalid_request", "opponentBuildKey is required.");
         }
         you = notesPatch.notes !== undefined ? mergeIntentPipeline({ ...notesPatch, updatedAt: now }) : [];
+        break;
+      case "reopen":
+        you = reopenPipeline(before, reason, notesPatch, now);
         break;
       default:
         throw new BuildIntentError(400, "invalid_action", "Unknown action.");

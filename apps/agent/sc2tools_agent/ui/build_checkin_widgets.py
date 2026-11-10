@@ -26,14 +26,16 @@ from .theme import (
     ACCENT as _ACCENT,
     ACCENT_CYAN as _ACCENT_CYAN,
     ACCENT_HOVER as _ACCENT_HOVER,
+    ACCENT_PRESSED as _ACCENT_PRESSED,
     BORDER as _BORDER,
+    BORDER_CONTROL as _BORDER_CONTROL,
     BORDER_STRONG as _BORDER_STRONG,
     BUTTON as _BUTTON,
-    BUTTON_CHECKED as _BUTTON_CHECKED,
     BUTTON_HOVER as _BUTTON_HOVER,
     DANGER as _DANGER,
     ELEVATED as _ELEVATED,
     FOCUS as _FOCUS,
+    ON_ACCENT as _ON_ACCENT,
     SUBTLE as _SUBTLE,
     SUCCESS as _SUCCESS,
     SURFACE as _SURFACE,
@@ -160,14 +162,18 @@ QPushButton:hover {{
 QPushButton:pressed {{ background-color: {_BORDER_STRONG}; }}
 QPushButton:focus {{ border-color: {_FOCUS}; }}
 QPushButton#checkinPrimary {{
-    background-color: {_BUTTON_CHECKED};
-    color: {_TEXT};
+    background-color: {_ACCENT};
+    color: {_ON_ACCENT};
     border-color: {_ACCENT};
     font-weight: 600;
 }}
 QPushButton#checkinPrimary:hover {{
-    background-color: {_BUTTON_HOVER};
+    background-color: {_ACCENT_HOVER};
     border-color: {_ACCENT_HOVER};
+}}
+QPushButton#checkinPrimary:pressed {{
+    background-color: {_ACCENT_PRESSED};
+    border-color: {_ACCENT_PRESSED};
 }}
 QPushButton#checkinPrimary:focus {{ border-color: {_FOCUS}; }}
 QPushButton#checkinQuiet {{
@@ -215,11 +221,11 @@ QPushButton#checkinLink:disabled {{ color: {_TEXT_DIM}; text-decoration: none; }
 QLineEdit#checkinSearch, QPlainTextEdit#checkinNotes {{
     background-color: {_ELEVATED};
     color: {_TEXT};
-    border: 1px solid {_BORDER_STRONG};
+    border: 1px solid {_BORDER_CONTROL};
     border-radius: 7px;
     padding: 4px 8px;
     selection-background-color: {_ACCENT};
-    selection-color: {_TEXT};
+    selection-color: {_ON_ACCENT};
 }}
 QLineEdit#checkinSearch:focus, QPlainTextEdit#checkinNotes:focus {{
     border-color: {_ACCENT_CYAN};
