@@ -30,11 +30,12 @@ const article: HelpArticle = {
     "turning points",
     "save as new build",
     "share this game",
+    "share link",
     "battle card",
     "download replay",
     "ask for a review",
   ],
-  updated: "2026-11-09",
+  updated: "2026-11-10",
   body: [
     {
       type: "paragraph",
@@ -49,7 +50,7 @@ const article: HelpArticle = {
       items: [
         "The result, matchup and map, when it was played, how long it lasted, the MMR, and your opponent, with a link to their dossier.",
         "**My build** and **Opponent strategy** name the openings the replay shows. **Planned** or **Corrected** means you changed them with [Build check-in](/help/build-check-in).",
-        "**Share this game** saves or shares the game as an image. It shows your MMR and whether your opponent was higher or lower, rounded to the nearest 100, and never their name or exact rating. The download button gets the original .SC2Replay file, and **Ask for a review** asks other players about a moment in the game.",
+        "**Share** opens the share menu: copy a link anyone can open without an account, with the map replay and no opponent names, or save the battle card image, which shows your MMR and whether your opponent was higher or lower, rounded to the nearest 100. **Manage share links** turns a link off. See [Sharing a game](/help/game-page-sharing). The download button gets the original .SC2Replay file, and **Ask for a review** asks other players about a moment in the game.",
         "When you or your opponent streamed the game, a link jumps to that moment in the recording.",
       ],
     },
@@ -115,7 +116,7 @@ const article: HelpArticle = {
     {"type": "heading", "text": "When a section doesn't load", "anchor": "section-recovery"},
     {"type": "paragraph", "text": "A ‘Couldn't load …’ message with Retry means a temporary connection or server problem. Your replay is safe; retry that section without leaving the rest of the page. ‘Not computed yet’ or a missing-analysis explanation means this game has no analysis for that section yet. Loading placeholders mean the request is still running. If a section crashes, its Try again button remounts it while the rest of the page stays available."},
   ],
-  related: ["battle-reports", "game-page-replay", "game-page-accurate-playback", "macro", "build-check-in"],
+  related: ["battle-reports", "game-page-sharing", "game-page-replay", "game-page-accurate-playback", "macro", "build-check-in"],
 };
 
 export default article;

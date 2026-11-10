@@ -201,6 +201,8 @@ const { buildNotificationsRouter } = require("./routes/notifications");
 const { ReviewerReputationService } = require("./services/reviewerReputation");
 const { ReviewsService } = require("./services/reviews");
 const { buildReviewsRouter } = require("./routes/reviews");
+const { GameSharesService } = require("./services/gameShares");
+const { buildGameSharesRouter } = require("./routes/gameShares");
 const { loadAllMigrations } = require("./db/migrations");
 
 const { buildHealthRouter } = require("./routes/health");
@@ -1141,7 +1143,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     supportMessages,
     announcements,
     reviewerReputation,
-    reviews,
+    reviews, gameShares: new GameSharesService(deps.db, { replayLibrary, perGame, playbackArtifacts, leaguePercentiles, logger: deps.logger }),
   }, deps, gameDetails);
 }
 
@@ -1306,6 +1308,24 @@ function registerRuntimeCapacityProviders(registry, services) {
   for (const [name, provider] of Object.entries(providers)) {
     if (provider) registry.register(name, provider);
   }
+}
+
+/**
+ * Public-bundle routers whose reads are scoped grants to one game.
+ *
+ * - Replay Review Exchange: public review pages, the board and the scoped
+ *   per-game analysis grant are unauthenticated by design (the asker opted
+ *   in); writes apply auth per route.
+ * - Game share links: public reads by token (no account), owner
+ *   management with per-route auth.
+ *
+ * @param {import('express').Express} app
+ * @param {ReturnType<typeof makeServices>} services
+ * @param {{auth: import('express').RequestHandler, isAdmin: (req: import('express').Request) => boolean, rollout: "off" | "admins" | "on"}} opts
+ */
+function mountScopedGrants(app, services, { auth, isAdmin, rollout }) {
+  app.use(SERVICE.ROUTE_PREFIX, buildReviewsRouter({ reviews: services.reviews, reputation: services.reviewerReputation, auth, isAdmin, rollout }));
+  app.use(SERVICE.ROUTE_PREFIX, buildGameSharesRouter({ gameShares: services.gameShares, auth }));
 }
 
 /**
@@ -1569,19 +1589,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       auth,
     }),
   );
-  // Replay Review Exchange — public review pages, the board and the
-  // scoped per-game analysis grant are unauthenticated by design (the
-  // asker opted in); writes apply auth per route. Public bundle.
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildReviewsRouter({
-      reviews: services.reviews,
-      reputation: services.reviewerReputation,
-      auth,
-      isAdmin,
-      rollout: deps.config.reviewsEnabled || "off",
-    }),
-  );
+  mountScopedGrants(app, services, { auth, isAdmin, rollout: deps.config.reviewsEnabled || "off" });
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildNotificationsRouter({

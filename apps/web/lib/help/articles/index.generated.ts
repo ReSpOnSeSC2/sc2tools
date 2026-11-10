@@ -71,6 +71,7 @@ import gamePage_benchmarks from "./game-page/benchmarks";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
 import gamePage_gamePageNotes from "./game-page/game-page-notes";
 import gamePage_gamePageReplay from "./game-page/game-page-replay";
+import gamePage_gamePageSharing from "./game-page/game-page-sharing";
 import gamePage_gamePage from "./game-page/game-page";
 import gamePage_yourFirstGame from "./game-page/your-first-game";
 import gettingStarted_aPageAskedMeToSignIn from "./getting-started/a-page-asked-me-to-sign-in";
@@ -175,6 +176,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gamePage_gamePageAccuratePlayback,
   gamePage_gamePageNotes,
   gamePage_gamePageReplay,
+  gamePage_gamePageSharing,
   gamePage_gamePage,
   gamePage_yourFirstGame,
   gettingStarted_aPageAskedMeToSignIn,

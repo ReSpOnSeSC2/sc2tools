@@ -22,6 +22,7 @@ import { MapLabel } from "@/components/maps/MapArtwork";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
+import { ShareGameButton } from "@/components/analyzer/game/ShareGameButton";
 import { PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import { Icon } from "@/components/ui/Icon";
 import { fmtDate, fmtDateCompact, fmtMinutes, fmtMmr, macroScoreTone } from "@/lib/format";
@@ -196,6 +197,7 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
               ariaLabel={`Ask for a review of your game vs ${replayContext(game)}`}
             />
           ) : null}
+            <ShareGameButton game={game} compact className={actionClass} label={`Share ${replayContext(game)}`} />
             <ReplayDownloadButton
               gameId={game.gameId}
               available={game.replayAvailable}
@@ -267,6 +269,7 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, p
             ariaLabel={`Ask for a review of your game vs ${replayContext(game)}`}
           />
         ) : null}
+          <ShareGameButton game={game} className={mobileActionClass} label={`Share ${replayContext(game)}`} />
           <div className="w-full sm:w-auto">
             <ReplayDownloadButton
               gameId={game.gameId}
