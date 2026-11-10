@@ -28,6 +28,7 @@ corresponding GitHub Release.
   if your MMR is missing, and open the games below each target.
 - A game's SQ now shows its percentile for its league and matchup, such as
   "p38 · Diamond PvZ", where that table has enough games.
+
 ### Game share links
 
 - Share one game by link from its new Share menu, on the game page and on each

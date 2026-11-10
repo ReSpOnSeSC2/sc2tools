@@ -39,7 +39,6 @@ const GDPR_CLASSIFICATION = Object.freeze({
   JOB_RUNS: "global", ADMIN_AUDIT: "purge_only",
   GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
   GHOST_EXAMPLES: "purge_only", PLAYER_GOALS: "purge_only",
-  GHOST_EXAMPLES: "purge_only",
   // Share links are exported (without their tokens) and deleted, but never
   // restored: a snapshot must not revive a link revoked after it was taken.
   GAME_SHARES: "purge_only",

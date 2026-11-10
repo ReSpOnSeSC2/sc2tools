@@ -185,9 +185,8 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     guideStats: db.collection(COLLECTIONS.GUIDE_STATS),
     guideNotes: db.collection(COLLECTIONS.GUIDE_NOTES),
     guideVideos: db.collection(COLLECTIONS.GUIDE_VIDEOS),
-    buildIntentLive: db.collection(COLLECTIONS.BUILD_INTENT_LIVE),
-    playerGoals: db.collection(COLLECTIONS.PLAYER_GOALS),
     buildIntentLive: db.collection(COLLECTIONS.BUILD_INTENT_LIVE), gameShares: db.collection(COLLECTIONS.GAME_SHARES),
+    playerGoals: db.collection(COLLECTIONS.PLAYER_GOALS),
     close: () => client.close(),
   };
   await ensureIndexes(ctx, { logger, awaitBackground: awaitBackgroundIndexes });
