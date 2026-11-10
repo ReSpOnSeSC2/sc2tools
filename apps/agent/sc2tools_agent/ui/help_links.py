@@ -1,6 +1,8 @@
 """Desktop help destinations. No Qt import is needed by headless installs."""
 from urllib.parse import urlsplit, urlunsplit
 
+from . import theme
+
 # Keep identical to apps/web/lib/help/__tests__/agentLinks.test.ts.
 AGENT_HELP_SLUGS = (
     "desktop-app-overview", "desktop-app-sync-range", "replay-folders",
@@ -26,7 +28,7 @@ def help_url(dashboard_url, slug):
 def help_button(QtWidgets, topic, callback, parent=None):
     button = QtWidgets.QToolButton(parent)
     button.setText("?")
-    button.setFixedSize(20, 20)
+    button.setFixedSize(theme.HELP_LINK_SIZE, theme.HELP_LINK_SIZE)
     button.setObjectName("helpLink")
     button.setAccessibleName(f"Help: {topic}")
     button.setToolTip("Open help in your browser")

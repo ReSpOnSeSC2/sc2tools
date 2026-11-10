@@ -185,7 +185,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             command_layout.addWidget(self.description_link_note)
             actions = QtWidgets.QHBoxLayout()
             actions.setSpacing(10)
-            self.save_button = self._button("Save title & description", self.save_title, primary=True)
+            self.save_button = self._button("Save title && description", self.save_title, primary=True)
             self.prepare_button = self._button("Prepare YouTube session", lambda: self.job({"action": "prepare"}))
             self.prepare_button.setToolTip("Save your title, description and YouTube setup, then prepare both destinations before starting Aitum.")
             actions.addWidget(self.save_button)
