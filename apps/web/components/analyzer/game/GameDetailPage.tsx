@@ -18,6 +18,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import type { AutopsyGame } from "@/lib/lossAutopsy";
 import { GameNavigation } from "./GameNavigation";
+import { CompareGamesButton } from "@/components/analyzer/compare/CompareGamesButton";
 import { GameDetailShell } from "./GameDetailShell";
 import { GameExportMenu } from "./GameExportMenu";
 import dynamic from "next/dynamic";
@@ -269,7 +270,10 @@ function GameDetailContent({
       oppStrategyLabel={checkinOpponent ? checkinOpponent.label : undefined}
       oppCorrected={checkinOpponent ? checkinOpponent.corrected : undefined}
     >
-      <GameNavigation game={game} source={source} opponentContext={opponentContext} buildLabel={checkinBuild ? checkinBuild.label : game.myBuild} />
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <GameNavigation game={game} source={source} opponentContext={opponentContext} buildLabel={checkinBuild ? checkinBuild.label : game.myBuild} />
+        <CompareGamesButton game={game} buildLabel={checkinBuild ? checkinBuild.label : game.myBuild} />
+      </div>
       <GameWorkspaceNav />
       <BuildCheckInCard
         gameId={gameId}
