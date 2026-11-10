@@ -39,6 +39,8 @@ const DYNAMIC_ROUTES: ReadonlyArray<readonly [RegExp, string]> = [
   [/^\/builds\/[^/]+/, "/builds/:slug"],
   [/^\/community\/opponents\/[^/]+/, "/community/opponents/:pulseId"],
   [/^\/community\/authors\/[^/]+/, "/community/authors/:userId"],
+  // A share link's token is the page's credential.
+  [/^\/g\/[^/]+/, "/g/:token"],
 ];
 
 /** Query parameters GA4 needs for traffic attribution, plus the PWA launch marker. */

@@ -7,12 +7,13 @@
  */
 
 // API routes whose path segment after the prefix is a credential (overlay
-// and chat-bot tokens, pairing codes) or a live game key holding both
-// players' names.
+// and chat-bot tokens, pairing codes, game share tokens) or a live game key
+// holding both players' names.
 const CREDENTIAL_PATH_SEGMENT =
-  /\/(multichat|chatbot|overlay-tokens|device-pairings|build-intents\/live)\/[^/?#]+/giu;
-// OBS browser sources and the Stream Dock authenticate with the token in the URL.
-const TOKEN_PAGE_SEGMENT = /^\/(overlay|dock)\/[^/?#]+/iu;
+  /\/(multichat|chatbot|overlay-tokens|device-pairings|build-intents\/live|shares)\/[^/?#]+/giu;
+// OBS browser sources, the Stream Dock and shared-game pages authenticate
+// with the token in the URL.
+const TOKEN_PAGE_SEGMENT = /^\/(overlay|dock|g)\/[^/?#]+/iu;
 const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|token)/iu;
 const OAUTH_CALLBACK_PATH = /^\/v1\/integrations\/(?:twitch|kick|youtube)\/callback\/?$/iu;
 const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set(["code", "state", "error", "error_description", "error_uri"]);

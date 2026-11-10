@@ -116,6 +116,9 @@ async function* accountExportRecords(db, userId, options = {}) {
   }
   yield* collectionRecords(db, "playerIdentitySubmissions", { userId }, { _id: 0, reviewedBy: 0, evidenceMaxId: 0 }, signal);
   yield* collectionRecords(db, "multichatSounds", { userId }, { _id: 0, data: 0 }, signal);
+  // The link token is a bearer credential for the public page: the archive
+  // lists each share (game, dates, views) but never the token itself.
+  yield* collectionRecords(db, "gameShares", { userId }, { _id: 0, activeKey: 0 }, signal);
   if (db.coaching && options.includeSharedCoaching !== false) yield* coachingRecords(db, userId, signal);
   let user = null;
   const userProjection = { _id: 0, gameStats: 0, gameStatsRevision: 0, gameStatsProtocolVersion: 0,

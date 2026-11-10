@@ -586,7 +586,7 @@ describe("GameDetailPage", () => {
     const actionLine = screen.getByRole("toolbar", { name: "Game actions" });
     const actions = Array.from(actionLine.querySelectorAll("a,button")).filter(action => !action.closest("details"));
     expect(within(actionLine).getByText("Export")).toBeTruthy();
-    expect(actions).toEqual([screen.getByRole("button", { name: "Share this game as an image" }), download, link]);
+    expect(actions).toEqual([screen.getByRole("button", { name: "Share" }), download, link]);
     expect(useApiMock).toHaveBeenCalledWith(
       "/v1/games/vod-links?gameId=g1",
       { revalidateOnFocus: false, shouldRetryOnError: false },

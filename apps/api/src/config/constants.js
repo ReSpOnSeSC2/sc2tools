@@ -141,6 +141,10 @@ const COLLECTIONS = Object.freeze({
   // pre-game declaration, randomizer roll, post-game answer) until the
   // uploaded replay binds it. TTL-reaped; see services/buildIntentLive.js.
   BUILD_INTENT_LIVE: "build_intent_live",
+  // Revocable single-game share links: the ``_id`` is the unguessable
+  // 16-character token in the public ``/g/<token>`` URL. At most
+  // GAME_SHARES.MAX_ACTIVE live per user; see services/gameShares.js.
+  GAME_SHARES: "game_shares",
 });
 
 const LIMITS = Object.freeze({
