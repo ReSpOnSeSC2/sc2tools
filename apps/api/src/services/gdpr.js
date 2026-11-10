@@ -40,6 +40,9 @@ const GDPR_CLASSIFICATION = Object.freeze({
   JOB_RUNS: "global", ADMIN_AUDIT: "purge_only",
   GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
   GHOST_EXAMPLES: "purge_only",
+  // Share links are exported (without their tokens) and deleted, but never
+  // restored: a snapshot must not revive a link revoked after it was taken.
+  GAME_SHARES: "purge_only",
   // The independently stacked What's New feature adds this global config.
   ...(Object.hasOwn(COLLECTIONS, "SITE_CONFIG") ? { SITE_CONFIG: "global" } : {}),
 });
@@ -107,6 +110,8 @@ const PURGE_ONLY_COLLECTIONS = [
   // Re-analysis runs are live operational work: deleted with the account,
   // never exported or restored (a restore must not revive a queue).
   ["reanalysisJobs", "userId"],
+  // Revocable single-game share links. A restore must never revive one.
+  ["gameShares", "userId"],
 ];
 
 class GdprService {

@@ -60,6 +60,8 @@ vi.mock("@/components/ui/Toast", () => ({
   useToast: () => ({
     toast: { success: mocks.toastSuccess, error: mocks.toastError },
   }),
+  // Each owner row's Share menu toasts through the optional hook.
+  useToastOptional: () => null,
 }));
 
 vi.mock("@/components/analyzer/ReplayDownloadButton", () => ({

@@ -7,6 +7,7 @@ import { BENCHMARK_METRICS, percentileOf, type BenchmarkMetric, type GameContext
 import type { ClientApiError } from "@/lib/clientApi";
 import { useBenchmarks } from "@/lib/useBenchmarks";
 import { BenchmarkChip } from "./BenchmarkChip";
+import { BenchmarkStrip } from "./BenchmarkStrip";
 import type { GameSummary } from "./types";
 
 const LABELS: Record<BenchmarkMetric, string> = { macroScore: "Macro score", apm: "APM", spq: "Spending quotient", durationSec: "Length" };
@@ -26,11 +27,7 @@ function MetricRow({ metric, game, context, league }: { metric: BenchmarkMetric;
     <p className="mt-1 text-caption text-text-muted">{baseline.n > 0 && baseline.median !== null
       ? <>Your {context.matchup} median {format(metric, baseline.median)} · middle half {format(metric, baseline.p25)}–{format(metric, baseline.p75)} · n={baseline.n}</>
       : <>No earlier ranked {context.matchup || "matching"} games with this measurement · n=0</>}</p>
-    {pct && league ? <div className="relative mt-2 h-2 rounded-full bg-bg-elevated" role="img"
-      aria-label={`${LABELS[metric]}: band = opponent's league, ${league.league} ${league.matchup}; dot = this game's ${pct.label} percentile; n=${league.metrics[metric]!.n}.`}>
-      <span className="absolute inset-y-0 left-[25%] w-1/2 rounded-full bg-border-strong" />
-      <span className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-bg-surface bg-accent" style={{ left: `${pct.value}%` }} />
-    </div> : null}
+    {pct && league ? <BenchmarkStrip label={LABELS[metric]} percentile={pct} league={league.league} matchup={league.matchup} n={league.metrics[metric]!.n} /> : null}
     {metric === "durationSec" ? <p className="mt-1 text-caption text-text-muted">Length gives context; longer or shorter is not a rating.</p> : null}
   </li>;
 }
