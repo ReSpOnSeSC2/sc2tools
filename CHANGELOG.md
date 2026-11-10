@@ -11,6 +11,19 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Share cards
+
+- Fix the link printed on every share card. `sc2tools.com/arcade` now leads to
+  the no-install analyzer, or to the home page while that is hidden, instead of
+  a missing page.
+- Stop identifying opponents on Arcade, Season Recap and battle cards. Opponents
+  appear as "Rival A" or by race, rating gaps are rounded to the nearest 100 and
+  games are dated to the day. Names and exact figures stay in the app.
+- Stop copying or downloading a card when the share sheet is dismissed, and say
+  whether a card was shared, copied or saved.
+- Count delivered share cards by card type and delivery path, with nothing from
+  the card itself.
+
 ### Agent 0.24.11
 
 - Add an independent game-start title refresh with current opponent, known alias,

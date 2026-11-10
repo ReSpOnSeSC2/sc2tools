@@ -124,10 +124,30 @@ export function factPerfectOpponentExists(
   const nonPerfect = stats.filter((s) => s.losses > 0);
   if (perfect.length === 0 || nonPerfect.length === 0) return null;
   const sample = perfect.slice().sort((a, b) => b.games - a.games)[0];
+  return namedOpponentExample(
+    {
+      truthText: `In your tracked history, you have at least one opponent you've played ${CENSUS_MIN_GAMES}+ times against without ever losing.`,
+      lieText: `In your tracked history, you've lost at least once to every opponent you've played ${CENSUS_MIN_GAMES}+ times against.`,
+    },
+    sample,
+  );
+}
+
+/**
+ * Finish an opponent census fact. In the app the detail names the
+ * matching opponent; the share card says "One opponent" instead, because
+ * it is public and names nobody (lib/sharePrivacy.ts). The two claims
+ * never name anyone, so they are shared as written.
+ */
+function namedOpponentExample(
+  claims: Pick<FactCandidate, "truthText" | "lieText">,
+  sample: KeyedStats,
+): FactCandidate {
+  const record = `${sample.wins}-${sample.losses} (${pct1(sample.wins / sample.games)}).`;
   return {
-    truthText: `In your tracked history, you have at least one opponent you've played ${CENSUS_MIN_GAMES}+ times against without ever losing.`,
-    lieText: `In your tracked history, you've lost at least once to every opponent you've played ${CENSUS_MIN_GAMES}+ times against.`,
-    detail: `${sample.displayName} · ${sample.wins}-${sample.losses} (${pct1(sample.wins / sample.games)}).`,
+    ...claims,
+    detail: `${sample.displayName} · ${record}`,
+    share: { ...claims, detail: `One opponent · ${record}` },
   };
 }
 
@@ -193,11 +213,13 @@ export function factEvenRivalryExists(
   const nonEven = stats.filter((s) => s.wins !== s.losses);
   if (even.length === 0 || nonEven.length === 0) return null;
   const sample = even.slice().sort((a, b) => b.games - a.games)[0];
-  return {
-    truthText: `In your tracked history, you have at least one opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against where the head-to-head is exactly even.`,
-    lieText: `In your tracked history, every opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against has either a winning or a losing record (no exact ties).`,
-    detail: `${sample.displayName} · ${sample.wins}-${sample.losses} (${pct1(sample.wins / sample.games)}).`,
-  };
+  return namedOpponentExample(
+    {
+      truthText: `In your tracked history, you have at least one opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against where the head-to-head is exactly even.`,
+      lieText: `In your tracked history, every opponent you've played ${CENSUS_EVEN_MIN_GAMES}+ times against has either a winning or a losing record (no exact ties).`,
+    },
+    sample,
+  );
 }
 
 /**

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { pct1, wrColor } from "@/lib/format";
 import { isBarcodeName } from "@/lib/sc2pulse";
+import { rivalLabel } from "@/lib/sharePrivacy";
 import { QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import { pickN, registerMode } from "../../ArcadeEngine";
@@ -118,15 +119,22 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+/**
+ * The card is public, so rivals are lettered in the order the round
+ * showed them; their names stay in the app (lib/sharePrivacy.ts).
+ */
 function share(q: Q, _a: A | null, s: ScoreResult): ShareSummary {
-  const byId = new Map(q.candidates.map((c) => [c.pulseId, c]));
+  const byId = new Map(
+    q.candidates.map((c, i) => [c.pulseId, { c, label: rivalLabel(i) }] as const),
+  );
   const headline =
     s.note ?? "Toughest matchup first, by your win rate.";
   const rows = q.truth
     .map((pid, i) => {
-      const c = byId.get(pid);
-      if (!c) return null;
-      return `#${i + 1} ${displayNameFor(c)} · ${pct1(c.userWinRate)} (${c.wins}-${c.losses})`;
+      const entry = byId.get(pid);
+      if (!entry) return null;
+      const { c, label } = entry;
+      return `#${i + 1} ${label} · ${pct1(c.userWinRate)} (${c.wins}-${c.losses})`;
     })
     .filter((r): r is string => r !== null);
   return {

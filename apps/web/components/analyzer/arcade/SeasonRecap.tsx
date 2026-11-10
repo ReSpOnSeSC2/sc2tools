@@ -24,7 +24,9 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
+import { trackCardShared } from "@/lib/analytics/shareEvents";
 import { useFilters } from "@/lib/filterContext";
+import { anonymousOpponent, roundedMmrGap } from "@/lib/sharePrivacy";
 import { useArcadeData } from "./hooks/useArcadeData";
 import {
   computeSeasonRecap,
@@ -43,6 +45,7 @@ import {
   drawCardFooter,
   FONT_STACK,
   SHARE_LINK_URL,
+  shareOutcome,
   wrapText,
 } from "./ShareCard";
 import { buildRecapSlides, type RecapSlide } from "./seasonRecapSlides";
@@ -80,6 +83,61 @@ export function formatMmrStory(journeys: RecapMmrJourney[]): string | null {
       ? ` · +${remaining} more account${remaining === 1 ? "" : "s"}`
       : "";
   return `MMR: ${accounts.join(" · ")}${more}.`;
+}
+
+/**
+ * Story lines drawn on the exported card: per-account MMR first, then up
+ * to three season highlights.
+ *
+ * The card is public once shared, so other players appear by race only,
+ * never by name (the in-app slides keep the names and exact figures: that
+ * is the player's own private history). The upset is a gap rounded to the
+ * nearest 100, the same as on the battle card: an exact gap could be
+ * added to the MMR a battle card of that game prints, giving the other
+ * player's rating. An upset that rounds to nothing is left off.
+ */
+export function recapCardStory(recap: SeasonRecapResult): string[] {
+  const story: string[] = [];
+  const mmrStory = formatMmrStory(recap.mmrJourneys);
+  if (mmrStory) story.push(mmrStory);
+  if (recap.topOpener) {
+    story.push(
+      `Signature opener: ${recap.topOpener.name} (${recap.topOpener.games} games).`,
+    );
+  }
+  if (recap.nemesis) {
+    story.push(
+      `Nemesis: ${anonymousOpponent(recap.nemesis.race)} (you went ${recap.nemesis.record}).`,
+    );
+  }
+  const upsetGap = recap.biggestUpset
+    ? roundedMmrGap(recap.biggestUpset.mmrGap)
+    : 0;
+  if (upsetGap > 0) {
+    story.push(`Biggest upset: beat a player about ${upsetGap} MMR above you.`);
+  }
+  return story.slice(0, 4);
+}
+
+/**
+ * Text posted alongside the recap card. Totals and the player's own MMR
+ * change only; no opponent appears in it.
+ */
+export function recapShareText(
+  recap: SeasonRecapResult,
+  recapWindow: RecapWindow,
+): string {
+  const wr =
+    recap.totals.winrate !== null
+      ? `${Math.round(recap.totals.winrate * 100)}% WR`
+      : "";
+  return [
+    `My SC2 ${recapWindow.label} recap: ${recap.totals.games} games${
+      wr ? `, ${wr}` : ""
+    }${inlineMmrSummary(recap.mmrJourneys)}.`,
+    "",
+    SHARE_LINK_URL,
+  ].join("\n");
 }
 
 export function SeasonRecap() {
@@ -299,24 +357,16 @@ function ShareRecapButton({
         toast.error("Couldn't render the recap image");
         return;
       }
-      const wr =
-        recap.totals.winrate !== null
-          ? `${Math.round(recap.totals.winrate * 100)}% WR`
-          : "";
-      const text = [
-        `My SC2 ${recapWindow.label} recap: ${recap.totals.games} games${
-          wr ? `, ${wr}` : ""
-        }${inlineMmrSummary(recap.mmrJourneys)}.`,
-        "",
-        SHARE_LINK_URL,
-      ].join("\n");
-      const { shared } = await deliverShareCard({
+      const { shared, method } = await deliverShareCard({
         blob,
         title: "SC2 Season Recap",
-        text,
+        text: recapShareText(recap, recapWindow),
         filename: "sc2-season-recap.png",
       });
-      toast.success(shared ? "Recap shared" : "Recap saved");
+      // Nothing delivered means the player dismissed the share sheet.
+      if (!shared || !method) return;
+      trackCardShared({ card: "season_recap", method });
+      toast.success(shareOutcome("Recap", method));
     } catch {
       toast.error("Share failed");
     } finally {
@@ -383,31 +433,10 @@ export async function renderSeasonRecapPng(
     y += 64;
   }
 
-  // Story lines: per-account MMR first, then the season highlights.
-  const story: string[] = [];
-  const mmrStory = formatMmrStory(recap.mmrJourneys);
-  if (mmrStory) story.push(mmrStory);
-  if (recap.topOpener) {
-    story.push(
-      `Signature opener: ${recap.topOpener.name} (${recap.topOpener.games} games).`,
-    );
-  }
-  if (recap.nemesis) {
-    story.push(
-      `Nemesis: ${recap.nemesis.name} (${recap.nemesis.record} against you).`,
-    );
-  }
-  if (recap.biggestUpset) {
-    story.push(
-      `Biggest upset: beat +${recap.biggestUpset.mmrGap} MMR${
-        recap.biggestUpset.opponentName ? ` (${recap.biggestUpset.opponentName})` : ""
-      }.`,
-    );
-  }
   ctx.fillStyle = "#c7d0dc";
   ctx.font = `400 24px ${FONT_STACK}`;
   let sy = 190;
-  for (const s of story.slice(0, 4)) {
+  for (const s of recapCardStory(recap)) {
     sy = wrapText(ctx, s, CARD_W / 2 + 20, sy, CARD_W / 2 - CARD_PAD - 20, 32, 3) + 14;
   }
 

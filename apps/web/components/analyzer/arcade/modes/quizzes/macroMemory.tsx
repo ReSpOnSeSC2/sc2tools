@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { fmtDate } from "@/lib/format";
+import { letteredLabel } from "@/lib/sharePrivacy";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import { pickN, registerMode, shuffle } from "../../ArcadeEngine";
@@ -74,13 +75,18 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+/**
+ * The card is public, so the three games are lettered in the order the
+ * round showed them; who they were played against stays in the app
+ * (lib/sharePrivacy.ts).
+ */
 function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
   const best = q.candidates[q.correctIndex];
   const answer: string[] = [
-    `Cleanest macro: ${best.matchupLetter} vs ${best.opponentName} (${best.macroScore}).`,
+    `Cleanest macro: ${letteredLabel("Game", q.correctIndex)}, ${best.matchupLetter} (${best.macroScore}).`,
     ...q.candidates.map((c, i) => {
       const star = i === q.correctIndex ? " ★" : "";
-      return `${c.matchupLetter} vs ${c.opponentName} · ${c.macroScore}${star}`;
+      return `${letteredLabel("Game", i)} · ${c.matchupLetter} · ${c.macroScore}${star}`;
     }),
   ];
   return {

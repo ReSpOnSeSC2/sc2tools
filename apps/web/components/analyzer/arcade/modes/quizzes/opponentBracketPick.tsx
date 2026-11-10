@@ -3,6 +3,7 @@
 import { Fragment } from "react";
 import { pct1, wrColor } from "@/lib/format";
 import { isBarcodeName } from "@/lib/sc2pulse";
+import { rivalLabel } from "@/lib/sharePrivacy";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import {
@@ -426,20 +427,27 @@ function questionPlain(variant: OpponentBracketVariant): string {
   return "Four opponents you've played at least 3 times each. Which one has the highest WR against you?";
 }
 
+/**
+ * The card is public, so the four opponents are lettered in the order
+ * the round showed them; their names stay in the app
+ * (lib/sharePrivacy.ts). The headline for a correct pick reuses the
+ * score note, which names nobody; a miss gets its own name-free line
+ * because the in-app miss note does name the opponent.
+ */
 function share(q: Q, a: A | null, s: ScoreResult): ShareSummary {
   const variant = q.variant ?? "highest-wr-vs-you";
-  const correct = q.candidates[q.correctIndex];
   const fallbackMetrics = q.candidates.map(
     (c) => `${pct1(c.opponentWinRate)} (${c.losses}-${c.wins})`,
   );
   const metrics = q.metrics ?? fallbackMetrics;
+  const answerLabel = rivalLabel(q.correctIndex);
   const userCorrect = a === q.correctIndex;
   const headline = userCorrect
-    ? s.note ?? `It was ${displayNameFor(correct)}.`
-    : `It was ${displayNameFor(correct)} — ${metrics[q.correctIndex]}.`;
-  const rows = q.candidates.map((c, i) => {
+    ? s.note ?? `It was ${answerLabel}.`
+    : `It was ${answerLabel} — ${metrics[q.correctIndex]}.`;
+  const rows = q.candidates.map((_c, i) => {
     const star = i === q.correctIndex ? " ★" : "";
-    return `${displayNameFor(c)} · ${metrics[i]}${star}`;
+    return `${rivalLabel(i)} · ${metrics[i]}${star}`;
   });
   return {
     question: questionPlain(variant),

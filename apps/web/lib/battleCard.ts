@@ -4,7 +4,9 @@
  * One finished game distilled to a single screenshot-friendly image:
  * result headline (win/loss accent), matchup + map, the MMR line, your
  * build vs the opponent's strategy, and one standout stat when it's
- * derivable. Reuses the Arcade ShareCard canvas helpers (background,
+ * derivable. The opponent appears only as a race, a strategy label and a
+ * rounded MMR gap: never by name, id or exact rating (lib/sharePrivacy.ts).
+ * Reuses the Arcade ShareCard canvas helpers (background,
  * footer, word-wrap, delivery) so every share surface stays visually
  * consistent and carries the sc2tools.com link-back.
  *
@@ -28,6 +30,7 @@ import {
   isWinResult,
   type GameSummary,
 } from "@/components/analyzer/game/types";
+import { knownMmr, roundedMmrGap } from "@/lib/sharePrivacy";
 
 const WIN_ACCENT = "#28A06B";
 const LOSS_ACCENT = "#DA4150";
@@ -70,23 +73,25 @@ function clock(seconds: number): string {
 }
 
 /**
- * MMR line for a single game. GameSummary carries `myMmr` and the
- * opponent's `mmr` but no signed per-game delta, so the "delta" here is
- * the gap vs the opponent (positive = you outrank them). Returns null
- * when neither MMR is known.
+ * MMR line for a single game: your own rating, then how the opponent
+ * compared as a gap rounded to the nearest 100.
+ *
+ * The card is public once shared and the opponent never agreed to be on
+ * it, so their rating is never printed, and the rounded gap can't be
+ * added to yours to recover it (see lib/sharePrivacy.ts). Without your
+ * own rating there is nothing safe to say about theirs, so the line is
+ * left off. Returns null when your MMR is unknown; a value that is not a
+ * real ladder rating (0 means "not recorded") counts as unknown.
  */
 export function mmrLine(game: GameSummary): string | null {
-  const mine = typeof game.myMmr === "number" ? game.myMmr : null;
-  const opp =
-    typeof game.opponent?.mmr === "number" ? game.opponent.mmr : null;
-  if (mine === null && opp === null) return null;
-  if (mine !== null && opp !== null) {
-    const gap = Math.round(mine - opp);
-    const sign = gap >= 0 ? "+" : "";
-    return `MMR ${Math.round(mine)} vs ${Math.round(opp)} (${sign}${gap})`;
-  }
-  if (mine !== null) return `MMR ${Math.round(mine)}`;
-  return `Opponent MMR ${Math.round(opp as number)}`;
+  const mine = knownMmr(game.myMmr);
+  if (mine === null) return null;
+  const own = `MMR ${Math.round(mine)}`;
+  const opp = knownMmr(game.opponent?.mmr);
+  if (opp === null) return own;
+  const gap = roundedMmrGap(opp - mine);
+  if (gap === 0) return `${own} · evenly matched`;
+  return `${own} · opponent about ${Math.abs(gap)} ${gap > 0 ? "higher" : "lower"}`;
 }
 
 /** "You: <build>  vs  <opp strategy>" with graceful fallbacks. */

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { fmtDate } from "@/lib/format";
+import { letteredLabel, sharedDay } from "@/lib/sharePrivacy";
 import { QuizAnswerButton, QuizCard } from "../../shells/QuizCard";
 import { IconFor } from "../../icons";
 import {
@@ -93,13 +94,19 @@ function score(q: Q, a: A): ScoreResult {
   };
 }
 
+/**
+ * The card is public, so the three losses are lettered in the order the
+ * round showed them; who dealt them stays in the app
+ * (lib/sharePrivacy.ts). Each is dated to the day, not the second: the
+ * exact time of one game would point straight at the other player.
+ */
 function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
   const longest = q.candidates[q.correctIndex];
   const answer: string[] = [
-    `Longest streak (${longest.runLength}W) broken by ${longest.opponentName}.`,
+    `Longest streak (${longest.runLength}W) ended by ${letteredLabel("Loss", q.correctIndex)}.`,
     ...q.candidates.map((c, i) => {
       const star = i === q.correctIndex ? " ★" : "";
-      return `vs ${c.opponentName} · ${fmtDate(c.endedByDate)} · ${c.runLength}W${star}`;
+      return `${letteredLabel("Loss", i)} · ${sharedDay(c.endedByDate)} · ${c.runLength}W${star}`;
     }),
   ];
   return {

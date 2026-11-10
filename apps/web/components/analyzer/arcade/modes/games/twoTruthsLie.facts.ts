@@ -31,6 +31,20 @@ export interface FactCandidate {
   /** A negation/inversion of the same fact that the data refutes. */
   lieText: string;
   detail: string;
+  /**
+   * Wording for the share card, required whenever any of the three
+   * strings above names an opponent: the card is public and names
+   * nobody (lib/sharePrivacy.ts). Facts about the player's own builds,
+   * maps and races leave it unset and are shared as written.
+   */
+  share?: FactShareWording;
+}
+
+/** A fact's three strings with every opponent's name taken out. */
+export interface FactShareWording {
+  truthText: string;
+  lieText: string;
+  detail: string;
 }
 
 /** A string is "displayable" when it survives templating without
@@ -386,14 +400,21 @@ function factTopRival(data: ArcadeDataset): FactCandidate | null {
   const diff = top.userWinRate - data.summary.winRate;
   if (Math.abs(diff) < MIN_WR_GAP) return null;
   const better = diff > 0;
+  const higher = (who: string) =>
+    `In your tracked history, your WR vs your most-faced opponent${who} is higher than your overall WR.`;
+  const lower = (who: string) =>
+    `In your tracked history, your WR vs your most-faced opponent${who} is lower than your overall WR.`;
+  const named = ` (${name})`;
+  const record = `${pct1(top.userWinRate)} (${top.games}g) vs overall ${pct1(data.summary.winRate)}.`;
   return {
-    truthText: better
-      ? `In your tracked history, your WR vs your most-faced opponent (${name}) is higher than your overall WR.`
-      : `In your tracked history, your WR vs your most-faced opponent (${name}) is lower than your overall WR.`,
-    lieText: better
-      ? `In your tracked history, your WR vs your most-faced opponent (${name}) is lower than your overall WR.`
-      : `In your tracked history, your WR vs your most-faced opponent (${name}) is higher than your overall WR.`,
-    detail: `vs ${name} ${pct1(top.userWinRate)} (${top.games}g) vs overall ${pct1(data.summary.winRate)}.`,
+    truthText: better ? higher(named) : lower(named),
+    lieText: better ? lower(named) : higher(named),
+    detail: `vs ${name} ${record}`,
+    share: {
+      truthText: better ? higher("") : lower(""),
+      lieText: better ? lower("") : higher(""),
+      detail: `Most-faced opponent ${record}`,
+    },
   };
 }
 
