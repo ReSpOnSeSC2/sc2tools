@@ -1263,8 +1263,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             for title, route in (("Companion", "companion"), ("Dashboard", "dashboard"), ("Recent games", "recent"), ("Streams", "streams"), ("Activity log", "log"), ("Settings", "settings"), ("Help", "help")):
                 menu.addAction(title, lambda _checked=False, destination=route: self._go_to_page(destination))
             menu.addSeparator()
-            menu.addAction("Border & animations…", self._open_companion_appearance)
-            menu.addAction("Help & troubleshooting", lambda: self._go_to_page("help"))
+            menu.addAction("Border && animations…", self._open_companion_appearance)
+            menu.addAction("Help && troubleshooting", lambda: self._go_to_page("help"))
             self._check_updates_action = menu.addAction("Check for updates", self._check_updates_from_menu)
             menu.addSeparator()
             menu.addAction("Quit SC2 Tools", ui._on_quit)
@@ -1425,7 +1425,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._sidebar_status.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
             layout.addWidget(self._sidebar_status)
 
-            help_btn = QtWidgets.QPushButton("Help & support")
+            help_btn = QtWidgets.QPushButton("Help && support")
             help_btn.setFlat(True)
             help_btn.clicked.connect(lambda: self._go_to_page("help"))
             layout.addWidget(help_btn)
@@ -1655,7 +1655,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             failures = QtWidgets.QPushButton("View problems")
             failures.setFlat(True)
             failures.clicked.connect(self._show_recent_problems)
-            self._stat_failed["frame"].layout().addWidget(failures)
+            # Below the stretch, so every card's number and caption share one line.
+            self._stat_failed["frame"].layout().addWidget(failures, 0, QtCore.Qt.AlignLeft)
 
             self._stat_cards = (self._stat_synced, self._stat_queued, self._stat_last, self._stat_failed)
             for column, card in enumerate(self._stat_cards):
@@ -1679,6 +1680,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             label_lbl.setObjectName("muted")
             label_lbl.setWordWrap(True)
             v.addWidget(label_lbl)
+            v.addStretch(1)
 
             return {"frame": card, "value": value_lbl, "label": label_lbl}
 

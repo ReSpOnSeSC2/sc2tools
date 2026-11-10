@@ -28,7 +28,7 @@ QLabel#companionMuted {{ color: {theme.TEXT_MUTED}; font-size: 12px; }}
 QLabel#companionAccent {{ color: {theme.ACCENT_CYAN}; font-size: 12px; font-weight: 600; }}
 QWidget#companionDesk QLineEdit, QWidget#companionDesk QPlainTextEdit,
 QWidget#companionDesk QComboBox, QWidget#companionPanel QComboBox {{
-    background: {theme.ELEVATED}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 6px; padding: 7px;
+    background: {theme.ELEVATED}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_CONTROL}; border-radius: 6px; padding: 7px;
 }}
 QWidget#companionDesk QPushButton, QWidget#companionPanel QPushButton {{
     background: {theme.BUTTON}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 6px; padding: 7px 12px;
@@ -1207,7 +1207,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 for title, route in (("Dashboard", "dashboard"), ("Recent games", "recent"), ("Settings", "settings"), ("Streams", "streams"), ("Logs", "log")):
                     menu.addAction(title, lambda _checked=False, destination=route: self.agentPageRequested.emit(destination))
                 menu.addSeparator()
-                menu.addAction("Border & animations…", self.show_appearance_settings)
+                menu.addAction("Border && animations…", self.show_appearance_settings)
             self.agent_menu_button.setMenu(menu)
             self.console.brand_actions.addWidget(self.agent_menu_button)
             from .team_roster import build_team_roster

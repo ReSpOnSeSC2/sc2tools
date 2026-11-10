@@ -5,7 +5,8 @@ Run from any directory with the desktop development Python:
     python apps/agent/tests/manual/interface_gallery.py <output folder> [--scale 1.5]
 
 It saves ``<surface>-<skin>-<size>.png`` for the main window's seven pages,
-the loading-screen and post-game check-in cards and the floating scouting
+the Dashboard needing attention and on a PC waiting to be linked, the
+loading-screen and post-game check-in cards and the floating scouting
 report, in the Default, Protoss, Terran and Zerg skins. Everything is sample
 data: no paired account, service, runner, OBS connection, network request or
 user setting is loaded. ``--scale`` renders as Windows does at that display
@@ -26,6 +27,7 @@ PAGES = ("dashboard", "recent", "log", "settings", "streams", "companion", "help
 WINDOW_SIZES = (("large", (1100, 760)), ("minimum", (480, 360)))
 REPORT_SIZES = (("large", (650, 450)), ("minimum", (420, 300)))
 CHECKIN_CARDS = ("loading", "postgame")
+PAIRING_CODE = "7KQ4XM"
 FONT_FILES = ("SegUIVar.ttf", "segoeui.ttf", "segoeuib.ttf", "seguisb.ttf", "seguisym.ttf")
 REPLAY_FOLDER = "C:/Users/Player/Documents/StarCraft II/Accounts/1/1-S2-1-1/Replays/Multiplayer"
 RECENT_GAMES = (
@@ -75,6 +77,41 @@ def sample_health():
                                 live_enabled=True, live_contact_at=now, auto_update=True), now)
 
 
+def needs_attention(window, ui):
+    """Offline, an analyzer that failed, failed uploads, an update and games to archive."""
+    from types import SimpleNamespace
+
+    from sc2tools_agent.health import HealthFacts, evaluate
+
+    now = time.time()
+    snapshot = sample_snapshot()
+    snapshot["facts"]["failed24h"] = 3
+    ui.on_recent_snapshot(snapshot)
+    ui.on_health(evaluate(HealthFacts(phase="watching", paired=True, connection="offline", pending=3,
+                                      heartbeat_failing_since=now - 600, socket_connected=False,
+                                      folders=(REPLAY_FOLDER,), analyzer_ok=False,
+                                      failure_times=(now - 60, now - 120, now - 180), auto_update=True), now))
+    ui.show_update_state(SimpleNamespace(latest="0.25.1", release_notes="Sample notes."), "ready", "")
+    ui.on_replay_archive_status(37, 1284)
+
+
+def waiting_to_link(window, ui):
+    """A new PC showing its pairing code, before any game is synced."""
+    from sc2tools_agent.health import HealthFacts, evaluate
+    from sc2tools_agent.pairing.flow import PairingUiState
+
+    window._update_card.hide()
+    ui.on_replay_archive_status(0, 0)
+    ui.on_pairing_state(PairingUiState("showing", PAIRING_CODE, datetime.now(timezone.utc) + timedelta(minutes=9)))
+    ui.on_recent_snapshot({"owner": None, "rows": [], "facts": {}, "today": {}, "skipped": []})
+    now = time.time()
+    ui.on_health(evaluate(HealthFacts(phase="watching", paired=False, folders=(REPLAY_FOLDER,),
+                                      analyzer_ok=True), now))
+
+
+DASHBOARD_STATES = (("attention", needs_attention), ("unpaired", waiting_to_link))
+
+
 def build_window(folder, *, QtCore, QtGui, QtWidgets):
     """The real main window, paired to a sample account with no services."""
     from sc2tools_agent import __version__
@@ -95,7 +132,7 @@ def build_window(folder, *, QtCore, QtGui, QtWidgets):
     ui.on_health(sample_health())
     window.show()
     settle(QtCore=QtCore, QtWidgets=QtWidgets)
-    return window
+    return ui, window
 
 
 def settle(*, QtCore, QtWidgets, milliseconds=400):
@@ -119,7 +156,10 @@ def choose_skin(window, skin, *, QtWidgets):
 
 
 def save(widget, folder, name, *, QtWidgets):
-    QtWidgets.QApplication.processEvents()
+    from PySide6 import QtCore
+
+    # A resize or a page switch lays out over several passes; save the settled result.
+    settle(QtCore=QtCore, QtWidgets=QtWidgets, milliseconds=150)
     target = folder / (name + ".png")
     if not widget.grab().save(str(target)):
         raise RuntimeError(f"Could not save {target}")
@@ -134,6 +174,20 @@ def render_pages(window, folder, skin, *, QtWidgets):
             scroll_to_top(window._stack.currentWidget(), QtWidgets=QtWidgets)
             save(window, folder, f"window-{page}-{skin}-{size_name}", QtWidgets=QtWidgets)
     window._go_to_page("dashboard")
+
+
+def render_dashboard_states(window, ui, folder, skins, *, QtCore, QtWidgets):
+    """Each Dashboard state in every skin and size; a state is applied once and kept."""
+    for state, apply in DASHBOARD_STATES:
+        apply(window, ui)
+        settle(QtCore=QtCore, QtWidgets=QtWidgets)
+        for skin in skins:
+            choose_skin(window, skin, QtWidgets=QtWidgets)
+            for size_name, size in WINDOW_SIZES:
+                window.resize(*size)
+                window._go_to_page("dashboard")
+                scroll_to_top(window._stack.currentWidget(), QtWidgets=QtWidgets)
+                save(window, folder, f"window-dashboard-{state}-{skin}-{size_name}", QtWidgets=QtWidgets)
 
 
 def render_checkin_cards(window, folder, skin, *, QtWidgets):
@@ -175,12 +229,14 @@ def capture(folder):
     app.setStyleSheet(theme.STYLE)
     folder.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as logs:
-        window = build_window(Path(logs), QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
-        for _title, skin in RACE_SKINS:
+        ui, window = build_window(Path(logs), QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+        skins = [skin for _title, skin in RACE_SKINS]
+        for skin in skins:
             choose_skin(window, skin, QtWidgets=QtWidgets)
             render_pages(window, folder, skin, QtWidgets=QtWidgets)
             render_checkin_cards(window, folder, skin, QtWidgets=QtWidgets)
             render_scouting_report(window, folder, skin, QtWidgets=QtWidgets)
+        render_dashboard_states(window, ui, folder, skins, QtCore=QtCore, QtWidgets=QtWidgets)
         window._companion_page.shutdown()
         window.hide()
         app.processEvents()

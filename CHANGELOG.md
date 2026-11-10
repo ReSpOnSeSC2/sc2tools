@@ -63,6 +63,8 @@ corresponding GitHub Release.
   stays. Text keeps at least 4.5:1 contrast in every skin.
 - Shorten the border animation and skip it while Windows has animation effects
   turned off. Status lights keep their colour after a skin change.
+- Show the "&" in Help & support and three other labels, and line up the
+  Dashboard's four counts.
 
 ### Agent 0.24.11
 

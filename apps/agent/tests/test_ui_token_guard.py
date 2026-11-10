@@ -31,8 +31,13 @@ CONVERTED = {
 }
 HEX_COLOUR = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b")
 STYLE_LITERAL = re.compile(r"\b(?:rgba?|hsla?)\s*\(|font-size|\bfont\s*:", re.IGNORECASE)
+NAMED_COLOUR = re.compile(r"\b(?:color|background(?:-color)?|border(?:-[a-z]+)*)\s*:[^;{}]*?"
+                          r"\b(?:white|black|red|green|blue|cyan|magenta|yellow|gr[ae]y|orange|purple|pink)\b",
+                          re.IGNORECASE)
 LITERAL_CALLS = {"QColor", "fromRgb", "fromRgbF", "fromHsv", "fromHsl", "fromString",
                  "setPointSize", "setPointSizeF", "setPixelSize"}
+# A number in a QFont call is a point size or a weight.
+NUMBER_CALLS = {"QFont"}
 QT_COLOURS = {"white", "black", "red", "darkRed", "green", "darkGreen", "blue", "darkBlue", "cyan",
               "darkCyan", "magenta", "darkMagenta", "yellow", "darkYellow", "gray", "darkGray", "lightGray"}
 
@@ -41,14 +46,20 @@ def _call_name(call):
     return call.func.attr if isinstance(call.func, ast.Attribute) else getattr(call.func, "id", "")
 
 
+def _owner_name(node):
+    return getattr(node, "attr", getattr(node, "id", ""))
+
+
 def _violation(node):
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return bool(HEX_COLOUR.search(node.value) or STYLE_LITERAL.search(node.value))
+        return any(pattern.search(node.value) for pattern in (HEX_COLOUR, STYLE_LITERAL, NAMED_COLOUR))
     if isinstance(node, ast.Call) and _call_name(node) in LITERAL_CALLS:
         return any(isinstance(argument, ast.Constant) for argument in node.args)
+    if isinstance(node, ast.Call) and _call_name(node) in NUMBER_CALLS:
+        values = (*node.args, *(keyword.value for keyword in node.keywords))
+        return any(isinstance(value, ast.Constant) and type(value.value) in (int, float) for value in values)
     if isinstance(node, ast.Attribute) and node.attr in QT_COLOURS:
-        return isinstance(node.value, (ast.Attribute, ast.Name)) and getattr(node.value, "attr",
-                                                                           getattr(node.value, "id", "")) == "Qt"
+        return _owner_name(node.value) in ("Qt", "GlobalColor")
     return False
 
 
@@ -78,6 +89,11 @@ def test_converted_files_set_no_colour_or_font_size_of_their_own(filename):
     'painter.setBrush(QtGui.QColor("#fff"))',
     'font.setPointSize(11)',
     'painter.fillRect(rect, QtCore.Qt.white)',
+    'painter.setPen(QtCore.Qt.GlobalColor.white)',
+    'self.setFont(QtGui.QFont("Segoe UI", 11))',
+    'self.setFont(QtGui.QFont(family, pointSize=11))',
+    'label.setStyleSheet("QLabel { color: white; }")',
+    'button.setStyleSheet(f"border: 1px solid gray; padding: {theme.SPACE_S}px")',
 ])
 def test_the_guard_catches_each_way_of_setting_a_colour_or_size(snippet):
     assert violations(snippet)
@@ -87,6 +103,9 @@ def test_the_guard_catches_each_way_of_setting_a_colour_or_size(snippet):
     'label.setStyleSheet("color: " + theme.SUCCESS)',
     'painter.setBrush(QtGui.QColor(theme.SKINS[skin].accent))',
     'pixmap.fill(QtCore.Qt.transparent)',
+    'pixmap.fill(QtCore.Qt.GlobalColor.transparent)',
+    'font = QtGui.QFont(self.font())',
+    'label.setStyleSheet(f"border: 1px solid transparent; color: {theme.TEXT}")',
     'label.setObjectName("muted")',
 ])
 def test_the_guard_allows_theme_tokens(snippet):

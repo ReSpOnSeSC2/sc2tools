@@ -69,6 +69,10 @@ setting, file format or dependency change.
   already read the shared tokens, so they take the new surfaces;
   `ACCENT_CYAN` and `CONSOLE_GRADIENT` remain only for them, and
   `race_visuals.css_for_skin` recolours Companion's accents in race skins.
+- Old token names keep new meanings: `BORDER_STRONG` is a quiet divider and
+  `BUTTON_CHECKED` the light selected tint. A field outline takes
+  `BORDER_CONTROL` and a filled main action takes `ACCENT` with `ON_ACCENT`
+  text, as the check-in cards and Companion's fields now do.
 - The offscreen gallery renders Segoe UI; Segoe UI Variable is drawn only on
   Windows 11 itself.
 

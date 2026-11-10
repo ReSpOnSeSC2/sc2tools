@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 from . import palette
 
@@ -134,6 +135,8 @@ BG = DEFAULT_SKIN.canvas
 ELEVATION = (BG, SURFACE, ELEVATED, SUBTLE)
 ACCENT = DEFAULT_SKIN.accent
 ACCENT_HOVER = DEFAULT_SKIN.accent_hover
+ACCENT_PRESSED = DEFAULT_SKIN.accent_pressed
+ON_ACCENT = DEFAULT_SKIN.on_accent
 BUTTON_CHECKED = DEFAULT_SKIN.selected
 FOCUS = DEFAULT_SKIN.focus
 
@@ -275,12 +278,12 @@ QPushButton:focus, QToolButton:focus {{ border-color: {skin.focus}; }}
 QPushButton:flat {{ background: transparent; border-color: transparent; color: {TEXT_MUTED}; }}
 QPushButton:flat:hover {{ background: {BUTTON_HOVER}; color: {TEXT}; }}
 QPushButton:flat:focus {{ border-color: {skin.focus}; }}
+QPushButton#danger, QPushButton#dangerButton {{ color: {DANGER}; border-color: {DANGER_EDGE}; }}
+QPushButton#danger:hover, QPushButton#dangerButton:hover {{ background: {DANGER_TINT}; border-color: {DANGER}; }}
 QPushButton#primary {{ background: {skin.accent}; border-color: {skin.accent}; color: {skin.on_accent}; }}
 QPushButton#primary:hover {{ background: {skin.accent_hover}; border-color: {skin.accent_hover}; }}
 QPushButton#primary:pressed {{ background: {skin.accent_pressed}; border-color: {skin.accent_pressed}; }}
-QPushButton#primary:focus {{ border-color: {skin.focus}; }}
-QPushButton#danger, QPushButton#dangerButton {{ color: {DANGER}; border-color: {DANGER_EDGE}; }}
-QPushButton#danger:hover, QPushButton#dangerButton:hover {{ background: {DANGER_TINT}; border-color: {DANGER}; }}
+QPushButton#primary:focus, QPushButton#danger:focus, QPushButton#dangerButton:focus {{ border-color: {skin.focus}; }}
 QPushButton#navItem {{
     background: transparent; color: {TEXT_MUTED}; font-weight: {WEIGHT_REGULAR};
     border: 1px solid transparent; border-left: 3px solid transparent;
@@ -511,11 +514,24 @@ def stylesheet(skin=DEFAULT_SKIN):
     return "".join(section(skin) for section in _SECTIONS)
 
 
+# A quoted url() is one token, since the install folder in it may hold a brace or a semicolon.
+_QSS_TOKEN = re.compile(r'"[^"]*"|[{};]|[^{};"]+')
+
+
 def _rules(style):
     """``(selector, [declaration, ...])`` for each rule of a stylesheet built here."""
-    for block in style.split("}")[:-1]:
-        selector, body = block.split("{", 1)
-        yield " ".join(selector.split()), [part.strip() for part in body.split(";") if part.strip()]
+    selector, declarations, text = "", [], ""
+    for token in _QSS_TOKEN.findall(style):
+        if token == "{":
+            selector, declarations, text = " ".join(text.split()), [], ""
+        elif token in ";}":
+            if text.strip():
+                declarations.append(text.strip())
+            text = ""
+            if token == "}":
+                yield selector, declarations
+        else:
+            text += token
 
 
 def skin_layer(name):

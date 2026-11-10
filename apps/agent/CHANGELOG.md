@@ -38,6 +38,10 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ### Fixed
 - Status lights on the Dashboard keep their colour after you change the skin.
+- Help & support, Border & animations…, Help & troubleshooting and Save title
+  & description show their "&" instead of a gap.
+- The Dashboard's four counts and their captions sit on one line; View
+  problems moves to the foot of its card.
 
 ## 0.24.11
 

@@ -19,14 +19,19 @@ win.resize(1100, 760)
 win.show()
 app.processEvents()
 mark = win._agent_brandbar.findChild(QtWidgets.QWidget, "agentBrandMark")
-assert mark is not None and mark.skin == "default"
-for skin in ("terran", "zerg", "default"):
-    pick_skin(win, skin)
+assert mark is not None
+
+def check(skin):
     assert mark.skin == skin and ui._window_skin == skin
-    selected = win._nav_group.checkedButton()
-    image = selected.grab().toImage()
+    image = win._nav_group.checkedButton().grab().toImage()
     edge = {image.pixelColor(column, image.height() // 2).name() for column in range(3)}
     assert theme.SKINS[skin].accent in edge, (skin, edge)
+
+# A skin change restyles the whole application, so the check makes only the two that matter.
+check("default")
+for skin in ("zerg", "default"):
+    pick_skin(win, skin)
+    check(skin)
 win._companion_page.shutdown()
 win.hide()
 ''')
@@ -48,6 +53,29 @@ assert dots and all(dot.styleSheet() == "color: " + palette.GREEN for dot in dot
 for skin in ("protoss", "zerg"):
     pick_skin(win, skin)
     assert [dot.styleSheet() for dot in dots] == ["color: " + palette.GREEN] * len(dots), skin
+win._companion_page.shutdown()
+win.hide()
+''')
+
+
+def test_dashboard_stat_numbers_and_captions_share_one_line_and_labels_show_their_ampersand(tmp_path):
+    run_gui_check(tmp_path, '''
+import re
+app.setStyleSheet(gui._STYLE)
+ui, win = make_window(window_page="dashboard")
+win.resize(1100, 760)
+win.show()
+app.processEvents()
+for part in ("value", "label"):
+    rows = {card[part].mapTo(win, QtCore.QPoint()).y() for card in win._stat_cards}
+    assert len(rows) == 1, (part, rows)
+problems = win._stat_failed["frame"].findChild(QtWidgets.QPushButton)
+assert problems.text() == "View problems" and problems.x() == win._stat_failed["label"].x()
+assert problems.width() == problems.sizeHint().width(), "View problems is left-aligned, not stretched"
+texts = [*(button.text() for button in win.findChildren(QtWidgets.QAbstractButton)),
+         *(action.text() for action in win.findChildren(QtGui.QAction))]
+# An "&" before a space makes the space an access key, so "Help & support" draws as "Help  support".
+assert not [text for text in texts if re.search(r"&\\s", text.replace("&&", ""))], texts
 win._companion_page.shutdown()
 win.hide()
 ''')

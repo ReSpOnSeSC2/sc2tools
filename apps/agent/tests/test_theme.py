@@ -173,6 +173,75 @@ def test_the_default_style_and_a_race_layer_paint_that_race_with_no_default_acce
     assert not skin_colours(theme.DEFAULT_SKIN) & set(re.findall(r"#[0-9a-f]{6}", theme.stylesheet(skin)))
 
 
+def test_a_race_layer_is_the_same_when_the_install_folder_holds_braces_and_semicolons(monkeypatch):
+    expected = {name: theme.skin_layer(name) for name in RACES}
+    folder = "C:/Users/{Clan};Jay}/AppData/Local/SC2 Tools/assets/controls"
+    monkeypatch.setattr(theme, "CONTROL_ICONS", {name: f"{folder}/{name}.svg" for name in theme.CONTROL_ICONS})
+    monkeypatch.setattr(theme, "STYLE", theme.stylesheet())
+    assert f'url("{folder}/check.svg")' in theme.STYLE
+    assert {name: theme.skin_layer(name) for name in RACES} == expected
+
+
+BORDER = ("border", "border-color")
+BACKGROUND = ("background", "background-color")
+
+
+def declared_colour(style, selector, properties):
+    """The ``#rrggbb`` of the last of ``properties`` that ``style`` declares under ``selector``."""
+    values = [declaration.split(":", 1)[1] for group, body in theme._rules(style)
+              if selector in (part.strip() for part in group.split(",")) for declaration in body
+              if declaration.split(":", 1)[0].strip() in properties]
+    return re.search(r"#[0-9a-f]{6}", values[-1]).group(0)
+
+
+def test_check_in_cards_keep_a_filled_primary_and_every_field_outlined_at_3_to_1():
+    from sc2tools_agent.ui import companion_ghost, companion_page
+    from sc2tools_agent.ui.build_checkin_widgets import card_stylesheet
+
+    card = card_stylesheet()
+    fill = declared_colour(card, "QPushButton#checkinPrimary", BACKGROUND)
+    assert contrast(fill, theme.SURFACE) >= 3, fill
+    assert contrast(declared_colour(card, "QPushButton#checkinPrimary", ("color",)), fill) >= 4.5
+    for style, field in ((card, "QLineEdit#checkinSearch"), (card, "QPlainTextEdit#checkinNotes"),
+                         (companion_page._STYLE, "QWidget#companionDesk QLineEdit"),
+                         (companion_page._STYLE, "QWidget#companionPanel QComboBox"),
+                         (companion_ghost._STYLE, "QWidget#ghostDesk QLineEdit"),
+                         (companion_ghost._STYLE, "QWidget#ghostDesk QComboBox")):
+        outline = declared_colour(style, field, BORDER)
+        for surface in (theme.SURFACE, declared_colour(style, field, BACKGROUND)):
+            assert contrast(outline, surface) >= 3, (field, outline, surface)
+
+
+FOCUSABLE = ("QPushButton", "QToolButton", "QLineEdit", "QComboBox", "QPlainTextEdit", "QTextEdit",
+             "QTextBrowser", "QAbstractSpinBox", "QTableView", "QTableWidget", "QTreeView", "QTreeWidget",
+             "QListView", "QListWidget")
+PSEUDO_STATE = re.compile(r"(?<!:):[a-z-]+")
+
+
+def specificity(selector):
+    """CSS 2 specificity: ids, then pseudo-states and attributes, then type names."""
+    return selector.count("#"), len(PSEUDO_STATE.findall(selector)) + selector.count("["), len(selector.split())
+
+
+@pytest.mark.parametrize("name", list(theme.SKINS))
+def test_every_control_that_colours_its_own_border_still_shows_keyboard_focus(name):
+    skin = theme.SKINS[name]
+    style = theme.STYLE + theme.skin_layer(name)
+    rules_in_order = [(index, selector.strip(), body) for index, (group, body) in enumerate(theme._rules(style))
+                      for selector in group.split(",")]
+    focus_rules = [(specificity(selector), index, PSEUDO_STATE.sub("", selector))
+                   for index, selector, body in rules_in_order if f"border-color: {skin.focus}" in body]
+    for index, selector, body in rules_in_order:
+        states = set(PSEUDO_STATE.findall(selector))
+        if "::" in selector or states & {":focus", ":disabled"} or not selector.split()[-1].startswith(FOCUSABLE):
+            continue
+        if not any(declaration.startswith(("border:", "border-color:")) for declaration in body):
+            continue
+        base = PSEUDO_STATE.sub("", selector)
+        assert any(own == base and (rank, later) > (specificity(selector), index)
+                   for rank, later, own in focus_rules), (name, selector)
+
+
 @pytest.mark.parametrize("name", ["check", "dash", "radio-dot", "chevron-down", "chevron-up"])
 def test_control_glyphs_are_local_valid_svg_assets_used_by_the_theme(name):
     path = Path(theme.CONTROL_ICONS[name])
