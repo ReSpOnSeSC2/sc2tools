@@ -6,11 +6,11 @@ export const CATEGORY_LABELS = { all: "All", reviews: "Reviews", coaching: "Coac
 export const NOTIFICATION_KINDS = [
   ["review.new", "New reviews"], ["review.reply", "Review replies"], ["review.helpful", "Helpful review marks"],
   ["review.best", "Best review marks"], ["review.digest", "Review digest"], ["coaching.booked", "Session bookings"],
-  ["coaching.cancelled", "Session cancellations"], ["coaching.assigned", "Practice assignments"],
+  ["coaching.cancelled", "Session cancellations"], ["coaching.reminder", "Session reminders"], ["coaching.assigned", "Practice assignments"],
   ["coaching.practice_sharing_requested", "Practice sharing requests"], ["coaching.practice_sharing_accepted", "Practice sharing accepted"],
   ["coaching.practice_sharing_rejected", "Practice sharing declined"], ["coaching.practice_sharing_revoked", "Practice sharing revoked"],
   ["import.done", "Import finished"], ["agent.update_required", "Required desktop app updates"],
-  ["community.vote", "Community build upvotes"], ["support.status", "Report status changes"], ["support.reply", "Replies to reports"],
+  ["community.vote", "Community build upvotes"], ["support.status", "Report status changes"], ["support.reply", "Replies to reports"], ["integration.discord_disabled", "Discord posting stopped"],
   ["whats_new", "Major product updates"], ["goal_met", "Goals reached"],
 ] as const;
 export function notificationCategory(kind: string): NotificationCategory {

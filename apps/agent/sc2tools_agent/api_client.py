@@ -506,6 +506,24 @@ class ApiClient:
             raise RuntimeError("replay_archive_not_confirmed")
         return stored
 
+    def get_replay_download(self, game_id: str) -> Optional[Dict[str, Any]]:
+        """A short-lived signed URL for this owner's archived original replay.
+
+        ``None`` when the game has no archived original (404). The URL is a
+        bearer secret for one object: callers must never log or persist it.
+        """
+        if not isinstance(game_id, str) or not 0 < len(game_id) <= 200:
+            raise ValueError("invalid_game_id")
+        try:
+            return self._request(
+                "GET", f"/v1/games/{quote(game_id, safe='')}/replay-download",
+                auth=True, attempts=2, read_timeout=10.0,
+            )
+        except _ApiError as exc:
+            if exc.status == 404:
+                return None
+            raise
+
     def get_replay_archive_status(self) -> Optional[Dict[str, Any]]:
         """Return progress for the one-time original-replay backfill.
 

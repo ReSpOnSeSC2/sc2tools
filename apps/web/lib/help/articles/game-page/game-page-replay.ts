@@ -28,7 +28,7 @@ const article: HelpArticle = {
     "estimated creep",
     "no playback data",
   ],
-  updated: "2026-10-23",
+  updated: "2026-11-10",
   body: [
     {
       type: "paragraph",
@@ -51,6 +51,7 @@ const article: HelpArticle = {
         "Use the **Zoom in** and **Zoom out** buttons, hold Ctrl (Command on Mac) while scrolling, or pinch to zoom. Plain scrolling moves the page unless the map has focus or is fullscreen. Click the map to focus it; Escape or moving the pointer off the map releases focus. Drag to pan when zoomed.",
         "Double-click the map, or press **Reset zoom**, to see the whole map again.",
         "**Full screen** fills the screen with the replay; press it again or Esc to leave.",
+        "Tap a unit for its details and a camera follow, choose whose vision reveals the map, or make a video clip: see [Vision and unit details](/help/game-page#vision-and-inspector) and [Make a clip](/help/game-page#make-a-clip).",
       ],
     },
     { type: "heading", text: "The panels beside it", anchor: "panels" },

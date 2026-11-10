@@ -57,6 +57,7 @@ const { GameControlsService } = require("./services/gameControls");
 const { UserRevision } = require("./util/userRevision");
 const { UserCache } = require("./middleware/userCache");
 const { buildGameControlsRouter } = require("./routes/gameControls");
+const { buildGameNotesRouter } = require("./routes/gameNotes");
 const { GameContextService } = require("./services/gameContext");
 const { BuildExecutionService } = require("./services/buildExecution");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
@@ -78,6 +79,7 @@ const { BuildIntentsService } = require("./services/buildIntents");
 const { GhostExamplesService } = require("./services/ghostExamples");
 const { GhostReferencesService } = require("./services/ghostReferences");
 const { GhostConfigService } = require("./services/ghostConfig");
+const { PracticeLogService } = require("./services/practiceLog");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { PlatformIntegrationsService } = require("./services/platformIntegrations");
@@ -196,11 +198,11 @@ const { PlayerChannelsService } = require("./services/playerChannels");
 const { buildPlayerChannelsRouter } = require("./routes/playerChannels");
 const { PlayerIdentitiesService } = require("./services/playerIdentities");
 const { buildPlayerIdentitiesRouter } = require("./routes/playerIdentities");
-const { NotificationsService } = require("./services/notifications");
 const { SupportMessagesService } = require("./services/supportMessages");
 const { AnnouncementsService } = require("./services/announcements");
 const { buildAnnouncementsRouter } = require("./routes/announcements");
-const { buildNotificationsRouter } = require("./routes/notifications");
+const { buildNotificationServices } = require("./services/deliveryServices");
+const { mountNotificationRoutes } = require("./routes/deliveryRoutes");
 const { ReviewerReputationService } = require("./services/reviewerReputation");
 const { ReviewsService } = require("./services/reviews");
 const { buildReviewsRouter } = require("./routes/reviews");
@@ -223,6 +225,8 @@ const { buildPlaybackArtifactsRouter } = require("./routes/playbackArtifacts");
 const { buildBotLabRouter } = require("./routes/botLab");
 const { buildObsSourcesRouter } = require("./routes/obsSources");
 const { buildSyncHealthActionsRouter } = require("./routes/syncHealthActions");
+const { buildReanalysisRouter } = require("./routes/reanalysis");
+const { ReanalysisService } = require("./services/reanalysis");
 const {
   buildInfrastructureCostsRouter,
 } = require("./routes/infrastructureCosts");
@@ -242,6 +246,7 @@ const {
 } = require("./routes/perGame");
 const { buildImportsRouter } = require("./routes/imports");
 const { buildSpatialRouter } = require("./routes/spatial");
+const { buildPracticeRouter } = require("./routes/practice");
 const { buildCatalogRouter } = require("./routes/catalog");
 const { buildBuildOrderExportRouter } = require("./routes/buildOrderExport");
 const { buildMapImageRouter } = require("./routes/mapImage");
@@ -415,10 +420,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     logger: deps.logger,
     supportEmail: deps.config.supportEmail,
   });
-  const notifications = new NotificationsService(deps.db, {
-    io: deps.io,
-    logger: deps.logger,
-  });
+  // The bell plus Web Push, reports, Discord, calendar feed and reminders.
+  const { notifications, delivery, useSessionPolicy } = buildNotificationServices(deps);
   const supportMessages = new SupportMessagesService(deps.db, notifications, adminEvents);
   const announcements = new AnnouncementsService(deps.db, { notifications, io: deps.io, logger: deps.logger });
   const identityDeletions = new IdentityDeletionsService(deps.db, { clerk, secret: deps.config.serverPepper, logger: deps.logger });
@@ -648,7 +651,8 @@ function makeServices(deps, clerk, adminClerkIds) {
   // ``pulseMmr`` gives the rank widget the streamer's REAL current
   // league + tier from SC2Pulse instead of an MMR-threshold guess.
   const overlayLive = new OverlayLiveService(deps.db, {
-    gameDetails,
+    // One notes system: every reader shares one NotesService and its migration.
+    notes: opponents.notes, gameDetails,
     pulseMmr,
     rivals,
     scoutingIdentities,
@@ -731,7 +735,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   };
   const gameDesk = new GameDeskService({ users: deps.db.users, studio: multichatStudio,
     engagement: multichatEngagement, games, broker: liveGameBroker, channels: opponentChannels,
-    tokens: overlayTokens, bot: twitchChatBot, io: deps.io, onSessionReset: owner => sessionHistory.invalidateForReset(owner) });
+    tokens: overlayTokens, bot: twitchChatBot, io: deps.io, onSessionReset: owner => sessionHistory.invalidateForReset(owner), streams: delivery.streamReports });
   twitchChatBot.shoutoutLine = userId => gameDesk.shoutoutLine(userId);
   const streamSeries = new StreamSeriesService({ studio: multichatStudio, games: deps.db.games,
     tokens: overlayTokens, io: deps.io, onCompleted: async (token, series) => {
@@ -744,7 +748,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const aggregations = new AggregationsService(deps.db, { mmrExpectation });
   const sessionPolicy = new SessionPolicyService(deps.db, { revisions: aggregations.trendsRequests.revisions });
   aggregations.sessionPolicy = sessionPolicy;
-  games.sessionPolicy = sessionPolicy;
+  games.sessionPolicy = sessionPolicy; useSessionPolicy(sessionPolicy);
   const sessionHistory = new SessionHistoryService(deps.db, { sessionPolicy });
   const macroReport = new MacroReportService(deps.db);
   const streak = new StreakService(deps.db);
@@ -822,7 +826,9 @@ function makeServices(deps, clerk, adminClerkIds) {
   const ghostExamples = new GhostExamplesService({ db: deps.db, gameDetails });
   const ghostReferences = new GhostReferencesService({ db: deps.db, gameDetails });
   const ghostConfig = new GhostConfigService({ db: deps.db, overlayTokens, io: deps.io });
+  const practice = new PracticeLogService(deps.db, { gameDetails });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
+  const reanalysis = new ReanalysisService({ db: deps.db, io: deps.io, pairings, notifications, logger: deps.logger });
   const imports = new ImportService(deps.db, { io: deps.io, notifications, logger: deps.logger });
   const spatial = new SpatialService(deps.db);
   // The GitHub feed makes an `agent-v*` tag push a complete release:
@@ -1043,7 +1049,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const invalidatePrivateGameCaches = (/** @type {string} */ userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, rivals, gameContext, gameExecution, tickerFacts, chatStats, aggregations.trendsRequests, streamSeries, playerGoals]) {
+    for (const service of [overlayLive, rivals, gameContext, gameExecution, tickerFacts, chatStats, aggregations.trendsRequests, streamSeries, playerGoals, spatial]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
@@ -1074,7 +1080,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     userRevision, userCache, sessionPolicy, sessionHistory, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
     privateSearch,
     users,
-    activation,
+    activation, notes: /** @type {import('./services/notes').NotesService} */ (opponents.notes),
     opponents,
     opponentIdentityMatcher,
     rivals,
@@ -1093,7 +1099,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     buildStudio,
     ghostExamples,
     ghostReferences,
-    ghostConfig,
+    ghostConfig, practice,
     pairings,
     overlayTokens,
     platformIntegrations,
@@ -1115,6 +1121,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     catalog,
     perGame,
     macroBackfill,
+    reanalysis,
     imports,
     spatial,
     agentVersion,
@@ -1163,7 +1170,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     pulseDirectory,
     playerChannels,
     playerIdentities,
-    notifications,
+    notifications, ...delivery,
     supportMessages,
     announcements,
     reviewerReputation,
@@ -1499,6 +1506,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     enabled: process.env.BOT_LAB_ENABLED === "true" }));
   app.use("/v1/devices/obs", buildObsSourcesRouter({ auth, io: deps.io }));
   app.use("/v1/me/sync-health", buildSyncHealthActionsRouter({ auth, users: deps.db.users, pairings: services.pairings, io: deps.io }));
+  app.use("/v1/me/reanalysis", buildReanalysisRouter({ auth, reanalysis: services.reanalysis }));
   app.use(SERVICE.ROUTE_PREFIX, buildPlaybackArtifactsRouter({ playbackArtifacts: services.playbackArtifacts, auth }));
   app.use(SERVICE.ROUTE_PREFIX, buildSessionsRouter({ sessionHistory: services.sessionHistory, auth }));
   // Email allowlist — the deterministic admin path. Lower-cased at load;
@@ -1614,13 +1622,8 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     }),
   );
   mountScopedGrants(app, services, { auth, isAdmin, rollout: deps.config.reviewsEnabled || "off" });
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildNotificationsRouter({
-      notifications: services.notifications,
-      auth,
-    }),
-  );
+  // The bell, push devices, calendar feed, reports and Discord settings.
+  mountNotificationRoutes(app, SERVICE.ROUTE_PREFIX, services, auth);
   // Multichat overlay relays — overlay-token auth (path segment), no
   // Clerk session, so it mounts with the public bundle.
   app.use(
@@ -1771,16 +1774,16 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       auth,
     }),
   );
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildGameControlsRouter({ auth, controls: services.gameControls }),
-  );
+  app.use(SERVICE.ROUTE_PREFIX, buildGameControlsRouter({ auth, controls: services.gameControls }));
+  // Private game notes + review queue, before the games router's /games/:gameId.
+  app.use(SERVICE.ROUTE_PREFIX, buildGameNotesRouter({ auth, notes: services.notes }));
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildGamesRouter({
       games: services.games,
       gameContext: services.gameContext,
       gameExecution: services.gameExecution,
+      spatial: services.spatial, practice: services.practice,
       gameVods: services.gameVods,
       opponents: services.opponents,
       users: services.users,
@@ -1793,7 +1796,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       ladderMapPool: services.seasons ? services.seasons.ladderMapPool : undefined,
       series: services.streamSeries,
       gameMoments: services.gameMoments,
-      twitchAutomation: services.twitchAutomation || undefined,
+      twitchAutomation: services.twitchAutomation || undefined, discord: services.discordWebhooks,
       replayFiles: services.replayFiles || undefined,
       io: deps.io,
       guideSamples: services.guideSamples,
@@ -1881,8 +1884,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildSpatialRouter({ spatial: services.spatial, auth }),
+    buildSpatialRouter({ spatial: services.spatial, opponents: services.opponents, auth }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildPracticeRouter({ practice: services.practice, auth }));
   mountCatalogAndExport(app, services, auth);
   app.use(
     SERVICE.ROUTE_PREFIX,

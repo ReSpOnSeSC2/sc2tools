@@ -823,3 +823,41 @@ describe("validateGameRecord - upload provenance", () => {
     expect(validateGameRecord({ ...base, ingestSource }).valid).toBe(expected);
   });
 });
+
+describe("validateGameRecord - reported agent parse version", () => {
+  const base = { gameId: "agent-provenance", date: "2026-09-27T12:00:00.000Z", result: "Victory", myRace: "Protoss", map: "Site Delta LE" };
+  test.each([
+    ["0.24.9", true],
+    ["0.24.9-rc.1+build.7", true],
+    [`0.24.9-${"a".repeat(33)}`, true],
+    [`0.24.9-${"a".repeat(34)}`, false],
+    ["latest", false],
+    ["v0.24.9", false],
+    ["0.24", false],
+    ["0.24.9-", false],
+    ["0.24.9-rc..1", false],
+    ["0.24.9 ", false],
+    [249, false],
+    [null, false],
+    [{ version: "0.24.9" }, false],
+    [["0.24.9"], false],
+  ])("agentVersion %p valid=%p", (agentVersion, expected) => {
+    const result = validateGameRecord({ ...base, agentVersion });
+    expect(result.valid).toBe(expected);
+    if (expected) {
+      if (!result.valid) throw new Error("expected valid agent parse version");
+      expect(result.value).toHaveProperty("agentVersion", agentVersion);
+    }
+  });
+
+  test("versions are optional and unrelated future fields remain forward compatible", () => {
+    const value = { ...base, futureAnalyzerField: { enabled: true } };
+    const result = validateGameRecord(value);
+    expect(result.valid).toBe(true);
+    if (!result.valid) throw new Error("expected valid optional parse provenance");
+    expect(result.value).toBe(value);
+    expect(result.value).not.toHaveProperty("engineVersion");
+    expect(result.value).not.toHaveProperty("agentVersion");
+    expect(result.value).toHaveProperty("futureAnalyzerField", { enabled: true });
+  });
+});

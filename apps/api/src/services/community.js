@@ -24,6 +24,13 @@ const { communityListFilter } = require("./communityListFilters");
 const { CommunityOpponentCache } = require("./communityOpponentCache");
 const { listOwnerBuilds } = require("./communityOwnerBuilds");
 const {
+  AuthorRecords,
+  communityVersions,
+  publicationMutation,
+  publicationVersion,
+  recordCommunitySave,
+} = require("./communityTrust");
+const {
   DETECTOR_OPP_SLUG_EXPR,
   DETECTOR_SLUG_EXPR,
   OPP_INTENT_LABEL_PROJECTION,
@@ -126,6 +133,12 @@ const PUBLIC_OUTER_PROJECTION = Object.freeze({
   votes: 1,
   publishedAt: 1,
   updatedAt: 1,
+  // Trust signals (services/communityTrust.js). ``showAuthorRecord`` only
+  // decides whether the author's record is attached; it is never output.
+  saves: 1,
+  version: 1,
+  contentUpdatedAt: 1,
+  showAuthorRecord: 1,
 });
 
 // Aggregations cannot rely on a later dotted projection when an earlier
@@ -179,8 +192,11 @@ function publicCommunityBuildSnapshot(row) {
   if (typeof row.votes === "number" && Number.isFinite(row.votes)) {
     out.votes = row.votes;
   }
+  out.saves = typeof row.saves === "number" && Number.isFinite(row.saves) ? Math.max(0, Math.floor(row.saves)) : 0;
+  out.version = publicationVersion(row);
   copyPublicDate(out, "publishedAt", row.publishedAt);
   copyPublicDate(out, "updatedAt", row.updatedAt);
+  copyPublicDate(out, "contentUpdatedAt", row.contentUpdatedAt || row.publishedAt);
   if (row.build !== undefined) {
     out.build = publicBuildSnapshot(row.build);
   }
@@ -291,6 +307,40 @@ class CommunityService {
     this.now = typeof opts.now === "function" ? opts.now : Date.now;
     this.opponentAggregates = new CommunityOpponentCache({ now: this.now });
     this.onPublicChanged = opts.onPublicChanged || null;
+    this.authorRecords = new AuthorRecords(
+      (owner, publicSlugs) => this.listOwnerReplayStats(owner, { publicSlugs }),
+      { now: this.now },
+    );
+  }
+
+  /**
+   * Public rows with the author's record attached where the author opted
+   * in ("Show my record with this build publicly"; off by default).
+   * @param {Array<Record<string, any>>} rows raw rows (PUBLIC_AGGREGATE_PROJECTION)
+   */
+  async _withAuthorRecords(rows) {
+    const records = await this.authorRecords.forRows(rows);
+    return rows.map((row) => {
+      const out = publicCommunityBuildSnapshot(row);
+      const record = records.get(String(row.slug));
+      if (record) out.authorRecord = record;
+      return out;
+    });
+  }
+
+  /**
+   * "Save to my library" by another account: counts once per account.
+   * @param {string} userId @param {string} slug
+   */
+  async recordSave(userId, slug) {
+    const counted = await recordCommunitySave(this.db, userId, slug, new Date(this.now()));
+    if (counted) this.notifyPublicChanged();
+    return counted;
+  }
+
+  /** @param {string[]} slugs */
+  async versions(slugs) {
+    return communityVersions(this.db, slugs);
   }
 
   /** Advisory, after a public mutation commits. No secret or private ID is sent. */
@@ -339,10 +389,13 @@ class CommunityService {
    *   description?: string,
    *   authorName?: string,
    *   publishAnonymously?: boolean,
-   * }} meta
-   * @returns {Promise<{slug: string, created: boolean, mirrorPending?: boolean}>}
+   *   showRecord?: boolean,
+   * }} meta ``showRecord``: show the author's record with the build
+   *   (off by default; omitted keeps the current choice)
+   * @returns {Promise<{slug: string, created: boolean, mirrorPending?: boolean, version?: number}>}
    */
   async publish(userId, userSlug, meta) {
+    const showRecord = typeof (meta && meta.showRecord) === "boolean" ? !!meta.showRecord : undefined;
     // Content hygiene on everything that renders publicly. Blocked
     // terms reject outright; names/links are silently cleaned.
     const hasAuthorName = Object.prototype.hasOwnProperty.call(
@@ -467,11 +520,7 @@ class CommunityService {
       privateMirrorPending: true,
     };
     stampVersion(doc, COLLECTIONS.COMMUNITY_BUILDS);
-    const mutation = {
-      $set: doc,
-      $setOnInsert: { createdAt: now, publishedAt: now, votes: 0 },
-      $inc: { publicationSequence: 1 },
-    };
+    const mutation = publicationMutation(existing, doc, { now, showRecord });
     const updatingExisting = !!existing;
     let created = false;
     try {
@@ -542,6 +591,7 @@ class CommunityService {
     return {
       slug,
       created,
+      version: typeof doc.version === "number" ? doc.version : publicationVersion(existing),
       ...(mirrored ? {} : { mirrorPending: true }),
     };
   }
@@ -559,6 +609,7 @@ class CommunityService {
    *   publicSlug: string|null,
    *   authorName: string,
    *   publishAnonymously: boolean,
+   *   showAuthorRecord: boolean,
    *   mirrorPending: boolean,
    * }>}
    */
@@ -577,6 +628,7 @@ class CommunityService {
             privateMirrorPending: 1,
             publicationRevision: 1,
             publicationSequence: 1,
+            showAuthorRecord: 1,
           },
         },
       ),
@@ -609,6 +661,7 @@ class CommunityService {
       // owner can uncheck the opt-in and immediately see who will be shown.
       authorName: savedAuthorName || defaultAuthorName,
       publishAnonymously,
+      showAuthorRecord: !!row && row.showAuthorRecord === true,
       mirrorPending,
     };
   }
@@ -1015,7 +1068,7 @@ class CommunityService {
    *   skill?: string,
    *   limit?: number,
    *   offset?: number,
-   *   sort?: 'top' | 'new' | 'controversial' | 'updated',
+   *   sort?: 'top' | 'new' | 'controversial' | 'updated' | 'saves',
    *   search?: string,
    * }} opts
    */
@@ -1032,6 +1085,9 @@ class CommunityService {
         break;
       case "new":
         sort = { publishedAt: -1, votes: -1 };
+        break;
+      case "saves":
+        sort = { saves: -1, votes: -1, publishedAt: -1 };
         break;
       case "controversial":
         // Controversial: lots of votes either way. We approximate by
@@ -1051,9 +1107,7 @@ class CommunityService {
       { $project: PUBLIC_AGGREGATE_PROJECTION },
     ]).toArray();
     const hasMore = rows.length > limit;
-    const items = rows
-      .slice(0, limit)
-      .map((row) => publicCommunityBuildSnapshot(row));
+    const items = await this._withAuthorRecords(rows.slice(0, limit));
     const total = await this.db.communityBuilds.countDocuments(filter);
     return { items, hasMore, total, offset, limit };
   }
@@ -1268,9 +1322,7 @@ class CommunityService {
     const hasMore = items.length > page.limit;
     const total = await this.db.communityBuilds.countDocuments(filter);
     return {
-      items: items
-        .slice(0, page.limit)
-        .map((row) => publicCommunityBuildSnapshot(row)),
+      items: await this._withAuthorRecords(items.slice(0, page.limit)),
       hasMore,
       total,
       offset: page.offset,
@@ -1297,7 +1349,7 @@ class CommunityService {
         buildOrder: referenceBuildOrderMongoExpression("$build.buildOrder"),
       } } },
     ]).next();
-    return row ? publicCommunityBuildSnapshot(row) : null;
+    return row ? (await this._withAuthorRecords([row]))[0] : null;
   }
 
   /**

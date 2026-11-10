@@ -1,6 +1,7 @@
 "use strict";
 
-const { buildReplayLibraryMatch } = require("./replayLibrary");
+const { buildReplayLibraryMatch, cleanReplaySearch } = require("./replayLibrary");
+const { NotesService } = require("./notes");
 const { replayNeighborBranches } = require("./replayLibraryCursor");
 
 /** @typedef {Record<string, any>} Row */
@@ -78,7 +79,7 @@ async function cachedHeadToHead(db, userId, rawId) {
 
 /** Three slim, owner-scoped game reads; optional H2H is one indexed cached read.
  * @param {NeighborDb} db @param {string} userId @param {string} gameId
- * @param {{scope?:unknown,filters?:import('../util/parseQuery').GlobalFilters,result?:unknown,matchup?:unknown,search?:unknown}} [opts] */
+ * @param {{scope?:unknown,filters?:import('../util/parseQuery').GlobalFilters,result?:unknown,matchup?:unknown,search?:unknown,review?:unknown,reviewTag?:unknown,hasNotes?:boolean}} [opts] */
 async function ownedGameNeighbors(db, userId, gameId, opts = {}) {
   const owner = navigationIdentity(userId), id = navigationIdentity(gameId);
   if (!owner || !id) return null;
@@ -92,7 +93,11 @@ async function ownedGameNeighbors(db, userId, gameId, opts = {}) {
     const h2h = await h2hPromise;
     return { prev: null, next: null, ...(h2h ? { h2h } : {}) };
   }
-  const match = buildReplayLibraryMatch(owner, { ...opts, view: "owner" });
+  // Older/Newer follow the owner list exactly, note-text matches included.
+  const query = cleanReplaySearch(opts.search);
+  const notes = query && /** @type {any} */ (db).notes ? new NotesService(/** @type {any} */ (db)) : null;
+  const noteGameIds = notes ? await notes.gameIdsMatchingText(owner, query).catch(() => []) : [];
+  const match = buildReplayLibraryMatch(owner, { ...opts, noteGameIds, view: "owner" });
   const read = (/** @type {'date_desc'|'date_asc'} */ direction) => db.games.findOne(
     { $and: [match, scopeMatch, { $or: replayNeighborBranches(current.date, current._id, direction) }] },
     { projection: SUMMARY_PROJECTION, sort: direction === "date_desc" ? { date: -1, _id: -1 } : { date: 1, _id: 1 }, hint: NAV_INDEX },

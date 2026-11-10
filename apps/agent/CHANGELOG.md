@@ -2,6 +2,16 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## Unreleased
+
+### Added
+- Re-analyze games on request from **Settings → Backups & data** on the website:
+  the agent re-reads each requested game with the current analysis engine, from
+  the replay on this PC or, when it is gone, a verified copy from your Cloud
+  Replay Archive that is deleted right after reading, and uploads it like a new
+  game. One game at a time, 100 per batch; never a full Re-sync or a recording.
+- Record the engine and agent versions that analyzed each uploaded game.
+
 ## 0.25.0
 
 ### Added

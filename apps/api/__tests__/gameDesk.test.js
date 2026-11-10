@@ -15,6 +15,7 @@ const { buildMultichatRouter } = require("../src/routes/multichat");
 const { OverlayTokensService } = require("../src/services/overlayTokens");
 const { SessionPolicyService } = require("../src/services/sessionPolicy");
 const { OwnerRevisions } = require("../src/util/gameVisibility");
+const { StreamReportsService } = require("../src/services/streamReports");
 let mongo, db, svc, engagement, studio, games, live, verified, app, directory, channels, events, bot;
 const TOKEN = "desk-token", OWNER = "desk-owner";
 beforeAll(async () => { mongo = await MongoMemoryServer.create(); db = await connect({ uri: mongo.getUri(), dbName: "game_desk" }); });
@@ -29,7 +30,8 @@ beforeEach(async () => {
   channels = new OpponentChannelsCache(directory); bot = { queueShoutout: jest.fn(() => false) };
   live = { type: "liveGameState", gameKey: "game-one", phase: "match_ended", opponent: { toonHandle: "1-S2-1-123" } }; verified = null;
   const tokens = { resolve: async token => token === TOKEN ? { userId: OWNER } : null, list: async () => [{ token: TOKEN }, { token: "revoked", revokedAt: new Date() }, { token: "rotating", rotationPending: true }] };
-  svc = new GameDeskService({ users: db.users, studio, engagement, games, broker: { latest: () => live, latestOverlayLive: () => verified }, channels, tokens, bot, io });
+  const streams = new StreamReportsService(db, { notifications: { notify: async () => null } });
+  svc = new GameDeskService({ users: db.users, studio, engagement, games, broker: { latest: () => live, latestOverlayLive: () => verified }, channels, tokens, bot, io, streams });
   app = express(); app.use(express.json()); app.use(buildMultichatRouter({ overlayTokens: tokens, users: new UsersService(db), studio, engagement, gameDesk: svc }));
   app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: { code: error.code || "unknown" } }));
 });
@@ -420,4 +422,17 @@ test("an unrelated owner refresh emission failure is not swallowed as overlay re
     expect((await db.users.findOne({ userId: OWNER })).sessionAnchorAt).toBeDefined();
     expect(query).not.toHaveBeenCalled();
   } finally { emit.mockRestore(); query.mockRestore(); }
+});
+test("Start new session opens a stream and End stream closes it with its report", async () => {
+  await db.streamSessions.deleteMany({});
+  expect((await post({ action: "sessionReset" })).status).toBe(200);
+  const opened = await db.users.findOne({ userId: OWNER });
+  expect(opened.streamSession.startAt).toBeInstanceOf(Date);
+  await db.games.insertOne({ userId: OWNER, gameId: "stream-game", date: new Date(), result: "Victory", myRace: "Protoss", map: "Map", opponent: { race: "Zerg" } });
+  expect((await post({ action: "streamEnd", extra: true })).status).toBe(400);
+  const ended = await post({ action: "streamEnd" });
+  expect(ended.status).toBe(200);
+  expect(ended.body.deskAction.streamReport).toMatchObject({ games: 1, wins: 1, losses: 0, endedBy: "manual" });
+  expect((await db.users.findOne({ userId: OWNER })).streamSession).toBeUndefined();
+  expect((await post({ action: "streamEnd" })).body.deskAction.streamReport).toBeNull();
 });

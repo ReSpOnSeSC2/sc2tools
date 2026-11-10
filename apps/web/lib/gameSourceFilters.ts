@@ -1,7 +1,7 @@
 import { accountFilter } from "./accountFilter";
 
 /** Only navigation's supported game filters may cross a page boundary. */
-const KEYS = new Set(["since", "until", "patch_era", "race", "opp_race", "map", "map_exact", "mmr_min", "mmr_max", "opp_strategy", "group_by_race_played", "build", "leak", "macro_min", "macro_max", "min_minutes", "max_minutes", "exclude_too_short", "regions", "map_pool", "game_size", "result", "matchup", "q"]);
+const KEYS = new Set(["since", "until", "patch_era", "race", "opp_race", "map", "map_exact", "mmr_min", "mmr_max", "opp_strategy", "group_by_race_played", "build", "leak", "macro_min", "macro_max", "min_minutes", "max_minutes", "exclude_too_short", "regions", "map_pool", "game_size", "result", "matchup", "q", "review", "review_tag", "notes"]);
 
 /** Drop credentials, pagination and unknown inputs; retain one bounded value per filter. */
 export function gameSourceFilters(...queries: readonly (string | null | undefined)[]): string {

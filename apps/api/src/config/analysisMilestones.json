@@ -1,0 +1,14 @@
+[
+  {
+    "engine": "1.6.10",
+    "date": "2026-10-10",
+    "summary": "PvT Blink labels need Blink as the first Twilight upgrade, Shadow Stride no longer counts as Blink, and Charge openings with an early third Nexus get their own label.",
+    "matchups": ["PvT", "TvP"]
+  },
+  {
+    "engine": "1.6.11",
+    "date": "2026-10-14",
+    "summary": "PvT Oracle-first openings keep their Oracle label, the Oracle/Robo variant is labelled separately, and TvP Widow Mine Drop needs early mines with a Medivac-first Starport.",
+    "matchups": ["PvT", "TvP"]
+  }
+]

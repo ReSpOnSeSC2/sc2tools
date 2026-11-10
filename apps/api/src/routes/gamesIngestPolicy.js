@@ -8,7 +8,7 @@
  * trusted to describe itself, so this module:
  *
  *   - stamps ``ingestSource`` from the authenticated credential and keeps
- *     ``engineVersion`` only for browser uploads;
+ *     validated reported engine/agent versions for the corresponding uploader;
  *   - enforces the per-user daily browser-ingest cap (Clerk sessions only)
  *     before a batch is processed, and bills accepted games afterwards;
  *   - counts the desktop agent's non-retryable rejections on the owner row
@@ -52,13 +52,13 @@ function provenanceForAuth(auth) {
 
 /**
  * Overwrite client-claimed provenance on a validated game record. Only the
- * credential decides: device token -> "agent" (engine version dropped),
- * Clerk session -> "browser" (engine version kept). Any other source gets
- * neither field, so an unexpected caller can never mislabel a row.
+ * credential decides: device token -> "agent" (reported versions kept),
+ * Clerk session -> "browser" (engine kept, agent dropped). Unknown sources
+ * get none of these fields. Versions describe the parse, not attestation.
  *
  * Example:
  *   stampIngestProvenance(game, { userId, source: "device" });
- *   // game.ingestSource === "agent", game.engineVersion deleted
+ *   // game.ingestSource === "agent", validated reported versions retained
  *
  * @param {Record<string, any>} game validated record (mutated in place)
  * @param {IngestAuth} auth
@@ -67,7 +67,8 @@ function stampIngestProvenance(game, auth) {
   const source = provenanceForAuth(auth);
   if (source === undefined) delete game.ingestSource;
   else game.ingestSource = source;
-  if (source !== INGEST_PROVENANCE.SOURCE_BROWSER) delete game.engineVersion;
+  if (source !== INGEST_PROVENANCE.SOURCE_AGENT) delete game.agentVersion;
+  if (source === undefined) delete game.engineVersion;
 }
 
 /**

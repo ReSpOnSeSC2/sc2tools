@@ -139,7 +139,7 @@ describe("paired desktop companion access", () => {
     const saved = await asOwner(request(app).put(`/v1/opponents/${pulseId}/notes`))
       .send({ notes: "Check the second gas", notesReadAloud: true });
     expect(saved.status).toBe(200);
-    expect(saved.body).toEqual({ notes: "Check the second gas", notesReadAloud: true });
+    expect(saved.body).toMatchObject({ notes: "Check the second gas", notesReadAloud: true, note: { text: "Check the second gas", visibility: "stream" } });
     expect((await db.opponentNotes.findOne({ userId: "other", pulseId })).notes)
       .toBe("other private note");
   });

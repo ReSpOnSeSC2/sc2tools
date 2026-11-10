@@ -20,12 +20,14 @@ export const SETTINGS_SECTIONS = {
     { id: "replay-archive", label: "Replay archive" },
     { id: "snapshots", label: "Snapshots" },
     { id: "repair-data", label: "Repair my data" },
+    { id: "reanalyze", label: "Re-analyze games" },
     { id: "hidden-games", label: "Hidden games" },
     { id: "device-history", label: "Games on this device" },
     { id: "export", label: "Export" },
     { id: "delete-history", label: "Delete game history" },
     { id: "gdpr", label: "Export & delete account" },
   ],
+  integrations: [{ id: "discord", label: "Post to Discord" }],
   checkin: [{ id: "build-check-in", label: "Build check-in" }],
   randomizer: [
     { id: "build-randomizer", label: "Build randomizer" },
@@ -66,7 +68,9 @@ export const SETTINGS_SECTIONS = {
   preferences: [
     { id: "app-preferences", label: "App preferences" },
     { id: "setup-privacy", label: "Setup & privacy" },
+    { id: "reports", label: "Reports" },
     { id: "notifications", label: "Notifications" },
+    { id: "push", label: "Phone and browser notifications" },
   ],
   help: [],
 } as const satisfies Record<SettingsTabId, readonly SettingsSectionEntry[]>;
@@ -98,6 +102,7 @@ export const SETTINGS_FIELDS = [
   { id: "replay-archive", tab: "backups", section: "replay-archive", label: "Cloud Replay Archive", synonyms: ["original replays", "replay backups", "download replay", "archive storage"] },
   { id: "snapshots", tab: "backups", section: "snapshots", label: "Account snapshots", synonyms: ["restore point", "snapshot", "backup account"] },
   { id: "repair-data", tab: "backups", section: "repair-data", label: "Repair my data", synonyms: ["recalculate", "wrong counts", "repair records", "archive recheck"] },
+  { id: "reanalyze", tab: "backups", section: "reanalyze", label: "Re-analyze games", synonyms: ["reanalyze", "re-parse", "engine update", "old labels", "wrong build labels", "macro score missing"] },
   { id: "export", tab: "backups", section: "export", label: "Export data", synonyms: ["download data", "full archive", "NDJSON", "build order CSV", "replay pack", "ZIP", "manifest"] },
   { id: "hidden-games", tab: "backups", section: "hidden-games", label: "Hidden games", synonyms: ["unhide", "pending deletion", "hidden replays"] },
   { id: "device-history", tab: "backups", section: "device-history", label: "Games stored on this device", synonyms: ["history on this device", "Daily Pulse history", "clear this device", "local storage", "local copy", "storage space", "cache"] },
@@ -129,6 +134,9 @@ export const SETTINGS_FIELDS = [
   { id: "app-preferences", tab: "preferences", section: "app-preferences", label: "Default tab", synonyms: ["start page", "app preferences", "default dashboard"] },
   { id: "setup-privacy", tab: "preferences", section: "setup-privacy", label: "Setup & privacy", synonyms: ["analytics cookies", "cookie consent", "setup guide", "setup checklist"] },
   { id: "notifications", tab: "preferences", section: "notifications", label: "Notification preferences", synonyms: ["mute notifications", "in-app updates", "notifications"] },
+  { id: "reports", tab: "preferences", section: "reports", label: "Weekly and stream reports", synonyms: ["weekly report", "stream report", "report time zone", "Monday summary"] },
+  { id: "push", tab: "preferences", section: "push", label: "Phone and browser notifications", synonyms: ["push notifications", "phone notifications", "notification devices", "web push"] },
+  { id: "discord", tab: "integrations", section: "discord", label: "Post to Discord", synonyms: ["Discord webhook", "post results", "clan channel", "Discord"] },
 ] as const satisfies readonly SettingsFieldEntry[];
 
 export function settingsFieldHref(field: SettingsFieldEntry): string {

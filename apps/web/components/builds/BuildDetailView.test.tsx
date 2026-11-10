@@ -9,7 +9,8 @@ const harness = vi.hoisted(() => ({
   mutate: vi.fn(async () => undefined),
   apiCall: vi.fn(async () => null),
   push: vi.fn(),
-  toastSuccess: vi.fn(),
+  toastSuccess: vi.fn((..._args: unknown[]) => "toast-1"),
+  toastDismiss: vi.fn(),
   isLoaded: true,
   isSignedIn: true,
 }));
@@ -38,7 +39,7 @@ vi.mock("@/lib/clientApi", () => ({
 vi.mock("@/components/ui/Toast", () => ({
   useToastOptional: () => undefined,
   useToast: () => ({
-    toast: { success: harness.toastSuccess, error: vi.fn() },
+    toast: { success: harness.toastSuccess, error: vi.fn(), dismiss: harness.toastDismiss },
   }),
 }));
 
@@ -167,8 +168,17 @@ describe("BuildDetailView states", () => {
       "/v1/custom-builds/proxy-gateway",
       { method: "DELETE" },
     );
-    expect(harness.toastSuccess).toHaveBeenCalledWith("Build deleted.");
+    expect(harness.toastSuccess).toHaveBeenCalledWith(`Deleted “${RULE_BUILD.name}”`, expect.objectContaining({ duration: 10_000 }));
     expect(assign).not.toHaveBeenCalled();
+
+    // Undo restores the build (privately) and comes back to its page.
+    const { description } = harness.toastSuccess.mock.calls[0][1] as { description: React.ReactElement };
+    render(<>{description}</>);
+    harness.apiCall.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(harness.push).toHaveBeenLastCalledWith(`/builds/${RULE_BUILD.slug}`));
+    expect(harness.toastDismiss).toHaveBeenCalledWith("toast-1");
+    expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/custom-builds/proxy-gateway/restore", { method: "POST", body: "{}" });
   });
 });
 

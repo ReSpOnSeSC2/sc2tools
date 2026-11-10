@@ -63,7 +63,7 @@ describe("SettingsShell layout containment", () => {
       .toEqual(["Account", "Gameplay", "Streaming"]);
     const tabs = within(desktop).getAllByRole("tab");
     expect(tabs.map((node) => node.getAttribute("data-value")))
-      .toEqual(["account", "profile", "backups", "checkin", "randomizer", "import", "overlay", "chat", "voice", "preferences", "help"]);
+      .toEqual(["account", "profile", "backups", "checkin", "randomizer", "import", "overlay", "chat", "voice", "preferences", "integrations", "help"]);
     expect(Array.from(desktop.children).every((node) => node.getAttribute("role") === "tab")).toBe(true);
     const devices = within(sidebar).getByRole("link", { name: "Devices" });
     expect(devices.getAttribute("href")).toBe("/devices");

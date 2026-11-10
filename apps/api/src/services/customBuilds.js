@@ -160,6 +160,8 @@ const CUSTOM_BUILD_READ_PROJECTION = Object.freeze({
   "forkedFrom.communitySlug": 1,
   "forkedFrom.version": 1,
   "forkedFrom.savedAt": 1,
+  pinned: 1,
+  tags: 1,
   createdAt: 1,
   updatedAt: 1,
   _schemaVersion: 1,
@@ -215,6 +217,18 @@ const CUSTOM_BUILD_READ_AGGREGATE_PROJECTION = Object.freeze({
         version: boundedMongoString("$forkedFrom.version", 40),
         savedAt: boundedMongoString("$forkedFrom.savedAt", 40),
       },
+      null,
+    ],
+  },
+  // Library organisation (private): pin and up to 8 short tags.
+  pinned: boundedMongoBoolean("$pinned"),
+  tags: {
+    $cond: [
+      { $isArray: "$tags" },
+      { $slice: [{ $map: {
+        input: { $filter: { input: "$tags", cond: { $eq: [{ $type: "$$this" }, "string"] } } },
+        in: { $substrCP: ["$$this", 0, 24] },
+      } }, 8] },
       null,
     ],
   },

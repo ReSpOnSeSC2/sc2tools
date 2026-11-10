@@ -81,9 +81,9 @@ function renderMisc() {
   );
 }
 
-it("keeps all three actual Preferences targets, including the independently saved Notifications form", () => {
+it("keeps all five actual Preferences targets, including the independently saved Reports, Notifications and push forms", () => {
   mocks.ownerId = "synthetic-owner"; renderMisc();
-  for (const id of ["app-preferences", "setup-privacy", "notifications"]) {
+  for (const id of ["app-preferences", "setup-privacy", "reports", "notifications", "push"]) {
     expect(document.querySelectorAll(`[id="${id}"]`)).toHaveLength(1);
     expect(document.getElementById(id)?.tagName).toBe("SECTION");
   }

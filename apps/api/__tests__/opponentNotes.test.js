@@ -28,6 +28,7 @@ describe("per-opponent scouting notes", () => {
   beforeEach(async () => {
     await db.opponents.deleteMany({});
     await db.opponentNotes.deleteMany({});
+    await db.notes.deleteMany({});
     await db.games.deleteMany({});
     opponents = new OpponentsService(db, Buffer.alloc(32, 1));
     await db.opponents.insertOne({
@@ -57,12 +58,13 @@ describe("per-opponent scouting notes", () => {
   });
 
   test("text-only live saves preserve the stored read-aloud setting atomically", async () => {
+    const slot = { userId: "owner", "target.kind": "opponent", "target.id": "pulse-1" };
     await opponents.updateNotes("owner", "pulse-1", { notes: "Old packet", notesReadAloud: true });
-    await db.opponentNotes.updateOne({ userId: "owner", pulseId: "pulse-1" }, { $set: { notesReadAloud: false } });
+    await db.notes.updateOne(slot, { $set: { readAloud: false } });
     const saved = await opponents.updateNotes("owner", "pulse-1", { notes: "New text", preserveReadAloud: true });
     expect(saved.notesReadAloud).toBe(false);
-    expect(await db.opponentNotes.findOne({ userId: "owner", pulseId: "pulse-1" })).toMatchObject({ notes: "New text", notesReadAloud: false });
-    await db.opponentNotes.updateOne({ userId: "owner", pulseId: "pulse-1" }, { $set: { notesReadAloud: true } });
+    expect(await db.notes.findOne(slot)).toMatchObject({ text: "New text", readAloud: false, visibility: "stream" });
+    await db.notes.updateOne(slot, { $set: { readAloud: true } });
     expect((await opponents.updateNotes("owner", "pulse-1", { notes: "Another text", preserveReadAloud: true })).notesReadAloud).toBe(true);
     expect(await opponents.updateNotes("other-owner", "pulse-1", { notes: "No", preserveReadAloud: true })).toBeNull();
   });
@@ -81,21 +83,16 @@ describe("per-opponent scouting notes", () => {
     expect(saved).toEqual({
       notes: "Watch for proxy barracks.",
       notesReadAloud: true,
+      note: expect.objectContaining({ text: "Watch for proxy barracks.", visibility: "stream", readAloud: true, scope: "account", tags: [] }),
       opponentName: "CurrentName",
       pulseCharacterId: "12345",
     });
-    await expect(
-      db.opponentNotes.findOne(
-        { userId: "owner", pulseId: "pulse-1" },
-        { projection: { _id: 0, updatedAt: 0 } },
-      ),
-    ).resolves.toEqual({
-      userId: "owner",
-      pulseId: "pulse-1",
-      notes: "Watch for proxy barracks.",
-      notesReadAloud: true,
-      _schemaVersion: 1,
+    // A legacy read-aloud save is a stream note, stored only in the notes collection.
+    await expect(db.notes.findOne({ userId: "owner", "target.id": "pulse-1" }, { projection: { _id: 0, updatedAt: 0, createdAt: 0 } })).resolves.toEqual({
+      userId: "owner", target: { kind: "opponent", id: "pulse-1" }, text: "Watch for proxy barracks.", tags: [], visibility: "stream",
+      readAloud: true, scope: "account", pinned: false, _schemaVersion: 1,
     });
+    expect(await db.opponentNotes.countDocuments({})).toBe(0);
 
     const profile = await opponents.get("owner", "pulse-1");
     expect(profile).toEqual(expect.objectContaining({
@@ -107,27 +104,29 @@ describe("per-opponent scouting notes", () => {
   test("lists private note previews in one batch on filtered and unfiltered pages", async () => {
     await db.opponents.insertOne({ userId: "owner", pulseId: "pulse-2", displayNameSample: "Other", lastSeen: new Date(), wins: 1, losses: 0, gameCount: 1 });
     await db.games.insertOne({ userId: "owner", gameId: "other", date: new Date(), result: "Victory", opponent: { pulseId: "pulse-2", displayName: "Other" } });
-    const text = "  Watch\n  proxy " + "🌟".repeat(150);
+    const text = "Watch\n  proxy " + "🌟".repeat(150);
+    // Legacy rows: the first read moves only the owner's row into the notes collection.
     await db.opponentNotes.insertMany([
       { userId: "owner", pulseId: "pulse-1", notes: text },
       { userId: "another-user", pulseId: "pulse-2", notes: "Private to someone else" },
     ]);
-    const find = jest.spyOn(db.opponentNotes, "find");
+    const find = jest.spyOn(db.notes, "find");
     try {
       for (const filters of [{}, { since: new Date("2026-01-01") }]) {
         find.mockClear();
         const page = await opponents.list("owner", { filters });
         expect(find).toHaveBeenCalledTimes(1);
-        expect(find.mock.calls[0][0]).toEqual({ userId: "owner", pulseId: { $in: expect.arrayContaining(["pulse-1", "pulse-2"]) } });
+        expect(find.mock.calls[0][0]).toEqual({ userId: "owner", "target.kind": "opponent", "target.id": { $in: expect.arrayContaining(["pulse-1", "pulse-2"]) } });
         const withNotes = page.items.find((item) => item.pulseId === "pulse-1");
         const withoutNotes = page.items.find((item) => item.pulseId === "pulse-2");
         expect(withNotes.notesMeta.preview).toBe(Array.from(text.replace(/\s+/g, " ").trim()).slice(0, 140).join(""));
         expect(Array.from(withNotes.notesMeta.preview)).toHaveLength(140);
-        expect(withoutNotes.notesMeta).toBeUndefined();
+        expect(withNotes.notesMeta).toMatchObject({ tags: [], visibility: "stream", scope: "account" }); expect(withoutNotes.notesMeta).toBeUndefined();
         if (filters.since) expect(withNotes.notes).toBeUndefined();
         else expect(withNotes.notes).toBe(text);
       }
     } finally { find.mockRestore(); }
+    expect([await db.opponentNotes.countDocuments({ userId: "owner" }), await db.opponentNotes.countDocuments({ userId: "another-user" })]).toEqual([0, 1]);
   });
 
   test("blank notes delete the row and force read-aloud off", async () => {
@@ -145,7 +144,7 @@ describe("per-opponent scouting notes", () => {
       notesReadAloud: false,
     }));
     await expect(
-      db.opponentNotes.findOne({ userId: "owner", pulseId: "pulse-1" }),
+      db.notes.findOne({ userId: "owner", "target.id": "pulse-1" }),
     ).resolves.toBeNull();
     const profile = await opponents.get("owner", "pulse-1");
     expect(profile).toEqual(expect.objectContaining({
@@ -161,7 +160,7 @@ describe("per-opponent scouting notes", () => {
         notesReadAloud: true,
       }),
     ).resolves.toBeNull();
-    await expect(db.opponentNotes.countDocuments({})).resolves.toBe(0);
+    await expect(db.notes.countDocuments({})).resolves.toBe(0);
   });
 
   test("registers the unique owner/opponent key and GDPR collection", async () => {

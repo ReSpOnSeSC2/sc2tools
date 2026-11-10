@@ -38,8 +38,10 @@ const {
   buildLadderMetaRecomputeJob,
 } = require("./jobs/ladderMetaRecomputeJob");
 const { buildReviewDigestJob } = require("./jobs/reviewDigestJob");
+const { buildCustomBuildTrashPurgeJob } = require("./jobs/customBuildTrashPurgeJob");
 const { buildBackupHealthJob } = require("./jobs/backupHealthJob");
 const { buildIdentityDeletionJob } = require("./jobs/identityDeletionJob");
+const { startDeliveryJobs } = require("./jobs/deliveryJobs");
 const sentry = require("./util/sentry");
 const { TrendsExplorerBackfill } = require("./services/trendsExplorerBackfill");
 const { startBrowserUploadCorsCheck } = require("./services/replayFilesCors");
@@ -169,6 +171,8 @@ async function main() {
       /** @type {any} */ (services).buildIntents.overlayStateForCurrentGame(userId),
     onRandomizerRolled: (userId, token, payload) =>
       /** @type {any} */ (services).buildIntents.handleRandomizerRoll(userId, token, payload),
+    // Managed re-analysis: resume work when an agent connects; record outcomes.
+    reanalysis: /** @type {any} */ (services).reanalysis,
     // Replayed to Browser Sources on connect/resync. Live Stream Dock pushes
     // are still immediate; this persisted read closes the reconnect gap for
     // the manual Starting Soon / BRB cover.
@@ -376,6 +380,10 @@ async function main() {
   const guideStatsJob = /** @type {any} */ (services).guideStatsJob;
   if (config.guidesEnabled) guideStatsJob.start();
 
+  // Nightly hard-delete of builds past the 30-day "Recently deleted" window.
+  const customBuildTrashPurgeJob = buildCustomBuildTrashPurgeJob({ jobLedger: /** @type {any} */ (services).jobLedger, db, logger });
+  customBuildTrashPurgeJob.start();
+
   // Weekly Replay Review Exchange digest (hourly check, weekly send).
   const reviewDigestJob = buildReviewDigestJob({
     jobLedger: /** @type {any} */ (services).jobLedger,
@@ -394,7 +402,8 @@ async function main() {
   });
   backupHealthJob.start();
   const identityDeletionJob = buildIdentityDeletionJob({ jobLedger: /** @type {any} */ (services).jobLedger, service: /** @type {any} */ (services).identityDeletions, logger });
-  identityDeletionJob.start();
+  // Reports, Discord outbox and coaching reminders (jobs/deliveryJobs.js).
+  identityDeletionJob.start(); const deliveryJobs = startDeliveryJobs(/** @type {any} */ (services), logger);
 
   // SC2 Tools Guides build-order videos: seed the committed channel
   // snapshot, then re-read the owner's YouTube RSS feed every 6 h. Only
@@ -451,6 +460,7 @@ async function main() {
       await drained;
     }
     await keepalive.stop();
+    await customBuildTrashPurgeJob.stop();
     await supportEmailJob.stop();
     await pulseBackfill.stop();
     await opponentMmrEnrichment.stop();
@@ -463,7 +473,7 @@ async function main() {
     await ladderMetaJob.stop();
     await reviewDigestJob.stop();
     await backupHealthJob.stop();
-    await identityDeletionJob.stop();
+    await identityDeletionJob.stop(); await deliveryJobs.stop();
     // Also waits for an admin-forced run when the schedule never started.
     await guideStatsJob.stop();
     // Admin-triggered guide backfill (never started at boot) and any

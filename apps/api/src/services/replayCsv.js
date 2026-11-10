@@ -61,9 +61,12 @@ async function* streamRows(games, match, opts = {}) {
  * @param {import('mongodb').Collection} games @param {string} userId @param {object} filters
  * `trustedMatch` is constructed by an owned service, never copied from query
  * JSON. It can only narrow the existing owner/visibility/global scope.
- * @param {{search?:unknown,result?:unknown,matchup?:unknown,sort?:unknown,signal?:AbortSignal,maxRows?:number,trustedMatch?:Record<string,any>}} [opts] */
+ * The owner review queue filters (``review``, ``reviewTag``, ``hasNotes``)
+ * follow the visible Replays list.
+ * @param {{search?:unknown,result?:unknown,matchup?:unknown,sort?:unknown,signal?:AbortSignal,maxRows?:number,trustedMatch?:Record<string,any>,review?:unknown,reviewTag?:unknown,hasNotes?:boolean}} [opts] */
 async function prepareReplayCsv(games, userId, filters, opts = {}) {
-  const libraryMatch = buildReplayLibraryMatch(userId, { filters, search: opts.search, result: opts.result, matchup: opts.matchup, view: "owner" });
+  const libraryMatch = buildReplayLibraryMatch(userId, { filters, search: opts.search, result: opts.result, matchup: opts.matchup,
+    review: opts.review, reviewTag: opts.reviewTag, hasNotes: opts.hasNotes, view: "owner" });
   const match = opts.trustedMatch ? { $and: [libraryMatch, opts.trustedMatch] } : libraryMatch;
   const sentinel = await games.find(match, { projection: { _id: 1 }, maxTimeMS: 5000, ...(opts.signal ? { signal: opts.signal } : {}) })
     .sort(opts.sort === "date_asc" ? { date: 1, _id: 1 } : { date: -1, _id: -1 }).skip(exportLimit(opts.maxRows)).limit(1).toArray();

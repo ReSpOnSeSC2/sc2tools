@@ -51,6 +51,12 @@ export interface CustomBuild {
   perspective?: BuildPerspective;
   /** Race the opponent was playing when the build was captured (only set when perspective="opponent"). */
   opponentRace?: Race;
+  /** Pinned builds lead every sort of the library. */
+  pinned?: boolean | null;
+  /** Up to 8 short library tags. */
+  tags?: string[] | null;
+  /** Set on a copy saved from Community ("Save to my library"). */
+  forkedFrom?: { communitySlug?: string | null; version?: string | null; savedAt?: string | null } | null;
 }
 
 /** Aggregate stats from /v1/builds, keyed by build name (NOT slug). */

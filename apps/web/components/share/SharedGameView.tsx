@@ -28,7 +28,13 @@ export function SharedGameView({ token, data, initialTimeSec = null }: {
   const { game } = data;
   const [seek, setSeek] = useState<{ t: number; seq: number } | null>(null);
   const sequence = useRef(0);
-  const onSeek = useCallback((t: number) => setSeek({ t, seq: ++sequence.current }), []);
+  const onSeek = useCallback((t: number, reveal = false) => {
+    setSeek({ t, seq: ++sequence.current });
+    if (!reveal) return;
+    const replay = document.getElementById("replay");
+    const reduced = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    replay?.scrollIntoView?.({ block: "start", behavior: reduced ? "auto" : "smooth" });
+  }, []);
   useShareViewBeacon(token);
   const resultTone = game.result === "Win" ? "text-success" : game.result === "Loss" ? "text-danger" : "text-text";
   const played = game.playedOn ? new Date(`${game.playedOn}T12:00:00Z`).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" }) : null;

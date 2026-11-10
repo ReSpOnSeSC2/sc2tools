@@ -54,7 +54,8 @@
  * the light theme.
  */
 
-import { ChevronDown, ChevronUp, Keyboard } from "lucide-react";
+import { ChevronDown, ChevronUp, Film, Keyboard } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MapPlayback } from "@/lib/mapReplay";
 import type { PatchEra } from "@/lib/meta";
@@ -67,7 +68,8 @@ import {
 } from "@/lib/replayHud";
 import { useReplayMusic } from "@/lib/replayMusic";
 import { clampReplayTime } from "@/lib/replayLink";
-import { MapReplayer, type ReplayMapMarker } from "../MapReplayer";
+import { MapReplayer, type MapReplayerHandle, type ReplayMapMarker } from "../MapReplayer";
+import { nextReplayVision, visionIsObserved, visionLabel, type ReplayVision } from "@/lib/replayVision";
 import { ReplayTopBar } from "./ReplayTopBar";
 import { ProductionRail, type ProductionTab } from "./ProductionRail";
 import { BuildOrderRail } from "./BuildOrderRail";
@@ -77,7 +79,10 @@ import { useReplayPreferences } from "@/lib/useReplayPreferences";
 import { useReplayShortcuts } from "@/lib/useReplayShortcuts";
 import { formatClock } from "@/lib/replayHud";
 import { ReplayShortcutSheet } from "./ReplayShortcutSheet";
-import { REPLAY_SCOPE_CLASS, STAGE_BG } from "./replayTheme";
+import { REPLAY_SCOPE_CLASS, STAGE_BG, sideLabel } from "./replayTheme";
+
+// The clip dialog, its renderer and both encoders load only on "Clip".
+const ClipDialog = dynamic(() => import("./clip/ClipDialog"), { ssr: false });
 
 export function ReplayStage({
   playback,
@@ -106,9 +111,12 @@ export function ReplayStage({
   onMarkerClick,
   commentMarkers,
   onCommentMarker,
+  commentLabel,
+  onAddNote,
   mobileCompact = false,
   defaultShowProduction = true,
   patchEra,
+  clip,
 }: {
   playback: MapPlayback;
   /** Only used to seed the background score, so the same replay always
@@ -159,6 +167,10 @@ export function ReplayStage({
   onMarkerClick?: (id: string) => void;
   commentMarkers?: readonly CommentTimelineMarker[];
   onCommentMarker?: (marker: CommentTimelineMarker) => void;
+  /** Accessible name of the transport dock's comment strip. */
+  commentLabel?: string;
+  /** Owner game page only: "Add note at 4:12" in the dock and the B key. */
+  onAddNote?: (t: number) => void;
   /** Below ``xl``: hide both rails and shorten the map band, so the
    *  whole stage is short enough to pin above a scrolling thread. */
   mobileCompact?: boolean;
@@ -166,6 +178,10 @@ export function ReplayStage({
   /** The game's patch era, which prices kills and losses. MapPlayback
    *  carries no game version; omitted, the live 12-worker game. */
   patchEra?: PatchEra | null;
+  /** Offer "Make a clip": ``owner`` on the player's own game page (may
+   *  watermark with their player page), ``shared`` on analysis pages the
+   *  owner shared. Omitted, no Clip button. */
+  clip?: "owner" | "shared";
 }) {
   const baseModel = useMemo(() => deriveReplayHud(playback, patchEra), [playback, patchEra]);
   const model = useMemo(() => castMarkers ? { ...baseModel,
@@ -177,7 +193,7 @@ export function ReplayStage({
   const currentTime = useRef(time); currentTime.current = time;
   useEffect(() => { onPlaybackStateChange?.(playing, currentTime.current); }, [playing, onPlaybackStateChange]);
   const { preferences, update } = useReplayPreferences(defaultShowProduction);
-  const { speed, productionSide, buildFilter, showWorkers, autoScroll, panelTab } = preferences;
+  const { speed, productionSide, buildFilter, showWorkers, autoScroll, panelTab, vision } = preferences;
   useEffect(() => { onPlaybackSpeedChange?.(speed); }, [speed, onPlaybackSpeedChange]);
   const showProduction = preferences.rails.production;
   const showBuildOrder = preferences.rails.build;
@@ -195,7 +211,13 @@ export function ReplayStage({
   const panelId = useId();
   const stageRef = useRef<HTMLElement>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [clipOpen, setClipOpen] = useState(false);
+  const replayerRef = useRef<MapReplayerHandle | null>(null);
   const [seekAnnouncement, setSeekAnnouncement] = useState("");
+  const setVision = useCallback((next: ReplayVision) => {
+    update({ vision: next });
+    setSeekAnnouncement(`Vision: ${visionLabel(next, sideLabel("me", myName), sideLabel("opp", null, oppName))}`);
+  }, [update, myName, oppName]);
   useEffect(() => {
     const desktop = window.matchMedia?.("(min-width: 1280px)") ?? { matches: window.innerWidth >= 1280, addEventListener: undefined, removeEventListener: undefined };
     const phone = window.matchMedia?.("(max-width: 767px)") ?? { matches: window.innerWidth < 768, addEventListener: undefined, removeEventListener: undefined };
@@ -236,7 +258,9 @@ export function ReplayStage({
     setSeekAnnouncement(`Playback at ${formatClock(target)} of ${formatClock(model.gameLength)}`);
   }, [seek, onPlayingChange, onStageSeek, model.gameLength]);
   const onReplayKeyDown = useReplayShortcuts({ root: stageRef, time, gameLength: model.gameLength, playing, speed, markers: model.markers,
-    onSeek: onUserSeek, onPlay: onPlayingChange, onSpeed: onSpeedChange, onMusic: () => music.setEnabled(!music.enabled), onHelp: () => setShortcutsOpen(true), helpOpen: shortcutsOpen });
+    onSeek: onUserSeek, onPlay: onPlayingChange, onSpeed: onSpeedChange, onMusic: () => music.setEnabled(!music.enabled), onHelp: () => setShortcutsOpen(true), helpOpen: shortcutsOpen || clipOpen,
+    onVision: () => setVision(nextReplayVision(vision)), onInspect: () => replayerRef.current?.inspectNext(),
+    onNote: onAddNote ? () => { onPlayingChange(false); onAddNote(currentTime.current); } : undefined });
 
   // Pause and seek before the browser can tick the old playing position.
   // External seek-and-pause. Keyed on ``seq`` so asking for the same
@@ -295,6 +319,11 @@ export function ReplayStage({
     >
       <span role="status" aria-live="polite" className="sr-only">{seekAnnouncement}</span>
       <ReplayShortcutSheet container={stageRef.current} open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      {clip && clipOpen ? (
+        <ClipDialog open onClose={() => setClipOpen(false)} playback={playback} time={time} vision={vision} playbackWindow={playbackWindow}
+          races={{ me: myRace, opp: oppRace }} owner={clip === "owner"} replayer={replayerRef} container={stageRef.current}
+          onStart={() => onPlayingChange(false)} />
+      ) : null}
       <ReplayTopBar
         t={time}
         gameLength={model.gameLength}
@@ -305,6 +334,12 @@ export function ReplayStage({
         oppName={oppName}
         myRace={myRace}
         oppRace={oppRace}
+        actions={clip ? (
+          <button type="button" onClick={() => setClipOpen(true)} aria-haspopup="dialog" title="Make a clip of this replay"
+            className="inline-flex min-h-9 items-center gap-1 rounded-md border border-border bg-bg-elevated px-2.5 text-micro font-semibold text-text hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <Film className="h-3.5 w-3.5" aria-hidden />Clip
+          </button>
+        ) : undefined}
       />
 
       <div className="flex min-h-0 flex-1 flex-col">
@@ -349,6 +384,9 @@ export function ReplayStage({
             onWorldClick={onWorldClick}
             onMarkerClick={onMarkerClick}
             patchEra={patchEra}
+            vision={vision}
+            sideLabels={{ me: myName, opp: oppName }}
+            handleRef={replayerRef}
           />
         </div>
 
@@ -382,6 +420,8 @@ export function ReplayStage({
         phases={model.phases}
         commentMarkers={commentMarkers}
         onCommentMarker={onCommentMarker}
+        commentLabel={commentLabel}
+        onAddNote={onAddNote ? (t: number) => { onPlayingChange(false); onAddNote(t); } : undefined}
         onSeek={onUserSeek}
         onPlayingChange={onPlayingChange}
         onSpeedChange={onSpeedChange}
@@ -398,6 +438,9 @@ export function ReplayStage({
           onProductionSide={setProductionSide}
           myName={myName}
           oppName={oppName}
+          vision={vision}
+          onVision={setVision}
+          approximateVision={!visionIsObserved(playback)}
         />
       </TransportDock>
       </div>

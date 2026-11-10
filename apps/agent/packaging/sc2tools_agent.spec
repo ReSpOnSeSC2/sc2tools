@@ -84,6 +84,7 @@ for name in ("pyproject.toml", "LICENSE", "README.md", "THIRD_PARTY.md"):
     if source.exists():
         DATAS.append((str(source), "bot-runtime"))
 if ANALYZER_DIR.exists():
+    DATAS.append((str(ANALYZER_DIR / "VERSION"), "apps/replay-engine"))
     for sub in ("core", "analytics", "scripts", "detectors", "data"):
         src = ANALYZER_DIR / sub
         if src.exists():

@@ -17,6 +17,7 @@ import {
   Upload,
   ClipboardCheck,
   MessagesSquare,
+  Webhook,
 } from "lucide-react";
 import { Tabs, useTabIds } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -57,7 +58,7 @@ export {
 const TAB_ICONS: Record<SettingsTabId, typeof ServerCog> = {
   account: ServerCog, profile: UserRound, backups: Database,
   checkin: ClipboardCheck, randomizer: Dices, import: Upload,
-  overlay: MonitorPlay, chat: MessagesSquare, voice: Volume2, preferences: Settings2, help: LifeBuoy,
+  overlay: MonitorPlay, chat: MessagesSquare, voice: Volume2, preferences: Settings2, integrations: Webhook, help: LifeBuoy,
 };
 const TABS = SETTINGS_TABS.map((tab) => ({ ...tab, Icon: TAB_ICONS[tab.id] }));
 type TabDef = (typeof TABS)[number];

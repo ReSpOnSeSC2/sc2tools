@@ -36,6 +36,7 @@ beforeEach(() => {
     "/v1/me/backups": { items: [] },
     "/v1/me/replay-archive-status": { enabled: false, totalGames: 0, archivedGames: 0, missingGames: 0, archiveComplete: true, backfillVersion: 0, resyncRequestedAt: null, requiresResync: false },
     "/v1/games/hidden": { items: [], nextCursor: null },
+    "/v1/me/reanalysis": { catalogRevision: "0123456789abcdef", cohorts: [], job: null, agent: "offline" },
     "/v1/me/preferences/randomizer": {},
     "/v1/me/preferences/voice": {},
     "/v1/me/player-channels": { identities: [], entries: [] },
@@ -79,9 +80,10 @@ describe("actual Settings section owners", () => {
       expect(definition.closest("dl")).toBe(list);
     });
   });
-  it("renders all seven actual Backups owners including its lazy Hidden games Section", async () => {
+  it("renders every actual Backups owner including its lazy Hidden games and Re-analyze Sections", async () => {
     mount(<SettingsBackups />);
     await waitFor(() => expect(document.getElementById("hidden-games")).toBeTruthy());
+    await waitFor(() => expect(document.getElementById("reanalyze")).toBeTruthy());
     expectTargets(SETTINGS_SECTIONS.backups.map(section => section.id));
   });
   it("includes the nested catalog, library, Gateway and preview Sections in Randomizer", () => {

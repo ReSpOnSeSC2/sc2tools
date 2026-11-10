@@ -47,12 +47,14 @@ export function planBattleReport(facts: StoryFacts, tone: ReportTone = "battle")
   return { headline, tone, paragraphs: groups.map((sentences, index) => ({ id: `paragraph:${index}`, sentences })), facts };
 }
 
-export function reportText(report: BattleReport, markdown = false): string {
+/** ``linkFor`` sets where Markdown time links point (default: the owner's game page). */
+export function reportText(report: BattleReport, markdown = false, linkFor?: (time: number) => string): string {
   const heading = markdown ? `# ${report.headline}` : report.headline;
   const date = [report.facts.map, report.facts.date, report.facts.length === null ? null : `${Math.floor(report.facts.length / 60)}:${String(Math.floor(report.facts.length % 60)).padStart(2, "0")}`].filter(Boolean).join(" · ");
   const paragraphs = report.paragraphs.map(paragraph => paragraph.sentences.map(sentence => {
     const clock = `${Math.floor(sentence.time / 60)}:${String(Math.floor(sentence.time % 60)).padStart(2, "0")}`;
-    return markdown ? `${sentence.text} [${clock}](/app/game/${encodeURIComponent(report.facts.gameId)}?t=${Math.floor(sentence.time)})` : `${sentence.text} [${clock}]`;
+    const href = linkFor ? linkFor(sentence.time) : `/app/game/${encodeURIComponent(report.facts.gameId)}?t=${Math.floor(sentence.time)}`;
+    return markdown ? `${sentence.text} [${clock}](${href})` : `${sentence.text} [${clock}]`;
   }).join(" "));
   return [heading, date, ...paragraphs, "Written from this replay's recorded data with fixed rules. No AI."].filter(Boolean).join("\n\n");
 }

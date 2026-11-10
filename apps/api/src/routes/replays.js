@@ -105,7 +105,31 @@ function parseReplayListQuery(raw) {
     result: firstQueryValue(query.result),
     matchup: firstQueryValue(query.matchup),
     sort: firstQueryValue(query.sort),
+    // The owner's own list may match private note text; the public
+    // archive route has its own parser and never sets this.
+    searchNotes: true,
+    ...parseReviewQueueQuery(query),
   };
+}
+
+/**
+ * The owner-only review queue filters, allowlisted: ``review=todo|done``,
+ * ``review_tag=<tag>`` and ``notes=has``. Anything else is ignored.
+ * Example: parseReviewQueueQuery({ review: "todo", notes: "has" })
+ *   → { review: "todo", hasNotes: true }
+ * @param {Record<string, unknown>} raw
+ * @returns {{review?: "todo"|"done", reviewTag?: string, hasNotes?: true}}
+ */
+function parseReviewQueueQuery(raw) {
+  const query = raw && typeof raw === "object" ? raw : {};
+  /** @type {{review?: "todo"|"done", reviewTag?: string, hasNotes?: true}} */
+  const out = {};
+  const review = firstQueryValue(query.review);
+  if (review === "todo" || review === "done") out.review = review;
+  const tag = firstQueryValue(query.review_tag);
+  if (typeof tag === "string" && tag.trim() && tag.length <= 48) out.reviewTag = tag.trim();
+  if (firstQueryValue(query.notes) === "has") out.hasNotes = true;
+  return out;
 }
 
 /**
@@ -228,6 +252,7 @@ function privateNoStore(res) {
 
 module.exports = {
   buildReplaysRouter,
+  parseReviewQueueQuery,
   _internals: {
     parseReplayListQuery,
     replayListMode,

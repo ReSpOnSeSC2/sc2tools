@@ -43,6 +43,9 @@ export interface ReplayLibraryItem {
   opponent?: ReplayOpponent | null;
   matchup?: string | null;
   streams?: GameStreamLink[];
+  /** Owner rows only: review queue state and the private note count. */
+  review?: import("@/lib/notes").GameReview | null;
+  noteCount?: number;
   /** Archive availability only. Public payloads never include storage keys. */
   replayAvailable?: boolean;
   replayFilename?: string | null;

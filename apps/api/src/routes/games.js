@@ -78,6 +78,40 @@ async function bindIngestedBuildIntent(binder, req, userId, game, options) {
   }
 }
 
+/** A stored or re-stored game retires the owner's per-game caches: build
+ * execution and the Map Intel heatmaps.
+ * @param {{gameExecution?: {invalidateForUser: (userId: string) => void}, spatial?: {invalidateForUser: (userId: string) => void}}} deps
+ * @param {string} userId */
+function invalidateIngestCaches(deps, userId) {
+  deps.gameExecution?.invalidateForUser(userId);
+  deps.spatial?.invalidateForUser(userId);
+}
+
+/** The armed Ghost slots, read once per ingest request. @type {WeakMap<object, Promise<any>>} */
+const practiceContexts = new WeakMap();
+
+/** Grade a stored game for the owner's private practice log, after its
+ * custom-build tag. Advisory: a failure is logged and never makes the game
+ * retryable; the record is written once and never regraded.
+ * @param {import('../services/practiceLog').PracticeLogService | undefined} practice
+ * @param {import('express').Request} req @param {string} userId @param {Record<string, any>} game */
+async function recordIngestedPractice(practice, req, userId, game) {
+  if (!practice) return;
+  try {
+    let context = practiceContexts.get(req);
+    if (!context) {
+      context = practice.ingestContext(userId);
+      practiceContexts.set(req, context);
+    }
+    await practice.recordIngested(userId, game, await context);
+  } catch (err) {
+    if (req.log) {
+      const e = /** @type {{ code?: unknown, name?: unknown }} */ (err);
+      req.log.warn({ userId, errName: String(e && (e.code || e.name) || "error") }, "ingest_practice_grade_failed");
+    }
+  }
+}
+
 /** Tag exactly the bounded evidence GamesService persisted. Malformed/truncated
  * v1 lists have already lost their coverage stamp and must not classify only
  * on ingest. The batch's original owner slot is forwarded, never recaptured.
@@ -179,6 +213,8 @@ function analysisCorpusPage(analysisCorpusAdmission, prepare, load) {
  *   games: import('../services/types').GamesService,
  *   gameContext?: import('../services/gameContext').GameContextService,
  *   gameExecution?: import('../services/buildExecution').BuildExecutionService,
+ *   spatial?: { invalidateForUser: (userId: string) => void },
+ *   practice?: import('../services/practiceLog').PracticeLogService,
  *   opponents: import('../services/types').OpponentsService,
  *   users?: {
  *     addPulseId: (userId: string, pulseId: string) => Promise<boolean>,
@@ -194,6 +230,7 @@ function analysisCorpusPage(analysisCorpusAdmission, prepare, load) {
  *   series?: import('../services/streamSeries').StreamSeriesService,
  *   gameMoments?: import('../services/gameMoments').GameMomentsService,
  *   twitchAutomation?: import('../services/twitchAutomation').TwitchAutomationService,
+ *   discord?: {onFreshGame: (userId: string, game: Record<string, any>) => Promise<void>},
  *   gameVods?: {
  *     resolveForGames: (userId: string, games: Array<Record<string, any>>, opts?: {includeOpponent?: boolean}) => Promise<{
  *       configuredPlatforms: string[],
@@ -628,7 +665,7 @@ function buildGamesRouter(deps) {
               game,
               ...statsArgs,
             );
-            deps.gameExecution?.invalidateForUser(userId);
+            invalidateIngestCaches(deps, userId);
             const outcome = {
               gameId: game.gameId,
               created: marked.created,
@@ -690,15 +727,15 @@ function buildGamesRouter(deps) {
         let storedSpatial = game.spatial;
         try {
           if (typeof deps.games.upsertWithRevision === "function") {
-            const stored = await deps.games.upsertWithRevision(userId, game, ...statsArgs);
-            deps.gameExecution?.invalidateForUser(userId);
+            const stored = await deps.games.upsertWithRevision(userId, game, statsOwner, { replaceAnalysis: true });
+            invalidateIngestCaches(deps, userId);
             if (stored.excluded) { accepted.push({ gameId: game.gameId, created: false, excluded: true }); continue; }
             created = stored.created;
             customBuildRevision = stored.customBuildRevision;
             storedSpatial = stored.spatial;
           } else {
-            created = await deps.games.upsert(userId, game, ...statsArgs);
-            deps.gameExecution?.invalidateForUser(userId);
+            created = await deps.games.upsert(userId, game, statsOwner, { replaceAnalysis: true });
+            invalidateIngestCaches(deps, userId);
           }
         } catch (err) {
           const e = /** @type {{ message?: unknown, code?: string }} */ (err);
@@ -884,10 +921,10 @@ function buildGamesRouter(deps) {
             statsOwner,
           });
         }
+        await recordIngestedPractice(deps.practice, req, userId, game);
         captureGuideSample(deps.guideSamples, userId, game, customTag, created);
         const outcome = { gameId: game.gameId, created };
-        accepted.push(outcome);
-        competitiveAccepted.push(outcome);
+        accepted.push(outcome); competitiveAccepted.push(outcome);
       }
       // Always finish durable quarantine repairs after a stored marker,
       // including on a retry where the rows were already sticky-flagged.
@@ -995,7 +1032,9 @@ function buildGamesRouter(deps) {
           }
         }
       }
-      const freshGame = accepted.length > 0 ? pickFreshOverlayGame(competitiveIncoming, competitiveAccepted) : null;
+      // Discord result/peak posts (the user's own opt-in webhooks) are only
+      // queued here; the outbox job sends. Never delays or fails the ingest.
+      const freshGame = accepted.length > 0 ? pickFreshOverlayGame(competitiveIncoming, competitiveAccepted) : null; queueDiscordPosts(deps.discord, userId, freshGame, req.log);
       if (freshGame && deps.twitchAutomation?.deps.enabled === true && deps.liveGameBroker) {
         const key = pickGameKey(deps.liveGameBroker, userId, freshGame, { oppName: freshGame.opponent?.displayName });
         // Dormant under the default-off server gate. Independent from overlay
@@ -1351,6 +1390,15 @@ function compactGameForRealtime(game) {
         }
       : undefined,
   };
+}
+
+/**
+ * @param {{onFreshGame: (userId: string, game: Record<string, any>) => Promise<void>}|undefined} discord
+ * @param {string} userId @param {Record<string, any>|null} game @param {import('pino').Logger|undefined} log
+ */
+function queueDiscordPosts(discord, userId, game, log) {
+  if (!discord || !game) return;
+  void discord.onFreshGame(userId, game).catch((err) => log?.warn({ code: err?.code || "discord_enqueue_failed" }, "discord_enqueue_failed"));
 }
 
 /**

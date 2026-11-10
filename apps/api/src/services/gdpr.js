@@ -15,20 +15,23 @@ const { dataInventory } = require("./dataInventory");
 const { USER_SCOPED_COLLECTIONS } = require("./accountExportPolicy");
 const { collectAccountExport } = require("./accountExportData");
 const { accountExportStream } = require("./accountExportStream");
+const { retireReanalysisJobs } = require("./reanalysis");
+const { NotesService } = require("./notes");
 
 // Every registered collection needs an explicit disposition. Shared/public
 // records use dedicated scrubbers; this map is audited by a coverage test and
 // deliberately has no catch-all for future collections.
 const GDPR_CLASSIFICATION = Object.freeze({
-  USERS: "user_scoped", PROFILES: "user_scoped", OPPONENTS: "user_scoped", OPPONENT_NOTES: "user_scoped",
+  USERS: "user_scoped", PROFILES: "user_scoped", OPPONENTS: "user_scoped", OPPONENT_NOTES: "user_scoped", NOTES: "user_scoped",
   GAMES: "user_scoped", GAME_DETAILS: "user_scoped", CUSTOM_BUILDS: "user_scoped", CUSTOM_BUILD_JOBS: "purge_only",
+  CUSTOM_BUILD_REVISIONS: "purge_only", COMMUNITY_SAVES: "purge_only",
   DEVICE_PAIRINGS: "ttl_ephemeral", DEVICE_TOKENS: "user_scoped", OVERLAY_TOKENS: "user_scoped",
   MULTICHAT_STUDIO: "overlay_token_scoped", MULTICHAT_SOUNDS: "purge_only", MULTICHAT_ENGAGEMENT_EVENTS: "overlay_token_scoped",
   MULTICHAT_VIEWERS: "overlay_token_scoped", MULTICHAT_PREDICTIONS: "overlay_token_scoped", MULTICHAT_CLIP_MOMENTS: "overlay_token_scoped",
   PLATFORM_CONNECTIONS: "purge_only", PUBLIC_YOUTUBE_ARCHIVES: "global", PLATFORM_OAUTH_STATES: "ttl_ephemeral",
   YOUTUBE_CREATE_OPERATIONS: "purge_only", PLATFORM_WEBHOOK_RECEIPTS: "ttl_ephemeral", PLATFORM_EVENTS: "purge_only",
   TWITCH_AUTOMATION_RECEIPTS: "purge_only",
-  IMPORT_JOBS: "user_scoped", MACRO_JOBS: "user_scoped", AGENT_RELEASES: "global", COMMUNITY_BUILDS: "purge_only",
+  IMPORT_JOBS: "user_scoped", MACRO_JOBS: "user_scoped", REANALYSIS_JOBS: "purge_only", AGENT_RELEASES: "global", COMMUNITY_BUILDS: "purge_only",
   COMMUNITY_REPORTS: "purge_only", USER_BACKUPS: "user_scoped", BACKUP_RESTORE_STAGING: "ttl_ephemeral",
   PENDING_IDENTITY_DELETIONS: "ttl_ephemeral", ARCADE_LEADERBOARD: "purge_only", ADMIN_EVENTS: "purge_only",
   SUPPORT_EMAIL_SYNC: "global", SITE_PRESENCE: "ttl_ephemeral", COACHING: "user_scoped",
@@ -39,6 +42,10 @@ const GDPR_CLASSIFICATION = Object.freeze({
   JOB_RUNS: "global", ADMIN_AUDIT: "purge_only",
   GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
   GHOST_EXAMPLES: "purge_only", PLAYER_GOALS: "purge_only",
+  // Reports and delivery channels: exported explicitly (Discord URLs
+  // redacted, push endpoints/keys included) and purged with the owner.
+  STREAM_SESSIONS: "purge_only", DISCORD_HOOKS: "purge_only", DISCORD_OUTBOX: "purge_only",
+  PUSH_SUBSCRIPTIONS: "purge_only",
   // Share links are exported (without their tokens) and deleted, but never
   // restored: a snapshot must not revive a link revoked after it was taken.
   GAME_SHARES: "purge_only",
@@ -83,6 +90,10 @@ const PURGE_ONLY_COLLECTIONS = [
   // Ephemeral background work must never be exported/restored: doing so could
   // resurrect a completed classifier after an account recovery.
   ["customBuildJobs", "userId"],
+  // Build version history and community save markers: derived from the
+  // exported builds, so a restore starts a fresh history.
+  ["customBuildRevisions", "userId"],
+  ["communitySaves", "userId"],
   ["arcadeLeaderboard", "userId"],
   ["communityBuilds", "ownerUserId"],
   ["communityReports", "reporterUserId"],
@@ -106,9 +117,20 @@ const PURGE_ONLY_COLLECTIONS = [
   // must never replay. Bound answers already live on games.buildIntent.
   ["buildIntentLive", "userId"],
   ["multichatSounds", "userId"],
+  // Re-analysis runs are live operational work: deleted with the account,
+  // never exported or restored (a restore must not revive a queue).
+  ["reanalysisJobs", "userId"],
   // Personal goals are derived training targets; a restore must not
   // resurrect goals (and their notify claims) deleted in between.
   ["playerGoals", "userId"],
+  // Reports and delivery channels. The outbox goes first so a drain that
+  // races the erasure finds no hook to decrypt; push endpoints and the
+  // stream reports follow. Restoring them from a snapshot would revive a
+  // revoked device or webhook, so they never round-trip.
+  ["discordOutbox", "userId"],
+  ["discordHooks", "userId"],
+  ["pushSubscriptions", "userId"],
+  ["streamSessions", "userId"],
   // Revocable single-game share links. A restore must never revive one.
   ["gameShares", "userId"],
 ];
@@ -760,6 +782,13 @@ class GdprService {
     return this.db.games.countDocuments(this._gamesWipeFilter(userId, opts));
   }
 
+  /** What still points at removed games: Review Exchange requests and private game notes.
+   * @param {string} userId */
+  async _afterGamesRemoved(userId) {
+    if (this.reviews) await this.reviews.closeForMissingGames(userId);
+    if (this.db.notes) await new NotesService(this.db).deleteForMissingGames(userId);
+  }
+
   /** @param {string} userId @param {{since?: Date|null, until?: Date|null, expectedGames?:number}} [opts] */
   async wipeGames(userId, opts = {}) {
     const gdprFence = await this._acquireMutationFence(userId, "wipe_games");
@@ -885,10 +914,11 @@ class GdprService {
     }
     await gdprFence.assert();
     const macroJobsRes = await this.db.macroJobs.deleteMany({ userId });
+    // A running re-analysis batch could otherwise re-upload wiped games.
+    await retireReanalysisJobs(this.db.reanalysisJobs, this.io, userId);
 
-    // A review request's scoped grant points at one game; once that game
-    // is gone the request closes (its thread text stays).
-    if (this.reviews) await this.reviews.closeForMissingGames(userId);
+    // Requests on a removed game close (thread text stays); its private notes go.
+    await this._afterGamesRemoved(userId);
 
     const opponentsDeleted = await this.rebuildOpponentsForUser(userId);
     await gdprFence.assert();

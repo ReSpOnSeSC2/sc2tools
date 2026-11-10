@@ -18,6 +18,7 @@ import {
 import { ReplayDownloadButton } from "@/components/analyzer/ReplayDownloadButton";
 import { fmtGameDate, fmtMinutes, fmtMmr } from "@/lib/format";
 import { ShareGameButton } from "./ShareGameButton";
+import { AnalysisEngineChip } from "./AnalysisEngineChip";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { isReviewableGame } from "@/lib/reviews";
 import { CorrectedBadge, PlannedBadge } from "@/components/build-checkin/PlannedBadge";
@@ -50,12 +51,18 @@ export function GameDetailShell({
   oppStrategyLabel,
   oppCorrected,
   exportAction,
+  noteActions,
   source,
+  shareTimeSec,
 }: {
   game: GameSummary;
+  /** The shared replay clock, for the Share menu's "Copy link at m:ss". */
+  shareTimeSec?: number | null;
   source?: GameSource | null;
   children: ReactNode;
   exportAction?: ReactNode;
+  /** Review queue toggle and the opponent quick note (owner page). */
+  noteActions?: ReactNode;
   opponentContext?: OpponentNavigationContext | null;
   streamLinks?: GameStreamLink[] | null;
   /** Effective build label from the live check-in state; the slim row's otherwise. */
@@ -151,6 +158,7 @@ export function GameDetailShell({
               {namedOpponent || game.opponent?.race ? <MetaItem label="Opponent">
                 <OpponentLink pulseId={game.opponent?.pulseId} name={oppName} race={game.opponent?.race} />
               </MetaItem> : null}
+              <MetaItem label="Analysis"><AnalysisEngineChip engineVersion={game.engineVersion} /></MetaItem>
             </dl>
 
             <div
@@ -158,7 +166,8 @@ export function GameDetailShell({
               aria-label="Game actions"
               className="flex min-h-9 w-full flex-wrap items-center justify-end gap-2"
             >
-              <ShareGameButton game={game} />
+              {noteActions}
+              <ShareGameButton game={game} currentTimeSec={shareTimeSec} />
               {exportAction}
               <ReplayDownloadButton
                 gameId={game.gameId}

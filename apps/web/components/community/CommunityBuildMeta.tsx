@@ -18,6 +18,8 @@ export function CommunityBuildMeta({ data, ruleCount, stepCount }: { data: Commu
     <div className={row}><dt className="text-text-muted">Rules</dt><dd className="font-medium text-text">{ruleCount === null ? `${stepCount} step${stepCount === 1 ? "" : "s"}` : `${ruleCount} rule${ruleCount === 1 ? "" : "s"}`}</dd></div>
     <div className={row}><dt className="text-text-muted">Skill level</dt><dd>{skill ? <Badge size="sm" variant="neutral">{skill.label}</Badge> : "Any level"}</dd></div>
     <div className={row}><dt className="text-text-muted">Published</dt><dd className="font-medium text-text">{fmtDay(data.publishedAt)}</dd></div>
-    <div className={row}><dt className="text-text-muted">Updated</dt><dd className="font-medium text-text">{fmtDay(data.updatedAt || data.publishedAt)}</dd></div>
+    <div className={row}><dt className="text-text-muted">Updated</dt><dd className="font-medium text-text">{fmtDay(data.contentUpdatedAt || data.updatedAt || data.publishedAt)}</dd></div>
+    <div className={row}><dt className="text-text-muted">Saved by</dt><dd className="font-medium text-text">{(data.saves ?? 0) === 1 ? "1 player" : `${data.saves ?? 0} players`}</dd></div>
+    {data.authorRecord ? <div className={row}><dt className="text-text-muted">Author’s record</dt><dd className="font-medium tabular-nums text-text">{data.authorRecord.wins}–{data.authorRecord.losses}</dd></div> : null}
   </dl></Card>;
 }

@@ -105,6 +105,23 @@ describe("BuildPublishModal community identity", () => {
     });
   });
 
+  it("leaves the public record off by default and sends the author's opt-in", async () => {
+    harness.apiCall
+      .mockResolvedValueOnce({ published: false, publicSlug: null, authorName: "Profile Author", publishAnonymously: false, mirrorPending: false })
+      .mockResolvedValueOnce({ slug: "public-three-gate" });
+    renderModal();
+    const toggle = await screen.findByRole("checkbox", { name: "Show my record with this build publicly" }) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    expect(toggle.getAttribute("aria-describedby")).toBeTruthy();
+    expect(document.getElementById(toggle.getAttribute("aria-describedby")!)?.textContent).toMatch(/Off by default/);
+    await waitFor(() => expect(toggle.disabled).toBe(false));
+    fireEvent.click(toggle);
+    await acknowledge();
+    fireEvent.click(screen.getByRole("button", { name: "Publish…" }));
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(harness.apiCall.mock.calls[1][2].body).showRecord).toBe(true);
+  });
+
   it("hydrates and preserves an existing anonymous choice", async () => {
     harness.apiCall
       .mockResolvedValueOnce({

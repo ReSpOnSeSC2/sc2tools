@@ -61,6 +61,16 @@ describe("SharedGameView", () => {
     expect(view.container.querySelector('a[href^="/app"]')).toBeNull();
   });
 
+  it("shows the battle report with time links back to this share page", async () => {
+    const view = render(<SharedGameView token={TOKEN} data={DATA} />);
+    expect(await screen.findByRole("heading", { name: "Battle report" })).toBeTruthy();
+    const links = Array.from(view.container.querySelectorAll<HTMLAnchorElement>("[data-report-paragraph] a"));
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) expect(link.getAttribute("href")).toMatch(/^\/g\/AbCdEfGhIjKlMnOp\?t=\d+#replay$/);
+    const report = view.container.querySelector("#battle-report")?.textContent ?? "";
+    expect(report).not.toMatch(/\byou(r)?\b/i);
+  });
+
   it("plays the recorded replay through the share's own grant, storage links first", async () => {
     render(<SharedGameView token={TOKEN} data={DATA} initialTimeSec={312} />);
     await screen.findByTestId("segmented-host");

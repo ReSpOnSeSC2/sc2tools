@@ -1,5 +1,6 @@
 "use client";
 import { CalendarCheck2, Check, UserRound } from "lucide-react";
+import { bookingIcs, downloadIcs } from "@/lib/coaching/ics";
 import { formatDay, formatDuration, formatRange } from "./coachingTime";
 import type { Booking } from "./coachingScheduleModel";
 export function BookingCard({
@@ -7,12 +8,15 @@ export function BookingCard({
   primaryTimeZone,
   coachTimeZone,
   showStudent = false,
+  calendarSummary = "Coaching session",
   onCancel,
 }: {
   booking: Booking;
   primaryTimeZone: string;
   coachTimeZone?: string;
   showStudent?: boolean;
+  /** Event title in the downloaded .ics file. */
+  calendarSummary?: string;
   onCancel: () => void;
 }) {
   return (
@@ -34,13 +38,22 @@ export function BookingCard({
           ) : null}
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onCancel}
-        className="mt-3 text-caption font-bold text-text-muted underline-offset-4 hover:text-danger hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        Cancel session
-      </button>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+        <button
+          type="button"
+          onClick={() => downloadIcs(`sc2tools-session-${booking.startAt.slice(0, 10)}.ics`, bookingIcs(booking, calendarSummary))}
+          className="min-h-11 text-caption font-bold text-text-muted underline-offset-4 hover:text-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          Add to calendar
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="min-h-11 text-caption font-bold text-text-muted underline-offset-4 hover:text-danger hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          Cancel session
+        </button>
+      </div>
     </article>
   );
 }
