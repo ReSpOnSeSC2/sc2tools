@@ -153,6 +153,38 @@ test("stream reports: four quiet hours close a stream, the newest 100 are kept, 
   expect(await h.db.streamSessions.countDocuments({ userId: "u_hal" })).toBe(0);
 });
 
+test("stream closure survives a failed build and a failed notification without changing its original end", async () => {
+  await h.seedUser("ivy");
+  const streams = h.services.streamReports;
+  const end = Date.now();
+  await h.db.games.insertOne(game("u_ivy", end - 30 * 60_000));
+  await streams.start("u_ivy", end - HOUR);
+  const build = jest.spyOn(streams, "build").mockRejectedValueOnce(new Error("read failed"));
+  streams.now = () => end;
+  try {
+    await expect(streams.end("u_ivy")).rejects.toThrow("read failed");
+    const pending = await h.db.streamSessions.findOne({ userId: "u_ivy" });
+    expect(pending).toMatchObject({ reportState: "building", endAt: new Date(end), endedBy: "manual" });
+    expect((await get("ivy", "/v1/reports/streams")).body.items).toEqual([]);
+    await get("ivy", `/v1/reports/streams/${pending.streamId}`).expect(404);
+
+    const notify = jest.spyOn(h.services.notifications, "notify").mockRejectedValueOnce(new Error("notice failed"));
+    streams.now = () => end + 60_000;
+    try {
+      expect((await streams.closeIdle()).closed).toBe(0);
+      expect(await h.db.streamSessions.findOne({ userId: "u_ivy" })).toMatchObject({ reportState: "notifying", games: 1, endAt: new Date(end) });
+      expect((await streams.closeIdle()).closed).toBe(1);
+      expect((await streams.closeIdle()).closed).toBe(0);
+    } finally { notify.mockRestore(); }
+    expect(build).toHaveBeenCalledTimes(2);
+    expect(await h.db.notifications.countDocuments({ userId: "u_ivy", kind: "report.stream" })).toBe(1);
+    expect((await get("ivy", `/v1/reports/streams/${pending.streamId}`)).body).toMatchObject({ games: 1, endAt: new Date(end).toISOString() });
+  } finally {
+    streams.now = Date.now;
+    build.mockRestore();
+  }
+});
+
 test("Today links the last completed report Monday through Wednesday in the saved time zone", () => {
   const { todayReportWeek } = require("../src/services/reportPreferences");
   const wednesdayUtc = Date.parse("2026-11-12T02:00:00.000Z");
