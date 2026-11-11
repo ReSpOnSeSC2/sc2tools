@@ -418,7 +418,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     check: "Test displays a sample recap. Once the source is loaded, Fire session recap uses your real available session summary.",
     troubleshooting: "Refreshing the Browser Source does not replay the last recap. Wait for it to load, then press Fire session recap again. Missing starting or current MMR produces a dash for net MMR.",
     placement: "Use a prominent card area in a closing or break scene where viewers can read the record.",
-    source: "dedicated", settingsHref: OVERLAY_SETTINGS, related: ["session", "streak", "stream-scene"],
+    source: "dedicated", settingsHref: OVERLAY_SETTINGS, related: ["session", "streak", "stream-scene"], helpSlug: "stream-reports",
   },
   {
     id: "countdown-timer", name: "Countdown timer", group: "production",

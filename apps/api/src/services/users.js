@@ -1,6 +1,7 @@
 "use strict";
 const { sanitizeGameMomentAlerts } = require("./multichatAppearance");
 const { sanitizeChatCommands } = require("./chatCommands");
+const { REPORTS_PREF_TYPE } = require("./reportPreferences");
 
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
@@ -874,7 +875,7 @@ class UsersService {
     }
     await this.db.users.updateOne(
       { userId },
-      { $set: { [`preferences.${type}`]: prefs } },
+      { $set: { [`preferences.${type}`]: prefs, ...(type === REPORTS_PREF_TYPE && prefs.stream === false ? { streamReportPublicEpoch: crypto.randomUUID() } : {}) } },
     );
     return prefs;
   }

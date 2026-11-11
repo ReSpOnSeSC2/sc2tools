@@ -121,7 +121,8 @@ test("stream report: computed once per stream, stored without opponent names, li
   expect(summary).toMatchObject({ games: 2, wins: 1, losses: 1, endedBy: "manual" });
   const doc = await h.db.streamSessions.findOne({ userId: "u_eve", streamId: summary.id });
   expect(doc).toMatchObject({ randomizer: { games: 1, wins: 0, losses: 1 }, crystalBall: { rounds: 1, picks: 2, correct: 1, viewers: 2, accuracy: null },
-    supporters: { events: 1, viewers: 1 }, bestWin: { opponentMmr: 4300, matchup: "PvT" } });
+    supporters: { events: 1, viewers: 1, top: [1] }, bestWin: { opponentMmr: 4300, matchup: "PvT" } });
+  expect(doc.crystalBall.top).toEqual([{ picks: 1, correct: 1 }, { picks: 1, correct: 0 }]);
   expect(JSON.stringify(doc)).not.toMatch(/SecretOppZed|ViewerOne|ViewerTwo/);
   expect(Buffer.byteLength(JSON.stringify(doc))).toBeLessThanOrEqual(5120);
   expect(await h.db.notifications.countDocuments({ userId: "u_eve", kind: "report.stream" })).toBe(1);
@@ -129,6 +130,15 @@ test("stream report: computed once per stream, stored without opponent names, li
   expect((await get("eve", `/v1/reports/streams/${summary.id}`)).body).toMatchObject({ streamId: summary.id, games: 2 });
   expect((await get("bob", `/v1/reports/streams/${summary.id}`)).status).toBe(404);
   expect(await streams.end("u_eve")).toBeNull();
+  const vodPath = `/v1/reports/streams/${summary.id}/vod`;
+  const attach = (name, url) => request(h.app).put(vodPath).set("authorization", h.bearer(name)).send({ url });
+  await attach("bob", "https://www.twitch.tv/videos/42").expect(404);
+  await attach("eve", "https://wrong.example/video/42").expect(400);
+  expect((await attach("eve", "https://www.twitch.tv/videos/42?t=10m&tracking=private").expect(200)).body).toEqual({ vodUrl: "https://www.twitch.tv/videos/42" });
+  expect((await get("eve", `/v1/reports/streams/${summary.id}`)).body.vodUrl).toBe("https://www.twitch.tv/videos/42");
+  expect((await attach("eve", null).expect(200)).body).toEqual({ vodUrl: null });
+  const { privateSearchHttpOptions } = require("../src/middleware/privateSearchTelemetry");
+  expect(privateSearchHttpOptions().ignoreIncomingRequestBody(vodPath)).toBe(true);
 });
 
 test("stream reports: four quiet hours close a stream, the newest 100 are kept, and opting out stores nothing", async () => {
@@ -151,6 +161,94 @@ test("stream reports: four quiet hours close a stream, the newest 100 are kept, 
   expect(await streams.end("u_hal")).toBeNull();
   expect((await h.db.users.findOne({ userId: "u_hal" })).streamSession).toBeUndefined();
   expect(await h.db.streamSessions.countDocuments({ userId: "u_hal" })).toBe(0);
+});
+
+test("stream closure survives a failed build and a failed notification without changing its original end", async () => {
+  await h.seedUser("ivy");
+  const streams = h.services.streamReports;
+  const end = Date.now();
+  await h.db.games.insertOne(game("u_ivy", end - 30 * 60_000));
+  await streams.start("u_ivy", end - HOUR);
+  const build = jest.spyOn(streams, "build").mockRejectedValueOnce(new Error("read failed"));
+  streams.now = () => end;
+  try {
+    await expect(streams.end("u_ivy")).rejects.toThrow("read failed");
+    const pending = await h.db.streamSessions.findOne({ userId: "u_ivy" });
+    expect(pending).toMatchObject({ reportState: "building", endAt: new Date(end), endedBy: "manual" });
+    expect((await get("ivy", "/v1/reports/streams")).body.items).toEqual([]);
+    await get("ivy", `/v1/reports/streams/${pending.streamId}`).expect(404);
+
+    const notify = jest.spyOn(h.services.notifications, "notify").mockRejectedValueOnce(new Error("notice failed"));
+    streams.now = () => end + 60_000;
+    try {
+      expect((await streams.closeIdle()).closed).toBe(0);
+      expect(await h.db.streamSessions.findOne({ userId: "u_ivy" })).toMatchObject({ reportState: "notifying", games: 1, endAt: new Date(end) });
+      expect((await streams.closeIdle()).closed).toBe(1);
+      expect((await streams.closeIdle()).closed).toBe(0);
+    } finally { notify.mockRestore(); }
+    expect(build).toHaveBeenCalledTimes(2);
+    expect(await h.db.notifications.countDocuments({ userId: "u_ivy", kind: "report.stream" })).toBe(1);
+    expect((await get("ivy", `/v1/reports/streams/${pending.streamId}`)).body).toMatchObject({ games: 1, endAt: new Date(end).toISOString() });
+  } finally {
+    streams.now = Date.now;
+    build.mockRestore();
+  }
+});
+
+test("publishes only an opted-in aggregate report and invalidates the old address after opt-out or deletion", async () => {
+  const name = "publicstream";
+  const userId = "u_publicstream";
+  const slug = "stream-player-0123456789";
+  const streamId = "sample01";
+  await h.seedUser(name, { displayName: "Stream Player" });
+  await h.db.streamSessions.insertOne({
+    userId, streamId, games: 3, wins: 2, losses: 1, hours: 1.5, startAt: new Date("2026-11-10T22:42:31.000Z"),
+    endAt: new Date("2026-11-11T00:12:31.000Z"), createdAt: new Date(), bestWin: { gameId: "private-game-id", opponentMmr: 4242 },
+    matchups: [{ name: "PvZ", games: 3, wins: 2, losses: 1 }, { name: "SecretOppZed", games: 1 }],
+    mmr: { delta: 22, account: "Private account" }, clips: [{ minute: 5, reason: "Viewer private message" }],
+  });
+  const publishPath = `/v1/reports/streams/${streamId}/sharing`;
+  const publish = (enabled, actor = name) => request(h.app).patch(publishPath).set("authorization", h.bearer(actor)).send({ enabled });
+  const pref = (stream) => request(h.app).put("/v1/me/preferences/reports").set("authorization", h.bearer(name)).send({ stream });
+  await request(h.app).patch(publishPath).send({ enabled: true }).expect(401);
+  await publish(true, "bob").expect(404);
+  await publish(true).expect(409);
+  await h.db.users.updateOne({ userId }, { $set: { publicProfile: { enabled: true }, replaySharing: { slug, enabled: false } } });
+  const [first, repeated] = await Promise.all([publish(true).expect(200), publish(true).expect(200)]);
+  expect(first.body).toEqual(repeated.body);
+  expect(first.body.href).toMatch(/^\/players\/stream-player-0123456789\/streams\/[\w-]{16}$/);
+  expect(first.body.href).not.toContain(streamId);
+  const address = `/v1/public${first.body.href}`;
+  const shared = await request(h.app).get(address).expect(200);
+  expect(shared.headers["cache-control"]).toBe("private, no-store");
+  expect(shared.body).toEqual({ player: "Stream Player", slug, date: "2026-11-10", games: 3, wins: 2, losses: 1, hours: 1.5, mmrDelta: 22,
+    matchups: [{ name: "PvZ", games: 3, wins: 2, losses: 1 }] });
+  expect(shared.text).not.toMatch(/private-game-id|Private account|Viewer private message|SecretOppZed|22:42:31|4242/);
+
+  await pref(false).expect(200);
+  await request(h.app).get(address).expect(404);
+  await pref(true).expect(200);
+  await request(h.app).get(address).expect(404);
+  const again = await publish(true).expect(200);
+  expect(again.body.href).not.toBe(first.body.href);
+  const next = `/v1/public${again.body.href}`;
+  await request(h.app).get(next).expect(200);
+  const { SECTION_KEYS } = require("../src/util/publicPlayerConfig");
+  const sections = Object.fromEntries(SECTION_KEYS.map((key) => [key, false]));
+  const profile = (enabled, revision) => request(h.app).put("/v1/me/public-profile").set("authorization", h.bearer(name)).send({ enabled, revision, slug, ...sections });
+  await profile(false, 0).expect(200);
+  await request(h.app).get(next).expect(404);
+  await profile(true, 1).expect(200);
+  await request(h.app).get(next).expect(404);
+  const renewed = `/v1/public${(await publish(true).expect(200)).body.href}`;
+  await request(h.app).get(renewed).expect(200);
+  await publish(false).expect(200);
+  await request(h.app).get(renewed).expect(404);
+  const deletion = `/v1/public${(await publish(true).expect(200)).body.href}`;
+  await h.db.users.updateOne({ userId }, { $set: { _gdprMutation: { id: "deleting" } } });
+  await request(h.app).get(deletion).expect(404);
+  await h.db.users.deleteOne({ userId });
+  await request(h.app).get(deletion).expect(404);
 });
 
 test("Today links the last completed report Monday through Wednesday in the saved time zone", () => {

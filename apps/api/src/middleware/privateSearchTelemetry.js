@@ -46,8 +46,17 @@ function isCredentialBodyPath(value) {
   return CREDENTIAL_BODY_PATH.test((end < 0 ? value : value.slice(0, end)).replace(/^https?:\/\/[^/]+(?=\/)/i, ""));
 }
 
+const STREAM_VOD_PATH = /^\/(?:v1\/)?reports\/streams\/[^/]+\/vod\/?$/i;
+
+/** A pasted URL may contain tracking data or credentials before normalization. @param {unknown} value */
+function isStreamVodBodyPath(value) {
+  if (typeof value !== "string") return false;
+  const path = value.replace(/^https?:\/\/[^/]+(?=\/)/i, "").split(/[?#]/, 1)[0];
+  return STREAM_VOD_PATH.test(path);
+}
+
 /** @param {unknown} value */
-const isPrivateBodyPath = value => isHeartbeatBodyPath(value) || isSyncActionPath(value) || isReplayDownloadBatchPath(value) || isCredentialBodyPath(value);
+const isPrivateBodyPath = value => isHeartbeatBodyPath(value) || isSyncActionPath(value) || isReplayDownloadBatchPath(value) || isCredentialBodyPath(value) || isStreamVodBodyPath(value);
 
 /** Heartbeats and sync actions keep their URL/status but never their private
  * body, including a second request copy without its own URL.

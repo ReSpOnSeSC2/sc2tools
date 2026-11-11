@@ -140,7 +140,8 @@ test("stream reports stay under 5 kB and keep viewer data aggregate", () => {
   expect(doc.mmr.points).toHaveLength(40);
   const ball = crystalBall([{ result: "win", picks: { "twitch:a": { pick: "win", user: "A" }, "twitch:b": { pick: "loss", user: "B" } } },
     { result: "loss", picks: { "twitch:a": { pick: "loss" }, "twitch:c": { pick: "loss" }, "twitch:d": { pick: "win" } } }]);
-  expect(ball).toEqual({ rounds: 2, picks: 5, correct: 3, viewers: 4, accuracy: 60 });
+  expect(ball).toEqual({ rounds: 2, picks: 5, correct: 3, viewers: 4, accuracy: 60,
+    top: [{ picks: 2, correct: 2 }, { picks: 1, correct: 1 }, { picks: 1, correct: 0 }, { picks: 1, correct: 0 }] });
   expect(JSON.stringify(ball)).not.toMatch(/"A"|"B"/);
 });
 
