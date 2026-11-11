@@ -92,14 +92,14 @@ test("only Discord webhook URLs are accepted", () => {
 test("Discord posts hide opponent names by default, never ping, and escape user text", () => {
   const game = { gameId: "g1", result: "Defeat", myRace: "Protoss", map: "Alcyone LE", myBuild: "@everyone **2 base**", myMmr: 4100, myMmrSource: "replay", durationSec: 754,
     date: "2026-11-10T12:00:00.000Z", opponent: { race: "Zerg", mmr: 4050, displayName: "SecretOppZed" } };
-  const hidden = templates.resultMessage(game, { options: undefined, mmrDelta: -14, replaySlug: "me" });
+  const hidden = templates.resultMessage(game, { options: undefined, replaySlug: "me" });
   const text = JSON.stringify(hidden);
   expect(hidden.allowed_mentions).toEqual({ parse: [] });
   expect(text).not.toContain("SecretOppZed");
-  expect(text).toContain("4,100 (−14)");
+  expect(hidden.embeds[0].fields).toContainEqual({ name: "MMR", value: "4,100", inline: true });
   expect(text).toContain("\\\\@everyone \\\\*\\\\*2 base\\\\*\\\\*");
   expect(hidden.embeds[0].url).toBeUndefined();
-  const shown = templates.resultMessage(game, { options: { opponentNames: true, mmr: false, replayLink: true }, mmrDelta: -14, replaySlug: "me" });
+  const shown = templates.resultMessage(game, { options: { opponentNames: true, mmr: false, replayLink: true }, replaySlug: "me" });
   expect(JSON.stringify(shown)).toContain("SecretOppZed");
   expect(JSON.stringify(shown)).not.toContain("4,100");
   expect(shown.embeds[0].url).toBe("https://sc2tools.com/p/me/replays/g1");

@@ -322,7 +322,7 @@ test("a result or promotion never includes an unproven rating", async () => {
   expect(JSON.stringify(rows)).not.toMatch(/7,321|7,123/);
 });
 
-test("rating delta and peak use only replay-rated 1v1 games on the same account and queue race", async () => {
+test("a ranked result shows its starting rating without a delta and a peak uses matching replay-rated games", async () => {
   const userId = await promotionRecipient("ratingcohort");
   const now = Date.now() - 30_000;
   const historic = Array.from({ length: 19 }, (_, i) => game(userId, {
@@ -339,7 +339,7 @@ test("rating delta and peak use only replay-rated 1v1 games on the same account 
   ]);
   await discord.onFreshGame(userId, game(userId, { date: new Date(now), myMmr: 4250, myLadderRace: "Random" }));
   expect(await h.db.discordOutbox.countDocuments({ userId, kind: "milestone" })).toBe(0);
-  expect((await h.db.discordOutbox.findOne({ userId, kind: "result" })).payload.embeds[0].fields).toContainEqual({ name: "MMR", value: "4,250 (+30)", inline: true });
+  expect((await h.db.discordOutbox.findOne({ userId, kind: "result" })).payload.embeds[0].fields).toContainEqual({ name: "MMR", value: "4,250", inline: true });
   await h.db.games.insertOne(game(userId, { ...offQueue, date: new Date(now - 2000), myMmr: 4230 }));
   await discord.onFreshGame(userId, game(userId, { date: new Date(now), myMmr: 4260, myLadderRace: "rand" }));
   expect((await h.db.discordOutbox.findOne({ userId, kind: "milestone" })).payload.embeds[0]).toMatchObject({
@@ -362,6 +362,17 @@ test("legacy results are still posted after rating fields are removed, and unver
     ] }] },
   ]));
   expect(await h.db.discordOutbox.countDocuments({ userId, payload: { $exists: false }, dedupeKey: { $exists: true } })).toBe(3);
+});
+
+test("a queued proven result keeps ratings while dropping an inferred current-game delta", async () => {
+  const userId = await promotionRecipient("oldpregame");
+  await discord.enqueue(userId, "result", "previously-queued-result", () => ({ embeds: [{ title: "Victory", fields: [
+    { name: "MMR", value: "4,100 (−14)" }, { name: "Opponent", value: "Zerg · 4,050 MMR" },
+  ] }] }));
+  expect(await discord.drain()).toMatchObject({ sent: 1 });
+  expect(JSON.parse(calls[0].init.body)).toEqual({ embeds: [{ title: "Victory", fields: [
+    { name: "MMR", value: "4,100" }, { name: "Opponent", value: "Zerg · 4,050 MMR" },
+  ] }] });
 });
 
 async function changeInsideDispatchLease(row, change) {

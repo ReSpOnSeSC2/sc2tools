@@ -5,7 +5,7 @@
  * owner-scoped data plus the hook's options:
  *
  *   opponentNames  false by default: no opponent name unless turned on
- *   mmr            true by default: MMR and its change
+ *   mmr            true by default: observed MMR and historical changes
  *   replayLink     false by default, and only with public replay sharing
  *
  * ``allowed_mentions: {parse: []}`` stops any text (custom build names,
@@ -64,7 +64,7 @@ function hookOptions(options) {
 /**
  * One ranked result.
  * @param {any} game slim games row
- * @param {{options?: unknown, mmrDelta?: number|null, replaySlug?: string|null}} ctx
+ * @param {{options?: unknown, replaySlug?: string|null}} ctx
  */
 function resultMessage(game, ctx) {
   const options = hookOptions(ctx.options);
@@ -77,10 +77,7 @@ function resultMessage(game, ctx) {
   const opponent = [options.opponentNames && game.opponent?.displayName ? md(game.opponent.displayName, 40) : null,
     md(game.opponent?.race, 12) || null, opponentMmr !== null && options.mmr ? `${num(opponentMmr)} MMR` : null].filter(Boolean);
   if (opponent.length) fields.push({ name: "Opponent", value: opponent.join(" · "), inline: true });
-  if (options.mmr && ownMmr !== null) {
-    const delta = typeof ctx.mmrDelta === "number" && ctx.mmrDelta !== 0 ? ` (${signed(ctx.mmrDelta)})` : "";
-    fields.push({ name: "MMR", value: `${num(ownMmr)}${delta}`, inline: true });
-  }
+  if (options.mmr && ownMmr !== null) fields.push({ name: "MMR", value: num(ownMmr), inline: true });
   const length = clock(game.durationSec);
   if (length) fields.push({ name: "Length", value: length, inline: true });
   const url = options.replayLink && ctx.replaySlug && typeof game.gameId === "string"
@@ -90,16 +87,19 @@ function resultMessage(game, ctx) {
     ...(url ? { url } : {}), ...(game.date ? { timestamp: new Date(game.date).toISOString() } : {}), footer: { text: "SC2 Tools" } }]);
 }
 
-/** Historical result embeds stored formatted MMR without provenance.
- * Keep the result, removing the two structured places that held ratings.
- * @param {any} payload */
-function withoutLegacyResultRatings(payload) {
+/** Older result embeds included ratings without provenance or attributed a
+ * change between two pregame readings to the current result.
+ * @param {any} payload @param {boolean} verified */
+function sanitizeQueuedResultRatings(payload, verified) {
   if (!Array.isArray(payload?.embeds)) return payload;
   return { ...payload, embeds: payload.embeds.map((/** @type {any} */ embed) => {
     if (!Array.isArray(embed?.fields)) return embed;
     const fields = embed.fields.flatMap((/** @type {any} */ field) => {
-      if (field?.name === "MMR") return [];
-      if (field?.name !== "Opponent" || typeof field.value !== "string") return [field];
+      if (field?.name === "MMR") {
+        if (!verified || typeof field.value !== "string") return [];
+        return [{ ...field, value: field.value.replace(/ \([+−-][0-9,]+\)$/, "") }];
+      }
+      if (verified || field?.name !== "Opponent" || typeof field.value !== "string") return [field];
       const value = field.value.replace(/(?:^| · )[-−]?(?:[0-9,]+|NaN|∞) MMR$/, "");
       return value ? [{ ...field, value }] : [];
     });
@@ -169,4 +169,4 @@ function battleReportMessage(report) {
     url: `${SITE}/g/${encodeURIComponent(report.token)}#battle-report`, footer: { text: "SC2 Tools · Battle report" } }]);
 }
 
-module.exports = { resultMessage, withoutLegacyResultRatings, sessionMessage, weeklyMessage, milestoneMessage, promotionMessage, testMessage, battleReportMessage, hookOptions, md, DEFAULT_OPTIONS };
+module.exports = { resultMessage, sanitizeQueuedResultRatings, sessionMessage, weeklyMessage, milestoneMessage, promotionMessage, testMessage, battleReportMessage, hookOptions, md, DEFAULT_OPTIONS };

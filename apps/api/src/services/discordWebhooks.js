@@ -236,7 +236,7 @@ class DiscordWebhooksService {
     const game = latest[0] || { result: "Victory", myRace: "Protoss", map: "Example map", myBuild: "Example build", myMmr: 4000,
       myMmrSource: "replay", durationSec: 742, opponent: { race: "Zerg", mmr: 3980, mmrSource: "replay", displayName: "Opponent" } };
     const example = !latest[0];
-    if (kind === "result") return { example, payload: templates.resultMessage(game, { options, mmrDelta: example ? 18 : null, replaySlug: null }) };
+    if (kind === "result") return { example, payload: templates.resultMessage(game, { options }) };
     if (kind === "milestone") return { example: true, payload: templates.milestoneMessage({ mmr: 4001, previousPeak: 4000, race: "Protoss" }, { options }) };
     if (kind === "weekly" && this.weekly) {
       const report = await this.weekly.report(userId, {}).catch(() => null);
@@ -295,11 +295,9 @@ class DiscordWebhooksService {
     const cohort = rankedHistoryCohort(userId, game);
     const ratedHistory = ownMmr !== null && cohort ? { ...cohort.match, myMmrSource: "replay", myMmr: { $type: "number", $gt: 0, $lte: 9999 } } : null;
     const projection = { _id: 0, myMmr: 1, myMmrSource: 1 };
-    const previous = ratedHistory && cohort ? await this.db.games.findOne({ ...ratedHistory, date: { $lt: cohort.at } },
-      { projection, sort: { date: -1, _id: -1 } }) : null;
-    const priorMmr = previous ? recordedRating(previous) : null;
-    const mmrDelta = priorMmr !== null && ownMmr !== null ? ownMmr - priorMmr : null;
-    await this.enqueue(userId, "result", `result:${game.gameId}`, (options) => templates.resultMessage(game, { options, mmrDelta, replaySlug: slug }), { replaySlug: slug });
+    // The replay rating is observed at match start. A change from the
+    // previous start belongs to an earlier game, not the result being posted.
+    await this.enqueue(userId, "result", `result:${game.gameId}`, (options) => templates.resultMessage(game, { options, replaySlug: slug }), { replaySlug: slug });
     if (await this.queuePromotion(userId, game, cohort) || !ratedHistory || !cohort || ownMmr === null) return;
     // Avoid the historical sort for ordinary results below an existing peak.
     const higher = await this.db.games.findOne({ ...ratedHistory, myMmr: { ...ratedHistory.myMmr, $gte: ownMmr } }, { projection: { _id: 1 } });
@@ -477,8 +475,8 @@ class DiscordWebhooksService {
 
   /** Remove an archive link when archive consent was withdrawn. @param {any} row @param {any} user */
   currentPayload(row, user) {
-    const payload = row.kind === "result" && !row.shareToken && row.ratingPolicy !== REPLAY_RATING_POLICY
-      ? templates.withoutLegacyResultRatings(row.payload) : row.payload;
+    const payload = row.kind === "result" && !row.shareToken
+      ? templates.sanitizeQueuedResultRatings(row.payload, row.ratingPolicy === REPLAY_RATING_POLICY) : row.payload;
     if (!row.replaySlug || (user.replaySharing?.enabled === true && user.replaySharing.slug === row.replaySlug)) return payload;
     return { ...payload, embeds: payload.embeds.map((/** @type {any} */ embed) => ({ ...embed, url: undefined })) };
   }
