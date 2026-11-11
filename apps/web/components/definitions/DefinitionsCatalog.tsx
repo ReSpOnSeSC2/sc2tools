@@ -11,6 +11,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
+import { InfoTip } from "@/components/ui/InfoTip";
 import { useToastOptional } from "@/components/ui/Toast";
 import { useCopy } from "@/lib/useCopy";
 import { FilterPill } from "@/components/ui/FilterPill";
@@ -26,6 +27,7 @@ import type {
   DefinitionGuideLinks,
 } from "@/lib/guides/definitionLinks";
 import { publicBuildVariantIntent } from "@/lib/buildVariantIntent";
+import type { ClassifierTrust } from "@/lib/classifierTrust";
 import { BuildVariantContinuation } from "./BuildVariantContinuation";
 import { raceIconName, raceTint, type Race } from "@/lib/race";
 import { PracticeButton } from "@/components/practice/PracticeButton";
@@ -54,11 +56,15 @@ function readFilters(params: URLSearchParams): { query: string; race: Race | "Al
  * text search across name, description and 8-worker patch names. Each
  * card is addressable (`/definitions#<id>`) with a copy-link button, and
  * links its published community guides (`guideLinks`, from the server).
+ * A rule with enough check-ins shows "Matches N of M player corrections"
+ * (`trust`, from the server): disagreement volume, never an accuracy score.
  */
 export function DefinitionsCatalog({
   guideLinks = {},
+  trust = null,
 }: {
   guideLinks?: DefinitionGuideLinks;
+  trust?: ClassifierTrust | null;
 } = {}) {
   const searchParams = useSearchParams();
   const encodedParams = searchParams.toString();
@@ -209,6 +215,12 @@ export function DefinitionsCatalog({
                 );
               })}
             </div>
+          {trust && Object.keys(trust).length ? (
+            <p className="flex flex-wrap items-center gap-1 text-caption text-text-muted">
+              Some rules show how often players&apos; build check-ins matched the detected label.
+              <InfoTip termId="player-corrections" label="player corrections" />
+            </p>
+          ) : null}
           <div className="flex items-center justify-between gap-2 text-caption text-text-dim">
             <span aria-live="polite">
               <span className="text-text">{filtered.length}</span> of{" "}
@@ -242,7 +254,7 @@ export function DefinitionsCatalog({
             {([null, ...MATCHUPS.filter((item) => item[0] === groupRace[0])] as const).map((groupMatchup) => {
               const members = entries.filter((def) => def.matchup === groupMatchup);
               if (!members.length) return null;
-              return <div key={groupMatchup ?? "general"} className="space-y-2"><h3 className="text-body font-semibold text-text-muted">{groupMatchup ?? `${groupRace} · general`} ({members.length})</h3><ul className="space-y-2">{members.map((def) => <li key={def.id}><DefinitionCard def={def} highlighted={highlight === def.id} guides={guideLinks[def.id] ?? []} /></li>)}</ul></div>;
+              return <div key={groupMatchup ?? "general"} className="space-y-2"><h3 className="text-body font-semibold text-text-muted">{groupMatchup ?? `${groupRace} · general`} ({members.length})</h3><ul className="space-y-2">{members.map((def) => <li key={def.id}><DefinitionCard def={def} highlighted={highlight === def.id} guides={guideLinks[def.id] ?? []} trust={trust?.[def.name] ?? null} /></li>)}</ul></div>;
             })}
           </section>;
         })}</div>
@@ -255,10 +267,12 @@ function DefinitionCard({
   def,
   guides,
   highlighted,
+  trust,
 }: {
   def: BuildDefinition;
   guides: ReadonlyArray<DefinitionGuideLink>;
   highlighted: boolean;
+  trust: { matches: number; corrections: number } | null;
 }) {
   const tint = raceTint(def.race);
   return (
@@ -303,6 +317,11 @@ function DefinitionCard({
             <CopyDefinitionLink id={def.id} name={def.name} />
           </div>
           <p className="text-caption text-text-muted">{def.description}</p>
+          {trust ? (
+            <p className="text-micro text-text-dim">
+              Matches {trust.matches.toLocaleString()} of {trust.corrections.toLocaleString()} player corrections
+            </p>
+          ) : null}
           <Link href={`/builds?create=detected&definition=${encodeURIComponent(def.id)}`} className="inline-flex min-h-11 items-center text-caption font-semibold text-accent underline underline-offset-2">Make my own variant<span className="sr-only"> of {def.name}</span></Link>
           {def.eightWorkerName ? (
             <p className="text-micro text-text-dim">

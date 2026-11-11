@@ -75,6 +75,7 @@ const { CustomBuildsService } = require("./services/customBuilds");
 const { PresetPoliciesService } = require("./services/presetPolicies");
 const { AdminBuildStudioService } = require("./services/adminBuildStudio");
 const { buildPresetPolicyRouter } = require("./routes/presetPolicy");
+const { buildClassifierTrustRouter } = require("./routes/adminClassifier");
 const { BuildIntentsService } = require("./services/buildIntents");
 const { GhostExamplesService } = require("./services/ghostExamples");
 const { GhostReferencesService } = require("./services/ghostReferences");
@@ -188,6 +189,7 @@ const {
 const { buildFingerprintRouter } = require("./routes/fingerprint");
 const { AdminService } = require("./services/admin");
 const { AdminGlobalService } = require("./services/adminGlobal");
+const { ClassifierQualityService } = require("./services/classifierQuality");
 const { AdminGlobalTrendsService } = require("./services/adminGlobalTrends");
 const { AdminEventsService } = require("./services/adminEvents");
 const { SiteStatsService } = require("./services/siteStats");
@@ -399,6 +401,21 @@ function buildProgressServices(deps, notifications, gameDetails) {
   const leagueTimingPercentiles = new LeagueTimingPercentilesService(deps.db, { logger: deps.logger });
   const leagueTargets = new LeagueTargetsService(deps.db, gameDetails);
   return { playerGoals, leagueTimingPercentiles, leagueTargets };
+}
+
+/** Build the admin's cross-user read services.
+ * @param {AppDeps['db']} db
+ * @param {import('./services/pulseDirectory').PulseDirectoryService} pulseDirectory
+ * @param {import('./services/mmrExpectation').MmrExpectationService} mmrExpectation
+ * @param {import('./services/gameDetails').GameDetailsService} gameDetails
+ * @param {import('./services/presetPolicies').PresetPoliciesService} presetPolicies
+ */
+function buildAdminInsightServices(db, pulseDirectory, mmrExpectation, gameDetails, presetPolicies) {
+  return {
+    adminGlobal: new AdminGlobalService({ db, pulseDirectory }),
+    adminGlobalTrends: new AdminGlobalTrendsService({ db, mmrExpectation }),
+    classifierQuality: new ClassifierQualityService({ db, gameDetails, presetPolicies }),
+  };
 }
 
 /**
@@ -1014,15 +1031,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     gdpr,
     infrastructureUsage,
   });
-  // Cross-user global tracking for the admin Global tab — merges every
-  // user's opponents / games into platform-wide player, strategy,
-  // build, and map records. Reads the shared Pulse cache for resolve /
-  // MMR coverage counters.
-  const adminGlobal = new AdminGlobalService({
-    db: deps.db,
-    pulseDirectory,
-  });
-  const adminGlobalTrends = new AdminGlobalTrendsService({ db: deps.db, mmrExpectation });
+  const adminInsights = buildAdminInsightServices(deps.db, pulseDirectory, mmrExpectation, gameDetails, presetPolicies);
+  const { adminGlobalTrends } = adminInsights;
   // Atlas Cloud Backup health + in-app snapshot counts for /admin/health;
   // server.js runs the hourly stale-backup alert against the same cache.
   const backupStatus = new BackupStatusService({
@@ -1132,8 +1142,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     tickerFacts,
     twitchChatBot,
     admin,
-    adminGlobal,
-    adminGlobalTrends,
+    ...adminInsights,
     adminEvents,
     backupStatus,
     analytics,
@@ -1354,6 +1363,63 @@ function registerRuntimeCapacityProviders(registry, services) {
 function mountScopedGrants(app, services, { auth, isAdmin, rollout }) {
   app.use(SERVICE.ROUTE_PREFIX, buildReviewsRouter({ reviews: services.reviews, reputation: services.reviewerReputation, auth, isAdmin, rollout }));
   app.use(SERVICE.ROUTE_PREFIX, buildGameSharesRouter({ gameShares: services.gameShares, auth }));
+}
+
+/** @param {import('express').Express} app
+ * @param {AppDeps} deps @param {ReturnType<typeof makeServices>} services
+ * @param {Set<string>} adminClerkIds @param {import('express').RequestHandler} auth
+ * @param {(req: import('express').Request) => boolean} isAdmin */
+function mountAdminRoutes(app, deps, services, adminClerkIds, auth, isAdmin) {
+  // Public, k-floored /definitions trust lines; before any router that
+  // applies auth to every /v1 path it sees.
+  app.use(SERVICE.ROUTE_PREFIX, buildClassifierTrustRouter(services.classifierQuality));
+  // Operational admin router — gated on isAdmin(req) inside the
+  // router. Mounted alongside the rest of the v1 prefix so
+  // /v1/admin/* shares CORS, rate-limit, and JSON parsing config.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildAdminRouter({
+      buildStudio: { studio: services.buildStudio, policies: services.presetPolicies },
+      classifierQuality: services.classifierQuality,
+      announcements: services.announcements,
+      supportMessages: services.supportMessages,
+      jobLedger: services.jobLedger, adminAudit: services.adminAudit,
+      protectedAdminIds: deps.config.adminUserIds || [],
+      protectedAdminEmails: deps.config.adminEmails || [],
+      onAdminRevoked: (clerkId) => { adminClerkIds.delete(clerkId); },
+      pairings: services.pairings, agentVersion: services.agentVersion,
+      userCache: services.userCache,
+      replayArchiveEnabled: deps.config.replayFilesStore === "r2",
+      admin: services.admin,
+      adminGlobal: services.adminGlobal,
+      adminGlobalTrends: services.adminGlobalTrends,
+      adminEvents: services.adminEvents,
+      backupStatus: services.backupStatus,
+      analytics: services.analytics,
+      gdpr: services.gdpr,
+      games: services.games,
+      opponents: services.opponents,
+      perGame: services.perGame,
+      users: services.users,
+      auth,
+      isAdmin,
+      // Push freshly-granted admins into the live allowlist so their
+      // next request is authorized without waiting for a restart.
+      onAdminGranted: (clerkUserId) => {
+        if (clerkUserId) adminClerkIds.add(clerkUserId);
+      },
+      gameDetailsStoreKind: deps.config.gameDetailsStore,
+      replayFilesStoreKind: deps.config.replayFilesStore,
+      browserUploadCors: services.browserUploadCors,
+      guideNotes: services.guideNotes,
+      guides: services.guides,
+      guideStats: services.guideStats,
+      guideStatsJob: services.guideStatsJob,
+      revalidateGuides: services.revalidateGuides,
+      guideSamplesBackfill: services.guideSamplesBackfill,
+      guideVideos: services.guideVideos,
+    }),
+  );
 }
 
 /**
@@ -1652,52 +1718,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     }),
   );
   app.use(SERVICE.ROUTE_PREFIX, buildPresetPolicyRouter(services.presetPolicies));
-  // Operational admin router — gated on isAdmin(req) inside the
-  // router. Mounted alongside the rest of the v1 prefix so
-  // /v1/admin/* shares CORS, rate-limit, and JSON parsing config.
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildAdminRouter({
-      buildStudio: { studio: services.buildStudio, policies: services.presetPolicies },
-      announcements: services.announcements,
-      supportMessages: services.supportMessages,
-      jobLedger: services.jobLedger, adminAudit: services.adminAudit,
-      protectedAdminIds: deps.config.adminUserIds || [],
-      protectedAdminEmails: deps.config.adminEmails || [],
-      onAdminRevoked: (clerkId) => { adminClerkIds.delete(clerkId); },
-      pairings: services.pairings, agentVersion: services.agentVersion,
-      userCache: services.userCache,
-      replayArchiveEnabled: deps.config.replayFilesStore === "r2",
-      admin: services.admin,
-      adminGlobal: services.adminGlobal,
-      adminGlobalTrends: services.adminGlobalTrends,
-      adminEvents: services.adminEvents,
-      backupStatus: services.backupStatus,
-      analytics: services.analytics,
-      gdpr: services.gdpr,
-      games: services.games,
-      opponents: services.opponents,
-      perGame: services.perGame,
-      users: services.users,
-      auth,
-      isAdmin,
-      // Push freshly-granted admins into the live allowlist so their
-      // next request is authorized without waiting for a restart.
-      onAdminGranted: (clerkUserId) => {
-        if (clerkUserId) adminClerkIds.add(clerkUserId);
-      },
-      gameDetailsStoreKind: deps.config.gameDetailsStore,
-      replayFilesStoreKind: deps.config.replayFilesStore,
-      browserUploadCors: services.browserUploadCors,
-      guideNotes: services.guideNotes,
-      guides: services.guides,
-      guideStats: services.guideStats,
-      guideStatsJob: services.guideStatsJob,
-      revalidateGuides: services.revalidateGuides,
-      guideSamplesBackfill: services.guideSamplesBackfill,
-      guideVideos: services.guideVideos,
-    }),
-  );
+  mountAdminRoutes(app, deps, services, adminClerkIds, auth, isAdmin);
   // User → admin messaging (bug reports). Auth-gated per-path inside
   // the router; persists each message as a ``user_message`` admin
   // event so it shares the /admin/notifications inbox.

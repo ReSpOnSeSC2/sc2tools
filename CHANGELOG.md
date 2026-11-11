@@ -193,6 +193,27 @@ corresponding GitHub Release.
   page or its definition.
 - Give the header's check-in chip a 44px touch target without changing its look.
 
+### Admin console
+
+- Notifications: mark a single item read or unread from its row, see unread
+  counts on each filter chip, mark only the selected type read, and open the
+  linked user straight from a signup, install or message. A failed save shows
+  Retry instead of failing silently.
+- Opponent and global player games: ties and unrecorded results never show as
+  losses, the opponent page opens with a head-to-head summary (record, decided
+  win rate, average length, top maps, last 10), both pages filter by result and
+  map (and by user on the global page), and j/k or the arrow keys move between
+  games.
+- New Classifier console: see where players' build check-ins disagree with the
+  detected label, by matchup and engine version, with sample build orders that
+  copy as test fixtures. Rules stay hand-edited.
+
+### Build definitions
+
+- Rules with enough build check-ins now show "Matches N of M player
+  corrections" on the Build & Strategy Definitions page. Your corrections help
+  improve labels for everyone.
+
 ### Share cards
 
 - Fix the link printed on every share card. `sc2tools.com/arcade` now leads to

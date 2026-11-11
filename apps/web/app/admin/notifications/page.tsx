@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { Suspense, useCallback, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 
 import { Card } from "@/components/ui/Card";
@@ -19,6 +20,7 @@ import { AdminEventRow } from "../components/AdminEventRow";
 import { useAdminEventsSocket } from "../components/useAdminEventsSocket";
 import type {
   AdminEventCountsResp,
+  AdminEventReadResp,
   AdminEventsListResp,
   AdminEventType,
 } from "../components/adminTypes";
@@ -35,6 +37,24 @@ const FILTER_LABEL: Record<Filter, string> = {
   backup_stale: "Backups",
   job_overdue: "Jobs",
 };
+const FILTERS = Object.keys(FILTER_LABEL) as Filter[];
+
+/** What one type's mark-all names: "Mark 3 messages read". */
+const TYPE_NOUN: Record<AdminEventType, [one: string, many: string]> = {
+  user_signup: ["signup", "signups"],
+  agent_download: ["download", "downloads"],
+  agent_connected: ["install", "installs"],
+  user_message: ["message", "messages"],
+  backup_stale: ["backup alert", "backup alerts"],
+  job_overdue: ["job alert", "job alerts"],
+};
+
+function markAllLabel(filter: Filter, count: number): string {
+  if (count === 0) return "All caught up";
+  if (filter === "all") return `Mark all ${count} read`;
+  const [one, many] = TYPE_NOUN[filter];
+  return `Mark ${count} ${count === 1 ? one : many} read`;
+}
 
 /**
  * /admin/notifications — full chronological feed of signup +
@@ -50,7 +70,9 @@ function NotificationsBody() {
   const setFilter = (type: Filter) => setView({ type });
   const setUnreadOnly = (unread: boolean) => setView({ unread });
   const paging = useAdminCursor(before, before => setView({ before }));
+  const debug = useSearchParams().get("debug") === "1";
   const [markingRead, setMarkingRead] = useState(false);
+  const [markError, setMarkError] = useState<Filter | null>(null);
 
   const params = new URLSearchParams();
   params.set("limit", String(PAGE_SIZE));
@@ -87,19 +109,38 @@ function NotificationsBody() {
   const items = data?.items || [];
 
   async function markAllRead() {
-    if (markingRead) return;
+    if (markingRead || view.userId) return;
     setMarkingRead(true);
+    setMarkError(null);
     try {
-      await apiCall(getToken, "/v1/admin/events/mark-read", { method: "POST" });
-      await Promise.all([mutate(), counts.mutate()]);
+      await apiCall(getToken, "/v1/admin/events/mark-read", {
+        method: "POST", ...(filter !== "all" ? { body: JSON.stringify({ type: filter }) } : {}),
+      });
+      await Promise.allSettled([mutate(), counts.mutate()]);
+    } catch {
+      setMarkError(filter);
     } finally {
       setMarkingRead(false);
     }
   }
 
+  // One row's read state. The saved row replaces the cached one without a
+  // refetch (an Unread view keeps the row in place until the next refresh),
+  // and the shared counts revalidate so the sidebar badge updates here too.
+  // A count refresh failure never turns a saved change into a rollback.
+  const setEventRead = useCallback(async (eventId: string, read: boolean) => {
+    const saved = await apiCall<AdminEventReadResp>(getToken, `/v1/admin/events/${encodeURIComponent(eventId)}/${read ? "read" : "unread"}`, { method: "POST" });
+    void Promise.allSettled([
+      mutate((current) => current && { ...current, items: current.items.map((item) => item.eventId === eventId ? { ...item, readAt: saved.event.readAt } : item) }, { revalidate: false }),
+      counts.mutate(),
+    ]);
+  }, [getToken, mutate, counts]);
+
   if (error && error.status === 403) return <ForbiddenCard />;
 
   const unread = counts.data?.unreadCount ?? 0;
+  const byType = counts.data?.unreadByType;
+  const scopedUnread = filter === "all" ? unread : byType?.[filter] ?? 0;
   const emptyType = filter === "all" ? "notifications" : FILTER_LABEL[filter].toLowerCase();
 
   function resetPage() { setView({ before: "" }); }
@@ -111,14 +152,16 @@ function NotificationsBody() {
           type="button"
 
           onClick={markAllRead}
-          disabled={markingRead || unread === 0 || !!view.userId}
+          disabled={markingRead || scopedUnread === 0 || !!view.userId}
         >
-          {markingRead
-            ? "Working…"
-            : unread === 0
-              ? "All caught up"
-              : `Mark all ${unread} unread as read`}
+          {markingRead ? "Working…" : markAllLabel(filter, scopedUnread)}
         </Button></>} />
+      {markError === filter && !view.userId ? (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-caption text-text">
+          <span>Couldn&apos;t mark {filter === "all" ? "activity" : FILTER_LABEL[filter].toLowerCase()} read. Try again.</span>
+          <Button size="sm" variant="secondary" onClick={() => { void markAllRead(); }} loading={markingRead}>Retry</Button>
+        </div>
+      ) : null}
       <details className="text-caption text-text-muted"><summary>Learn more</summary><p className="text-text-muted">
             Live feed of new signups, agent downloads, confirmed installs, and user messages.
             {realtime.status === "connected" ? "Updates in real time while this page is open." : "Refresh now or wait for the next automatic check while live updates reconnect."}
@@ -160,17 +203,19 @@ function NotificationsBody() {
           <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
             Filter
           </span>
-          {(
-            ["all", "user_signup", "agent_download", "agent_connected", "user_message", "backup_stale", "job_overdue"] as Filter[]
-          ).map((f) => {
+          {FILTERS.map((f) => {
             const isActive = filter === f;
+            const count = f === "all" ? unread : byType?.[f] ?? 0;
             return (
               <Button variant="secondary" size="sm"
                 key={f}
                 type="button"
+                aria-pressed={isActive}
+                aria-label={count > 0 ? `${FILTER_LABEL[f]}, ${count} unread` : undefined}
                 onClick={() => {
                   setFilter(f);
                   resetPage();
+                  setMarkError(null);
                 }}
                 className={[
                   "rounded-full border px-3 py-1 text-caption transition-colors",
@@ -180,6 +225,7 @@ function NotificationsBody() {
                 ].join(" ")}
               >
                 {FILTER_LABEL[f]}
+                {count > 0 ? <span aria-hidden="true" className="ml-1.5 rounded-full bg-bg-elevated px-1.5 text-micro tabular-nums text-text">{count > 99 ? "99+" : count}</span> : null}
               </Button>
             );
           })}
@@ -193,7 +239,7 @@ function NotificationsBody() {
         <RequestError error={error} onRetry={() => mutate()} />
       ) : items.length === 0 ? (
         <Card padded>
-          <EmptyStatePanel title="No activity in this view" description={unreadOnly ? `No unread ${emptyType}${filter !== "all" ? " in this filter" : before ? " on this page" : ""}.` : `No ${emptyType} in this view.`} action={<div className="flex flex-wrap gap-2">{unreadOnly && unread > 0 ? <Button variant="secondary" onClick={() => { setFilter("all"); resetPage(); void mutate(); }}>View all {unread} unread notifications</Button> : null}<Button variant="secondary" onClick={() => { setUnreadOnly(false); setFilter("all"); resetPage(); void mutate(); }}>View all activity</Button></div>} />
+          <EmptyStatePanel title={unreadOnly ? `No unread ${emptyType}` : `No ${emptyType}`} description={unreadOnly ? `No unread ${emptyType}${filter !== "all" ? " in this filter" : before ? " on this page" : ""}.` : `No ${emptyType} in this view.`} action={<div className="flex flex-wrap gap-2">{unreadOnly && unread > 0 ? <Button variant="secondary" onClick={() => { setFilter("all"); resetPage(); void mutate(); }}>View all {unread} unread notifications</Button> : null}<Button variant="secondary" onClick={() => { setUnreadOnly(false); setFilter("all"); resetPage(); void mutate(); }}>View all activity</Button></div>} />
 
         </Card>
       ) : (
@@ -204,6 +250,7 @@ function NotificationsBody() {
                 key={event.eventId}
                 event={event}
                 onReportUpdated={() => mutate()}
+                onSetRead={(read) => setEventRead(event.eventId, read)}
                 unread={!event.readAt}
               />
             ))}
@@ -211,13 +258,12 @@ function NotificationsBody() {
         </Card>
       )}
 
-      <AdminPagination hasPrev={paging.hasPrev} prevLabel={paging.prevLabel} hasNext={!!data?.nextBefore} onPrev={paging.previous} onNext={() => paging.next(data?.nextBefore || "")} label={paging.page} loading={isValidating} itemCount={data?.items.length || 0} />
+      {items.length > 0 ? <AdminPagination hasPrev={paging.hasPrev} prevLabel={paging.prevLabel} hasNext={!!data?.nextBefore} onPrev={paging.previous} onNext={() => paging.next(data?.nextBefore || "")} label={paging.page} loading={isValidating} itemCount={items.length} /> : null}
 
-      {/* Hint about the live API_BASE so admins can verify the
-          environment when triaging in a staging deployment. */}
-      <p className="text-caption text-text-dim">
+      {/* The live API_BASE, for verifying a staging deployment; ?debug=1 only. */}
+      {debug ? <p className="text-caption text-text-dim">
         Source: <code className="font-mono text-text-muted">{API_BASE}/v1/admin/events</code>
-      </p>
+      </p> : null}
     </div>
   );
 }
