@@ -38,6 +38,7 @@ const CREDENTIAL_PATH_SEGMENT =
   /\/(multichat|chatbot|overlay-tokens|device-pairings|build-intents\/live|shares|calendar)\/[^/?#]+/giu;
 // ``review_tag`` is owner-authored review-queue text (routes/replays.js).
 const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|token|review_tag)/iu;
+const SPATIAL_PATH = /^\/v1\/spatial\//iu;
 const OAUTH_CALLBACK_PATH =
   /^\/v1\/integrations\/(?:twitch|kick|youtube)\/callback\/?$/iu;
 const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set([
@@ -65,6 +66,10 @@ function sanitiseRequestUrl(value) {
   try {
     const parsed = new URL(redacted, "http://request.invalid");
     const isOauthCallback = OAUTH_CALLBACK_PATH.test(parsed.pathname);
+    // A heatmap filter can contain a private opponent identity.
+    if (SPATIAL_PATH.test(parsed.pathname) && parsed.searchParams.has("opponent")) {
+      parsed.searchParams.set("opponent", "[redacted]");
+    }
     for (const key of parsed.searchParams.keys()) {
       if (
         SENSITIVE_QUERY_KEY.test(key)

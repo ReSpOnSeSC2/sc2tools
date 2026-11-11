@@ -1436,16 +1436,16 @@ class OpponentsService {
   /** The games-row identity match of one owned opponent: its pulse id and
    * character id, or every linked identity's with ``mergeLinked``. The same
    * rule as the replay history, for owner-only consumers such as the Map
-   * Intel heatmaps. Null when the opponent is not in the owner's history.
-   * @param {string} userId @param {string} pulseId @param {{mergeLinked?: boolean}} [opts] */
-  async identityClause(userId, pulseId, opts = {}) {
-    const doc = await this.db.opponents.findOne(
-      { userId, pulseId },
-      { projection: { _id: 0, userId: 1, pulseId: 1, pulseCharacterId: 1, toonHandle: 1, displayNameSample: 1, revealedName: 1 } },
-    );
+   * Intel heatmaps. Accepts either a dossier pulse id or a character id.
+   * Null when the opponent is not in the owner's history.
+   * @param {string} userId @param {string} opponentId @param {{mergeLinked?: boolean}} [opts] */
+  async identityClause(userId, opponentId, opts = {}) {
+    const options = { projection: { _id: 0, userId: 1, pulseId: 1, pulseCharacterId: 1, toonHandle: 1, displayNameSample: 1, revealedName: 1 } };
+    const doc = await this.db.opponents.findOne({ userId, pulseId: opponentId }, options)
+      ?? await this.db.opponents.findOne({ userId, pulseCharacterId: opponentId }, options);
     if (!doc) return null;
     const linked = opts.mergeLinked ? await this._resolveLinkedIdentities(userId, doc) : null;
-    return profileGamesIdentityFilter(pulseId, doc, linked);
+    return profileGamesIdentityFilter(doc.pulseId, doc, linked);
   }
 
   /** Shared metadata-only replay serializer, 5,000-row dossier cap.

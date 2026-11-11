@@ -250,6 +250,9 @@ test("pause fences late acknowledgements, resume redelivers only open games, can
   expect(redelivery.games.map((g) => g.gameId)).toEqual(["g-0002", "g-0003"]);
   stored = await db.reanalysisJobs.findOne({ userId: OWNER });
   expect(stored.batch).toMatchObject({ acked: true, ackedGeneration: 3 });
+  const stale = outcomeEvent(job.id, 1, "g-0002", "parse_failed");
+  expect(await h.service.recordOutcome(deviceData, stale)).toBe(false);
+  expect(await h.service.recordOutcome({ ...deviceData, deviceId: "b".repeat(24) }, { ...stale, generation: 3 })).toBe(false);
   await h.service.control(OWNER, "cancel", { jobId: job.id });
   expect(await h.service.recordOutcome(deviceData, outcomeEvent(job.id, 1, "g-0002", "parse_failed"))).toBe(false);
   stored = await db.reanalysisJobs.findOne({ userId: OWNER });

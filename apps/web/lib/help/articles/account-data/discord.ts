@@ -26,7 +26,7 @@ const article: HelpArticle = {
     { type: "list", items: [
       "**Opponent names are off by default.** Posts show the opponent's race and MMR only, unless you turn on **Show opponent names**.",
       "**Show MMR** is on by default; turn it off to post results without ratings.",
-      "**Link to the public replay** is off by default and only works when your replay archive is shared publicly.",
+      "**Include replay links** is off by default. Automatic posts link to your replay archive only if you share it publicly. When both ranked results and replay links are enabled, you can also post a single-game [battle report](/help/battle-reports#share) from its share dialog.",
     ] },
     { type: "heading", text: "When a channel stops", anchor: "stopped" },
     { type: "paragraph", text: "If Discord rejects a webhook three times in a row (usually because it was deleted or its channel removed), SC2 Tools switches that channel off and sends you a notification. Create a new webhook and connect it again. Nothing is posted while your account is being deleted, and deleting your account removes every connected channel." },

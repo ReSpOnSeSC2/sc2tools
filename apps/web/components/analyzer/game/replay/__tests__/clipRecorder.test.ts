@@ -76,7 +76,7 @@ describe("GIF clips", () => {
 });
 
 describe("video clips", () => {
-  function videoEnvironment() {
+  function videoEnvironment({ manual = true, onStop }: { manual?: boolean; onStop?: () => void } = {}) {
     const requested: number[] = [];
     let frames = 0;
     class FakeRecorder {
@@ -90,15 +90,21 @@ describe("video clips", () => {
       resume() { this.state = "recording"; }
       stop() {
         this.state = "inactive";
-        this.ondataavailable?.({ data: new Blob([new Uint8Array(frames)], { type: this.options.mimeType }) });
+        if (onStop) { onStop(); return; }
+        this.ondataavailable?.({ data: new Blob([new Uint8Array(manual ? frames : 1)], { type: this.options.mimeType }) });
         this.onstop?.();
       }
       static isTypeSupported() { return true; }
     }
     vi.stubGlobal("MediaRecorder", FakeRecorder);
-    const track = { stop: vi.fn(), requestFrame: () => { frames += 1; requested.push(frames); } };
-    const canvas = { captureStream: () => ({ getVideoTracks: () => [track], getTracks: () => [track] }) } as unknown as HTMLCanvasElement;
-    return { canvas, requested, track };
+    const track = { stop: vi.fn(), ...(manual ? { requestFrame: () => { frames += 1; requested.push(frames); } } : {}) };
+    const probe = { stop: vi.fn() };
+    const captureStream = vi.fn((fps: number) => {
+      const active = fps || manual ? track : probe;
+      return { getVideoTracks: () => [active], getTracks: () => [active] };
+    });
+    const canvas = { captureStream } as unknown as HTMLCanvasElement;
+    return { canvas, captureStream, probe, requested, track };
   }
 
   it("captures one recorder frame per planned frame and releases the stream", async () => {
@@ -113,6 +119,28 @@ describe("video clips", () => {
     expect(blob.type).toBe("video/webm");
     expect(blob.size).toBe(6);
     expect(track.stop).toHaveBeenCalled();
+  });
+
+  it("paces the stream in browsers without requestFrame", async () => {
+    const { canvas, captureStream, probe, track } = videoEnvironment({ manual: false });
+    const blob = await recordVideoClip({
+      canvas, count: 2, fps: 60, mime: "video/webm", bitsPerSecond: 1, maxBytes: 100,
+      signal: new AbortController().signal, onProgress: () => {}, render: () => {},
+    });
+    expect(captureStream.mock.calls).toEqual([[0], [60]]);
+    expect(blob.size).toBe(1);
+    expect(probe.stop).toHaveBeenCalledTimes(1);
+    expect(track.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels and releases tracks while the recorder is finalizing", async () => {
+    const controller = new AbortController();
+    const { canvas, track } = videoEnvironment({ onStop: () => controller.abort() });
+    await expect(recordVideoClip({
+      canvas, count: 2, fps: 500, mime: "video/webm", bitsPerSecond: 1, maxBytes: 100,
+      signal: controller.signal, onProgress: () => {}, render: () => {},
+    })).rejects.toMatchObject({ reason: "cancelled" });
+    expect(track.stop).toHaveBeenCalledTimes(1);
   });
 
   it("is unsupported without canvas capture, and cancellable mid-recording", async () => {

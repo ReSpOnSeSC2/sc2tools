@@ -206,7 +206,55 @@ describe("notifications and settlement", () => {
     expect(await db.notifications.countDocuments({ userId: OWNER, kind: "goal_met" })).toBe(2);
     expect((await svc.list(OWNER)).goals[0].status).toBe("active");
   });
+});
 
+describe("editing criteria while goals are active", () => {
+  test("changed criteria can notify again in the same bucket, but an unchanged save cannot", async () => {
+    const { goals: [active] } = await svc.create(OWNER, goal({ params: { target: 1 } }));
+    await db.games.insertMany([game(), game()]);
+    await svc.afterIngest(OWNER);
+    await svc.update(OWNER, active.id, { params: { target: 1 } });
+    expect(await db.notifications.countDocuments({ userId: OWNER, kind: "goal_met" })).toBe(1);
+    await svc.update(OWNER, active.id, { params: { target: 2 } });
+    await svc.afterIngest(OWNER);
+    expect(await db.notifications.countDocuments({ userId: OWNER, kind: "goal_met" })).toBe(2);
+  });
+
+  test("an evaluation of old criteria cannot complete a goal edited while it was measuring", async () => {
+    const { goals: [active] } = await svc.create(OWNER, goal({
+      params: { target: 1 },
+      window: { recurrence: "once", startsOn: "2026-11-01", endsOn: "2026-11-30", tz: NY },
+    }));
+    await db.games.insertOne(game());
+    const aggregate = db.games.aggregate.bind(db.games);
+    let resume;
+    let measuring;
+    const started = new Promise(resolve => { measuring = resolve; });
+    const hold = new Promise(resolve => { resume = resolve; });
+    const spy = jest.spyOn(db.games, "aggregate").mockImplementationOnce((...args) => {
+      const cursor = aggregate(...args);
+      return { toArray: async () => {
+        measuring();
+        await hold;
+        return cursor.toArray();
+      } };
+    });
+    const evaluation = svc.afterIngest(OWNER);
+    try {
+      await started;
+      await svc.update(OWNER, active.id, { params: { target: 10 } });
+    } finally {
+      resume();
+      await evaluation;
+      spy.mockRestore();
+    }
+    expect(await db.playerGoals.findOne({ id: active.id })).toMatchObject({ status: "active", params: { target: 10 } });
+    expect(await db.notifications.countDocuments({ userId: OWNER, kind: "goal_met" })).toBe(0);
+  });
+
+});
+
+describe("muted and expired goals", () => {
   test("a muted kind sends nothing but the claim still holds", async () => {
     await db.users.updateOne({ userId: OWNER }, { $set: { "preferences.notifications": { muted: ["goal_met"] } } });
     await svc.create(OWNER, goal({ params: { target: 1 } }));
