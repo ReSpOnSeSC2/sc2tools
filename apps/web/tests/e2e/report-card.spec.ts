@@ -23,6 +23,7 @@ test("shows a noindex, self-reported card with accessible text", async ({ page }
   await page.context().addCookies([{ url: site, name: "__session", value: "synthetic-expired" }]);
   page.on("request", request => { requests.push(request.url()); });
   for (const theme of ["light", "dark"] as const) {
+    await page.goto("about:blank");
     await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
     const response = await page.goto(`${REPORT_CARD_PATH}#${fragment}`);
     expect(response?.status()).toBe(200);
@@ -47,6 +48,7 @@ test("shows a noindex, self-reported card with accessible text", async ({ page }
 
 test("renders neutral missing, forged and oversized states", async ({ page }, info) => {
   for (const theme of ["light", "dark"] as const) {
+    await page.goto("about:blank");
     await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
     await page.goto(REPORT_CARD_PATH);
     await expect(page.getByText("No report card in this link")).toBeVisible();

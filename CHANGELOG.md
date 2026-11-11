@@ -4716,6 +4716,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Browser replay analysis scans the selected files first, then analyzes up to 25 recent one-on-one games for the chosen player. Select Watch to open a local replay player.
 
+### Replay report card links
+
+- Copy a link to the aggregate rows you choose in your browser replay report. The recipient's browser redraws the card without receiving your replays, player names or account IDs.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:
