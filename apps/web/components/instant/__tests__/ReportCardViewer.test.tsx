@@ -45,6 +45,8 @@ it("builds a comparison locally and restores focus from clipboard fallback", asy
   const copy = within(card).getByRole("button", { name: "Copy comparison link" });
   fireEvent.click(copy);
   const manual = await screen.findByRole<HTMLInputElement>("textbox", { name: "Comparison link" });
+  expect(manual.classList.contains("selection:bg-text")).toBe(true);
+  expect(manual.classList.contains("selection:text-bg")).toBe(true);
   const link = new URL(manual.value);
   expect(link.pathname).toBe(REPORT_COMPARE_PATH);
   expect(decodeReportComparison(link.hash.slice(1))).toEqual({ first: own.totals, second: model.totals });

@@ -2,6 +2,7 @@ import path from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { decodeReportComparison, encodeReportCard, reportCardLink } from "../../lib/instant/reportCardLink";
 import { REPORT_CARD_PATH, REPORT_COMPARE_PATH, reportCardPreviewPath } from "../../lib/instant/reportCardRoute";
+import { contrastRatio } from "../../scripts/contrast-tokens.mjs";
 import { captureAccessibility, checkAccessibility } from "./accessibility-check";
 
 const fragment = encodeReportCard({
@@ -133,6 +134,11 @@ async function buildComparison(page: Page, info: TestInfo, own: string, theme: "
   await copy.click();
   const manual = page.getByRole("dialog", { name: "Copy comparison link manually" }).getByRole("textbox", { name: "Comparison link" });
   await expect(manual).toBeFocused();
+  const selection = await manual.evaluate(element => {
+    const { color, backgroundColor } = getComputedStyle(element, "::selection");
+    return [color, backgroundColor].map(paint => (paint.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number));
+  });
+  expect(contrastRatio(selection[0], selection[1]), `Selected link contrast in ${theme} mode`).toBeGreaterThanOrEqual(4.5);
   const link = new URL(await manual.inputValue());
   expect(link.pathname).toBe(REPORT_COMPARE_PATH);
   expect(link.search).toBe("");
@@ -148,7 +154,8 @@ async function buildComparison(page: Page, info: TestInfo, own: string, theme: "
 
 test("compares two selected reports locally and shares neutral results", async ({ page }, info) => {
   const own = reportCardLink({ totals: { games: 8, wins: 4, losses: 3 }, matchups: [], opener: null, macro: null });
-  if (!fragment || !own) throw new Error("Invalid comparison fixture");
+  const withoutTotals = encodeReportCard({ totals: null, matchups: [], opener: null, macro: { score: 72, games: 9 } });
+  if (!fragment || !own || !withoutTotals) throw new Error("Invalid comparison fixture");
   const requests: { url: string; method: string; body: string | null }[] = [];
   const site = new URL(String(info.project.use.baseURL)).origin;
   await page.context().addCookies([{ url: site, name: "__session", value: "synthetic-expired" }]);
@@ -161,6 +168,11 @@ test("compares two selected reports locally and shares neutral results", async (
   for (const theme of ["light", "dark"] as const) {
     await page.goto("about:blank");
     await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+    await page.goto(`${REPORT_CARD_PATH}#${withoutTotals}`);
+    await expect(page.getByText("A comparison needs game totals in both links.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Compare reports" })).toHaveCount(0);
+    await assertNoOverflow(page);
+    await captureAccessibility(page, info, `report-comparison-unavailable-${theme}`, true);
     await page.goto(`${REPORT_CARD_PATH}#${fragment}`);
     const link = await buildComparison(page, info, own, theme);
     const comparePath = theme === "light" ? REPORT_COMPARE_PATH : "/card/r%65port/c%6Fmpare";
@@ -176,7 +188,9 @@ test("compares two selected reports locally and shares neutral results", async (
     expect(requests.some(({ url }) => url.includes(link.hash.slice(1)))).toBe(false);
   }
   const ownFragment = new URL(own).hash.slice(1);
-  expect(requests.some(({ url }) => url.includes(fragment) || url.includes(ownFragment) || url.includes("PrivateFixture"))).toBe(false);
+  expect(requests.some(({ url }) =>
+    [fragment, ownFragment, withoutTotals, "PrivateFixture"].some(value => url.includes(value))
+  )).toBe(false);
   expect(requests.filter(({ url, method, body }) => /^https?:/.test(url) && (
     new URL(url).origin !== site || method !== "GET" || body !== null
   ))).toEqual([]);

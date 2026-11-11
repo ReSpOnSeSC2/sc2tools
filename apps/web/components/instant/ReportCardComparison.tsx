@@ -43,7 +43,8 @@ function CopyComparisonLink({ link }: { link: string }) {
         {copy.status === "copied" ? "Comparison link copied." : copy.pending ? "Copying comparison link." : null}
       </p>
       <CopyRecoveryDialog text={copy.fallbackText} inputRef={copy.inputRef} triggerRef={button}
-        scopeKey={scope} onDismiss={copy.clear} title="Copy comparison link manually" label="Comparison link" />
+        scopeKey={scope} onDismiss={copy.clear} title="Copy comparison link manually" label="Comparison link"
+        inputClassName="selection:bg-text selection:text-bg" />
     </div>
   );
 }

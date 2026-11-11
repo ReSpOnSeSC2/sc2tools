@@ -122,6 +122,7 @@ describe("report comparisons", () => {
     ["empty", ""], ["oversized", "A".repeat(60)], ["non-alphabet", "<Private Name>"],
     ["padded", valid + "="], ["noncanonical base64", "AQIFBAEIAwV"],
     ["unsupported version", wire(2, 2, 5, 4, 1, 8, 3, 5)],
+    ["summary type with comparison-shaped data", wire(1, 1, 5, 4, 1, 8, 3, 5)],
     ["truncated", wire(1, 2, 5, 4, 1, 8, 3)],
     ["trailing bytes", wire(1, 2, 5, 4, 1, 8, 3, 5, 9)],
     ["noncanonical varint", wire(1, 2, 133, 0, 4, 1, 8, 3, 5)],
