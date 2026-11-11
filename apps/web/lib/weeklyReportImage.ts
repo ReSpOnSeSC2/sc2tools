@@ -1,3 +1,4 @@
+import { shareReportPalette } from "@/lib/shareReportPalette";
 import {
   CARD_H, CARD_PAD, CARD_W, deliverShareCard, drawCardBackground, drawCardFooter, FONT_STACK, shareOutcome,
 } from "@/components/analyzer/arcade/ShareCard";
@@ -24,28 +25,28 @@ export async function shareWeeklyReport(report: WeeklyReport): Promise<string | 
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("canvas_unavailable");
   const copy = weeklyReportShareCopy(report);
-  drawCardBackground(ctx, "#35d8d0");
+  drawCardBackground(ctx, shareReportPalette.weeklyAccent);
   ctx.textBaseline = "top";
-  ctx.fillStyle = "#b6c9d5";
+  ctx.fillStyle = shareReportPalette.weeklyMuted;
   ctx.font = `600 26px ${FONT_STACK}`;
   ctx.fillText("WEEKLY REPORT", CARD_PAD, 54);
-  ctx.fillStyle = "#f4f9fc";
+  ctx.fillStyle = shareReportPalette.weeklyText;
   ctx.font = `750 62px ${FONT_STACK}`;
   ctx.fillText(copy.label, CARD_PAD, 100);
 
   const width = (CARD_W - CARD_PAD * 2 - 48) / 3;
   copy.stats.forEach(({ label, value }, index) => {
     const x = CARD_PAD + index * (width + 24);
-    ctx.fillStyle = "#202d3a";
+    ctx.fillStyle = shareReportPalette.weeklyTile;
     ctx.fillRect(x, 210, width, 150);
-    ctx.fillStyle = "#b6c9d5";
+    ctx.fillStyle = shareReportPalette.weeklyMuted;
     ctx.font = `600 23px ${FONT_STACK}`;
     ctx.fillText(label, x + 24, 232);
-    ctx.fillStyle = "#f4f9fc";
+    ctx.fillStyle = shareReportPalette.weeklyText;
     ctx.font = `750 60px ${FONT_STACK}`;
     ctx.fillText(value, x + 24, 275);
   });
-  ctx.fillStyle = "#c3d4e0";
+  ctx.fillStyle = shareReportPalette.weeklyDetails;
   ctx.font = `600 26px ${FONT_STACK}`;
   ctx.fillText(copy.previous, CARD_PAD, 412);
   if (copy.matchups) ctx.fillText(copy.matchups, CARD_PAD, 465);

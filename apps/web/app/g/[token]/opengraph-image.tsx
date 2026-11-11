@@ -1,3 +1,4 @@
+import { shareReportPalette } from "@/lib/shareReportPalette";
 import { ImageResponse } from "next/og";
 import { SHARE_TOKEN_RE } from "@/lib/gameShares";
 import { snapshotColor, snapshotPositions } from "@/lib/battleReport/mapSnapshot";
@@ -126,7 +127,7 @@ function MapSnapshot({ frame, myRace, oppRace }: { frame: NonNullable<ReturnType
       return point.structure ? <rect key={index} x={point.x - 2.5} y={point.y - 2.5} width={5} height={5} {...style} />
         : <circle key={index} cx={point.x} cy={point.y} r={1.9} {...style} />;
     })}
-    {frame.fight ? <circle cx={frame.fight.x} cy={frame.fight.y} r={6} fill="none" stroke="#ffd15c" strokeWidth={2} /> : null}
+    {frame.fight ? <circle cx={frame.fight.x} cy={frame.fight.y} r={6} fill="none" stroke={shareReportPalette.fight} strokeWidth={2} /> : null}
   </svg>;
 }
 

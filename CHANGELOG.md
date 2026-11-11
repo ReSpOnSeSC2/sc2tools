@@ -223,6 +223,33 @@ corresponding GitHub Release.
   corrections" on the Build & Strategy Definitions page. Your corrections help
   improve labels for everyone.
 
+### Coaching sessions and prep digest
+
+- Add "Since last session" to each upcoming coaching session. Coaches see the
+  student's ranked 1v1 record and replay details already shared in practice
+  assignment evidence. Students see their own eligible 1v1 games and builds
+  with links to their game pages. The digest requires active practice sharing.
+- Copy a day's hours to the weekdays or to every day, clear a day, and undo
+  either for 10 seconds. Empty days offer evening, afternoon and weekend
+  presets, and Add hours now continues after the day's last window.
+- Add a Google Calendar link beside the .ics download on each upcoming session.
+- List past sessions under the upcoming ones, newest first, with cancelled
+  sessions marked and, for coaches, each student's session count. Sessions in
+  progress stay listed until they end.
+
+### Replay review links and navigation
+
+- Open `#comment-…` links with that comment highlighted, the replay at its
+  time and the comment in view, and `?t=5:12` links at that moment with a
+  comment started there. Links to removed comments say so.
+- Copy a link to any comment, to the moment in the comment box, or to the
+  current replay time from Share. Moving through the replay never changes the
+  address bar.
+- Step through timed comments with Prev and Next, filter the thread by focus
+  range, map pins and replies, and keep Top or Timeline order on this device.
+- Press N or P for the next or previous comment and C to comment at the
+  replay time; ? lists them. Scrolling to a comment respects reduced motion.
+
 ### Share cards
 
 - Fix the link printed on every share card. `sc2tools.com/arcade` now leads to

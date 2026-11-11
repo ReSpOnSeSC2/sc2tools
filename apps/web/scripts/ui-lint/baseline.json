@@ -11,7 +11,8 @@
       "components/analyzer/StrategyTendencyChart.tsx",
       "components/analyzer/explorer/ExplorerCharts.tsx",
       "components/instant/report/OfflineMacroChart.tsx",
-      "lib/instant/reportCard.ts"
+      "lib/instant/reportCard.ts",
+      "lib/shareReportPalette.ts"
     ]
   },
   "entries": [

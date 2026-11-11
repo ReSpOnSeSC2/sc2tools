@@ -22,6 +22,13 @@ const { gamesMatchStage } = require("../util/parseQuery");
 const { eraForGame } = require("../util/patchEra");
 const { BUILD_INTENT_LABEL_PROJECTION, detectorView } = require("./buildIntentShape");
 const { detectorLabelMatch } = require("./buildIntentReaders");
+const {
+  assignmentGameStartExpression,
+  oneVsOneGameClause,
+  coachingResultExpr,
+  coachingRaceExpr,
+} = require("./coachingGameExpr");
+const { digestPipeline, digestWindow, sessionHistory, shapeDigest } = require("./coachingSessions");
 const { randomUUID } = require("node:crypto");
 const { deliverCoachingNotification } = require("./notificationDelivery");
 const { ASSIGNMENT_STATES, assignmentStateMatch, assignmentStateCounts } = require("./coachingAssignmentState");
@@ -1854,6 +1861,118 @@ class CoachingService {
     return { ok: true };
   }
 
+  /**
+   * The caller's complete past sessions (ended before now), newest first,
+   * with per-student totals for a coach. Same authorization as the
+   * calendar: a coach reads their own calendar, a student only their own
+   * bookings on their coach's calendar.
+   *
+   * @param {string} userId
+   * @param {{role:string,coachId?:string,studentId?:string}} coachingRole
+   * @param {{limit?:unknown}|undefined} options
+   */
+  async calendarHistory(userId, coachingRole, options) {
+    const actor = await this._scheduleActor(userId, coachingRole);
+    const doc = await this._calendarDoc(actor.coach.id);
+    const viewer = actor.kind === "coach"
+      ? { kind: /** @type {const} */ ("coach") }
+      : { kind: /** @type {const} */ ("student"), studentUserId: userId };
+    return {
+      role: actor.kind,
+      ...sessionHistory(doc && doc.bookings, viewer, {
+        limit: options && options.limit,
+        now: this._assignmentNow(),
+        serialize: publicBooking,
+      }),
+    };
+  }
+
+  /**
+   * Facts-only "Since last session" prep digest for one upcoming booking.
+   * Only that booking's coach and student can read it. The student's games
+   * appear only while practice sharing with this coach is accepted under
+   * the current policy, and never from before that consent.
+   *
+   * @param {string} userId
+   * @param {{role:string,coachId?:string,studentId?:string}} coachingRole
+   * @param {unknown} bookingId
+   */
+  async bookingDigest(userId, coachingRole, bookingId) {
+    const now = this._assignmentNow();
+    const party = await this._bookingParty(userId, coachingRole, bookingId, now);
+    const base = { bookingId: party.booking.id, role: party.role };
+    if (!party.accepted) return { ...base, state: "sharing_off", sharing: party.sharingStatus };
+    const window = digestWindow({
+      bookings: party.bookings,
+      booking: party.booking,
+      sharingStartedAt: party.sharingStartedAt,
+      now,
+    });
+    const matches = party.role === "coach" ? await this._digestAssignmentMatches(party, window) : null;
+    const [root = {}] = await this.db.games
+      .aggregate(digestPipeline(party.booking.studentUserId, window.since, window.until, matches), { maxTimeMS: 5000 })
+      .toArray();
+    const current = await this._bookingParty(userId, coachingRole, bookingId, this._assignmentNow());
+    if (!current.accepted || current.grantId !== party.grantId) {
+      return { ...base, state: "sharing_off", sharing: current.sharingStatus };
+    }
+    return shapeDigest(root, { ...base, window });
+  }
+
+  /** Scope the coach's per-game details to qualifying assignments from this grant.
+   * @param {Awaited<ReturnType<CoachingService['_bookingParty']>>} party
+   * @param {{since:Date,until:Date}} window */
+  async _digestAssignmentMatches(party, window) {
+    const { booking, coachId, coachUserId, grantId } = party;
+    const rows = await this.db.coaching.find({
+      kind: ASSIGNMENT_KIND, coachId, coachUserId, studentId: booking.studentId,
+      studentUserId: booking.studentUserId, practiceSharingGrantId: grantId,
+      "requirement.startsAt": { $lt: window.until }, "requirement.endsAt": { $gt: window.since },
+    }, { maxTimeMS: 2000 }).sort({ createdAt: -1 }).limit(ASSIGNMENT_LIST_CAP).toArray();
+    return rows.map(assignmentGameMatch);
+  }
+
+  /**
+   * Resolve a booking for its own coach or student only. An admin acting as
+   * another coach's calendar, another student and unknown ids all get the
+   * same 404; a cancelled or finished session has no digest.
+   *
+   * @param {string} userId
+   * @param {{role:string,coachId?:string,studentId?:string}} coachingRole
+   * @param {unknown} bookingId
+   * @param {Date} now
+   */
+  async _bookingParty(userId, coachingRole, bookingId, now) {
+    const actor = await this._scheduleActor(userId, coachingRole);
+    const [doc, roster] = await Promise.all([this._calendarDoc(actor.coach.id), this.getRoster()]);
+    const id = safeIdentity(bookingId);
+    const bookings = doc && Array.isArray(doc.bookings) ? doc.bookings : [];
+    const booking = id && id.length <= 100 ? bookings.find((item) => item && item.id === id) : null;
+    const participant = booking && (actor.kind === "coach"
+      ? safeIdentity(actor.coach.userId) === userId
+      : booking.studentUserId === userId && booking.studentId === actor.student.id);
+    if (!booking || !participant) throw coachingError(404, "booking_not_found", "Booking not found.");
+    if (booking.status !== "booked" || toDate(booking.endAt).getTime() <= now.getTime()) {
+      throw coachingError(409, "session_not_upcoming", "Prep digests are available for upcoming sessions only.");
+    }
+    const student = roster.students.find((item) => item
+      && item.id === booking.studentId
+      && item.userId === booking.studentUserId
+      && item.coachId === actor.coach.id);
+    const sharing = student ? practiceSharingSnapshot(student, actor.coach) : null;
+    return {
+      role: actor.kind,
+      booking,
+      bookings,
+      accepted: Boolean(student) && practiceSharingAccepted(student, actor.coach),
+      sharingStatus: sharing ? sharing.status : "pending",
+      sharingStartedAt: sharing ? sharing.respondedAt : null,
+      grantId: sharing?.grantId ?? null,
+      coachId: actor.coach.id,
+      coachUserId: actor.coach.userId,
+    };
+  }
+
   /** @param {string} coachId */
   async _calendarDoc(coachId) {
     return this.db.coaching.findOne(
@@ -2369,46 +2488,6 @@ function assignmentGameMatch(assignment) {
   };
 }
 
-function assignmentGameStartExpression() {
-  const exactStart = {
-    $convert: { input: "$startedAt", to: "date", onError: null, onNull: null },
-  };
-  const end = {
-    $convert: { input: "$date", to: "date", onError: null, onNull: null },
-  };
-  const duration = {
-    $convert: { input: "$durationSec", to: "int", onError: null, onNull: null },
-  };
-  return {
-    $ifNull: [
-      exactStart,
-      {
-        $cond: [
-          {
-            $and: [
-              { $ne: [end, null] },
-              { $ne: [duration, null] },
-              { $gte: [duration, 0] },
-              { $lte: [duration, 86_400] },
-            ],
-          },
-          { $dateSubtract: { startDate: end, unit: "second", amount: duration } },
-          end,
-        ],
-      },
-    ],
-  };
-}
-
-function oneVsOneGameClause() {
-  return {
-    $or: [
-      { matchFormat: "1v1" },
-      { matchFormat: { $exists: false }, playerCount: 2 },
-    ],
-  };
-}
-
 /** @param {any} assignment */
 function assignmentEffectiveBounds(assignment) {
   const requirement = assignment.requirement || {};
@@ -2879,65 +2958,6 @@ const COACHING_MATCHUP_ORDER = new Map([
   ["ZvP", 3], ["ZvT", 4], ["ZvZ", 5],
   ["TvP", 6], ["TvT", 7], ["TvZ", 8],
 ]);
-
-/** @returns {Record<string, any>} */
-function coachingResultExpr() {
-  return {
-    $switch: {
-      branches: [
-        {
-          case: {
-            $in: [
-              { $toLower: { $ifNull: ["$result", ""] } },
-              ["victory", "win"],
-            ],
-          },
-          then: "win",
-        },
-        {
-          case: {
-            $in: [
-              { $toLower: { $ifNull: ["$result", ""] } },
-              ["defeat", "loss"],
-            ],
-          },
-          then: "loss",
-        },
-      ],
-      default: "other",
-    },
-  };
-}
-
-/** @param {string} field @returns {Record<string, any>} */
-function coachingRaceExpr(field) {
-  const firstLetter = {
-    $toUpper: {
-      $substrCP: [
-        {
-          $convert: {
-            input: field,
-            to: "string",
-            onError: "",
-            onNull: "",
-          },
-        },
-        0,
-        1,
-      ],
-    },
-  };
-  return {
-    $switch: {
-      branches: [
-        { case: { $eq: [firstLetter, "P"] }, then: "P" },
-        { case: { $eq: [firstLetter, "T"] }, then: "T" },
-        { case: { $eq: [firstLetter, "Z"] }, then: "Z" },
-      ],
-      default: "U",
-    },
-  };
-}
 
 /** @param {unknown} value @returns {number} */
 function nonNegativeInteger(value) {

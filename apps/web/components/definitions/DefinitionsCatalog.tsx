@@ -1,5 +1,6 @@
 "use client";
 
+import { formatNumber } from "@/lib/i18n/format";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -319,7 +320,7 @@ function DefinitionCard({
           <p className="text-caption text-text-muted">{def.description}</p>
           {trust ? (
             <p className="text-micro text-text-dim">
-              Matches {trust.matches.toLocaleString()} of {trust.corrections.toLocaleString()} player corrections
+              Matches {formatNumber(trust.matches)} of {formatNumber(trust.corrections)} player corrections
             </p>
           ) : null}
           <Link href={`/builds?create=detected&definition=${encodeURIComponent(def.id)}`} className="inline-flex min-h-11 items-center text-caption font-semibold text-accent underline underline-offset-2">Make my own variant<span className="sr-only"> of {def.name}</span></Link>

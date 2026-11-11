@@ -1,3 +1,4 @@
+import { shareReportPalette } from "@/lib/shareReportPalette";
 import {
   buildingPositionAt, buildingVisibleAt, projectX, projectY, unitMaxSpeed,
   unitPositionAt, unitVisibleAt, worldProjection, type MapPlayback,
@@ -8,11 +9,11 @@ type Point = { x: number; y: number };
 type Side = "me" | "opp";
 type Marker = Point & { side: Side; structure: boolean };
 
-const RACE_COLORS: Readonly<Record<string, string>> = { Protoss: "#67bcff", Terran: "#e8a25d", Zerg: "#c091f0" };
+const RACE_COLORS: Readonly<Record<string, string>> = { Protoss: shareReportPalette.protoss, Terran: shareReportPalette.terran, Zerg: shareReportPalette.zerg };
 const MAX_PER_SIDE = 80;
 
 export function snapshotColor(race: string | null | undefined, side: Side): string {
-  return RACE_COLORS[snapshotRace(race, side).name] ?? (side === "me" ? "#42e0db" : "#f07483");
+  return RACE_COLORS[snapshotRace(race, side).name] ?? (side === "me" ? shareReportPalette.owner : shareReportPalette.opponent);
 }
 
 /** Bounded replay coordinates only. No entity names, IDs or account data leave the recording. */

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDate, formatDateTime, formatNumber } from "@/lib/i18n/format";
 import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
@@ -69,7 +70,7 @@ export function ClassifierConsole() {
           <Card padded>
             <div className="space-y-2 text-caption text-text-muted">
               <p>
-                Check-ins confirmed {new Date(snapshot.windowStart).toLocaleDateString()} to {new Date(snapshot.generatedAt).toLocaleString()} (last {snapshot.windowDays} days).
+                Check-ins confirmed {formatDate(snapshot.windowStart)} to {formatDateTime(snapshot.generatedAt)} (last {snapshot.windowDays} days).
                 Every row below comes from at least {snapshot.kFloor} different players; {snapshot.totals.suppressedPairs} smaller {snapshot.totals.suppressedPairs === 1 ? "pair" : "pairs"} ({snapshot.totals.suppressedCheckIns} check-ins) {snapshot.totals.suppressedPairs === 1 ? "is" : "are"} withheld.
               </p>
               <p>Rules stay human-edited: nothing here changes a detector rule. Edit a rule in <Link href="/admin/build-studio" className="text-accent underline">Build Studio</Link>, then compare the next snapshot.</p>
@@ -77,9 +78,9 @@ export function ClassifierConsole() {
             </div>
           </Card>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <MetricStat label="Check-ins" value={snapshot.totals.checkIns.toLocaleString()} caption="confirmed, in the window" />
-            <MetricStat label="Disagreements" value={snapshot.totals.disagreements.toLocaleString()} caption="declared build was not detected" />
-            <MetricStat label="Players" value={snapshot.totals.users.toLocaleString()} caption="who checked in" />
+            <MetricStat label="Check-ins" value={formatNumber(snapshot.totals.checkIns)} caption="confirmed, in the window" />
+            <MetricStat label="Disagreements" value={formatNumber(snapshot.totals.disagreements)} caption="declared build was not detected" />
+            <MetricStat label="Players" value={formatNumber(snapshot.totals.users)} caption="who checked in" />
           </div>
           <EngineTrend engines={snapshot.engines} selected={view.engine} onSelect={(engine) => setView({ engine })} />
           <Provenance origins={snapshot.origins} />
@@ -218,7 +219,7 @@ function EngineTrend({ engines, selected, onSelect }: { engines: ClassifierEngin
               <Button size="sm" variant={selected === row.engine ? "primary" : "ghost"} aria-pressed={selected === row.engine}
                 onClick={() => onSelect(selected === row.engine ? "" : row.engine)}>Filter<span className="sr-only"> by {engineLabel(row.engine)}</span></Button>
               {row.trend && row.trend.length > 1 ? <ul aria-label={`${engineLabel(row.engine)} recent snapshots`} className="flex w-full flex-wrap gap-x-3 gap-y-1 text-micro text-text-dim">
-                {row.trend.map((point) => <li key={point.generatedAt}>{new Date(point.generatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })} · {point.disagreements.toLocaleString()}</li>)}
+                {row.trend.map((point) => <li key={point.generatedAt}>{formatDate(point.generatedAt, { month: "short", day: "numeric" })} · {formatNumber(point.disagreements)}</li>)}
               </ul> : null}
             </li>
           ))}

@@ -8,11 +8,16 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Toggle } from "@/components/ui/Toggle";
+import { useToastOptional } from "@/components/ui/Toast";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { MapArtwork } from "@/components/maps/MapArtwork";
 import { apiCall, useOwnerRequestScope } from "@/lib/clientApi";
 import { signInHref } from "@/lib/authLinks";
 import { usePublicApi } from "@/lib/usePublicApi";
+import { useReducedMotion } from "@/lib/useChartTheme";
+import { usePageShortcuts, type PageShortcutSection } from "@/lib/pageShortcuts";
+import { REPLAY_SHORTCUTS } from "@/lib/replayControls";
+import { clampReviewTime, REVIEW_SHORTCUTS } from "@/lib/reviewNavigation";
 import type { ReplayMapMarker } from "@/components/analyzer/game/MapReplayer";
 import type { CommentTimelineMarker } from "@/components/analyzer/game/replay/TransportDock";
 import {
@@ -25,6 +30,7 @@ import {
   reviewsRollout,
   tagLabel,
   type ReviewAnalysis,
+  type ReviewComment,
   type ReviewPageData,
 } from "@/lib/reviews";
 import { ReviewComposer, type DraftPin } from "./ReviewComposer";
@@ -34,6 +40,17 @@ import { ReviewShareMenu } from "./ReviewShareMenu";
 import { REPORT_REASONS, ReviewMenu } from "./ReviewMenu";
 import { ReviewThread } from "./ReviewThread";
 import { formatNumber } from "@/lib/i18n/format";
+import { useReviewDeepLink, type PlaybackReadiness } from "./useReviewDeepLink";
+
+/** The global "?" sheet lists these under "This page" while a review is open. */
+const REVIEW_PAGE_SHORTCUTS: readonly PageShortcutSection[] = [
+  { title: "This page", items: REVIEW_SHORTCUTS },
+  { title: "Replay, while it has focus", items: REPLAY_SHORTCUTS.map(([keys, label]) => ({ keys, label })) },
+];
+
+function prefersReducedMotionNow(): boolean {
+  return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+}
 
 /**
  * /reviews/[id] — one review request: the replay on the left (pinned at
@@ -53,7 +70,12 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
 function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
   const id = initial.request.id;
   const enc = encodeURIComponent(id);
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, isLoaded } = useAuth();
+  const toasts = useToastOptional();
+  const reducedMotion = useReducedMotion();
+  const reducedRef = useRef(reducedMotion);
+  reducedRef.current = reducedMotion;
+  usePageShortcuts(REVIEW_PAGE_SHORTCUTS);
   const pageReq = usePublicApi<ReviewPageData>(`/v1/reviews/${enc}`, {
     fallbackData: initial,
     // The server render is anonymous and briefly cached; refetch once so
@@ -88,18 +110,23 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
   const togglePin = useCallback((owner: string) => setPickingFor((old) => old === owner ? null : owner), []);
   const [composing, setComposing] = useState<number | null>(null);
   const [playbackAvailable, setPlaybackAvailable] = useState(false);
+  const [playbackFailed, setPlaybackFailed] = useState(false);
+  const playbackUnavailable = useCallback(() => setPlaybackFailed(true), []);
+  const [filterResetKey, setFilterResetKey] = useState(0);
+  const scrollSequence = useRef(0);
   const [pinned, setPinned] = useState(true);
   const seq = useRef(0);
 
-  const duration = data.request.game.durationSec;
+  const duration = data.request.game.durationSec ?? analysisReq.data?.game.durationSec ?? null;
   const pins = useMemo(() => pinNumbers(data.comments), [data.comments]);
 
-  const seek = useCallback((t: number, commentId?: string) => {
+  const seek = useCallback((seconds: number, commentId?: string) => {
+    const t = clampReviewTime(seconds, duration);
     seq.current += 1;
     setSeekRequest({ t, seq: seq.current });
     setCurrentTime(t);
     if (commentId) setActiveId(commentId);
-  }, []);
+  }, [duration]);
 
   const mapMarkers = useMemo<ReplayMapMarker[]>(() => {
     const out: ReplayMapMarker[] = [];
@@ -130,8 +157,48 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
 
   const scrollToComment = useCallback((commentId: string) => {
     setActiveId(commentId);
-    document.getElementById(`comment-${commentId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const reduce = reducedRef.current || prefersReducedMotionNow();
+    const id = `comment-${commentId}`;
+    const request = ++scrollSequence.current;
+    const scroll = (node: HTMLElement | null) => {
+      if (request === scrollSequence.current) node?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    };
+    const node = document.getElementById(id);
+    if (node) scroll(node);
+    else window.requestAnimationFrame(() => scroll(document.getElementById(id)));
   }, []);
+
+  const goTo = useCallback((comment: ReviewComment) => {
+    if (comment.gameTimeSec !== null) seek(comment.gameTimeSec, comment.id);
+    scrollToComment(comment.id);
+  }, [seek, scrollToComment]);
+
+  const canPlay = open && !data.request.hidden && data.request.game.hasPlayback && !analysisReq.error && analysisReq.data?.playback.mode !== "none";
+  const playback: PlaybackReadiness = !canPlay ? "none" : playbackAvailable ? "ready" : playbackFailed ? "none" : "pending";
+  useReviewDeepLink({
+    comments: data.comments,
+    settled: isLoaded === true && !pageReq.isValidating,
+    playback,
+    durationSec: duration,
+    onSelect: setActiveId,
+    onSeek: seek,
+    onScroll: (commentId) => { setFilterResetKey((key) => key + 1); scrollToComment(commentId); },
+    onCompose: setComposing,
+    onMissing: () => { toasts?.toast.info("That comment is no longer available"); },
+  });
+
+  const [focusComposer, setFocusComposer] = useState(false);
+  const v = data.viewer;
+  const canCompose = open && Boolean(isSignedIn) && v.signedIn && v.canComment && (v.isAsker || v.canReview !== false);
+  const composeNow = () => {
+    if (composing !== null) {
+      document.querySelector<HTMLTextAreaElement>('form[aria-label="Write a review comment"] textarea')?.focus();
+      return;
+    }
+    setFocusComposer(true);
+    setComposing(currentTime);
+  };
+  const closeComposer = () => { setComposing(null); setFocusComposer(false); clearPin("root"); };
 
   const onCommentMarker = useCallback((marker: CommentTimelineMarker) => {
     const cluster = commentClusters(data.comments, duration ?? 0).find((c) => `cluster-${c.startSec}` === marker.id);
@@ -172,7 +239,7 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
         <ArrowLeft className="h-4 w-4" aria-hidden /> Review board
       </Link>
 
-      <RequestHeader data={data} onChanged={refresh} onClosed={() => setLocallyClosed(true)} />
+      <RequestHeader data={data} onChanged={refresh} onClosed={() => setLocallyClosed(true)} currentTime={currentTime} />
       {refreshError || pageReq.error ? (
         <div role="alert" className="rounded-xl border-2 border-warning/50 bg-warning/10 p-3 text-caption text-text">
           <p>The latest review thread couldn&apos;t be loaded. Saved changes won&apos;t be submitted again.</p>
@@ -194,6 +261,7 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
             seekRequest={seekRequest}
             onTimeChange={setCurrentTime}
             onPlaybackAvailable={setPlaybackAvailable}
+            onPlaybackUnavailable={playbackUnavailable}
             mapMarkers={mapMarkers}
             onWorldClick={pickingFor ? onWorldClick : undefined}
             onMarkerClick={onMarkerClick}
@@ -231,21 +299,23 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
               durationSec={duration}
               currentTime={currentTime}
               initialTime={composing}
+              requestUrl={data.request.url}
+              focusOnOpen={focusComposer}
               draftPin={draftPins.root ?? null}
               nextPinNumber={pins.size + 1}
               pinMode={pickingFor === "root"}
               canPin={playbackAvailable}
               onTogglePinMode={() => togglePin("root")}
               onClearPin={() => clearPin("root")}
-              onCancel={() => { setComposing(null); clearPin("root"); }}
+              onCancel={closeComposer}
               onPosted={(commentId) => {
-                setComposing(null);
-                clearPin("root");
+                closeComposer();
                 void refresh().then((refreshed) => { if (refreshed) scrollToComment(commentId); });
               }}
             />
           ) : null}
           <ReviewThread
+            filterResetKey={filterResetKey}
             data={data}
             pinNumbers={pins}
             activeId={activeId}
@@ -258,6 +328,8 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
             onTogglePinMode={togglePin}
             onClearPin={clearPin}
             onChanged={refresh}
+            onGoTo={goTo}
+            onCompose={canCompose ? composeNow : undefined}
           />
         </div>
       </div>
@@ -265,7 +337,7 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
   );
 }
 
-export function RequestHeader({ data, onChanged, onClosed }: { data: ReviewPageData; onChanged: () => Promise<unknown>; onClosed?: () => void }) {
+export function RequestHeader({ data, onChanged, onClosed, currentTime = 0 }: { data: ReviewPageData; onChanged: () => Promise<unknown>; onClosed?: () => void; currentTime?: number }) {
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   const owner = isLoaded && isSignedIn && userId ? userId : null;
   const runOwned = useOwnerRequestScope(owner, getToken);
@@ -356,7 +428,7 @@ export function RequestHeader({ data, onChanged, onClosed }: { data: ReviewPageD
           {active && r.replay?.shared ? (
             <ReviewReplayDownload requestId={r.id} requestUrl={r.url} variant="page" available={r.replay.available} />
           ) : null}
-          <ReviewShareMenu path={r.url} question={r.question} matchup={r.game.matchup} />
+          <ReviewShareMenu path={r.url} question={r.question} matchup={r.game.matchup} currentTime={currentTime} />
           {isSignedIn && !r.asker.isYou ? <ReviewMenu label="Request actions" disabled={reporting} items={[{ id: "report", label: "Report request…", items: REPORT_REASONS.map((reason) => ({ id: reason, label: reason, onSelect: () => report(reason) })) }]}><MoreHorizontal className="h-5 w-5" aria-hidden /></ReviewMenu> : null}
         </div>
         {reportNotice ? <p role="status" className="text-caption text-text-muted">{reportNotice}</p> : null}

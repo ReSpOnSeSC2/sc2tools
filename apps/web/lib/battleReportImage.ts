@@ -10,6 +10,7 @@
  * It uses the same fixed-rule text the page shows.
  */
 
+import { shareReportPalette } from "@/lib/shareReportPalette";
 import {
   CARD_H,
   CARD_PAD,
@@ -138,7 +139,7 @@ function drawMapSnapshot(
     else ctx.stroke();
   }
   if (fight) {
-    ctx.strokeStyle = "#ffd15c";
+    ctx.strokeStyle = shareReportPalette.fight;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(fight.x, fight.y, 6, 0, Math.PI * 2);
