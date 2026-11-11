@@ -1,10 +1,11 @@
-import { absoluteUrl } from "@/lib/seo/absoluteUrl";
+import { absoluteUrl, siteOrigin } from "@/lib/seo/absoluteUrl";
 import openersV1 from "./reportCardOpeners.v1.json";
-import { REPORT_CARD_PATH } from "./reportCardRoute";
+import { canonicalReportCardPath, REPORT_CARD_PATH, REPORT_COMPARE_PATH } from "./reportCardRoute";
 import type { ReportCardModel } from "./reportSharing";
 
 const VERSION = 1;
 const REPORT_TYPE = 1;
+const COMPARISON_TYPE = 2;
 const TOTALS = 1;
 const OPENER = 2;
 const MACRO = 4;
@@ -16,6 +17,7 @@ const MATCHUPS = ["vs P", "vs T", "vs Z"];
 const OPENER_INDEX = new Map(openersV1.map((name, index) => [name, index]));
 
 type GameRecord = NonNullable<ReportCardModel["totals"]>;
+export type ReportComparison = { first: GameRecord; second: GameRecord };
 const inRange = (value: number, min: number, max: number) => Number.isInteger(value) && value >= min && value <= max;
 
 function validRecord(row: GameRecord, minGames = 0): boolean {
@@ -110,22 +112,71 @@ function readReportCard(reader: ReportCardReader): ReportCardModel | null {
   const opener = sections & OPENER ? { name: openersV1[reader.read()], ...reader.record() } : null;
   const macro = sections & MACRO ? { score: reader.read(), games: reader.read() } : null;
   const model = { totals, matchups, opener, macro };
-  return reader.done && validModel(model) ? model : null;
+  return validModel(model) ? model : null;
 }
 
-/** The fragment is untrusted. Reject noncanonical encodings as well as invalid fields. */
-export function decodeReportCard(fragment: string): ReportCardModel | null {
+/** Bound the fragment before allocating, and reject noncanonical bytes. */
+function decodeCard<T>(fragment: string, read: (reader: ReportCardReader) => T | null): T | null {
   if (!fragment || fragment.length > MAX_FRAGMENT_LENGTH || !/^[A-Za-z0-9_-]+$/.test(fragment)) return null;
   try {
     const bytes = Uint8Array.from(atob(fragment.replaceAll("-", "+").replaceAll("_", "/")), char => char.charCodeAt(0));
     if (toBase64url(bytes) !== fragment) return null;
-    return readReportCard(new ReportCardReader(bytes));
+    const reader = new ReportCardReader(bytes);
+    const value = read(reader);
+    return reader.done ? value : null;
   } catch {
     return null;
   }
 }
 
+export function decodeReportCard(fragment: string): ReportCardModel | null {
+  return decodeCard(fragment, readReportCard);
+}
+
 export function reportCardLink(model: ReportCardModel): string | null {
   const fragment = encodeReportCard(model);
   return fragment ? absoluteUrl(`${REPORT_CARD_PATH}#${fragment}`) : null;
+}
+
+export function compareReportCards(own: ReportCardModel, shared: ReportCardModel): ReportComparison | null {
+  if (!own.totals || !shared.totals || !validRecord(own.totals, 1) || !validRecord(shared.totals, 1)) return null;
+  const countsOnly = ({ games, wins, losses }: GameRecord) => ({ games, wins, losses });
+  return { first: countsOnly(own.totals), second: countsOnly(shared.totals) };
+}
+
+function validComparison({ first, second }: ReportComparison): boolean {
+  return validRecord(first, 1) && validRecord(second, 1);
+}
+
+export function encodeReportComparison(comparison: ReportComparison): string | null {
+  if (!validComparison(comparison)) return null;
+  return toBase64url([VERSION, COMPARISON_TYPE, ...toVarintBytes([
+    ...recordValues(comparison.first), ...recordValues(comparison.second),
+  ])]);
+}
+
+export function decodeReportComparison(fragment: string): ReportComparison | null {
+  return decodeCard(fragment, reader => {
+    if (reader.read() !== VERSION || reader.read() !== COMPARISON_TYPE) return null;
+    const comparison = { first: reader.record(), second: reader.record() };
+    return validComparison(comparison) ? comparison : null;
+  });
+}
+
+export function reportComparisonLink(comparison: ReportComparison): string | null {
+  const fragment = encodeReportComparison(comparison);
+  return fragment ? absoluteUrl(`${REPORT_COMPARE_PATH}#${fragment}`) : null;
+}
+
+/** Pasted links are read locally. Only canonical-origin summary links can supply totals. */
+export function reportCardFromLink(value: string): ReportCardModel | null {
+  if (value.length > 240) return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.origin !== siteOrigin() || url.username || url.password || url.search
+      || canonicalReportCardPath(url.pathname) !== REPORT_CARD_PATH) return null;
+    return decodeReportCard(url.hash.slice(1));
+  } catch {
+    return null;
+  }
 }

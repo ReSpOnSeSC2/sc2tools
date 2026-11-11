@@ -3,19 +3,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { SkeletonBar, SkeletonRows } from "@/components/ui/Skeleton";
+import { ReportCardComparison, ReportComparisonBuilder } from "./ReportCardComparison";
 import { drawReportCard } from "@/lib/instant/reportCard";
-import { decodeReportCard } from "@/lib/instant/reportCardLink";
+import { decodeReportCard, decodeReportComparison, type ReportComparison } from "@/lib/instant/reportCardLink";
+import type { ReportCardClass } from "@/lib/instant/reportCardRoute";
 import { summaryFromModel } from "@/lib/instant/reportExport";
 import type { ReportCardModel } from "@/lib/instant/reportSharing";
 
-type CardState = { kind: "loading" | "empty" | "invalid" } | { kind: "ready"; model: ReportCardModel };
+type CardState = { kind: "loading" | "empty" | "invalid" }
+  | { kind: "summary"; model: ReportCardModel; fragment: string }
+  | { kind: "compare"; model: ReportComparison };
 const SCOPE_NOTE = "These numbers cover the games selected by the sharer.";
 
-function readCardFragment(): CardState {
+function readCardFragment(cardClass: ReportCardClass): CardState {
   const fragment = window.location.hash.slice(1);
   if (!fragment) return { kind: "empty" };
+  if (cardClass === "compare") {
+    const model = decodeReportComparison(fragment);
+    return model ? { kind: "compare", model } : { kind: "invalid" };
+  }
   const model = decodeReportCard(fragment);
-  return model ? { kind: "ready", model } : { kind: "invalid" };
+  return model ? { kind: "summary", model, fragment } : { kind: "invalid" };
 }
 
 function ReportPreview({ model }: { model: ReportCardModel }) {
@@ -57,19 +65,30 @@ function ReportPreview({ model }: { model: ReportCardModel }) {
   );
 }
 
-export function ReportCardViewer() {
+export function ReportCardViewer({ cardClass = "summary" }: { cardClass?: ReportCardClass }) {
   const [card, setCard] = useState<CardState>({ kind: "loading" });
   useEffect(() => {
-    const update = () => setCard(readCardFragment());
+    const update = () => setCard(readCardFragment(cardClass));
     update();
     window.addEventListener("hashchange", update);
     return () => window.removeEventListener("hashchange", update);
-  }, []);
+  }, [cardClass]);
 
-  if (card.kind === "ready") return <ReportPreview model={card.model} />;
+  if (card.kind === "summary") return (
+    <div className="space-y-6">
+      <ReportPreview model={card.model} />
+      <ReportComparisonBuilder key={card.fragment} shared={card.model} />
+    </div>
+  );
+  if (card.kind === "compare") return <ReportCardComparison model={card.model} />;
   if (card.kind === "loading") return (
     <div className="space-y-4">
-      <SkeletonBar className="aspect-[1200/630] w-full" />
+      {cardClass === "compare" ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SkeletonBar className="h-40 w-full" />
+          <SkeletonBar className="h-40 w-full" />
+        </div>
+      ) : <SkeletonBar className="aspect-[1200/630] w-full" />}
       <SkeletonRows rows={3} label="Opening report card" />
     </div>
   );

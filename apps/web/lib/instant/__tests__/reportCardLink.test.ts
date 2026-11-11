@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { decodeReportCard, encodeReportCard, reportCardLink } from "../reportCardLink";
+import {
+  compareReportCards, decodeReportCard, decodeReportComparison, encodeReportCard, encodeReportComparison,
+  reportCardFromLink, reportCardLink, reportComparisonLink,
+} from "../reportCardLink";
 import openersV1 from "../reportCardOpeners.v1.json";
-import { REPORT_CARD_PATH } from "../reportCardRoute";
+import { REPORT_CARD_PATH, REPORT_COMPARE_PATH } from "../reportCardRoute";
 import type { ReportCardModel } from "../reportSharing";
 
 const sample: ReportCardModel = {
@@ -90,5 +93,64 @@ describe("report card links", () => {
     }
     expect(accepted).toBeGreaterThan(50);
     expect(accepted).toBeLessThan(1000);
+  });
+});
+
+describe("report comparisons", () => {
+  const comparison = {
+    first: { games: 999, wins: 500, losses: 499 },
+    second: { games: 999, wins: 499, losses: 500 },
+  };
+  const valid = wire(1, 2, 5, 4, 1, 8, 3, 5);
+
+  it("encodes a bounded comparison with one record per side and keeps card types separate", () => {
+    const fragment = encodeReportComparison(comparison);
+    expect(fragment).toMatch(/^[A-Za-z0-9_-]{1,59}$/);
+    expect(decodeReportComparison(fragment!)).toEqual(comparison);
+    expect(decodeReportCard(fragment!)).toBeNull();
+    expect(decodeReportComparison(encodeReportCard(sample)!)).toBeNull();
+    const url = new URL(reportComparisonLink(comparison)!);
+    expect(url.pathname).toBe(REPORT_COMPARE_PATH);
+    expect(url.search).toBe("");
+    expect(url.hash).toBe(`#${fragment}`);
+    expect(decodeReportComparison(valid)).toEqual({
+      first: { games: 5, wins: 4, losses: 1 }, second: { games: 8, wins: 3, losses: 5 },
+    });
+  });
+
+  it.each([
+    ["empty", ""], ["oversized", "A".repeat(60)], ["non-alphabet", "<Private Name>"],
+    ["padded", valid + "="], ["noncanonical base64", "AQIFBAEIAwV"],
+    ["unsupported version", wire(2, 2, 5, 4, 1, 8, 3, 5)],
+    ["truncated", wire(1, 2, 5, 4, 1, 8, 3)],
+    ["trailing bytes", wire(1, 2, 5, 4, 1, 8, 3, 5, 9)],
+    ["noncanonical varint", wire(1, 2, 133, 0, 4, 1, 8, 3, 5)],
+    ["no games", wire(1, 2, 0, 0, 0, 8, 3, 5)],
+    ["inconsistent totals", wire(1, 2, 5, 5, 1, 8, 3, 5)],
+    ["out-of-range games", wire(1, 2, 232, 7, 0, 0, 8, 3, 5)],
+  ])("rejects %s", (_case, fragment) => {
+    expect(decodeReportComparison(fragment)).toBeNull();
+  });
+
+  it("requires totals on both sides and allows a sample with no decided games", () => {
+    expect(compareReportCards(sample, empty)).toBeNull();
+    expect(compareReportCards(empty, sample)).toBeNull();
+    const own = { ...empty, totals: { games: 2, wins: 0, losses: 0 } };
+    expect(compareReportCards(own, sample)).toEqual({ first: own.totals, second: sample.totals });
+    expect(encodeReportComparison({ ...comparison, first: { games: 1, wins: 1, losses: 1 } })).toBeNull();
+    expect(encodeReportComparison({ ...comparison, second: { games: 1, wins: 1, losses: 1 } })).toBeNull();
+  });
+
+  it("reads only complete same-origin summary links", () => {
+    const link = reportCardLink(sample)!;
+    const url = new URL(link);
+    expect(reportCardFromLink(`  ${link}  `)).toEqual(sample);
+    expect(reportCardFromLink(link.replace("/report/", "/r%65port/"))).toEqual(sample);
+    expect(reportCardFromLink(link.replace(REPORT_CARD_PATH, REPORT_COMPARE_PATH))).toBeNull();
+    expect(reportCardFromLink(`https://example.test${url.pathname}${url.hash}`)).toBeNull();
+    expect(reportCardFromLink(`https://PrivateName@${url.host}${url.pathname}${url.hash}`)).toBeNull();
+    expect(reportCardFromLink(`${url.origin}${url.pathname}?q=PrivateName${url.hash}`)).toBeNull();
+    expect(reportCardFromLink(`${link}${"A".repeat(240)}`)).toBeNull();
+    expect(reportCardFromLink("Private Name")).toBeNull();
   });
 });

@@ -4720,6 +4720,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Copy a link to the aggregate rows you choose in your browser replay report. The recipient's browser redraws the card without receiving your replays, player names or account IDs.
 
+### Replay report comparisons
+
+- Compare a shared replay report with your own card link and share both selected game records side by side. Report and comparison links have separate social previews.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

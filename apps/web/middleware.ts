@@ -1,7 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
 import { lowercaseGuidePath } from "./lib/guides/canonicalPath";
-import { isReportCardPath } from "./lib/instant/reportCardRoute";
+import { isReportCardPath, isReportCardPreviewPath } from "./lib/instant/reportCardRoute";
 import { isPublicReplayReference, legacyReplayArchivePath } from "./lib/replayRouteAccess";
 import { isPublicStatusRequest, statusHostRedirect } from "./lib/publicStatusRoute";
 
@@ -66,7 +66,8 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   if (statusRedirect) return NextResponse.redirect(statusRedirect, PERMANENT_REDIRECT);
   const pathname = req.nextUrl.pathname;
   // Static replay views must work without a Clerk session handshake.
-  if (isPublicStatusRequest(pathname) || pathname === "/wrapped" || pathname === "/wrapped/opengraph-image" || isReportCardPath(pathname)) {
+  if (isPublicStatusRequest(pathname) || pathname === "/wrapped" || pathname === "/wrapped/opengraph-image"
+    || isReportCardPath(pathname) || isReportCardPreviewPath(pathname)) {
     return NextResponse.next();
   }
   return authenticatedMiddleware(req, event);

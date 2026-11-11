@@ -1,5 +1,5 @@
 import { sanitiseRequestPath } from "./feedback/sanitise";
-import { isReportCardPath, REPORT_CARD_PATH } from "./instant/reportCardRoute";
+import { canonicalReportCardPath } from "./instant/reportCardRoute";
 
 // Browser Sentry keeps no typed search text or credential path (ADR 0069,
 // 2026-11-01 amendment). Request URLs in fetch and XHR breadcrumbs and in
@@ -22,7 +22,7 @@ function scrubUrl(value: unknown): unknown {
 function scrubCardNavigation(value: unknown): unknown {
   if (typeof value !== "string") return value;
   try {
-    return isReportCardPath(new URL(value, "https://sc2tools.com").pathname) ? REPORT_CARD_PATH : value;
+    return canonicalReportCardPath(new URL(value, "https://sc2tools.com").pathname) ?? value;
   } catch {
     return value;
   }
