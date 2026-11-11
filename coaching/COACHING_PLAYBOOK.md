@@ -107,6 +107,14 @@ Near term (manual, zero build cost): run the pipeline by hand, deliver cards as 
 Mid term: a `coaching/` watch-folder so submitted replays auto-grade; student packet page hosted on sc2tools.com behind their login; adherence trend chart from the accumulated `.grade.json` files.
 Long term: "Coach mode" as a product feature — coaches upload reference builds, students link accounts, grading + longitudinal analytics in-app. Your coaching practice becomes the design lab for a SaaS feature no competitor (human or AI-analyzer) currently ships.
 
+### Coaching notifications
+
+Booking and cancellation notices appear under **Coaching** in the shared
+notifications inbox. Opening Sessions acknowledges the notices for the
+bookings you just saw. Reading the same notices in the inbox clears the
+Sessions badge. Assignment and practice-sharing notifications also appear
+in the Coaching inbox.
+
 ### Locker roster
 
 Coaches and admins can choose **Open Locker roster** above the classic Locker. Link a student by searching for their account email, edit their display name or focus note, or remove their Locker profile. Admins can reassign students and manage linked coaches. **Roster help** opens in the coaching workspace.
@@ -138,12 +146,3 @@ You don't need funnels; you need proof. Post one anonymized before/after report 
 - Medians come from *your* MMR context; a 4.2k student hitting +15s across the board is fine early — grade the *trend*, and consider a per-student grace multiplier at intake.
 - "Game Too Short" and cheese losses shouldn't tank a week's average — exclude sub-4-minute games from trend stats.
 - Blizzard IP: keep branding "independent, not affiliated" (already on the site).
-
-
-## Coaching notifications
-
-Booking and cancellation notices appear under **Coaching** in the shared
-notifications inbox. Opening Sessions acknowledges the notices for the
-bookings you just saw. Reading the same notices in the inbox clears the
-Sessions badge. Assignment and practice-sharing notifications also appear
-in the Coaching inbox.

@@ -11,11 +11,6 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
-### Coaching notifications
-
-- Read booking notices in Sessions or the shared notifications inbox to clear
-  the same alert. A newer cancellation remains unread until you see it.
-
 ### Replay camera and mechanics
 
 - Follow either player's recorded camera and open Camera attention to see
@@ -68,6 +63,11 @@ corresponding GitHub Release.
   successfully saved changes. Instant controls apply when you change them.
 - Compare recent donation totals with the site's monthly running costs.
   Supporters can choose to appear publicly after review.
+
+### Coaching notifications
+
+- Read booking notices in Sessions or the shared notifications inbox to clear
+  the same alert. A newer cancellation remains unread until you see it.
 
 ### Trends and arcade fixes
 
