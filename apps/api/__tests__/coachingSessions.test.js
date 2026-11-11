@@ -204,7 +204,8 @@ async function seedDigest({ alexSharing = sharing("accepted", "2026-09-01T13:00:
     game("custom", "2026-10-13T13:00:00.000Z", { isLadderGame: false, myBuild: "Unassigned custom build" }),
     game("w3", "2026-10-14T12:00:00.000Z"),
     game("l2", "2026-10-15T12:00:00.000Z", { result: "Defeat", myBuild: null }),
-    game("pvt", "2026-10-16T12:00:00.000Z", { opponent: { race: "Terran" }, map: "Ghost River LE", result: "Defeat" }),
+    game("pvt", "2026-10-16T12:00:00.000Z", { opponent: { race: "Terran" }, map: "Ghost River LE",
+      result: "Defeat", replayFile: { storedAt: NOW } }),
     game("checked-in", "2026-10-17T12:00:00.000Z", {
       myBuild: "DT Rush",
       buildIntent: { status: "confirmed", applied: true, build: { name: "DT Rush" }, detected: { name: "Chargelot All-in" } },
@@ -244,6 +245,7 @@ describe("booking prep digest facts", () => {
     expect(digest.replays).toHaveLength(4);
     expect(digest.replays[1]).toEqual({
       playedAt: "2026-10-16T12:00:00.000Z", map: "Ghost River LE", matchup: "PvT", result: "Loss", build: "Blink Stalkers",
+      evidenceRef: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
     });
     expect(JSON.stringify(digest)).not.toMatch(/gameId|Unassigned custom build|SecretOpponent|DT Rush/);
   });
@@ -258,6 +260,44 @@ describe("booking prep digest facts", () => {
     expect(digest.totals.games).toBe(8);
     expect(digest.replays[0]).toMatchObject({ gameId: "checked-in", build: "DT Rush" });
     expect(digest.builds).toContainEqual({ name: "Unassigned custom build", games: 1 });
+  });
+});
+
+describe("exact assigned replay evidence", () => {
+  test("resolves only the archived replay for the actual booking party and live assignment grant", async () => {
+    await seedDigest();
+    const digest = await service.bookingDigest("coach-user", coachRole, "next");
+    const ref = digest.replays[1].evidenceRef;
+    expect(digest.replays.filter((replay) => replay.evidenceRef)).toHaveLength(1);
+    expect(JSON.stringify(digest)).not.toMatch(/"pvt"|student-user-1|https?:|grantId/);
+    await expect(service.bookingDigestReplay("coach-user", coachRole, "next", ref)).resolves.toEqual({ userId: "student-user-1", gameId: "pvt" });
+    await expect(service.bookingDigestReplay("coach-user", coachRole, "blair-next", ref)).rejects.toMatchObject({ status: 404 });
+    await db.coaching.updateOne({ _id: "calendar:coach-1" }, { $push: {
+      bookings: booking("same-student-next", "student-1", "2026-10-24T18:00:00.000Z"),
+    } });
+    const otherBooking = await service.bookingDigest("coach-user", coachRole, "same-student-next");
+    expect(otherBooking.replays[1].evidenceRef).not.toBe(ref);
+    await expect(service.bookingDigestReplay("coach-user", coachRole, "same-student-next", ref)).rejects.toMatchObject({ status: 404 });
+    await expect(service.bookingDigestReplay("student-user-1", alexRole, "next", ref)).rejects.toMatchObject({ status: 404 });
+    await expect(service.bookingDigestReplay("platform-admin", { role: "admin", coachId: "coach-1" }, "next", ref)).rejects.toMatchObject({ status: 404 });
+    await db.games.updateOne({ userId: "student-user-1", gameId: "pvt" }, { $set: { excluded: true } });
+    await expect(service.bookingDigestReplay("coach-user", coachRole, "next", ref)).rejects.toMatchObject({ status: 404 });
+  });
+
+  test("revocation and acceptance under a new grant retire prior references", async () => {
+    await seedDigest();
+    const digest = await service.bookingDigest("coach-user", coachRole, "next");
+    const ref = digest.replays[1].evidenceRef;
+    const write = (value) => db.coaching.updateOne({ _id: "locker" }, { $set: { "state.students.0.practiceSharing": value } });
+    await write(sharing("revoked", NOW.toISOString()));
+    await expect(service.bookingDigestReplay("coach-user", coachRole, "next", ref)).rejects.toMatchObject({ status: 404 });
+    await write({ ...sharing("accepted", "2026-09-01T13:00:00.000Z"), grantId: "new-grant" });
+    await db.coaching.updateMany({ kind: "game_requirement", practiceSharingGrantId: "grant-student-user-1" }, { $set: { practiceSharingGrantId: "new-grant" } });
+    const renewed = await service.bookingDigest("coach-user", coachRole, "next");
+    expect(renewed.replays[1].evidenceRef).not.toBe(ref);
+    await expect(service.bookingDigestReplay("coach-user", coachRole, "next", renewed.replays[1].evidenceRef))
+      .resolves.toMatchObject({ gameId: "pvt" });
+    await expect(service.bookingDigestReplay("coach-user", coachRole, "next", ref)).rejects.toMatchObject({ status: 404 });
   });
 });
 
@@ -327,18 +367,20 @@ describe("booking prep digest access and history", () => {
   });
 });
 
-function app(auth, role = { role: "coach", coachId: "coach-1" }) {
+function app(auth, role = { role: "coach", coachId: "coach-1" }, replayFiles) {
   const coaching = {
     roleFor: jest.fn(async () => role),
     calendarFor: jest.fn(async () => ({ role: "coach" })),
     calendarHistory: jest.fn(async () => ({ role: "coach", bookings: [] })),
     bookingDigest: jest.fn(async () => ({ state: "ready" })),
+    bookingDigestReplay: jest.fn(async () => ({ userId: "private-student", gameId: "private-replay" })),
   };
   const router = buildCoachingRouter({
     auth: (req, _res, next) => { req.auth = auth; next(); },
     isAdmin: () => false,
     coaching,
     aggregations: {},
+    replayFiles,
     users: {},
   });
   const server = express();
@@ -372,4 +414,32 @@ describe("coaching session routes", () => {
     await request(outsider.server).get("/v1/coaching/calendar/bookings/next/digest").expect(404);
     expect(outsider.coaching.bookingDigest).not.toHaveBeenCalled();
   });
+});
+
+test("coach replay is a private neutral attachment and rechecks the grant after opening storage", async () => {
+  const files = { prepareDownload: jest.fn(async () => ({ url: "https://internal.invalid/private-storage-key" })) };
+  const route = "/v1/coaching/calendar/bookings/next/digest/replay";
+  const body = { reference: "A".repeat(43) };
+  const signedIn = app({ userId: "coach-user", source: "clerk" }, undefined, files);
+  const bytes = Buffer.from("MPQ\x1a");
+  const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async () => new Response(bytes, { headers: { "content-length": "4" } }));
+  try {
+    const result = await request(signedIn.server).post(route).send(body).expect(200);
+    expect(result.body).toEqual(bytes);
+    expect(result.headers["cache-control"]).toBe("private, no-store, max-age=0");
+    expect(result.headers["content-disposition"]).toBe('attachment; filename="sc2tools-replay.SC2Replay"');
+    expect(result.headers.location).toBeUndefined();
+    expect(files.prepareDownload).toHaveBeenCalledWith("private-student", "private-replay", { filename: "sc2tools-replay.SC2Replay" });
+    expect(signedIn.coaching.bookingDigestReplay).toHaveBeenCalledTimes(2);
+    fetchSpy.mockImplementationOnce(async () => {
+      signedIn.coaching.bookingDigestReplay.mockRejectedValueOnce(Object.assign(new Error("revoked"), { status: 404 }));
+      return new Response(bytes, { headers: { "content-length": "4" } });
+    });
+    const revoked = await request(signedIn.server).post(route).send(body).expect(404);
+    expect(revoked.headers["content-disposition"]).toBeUndefined();
+    expect(JSON.stringify(revoked.body)).not.toMatch(/private-student|private-replay|internal.invalid/);
+    const device = app({ userId: "coach-user", source: "device" }, undefined, files);
+    await request(device.server).post(route).send(body).expect(404);
+    expect(device.coaching.bookingDigestReplay).not.toHaveBeenCalled();
+  } finally { fetchSpy.mockRestore(); }
 });

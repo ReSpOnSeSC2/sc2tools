@@ -15,6 +15,7 @@
  * aggregation pipeline the service runs.
  */
 
+const { createHmac } = require("node:crypto");
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 const { DETECTOR_MY_BUILD_FIELD } = require("./buildIntentReaders");
 const {
@@ -172,7 +173,8 @@ function digestPipeline(userId, since, until, assignmentMatches = null) {
           { $limit: DIGEST_RECENT_GAMES },
           {
             $project: {
-              _id: 0, ...(own ? { gameId: 1 } : {}), date: 1, startedAt: 1, durationSec: 1, map: 1,
+              _id: 0, gameId: 1, date: 1, startedAt: 1, durationSec: 1, map: 1,
+              ...(!own ? { "replayFile.storedAt": 1 } : {}),
               _digestResult: 1, _digestMyRace: 1, _digestOppRace: 1, _digestBuild: 1,
             },
           },
@@ -250,13 +252,24 @@ function digestGameStart(row) {
   return end;
 }
 
-/** @param {any} row @param {boolean} own */
-function serializeDigestGame(row, own) {
+/** Stable across digest refreshes, scoped to one booking and current grant.
+ * The reference has no independent replay access.
+ * @param {string} grantId @param {string} bookingId @param {string} gameId */
+function digestReplayRef(grantId, bookingId, gameId) {
+  return createHmac("sha256", grantId).update(JSON.stringify(["coaching-digest-replay-v1", bookingId, gameId])).digest("base64url");
+}
+
+/** @param {any} row @param {boolean} own @param {string} bookingId @param {string|null} grantId */
+function serializeDigestGame(row, own, bookingId, grantId) {
   const my = row && row._digestMyRace;
   const opp = row && row._digestOppRace;
   const result = row && row._digestResult;
+  const gameId = boundedText(row && row.gameId, 200);
+  const evidenceRef = !own && grantId && gameId && row?.replayFile?.storedAt
+    ? digestReplayRef(grantId, bookingId, gameId) : null;
   return {
-    ...(own ? { gameId: boundedText(row && row.gameId, 200) } : {}),
+    ...(own ? { gameId } : {}),
+    ...(evidenceRef ? { evidenceRef } : {}),
     playedAt: isoOrNull(digestGameStart(row)),
     map: boundedText(row && row.map, 120),
     matchup: RACES.has(my) && RACES.has(opp) ? `${my}v${opp}` : null,
@@ -269,7 +282,7 @@ function serializeDigestGame(row, own) {
  * Shape the pipeline's single $facet document into the public digest.
  *
  * @param {any} root
- * @param {{bookingId:string, role:string, window:ReturnType<typeof digestWindow>}} context
+ * @param {{bookingId:string, role:string, grantId?:string|null, window:ReturnType<typeof digestWindow>}} context
  */
 function shapeDigest(root, context) {
   /** @type {{_id:string,games:number}[]} */
@@ -282,7 +295,7 @@ function shapeDigest(root, context) {
   const own = context.role === "student";
   /** @type {any[]} */
   const recent = Array.isArray(root?.recent) ? root.recent : [];
-  const replays = recent.map((row) => serializeDigestGame(row, own)).filter((game) => !own || game.gameId);
+  const replays = recent.map((row) => serializeDigestGame(row, own, context.bookingId, context.grantId ?? null)).filter((game) => !own || game.gameId);
   const replayCount = count(root?.evidenceCount?.[0]?.n);
   return {
     bookingId: context.bookingId,
@@ -370,6 +383,7 @@ module.exports = {
   previousSession,
   digestWindow,
   digestGameMatch,
+  digestReplayRef,
   digestPipeline,
   shapeDigest,
   sessionHistory,

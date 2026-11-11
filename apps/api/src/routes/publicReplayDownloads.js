@@ -99,8 +99,10 @@ function mountPublicReplayDownloads(router, deps) {
   });
 }
 
-/** @param {string} source @param {import('express').Response} res */
-async function streamOriginal(source, res) {
+/** @param {string} source @param {import('express').Response} res
+ * @param {() => Promise<boolean>} [authorize] */
+async function streamOriginal(source, res, authorize) {
+  if (res.destroyed) return;
   const cancel = new AbortController();
   const stop = () => cancel.abort();
   res.once("close", stop);
@@ -112,6 +114,11 @@ async function streamOriginal(source, res) {
       await upstream.body?.cancel().catch(() => {});
       return storageUnavailable(res);
     }
+    if (authorize && !await authorize()) {
+      await upstream.body.cancel().catch(() => {});
+      return notFound(res);
+    }
+    signal.throwIfAborted();
     res.set({ "Content-Type": "application/octet-stream", "Content-Length": String(bytes),
       "Content-Disposition": 'attachment; filename="' + FILENAME + '"', "X-Content-Type-Options": "nosniff" });
     const body = /** @type {import('node:stream/web').ReadableStream} */ (/** @type {unknown} */ (upstream.body));
@@ -121,7 +128,8 @@ async function streamOriginal(source, res) {
     else if (!res.destroyed) storageUnavailable(res);
   } finally {
     res.off("close", stop);
+    cancel.abort();
   }
 }
 
-module.exports = { mountPublicReplayDownloads };
+module.exports = { mountPublicReplayDownloads, streamOriginal };

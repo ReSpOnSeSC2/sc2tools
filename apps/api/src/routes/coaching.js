@@ -4,7 +4,7 @@ const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
 const { REGION_LABELS } = require("../util/regionFromToonHandle");
 const { ASSIGNMENT_STATES } = require("../services/coachingAssignmentState");
-const { bookingDigestRoute, calendarRoute } = require("./coachingSessions");
+const { mountBookingDigestRoutes, calendarRoute } = require("./coachingSessions");
 
 // Whole-state payloads carry embedded media (voice memos, images,
 // small replays) as base64. Body parsing is owned by the app-level
@@ -150,7 +150,7 @@ function buildCoachingRouter(deps) {
   });
 
   router.get("/coaching/calendar", withRole, calendarRoute(deps, ctx));
-  router.get("/coaching/calendar/bookings/:bookingId/digest", withRole, bookingDigestRoute(deps, ctx));
+  mountBookingDigestRoutes(router, withRole, deps, ctx);
 
   router.put("/coaching/calendar/availability", withRole, async (req, res, next) => {
     try {

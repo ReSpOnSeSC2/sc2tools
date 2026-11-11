@@ -28,7 +28,7 @@ const {
   coachingResultExpr,
   coachingRaceExpr,
 } = require("./coachingGameExpr");
-const { digestPipeline, digestWindow, sessionHistory, shapeDigest } = require("./coachingSessions");
+const { DIGEST_RECENT_GAMES, digestGameMatch, digestPipeline, digestReplayRef, digestWindow, sessionHistory, shapeDigest } = require("./coachingSessions");
 const { randomUUID } = require("node:crypto");
 const { deliverCoachingNotification } = require("./notificationDelivery");
 const { ASSIGNMENT_STATES, assignmentStateMatch, assignmentStateCounts } = require("./coachingAssignmentState");
@@ -1916,7 +1916,42 @@ class CoachingService {
     if (!current.accepted || current.grantId !== party.grantId) {
       return { ...base, state: "sharing_off", sharing: current.sharingStatus };
     }
-    return shapeDigest(root, { ...base, window });
+    return shapeDigest(root, { ...base, window, grantId: party.grantId });
+  }
+
+  /**
+   * Resolve the exact archived assignment replay while the original booking
+   * and its practice-sharing grant still authorize the coach's evidence.
+   * @param {string} userId
+   * @param {{role:string,coachId?:string,studentId?:string}} coachingRole
+   * @param {unknown} bookingId
+   * @param {unknown} reference
+   */
+  async bookingDigestReplay(userId, coachingRole, bookingId, reference) {
+    const unavailable = () => coachingError(404, "replay_not_found", "The assigned replay is unavailable.");
+    if (typeof reference !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(reference)) throw unavailable();
+    const now = this._assignmentNow();
+    const party = await this._bookingParty(userId, coachingRole, bookingId, now);
+    if (party.role !== "coach" || !party.accepted || !party.grantId) throw unavailable();
+    const window = digestWindow({
+      bookings: party.bookings, booking: party.booking, sharingStartedAt: party.sharingStartedAt, now,
+    });
+    const matches = await this._digestAssignmentMatches(party, window);
+    if (!matches.length) throw unavailable();
+    const rows = await this.db.games.find({
+      $and: [digestGameMatch(party.booking.studentUserId, window.since, window.until), { $or: matches }],
+    }, { projection: { _id: 0, gameId: 1, "replayFile.storedAt": 1 }, maxTimeMS: 5000 })
+      .sort({ date: -1, _id: -1 }).limit(DIGEST_RECENT_GAMES).toArray();
+    const grantId = party.grantId;
+    const match = rows.find((row) => {
+      const gameId = safeIdentity(row.gameId);
+      return gameId && gameId.length <= 200 && row.replayFile?.storedAt
+        && digestReplayRef(grantId, party.booking.id, gameId) === reference;
+    });
+    if (!match) throw unavailable();
+    const current = await this._bookingParty(userId, coachingRole, bookingId, this._assignmentNow());
+    if (!current.accepted || current.grantId !== grantId) throw unavailable();
+    return { userId: party.booking.studentUserId, gameId: match.gameId };
   }
 
   /** Scope the coach's per-game details to qualifying assignments from this grant.

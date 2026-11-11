@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { History } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
+import { AssignedReplayDownload } from "./AssignedReplayDownload";
 import { Button } from "@/components/ui/Button";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import {
@@ -120,7 +121,7 @@ function DigestFacts({ digest, timeZone }: { digest: PrepDigestFacts; timeZone: 
       {digest.replays.length ? <section aria-label="New replays">
         <h4 className="text-micro font-bold uppercase tracking-wider text-text-dim">{digest.role === "coach" ? "New assigned replays" : "New replays"}</h4>
         <ul className="mt-1 space-y-1.5">
-          {digest.replays.map((game, index) => <DigestReplay key={game.gameId ?? `${game.playedAt}:${index}`} game={game} role={digest.role} timeZone={timeZone} />)}
+          {digest.replays.map((game, index) => <DigestReplay key={game.gameId ?? game.evidenceRef ?? `${game.playedAt}:${index}`} bookingId={digest.bookingId} game={game} role={digest.role} timeZone={timeZone} />)}
         </ul>
         {digest.moreReplays ? <p className="mt-1 text-micro text-text-dim">+{digest.moreReplays} older game{digest.moreReplays === 1 ? "" : "s"} in this window.</p> : null}
         {digest.role === "coach" ? <Link href="/coaching?view=practice" className="inline-flex min-h-11 items-center text-caption text-link underline">Find assigned replays in Practice</Link> : null}
@@ -129,7 +130,7 @@ function DigestFacts({ digest, timeZone }: { digest: PrepDigestFacts; timeZone: 
   );
 }
 
-function DigestReplay({ game, role, timeZone }: { game: PrepDigestFacts["replays"][number]; role: PrepDigestRole; timeZone: string }) {
+function DigestReplay({ bookingId, game, role, timeZone }: { bookingId: string; game: PrepDigestFacts["replays"][number]; role: PrepDigestRole; timeZone: string }) {
   const label = [game.map || "Unknown map", game.matchup, game.build].filter(Boolean).join(" · ");
   const badge = game.result === "Win" ? "border-success/35 bg-success/10 text-success" : game.result === "Loss" ? "border-danger/35 bg-danger/10 text-danger" : "border-border text-text-dim";
   return (
@@ -145,6 +146,7 @@ function DigestReplay({ game, role, timeZone }: { game: PrepDigestFacts["replays
           Open game
         </Link>
       ) : null}
+      {role === "coach" && game.evidenceRef ? <AssignedReplayDownload bookingId={bookingId} reference={game.evidenceRef} label={label} /> : null}
     </li>
   );
 }
