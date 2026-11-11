@@ -32,7 +32,7 @@ export function OverlayPanel({
   if (frame) Object.assign(panelStyle, {
     position: style?.position ?? "relative",
     display: style?.display ?? "flex",
-    flexDirection: "var(--ov-panel-flow, row)",
+    flexDirection: "var(--ov-panel-flow, row)" as CSSProperties["flexDirection"],
     overflow: "hidden",
     isolation: "isolate",
     minWidth: style?.minWidth ?? 0,
