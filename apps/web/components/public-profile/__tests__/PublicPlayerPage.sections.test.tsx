@@ -3,8 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { PublicPlayerPage } from "../PublicPlayerPage";
 import { PUBLIC_PLAYER } from "../__fixtures__/publicPlayer";
 vi.mock("next/image", () => ({ default: ({ alt = "", src }: { alt?: string; src: string }) => <span data-image={src}>{alt}</span> }));
-vi.mock("@/components/community/CommunityBuildOwnerControls", () => ({ CommunityBuildOwnerControls: () => null }));
-vi.mock("@/components/community/CommunityOwnerReplayCount", () => ({ CommunityOwnerReplayCount: () => null }));
+vi.mock("@/components/community/useOwnerBuilds", () => ({ useOwnerBuilds: () => ({ data: undefined }) }));
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 it("hides all optional sections and crosslinks until separately enabled", () => {
   const { container } = render(<PublicPlayerPage profile={{ ...PUBLIC_PLAYER, recentForm: [{ result: "W", matchup: "PvT", date: "2026-10-20" }], currentStreak: { kind: "W", count: 4 }, lastPlayedAt: "2026-10-20", mmrHistory: [{ date: "2026-10-20", mmr: 9999, games: 10 }], channels: [{ platform: "twitch", url: "https://twitch.tv/synthetic" }], maps: [{ name: "Hidden map", games: 20, wins: 12, losses: 8 }], replayArchive: { handle: PUBLIC_PLAYER.handle, total: 20 } }} />);
