@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useApi, type ClientApiError } from "@/lib/clientApi";
 import { useUserSocket } from "@/lib/useUserSocket";
-import { formatDate, formatNumber } from "@/lib/i18n/format";
+import { formatDate, formatDateTime, formatNumber } from "@/lib/i18n/format";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -59,10 +59,10 @@ function ChallengeBody() {
   const started = data.data?.challengeStartedAt;
   return <Section id="randomizer-challenge" className="scroll-mt-28" title="Randomizer challenge"
     description="Work through each matchup pool. A game counts as played as rolled when its confirmed check-in matches the saved draw."
-    actions={data.data?.pools.some((pool) => pool.rolled > 0)
+    actions={data.data?.pools.length
       ? <Button variant="secondary" onClick={() => { setConfirming(true); setError(null); setResetDone(false); }}>Reset challenge</Button> : undefined}>
     <Card>
-      {started ? <p className="mb-3 text-caption text-text-muted">Current challenge started {formatDate(new Date(started))}.</p> : null}
+      {started ? <p className="mb-3 text-caption text-text-muted">Current challenge started {formatDateTime(started, { dateStyle: "medium", timeStyle: "short" })}.</p> : null}
       {resetDone ? <p role="status" className="mb-3 text-caption text-success">Challenge reset.</p> : null}
       <QueryState q={data} isEmpty={(value) => value.pools.length === 0}
         empty={<div className="space-y-2">
