@@ -5,6 +5,7 @@ import Link from "next/link";
 import { buttonClassName } from "@/components/ui/Button";
 import { ArrowLeft, ArrowRight, Check, RotateCcw } from "lucide-react";
 import { STUDIO_CHANNEL_PANEL_LESSON } from "@/lib/streamStudioLearn";
+import { CourseCompletion, useAutomaticLessons, type CourseSetup } from "./CourseCompletion";
 
 const STORAGE_KEY = "sc2tools:stream-studio:crash-course:v1";
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
@@ -175,7 +176,7 @@ function readProgress(raw: unknown): Progress {
   };
 }
 
-export function CrashCourse() {
+export function CrashCourse({ setup }: { setup?: CourseSetup } = {}) {
   const headingId = useId();
   const lessonHeadingId = useId();
   const lessonPanelId = useId();
@@ -186,7 +187,8 @@ export function CrashCourse() {
   const [hydrated, setHydrated] = useState(false);
   const [storageAvailable, setStorageAvailable] = useState<boolean | null>(null);
   const [answerVisible, setAnswerVisible] = useState(false);
-  const [resetUndo, setResetUndo] = useState<{ progress: Progress } | null>(null);
+  const automatic = useAutomaticLessons(setup);
+  const [resetUndo, setResetUndo] = useState<{ progress: Progress; automatic: typeof automatic.state } | null>(null);
   useEffect(() => {
     if (!resetUndo) return;
     const timer = setTimeout(() => setResetUndo(null), 8000);
@@ -218,8 +220,9 @@ export function CrashCourse() {
 
   const activeIndex = LESSONS.findIndex((lesson) => lesson.id === progress.activeId);
   const lesson = LESSONS[activeIndex];
-  const completed = progress.completed.includes(lesson.id);
-  const finished = progress.completed.length === LESSONS.length;
+  const completeIds = new Set([...progress.completed, ...automatic.state.accepted]);
+  const completed = completeIds.has(lesson.id);
+  const finished = BASE_LESSONS.every(item => completeIds.has(item.id));
 
   function selectLesson(id: string) {
     setProgress((current) => ({ ...current, activeId: id }));
@@ -241,20 +244,20 @@ export function CrashCourse() {
         <button
           type="button"
           className={`inline-flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-caption font-semibold text-text-muted hover:bg-bg-elevated hover:text-text ${FOCUS}`}
-          onClick={() => { setResetUndo({ progress }); setProgress(emptyProgress()); setAnswerVisible(false); }}
+          onClick={() => { setResetUndo({ progress, automatic: automatic.state }); setProgress(emptyProgress()); automatic.reset(); setAnswerVisible(false); }}
         >
           <RotateCcw className="h-4 w-4" aria-hidden />
           Reset course progress
         </button>
       </div>
 
-      {resetUndo ? <div role="status" className="fixed bottom-5 right-5 z-50 max-w-[calc(100vw-2.5rem)] rounded-md border-2 border-line bg-bg-surface p-4 text-body text-text shadow-hard">Progress reset · <button type="button" className="font-semibold text-accent underline" onClick={() => { setProgress(resetUndo.progress); setResetUndo(null); setAnswerVisible(false); }}>Undo</button></div> : null}
+      {resetUndo ? <div role="status" className="fixed bottom-5 right-5 z-50 max-w-[calc(100vw-2.5rem)] rounded-md border-2 border-line bg-bg-surface p-4 text-body text-text shadow-hard">Progress reset · <button type="button" className="font-semibold text-accent underline" onClick={() => { setProgress(resetUndo.progress); automatic.restore(resetUndo.automatic); setResetUndo(null); setAnswerVisible(false); }}>Undo</button></div> : null}
       <div className="space-y-2">
         <p role="status" aria-live="polite" className="text-body font-semibold text-text">
-          {progress.completed.length} of {LESSONS.length} lessons complete{finished ? <> — nice work. Next: add your first widgets in <Link href="/settings?tab=overlay" className="underline text-accent">Overlay settings</Link>.</> : "."}
+          {completeIds.size} of {LESSONS.length} lessons complete.
         </p>
         <div className="h-2 overflow-hidden rounded-full bg-accent/15" aria-hidden>
-          <div className="h-full rounded-full bg-accent transition-[width] motion-reduce:transition-none" style={{ width: `${progress.completed.length / LESSONS.length * 100}%` }} />
+          <div className="h-full rounded-full bg-accent transition-[width] motion-reduce:transition-none" style={{ width: `${completeIds.size / LESSONS.length * 100}%` }} />
         </div>
         <p className="text-caption text-text-muted">
           {storageAvailable === false
@@ -267,7 +270,8 @@ export function CrashCourse() {
         <nav aria-label="Crash course lessons" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
           {LESSONS.map((item, index) => {
             const isActive = lesson.id === item.id;
-            const isComplete = progress.completed.includes(item.id);
+            const isComplete = completeIds.has(item.id);
+            const auto = automatic.state.accepted.includes(item.id) && !progress.completed.includes(item.id);
             return (
               <button
                 key={item.id}
@@ -282,7 +286,7 @@ export function CrashCourse() {
                 </span>
                 <span className="min-w-0">
                   <span className="block font-display text-body font-bold">{index + 1}. {item.title}</span>
-                  <span className="block text-caption">{item.time}{isComplete ? " · Complete" : ""}</span>
+                  <span className="block text-caption">{item.time}{isComplete ? " · Complete" : ""}{auto ? " (checked automatically)" : ""}</span>
                 </span>
               </button>
             );
@@ -333,6 +337,7 @@ export function CrashCourse() {
                 checked={completed}
                 onChange={(event) => {
                   const checked = event.target.checked;
+                  if (!checked) automatic.ignore(lesson.id);
                   setProgress((current) => ({ ...current, completed: checked ? [...current.completed, lesson.id] : current.completed.filter((id) => id !== lesson.id) }));
                 }}
                 className={`h-5 w-5 shrink-0 accent-accent ${FOCUS}`}
@@ -350,6 +355,7 @@ export function CrashCourse() {
           </div>
         </article>
       </div>
+      {finished ? <CourseCompletion lessons={LESSONS.filter(item => completeIds.has(item.id)).map(item => item.title)} widgets={setup?.starterWidgets} /> : null}
     </section>
   );
 }

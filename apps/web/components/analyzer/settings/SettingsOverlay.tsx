@@ -82,7 +82,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         description="Copy the URLs you want into OBS. Each widget is transparent and positioned independently. The URLs share the same socket connection so your overlay stays in sync."
       >
       <div className="space-y-6">
-      <OverlayHealthBoard />
+      <OverlayHealthBoard token={activeToken} />
       {/* Browser-import users without a paired agent: the overlay's live data needs it. */}
       <OverlayAgentUpsell />
         <Card>
