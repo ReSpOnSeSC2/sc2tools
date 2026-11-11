@@ -31,7 +31,11 @@ export type Opp = OpponentListDetails & {
   mmrAvgDelta?: number | null;
   lastPlayed: string | null;
   lastSeen?: string | null;
-  notesMeta?: { preview: string };
+  notesMeta?: { preview: string; tags?: string[] };
   notes?: string;
 };
-export const notePreview = (opponent: Opp) => opponent.notesMeta?.preview || Array.from((opponent.notes || "").replace(/\s+/g, " ").trim()).slice(0, 140).join("");
+export const notePreview = (opponent: Opp) =>
+  opponent.notesMeta?.preview
+  || Array.from((opponent.notes || "").replace(/\s+/g, " ").trim()).slice(0, 140).join("")
+  || opponent.notesMeta?.tags?.join(" · ")
+  || "";

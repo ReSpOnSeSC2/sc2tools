@@ -101,6 +101,52 @@ describe("per-opponent scouting notes", () => {
     }));
   });
 
+  test("saves and reloads opponent tags with an empty note", async () => {
+    const app = express();
+    app.use(express.json());
+    app.use(buildOpponentsRouter({
+      opponents,
+      auth: (req, _res, next) => { req.auth = { userId: "owner" }; next(); },
+    }));
+    const api = request(app);
+    const path = "/opponents/pulse-1/notes";
+
+    const saved = await api.put(path).send({
+      notes: "  ", notesReadAloud: false, tags: ["Macro"], visibility: "private", scope: "account",
+    }).expect(200);
+    expect(saved.body).toMatchObject({
+      notes: "",
+      notesReadAloud: false,
+      note: { text: "", tags: ["Macro"], visibility: "private", readAloud: false, streamEligible: false },
+    });
+    const reloaded = await api.get(path).expect(200);
+    expect(reloaded.body).toEqual(saved.body);
+
+    const dossier = await api.get("/opponents/pulse-1").expect(200);
+    expect(dossier.body.note).toEqual(saved.body.note);
+    const list = await api.get("/opponents").expect(200);
+    expect(list.body.items).toContainEqual(expect.objectContaining({
+      pulseId: "pulse-1", notesMeta: { preview: "", tags: ["Macro"], visibility: "private", scope: "account" },
+    }));
+
+    const textSaved = await api.put(path).send({
+      notes: "Fast third", notesReadAloud: true, visibility: "stream",
+    }).expect(200);
+    expect(textSaved.body.note).toMatchObject({ tags: ["Macro"], streamEligible: true, readAloud: true });
+
+    const textCleared = await api.put(path).send({ notes: "", preserveReadAloud: true }).expect(200);
+    expect(textCleared.body).toMatchObject({
+      notes: "",
+      notesReadAloud: false,
+      note: { text: "", tags: ["Macro"], readAloud: false, streamEligible: false },
+    });
+    await expect(opponents.notes.liveNotes("owner", "pulse-1")).resolves.toMatchObject({ stream: null });
+
+    await api.put(path).send({ notes: "", notesReadAloud: false, tags: [] }).expect(200);
+    const cleared = await api.get(path).expect(200);
+    expect(cleared.body).toEqual({ notes: "", notesReadAloud: false, note: null });
+  });
+
   test("lists private note previews in one batch on filtered and unfiltered pages", async () => {
     await db.opponents.insertOne({ userId: "owner", pulseId: "pulse-2", displayNameSample: "Other", lastSeen: new Date(), wins: 1, losses: 0, gameCount: 1 });
     await db.games.insertOne({ userId: "owner", gameId: "other", date: new Date(), result: "Victory", opponent: { pulseId: "pulse-2", displayName: "Other" } });

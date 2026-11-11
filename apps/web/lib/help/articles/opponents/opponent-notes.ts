@@ -32,7 +32,7 @@ const article: HelpArticle = {
       "**Add note** in your live scouting brief and **Opponent note** in a game's header are quick editors for the text and Show on stream. They keep the tags and other settings you chose in the dossier.",
       "The paired desktop app edits the same note.",
     ] },
-    { type: "paragraph", text: "Each opponent account has one note of up to 500 characters with up to 8 tags. A blank note is deleted." },
+    { type: "paragraph", text: "Each opponent account has one note with up to 500 characters and up to 8 tags. You can save tags without writing a note. To delete a note, clear its text, remove all its tags, and save." },
     { type: "heading", text: "Private or on stream", anchor: "visibility" },
     { type: "paragraph", text: "New notes are private: they appear only in your own views. Turn on **Show on stream** to let the note appear on your OBS scouting widget. Only notes with Show on stream on appear on stream, and a note tagged Toxic never does. **Read aloud** adds a stream note to the voice readout and needs Voice → Scouting Report in your overlay settings." },
     { type: "callout", tone: "info", title: "Notes written before this change", text: "Notes always appeared on the scouting widget before private notes existed, so your earlier notes keep doing that until you change them. The dossier shows a one-time banner on those notes; turn off Show on stream to keep one to yourself." },

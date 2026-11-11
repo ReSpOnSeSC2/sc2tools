@@ -604,8 +604,8 @@ class OpponentsService {
     const notes = await this.notes.opponentNotesFor(userId, rows.map((row) => row.pulseId));
     for (const row of rows) {
       const note = notes.get(row.pulseId);
-      const value = note?.text;
-      if (note && value) {
+      const value = typeof note?.text === "string" ? note.text : "";
+      if (note) {
         row.notesMeta = {
           preview: Array.from(value.replace(/\s+/g, " ").trim()).slice(0, 140).join(""),
           tags: Array.isArray(note.tags) ? note.tags : [],
@@ -1262,7 +1262,8 @@ class OpponentsService {
   /**
    * Save the owning user's scouting note for one opponent account.
    * Notes live outside the derived opponents aggregate (services/notes.js)
-   * so recounts keep user-authored data. Blank text removes the note.
+   * so recounts keep user-authored data. A note is removed when its text
+   * and tags are both empty.
    *
    * The legacy body ({notes, notesReadAloud} or {notes, preserveReadAloud})
    * still works for older desktop agents; the optional ``tags``,
