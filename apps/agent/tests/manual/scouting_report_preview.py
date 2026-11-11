@@ -23,7 +23,6 @@ from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
 from sc2tools_agent import __version__  # noqa: E402
 from sc2tools_agent.build_checkin.scouting import parse_scouting_brief, scouting_model  # noqa: E402
 from sc2tools_agent.ui import theme  # noqa: E402
-from sc2tools_agent.ui.build_checkin_widgets import card_stylesheet  # noqa: E402
 from sc2tools_agent.ui.companion_page import build_companion_page  # noqa: E402
 from sc2tools_agent.ui.private_scouting import ScoutingStrip  # noqa: E402
 
@@ -140,7 +139,7 @@ def render_strip(folder):
         # A fresh card per state, sized from its own content as on a real game start.
         card = QtWidgets.QFrame()
         card.setObjectName("card")
-        card.setStyleSheet(card_stylesheet())
+        card.setStyleSheet(theme.card_stylesheet())
         card.setFixedWidth(320)
         strip = ScoutingStrip()
         QtWidgets.QVBoxLayout(card).addWidget(strip)

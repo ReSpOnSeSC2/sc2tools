@@ -1,8 +1,5 @@
 """Widgets shared by the build check-in cards.
 
-* :func:`card_stylesheet` — the cards' self-contained dark style, built
-  from the shared Companion theme. It is set on each card window,
-  so it wins over the application style sheet inside the card.
 * :class:`BuildRow` — one pickable build, painted as plain text. Compact
   rows elide names; expanded rows wrap the full name above the record
   and the Rolled / Usual / Suggested chips.
@@ -22,41 +19,12 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .theme import (
-    ACCENT as _ACCENT,
-    ACCENT_CYAN as _ACCENT_CYAN,
-    ACCENT_HOVER as _ACCENT_HOVER,
-    ACCENT_PRESSED as _ACCENT_PRESSED,
-    BORDER as _BORDER,
-    BORDER_CONTROL as _BORDER_CONTROL,
-    BORDER_STRONG as _BORDER_STRONG,
-    BUTTON as _BUTTON,
-    BUTTON_HOVER as _BUTTON_HOVER,
-    DANGER as _DANGER,
-    ELEVATED as _ELEVATED,
-    FOCUS as _FOCUS,
-    ON_ACCENT as _ON_ACCENT,
-    SUBTLE as _SUBTLE,
-    SUCCESS as _SUCCESS,
-    SURFACE as _SURFACE,
-    TEXT as _TEXT,
-    TEXT_DIM as _TEXT_DIM,
-    TEXT_MUTED as _TEXT_MUTED,
-    WARNING as _WARNING,
-)
+from . import theme
 
-ROW_HEIGHT = 30
-ROW_SPACING = 2
+ROW_HEIGHT = theme.CHECKIN_ROW_HEIGHT
+ROW_SPACING = theme.SPACE_2XS
 MORE_VISIBLE_ROWS = 6
 """Rows the **More builds…** list shows before it scrolls."""
-
-CHIP_TONES: Dict[str, Tuple[str, str]] = {
-    # tone → (background, foreground)
-    "rolled": ("rgba(230, 180, 80, 0.18)", _WARNING),
-    "usual": (_SUBTLE, _ACCENT),
-    "reason": ("rgba(62, 192, 199, 0.18)", _ACCENT_CYAN),
-    "suggested": ("rgba(62, 192, 199, 0.12)", _ACCENT_CYAN),
-}
 
 ROLLED_CHIP = "Rolled"
 USUAL_CHIP = "Usual"
@@ -69,195 +37,6 @@ MORE_TOGGLE = "More builds…"
 FEWER_TOGGLE = "Fewer builds"
 SEARCH_PLACEHOLDER = "Search builds"
 NO_MATCH = "No builds match your search."
-
-
-def card_stylesheet() -> str:
-    """The cards' style sheet (Companion palette, compact sizes)."""
-    return f"""
-QWidget {{
-    background-color: transparent;
-    color: {_TEXT};
-    font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, Arial, sans-serif;
-    font-size: 12px;
-}}
-QFrame#card {{
-    background-color: {_SURFACE};
-    border: 1px solid {_BORDER_STRONG};
-    border-radius: 14px;
-}}
-QLabel {{
-    background-color: transparent;
-    border: none;
-}}
-QLabel#checkinPreview {{
-    color: {_ACCENT_CYAN};
-    background-color: {_SUBTLE};
-    border: 1px solid {_BORDER_STRONG};
-    border-radius: 6px;
-    padding: 3px 6px;
-}}
-QLabel#checkinEyebrow {{
-    color: {_TEXT_MUTED};
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 1px;
-}}
-QLabel#checkinTitle {{
-    font-size: 14px;
-    font-weight: 600;
-}}
-QLabel#checkinResult {{
-    font-size: 14px;
-    font-weight: 700;
-    color: {_TEXT_MUTED};
-}}
-QLabel#checkinResult[tone="success"] {{ color: {_SUCCESS}; }}
-QLabel#checkinResult[tone="danger"] {{ color: {_DANGER}; }}
-QLabel#checkinGrip {{
-    color: {_TEXT_DIM};
-    font-size: 14px;
-}}
-QLabel#checkinMuted, QLabel#checkinSection, QLabel#checkinCounter {{
-    color: {_TEXT_MUTED};
-}}
-QLabel#checkinSection {{
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 1px;
-}}
-QLabel#checkinCounter {{ font-size: 11px; }}
-QLabel#checkinCounter[tone="warning"] {{ color: {_WARNING}; }}
-QLabel#checkinCounter[tone="danger"] {{ color: {_DANGER}; }}
-QLabel#checkinStatus {{ color: {_TEXT_MUTED}; }}
-QLabel#checkinStatus[tone="warning"] {{ color: {_WARNING}; }}
-QLabel#checkinIntro {{ color: {_TEXT}; font-size: 11px; }}
-QLabel#checkinLocked {{ font-weight: 600; }}
-QLabel#checkinOpponent {{ color: {_TEXT}; }}
-QLabel#checkinChanged {{ color: {_ACCENT_CYAN}; font-size: 11px; font-weight: 600; }}
-QLabel#checkinLocked[saving="true"] {{ color: {_TEXT_MUTED}; }}
-QLabel#checkinPrompt {{ font-size: 13px; }}
-QFrame#checkinStrip {{
-    background-color: {_SUBTLE};
-    border: 1px solid {_BORDER_STRONG};
-    border-radius: 8px;
-}}
-QFrame#checkinIntroBox {{
-    background-color: {_ELEVATED};
-    border: 1px solid {_BORDER_STRONG};
-    border-radius: 8px;
-}}
-QPushButton {{
-    background-color: {_BUTTON};
-    color: {_TEXT};
-    border: 1px solid {_BORDER_STRONG};
-    border-radius: 7px;
-    padding: 5px 12px;
-    min-height: 18px;
-    font-weight: 500;
-}}
-QPushButton:hover {{
-    background-color: {_BUTTON_HOVER};
-    border-color: {_ACCENT_HOVER};
-}}
-QPushButton:pressed {{ background-color: {_BORDER_STRONG}; }}
-QPushButton:focus {{ border-color: {_FOCUS}; }}
-QPushButton#checkinPrimary {{
-    background-color: {_ACCENT};
-    color: {_ON_ACCENT};
-    border-color: {_ACCENT};
-    font-weight: 600;
-}}
-QPushButton#checkinPrimary:hover {{
-    background-color: {_ACCENT_HOVER};
-    border-color: {_ACCENT_HOVER};
-}}
-QPushButton#checkinPrimary:pressed {{
-    background-color: {_ACCENT_PRESSED};
-    border-color: {_ACCENT_PRESSED};
-}}
-QPushButton#checkinPrimary:focus {{ border-color: {_FOCUS}; }}
-QPushButton#checkinQuiet {{
-    background-color: transparent;
-    border-color: transparent;
-    color: {_TEXT_MUTED};
-}}
-QPushButton#checkinQuiet:hover {{
-    background-color: {_SUBTLE};
-    border-color: {_BORDER_STRONG};
-    color: {_TEXT};
-}}
-QPushButton#checkinSmall {{
-    padding: 2px 10px;
-    min-height: 16px;
-    font-size: 11px;
-}}
-QPushButton#checkinLink, QPushButton#checkinMoreToggle {{
-    background-color: transparent;
-    border: none;
-    padding: 0;
-    min-height: 0;
-    color: {_ACCENT};
-    font-size: 11px;
-    text-align: left;
-}}
-QPushButton#checkinLink:hover, QPushButton#checkinMoreToggle:hover {{
-    color: {_TEXT};
-    text-decoration: underline;
-}}
-QPushButton#checkinLink:focus, QPushButton#checkinMoreToggle:focus {{
-    text-decoration: underline;
-}}
-QPushButton#checkinMoreToggle {{ color: {_TEXT_MUTED}; font-weight: 600; }}
-QPushButton:disabled, QPushButton#checkinPrimary:disabled {{
-    background-color: {_ELEVATED};
-    color: {_TEXT_DIM};
-    border-color: {_BORDER};
-}}
-QPushButton#checkinLink:disabled, QPushButton#checkinQuiet:disabled {{
-    background-color: transparent;
-    border-color: transparent;
-}}
-QPushButton#checkinLink:disabled {{ color: {_TEXT_DIM}; text-decoration: none; }}
-QLineEdit#checkinSearch, QPlainTextEdit#checkinNotes {{
-    background-color: {_ELEVATED};
-    color: {_TEXT};
-    border: 1px solid {_BORDER_CONTROL};
-    border-radius: 7px;
-    padding: 4px 8px;
-    selection-background-color: {_ACCENT};
-    selection-color: {_ON_ACCENT};
-}}
-QLineEdit#checkinSearch:focus, QPlainTextEdit#checkinNotes:focus {{
-    border-color: {_ACCENT_CYAN};
-}}
-QScrollArea, QScrollArea > QWidget > QWidget {{
-    background-color: transparent;
-    border: none;
-}}
-QScrollBar:vertical {{
-    background: transparent;
-    width: 8px;
-    margin: 2px;
-}}
-QScrollBar::handle:vertical {{
-    background: {_BORDER_STRONG};
-    border-radius: 3px;
-    min-height: 20px;
-}}
-QScrollBar::handle:vertical:hover {{ background: {_ACCENT}; }}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
-QProgressBar#checkinBusy {{
-    background-color: {_BORDER};
-    border: none;
-    border-radius: 1px;
-    max-height: 2px;
-    min-height: 2px;
-}}
-QProgressBar#checkinBusy::chunk {{
-    background-color: {_ACCENT_CYAN};
-    border-radius: 1px;
-}}
-"""
 
 
 def plain_label(
@@ -446,9 +225,9 @@ class BuildRow(QtWidgets.QAbstractButton):
 
     def _fonts(self) -> Tuple[QtGui.QFont, QtGui.QFont]:
         name_font = QtGui.QFont(self.font())
-        name_font.setPixelSize(13)
+        name_font.setPixelSize(theme.TYPE_BODY)
         chip_font = QtGui.QFont(self.font())
-        chip_font.setPixelSize(10)
+        chip_font.setPixelSize(theme.TYPE_CAPTION)
         chip_font.setWeight(QtGui.QFont.DemiBold)
         return name_font, chip_font
 
@@ -488,50 +267,56 @@ class BuildRow(QtWidgets.QAbstractButton):
         fits = QtGui.QFontMetrics(name_font).horizontalAdvance(self.name) <= max(0, right - left)
         self.setToolTip("" if fits else self.name)
 
+    def _row_colours(self, skin: theme.Skin) -> Tuple[str, Optional[str]]:
+        if self.isChecked():
+            return skin.selected, skin.accent
+        if self.isDown():
+            return theme.BUTTON_PRESSED, theme.BORDER_STRONG
+        if self.isEnabled() and self.underMouse():
+            return theme.SUBTLE, theme.BORDER_STRONG
+        return theme.ELEVATED, None
+
+    def _skin(self) -> theme.Skin:
+        parent = self.parentWidget()
+        while parent is not None:
+            name = parent.property("checkinSkin")
+            if name in theme.SKINS:
+                return theme.SKINS[name]
+            parent = parent.parentWidget()
+        return theme.DEFAULT_SKIN
+
     def paintEvent(self, _event: QtGui.QPaintEvent) -> None:  # noqa: N802
+        skin = self._skin()
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
-        enabled = self.isEnabled()
-        hovered = enabled and self.underMouse()
         rect = QtCore.QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-
-        if self.isChecked():
-            fill = QtGui.QColor(62, 192, 199, 36)
-            border = QtGui.QColor(_ACCENT_CYAN)
-        elif self.isDown():
-            fill = QtGui.QColor(_BORDER_STRONG)
-            border = QtGui.QColor(_BORDER_STRONG)
-        elif hovered:
-            fill = QtGui.QColor(_SUBTLE)
-            border = QtGui.QColor(_BORDER_STRONG)
-        else:
-            fill = QtGui.QColor(255, 255, 255, 8)
-            border = QtGui.QColor(0, 0, 0, 0)
+        fill, border = self._row_colours(skin)
         if self.hasFocus():
-            border = QtGui.QColor(_ACCENT)
-        painter.setPen(QtGui.QPen(border, 1))
-        painter.setBrush(fill)
-        painter.drawRoundedRect(rect, 7, 7)
+            border = skin.focus
+        painter.setPen(QtGui.QPen(QtGui.QColor(border), 1) if border else QtCore.Qt.NoPen)
+        painter.setBrush(QtGui.QColor(fill))
+        painter.drawRoundedRect(rect, theme.RADIUS_M, theme.RADIUS_M)
+        if self._selectable:
+            self._paint_choice(painter, skin)
+        self._paint_labels(painter, skin)
+        painter.end()
 
+    def _paint_choice(self, painter, skin):
+        dot = QtCore.QRectF(10.5, 8 if self._names_expanded else (self.height() - 12) / 2, 12, 12)
+        color = QtGui.QColor(skin.accent if self.isChecked() else theme.TEXT_DIM)
+        painter.setPen(QtGui.QPen(color, 1.4))
+        painter.setBrush(QtCore.Qt.NoBrush)
+        painter.drawEllipse(dot)
+        if self.isChecked():
+            painter.setPen(QtCore.Qt.NoPen)
+            painter.setBrush(color)
+            painter.drawEllipse(dot.adjusted(3, 3, -3, -3))
+
+    def _paint_labels(self, painter, skin):
         name_font, chip_font = self._fonts()
         left, right, chips, record_rect = self._layout()
-        text_color = QtGui.QColor(_TEXT if enabled else _TEXT_DIM)
-        muted = QtGui.QColor(_TEXT_MUTED if enabled else _TEXT_DIM)
-
-        if self._selectable:
-            dot = QtCore.QRectF(10.5, 8 if self._names_expanded else (self.height() - 12) / 2, 12, 12)
-            painter.setPen(QtGui.QPen(
-                QtGui.QColor(_ACCENT_CYAN if self.isChecked() else _TEXT_DIM), 1.4,
-            ))
-            painter.setBrush(QtCore.Qt.NoBrush)
-            painter.drawEllipse(dot)
-            if self.isChecked():
-                painter.setPen(QtCore.Qt.NoPen)
-                painter.setBrush(QtGui.QColor(_ACCENT_CYAN))
-                painter.drawEllipse(dot.adjusted(3, 3, -3, -3))
-
         painter.setFont(name_font)
-        painter.setPen(text_color)
+        painter.setPen(QtGui.QColor(theme.TEXT if self.isEnabled() else theme.TEXT_DIM))
         if self._names_expanded:
             self._name_layout().draw(painter, QtCore.QPointF(left, 6))
         else:
@@ -542,27 +327,17 @@ class BuildRow(QtWidgets.QAbstractButton):
 
         painter.setFont(chip_font)
         for chip_rect, text, tone in chips:
-            background, foreground = CHIP_TONES.get(tone, CHIP_TONES["suggested"])
+            background, foreground = theme.checkin_chip_colours(skin, tone)
             painter.setPen(QtCore.Qt.NoPen)
-            painter.setBrush(_css_color(background))
-            painter.drawRoundedRect(QtCore.QRectF(chip_rect), 8, 8)
+            painter.setBrush(QtGui.QColor(background))
+            painter.drawRoundedRect(QtCore.QRectF(chip_rect), theme.RADIUS_L, theme.RADIUS_L)
             painter.setPen(QtGui.QColor(foreground))
             painter.drawText(chip_rect, QtCore.Qt.AlignCenter, text)
 
         if self.record:
             painter.setFont(name_font)
-            painter.setPen(muted)
+            painter.setPen(QtGui.QColor(theme.TEXT_MUTED if self.isEnabled() else theme.TEXT_DIM))
             painter.drawText(record_rect, QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight, self.record)
-        painter.end()
-
-
-def _css_color(value: str) -> QtGui.QColor:
-    """``rgba(r, g, b, a)`` (alpha 0–1) or ``#rrggbb`` → ``QColor``."""
-    if value.startswith("rgba("):
-        parts = [part.strip() for part in value[5:-1].split(",")]
-        red, green, blue = (int(part) for part in parts[:3])
-        return QtGui.QColor(red, green, blue, round(float(parts[3]) * 255))
-    return QtGui.QColor(value)
 
 
 class BuildList(QtWidgets.QWidget):
@@ -607,7 +382,7 @@ class BuildList(QtWidgets.QWidget):
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(theme.SPACE_XS)
 
         self.names_toggle = button("Expand build names", "checkinMoreToggle", focusable=focusable)
         self.names_toggle.setCheckable(True)
@@ -654,7 +429,7 @@ class BuildList(QtWidgets.QWidget):
             self.more_area.setFocusPolicy(QtCore.Qt.NoFocus)
         more_box = QtWidgets.QWidget()
         self._more_layout = QtWidgets.QVBoxLayout(more_box)
-        self._more_layout.setContentsMargins(0, 0, 4, 0)
+        self._more_layout.setContentsMargins(0, 0, theme.SPACE_XS, 0)
         self._more_layout.setSpacing(ROW_SPACING)
         self._more_layout.addStretch(1)
         self.more_area.setWidget(more_box)
@@ -891,11 +666,9 @@ class BuildList(QtWidgets.QWidget):
 __all__ = [
     "BuildList",
     "BuildRow",
-    "CHIP_TONES",
     "MORE_VISIBLE_ROWS",
     "ROW_HEIGHT",
     "button",
-    "card_stylesheet",
     "link",
     "plain_label",
     "row_chips",

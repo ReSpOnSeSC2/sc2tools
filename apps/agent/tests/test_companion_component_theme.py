@@ -6,7 +6,6 @@ from tests._gui_offscreen import run_gui_check
 def test_native_components_use_the_shared_companion_styles(tmp_path):
     run_gui_check(tmp_path, '''
 from sc2tools_agent.ui import theme
-from sc2tools_agent.ui.build_checkin_widgets import card_stylesheet
 from sc2tools_agent.ui.companion_build_chain import build_build_chain
 from sc2tools_agent.ui.companion_builds import build_companion_builds
 from sc2tools_agent.ui.companion_console import build_companion_console
@@ -33,12 +32,16 @@ assert ghost.history_toggle.objectName() == "ghostHistory"
 assert ghost.panel.title.objectName() == "ghostHeading"
 assert theme.TEXT in chain.styleSheet() and theme.TEXT_MUTED in chain.styleSheet()
 assert theme.SUBTLE in chain.styleSheet()
-style = card_stylesheet()
+style = theme.card_stylesheet()
 assert theme.SURFACE in style and theme.BUTTON in style and theme.ON_ACCENT in style
 assert theme.SUCCESS in style and theme.DANGER in style and theme.WARNING in style
 assert "background-color: transparent" in style
-assert "border-radius: 14px" in style
+assert f"border-radius: {theme.RADIUS_XL}px" in style
 assert not any(old in style for old in ("#141924", "#606d80", "#202938", "#72d8d8"))
+comparison = page.overlays["scouting"].comparison
+for density, expected_size in (("standard", theme.TYPE_SMALL), ("detailed", theme.TYPE_SUBTITLE)):
+    comparison.set_density(density)
+    assert all(label.font().pixelSize() == expected_size for label in comparison.chain_labels.values())
 page.shutdown()
 ghost.shutdown()
 for widget in (page, ghost, ghost.panel, chain, shell, builds):
