@@ -28,11 +28,14 @@ import { useEffect, useMemo } from "react";
 import { CheckCircle2, Swords } from "lucide-react";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { useApi } from "@/lib/clientApi";
+import { useFilters } from "@/lib/filterContext";
 import {
   DAILY_QUEST_COUNT,
   evaluateQuests,
   selectDailyQuests,
   type QuestEvaluation,
+  type PracticeQuestProgress,
 } from "@/lib/dailyQuests";
 import { useArcadeData } from "./hooks/useArcadeData";
 import { useArcadeState } from "./hooks/useArcadeState";
@@ -45,12 +48,16 @@ const QUEST_LEDGER_MAX_DAYS = 30;
 export function DailyQuests() {
   const { data, loading } = useArcadeData();
   const seed = useDailySeed();
+  const { dbRev } = useFilters();
+  const practice = useApi<PracticeQuestProgress>(`/v1/practice/quest?day=${seed.day}&tz=${encodeURIComponent(seed.tz)}#${dbRev}`, {
+    shouldRetryOnError: false,
+  });
   const { state, update, hydrated } = useArcadeState();
   const games = useMemo(() => data?.games ?? [], [data?.games]);
 
   const selection = useMemo(
-    () => selectDailyQuests(seed.day, games, DAILY_QUEST_COUNT, seed.userId),
-    [seed.day, seed.userId, games],
+    () => selectDailyQuests(seed.day, games, DAILY_QUEST_COUNT, seed.userId, practice.data),
+    [seed.day, seed.userId, games, practice.data],
   );
   const evaluations = useMemo(
     () => evaluateQuests(selection.quests, games, seed.day, seed.tz, selection.context),
@@ -63,7 +70,7 @@ export function DailyQuests() {
   // Auto-claim: award XP once per (day, quest) the moment the quest
   // verifies done. Idempotent — see the module docblock.
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || practice.isLoading) return;
     const day = seed.day;
     for (const ev of evaluations) {
       if (!ev.done) continue;
@@ -89,7 +96,7 @@ export function DailyQuests() {
         };
       });
     }
-  }, [evaluations, hydrated, seed.day, update]);
+  }, [evaluations, hydrated, practice.isLoading, seed.day, update]);
 
   const doneCount = evaluations.filter((e) => e.done).length;
 
@@ -100,7 +107,7 @@ export function DailyQuests() {
     </span>
   );
 
-  if (loading && games.length === 0) {
+  if (practice.isLoading || (loading && games.length === 0)) {
     return (
       <Card title={title}>
         <Skeleton rows={3} />

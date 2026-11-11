@@ -168,7 +168,6 @@ function TimingGaps({ data, league, nextLeague, matchup }: {
   data: ReturnType<typeof useTargetsData>; league: string; nextLeague: string | null; matchup: string;
 }) {
   const mine = data.targets.data?.timings;
-  const compareTo = data.nextTimings ? nextLeague : league;
   return (
     <section aria-labelledby="timing-gaps-heading" className="space-y-2">
       <h3 id="timing-gaps-heading" className="text-body font-semibold text-text">Timing gaps</h3>
@@ -178,15 +177,19 @@ function TimingGaps({ data, league, nextLeague, matchup }: {
         <dl className="grid gap-2 sm:grid-cols-2">
           {TIMING_ROWS.map((spec) => {
             const row = timingRow(spec, mine.timings[spec.key], data.currentTimings, data.nextTimings);
-            const gap = timingGapText(row.nextP50 !== null ? row.gap : row.mine !== null && row.currentP50 !== null ? Math.round(row.mine - row.currentP50) : null, compareTo);
+            const reference = row.nextP50 ?? row.currentP50;
+            const gap = timingGapText(reference !== null && row.mine !== null ? Math.round(row.mine - reference) : null, row.nextP50 !== null ? nextLeague : league);
+            const floorLeague = row.nextP50 === null ? nextLeague ?? (row.currentP50 === null ? league : null) : null;
+            const floor = floorLeague ? `Not enough ${floorLeague} ${matchup} games yet` : null;
             return (
               <div key={spec.key} className="rounded-lg border border-border p-2">
                 <dt className="text-caption text-text-muted">{spec.label} <span className="text-text-dim">({spec.hint})</span></dt>
                 <dd className="text-body tabular-nums text-text">
                   {clock(row.mine)}
                   <span className="ml-2 text-caption text-text-muted">
-                    {gap ?? (row.mine === null ? "Not reached often enough" : `Not enough ${league} ${matchup} games yet`)}
+                    {row.mine === null ? "Not reached often enough" : gap ?? floor}
                   </span>
+                  {gap && floor ? <span className="block text-micro text-text-dim">{floor}</span> : null}
                 </dd>
               </div>
             );
