@@ -28,10 +28,10 @@ jobs:
   check:
     name: Lint + typecheck + test (apps/api)
     runs-on: ubuntu-latest
-    # The expanded suite still made active runInBand progress at the 15-minute
-    # job deadline (Auth807 df88). Allow setup/cold Mongo and bounded writer
-    # drains to finish; keep per-case deadlines and serial execution intact.
-    timeout-minutes: 25
+    # The combined roadmap run finished Jest's 9,213 cases in 23m19s.
+    # Checkout, dependency install, types and lint consumed the remaining
+    # 25-minute job window. Allow setup and keep Jest's serial execution.
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: apps/api
