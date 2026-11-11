@@ -11,27 +11,7 @@ import textwrap
 import pytest
 
 
-def run_gui_check(tmp_path, body, *, timeout=30):
-    if importlib.util.find_spec("PySide6") is None:
-        pytest.skip("Qt is not installed")
-    setup = '''
-import sys
-from pathlib import Path
-from PySide6 import QtCore, QtGui, QtTest, QtWidgets
-from sc2tools_agent.ui import gui, system_motion
-from sc2tools_agent.ui.gui import GuiUI, SettingsPayload, _GuiSignals, _MainWindow
-# Windows' animation switch is the host's; a check that needs it off says so.
-system_motion.animations_enabled = lambda: True
-app = QtWidgets.QApplication([])
-base = Path(sys.argv[1])
-saved = []
-window_states = []
-
-def wait_saved(win):
-    deadline = QtCore.QDeadlineTimer(5000)
-    while win._settings_save_pending and not deadline.hasExpired():
-        QtTest.QTest.qWait(10)
-    assert not win._settings_save_pending, "Settings worker did not deliver completion"
+DRAFT_DIALOG_DRIVER = '''
 def answer_draft_prompt(expected_title, answer, navigate):
     responses = []
     def click_answer():
@@ -57,6 +37,30 @@ def keep_settings_draft_via_help(win):
     help_action = next(action for action in menu.actions() if action.text() == "Help and troubleshooting")
     answer_draft_prompt("Unsaved settings", "Keep draft", help_action.trigger)
     assert win._stack.currentWidget() is win._help_page
+'''
+
+
+def run_gui_check(tmp_path, body, *, timeout=30):
+    if importlib.util.find_spec("PySide6") is None:
+        pytest.skip("Qt is not installed")
+    setup = '''
+import sys
+from pathlib import Path
+from PySide6 import QtCore, QtGui, QtTest, QtWidgets
+from sc2tools_agent.ui import gui, system_motion
+from sc2tools_agent.ui.gui import GuiUI, SettingsPayload, _GuiSignals, _MainWindow
+# Windows' animation switch is the host's; a check that needs it off says so.
+system_motion.animations_enabled = lambda: True
+app = QtWidgets.QApplication([])
+base = Path(sys.argv[1])
+saved = []
+window_states = []
+
+def wait_saved(win):
+    deadline = QtCore.QDeadlineTimer(5000)
+    while win._settings_save_pending and not deadline.hasExpired():
+        QtTest.QTest.qWait(10)
+    assert not win._settings_save_pending, "Settings worker did not deliver completion"
 
 def make_window(**overrides):
     args = dict(
@@ -83,7 +87,7 @@ def make_window(**overrides):
         part for part in (str(Path(__file__).resolve().parents[1]), environment.get("PYTHONPATH")) if part
     )
     result = subprocess.run(
-        [sys.executable, "-c", textwrap.dedent(setup) + "\n" + textwrap.dedent(body), str(tmp_path)],
+        [sys.executable, "-c", textwrap.dedent(setup) + DRAFT_DIALOG_DRIVER + textwrap.dedent(body), str(tmp_path)],
         capture_output=True, text=True, timeout=timeout, env=environment,
     )
     assert result.returncode == 0, result.stdout + result.stderr
