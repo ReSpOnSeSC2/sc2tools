@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GuideAdminNote } from "@/lib/guides/types";
+import { guideDraftStorageKey } from "../components/useGuideDrafts";
+import { guideNoteKey } from "../components/guidesAdminShared";
 import { guideBuildOptions } from "@/lib/guides/slugs";
 import {
   ADMIN_VIDEOS,
@@ -9,6 +11,10 @@ import {
   glaivesNote,
   statusFixture,
 } from "./adminGuidesFixtures";
+
+import { guideNavigation } from "./adminGuidesNavigationFixture";
+
+vi.mock("next/navigation", async () => (await import("./adminGuidesNavigationFixture")).guideNavigationHooks);
 
 type Resp = { data?: unknown; error?: { status: number; message: string } };
 
@@ -19,7 +25,7 @@ const harness = vi.hoisted(() => ({
   getToken: vi.fn(async () => "admin-token"),
 }));
 
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: harness.getToken }) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: harness.getToken, userId: "guide-admin" }) }));
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string) => {
     const r = harness.responses.get(path) ?? {};
@@ -42,6 +48,8 @@ function pickGlaives() {
 }
 
 beforeEach(() => {
+  guideNavigation.setSearch("");
+  sessionStorage.clear();
   harness.responses.clear();
   harness.apiCall.mockResolvedValue({ note: glaivesNote() });
 });
@@ -81,13 +89,19 @@ describe("admin Guides page access", () => {
     }
   });
 
-  it("renders every section for an admin", () => {
+  it("shows one section at a time and keeps the draft across tabs", () => {
     serve();
     render(<AdminGuidesPage />);
     expect(screen.getByRole("heading", { level: 1, name: "Guides" })).toBeTruthy();
-    for (const name of ["Coach's notes", "Videos", "Stats runs"]) {
-      expect(screen.getByRole("heading", { level: 2, name })).toBeTruthy();
-    }
+    fireEvent.change(pickGlaives(), { target: { value: "Across tabs" } });
+    expect(screen.queryByRole("heading", { level: 2, name: "Videos" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Videos" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Videos" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 2, name: "Coach's notes" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Stats runs" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Stats runs" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Notes" }));
+    expect(pickGlaives().value).toBe("Across tabs");
   });
 });
 
@@ -110,7 +124,7 @@ describe("admin Guides coach's notes", () => {
     fireEvent.change(textarea, { target: { value: "### Plan\n- Chrono the first Adepts" } });
     fireEvent.click(screen.getByRole("button", { name: "Save notes" }));
     await waitFor(() => expect(harness.apiCall).toHaveBeenCalledTimes(1));
-    expect(harness.apiCall).toHaveBeenCalledWith(harness.getToken, STARGATE_GLAIVES_NOTES_PATH, {
+    expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), STARGATE_GLAIVES_NOTES_PATH, {
       method: "PUT",
       body: JSON.stringify({ body: "### Plan\n- Chrono the first Adepts" }),
     });
@@ -125,7 +139,7 @@ describe("admin Guides coach's notes", () => {
     fireEvent.change(pickGlaives(), { target: { value: "Too long" } });
     fireEvent.click(screen.getByRole("button", { name: "Save notes" }));
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toBe("Couldn't save the notes. /body must NOT have more than 4000 characters");
+    expect(alert.textContent).toContain("Could not save this note. /body must NOT have more than 4000 characters");
   });
 
   it("loads the stored note and deletes it only after confirmation", async () => {
@@ -136,7 +150,7 @@ describe("admin Guides coach's notes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete notes" }));
     expect(harness.apiCall).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Yes, delete notes" }));
-    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledWith(harness.getToken, STARGATE_GLAIVES_NOTES_PATH, { method: "DELETE" }));
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), STARGATE_GLAIVES_NOTES_PATH, { method: "DELETE" }));
     expect((await screen.findByRole("status")).textContent).toBe("Deleted the coach's notes for Stargate into Glaives.");
   });
 
@@ -232,5 +246,95 @@ describe("admin Guides notes preview", () => {
     render(<AdminGuidesPage />);
     pickGlaives();
     expect(within(screen.getByTestId("guide-notes-preview")).getByText("Nothing to preview yet.")).toBeTruthy();
+  });
+});
+
+
+describe("admin Guides draft recovery and bulk writes", () => {
+  const glaivesKey = guideDraftStorageKey("guide-admin", guideNoteKey("PvZ", STARGATE_GLAIVES));
+  const carrierKey = guideDraftStorageKey("guide-admin", guideNoteKey("PvZ", "PvZ - Carrier Rush"));
+
+  it("guards only dirty navigation, supports Stay and Leave, and keeps the session draft", () => {
+    serve();
+    render(<><a href="/admin/users" onClick={event => { if (event.ctrlKey) event.preventDefault(); }}>Other admin page</a><AdminGuidesPage /></>);
+    const unload = () => window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+    expect(unload()).toBe(true);
+    fireEvent.change(pickGlaives(), { target: { value: "Unsaved plan" } });
+    expect(unload()).toBe(false);
+    const link = screen.getByRole("link", { name: "Other admin page" });
+    fireEvent.click(link, { ctrlKey: true });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(link);
+    let dialog = within(screen.getByRole("dialog", { name: "Leave without saving 1 note?" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Stay" }));
+    expect(guideNavigation.push).not.toHaveBeenCalled();
+    fireEvent.click(link);
+    dialog = within(screen.getByRole("dialog", { name: "Leave without saving 1 note?" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Leave" }));
+    expect(guideNavigation.push).toHaveBeenCalledWith("/admin/users");
+    expect(sessionStorage.getItem(glaivesKey)).toBe("Unsaved plan");
+  });
+
+  it("restores drafts for this owner and clears them only after confirmed discard", () => {
+    serve([glaivesNote()]);
+    const other = guideDraftStorageKey("other-admin", guideNoteKey("PvZ", "PvZ - Carrier Rush"));
+    sessionStorage.setItem(other, "Other admin’s private draft");
+    guideNavigation.setSearch("matchup=PvZ&build=stargate-into-glaives");
+    const initial = render(<AdminGuidesPage />);
+    const deepLinkedNote = screen.getByLabelText("Notes for Stargate into Glaives (markdown)");
+    fireEvent.change(deepLinkedNote, { target: { value: "Retained draft" } });
+    initial.unmount();
+    render(<AdminGuidesPage />);
+    expect(screen.getByText("Restored 1 unsaved note.")).toBeTruthy();
+    expect(pickGlaives().value).toBe("Retained draft");
+    fireEvent.click(screen.getByRole("button", { name: "Discard all" }));
+    let dialog = within(screen.getByRole("dialog", { name: "Discard 1 note?" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Keep editing" }));
+    expect(sessionStorage.getItem(glaivesKey)).toBe("Retained draft");
+    fireEvent.click(screen.getByRole("button", { name: "Discard all" }));
+    dialog = within(screen.getByRole("dialog", { name: "Discard 1 note?" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Discard all" }));
+    expect(sessionStorage.getItem(glaivesKey)).toBeNull();
+    expect(sessionStorage.getItem(other)).toBe("Other admin’s private draft");
+    expect(window.dispatchEvent(new Event("beforeunload", { cancelable: true }))).toBe(true);
+  });
+
+  it("saves in draft order, preserves failures, and retries only the failed note", async () => {
+    serve();
+    let finishFirst: () => void = () => {};
+    harness.apiCall.mockImplementationOnce(() => new Promise(resolve => { finishFirst = () => resolve({ note: glaivesNote({ body: "First" }) }); }))
+      .mockRejectedValueOnce({ status: 503, message: "Try later." }).mockResolvedValueOnce({ note: glaivesNote({ body: "Second", buildKey: "PvZ - Carrier Rush", buildSlug: "carrier-rush" }) });
+    render(<AdminGuidesPage />);
+    fireEvent.change(pickGlaives(), { target: { value: "First" } });
+    fireEvent.change(screen.getByLabelText("Build guide"), { target: { value: "PvZ - Carrier Rush" } });
+    fireEvent.change(screen.getByLabelText("Notes for Carrier Rush (markdown)"), { target: { value: "Second" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save all" }));
+    expect(harness.apiCall).toHaveBeenCalledTimes(1);
+    expect(harness.apiCall.mock.calls[0][1]).toBe(STARGATE_GLAIVES_NOTES_PATH);
+    finishFirst();
+    const retry = await screen.findByRole("button", { name: "Retry Carrier Rush" });
+    expect(harness.apiCall.mock.calls[1][1]).toBe("/v1/admin/guides/notes/pvz/carrier-rush");
+    expect(sessionStorage.getItem(glaivesKey)).toBeNull();
+    expect(sessionStorage.getItem(carrierKey)).toBe("Second");
+    fireEvent.click(retry);
+    await waitFor(() => expect(sessionStorage.getItem(carrierKey)).toBeNull());
+    expect(harness.apiCall).toHaveBeenCalledTimes(3);
+    expect(harness.apiCall.mock.calls[2][1]).toBe(harness.apiCall.mock.calls[1][1]);
+  });
+
+  it("opens the guide from coverage and saves it with Cmd+S", async () => {
+    serve([glaivesNote()]);
+    render(<AdminGuidesPage />);
+    const coverage = within(screen.getByRole("table", { name: "Notes coverage by matchup" }));
+    const matchup = coverage.getByRole("row", { name: /PvZ/ });
+    expect(within(matchup).getByText(`1/${guideBuildOptions("PvZ").length}`)).toBeTruthy();
+    fireEvent.click(within(matchup).getByRole("button", { name: "PvZ" }));
+    fireEvent.click(coverage.getByRole("button", { name: "Stargate into Glaives" }));
+    const notes = screen.getByLabelText("Notes for Stargate into Glaives (markdown)");
+    fireEvent.change(notes, { target: { value: "Shortcut edit" } });
+    expect(within(matchup).getByText("Unsaved")).toBeTruthy();
+    expect(fireEvent.keyDown(notes, { key: "s", metaKey: true })).toBe(false);
+    expect(await screen.findByText("Saved.")).toBeTruthy();
+    expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), STARGATE_GLAIVES_NOTES_PATH, { method: "PUT", body: '{"body":"Shortcut edit"}' });
   });
 });
