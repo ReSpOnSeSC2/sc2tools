@@ -40,6 +40,11 @@ RADIUS_S = 4
 RADIUS_M = 6
 RADIUS_L = 8
 RADIUS_XL = 12
+# The inset of a page's content inside the display.
+PAGE_MARGIN_X = 28
+PAGE_MARGIN_Y = 24
+# The least height of a page's list or log; the page scrolls below it.
+PAGE_LIST_MIN_HEIGHT = 160
 # The round "?" beside a setting or a status line.
 HELP_LINK_SIZE = 20
 
@@ -243,6 +248,8 @@ QLabel#h1 {{ font-family: {FONT_FAMILY_DISPLAY}; font-size: {TYPE_HEADLINE}px; f
 QLabel#h2 {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
 QLabel#muted {{ color: {TEXT_MUTED}; }}
 QLabel#dim {{ color: {TEXT_DIM}; }}
+QLabel#hint {{ color: {TEXT_DIM}; font-size: {TYPE_SMALL}px; }}
+QLabel#folderSummary[missing="true"] {{ color: {WARNING}; }}
 QLabel#stat {{ font-family: {FONT_FAMILY_DISPLAY}; font-size: {TYPE_HEADLINE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
 QPushButton#statAction {{ text-align: left; }}
 QLabel#settingsToastOk {{ color: {SUCCESS}; }}
@@ -295,6 +302,7 @@ QPushButton#navItem:checked {{
     background: {skin.selected}; color: {TEXT}; font-weight: {WEIGHT_SEMIBOLD}; border-left-color: {skin.accent};
 }}
 QPushButton#navItem:focus, QPushButton#navItem:checked:focus {{ border-color: {skin.focus}; }}
+QPushButton#segment {{ padding: 6px {SPACE_L}px; }}
 QPushButton#quietButton {{
     background: transparent; color: {TEXT_MUTED}; border-color: transparent; padding: 6px 10px;
 }}

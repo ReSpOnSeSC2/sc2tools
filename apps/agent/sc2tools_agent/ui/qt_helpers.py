@@ -177,6 +177,20 @@ def build_flow_layout(parent=None, *, QtCore, QtWidgets, spacing=8):
     return FlowLayout()
 
 
+def scrolling_page(scroll, *, QtWidgets):
+    """Make ``scroll`` a page that scrolls instead of squeezing its content; return its layout.
+
+    The content keeps its own minimum height, so at the smallest window the
+    page scrolls where a plain page would overlap its controls.
+    """
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+    content = QtWidgets.QWidget()
+    layout = QtWidgets.QVBoxLayout(content)
+    scroll.setWidget(content)
+    return layout
+
+
 def install_responsive_forms(scroll, *, QtCore, QtWidgets, breakpoint=640):
     class ResponsiveForms(QtCore.QObject):
         def __init__(self):
@@ -200,7 +214,7 @@ def install_responsive_forms(scroll, *, QtCore, QtWidgets, breakpoint=640):
             self._narrow = narrow
             for form in scroll.widget().findChildren(QtWidgets.QFormLayout):
                 form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapAllRows if narrow else QtWidgets.QFormLayout.WrapLongRows)
-                form.setLabelAlignment((QtCore.Qt.AlignLeft if narrow else QtCore.Qt.AlignRight) | QtCore.Qt.AlignVCenter)
+                form.setLabelAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
 
         def eventFilter(self, watched, event):
             if not self._closed and watched is self._viewport and event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.Show):

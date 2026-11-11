@@ -114,6 +114,8 @@ _DANGER = palette.RED
 _BORDER = theme.BORDER
 _BORDER_STRONG = theme.BORDER_STRONG
 _STYLE = theme.STYLE
+# Qt date format of the sync range, and of the dates the agent saves.
+_ISO_DATE = "yyyy-MM-dd"
 
 
 # ---------------------------------------------------------------------
@@ -1263,8 +1265,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             for title, route in (("Companion", "companion"), ("Dashboard", "dashboard"), ("Recent games", "recent"), ("Streams", "streams"), ("Activity log", "log"), ("Settings", "settings"), ("Help", "help")):
                 menu.addAction(title, lambda _checked=False, destination=route: self._go_to_page(destination))
             menu.addSeparator()
-            menu.addAction("Border && animations…", self._open_companion_appearance)
-            menu.addAction("Help && troubleshooting", lambda: self._go_to_page("help"))
+            menu.addAction("Border and animations…", self._open_companion_appearance)
+            menu.addAction("Help and troubleshooting", lambda: self._go_to_page("help"))
             self._check_updates_action = menu.addAction("Check for updates", self._check_updates_from_menu)
             menu.addSeparator()
             menu.addAction("Quit SC2 Tools", ui._on_quit)
@@ -1425,7 +1427,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._sidebar_status.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
             layout.addWidget(self._sidebar_status)
 
-            help_btn = QtWidgets.QPushButton("Help && support")
+            help_btn = QtWidgets.QPushButton("Help and support")
             help_btn.setFlat(True)
             help_btn.clicked.connect(lambda: self._go_to_page("help"))
             layout.addWidget(help_btn)
@@ -1458,7 +1460,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _build_dashboard(self) -> QtWidgets.QWidget:
             page = QtWidgets.QWidget()
             v = QtWidgets.QVBoxLayout(page)
-            v.setContentsMargins(28, 24, 28, 24)
+            v.setContentsMargins(theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y, theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y)
             v.setSpacing(18)
 
             title = QtWidgets.QLabel("Dashboard")
@@ -1817,7 +1819,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             page = QtWidgets.QWidget()
             v = QtWidgets.QVBoxLayout(page)
-            v.setContentsMargins(10, 18, 10, 18)
+            v.setContentsMargins(theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y, theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y)
             v.setSpacing(14)
 
             title = QtWidgets.QLabel("Settings")
@@ -1988,42 +1990,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             # the UI because anything past 2 risks 429s on the
             # production rate limit. The state and env var both
             # accept higher; this is just a UI-side choice.
-            # Inline stylesheet for the toggle buttons. Inline (per-
-            # widget) instead of via the global QSS so the
-            # ``:checked`` selector reliably highlights — depending
-            # on QSS cascade order against the global QPushButton
-            # styling has bitten us before. The colors mirror the
-            # main-window's accent palette (``_ACCENT`` / ``_SUBTLE``)
-            # so the toggle group looks native.
-            _toggle_qss = (
-                "QPushButton {"
-                f" background: {theme.BUTTON};"
-                f" color: {_TEXT_MUTED};"
-                f" border: 1px solid {_BORDER_STRONG};"
-                " border-radius: 6px;"
-                " padding: 6px 14px;"
-                " font-weight: 600;"
-                "}"
-                "QPushButton:hover {"
-                f" background: {theme.BUTTON_HOVER};"
-                f" color: {_TEXT};"
-                "}"
-                "QPushButton:checked {"
-                f" background: {theme.BUTTON_CHECKED};"
-                " color: white;"
-                f" border-color: {_ACCENT};"
-                "}"
-                "QPushButton:checked:hover {"
-                f" background: {theme.BUTTON_HOVER};"
-                f" border-color: {_ACCENT_HOVER};"
-                "}"
-            )
             for n in (1, 2):
                 btn = QtWidgets.QPushButton(f"{n}")
                 btn.setCheckable(True)
                 btn.setMinimumWidth(56)
                 btn.setCursor(QtCore.Qt.PointingHandCursor)
-                btn.setStyleSheet(_toggle_qss)
+                btn.setObjectName("segment")
                 btn.setToolTip(
                     f"Use {n} parallel upload "
                     f"worker{'' if n == 1 else 's'}. "
@@ -2058,9 +2030,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "apply instantly — no restart needed."
             )
             upload_conc_hint.setWordWrap(True)
-            upload_conc_hint.setStyleSheet(
-                f"color: {_TEXT_DIM}; font-size: 10pt;"
-            )
+            upload_conc_hint.setObjectName("hint")
             upload_conc_h.addWidget(upload_conc_hint, 2)
             form.addRow("Upload concurrency", upload_conc_block)
 
@@ -2173,13 +2143,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             custom_h.addWidget(QtWidgets.QLabel("From"))
             self._filter_since = QtWidgets.QDateEdit()
             self._filter_since.setCalendarPopup(True)
-            self._filter_since.setDisplayFormat("yyyy-MM-dd")
+            self._filter_since.setDisplayFormat(_ISO_DATE)
             self._filter_since.setDate(QtCore.QDate.currentDate().addMonths(-1))
             custom_h.addWidget(self._filter_since)
             custom_h.addWidget(QtWidgets.QLabel("to"))
             self._filter_until = QtWidgets.QDateEdit()
             self._filter_until.setCalendarPopup(True)
-            self._filter_until.setDisplayFormat("yyyy-MM-dd")
+            self._filter_until.setDisplayFormat(_ISO_DATE)
             self._filter_until.setDate(QtCore.QDate.currentDate())
             custom_h.addWidget(self._filter_until)
             custom_h.addStretch(1)
@@ -3539,7 +3509,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             button = self._nav_group.button(index)
             if button is not None:
                 button.setChecked(True)
-            titles = {"companion": "Companion", "dashboard": "Dashboard", "recent": "Recent games", "log": "Activity log", "settings": "Settings", "streams": "Streams", "help": "Help & troubleshooting"}
+            titles = {"companion": "Companion", "dashboard": "Dashboard", "recent": "Recent games", "log": "Activity log", "settings": "Settings", "streams": "Streams", "help": "Help and troubleshooting"}
             self._agent_section_label.setText("Agent  /  " + titles.get(key, "Dashboard"))
             self._companion_page.set_active(key == "companion")
             self._apply_window_chrome()
@@ -3856,8 +3826,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             since_iso: Optional[str] = None
             until_iso: Optional[str] = None
             if preset == "custom":
-                since_iso = self._filter_since.date().toString("yyyy-MM-dd")
-                until_iso = self._filter_until.date().toString("yyyy-MM-dd")
+                since_iso = self._filter_since.date().toString(_ISO_DATE)
+                until_iso = self._filter_until.date().toString(_ISO_DATE)
             # Upload concurrency comes from the QButtonGroup's
             # ``checkedId()`` (1 or 2). Falls back to whatever we
             # last saved if no button is checked — should never
@@ -4566,13 +4536,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._filter_combo.setCurrentIndex(0)
             if initial.sync_filter_since:
                 qd = QtCore.QDate.fromString(
-                    initial.sync_filter_since[:10], "yyyy-MM-dd",
+                    initial.sync_filter_since[:10], _ISO_DATE,
                 )
                 if qd.isValid():
                     self._filter_since.setDate(qd)
             if initial.sync_filter_until:
                 qd = QtCore.QDate.fromString(
-                    initial.sync_filter_until[:10], "yyyy-MM-dd",
+                    initial.sync_filter_until[:10], _ISO_DATE,
                 )
                 if qd.isValid():
                     self._filter_until.setDate(qd)

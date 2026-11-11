@@ -38,9 +38,10 @@ def test_dashboard_recovery_and_settings_fit_minimum_agent_width(tmp_path, monke
     monkeypatch.setenv("QT_SCALE_FACTOR", scale)
     run_gui_check(tmp_path, THEMED_SETUP.replace("FONT_SIZE", "10") + '''
 from types import SimpleNamespace
+from sc2tools_agent.ui.race_visuals import RACE_SKINS, css_for_skin
+
 def wait_for_page_width(win, scroll, width, skin, route):
-    # Theme changes can queue another height-for-width pass after the resize.
-    # A fixed 15 ms delay did not guarantee both passes on the Windows runner.
+    # A resize can queue another height-for-width pass.
     deadline = QtCore.QDeadlineTimer(1000)
     stable = 0
     while not deadline.hasExpired():
@@ -54,20 +55,12 @@ def wait_for_page_width(win, scroll, width, skin, route):
     assert stable == 2, (skin, route, width, win.width(), content.width(), scroll.viewport().width(),
                          content.minimumSizeHint().width(), content.layout().minimumSize().width(),
                          scroll.horizontalScrollBar().maximum())
-ui, win = make_window(window_animations=False)
-win._set_window_size("Standard")
-win._on_update_state(SimpleNamespace(latest="0.24.0", release_notes="Audit sample"), "failed", "Retry when ready.")
-win._game_dashboard.set_progress({"phase": "importing", "total": 700, "completed": 123})
-win._on_replay_archive_status(12, 100)
-win.show()
-for skin in ("default", "protoss", "terran", "zerg"):
-    page = win._companion_page
-    page.appearance_skin.setCurrentIndex(page.appearance_skin.findData(skin))
+
+def check_pages(win, skin):
     for route in ("dashboard", "settings"):
         win._go_to_page(route)
         for width in (520, 480, 1300, 480):
-            win.resize(width, 480)
-            QtTest.QTest.qWait(15)
+            win.resize(width, 360)
             scroll = win._stack.currentWidget()
             wait_for_page_width(win, scroll, width, skin, route)
             assert win.width() == width
@@ -81,11 +74,28 @@ for skin in ("default", "protoss", "terran", "zerg"):
                 for control in (win._update_card.install_button, win._update_card.download_button,
                                 win._replay_archive_button, win._game_dashboard.season):
                     scroll.ensureWidgetVisible(control)
-                    QtTest.QTest.qWait(5)
                     assert scroll.viewport().rect().contains(control.mapTo(scroll.viewport(), control.rect().bottomRight()))
                     assert control.width() >= control.sizeHint().width()
-win._companion_page.shutdown()
-win._race_effects.shutdown()
-win._really_quit = True
-win.close()
+
+app.setProperty("raceBaseStyle", theme.STYLE)
+for _, skin in RACE_SKINS:
+    # Load the exact skin before widgets exist to avoid restyling an entire
+    # live window for a geometry check. The appearance tests cover live changes.
+    app.setStyleSheet(theme.STYLE + css_for_skin(skin))
+    ui, win = make_window(window_skin=skin, window_animations=False)
+    win.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+    win._set_window_size("Standard")
+    win._on_update_state(SimpleNamespace(latest="0.24.0", release_notes="Audit sample"), "failed", "Retry when ready.")
+    win._game_dashboard.set_progress({"phase": "importing", "total": 700, "completed": 123})
+    win._on_replay_archive_status(12, 100)
+    win.setUpdatesEnabled(False)
+    win.show()
+    assert ui._window_skin == skin
+    check_pages(win, skin)
+    win._overlay_input.shutdown()
+    win._companion_page.shutdown()
+    win._race_effects.shutdown()
+    win._really_quit = True
+    win.close()
+    QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
 ''', timeout=90)

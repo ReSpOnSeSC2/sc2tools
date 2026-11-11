@@ -4,13 +4,15 @@ from __future__ import annotations
 import codecs
 from collections import deque
 
+from . import theme
 from .help_links import help_button
 from .log_records import LogRecord, matches, parse_chunk, read_tail
+from .qt_helpers import scrolling_page
 
 
 def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
                        open_folder, open_help, palette, copy_support=None):
-    class ActivityLog(QtWidgets.QWidget):
+    class ActivityLog(QtWidgets.QScrollArea):
         def __init__(self):
             super().__init__(parent)
             self.records = deque(maxlen=3000)
@@ -22,8 +24,8 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
             self.new_lines = 0
             self.search_hits = []
             self.search_index = 0
-            layout = QtWidgets.QVBoxLayout(self)
-            layout.setContentsMargins(28, 24, 28, 24)
+            layout = scrolling_page(self, QtWidgets=QtWidgets)
+            layout.setContentsMargins(theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y, theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y)
             self.header_panel = QtWidgets.QWidget()
             self.header_panel.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
             self._header_layout = QtWidgets.QGridLayout(self.header_panel)
@@ -84,6 +86,7 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
             self.view.setMaximumBlockCount(6000)
             self.view.selectionChanged.connect(self._selection_changed)
             self.view.verticalScrollBar().valueChanged.connect(self._scroll_changed)
+            self.view.setMinimumHeight(theme.PAGE_LIST_MIN_HEIGHT)
             layout.addWidget(self.view, 1)
             self._copy_timer = QtCore.QTimer(self)
             self._copy_timer.setSingleShot(True)
@@ -100,7 +103,8 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
         def _reflow_controls(self):
             if not hasattr(self, "copy_button"):
                 return
-            available = max(1, self.width() - self.layout().contentsMargins().left() - self.layout().contentsMargins().right())
+            margins = self.widget().layout().contentsMargins()
+            available = max(1, self.viewport().width() - margins.left() - margins.right())
             header = [self.header_title, self.header_help, self.filter_combo, self.open_folder_button]
             toolbar = [self.search, self.match_count, self.follow, self.copy_button, self.support_copy_button]
             header_width = sum(widget.minimumSizeHint().width() for widget in header) + 4 * max(0, self._header_layout.horizontalSpacing())
@@ -279,6 +283,10 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
             self.view.setTextCursor(cursor)
             self.view.ensureCursorVisible()
             self.highlight_search()
+            if delta:
+                match = self.view.cursorRect()
+                position = self.view.viewport().mapTo(self.widget(), match.center())
+                self.ensureVisible(position.x(), position.y(), 0, match.height())
 
         def _copied(self):
             self.copy_button.setText("Copied ✓")

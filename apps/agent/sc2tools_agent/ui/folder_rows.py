@@ -65,7 +65,9 @@ def build_folder_rows(list_widget, *, QtCore, QtGui, QtWidgets, open_folder):
                     if row:
                         label = row.findChild(QtWidgets.QLabel, "folderSummary")
                         label.setText(folder_label(info))
-                        label.setStyleSheet("color: #e9b24a" if not info.exists else "")
+                        label.setProperty("missing", not info.exists)
+                        label.style().unpolish(label)
+                        label.style().polish(label)
                         item.setSizeHint(row.sizeHint())
     return Rows()
 
