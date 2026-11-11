@@ -36,6 +36,14 @@ export interface GlossaryTerm {
 
 export const GLOSSARY: readonly GlossaryTerm[] = [
   {
+    id: "detected-build-counts",
+    term: "Detected build counts",
+    short: "Replay counts use each replay's detected build label, so they can differ slightly from the Overview stats.",
+    related: [],
+    category: "builds",
+    help: { slug: "public-profile", anchor: "sharing-your-page" },
+  },
+  {
     id: "likely-range",
     term: "Likely range",
     short: "The uncertainty around a guide's recorded win rate; fewer games make the range wider.",
