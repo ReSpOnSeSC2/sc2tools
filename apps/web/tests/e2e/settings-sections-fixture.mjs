@@ -156,6 +156,7 @@ export async function openSettingsSectionsFixture(page, theme, options = {}) {
         ["/v1/me/preferences/chatCommands", { v: 1, builtins: {}, custom: [] }],
         ["/v1/me/chatbot", { enabled: false, username: "", channel: "", replyCommands: true, announceOracle: true, announceLevelUps: true, hasToken: false, status: { state: "off", channel: null, lastError: null, lastConnectedAt: null } }],
         ["/v1/me/integrations", { platforms: ["twitch", "kick", "youtube"].map(platform => ({ platform, configured: false, connected: false, ready: false, platformUserName: "", scopes: [], connectedAt: null, lastSyncedAt: null, lastError: null })) }],
+        ["/v1/me/twitch-rewards", { permission: false, available: false, settings: { enabled: false, target: null, mappings: [] }, targets: [], builds: [], activity: [] }],
         ["/v1/me/twitch-automation", { serverEnabled: false, configured: false, connected: false, eligible: false, predictionPermission: false, markerPermission: false, preferences: { predictionsEnabled: false, markersEnabled: false, windowSec: 90, titleTemplate: "{me} vs {opp}" } }],
       ]);
       if (url.pathname === "/v1/overlay-tokens") {
