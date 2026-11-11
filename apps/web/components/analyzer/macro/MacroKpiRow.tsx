@@ -1,23 +1,29 @@
 "use client";
 
 import { formatApm, type GameApm } from "@/lib/apm";
+import type { LeagueBenchmark } from "@/lib/benchmarks";
+import { percentileTag } from "@/lib/leagueTargets";
 import type { BreakdownRaw } from "./MacroBreakdownPanel.types";
 import { SpendingQuotientStat } from "./SpendingQuotientStat";
 
 /**
  * The macro breakdown's headline tiles: spending quotient, supply
  * blocked, float spikes and APM. Two per row on phones, one row from
- * ``md`` up.
+ * ``md`` up. With the game's league table the SQ tile reads "pXX ·
+ * League MU" instead of the fixed tier label.
  */
 export function MacroKpiRow({
   raw,
   apm,
   apmLoading,
+  league = null,
 }: {
   raw: BreakdownRaw;
   /** The game's trusted APM (lib/apm.ts); null when not measured. */
   apm: GameApm | null;
   apmLoading: boolean;
+  /** The game's opponent-league benchmark table, when one exists. */
+  league?: LeagueBenchmark | null;
 }) {
   const oppApm = apm?.opp?.avg ?? null;
   return (
@@ -29,6 +35,7 @@ export function MacroKpiRow({
         glow
         decimals={1}
         termId="spending-quotient"
+        benchmark={percentileTag(league, "spq", typeof raw.sq === "number" ? raw.sq : null)}
       />
       <SpendingQuotientStat
         label="Supply blocked"

@@ -32,7 +32,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(list).toHaveCount(1);
     await expect(list).toHaveAttribute("aria-orientation", mobile ? "horizontal" : "vertical");
     expect(await list.getByRole("tab").evaluateAll(nodes => nodes.map(node => node.getAttribute("data-value"))))
-      .toEqual(["account", "profile", "backups", "checkin", "randomizer", "import", "overlay", "chat", "voice", "preferences", "help"]);
+      .toEqual(["account", "profile", "backups", "checkin", "randomizer", "import", "overlay", "chat", "voice", "preferences", "integrations", "help"]);
     expect(evidence.panelReads).toEqual(["preferences"]);
     if (!mobile) {
       const sidebar = page.getByRole("navigation", { name: "Settings navigation", exact: true });

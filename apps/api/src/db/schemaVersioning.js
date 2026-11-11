@@ -90,6 +90,13 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  // v1 — unified notes: {target:{kind,id}, text, tags, visibility, scope,
+  // groupKey?, pinned, readAloud, gameTimeSec?, x?, y?}.
+  [COLLECTIONS.NOTES]: {
+    collection: COLLECTIONS.NOTES,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.GAMES]: {
     collection: COLLECTIONS.GAMES,
     // v2 — v0.4.3 storage trim: ``earlyBuildLog`` / ``oppEarlyBuildLog``
@@ -139,6 +146,19 @@ const REGISTRY = Object.freeze({
     // seconds, matching the build-log times the matcher reads off
     // games.
     currentVersion: 2,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.CUSTOM_BUILD_REVISIONS]: {
+    collection: COLLECTIONS.CUSTOM_BUILD_REVISIONS,
+    // {userId, slug, rev, savedAt, doc}: a saved build as it was before a
+    // later save replaced it.
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.COMMUNITY_SAVES]: {
+    collection: COLLECTIONS.COMMUNITY_SAVES,
+    // {slug, userId, savedAt}: unique per pair; counts ``saves`` once.
+    currentVersion: 1,
     versionKey: VERSION_KEY,
   },
   [COLLECTIONS.CUSTOM_BUILD_JOBS]: {
@@ -240,6 +260,11 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.REANALYSIS_JOBS]: {
+    collection: COLLECTIONS.REANALYSIS_JOBS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.AGENT_RELEASES]: {
     collection: COLLECTIONS.AGENT_RELEASES,
     currentVersion: 1,
@@ -308,6 +333,11 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.PLAYER_GOALS]: {
+    collection: COLLECTIONS.PLAYER_GOALS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   // Short-lived (TTL) per-user/day browser-ingest counters.
   [COLLECTIONS.BROWSER_INGEST_DAILY]: {
     collection: COLLECTIONS.BROWSER_INGEST_DAILY,
@@ -352,6 +382,17 @@ const REGISTRY = Object.freeze({
   // Short-lived (TTL) build check-in live records, purge-only.
   [COLLECTIONS.BUILD_INTENT_LIVE]: {
     collection: COLLECTIONS.BUILD_INTENT_LIVE,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  // Post-stream reports and the delivery channels (docs/notifications.md).
+  [COLLECTIONS.STREAM_SESSIONS]: { collection: COLLECTIONS.STREAM_SESSIONS, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.DISCORD_HOOKS]: { collection: COLLECTIONS.DISCORD_HOOKS, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.DISCORD_OUTBOX]: { collection: COLLECTIONS.DISCORD_OUTBOX, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.PUSH_SUBSCRIPTIONS]: { collection: COLLECTIONS.PUSH_SUBSCRIPTIONS, currentVersion: 1, versionKey: VERSION_KEY },
+  // Revocable single-game share links (services/gameShares.js).
+  [COLLECTIONS.GAME_SHARES]: {
+    collection: COLLECTIONS.GAME_SHARES,
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },

@@ -52,7 +52,7 @@ function buildAgentScoutingRouter(deps) {
       // Match the web route's invalidation, without adding a read or refresh.
       try { deps.overlayLive?.invalidateEnrichmentForOpponent(auth.userId, result.opponentName, result.pulseCharacterId); }
       catch { /* cache invalidation is advisory, as on the web note route */ }
-      res.set("Cache-Control", "private, no-store").json({ notes: result.notes, notesReadAloud: result.notesReadAloud });
+      res.set("Cache-Control", "private, no-store").json({ notes: result.notes, notesReadAloud: result.notesReadAloud, note: result.note });
     } catch (err) { next(err); }
   });
   return router;

@@ -4,6 +4,7 @@ const express = require("express");
 const { accountExportHandler } = require("./accountExport");
 const { buildDoctor, buildSyncHealth, withReplayResyncState, emptyReplayArchiveCounts } = require("../services/doctor");
 const { NOTIFICATIONS_PREF_TYPE, sanitizeNotificationPrefs } = require("../services/notificationPrefs");
+const { REPORTS_PREF_TYPE, sanitizeReportPrefs } = require("../services/reportPreferences");
 const { validateProfile } = require("../validation/profile");
 const { publicDataRetention } = require("../services/dataInventory");
 const {
@@ -14,6 +15,7 @@ const { browserUploadStatusOf } = require("../services/replayFilesCors");
 const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
 const { sanitizeRivals } = require("../util/rivalsPreferences");
 const { OPPONENT_SCOUTING_PREF_TYPE, sanitizeOpponentScouting } = require("../util/opponentScoutingPreferences");
+const { LEAGUE_TARGETS_PREF_TYPE, sanitizeLeagueTargets } = require("../util/leagueTargetsPreferences");
 const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("../services/twitchAutomationPolicy");
 const { sanitizeChatCommands } = require("../services/chatCommands");
 const { activationTimestamp } = require("../services/activation");
@@ -451,7 +453,7 @@ function buildMeRouter(deps) {
   // (downloadStartedAt, dismissedAt). "buildCheckin" is the build check-in
   // switches (always exactly three booleans, default true).
   const PREF_TYPES = new Set([
-    NOTIFICATIONS_PREF_TYPE,
+    NOTIFICATIONS_PREF_TYPE, REPORTS_PREF_TYPE,
     "misc",
     "voice",
     "arcade",
@@ -464,7 +466,7 @@ function buildMeRouter(deps) {
     OPPONENT_SCOUTING_PREF_TYPE,
     TWITCH_PREF_TYPE,
     "ghost",
-    CHECKIN_PREF_TYPE,
+    CHECKIN_PREF_TYPE, LEAGUE_TARGETS_PREF_TYPE,
   ]);
 
   router.get("/me/analyzer-default-view", deps.auth, async (req, res, next) => {
@@ -492,12 +494,12 @@ function buildMeRouter(deps) {
       }
       const prefs = await deps.users.getPreferences(auth.userId, type);
       res.json(type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(prefs)
-        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(prefs)
+        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(prefs) : type === REPORTS_PREF_TYPE ? sanitizeReportPrefs(prefs)
           : type === "analyzerViews" ? sanitizeAnalyzerViews(prefs)
             : type === "rivals" ? sanitizeRivals(prefs)
               : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(prefs)
                 : type === "chatCommands" ? sanitizeChatCommands(prefs)
-                : type === OPPONENT_SCOUTING_PREF_TYPE ? sanitizeOpponentScouting(prefs) : prefs);
+                : type === OPPONENT_SCOUTING_PREF_TYPE ? sanitizeOpponentScouting(prefs) : type === LEAGUE_TARGETS_PREF_TYPE ? sanitizeLeagueTargets(prefs) : prefs);
     } catch (err) {
       next(err);
     }
@@ -538,12 +540,12 @@ function buildMeRouter(deps) {
       }
       if (type === "onboarding" && Object.hasOwn(req.body, "toursDone")) validateOnboardingToursDone(req.body.toursDone);
       const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body)
-        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body)
+        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body) : type === REPORTS_PREF_TYPE ? sanitizeReportPrefs(req.body)
           : type === "analyzerViews" ? sanitizeAnalyzerViews(req.body, true)
             : type === "rivals" ? sanitizeRivals(req.body, true)
               : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(req.body, true)
                 : type === "chatCommands" ? sanitizeChatCommands(req.body, true)
-                : type === OPPONENT_SCOUTING_PREF_TYPE ? sanitizeOpponentScouting(req.body, true) : req.body;
+                : type === OPPONENT_SCOUTING_PREF_TYPE ? sanitizeOpponentScouting(req.body, true) : type === LEAGUE_TARGETS_PREF_TYPE ? sanitizeLeagueTargets(req.body, true) : req.body;
       const saved = await deps.users.updatePreferences(auth.userId, type, body);
       if (type === "rivals") {
         try { deps.onRivalsChanged?.(auth.userId); } catch { /* Advisory cache refresh; preferences are already saved. */ }

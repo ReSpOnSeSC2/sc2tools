@@ -7,6 +7,7 @@ const { PRIVATE_SEARCH_COMMENT } = require("../services/privateSearchReader");
 const { COMMUNITY_SEARCH_COMMENT, REPLAY_SEARCH_COMMENT } = require("../middleware/searchQueryPrivacy");
 const { REPLAY_DOWNLOAD_COMMENT } = require("../middleware/replayDownloadBatchBoundary");
 const { startPrivateSearchIndex } = require("./privateSearchIndexes");
+const { ensureNotesIndexes } = require("../services/notes");
 const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("../services/gameStatsMaintenance");
 const { credentialReadinessCapability } = require("../services/deviceCredentialTopology");
 
@@ -22,10 +23,13 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   profiles: import('mongodb').Collection,
  *   opponents: import('mongodb').Collection,
  *   opponentNotes: import('mongodb').Collection,
+ *   notes: import('mongodb').Collection,
  *   games: import('mongodb').Collection,
  *   gameDetails: import('mongodb').Collection,
  *   customBuilds: import('mongodb').Collection,
  *   customBuildJobs: import('mongodb').Collection,
+ *   customBuildRevisions: import('mongodb').Collection,
+ *   communitySaves: import('mongodb').Collection,
  *   coaching: import('mongodb').Collection,
  *   devicePairings: import('mongodb').Collection,
  *   deviceTokens: import('mongodb').Collection,
@@ -45,6 +49,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   twitchAutomationReceipts: import('mongodb').Collection<any>,
  *   importJobs: import('mongodb').Collection,
  *   macroJobs: import('mongodb').Collection,
+ *   reanalysisJobs: import('mongodb').Collection,
  *   agentReleases: import('mongodb').Collection,
  *   communityBuilds: import('mongodb').Collection,
  *   communityReports: import('mongodb').Collection,
@@ -75,6 +80,12 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   guideNotes: import('mongodb').Collection,
  *   guideVideos: import('mongodb').Collection<any>,
  *   buildIntentLive: import('mongodb').Collection<any>,
+ *   playerGoals: import('mongodb').Collection<any>,
+ *   streamSessions: import('mongodb').Collection<any>,
+ *   discordHooks: import('mongodb').Collection<any>,
+ *   discordOutbox: import('mongodb').Collection<any>,
+ *   pushSubscriptions: import('mongodb').Collection<any>,
+ *   gameShares: import('mongodb').Collection<any>,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -106,9 +117,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     retryWrites: true,
     monitorCommands: !!logger,
   });
-  if (logger) {
-    attachSlowQueryLogging(client, logger, observability.slowQueryMs);
-  }
+  if (logger) attachSlowQueryLogging(client, logger, observability.slowQueryMs);
   await client.connect();
   const db = client.db(dbName);
   // Check the connected topology rather than inferring transaction support
@@ -130,11 +139,12 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     users: db.collection(COLLECTIONS.USERS),
     profiles: db.collection(COLLECTIONS.PROFILES),
     opponents: db.collection(COLLECTIONS.OPPONENTS),
-    opponentNotes: db.collection(COLLECTIONS.OPPONENT_NOTES),
+    opponentNotes: db.collection(COLLECTIONS.OPPONENT_NOTES), notes: db.collection(COLLECTIONS.NOTES),
     games: db.collection(COLLECTIONS.GAMES),
     gameDetails: db.collection(COLLECTIONS.GAME_DETAILS),
     customBuilds: db.collection(COLLECTIONS.CUSTOM_BUILDS),
     customBuildJobs: db.collection(COLLECTIONS.CUSTOM_BUILD_JOBS),
+    customBuildRevisions: db.collection(COLLECTIONS.CUSTOM_BUILD_REVISIONS),
     devicePairings: db.collection(COLLECTIONS.DEVICE_PAIRINGS),
     deviceTokens: db.collection(COLLECTIONS.DEVICE_TOKENS),
     overlayTokens: db.collection(COLLECTIONS.OVERLAY_TOKENS),
@@ -153,9 +163,11 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     twitchAutomationReceipts: db.collection(COLLECTIONS.TWITCH_AUTOMATION_RECEIPTS),
     importJobs: db.collection(COLLECTIONS.IMPORT_JOBS),
     macroJobs: db.collection(COLLECTIONS.MACRO_JOBS),
+    reanalysisJobs: db.collection(COLLECTIONS.REANALYSIS_JOBS),
     agentReleases: db.collection(COLLECTIONS.AGENT_RELEASES),
     communityBuilds: db.collection(COLLECTIONS.COMMUNITY_BUILDS),
     communityReports: db.collection(COLLECTIONS.COMMUNITY_REPORTS),
+    communitySaves: db.collection(COLLECTIONS.COMMUNITY_SAVES),
     userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
     pendingIdentityDeletions: db.collection(COLLECTIONS.PENDING_IDENTITY_DELETIONS),
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
@@ -185,7 +197,8 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     guideStats: db.collection(COLLECTIONS.GUIDE_STATS),
     guideNotes: db.collection(COLLECTIONS.GUIDE_NOTES),
     guideVideos: db.collection(COLLECTIONS.GUIDE_VIDEOS),
-    buildIntentLive: db.collection(COLLECTIONS.BUILD_INTENT_LIVE),
+    buildIntentLive: db.collection(COLLECTIONS.BUILD_INTENT_LIVE), gameShares: db.collection(COLLECTIONS.GAME_SHARES), ...deliveryCollections(db),
+    playerGoals: db.collection(COLLECTIONS.PLAYER_GOALS),
     close: () => client.close(),
   };
   await ensureIndexes(ctx, { logger, awaitBackground: awaitBackgroundIndexes });
@@ -297,6 +310,38 @@ async function ensureBrowserIngestDailyIndexes(ctx) {
 }
 
 /**
+ * Private practice log (services/practiceLog.js): one owner's graded games in
+ * a matchup, newest first. Partial, so only games with a ``practice`` record
+ * are indexed; every practice read includes ``practice: {$exists: true}``.
+ *
+ * @param {{ games: import('mongodb').Collection }} ctx
+ */
+async function ensurePracticeLogIndexes(ctx) {
+  await ctx.games.createIndex(
+    { userId: 1, "practice.matchup": 1, date: -1, _id: -1 },
+    { name: "practice_log", partialFilterExpression: { practice: { $exists: true } } },
+  );
+}
+
+/**
+ * Build library safety and community trust: tag chips (multikey), the
+ * trash purge's soft-deleted rows, version history, "Most saved" and one
+ * community save per account.
+ * @param {DbContext} ctx
+ */
+async function ensureBuildLibraryIndexes(ctx) {
+  await ctx.customBuilds.createIndex({ userId: 1, tags: 1 });
+  await ctx.customBuilds.createIndex(
+    { deletedAt: 1 },
+    { name: "custom_build_trash", partialFilterExpression: { deletedAt: { $exists: true } } },
+  );
+  await ctx.customBuildRevisions.createIndex({ userId: 1, slug: 1, rev: -1 }, { unique: true });
+  await ctx.communityBuilds.createIndex({ removed: 1, saves: -1 });
+  await ctx.communitySaves.createIndex({ slug: 1, userId: 1 }, { unique: true });
+  await ctx.communitySaves.createIndex({ userId: 1 });
+}
+
+/**
  * Build check-in (services/buildIntents.js). Live records are unique per
  * (userId, gameKey); the ingest bind looks up a user's unbound records by
  * key start time; the TTL index reclaims them at ``expiresAt``. The partial
@@ -405,10 +450,8 @@ async function ensureIndexes(ctx, opts = {}) {
   // scans every opponents row for the user — Atlas Performance
   // Advisor flagged ~16k docs scanned per 5-doc result.
   await ctx.opponents.createIndex({ userId: 1, gameCount: -1 });
-  await ctx.opponentNotes.createIndex(
-    { userId: 1, pulseId: 1 },
-    { unique: true },
-  );
+  await ctx.opponentNotes.createIndex({ userId: 1, pulseId: 1 }, { unique: true });
+  await ensureNotesIndexes(ctx.notes); // target, group-key and one-note-per-account slots
 
   await ctx.games.createIndex({ userId: 1, gameId: 1 }, { unique: true });
   await ctx.games.createIndex({ userId: 1, date: -1 });
@@ -508,6 +551,7 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.customBuilds.createIndex({ userId: 1, updatedAt: -1 });
   await ctx.customBuilds.createIndex({ userId: 1, _id: 1 }, { name: "admin_custom_build_catalog" });
   await ctx.customBuildJobs.createIndex({ userId: 1 }, { unique: true });
+  await ensureBuildLibraryIndexes(ctx);
   await ctx.customBuildJobs.createIndex({ status: 1, leaseUntil: 1 });
 
   await ctx.devicePairings.createIndex({ code: 1 }, { unique: true });
@@ -641,6 +685,10 @@ async function ensureIndexes(ctx, opts = {}) {
 
   await ctx.importJobs.createIndex({ userId: 1, createdAt: -1 });
   await ctx.macroJobs.createIndex({ userId: 1, createdAt: -1 });
+  // One active re-analysis per owner; finished runs expire after 90 days.
+  await ctx.reanalysisJobs.createIndex({ userId: 1 }, { unique: true, partialFilterExpression: { active: true }, name: "reanalysis_one_active" });
+  await ctx.reanalysisJobs.createIndex({ userId: 1, createdAt: -1 });
+  await ctx.reanalysisJobs.createIndex({ completedAt: 1 }, { expireAfterSeconds: 90 * 86400 });
 
   await ctx.agentReleases.createIndex({ channel: 1, version: 1 }, { unique: true });
   await ctx.agentReleases.createIndex({ channel: 1, publishedAt: -1 });
@@ -749,8 +797,9 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.pulseCharacterLinks.createIndex({ toonHandle: 1 }, { sparse: true });
 
   await ensureBuildIntentIndexes(ctx);
+  await ensurePracticeLogIndexes(ctx);
   await ensureGuideIndexes(ctx);
-  await ensureReviewIndexes(ctx);
+  await ensureReviewIndexes(ctx); await ensurePlayerGoalIndexes(ctx); await ensureDeliveryIndexes(ctx);
   // Last, so the ``games`` collection exists and the long build never
   // competes with the awaited ones above.
   const logger = opts.logger || null, guides = startBackgroundIndexBuilds(ctx, logger);
@@ -761,6 +810,23 @@ async function ensureIndexes(ctx, opts = {}) {
   ctx.privateSearchIndexes = search;
   if (opts.awaitBackground) await Promise.all([guides.settled, search.settled, corpus.settled]);
   return guides;
+}
+
+/**
+ * Personal goals (services/playerGoals.js): lookups by public id, the
+ * active/completed lists, and the active-goal cap. Only an active goal
+ * holds a ``slot`` (0..7), so the unique partial index makes "at most 8
+ * active goals" a constraint instead of a racy count.
+ *
+ * @param {{ playerGoals: import('mongodb').Collection<any> }} ctx
+ */
+async function ensurePlayerGoalIndexes(ctx) {
+  await ctx.playerGoals.createIndex({ userId: 1, id: 1 }, { unique: true });
+  await ctx.playerGoals.createIndex({ userId: 1, status: 1, completedAt: -1 });
+  await ctx.playerGoals.createIndex(
+    { userId: 1, slot: 1 },
+    { unique: true, partialFilterExpression: { slot: { $exists: true } }, name: "player_goals_active_slot" },
+  );
 }
 
 /**
@@ -808,6 +874,12 @@ async function ensureReviewIndexes(ctx) {
   await ctx.reviewBlocks.createIndex({ blockerId: 1, blockedId: 1 }, { unique: true });
   await ctx.reviewBlocks.createIndex({ blockedId: 1 });
 
+  // Game share links: ``activeKey`` exists only while a link is live, so
+  // one game has at most one active link (services/gameShares.js).
+  await ctx.gameShares.createIndex({ activeKey: 1 }, { unique: true, sparse: true });
+  await ctx.gameShares.createIndex({ userId: 1, gameId: 1, createdAt: -1 });
+  await ctx.gameShares.createIndex({ userId: 1, revokedAt: 1 });
+
   await ctx.notifications.createIndex({ userId: 1, createdAt: -1 });
   await ctx.notifications.createIndex({ userId: 1, readAt: 1 });
   await ctx.notifications.createIndex(
@@ -834,6 +906,44 @@ async function ensureReviewIndexes(ctx) {
     { expireAfterSeconds: 90 * 24 * 60 * 60, name: "notification_ttl" },
   );
   await ctx.users.createIndex({ "reviewer.karma": -1 }, { sparse: true });
+}
+
+/**
+ * Reports and delivery channels (docs/notifications.md).
+ * @param {import('mongodb').Db} db
+ */
+function deliveryCollections(db) {
+  return {
+    streamSessions: db.collection(COLLECTIONS.STREAM_SESSIONS),
+    discordHooks: db.collection(COLLECTIONS.DISCORD_HOOKS),
+    discordOutbox: db.collection(COLLECTIONS.DISCORD_OUTBOX),
+    pushSubscriptions: db.collection(COLLECTIONS.PUSH_SUBSCRIPTIONS),
+  };
+}
+
+/**
+ * Weekly/stream reports, Discord posts, Web Push and the calendar feed
+ * (docs/notifications.md). Every lookup is owner-keyed except the two
+ * bearer-secret lookups (calendar feed hash, push endpoint hash) and the
+ * outbox drain, which reads due rows across users in send order.
+ *
+ * @param {DbContext} ctx
+ */
+async function ensureDeliveryIndexes(ctx) {
+  await ctx.streamSessions.createIndex({ userId: 1, streamId: 1 }, { unique: true });
+  await ctx.streamSessions.createIndex({ userId: 1, startAt: -1 });
+  // Open streams waiting for "End stream" or the four-hour idle close.
+  await ctx.users.createIndex({ "streamSession.startAt": 1 }, { sparse: true });
+  await ctx.users.createIndex({ "calendarFeed.hash": 1 }, { unique: true, sparse: true });
+  await ctx.discordHooks.createIndex({ userId: 1, createdAt: 1 });
+  await ctx.discordHooks.createIndex({ enabled: 1, status: 1 });
+  await ctx.discordOutbox.createIndex({ dedupeKey: 1 }, { unique: true });
+  await ctx.discordOutbox.createIndex({ status: 1, nextAttemptAt: 1 });
+  await ctx.discordOutbox.createIndex({ hookId: 1 });
+  await ctx.discordOutbox.createIndex({ userId: 1 });
+  await ctx.discordOutbox.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await ctx.pushSubscriptions.createIndex({ endpointHash: 1 }, { unique: true });
+  await ctx.pushSubscriptions.createIndex({ userId: 1, createdAt: -1 });
 }
 
 module.exports = { connect, ensureIndexes, attachSlowQueryLogging };

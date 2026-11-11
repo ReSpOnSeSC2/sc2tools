@@ -1,0 +1,621 @@
+{
+  "$comment": "Shared by apps/web/lib/__tests__/ghostGradeParity.test.ts (lib/ghostGrade.ts) and apps/api/__tests__/practiceGrade.test.js (services/practiceGrade.js). Inputs are hand-written; expected is the documented grading contract.",
+  "cases": [
+    {
+      "name": "on-time execution grades S and ignores extra events",
+      "target": {
+        "v": 1,
+        "name": "PvZ gate core",
+        "steps": [
+          {
+            "supply": 14,
+            "t": 18,
+            "name": "Pylon"
+          },
+          {
+            "supply": 16,
+            "t": 40,
+            "name": "Gateway"
+          },
+          {
+            "supply": 17,
+            "t": 48,
+            "name": "Assimilator"
+          },
+          {
+            "supply": 19,
+            "t": 90,
+            "name": "CyberneticsCore"
+          }
+        ]
+      },
+      "buildLog": [
+        "[0:18] Pylon",
+        "[0:20] Probe",
+        "[0:41] Gateway",
+        "[0:48] Assimilator",
+        "[1:32] Cybernetics Core"
+      ],
+      "expected": {
+        "grade": "S",
+        "targetSteps": 4,
+        "matchedSteps": 4,
+        "avgDriftSec": 0.8,
+        "maxDriftSec": 2,
+        "firstDivergence": null,
+        "perStep": [
+          {
+            "index": 0,
+            "name": "Pylon",
+            "supply": 14,
+            "expectedT": 18,
+            "actualT": 18,
+            "driftSec": 0,
+            "matched": true
+          },
+          {
+            "index": 1,
+            "name": "Gateway",
+            "supply": 16,
+            "expectedT": 40,
+            "actualT": 41,
+            "driftSec": 1,
+            "matched": true
+          },
+          {
+            "index": 2,
+            "name": "Assimilator",
+            "supply": 17,
+            "expectedT": 48,
+            "actualT": 48,
+            "driftSec": 0,
+            "matched": true
+          },
+          {
+            "index": 3,
+            "name": "CyberneticsCore",
+            "supply": 19,
+            "expectedT": 90,
+            "actualT": 92,
+            "driftSec": 2,
+            "matched": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "a 20 second slip with every step hit grades A",
+      "target": {
+        "v": 1,
+        "name": "PvZ gate core",
+        "steps": [
+          {
+            "supply": 14,
+            "t": 18,
+            "name": "Pylon"
+          },
+          {
+            "supply": 16,
+            "t": 40,
+            "name": "Gateway"
+          },
+          {
+            "supply": 17,
+            "t": 48,
+            "name": "Assimilator"
+          },
+          {
+            "supply": 19,
+            "t": 90,
+            "name": "CyberneticsCore"
+          }
+        ]
+      },
+      "buildLog": [
+        "[0:20] Pylon",
+        "[0:44] Gateway",
+        "[0:50] Assimilator",
+        "[1:50] CyberneticsCore"
+      ],
+      "expected": {
+        "grade": "A",
+        "targetSteps": 4,
+        "matchedSteps": 4,
+        "avgDriftSec": 7,
+        "maxDriftSec": 20,
+        "firstDivergence": null,
+        "perStep": [
+          {
+            "index": 0,
+            "name": "Pylon",
+            "supply": 14,
+            "expectedT": 18,
+            "actualT": 20,
+            "driftSec": 2,
+            "matched": true
+          },
+          {
+            "index": 1,
+            "name": "Gateway",
+            "supply": 16,
+            "expectedT": 40,
+            "actualT": 44,
+            "driftSec": 4,
+            "matched": true
+          },
+          {
+            "index": 2,
+            "name": "Assimilator",
+            "supply": 17,
+            "expectedT": 48,
+            "actualT": 50,
+            "driftSec": 2,
+            "matched": true
+          },
+          {
+            "index": 3,
+            "name": "CyberneticsCore",
+            "supply": 19,
+            "expectedT": 90,
+            "actualT": 110,
+            "driftSec": 20,
+            "matched": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "a cut step is the first divergence and caps the grade",
+      "target": {
+        "v": 1,
+        "name": "TvP reaper expand",
+        "steps": [
+          {
+            "supply": null,
+            "t": 17,
+            "name": "SupplyDepot"
+          },
+          {
+            "supply": null,
+            "t": 40,
+            "name": "Barracks"
+          },
+          {
+            "supply": null,
+            "t": 45,
+            "name": "Refinery"
+          },
+          {
+            "supply": null,
+            "t": 80,
+            "name": "Reaper"
+          },
+          {
+            "supply": null,
+            "t": 95,
+            "name": "CommandCenter"
+          }
+        ]
+      },
+      "buildLog": [
+        "[0:19] Supply Depot",
+        "[0:47] Barracks",
+        "[0:52] Refinery",
+        "[1:40] Command Center"
+      ],
+      "expected": {
+        "grade": "B",
+        "targetSteps": 5,
+        "matchedSteps": 4,
+        "avgDriftSec": 5.3,
+        "maxDriftSec": 7,
+        "firstDivergence": {
+          "index": 3,
+          "name": "Reaper",
+          "expectedT": 80,
+          "actualT": null
+        },
+        "perStep": [
+          {
+            "index": 0,
+            "name": "SupplyDepot",
+            "supply": null,
+            "expectedT": 17,
+            "actualT": 19,
+            "driftSec": 2,
+            "matched": true
+          },
+          {
+            "index": 1,
+            "name": "Barracks",
+            "supply": null,
+            "expectedT": 40,
+            "actualT": 47,
+            "driftSec": 7,
+            "matched": true
+          },
+          {
+            "index": 2,
+            "name": "Refinery",
+            "supply": null,
+            "expectedT": 45,
+            "actualT": 52,
+            "driftSec": 7,
+            "matched": true
+          },
+          {
+            "index": 3,
+            "name": "Reaper",
+            "supply": null,
+            "expectedT": 80,
+            "actualT": null,
+            "driftSec": null,
+            "matched": false
+          },
+          {
+            "index": 4,
+            "name": "CommandCenter",
+            "supply": null,
+            "expectedT": 95,
+            "actualT": 100,
+            "driftSec": 5,
+            "matched": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "a step more than 30 seconds late diverges even though it was built",
+      "target": {
+        "v": 1,
+        "name": "ZvT hatch pool gas",
+        "steps": [
+          {
+            "supply": null,
+            "t": 30,
+            "name": "Hatchery"
+          },
+          {
+            "supply": null,
+            "t": 60,
+            "name": "SpawningPool"
+          },
+          {
+            "supply": null,
+            "t": 70,
+            "name": "Extractor"
+          }
+        ]
+      },
+      "buildLog": [
+        "[0:31] Hatchery",
+        "[1:31] Spawning Pool",
+        "[1:40] Extractor"
+      ],
+      "expected": {
+        "grade": "C",
+        "targetSteps": 3,
+        "matchedSteps": 3,
+        "avgDriftSec": 20.7,
+        "maxDriftSec": 31,
+        "firstDivergence": {
+          "index": 1,
+          "name": "SpawningPool",
+          "expectedT": 60,
+          "actualT": 91
+        },
+        "perStep": [
+          {
+            "index": 0,
+            "name": "Hatchery",
+            "supply": null,
+            "expectedT": 30,
+            "actualT": 31,
+            "driftSec": 1,
+            "matched": true
+          },
+          {
+            "index": 1,
+            "name": "SpawningPool",
+            "supply": null,
+            "expectedT": 60,
+            "actualT": 91,
+            "driftSec": 31,
+            "matched": true
+          },
+          {
+            "index": 2,
+            "name": "Extractor",
+            "supply": null,
+            "expectedT": 70,
+            "actualT": 100,
+            "driftSec": 30,
+            "matched": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "one executed event satisfies at most one step, in order",
+      "target": {
+        "v": 1,
+        "name": "double gate",
+        "steps": [
+          {
+            "supply": null,
+            "t": 40,
+            "name": "Gateway"
+          },
+          {
+            "supply": null,
+            "t": 80,
+            "name": "Gateway"
+          },
+          {
+            "supply": null,
+            "t": 90,
+            "name": "CyberneticsCore"
+          }
+        ]
+      },
+      "buildLog": [
+        "[0:41] Gateway",
+        "[1:30] Cybernetics Core"
+      ],
+      "expected": {
+        "grade": "C",
+        "targetSteps": 3,
+        "matchedSteps": 2,
+        "avgDriftSec": 0.5,
+        "maxDriftSec": 1,
+        "firstDivergence": {
+          "index": 1,
+          "name": "Gateway",
+          "expectedT": 80,
+          "actualT": null
+        },
+        "perStep": [
+          {
+            "index": 0,
+            "name": "Gateway",
+            "supply": null,
+            "expectedT": 40,
+            "actualT": 41,
+            "driftSec": 1,
+            "matched": true
+          },
+          {
+            "index": 1,
+            "name": "Gateway",
+            "supply": null,
+            "expectedT": 80,
+            "actualT": null,
+            "driftSec": null,
+            "matched": false
+          },
+          {
+            "index": 2,
+            "name": "CyberneticsCore",
+            "supply": null,
+            "expectedT": 90,
+            "actualT": 90,
+            "driftSec": 0,
+            "matched": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "malformed lines are skipped and names normalise to letters and digits",
+      "target": {
+        "v": 1,
+        "name": "Terran 2-1-1",
+        "steps": [
+          {
+            "supply": null,
+            "t": 60,
+            "name": "Factory"
+          },
+          {
+            "supply": null,
+            "t": 100,
+            "name": "Starport"
+          },
+          {
+            "supply": null,
+            "t": 130,
+            "name": "Tech Lab"
+          }
+        ]
+      },
+      "buildLog": [
+        "nonsense",
+        "[1:2] Factory",
+        "[x:00] Factory",
+        42,
+        "[1:00] factory",
+        "[1:45]   STAR-PORT  ",
+        "[2:50] TechLab"
+      ],
+      "expected": {
+        "grade": "B",
+        "targetSteps": 3,
+        "matchedSteps": 3,
+        "avgDriftSec": 15,
+        "maxDriftSec": 40,
+        "firstDivergence": {
+          "index": 2,
+          "name": "Tech Lab",
+          "expectedT": 130,
+          "actualT": 170
+        },
+        "perStep": [
+          {
+            "index": 0,
+            "name": "Factory",
+            "supply": null,
+            "expectedT": 60,
+            "actualT": 60,
+            "driftSec": 0,
+            "matched": true
+          },
+          {
+            "index": 1,
+            "name": "Starport",
+            "supply": null,
+            "expectedT": 100,
+            "actualT": 105,
+            "driftSec": 5,
+            "matched": true
+          },
+          {
+            "index": 2,
+            "name": "Tech Lab",
+            "supply": null,
+            "expectedT": 130,
+            "actualT": 170,
+            "driftSec": 40,
+            "matched": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "half the steps on time grades C",
+      "target": {
+        "v": 1,
+        "name": "half",
+        "steps": [
+          {
+            "supply": null,
+            "t": 20,
+            "name": "Pylon"
+          },
+          {
+            "supply": null,
+            "t": 40,
+            "name": "Gateway"
+          },
+          {
+            "supply": null,
+            "t": 60,
+            "name": "Nexus"
+          },
+          {
+            "supply": null,
+            "t": 80,
+            "name": "CyberneticsCore"
+          }
+        ]
+      },
+      "buildLog": [
+        "[0:50] Pylon",
+        "[1:10] Gateway"
+      ],
+      "expected": {
+        "grade": "C",
+        "targetSteps": 4,
+        "matchedSteps": 2,
+        "avgDriftSec": 30,
+        "maxDriftSec": 30,
+        "firstDivergence": {
+          "index": 2,
+          "name": "Nexus",
+          "expectedT": 60,
+          "actualT": null
+        },
+        "perStep": [
+          {
+            "index": 0,
+            "name": "Pylon",
+            "supply": null,
+            "expectedT": 20,
+            "actualT": 50,
+            "driftSec": 30,
+            "matched": true
+          },
+          {
+            "index": 1,
+            "name": "Gateway",
+            "supply": null,
+            "expectedT": 40,
+            "actualT": 70,
+            "driftSec": 30,
+            "matched": true
+          },
+          {
+            "index": 2,
+            "name": "Nexus",
+            "supply": null,
+            "expectedT": 60,
+            "actualT": null,
+            "driftSec": null,
+            "matched": false
+          },
+          {
+            "index": 3,
+            "name": "CyberneticsCore",
+            "supply": null,
+            "expectedT": 80,
+            "actualT": null,
+            "driftSec": null,
+            "matched": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "an empty log misses every step and grades D",
+      "target": {
+        "v": 1,
+        "name": "empty",
+        "steps": [
+          {
+            "supply": null,
+            "t": 20,
+            "name": "Pylon"
+          },
+          {
+            "supply": null,
+            "t": 40,
+            "name": "Gateway"
+          }
+        ]
+      },
+      "buildLog": [],
+      "expected": {
+        "grade": "D",
+        "targetSteps": 2,
+        "matchedSteps": 0,
+        "avgDriftSec": 0,
+        "maxDriftSec": 0,
+        "firstDivergence": {
+          "index": 0,
+          "name": "Pylon",
+          "expectedT": 20,
+          "actualT": null
+        },
+        "perStep": [
+          {
+            "index": 0,
+            "name": "Pylon",
+            "supply": null,
+            "expectedT": 20,
+            "actualT": null,
+            "driftSec": null,
+            "matched": false
+          },
+          {
+            "index": 1,
+            "name": "Gateway",
+            "supply": null,
+            "expectedT": 40,
+            "actualT": null,
+            "driftSec": null,
+            "matched": false
+          }
+        ]
+      }
+    }
+  ]
+}

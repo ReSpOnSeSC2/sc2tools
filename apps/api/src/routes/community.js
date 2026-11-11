@@ -2,6 +2,7 @@
 
 const rateLimitModule = require("express-rate-limit");
 const { buildCommunityQuickSearchRouter } = require("./communityQuickSearch");
+const { parseVersionSlugs } = require("../services/communityTrust");
 const PUBLIC_COMMUNITY_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=600";
 
 const rateLimit =
@@ -100,8 +101,8 @@ function buildCommunityRouter(deps) {
         ? Number.parseInt(String(req.query.offset), 10)
         : undefined;
       const sortRaw = req.query.sort ? String(req.query.sort) : "top";
-      const sort = ["top", "new", "controversial", "updated"].includes(sortRaw)
-        ? /** @type {'top'|'new'|'controversial'|'updated'} */ (sortRaw)
+      const sort = ["top", "new", "controversial", "updated", "saves"].includes(sortRaw)
+        ? /** @type {'top'|'new'|'controversial'|'updated'|'saves'} */ (sortRaw)
         : "top";
       const search = req.query.q
         ? String(req.query.q).trim().slice(0, 80)
@@ -198,6 +199,8 @@ function buildCommunityRouter(deps) {
     }
   });
 
+  router.get("/community/builds/versions", versionsHandler(deps.community));
+
   router.get("/community/builds/:slug", async (req, res, next) => {
     try {
       const row = await deps.community.getPublic(String(req.params.slug));
@@ -279,27 +282,7 @@ function buildCommunityRouter(deps) {
           });
           return;
         }
-        /** @type {{
-         *   title: string,
-         *   description?: string,
-         *   authorName?: string,
-         *   publishAnonymously?: boolean,
-         * }} */
-        const meta = {
-          title: req.body?.title ? String(req.body.title).slice(0, 200) : "",
-        };
-        if (Object.prototype.hasOwnProperty.call(req.body || {}, "description")) {
-          meta.description = String(req.body.description || "").slice(0, 4000);
-        }
-        // Keep identity presence-aware. Omission means named-by-default on a
-        // first publish and preserve-current-choice on an update; it must not
-        // be collapsed into an empty (anonymous) author name.
-        if (Object.prototype.hasOwnProperty.call(req.body || {}, "authorName")) {
-          meta.authorName = String(req.body.authorName || "").slice(0, 80);
-        }
-        if (typeof req.body?.publishAnonymously === "boolean") {
-          meta.publishAnonymously = req.body.publishAnonymously;
-        }
+        const meta = publishMeta(req.body);
         const result = await deps.community.publish(
           auth.userId,
           userSlug,
@@ -445,6 +428,47 @@ function requireAdmin(deps) {
       return;
     }
     next();
+  };
+}
+
+/**
+ * Publish metadata from a request body. Presence-aware: omitted identity
+ * means named-by-default on a first publish and the current choice on an
+ * update (never an empty, anonymous author name); omitted ``showRecord``
+ * keeps the author's record choice.
+ * @param {any} body
+ * @returns {{title: string, description?: string, authorName?: string, publishAnonymously?: boolean, showRecord?: boolean}}
+ */
+function publishMeta(body) {
+  const has = (/** @type {string} */ key) => Object.prototype.hasOwnProperty.call(body || {}, key);
+  return {
+    title: body?.title ? String(body.title).slice(0, 200) : "",
+    ...(has("description") ? { description: String(body.description || "").slice(0, 4000) } : {}),
+    ...(has("authorName") ? { authorName: String(body.authorName || "").slice(0, 80) } : {}),
+    ...(typeof body?.publishAnonymously === "boolean" ? { publishAnonymously: body.publishAnonymously } : {}),
+    ...(typeof body?.showRecord === "boolean" ? { showRecord: body.showRecord } : {}),
+  };
+}
+
+/**
+ * ``GET /community/builds/versions?slugs=a,b`` (at most 50): each listed
+ * publication's current version and content-update time, so a library of
+ * saved copies can show "Author updated". Public data only.
+ * @param {import('../services/community').CommunityService} community
+ * @returns {import('express').RequestHandler}
+ */
+function versionsHandler(community) {
+  return async (req, res, next) => {
+    try {
+      const slugs = parseVersionSlugs(req.query.slugs);
+      if (!slugs) {
+        res.status(400).json({ error: { code: "bad_request", message: "slugs must list 1-50 public build slugs" } });
+        return;
+      }
+      res.set("Cache-Control", "public, max-age=60").json({ items: await community.versions(slugs) });
+    } catch (err) {
+      next(err);
+    }
   };
 }
 

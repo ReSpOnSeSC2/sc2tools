@@ -32,4 +32,19 @@ describe("live scouting projection", () => {
     expect(privateScouting(value).note).toBe(""); expect(privateScouting(value).pulseId).toBeNull();
     expect(projectDockScouting(value)?.enriched).toBe(false);
   });
+  it("shows the account's own private note and linked notes to the owner, never in the Dock model", () => {
+    const value = live();
+    value.streamerHistory!.opponentNotes = undefined;
+    value.streamerHistory!.privateNotes = {
+      note: { text: "Private exact note", tags: ["Toxic"], visibility: "private" },
+      linked: [{ text: "Main opens proxy", tags: ["Proxy", 7 as unknown as string], visibility: "stream", account: "MainName" }],
+    };
+    const owner = privateScouting(value);
+    expect(owner).toMatchObject({ note: "Private exact note", noteVisibility: "private", readAloud: false });
+    expect(owner.linkedNotes).toEqual([{ text: "Main opens proxy", account: "MainName", tags: ["Proxy"] }]);
+    expect(JSON.stringify(projectDockScouting(value))).not.toMatch(/Private exact note|Main opens proxy|privateNotes/);
+    // An older API sent only the stream note: it was always on stream.
+    const legacy = live();
+    expect(privateScouting(legacy).noteVisibility).toBe("stream");
+  });
 });

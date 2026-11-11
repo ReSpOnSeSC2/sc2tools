@@ -162,13 +162,16 @@ export interface OpponentsService {
       includeProfile?: boolean;
     },
   ): Promise<object | null>;
+  getNote?(userId: string, pulseId: string): Promise<{ notes: string; notesReadAloud: boolean; note: Record<string, unknown> | null } | null>;
   updateNotes(
     userId: string,
     pulseId: string,
-    input: { notes: string } & ({ notesReadAloud: boolean; preserveReadAloud?: never } | { preserveReadAloud: true; notesReadAloud?: never }),
+    input: { notes: string; tags?: string[]; visibility?: "stream" | "private"; scope?: "account" | "player"; pinned?: boolean }
+      & ({ notesReadAloud: boolean; preserveReadAloud?: never } | { preserveReadAloud: true; notesReadAloud?: never }),
   ): Promise<{
     notes: string;
     notesReadAloud: boolean;
+    note: Record<string, unknown> | null;
     opponentName: string;
     pulseCharacterId: string | null;
   } | null>;
@@ -315,11 +318,12 @@ export interface GamesService {
   findMany(userId: string, gameIds: string[]): Promise<object[]>;
   /** Ids from ``gameIds`` with a stored row (quarantined rows included). */
   existingGameIds(userId: string, gameIds: string[]): Promise<string[]>;
-  upsert(userId: string, game: object & { gameId: string }, admissionOwner?: import("./gameStatsWrites").GameStatsOwner): Promise<boolean>;
+  upsert(userId: string, game: object & { gameId: string }, admissionOwner?: import("./gameStatsWrites").GameStatsOwner, options?: { replaceAnalysis?: boolean }): Promise<boolean>;
   upsertWithRevision?(
     userId: string,
     game: object & { gameId: string },
     admissionOwner?: import("./gameStatsWrites").GameStatsOwner,
+    options?: { replaceAnalysis?: boolean },
   ): Promise<{
     created: boolean;
     customBuildRevision: string;
@@ -1259,38 +1263,20 @@ export interface ImportService {
   ): Promise<{ ok: boolean; jobId: string; existing: boolean }>;
 }
 
+export interface SpatialHeatmapOptions {
+  grid?: number;
+  /** Owner-scoped opponent identity clause (OpponentsService.identityClause). */
+  opponent?: Record<string, any> | null;
+}
+
 export interface SpatialService {
   maps(userId: string, filters: object): Promise<object[]>;
-  buildings(
-    userId: string,
-    map: string,
-    filters: object,
-    opts?: { grid?: number },
-  ): Promise<object>;
-  proxy(
-    userId: string,
-    map: string,
-    filters: object,
-    opts?: { grid?: number },
-  ): Promise<object>;
-  battle(
-    userId: string,
-    map: string,
-    filters: object,
-    opts?: { grid?: number },
-  ): Promise<object>;
-  deathZone(
-    userId: string,
-    map: string,
-    filters: object,
-    opts?: { grid?: number },
-  ): Promise<object>;
-  opponentProxies(
-    userId: string,
-    map: string,
-    filters: object,
-    opts?: { grid?: number },
-  ): Promise<object>;
+  buildings(userId: string, map: string, filters: object, opts?: SpatialHeatmapOptions): Promise<object>;
+  proxy(userId: string, map: string, filters: object, opts?: SpatialHeatmapOptions): Promise<object>;
+  battle(userId: string, map: string, filters: object, opts?: SpatialHeatmapOptions): Promise<object>;
+  deathZone(userId: string, map: string, filters: object, opts?: SpatialHeatmapOptions): Promise<object>;
+  opponentProxies(userId: string, map: string, filters: object, opts?: SpatialHeatmapOptions): Promise<object>;
+  invalidateForUser(userId: string): void;
 }
 
 export interface CatalogService {

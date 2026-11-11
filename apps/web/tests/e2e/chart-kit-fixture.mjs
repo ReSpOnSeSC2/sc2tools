@@ -21,7 +21,11 @@ const DATA = {
   ratingSeries: [{ matchup: "PvZ", totalGames: 75, sampleGames: 12, windowGames: 10, ratedGames: 10, excludedNoMmr: 2, perfRating: 4100,
     points: Array.from({ length: 12 }, (_, index) => ({ date: "2026-10-02T12:00:00Z", games: Math.min(index + 1, 10), ratedGames: Math.min(index + 1, 10), excludedNoMmr: 0, perfRating: index === 5 || index === 11 ? null : 4200.1 })) },
     { matchup: "PvT", totalGames: 10, sampleGames: 10, windowGames: 10, ratedGames: 10, excludedNoMmr: 0, perfRating: null,
-      points: Array.from({ length: 10 }, (_, index) => ({ date: "2026-10-02T12:00:00Z", games: index + 1, ratedGames: index + 1, excludedNoMmr: 0, perfRating: null })) }],
+      points: Array.from({ length: 10 }, (_, index) => ({ date: "2026-10-02T12:00:00Z", games: index + 1, ratedGames: index + 1, excludedNoMmr: 0, perfRating: null })) },
+    { matchup: "PvP", totalGames: 11, sampleGames: 11, windowGames: 10, ratedGames: 11, excludedNoMmr: 0, perfRating: 5393,
+      points: [null, 5420, 5385, 5632, 5555, 5460, 5440, 5480, 5465, 5373, 5392].map((perfRating, index) => ({ date: "2026-11-10T12:00:00Z", games: Math.min(index + 1, 10), ratedGames: Math.min(index + 1, 10), excludedNoMmr: 0, perfRating })) },
+    { matchup: "ZvZ", totalGames: 100, sampleGames: 50, windowGames: 10, ratedGames: 50, excludedNoMmr: 0, perfRating: 3550,
+      points: Array.from({ length: 50 }, (_, index) => ({ date: "2026-11-10T12:00:00Z", games: Math.min(index + 1, 10), ratedGames: Math.min(index + 1, 10), excludedNoMmr: 0, perfRating: [0, 17, 31].includes(index) ? null : 3500 + Math.sin(index / 3) * 130 })) }],
   aging: [24, 20].map((count, index) => ({ build: index ? "Fixture expansion" : "Fixture opening", curve: Array.from({ length: count }, (_, cursor) => {
     const n = cursor + 1, cumulativeWins = index ? Math.floor(n * .7) : Math.ceil(n / 2);
     return { n, wins: 1, losses: 0, cumulativeWins, cumulativeLosses: n - cumulativeWins };

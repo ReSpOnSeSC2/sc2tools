@@ -22,6 +22,7 @@ import { MapLabel } from "@/components/maps/MapArtwork";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
+import { ShareGameButton } from "@/components/analyzer/game/ShareGameButton";
 import { PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import { Icon } from "@/components/ui/Icon";
 import { fmtDate, fmtDateCompact, fmtMinutes, fmtMmr, macroScoreTone } from "@/lib/format";
@@ -162,7 +163,7 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
       <td className={["border-l-4 px-4 py-3", resultRail(game.result)].join(" ")}>
         <ResultBadge result={game.result} />
       </td>
-      <td className="px-3 py-3 align-middle text-text-muted"><ReplayDate value={game.date} /></td>
+      <td className="px-3 py-3 align-middle text-text-muted"><ReplayDate value={game.date} />{owner ? <ReviewBadges game={game} className="mt-1" /> : null}</td>
       <td className="px-3 py-3 align-middle"><Matchup game={game} playerName={playerName} owner={owner} />{game.streams?.length ? <GameStreamLinks links={game.streams} compact ariaLabel={`Streams for ${replayContext(game)}`} sharedPlayerName={owner ? undefined : playerName} className="mt-2" /> : null}</td>
       <td className="px-3 py-3 align-middle">
         {game.map ? (
@@ -196,6 +197,7 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
               ariaLabel={`Ask for a review of your game vs ${replayContext(game)}`}
             />
           ) : null}
+            <ShareGameButton game={game} compact className={actionClass} label={`Share ${replayContext(game)}`} />
             <ReplayDownloadButton
               gameId={game.gameId}
               available={game.replayAvailable}
@@ -226,6 +228,7 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, p
             <span className="font-mono text-micro tabular-nums text-text-dim">
               {game.durationSec ? fmtMinutes(game.durationSec) : "—"}
             </span>
+            {owner ? <ReviewBadges game={game} /> : null}
           </div>
           <Matchup game={game} playerName={playerName} owner={owner} />
         </div>
@@ -266,6 +269,7 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, p
             ariaLabel={`Ask for a review of your game vs ${replayContext(game)}`}
           />
         ) : null}
+          <ShareGameButton game={game} className={mobileActionClass} label={`Share ${replayContext(game)}`} />
           <div className="w-full sm:w-auto">
             <ReplayDownloadButton
               gameId={game.gameId}
@@ -431,6 +435,19 @@ function PublicReplayActions({ game, href, handle, locked, mobile = false }: { g
 
 const actionClass = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-border bg-bg-elevated/60 px-2.5 text-micro font-semibold text-text-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 const mobileActionClass = "inline-flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-3 text-caption font-semibold text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+
+/** Owner rows: review queue state, review tags and the private note count. */
+function ReviewBadges({ game, className = "" }: { game: ReplayLibraryItem; className?: string }) {
+  const state = game.review?.state ?? null;
+  const tags = game.review?.tags ?? [];
+  const notes = typeof game.noteCount === "number" && game.noteCount > 0 ? game.noteCount : 0;
+  if (!state && !tags.length && !notes) return null;
+  return <span className={`flex flex-wrap items-center gap-1 ${className}`}>
+    {state ? <Badge size="sm" variant={state === "todo" ? "warning" : "success"}>{state === "todo" ? "To review" : "Reviewed"}</Badge> : null}
+    {tags.slice(0, 3).map(tag => <Badge key={tag} size="sm" variant="neutral">{tag}</Badge>)}
+    {notes ? <Badge size="sm" variant="cyan"><span className="sr-only">Private notes: </span>{notes} {notes === 1 ? "note" : "notes"}</Badge> : null}
+  </span>;
+}
 
 function rememberOpen(event: MouseEvent, gameId: string, onOpen?: (gameId: string) => void) {
   if (!onOpen || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;

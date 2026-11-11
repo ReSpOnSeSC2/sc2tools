@@ -90,6 +90,9 @@ const ACID = /^(Roach|Ravager|Hydralisk|Mutalisk|Corruptor|Queen|SporeCrawler)/;
 export function drawWeaponEffects(
   ctx: CanvasRenderingContext2D, playback: MapPlayback, t: number,
   proj: { k: number; ox: number; oy: number }, view: { z: number },
+  /** Single-side replay vision: shots fired from outside the viewer's
+   *  sight are not drawn. */
+  canSee?: (owner: "me" | "opp", x: number, y: number) => boolean,
 ): number {
   let drawn = 0;
   ctx.save();
@@ -106,6 +109,7 @@ export function drawWeaponEffects(
       const pos = building ? buildingPositionAt(playback.buildings[index], attack.t)
         : unitPositionAt(playback.units[index].wp, attack.t);
       if (!pos) continue;
+      if (canSee && !canSee(entity.owner, pos.x, pos.y)) continue;
       const name = unitNameAt(entity, attack.t);
       const sx = projectX(playback.bounds, proj, pos.x), sy = projectY(playback.bounds, proj, pos.y);
       const tx = attack.x === null ? sx : projectX(playback.bounds, proj, attack.x);

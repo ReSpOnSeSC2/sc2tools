@@ -112,6 +112,7 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *     holdRemainingMs: number,
  *   } | null>,
  *   onRandomizerRolled?: (userId: string, token: string, payload: unknown) => Promise<void>|void,
+ *   reanalysis?: import('./deviceCapabilities').DeviceReanalysisHooks,
  *   resolveClerkUser?: (clerkUserId: string) => Promise<{userId: string}|null>,
  *   isAdminClerkId?: (clerkUserId: string) => boolean,
  * }} opts
@@ -474,7 +475,7 @@ function attachSocketAuth(io, opts) {
       });
       // The agent emits this once per startup so the cloud can mark
       // the device as "online" and surface that in the dashboard.
-      announceDeviceReady(socket);
+      announceDeviceReady(socket, opts.reanalysis);
       return;
     }
     const cid = socket.data.clerkUserId;

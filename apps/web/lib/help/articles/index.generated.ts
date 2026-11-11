@@ -8,13 +8,16 @@ import accountData_appearance from "./account-data/appearance";
 import accountData_backupsAndExport from "./account-data/backups-and-export";
 import accountData_deleteAccount from "./account-data/delete-account";
 import accountData_deletingGameHistory from "./account-data/deleting-game-history";
+import accountData_discord from "./account-data/discord";
 import accountData_exportCsv from "./account-data/export-csv";
 import accountData_hideOrDeleteAGame from "./account-data/hide-or-delete-a-game";
 import accountData_historyOnThisDevice from "./account-data/history-on-this-device";
+import accountData_notificationsOnYourPhone from "./account-data/notifications-on-your-phone";
 import accountData_notifications from "./account-data/notifications";
 import accountData_playerChannels from "./account-data/player-channels";
 import accountData_privacyCookies from "./account-data/privacy-cookies";
 import accountData_publicProfile from "./account-data/public-profile";
+import accountData_reanalyze from "./account-data/reanalyze";
 import accountData_repairMyData from "./account-data/repair-my-data";
 import accountData_replayPacks from "./account-data/replay-packs";
 import accountData_stayUpToDate from "./account-data/stay-up-to-date";
@@ -24,9 +27,12 @@ import analyzer_builds from "./analyzer/builds";
 import analyzer_dashboardAndAnalyzer from "./analyzer/dashboard-and-analyzer";
 import analyzer_filterByAccount from "./analyzer/filter-by-account";
 import analyzer_glossary from "./analyzer/glossary";
+import analyzer_goals from "./analyzer/goals";
 import analyzer_howAnalysisWorks from "./analyzer/how-analysis-works";
+import analyzer_leagueTargets from "./analyzer/league-targets";
 import analyzer_liveScouting from "./analyzer/live-scouting";
 import analyzer_macro from "./analyzer/macro";
+import analyzer_mapIntel from "./analyzer/map-intel";
 import analyzer_maps from "./analyzer/maps";
 import analyzer_opponents from "./analyzer/opponents";
 import analyzer_readingTheCharts from "./analyzer/reading-the-charts";
@@ -38,13 +44,18 @@ import analyzer_strategies from "./analyzer/strategies";
 import analyzer_today from "./analyzer/today";
 import analyzer_trends from "./analyzer/trends";
 import analyzer_vsExpected from "./analyzer/vs-expected";
+import analyzer_weeklyReport from "./analyzer/weekly-report";
 import builds_buildCheckIn from "./builds/build-check-in";
 import builds_buildGuides from "./builds/build-guides";
+import builds_buildHistory from "./builds/build-history";
+import builds_buildImportExport from "./builds/build-import-export";
+import builds_buildLibrary from "./builds/build-library";
 import builds_buildOrderPaste from "./builds/build-order-paste";
 import builds_buildOrdersExport from "./builds/build-orders-export";
 import builds_communityBuilds from "./builds/community-builds";
 import builds_customBuilds from "./builds/custom-builds";
 import builds_practiceGhostBuild from "./builds/practice-ghost-build";
+import builds_practiceLog from "./builds/practice-log";
 import builds_publishCommunityBuilds from "./builds/publish-community-builds";
 import builds_randomizer from "./builds/randomizer";
 import builds_readingGuideStats from "./builds/reading-guide-stats";
@@ -68,8 +79,11 @@ import desktopApp_pairingTroubleshooting from "./desktop-app/pairing-troubleshoo
 import desktopApp_replayFolders from "./desktop-app/replay-folders";
 import gamePage_battleReports from "./game-page/battle-reports";
 import gamePage_benchmarks from "./game-page/benchmarks";
+import gamePage_compareGames from "./game-page/compare-games";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
+import gamePage_gamePageNotes from "./game-page/game-page-notes";
 import gamePage_gamePageReplay from "./game-page/game-page-replay";
+import gamePage_gamePageSharing from "./game-page/game-page-sharing";
 import gamePage_gamePage from "./game-page/game-page";
 import gamePage_yourFirstGame from "./game-page/your-first-game";
 import gettingStarted_aPageAskedMeToSignIn from "./getting-started/a-page-asked-me-to-sign-in";
@@ -85,6 +99,7 @@ import gettingStarted_settingsOverview from "./getting-started/settings-overview
 import gettingStarted_takeATour from "./getting-started/take-a-tour";
 import gettingStarted_yourFirstWeek from "./getting-started/your-first-week";
 import opponents_opponentDossier from "./opponents/opponent-dossier";
+import opponents_opponentNotes from "./opponents/opponent-notes";
 import reviewsCoaching_coaching from "./reviews-coaching/coaching";
 import reviewsCoaching_replayReviews from "./reviews-coaching/replay-reviews";
 import streamStudio_customChatCommands from "./stream-studio/custom-chat-commands";
@@ -97,6 +112,7 @@ import streamStudio_overlayHealth from "./stream-studio/overlay-health";
 import streamStudio_overlayUrlLeaked from "./stream-studio/overlay-url-leaked";
 import streamStudio_seriesMode from "./stream-studio/series-mode";
 import streamStudio_streamDock from "./stream-studio/stream-dock";
+import streamStudio_streamReports from "./stream-studio/stream-reports";
 import streamStudio_viewerEngagement from "./stream-studio/viewer-engagement";
 import streamStudio_voice from "./stream-studio/voice";
 import troubleshooting_myGameDidntShowUp from "./troubleshooting/my-game-didnt-show-up";
@@ -110,13 +126,16 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   accountData_backupsAndExport,
   accountData_deleteAccount,
   accountData_deletingGameHistory,
+  accountData_discord,
   accountData_exportCsv,
   accountData_hideOrDeleteAGame,
   accountData_historyOnThisDevice,
+  accountData_notificationsOnYourPhone,
   accountData_notifications,
   accountData_playerChannels,
   accountData_privacyCookies,
   accountData_publicProfile,
+  accountData_reanalyze,
   accountData_repairMyData,
   accountData_replayPacks,
   accountData_stayUpToDate,
@@ -126,9 +145,12 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_dashboardAndAnalyzer,
   analyzer_filterByAccount,
   analyzer_glossary,
+  analyzer_goals,
   analyzer_howAnalysisWorks,
+  analyzer_leagueTargets,
   analyzer_liveScouting,
   analyzer_macro,
+  analyzer_mapIntel,
   analyzer_maps,
   analyzer_opponents,
   analyzer_readingTheCharts,
@@ -140,13 +162,18 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_today,
   analyzer_trends,
   analyzer_vsExpected,
+  analyzer_weeklyReport,
   builds_buildCheckIn,
   builds_buildGuides,
+  builds_buildHistory,
+  builds_buildImportExport,
+  builds_buildLibrary,
   builds_buildOrderPaste,
   builds_buildOrdersExport,
   builds_communityBuilds,
   builds_customBuilds,
   builds_practiceGhostBuild,
+  builds_practiceLog,
   builds_publishCommunityBuilds,
   builds_randomizer,
   builds_readingGuideStats,
@@ -170,8 +197,11 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   desktopApp_replayFolders,
   gamePage_battleReports,
   gamePage_benchmarks,
+  gamePage_compareGames,
   gamePage_gamePageAccuratePlayback,
+  gamePage_gamePageNotes,
   gamePage_gamePageReplay,
+  gamePage_gamePageSharing,
   gamePage_gamePage,
   gamePage_yourFirstGame,
   gettingStarted_aPageAskedMeToSignIn,
@@ -187,6 +217,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_takeATour,
   gettingStarted_yourFirstWeek,
   opponents_opponentDossier,
+  opponents_opponentNotes,
   reviewsCoaching_coaching,
   reviewsCoaching_replayReviews,
   streamStudio_customChatCommands,
@@ -199,6 +230,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   streamStudio_overlayUrlLeaked,
   streamStudio_seriesMode,
   streamStudio_streamDock,
+  streamStudio_streamReports,
   streamStudio_viewerEngagement,
   streamStudio_voice,
   troubleshooting_myGameDidntShowUp,

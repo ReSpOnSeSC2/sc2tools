@@ -113,7 +113,7 @@ class CatalogService {
   }
 
   /** @param {string} userId @param {object} filters
-   * @param {{search?:unknown,result?:unknown,matchup?:unknown,sort?:unknown,signal?:AbortSignal}} [opts] */
+   * @param {{search?:unknown,result?:unknown,matchup?:unknown,sort?:unknown,signal?:AbortSignal,review?:unknown,reviewTag?:unknown,hasNotes?:boolean}} [opts] */
   prepareCsv(userId, filters, opts = {}) {
     return prepareReplayCsv(this.db.games, userId, filters, opts);
   }

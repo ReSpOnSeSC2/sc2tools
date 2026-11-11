@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { reportText, type BattleReport } from "@/lib/battleReport/plan";
 
-export function ReportCopy({ report, pending = false }: { report: BattleReport; pending?: boolean }) {
+export function ReportCopy({ report, pending = false, linkFor }: { report: BattleReport; pending?: boolean; linkFor?: (time: number) => string }) {
   const [copied, setCopied] = useState("");
   const [fallback, setFallback] = useState("");
   const field = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (fallback) { field.current?.focus(); field.current?.select(); } }, [fallback]);
   const copy = async (markdown: boolean) => {
-    const value = reportText(report, markdown); setCopied("");
+    const value = reportText(report, markdown, linkFor); setCopied("");
     try { await navigator.clipboard.writeText(value); setFallback(""); setCopied(markdown ? "Markdown copied." : "Report text copied."); }
     catch { setFallback(value); }
   };

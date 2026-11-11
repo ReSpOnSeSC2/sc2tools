@@ -20,6 +20,8 @@ const SIGNATURE_MAX_ITEMS = 200;
 const RULES_MAX_ITEMS = 30;
 const STRATEGY_NOTES_MAX_ITEMS = 20;
 const LEGACY_STEPS_MAX_ITEMS = 200;
+const TAGS_MAX_ITEMS = 8;
+const TAG_MAX_LENGTH = 24;
 
 // Keep this list in step with BUILD_SCHEMA. validateCustomBuild projects an
 // untrusted JSON body through it before AJV runs so an unknown multi-megabyte
@@ -51,17 +53,30 @@ const BUILD_FIELDS = Object.freeze([
   "source",
   "forkedFrom",
   "buildOrder",
+  "pinned",
+  "tags",
 ]);
 
 // Community slugs share the private slug alphabet and length cap.
 const COMMUNITY_SLUG_PATTERN = "^[a-zA-Z0-9._-]+$";
 const FORKED_FROM_TEXT_MAX = 40;
 
+/** Library organisation: kept by the owner, never part of a public snapshot. */
+const META_PROPERTIES = Object.freeze({
+  pinned: { type: "boolean" },
+  tags: {
+    type: "array",
+    maxItems: TAGS_MAX_ITEMS,
+    items: { type: "string", minLength: 1, maxLength: TAG_MAX_LENGTH },
+  },
+});
+
 const BUILD_SCHEMA = {
   type: "object",
   required: ["slug", "name", "race"],
   additionalProperties: false,
   properties: {
+    ...META_PROPERTIES,
     buildOrder: REFERENCE_BUILD_ORDER_SCHEMA,
     slug: { type: "string", minLength: 1, maxLength: 80, pattern: "^[a-zA-Z0-9._-]+$" },
     name: { type: "string", minLength: 1, maxLength: 120 },
@@ -260,6 +275,73 @@ const BUILD_SCHEMA = {
 };
 
 const validate = ajv.compile(BUILD_SCHEMA);
+const validateMeta = ajv.compile({
+  type: "object",
+  additionalProperties: false,
+  minProperties: 1,
+  properties: META_PROPERTIES,
+});
+
+/**
+ * Trimmed, single-spaced tags with case-insensitive duplicates and empty
+ * entries dropped (the first spelling wins); non-arrays pass through so the
+ * schema reports them. One entry past the cap is kept so ``maxItems`` fails
+ * instead of silently truncating.
+ *
+ * Example: `normalizeBuildTags([" Cheese ", "cheese", "", "ZvP  macro"])` →
+ * `["Cheese", "ZvP macro"]`.
+ *
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function normalizeBuildTags(value) {
+  if (!Array.isArray(value)) return value;
+  /** @type {unknown[]} */
+  const out = [];
+  const seen = new Set();
+  for (const raw of value.slice(0, TAGS_MAX_ITEMS * 4)) {
+    if (typeof raw !== "string") {
+      out.push(raw);
+      continue;
+    }
+    const tag = raw.replace(/\s+/g, " ").trim();
+    const key = tag.toLowerCase();
+    if (!tag || seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+    if (out.length > TAGS_MAX_ITEMS) break;
+  }
+  return out;
+}
+
+/**
+ * Body of ``PATCH /v1/custom-builds/:slug/meta``: ``pinned`` and/or
+ * ``tags`` only.
+ *
+ * @param {unknown} raw
+ * @returns {{valid: true, value: {pinned?: boolean, tags?: string[]}} | {valid: false, errors: string[]}}
+ */
+function validateBuildMeta(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { valid: false, errors: ["body must be an object"] };
+  }
+  const body = /** @type {Record<string, unknown>} */ (raw);
+  // The shared AJV instance drops unknown keys; this body must name only these.
+  const keys = Object.keys(body);
+  if (keys.length === 0 || keys.some((key) => key !== "pinned" && key !== "tags")) {
+    return { valid: false, errors: ["send pinned and/or tags only"] };
+  }
+  /** @type {Record<string, unknown>} */
+  const value = {};
+  for (const key of Object.keys(body)) value[key] = key === "tags" ? normalizeBuildTags(body.tags) : body[key];
+  if (!validateMeta(value)) {
+    return {
+      valid: false,
+      errors: (validateMeta.errors || []).map((/** @type {any} */ e) => `${e.instancePath || "/"} ${e.message}`),
+    };
+  }
+  return { valid: true, value: /** @type {{pinned?: boolean, tags?: string[]}} */ (value) };
+}
 
 /**
  * @param {unknown} raw
@@ -351,6 +433,7 @@ function boundedBuildClone(raw) {
     raw.forkedFrom,
     ["communitySlug", "version", "savedAt"],
   );
+  out.tags = normalizeBuildTags(raw.tags);
   if (Object.prototype.hasOwnProperty.call(raw, "buildOrder")) {
     out.buildOrder = boundedReferenceBuildOrder(raw.buildOrder);
   }
@@ -363,6 +446,7 @@ function boundedBuildClone(raw) {
     "losesTo",
     "transitionsInto",
     "forkedFrom",
+    "tags",
   ]) {
     if (!Object.prototype.hasOwnProperty.call(raw, field)) delete out[field];
   }
@@ -407,6 +491,10 @@ function boundedObject(value, fields) {
 
 module.exports = {
   validateCustomBuild,
+  validateBuildMeta,
+  normalizeBuildTags,
+  TAGS_MAX_ITEMS,
+  TAG_MAX_LENGTH,
   SIGNATURE_MAX_ITEMS,
   RULES_MAX_ITEMS,
   STRATEGY_NOTES_MAX_ITEMS,

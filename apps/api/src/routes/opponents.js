@@ -2,6 +2,7 @@
 
 const express = require("express");
 const { LIMITS } = require("../config/constants");
+const { SCOPES, VISIBILITIES, normalizeTags } = require("../services/notesPolicy");
 const { parseFilters } = require("../util/parseQuery");
 const { parseAnalysisGameIds } = require("../util/opponentAnalysisMembership");
 
@@ -227,6 +228,7 @@ function buildOpponentsRouter(deps) {
     }
   });
 
+  registerOpponentNoteRead(router, deps);
   router.put("/opponents/:pulseId/notes", async (req, res, next) => {
     try {
       const auth = req.auth;
@@ -266,10 +268,7 @@ function buildOpponentsRouter(deps) {
         }
       }
 
-      res.set("Cache-Control", "private, no-store").json({
-        notes: result.notes,
-        notesReadAloud: result.notesReadAloud,
-      });
+      res.set("Cache-Control", "private, no-store").json({ notes: result.notes, notesReadAloud: result.notesReadAloud, note: result.note });
     } catch (err) {
       next(err);
     }
@@ -341,6 +340,32 @@ function buildOpponentsRouter(deps) {
   return router;
 }
 
+/**
+ * One account's own note, for the quick-note popovers (game header). 404 when
+ * the opponent is not the caller's.
+ * @param {import('express').Router} router
+ * @param {{opponents: import('../services/types').OpponentsService}} deps
+ */
+function registerOpponentNoteRead(router, deps) {
+  router.get("/opponents/:pulseId/notes", async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const result = typeof deps.opponents.getNote === "function"
+        ? await deps.opponents.getNote(auth.userId, String(req.params.pulseId))
+        : null;
+      if (!result) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+}
+
 /** @param {unknown} raw @returns {string[]} */
 function validateNotesBody(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -356,12 +381,26 @@ function validateNotesBody(raw) {
     );
   }
   if (body.preserveReadAloud === true) {
-    if (Object.keys(body).some(key => key !== "notes" && key !== "preserveReadAloud")) errors.push("preserveReadAloud accepts only notes");
+    if (Object.keys(body).some(key => !NOTE_FIELDS_PRESERVE.has(key))) errors.push("preserveReadAloud accepts only notes, tags, visibility, scope and pinned");
   } else if (body.preserveReadAloud !== undefined || typeof body.notesReadAloud !== "boolean") {
     errors.push("notesReadAloud must be a boolean, or use preserveReadAloud: true");
   }
+  if (body.tags !== undefined) {
+    const tags = normalizeTags(body.tags);
+    if (tags.error !== undefined) errors.push(tags.error);
+  }
+  if (body.visibility !== undefined && !VISIBILITIES.includes(/** @type {string} */ (body.visibility))) {
+    errors.push("visibility must be stream or private");
+  }
+  if (body.scope !== undefined && !SCOPES.includes(/** @type {string} */ (body.scope))) {
+    errors.push("scope must be account or player");
+  }
+  if (body.pinned !== undefined && typeof body.pinned !== "boolean") errors.push("pinned must be a boolean");
   return errors;
 }
+
+/** The text-only (preserve read-aloud) body: text plus the optional note fields. */
+const NOTE_FIELDS_PRESERVE = new Set(["notes", "preserveReadAloud", "tags", "visibility", "scope", "pinned"]);
 
 /** @param {unknown} raw @returns {number|undefined} */
 function parseLimit(raw) {

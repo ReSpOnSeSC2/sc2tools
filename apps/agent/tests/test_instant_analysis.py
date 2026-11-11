@@ -4,7 +4,7 @@ Parity is the point of this module: for every committed replay fixture and
 every human perspective, the browser entry point must produce the same
 upload payload as the desktop agent, differing only in the documented
 ``RUNTIME_ONLY_FIELDS``. Those comparisons run ``instant_golden.py`` in fresh
-interpreters (one per engine data view, concurrently) because:
+interpreters (one per engine data view, sequentially) because:
 
 * the data view (custom builds file, map bounds table) must be pinned before
   the engine is imported, and
@@ -114,13 +114,14 @@ def _golden_command(view: str, out: Path, report: Path) -> List[str]:
 
 @pytest.fixture(scope="module")
 def parity_runs(tmp_path_factory: pytest.TempPathFactory) -> Dict[str, Dict[str, Any]]:
-    """Run instant_golden.py for both data views concurrently (real parses).
+    """Run both real golden views sequentially; always join owned children.
 
     Output goes to log files, not pipes, so neither child can block on a
     full pipe buffer while the other is being waited on.
     """
     base = tmp_path_factory.mktemp("instant-parity")
     running: Dict[str, Tuple[subprocess.Popen, Path]] = {}
+    runs: Dict[str, Dict[str, Any]] = {}
     try:
         for view in DATA_VIEWS:
             log_path = base / f"{view}.log"
@@ -129,8 +130,7 @@ def parity_runs(tmp_path_factory: pytest.TempPathFactory) -> Dict[str, Dict[str,
                     _golden_command(view, base / view, base / f"{view}-parity.json"),
                     env=_clean_env(), stdout=log_file, stderr=subprocess.STDOUT,
                 ), log_path)
-        runs: Dict[str, Dict[str, Any]] = {}
-        for view, (proc, log_path) in running.items():
+            proc = running[view][0]
             returncode = proc.wait(timeout=SUBPROCESS_TIMEOUT_SEC)
             output = log_path.read_text(encoding="utf-8", errors="replace")
             assert returncode == 0, output[-LOG_TAIL_CHARS:]
@@ -139,8 +139,11 @@ def parity_runs(tmp_path_factory: pytest.TempPathFactory) -> Dict[str, Dict[str,
         return runs
     finally:
         for proc, _log_path in running.values():
-            if proc.poll() is None:
-                proc.kill()
+            try:
+                if proc.poll() is None:
+                    proc.kill()  # Only the subprocess created by this fixture.
+            finally:
+                proc.wait()  # A kill request is not actual child settlement.
 
 
 def _is_runtime_only(path: str) -> bool:

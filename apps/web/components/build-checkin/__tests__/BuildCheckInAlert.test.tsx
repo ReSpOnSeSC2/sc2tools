@@ -235,7 +235,7 @@ describe("BuildCheckInAlert chip", () => {
 
     const dialog = openQueue();
     expect(within(dialog).getAllByTestId("build-checkin-queue-item")).toHaveLength(3);
-    expect(within(dialog).getAllByText("PvZ - 2 Stargate Phoenix")).toHaveLength(3);
+    expect(within(dialog).getAllByRole("button", { name: "Confirm PvZ - 2 Stargate Phoenix" })).toHaveLength(3);
     expect(within(dialog).getAllByText("Your usual PvZ build")).toHaveLength(3);
     expect(
       within(dialog).getAllByRole("link", { name: /Open game/ })[0].getAttribute("href"),
@@ -263,7 +263,7 @@ describe("BuildCheckInQueue", () => {
     });
     renderAlert();
     const dialog = openQueue();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm PvZ - 2 Stargate Phoenix" }));
     await waitFor(() =>
       expect(within(dialog).getAllByText("Counted toward PvZ - 2 Stargate Phoenix").length).toBeGreaterThan(0),
     );
@@ -310,7 +310,9 @@ describe("BuildCheckInQueue", () => {
     renderAlert();
     const dialog = openQueue();
     expect(within(dialog).getByText(/No suggestion yet/)).toBeTruthy();
-    expect(within(dialog).queryByRole("button", { name: "Confirm" })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: /^Confirm/ })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Change…" })).toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Pick build…" })).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "No set build" }));
     expect((await within(dialog).findByRole("alert")).textContent).toMatch(/Too many check-in changes/);
     expect(JSON.parse(harness.apiCall.mock.calls[0][2].body)).toEqual({ action: "skip" });
@@ -407,7 +409,7 @@ describe("BuildCheckInQueue — navigation and focus", () => {
     expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Change…" }));
   });
 
-  it("moves focus to the outcome, then keeps it in the dialog when the game leaves", async () => {
+  it("moves focus to the outcome and keeps the decided game with Undo until the queue closes", async () => {
     harness.responses[CHIP_PATH] = { data: { items: [], total: 2, disabled: false } };
     harness.responses[QUEUE_PATH] = { data: pending([item("g1"), item("g2")]) };
     harness.apiCall.mockResolvedValue({
@@ -421,7 +423,7 @@ describe("BuildCheckInQueue — navigation and focus", () => {
     // Let the dialog place its initial focus first.
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
     const first = within(dialog).getAllByTestId("build-checkin-queue-item")[0];
-    const confirm = within(first).getByRole("button", { name: "Confirm" });
+    const confirm = within(first).getByRole("button", { name: "Confirm PvZ - 2 Stargate Phoenix" });
     confirm.focus();
     fireEvent.click(confirm);
     await waitFor(() =>
@@ -429,12 +431,27 @@ describe("BuildCheckInQueue — navigation and focus", () => {
     );
     expect(first.contains(document.activeElement)).toBe(true);
 
-    // The refresh drops the handled game.
+    // The refresh no longer lists the decided game; it stays with its Undo.
     harness.responses[QUEUE_PATH] = { data: pending([item("g2")]) };
+    refresh();
+    const entries = within(dialog).getAllByTestId("build-checkin-queue-item");
+    expect(entries).toHaveLength(2);
+    expect(within(entries[0]).getByRole("button", { name: "Undo" })).toBeTruthy();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    // A game handled elsewhere leaves; focus stays in the dialog.
+    const second = within(entries[1]).getByRole("button", { name: "Change…" });
+    second.focus();
+    harness.responses[QUEUE_PATH] = { data: pending([]) };
     refresh();
     expect(within(dialog).getAllByTestId("build-checkin-queue-item")).toHaveLength(1);
     expect(dialog.contains(document.activeElement)).toBe(true);
     expect(document.activeElement?.getAttribute("tabindex")).toBe("-1");
+
+    // Closing forgets the outcome: the next open shows the server list only.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    const reopened = openQueue();
+    expect(within(reopened).getByText("You're all caught up")).toBeTruthy();
   });
 
   it("asks about every pending game when the list shows only the newest", () => {
@@ -487,14 +504,15 @@ describe("BuildCheckInQueue — opponent and Add new build", () => {
     return openQueue();
   }
 
-  it("shows the opponent's build read-only with its Corrected marker", () => {
+  it("shows the opponent's build with its Corrected marker and its own Change", () => {
     const dialog = setup();
     const entry = within(dialog).getByTestId("build-checkin-queue-item");
     expect(entry.textContent).toContain("Opponent: Ling Flood");
     expect(within(entry).getByTestId("corrected-badge").getAttribute("title")).toBe(
       "Replay classified as Zerg - 12 Pool",
     );
-    expect(within(entry).queryByRole("button", { name: /Change the opponent/ })).toBeNull();
+    expect(within(entry).getByRole("link", { name: "Ling Flood" }).getAttribute("href")).toBe("/builds/ling-flood");
+    expect(within(entry).getByRole("button", { name: "Change the opponent's build" })).toBeTruthy();
   });
 
   it("adds your build directly from the replay label and checks it in for that game", async () => {

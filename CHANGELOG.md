@@ -11,6 +11,172 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Trends and arcade fixes
+
+- Put performance ratings on the matchup chart's vertical scale, label game order horizontally, and inspect rolling windows by mouse, touch or keyboard.
+- Start each newly generated arcade question with fresh answer state, including Streak Hunter and Closer's Eye. Hide old answers while the next question loads, prevent sticky touch hover colors, and improve Next round button contrast.
+
+### Re-analysis
+
+- Add **Re-analyze games** to Settings → Backups & data. It lists the games an
+  older analysis engine labelled (each label-changing release says what
+  changed), games missing a macro score and games with no engine version, then
+  re-analyzes the chosen group through the desktop agent 100 games at a time,
+  with progress, time left, Pause, Resume and Cancel. Games come from the PC
+  when the replay is still there, otherwise from your Cloud Replay Archive.
+  Requires the next desktop agent release. See
+  [Re-analyze old games after an update](https://sc2tools.com/help/reanalyze).
+- Show which engine analyzed a game on its page, with a **Re-analyze** link.
+- Keep the engine and agent versions the desktop agent reports for each upload.
+
+### Goals
+
+- Set personal goals on the new Goals page: games played, win rate, MMR, macro
+  score, SQ, APM or a build to practise, each day, week, month, ladder season
+  or one date range in your timezone. Progress fills in from your replays,
+  a win rate or average waits for its minimum number of games, and you get one
+  notification when a goal is reached. Pin up to three goals to Today.
+
+### League targets
+
+- See where your last 20 ranked games in a matchup sit against your league and
+  the next one: SQ, macro score, APM and game length as league bars, natural,
+  third, first upgrade and key tech timing gaps, and a season goal estimate,
+  at the top of the Macro tab with a short summary on Today. Choose your league
+  if your MMR is missing, and open the games below each target.
+- A game's SQ now shows its percentile for its league and matchup, such as
+  "p38 · Diamond PvZ", where that table has enough games.
+
+### Map replay studio
+
+- Choose whose vision reveals the map replay: both players, you, the opponent
+  or no fog (display settings, or press V). One side's view hides enemy units
+  outside its sight and keeps scouted enemy structures as dimmed last-seen
+  outlines, labelled approximate vision.
+- Tap a unit or structure for its details: owner, birth, death, lifetime and
+  recorded attacks, with Jump to birth, Jump to death and Follow. Tap again to
+  cycle through overlapping units; Esc stops following.
+- Make a clip of up to 60 seconds, starting on the nearest fight: WebM (MP4
+  where that is what the browser records) or a GIF where video recording is
+  unavailable, with speed, size, scoreboard and watermark options. Clips are
+  made in your browser and never uploaded.
+
+### Compare two games
+
+- Compare two of your games side by side at `/app/compare`: synced workers,
+  army, income and supply timelines, a step-by-step build-order diff and
+  mechanics. Start from Compare… on a game page, or select two replays in
+  Replays.
+
+### Notes and review queue
+
+- Opponent notes are now private unless you turn on **Show on stream**; only
+  those notes reach your OBS scouting widget. Notes written before this change
+  keep showing on stream, with a one-time explainer, until you change them.
+- Tag opponent notes (Cheeser, Proxy, All-in, Macro, Smurf, Off-race, Rival,
+  Toxic or your own). Toxic notes are always private. Cheeser is suggested from
+  your games, never added for you.
+- Let a note follow the player's other linked accounts with **All their
+  accounts**; the dossier and your live brief show notes from linked accounts.
+- Add private notes at a moment of a replay with **Note at 4:12** or the B key,
+  pin them on the map, and jump back from the timeline markers and the notes
+  list. Edit, tag, star or delete them, with Undo.
+- Mark games **To review** or **Reviewed** with review tags, and filter the
+  Replays page by review state, review tag or **Has notes**. Replay search also
+  matches your note text.
+
+### Map intel
+
+- Add Map intel heatmaps: on each map in Maps, **Map intel** shows where
+  opponents proxy, where your fights happen, where you lose units and where
+  you build, over the map itself, with an opponent-race filter. Each
+  opponent's dossier adds **Where they proxy / fight on this map** under each
+  map. The heat says how many games it is based on (your latest 300 games
+  with map positions at most), the top five hot zones are listed in words by
+  their nearest base, and a map-wide layer waits for at least three games.
+  Private to you.
+
+### Practice log
+
+- Grade every game you play in a matchup with an armed Ghost Build target when
+  it uploads, and keep the grade. The new private **Practice log** under Build
+  library shows your last 30 grades, a weekly goal, timing for each step, the
+  step where you most often fall off and every graded game. **Grade my last 20
+  games** grades recent games on request. A game page now shows the grade it
+  received when it was played, against the target armed at the time.
+
+### Reports and delivery
+
+- Add a weekly report every Monday morning: games, record by matchup, MMR,
+  best and worst map and build, opponents faced and macro, each next to the
+  week before. Turn it off or set its time zone in Settings → Preferences →
+  Reports.
+- Add stream reports. Press **End stream** in the Stream Dock (or play nothing
+  for four hours) and a recap of the stream appears in your notifications and
+  under Stream reports, with a **Copy Discord summary** button.
+- Add phone and browser notifications. Turn them on per device in Settings →
+  Preferences, choose what to push, send a test and remove old devices.
+- Add coaching session reminders 24 hours and 1 hour before a session, an
+  **Add to calendar** button on each booking and a private calendar link you
+  can subscribe to, regenerate or turn off.
+- Add **Post to Discord** in Settings → Integrations: ranked results, session
+  summaries, the weekly recap and new MMR peaks in your own server's channel.
+  Off until you preview the posts and turn a channel on; opponent names stay
+  hidden unless you allow them.
+
+### Build library
+
+- Undo a delete for 10 seconds, or restore it from **Recently deleted** for 30
+  days. Restored builds come back private; a nightly cleanup removes builds
+  deleted more than 30 days ago.
+- Keep the last 20 versions of each build. **History** on a build's page
+  compares a version with the current one and restores it.
+- Pin builds to the top, tag them, and filter the library by Mine or Opponent
+  captures, Published, race and tags.
+- Select many builds to tag, add to the randomizer, publish, unpublish, export
+  or delete them at once. Press **/** to search and **n** for a new build.
+- Export the library to a .json file and import builds from a file, pasted JSON
+  or a share code, choosing to skip, copy or overwrite builds you already have.
+  **Copy share code** makes a link that keeps the build in the link's fragment.
+
+### Community builds
+
+- Show how many players saved a build (each account once) and when its author
+  last changed it, and sort Community by **Most saved**.
+- Mark saved copies with **Author updated** when the author publishes a change.
+  **Review update** shows the rule changes; **Apply update** keeps your notes
+  and skill level.
+- Add **Show my record with this build publicly** to publishing, off by default.
+
+### Game share links
+
+- Share one game by link from its new Share menu, on the game page and on each
+  game in Replays. Anyone with the link can open the game's analysis and map
+  replay without an account. Opponents are never named, ratings are rounded to
+  the nearest 100 and the game is dated to the day.
+- Manage share links: copy a link, see how often it was opened, or turn it off,
+  which ends access at once. Deleting the game or your account turns its links
+  off. Links get a preview card when posted and are kept out of search engines.
+- The Share menu also copies links only you can open, one at the replay's
+  current moment, and the game's public replay page link. Turning public
+  replays on from the menu shows the same explanation as Replays first.
+- Share a battle report: a shared game shows its report, written without
+  names or ratings, its link preview shows the headline and turning point, and
+  Save as image downloads the report as a picture that names no one.
+### Build check-ins
+
+- Add **Confirm all suggested (N)** to the check-in queue. It confirms the
+  suggested build of each waiting game one at a time with a result per game,
+  pauses on sign-in or rate-limit errors and offers a retry of the rest.
+- Keep decided games in the queue with **Undo** until it closes. Undo puts the
+  game back to waiting with its suggestion and notes, and also reverts an
+  opponent build change.
+- Pick the opponent's build right in the queue, label the main action
+  **Confirm** with the build's name (or **Pick build…** without a suggestion),
+  show results as Win, Loss, Tie or Unknown, and link build names to the build
+  page or its definition.
+- Give the header's check-in chip a 44px touch target without changing its look.
+
 ### Share cards
 
 - Fix the link printed on every share card. `sc2tools.com/arcade` now leads to
@@ -1170,6 +1336,8 @@ release preparation, not a signed or published 0.24.9 installer.
   fast-third Oracle/Robo/Twilight variant uses **AlphaStar Style (Oracle/Robo)**.
   TvP Widow Mine Drop requires early mines and Medivac-first Starport production,
   so Vikings into fast-three-CC bio with later support mines keep their bio label.
+  To relabel games uploaded earlier, see
+  [Re-analyze old games after an update](https://sc2tools.com/help/reanalyze).
 
 - **Agent 0.18.9:** game-start randomizer and scouting widgets no longer
   restart on brief loading/UI changes or reconnects. The agent preserves the match identity,
@@ -1182,6 +1350,8 @@ release preparation, not a signed or published 0.24.9 installer.
   upgrade. Dark Templar's Shadow Stride no longer counts as Blink. Charge-first
   macro openings that start their third Nexus before 6:00 are labeled
   **Charge First (Fast 3rd Nexus)**, including later Blink transitions.
+  To relabel games uploaded earlier, see
+  [Re-analyze old games after an update](https://sc2tools.com/help/reanalyze).
 
 - **Agent 0.18.6: post-game scene recovery.** A definite SC2 menu takes
   precedence over a cached result from the finished match. Slash-qualified

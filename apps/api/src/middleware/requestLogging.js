@@ -31,10 +31,13 @@ const SAFE_RESPONSE_HEADER_NAMES = Object.freeze([
 ]);
 
 // ``build-intents/live/<gameKey>``: a live game key holds both players'
-// names, which never belong in request logs.
+// names, which never belong in request logs. ``shares/<token>``: a game
+// share token is the bearer credential of its public page.
+// ``calendar/<secret>.ics``: the private coaching calendar feed's bearer secret.
 const CREDENTIAL_PATH_SEGMENT =
-  /\/(multichat|chatbot|overlay-tokens|device-pairings|build-intents\/live)\/[^/?#]+/giu;
-const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|token)/iu;
+  /\/(multichat|chatbot|overlay-tokens|device-pairings|build-intents\/live|shares|calendar)\/[^/?#]+/giu;
+// ``review_tag`` is owner-authored review-queue text (routes/replays.js).
+const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|token|review_tag)/iu;
 const OAUTH_CALLBACK_PATH =
   /^\/v1\/integrations\/(?:twitch|kick|youtube)\/callback\/?$/iu;
 const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set([

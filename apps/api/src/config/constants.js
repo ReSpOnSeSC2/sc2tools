@@ -44,6 +44,11 @@ const COLLECTIONS = Object.freeze({
   // opponents aggregate. Admin rebuilds can safely drop/recreate the
   // aggregate without erasing notes the user wrote by hand.
   OPPONENT_NOTES: "opponent_notes",
+  // One private notes system: opponent notes (one per exact account, with
+  // tags, stream/private visibility and account/player scope) and
+  // timestamped game notes. Legacy ``opponent_notes`` rows move here in
+  // bounded per-user batches (services/notes.js ``ensureMigrated``).
+  NOTES: "notes",
   GAMES: "games",
   // Per-game heavy fields (build logs, macroBreakdown, apmCurve,
   // spatial). Split out of ``games`` in v0.4.3 so list-page queries
@@ -53,6 +58,9 @@ const COLLECTIONS = Object.freeze({
   GAME_DETAILS: "game_details",
   CUSTOM_BUILDS: "custom_builds",
   CUSTOM_BUILD_JOBS: "custom_build_jobs",
+  // Prior versions of each saved build (newest 20 per build), written on
+  // every save; restored through the normal save path.
+  CUSTOM_BUILD_REVISIONS: "custom_build_revisions",
   DEVICE_PAIRINGS: "device_pairings",
   DEVICE_TOKENS: "device_tokens",
   OVERLAY_TOKENS: "overlay_tokens",
@@ -73,9 +81,15 @@ const COLLECTIONS = Object.freeze({
   TWITCH_AUTOMATION_RECEIPTS: "twitch_automation_receipts",
   IMPORT_JOBS: "import_jobs",
   MACRO_JOBS: "macro_jobs",
+  // Managed re-analysis runs (services/reanalysis.js): one active per owner,
+  // a bounded current batch, never a history-sized id list.
+  REANALYSIS_JOBS: "reanalysis_jobs",
   AGENT_RELEASES: "agent_releases",
   COMMUNITY_BUILDS: "community_builds",
   COMMUNITY_REPORTS: "community_reports",
+  // One row per (community build, saver): the unique pair makes each
+  // account's "Save to my library" count once toward ``saves``.
+  COMMUNITY_SAVES: "community_saves",
   USER_BACKUPS: "user_backups",
   BACKUP_RESTORE_STAGING: "backup_restore_staging",
   PENDING_IDENTITY_DELETIONS: "pending_identity_deletions",
@@ -141,6 +155,22 @@ const COLLECTIONS = Object.freeze({
   // pre-game declaration, randomizer roll, post-game answer) until the
   // uploaded replay binds it. TTL-reaped; see services/buildIntentLive.js.
   BUILD_INTENT_LIVE: "build_intent_live",
+  // Personal goals with automatic progress (services/playerGoals.js): one
+  // row per goal; at most 8 active per user via a unique {userId, slot}.
+  PLAYER_GOALS: "player_goals",
+  // Reports and delivery channels (docs/notifications.md).
+  // ``stream_sessions``: one ≤5 kB post-stream report per ended stream,
+  // capped at 100 per user. ``discord_hooks``: the user's own channel
+  // webhooks (URL encrypted, last 4 shown). ``discord_outbox``: queued
+  // posts with a 7-day TTL. ``push_subscriptions``: Web Push endpoints.
+  STREAM_SESSIONS: "stream_sessions",
+  DISCORD_HOOKS: "discord_hooks",
+  DISCORD_OUTBOX: "discord_outbox",
+  PUSH_SUBSCRIPTIONS: "push_subscriptions",
+  // Revocable single-game share links: the ``_id`` is the unguessable
+  // 16-character token in the public ``/g/<token>`` URL. At most
+  // GAME_SHARES.MAX_ACTIVE live per user; see services/gameShares.js.
+  GAME_SHARES: "game_shares",
 });
 
 const LIMITS = Object.freeze({
@@ -182,6 +212,13 @@ const LIMITS = Object.freeze({
   OPPONENT_GAMES_PAGE_SIZE: 200,
   OPPONENT_GAMES_LIST_MAX: 200,
   OPPONENT_NOTES_MAX_LENGTH: 500,
+  // Unified notes (services/notesPolicy.js). Game notes are private and
+  // capped per game; review tags are the small queue labels on a game row.
+  NOTE_TEXT_MAX_LENGTH: 500,
+  NOTE_TAGS_MAX: 8,
+  NOTE_TAG_MAX_LENGTH: 24,
+  GAME_NOTES_MAX: 200,
+  REVIEW_TAGS_MAX: 5,
   PAIRING_CODE_TTL_SEC: 600,
   PAIRING_CODE_LEN: 6,
   CSV_EXPORT_MAX_ROWS: 50000,
@@ -196,17 +233,19 @@ const LIMITS = Object.freeze({
   GAME_ID_MAX_LENGTH: 200,
 });
 
-// Upload provenance stamped on slim game rows. ``ingestSource`` is derived
-// server-side from the authenticated caller; ``engineVersion`` is the semver
-// of the in-browser analysis engine (MAJOR.MINOR.PATCH with an optional
-// pre-release and/or build suffix, e.g. 1.6.3-rc.1 or 1.6.3+build.5).
+// Reported parse provenance, never an attestation or a current-version guess.
+// Keep the existing bounded version syntax for forward compatibility; cohort
+// comparison applies its own numeric/prerelease rules to these reported values.
+const ANALYSIS_VERSION_PATTERN =
+  "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$";
 const INGEST_PROVENANCE = Object.freeze({
   SOURCES: Object.freeze(["agent", "browser"]),
   SOURCE_AGENT: "agent",
   SOURCE_BROWSER: "browser",
   ENGINE_VERSION_MAX_LENGTH: 40,
-  ENGINE_VERSION_PATTERN:
-    "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$",
+  ENGINE_VERSION_PATTERN: ANALYSIS_VERSION_PATTERN,
+  AGENT_VERSION_MAX_LENGTH: 40,
+  AGENT_VERSION_PATTERN: ANALYSIS_VERSION_PATTERN,
 });
 
 // Replay Review Exchange (docs/reviews.md). Every threshold the feature
@@ -245,6 +284,19 @@ const REVIEWS = Object.freeze({
 
 // Build check-in (docs/adr/0025-build-check-in-attribution.md). Windows,
 // TTLs and limits for the live record, the ingest bind and the routes.
+/** Build library safety and organisation (routes/customBuildLibrary.js). */
+const CUSTOM_BUILD_LIBRARY = Object.freeze({
+  REVISIONS_PER_BUILD: 20,
+  TRASH_RETENTION_MS: 30 * 24 * 60 * 60 * 1000,
+  TRASH_LIST_MAX: 100,
+  IMPORT_BATCH_MAX: 100,
+  LIBRARY_MAX: 500,
+  TAGS_MAX: 8,
+  TAG_MAX_LENGTH: 24,
+  AVAILABLE_TAGS_MAX: 50,
+  PURGE_BATCH: 200,
+});
+
 const BUILD_INTENT = Object.freeze({
   // A bare registration lives 12 h; one carrying a declaration, roll or
   // post-game answer lives a week so a late replay upload still binds it.
@@ -304,6 +356,7 @@ module.exports = {
   LIMITS,
   REVIEWS,
   BUILD_INTENT,
+  CUSTOM_BUILD_LIBRARY,
   TIMEOUTS,
   PYTHON,
   INGEST_PROVENANCE,

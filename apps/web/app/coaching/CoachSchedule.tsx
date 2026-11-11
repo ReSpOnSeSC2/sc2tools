@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
 import { apiMessage, cloneAvailability, clockValue, COACHING_DAYS, compareWindows, formatDuration, minuteValue, PRESET_SESSION_DURATIONS, timeZoneOptions, useZoneClock, windowProblems } from "./coachingTime";
 import { BookingCard, BookingSummary, ChoiceChip, EmptySchedule } from "./CoachingScheduleParts";
+import { CalendarFeedCard } from "./CalendarFeedCard";
 import type { AvailabilityDraft, AvailabilityWindow, Booking, CalendarPayload } from "./coachingScheduleModel";
 export function CoachSchedule({
   data,
@@ -397,6 +398,7 @@ export function CoachSchedule({
               booking={booking}
               primaryTimeZone={bookingTimeZone}
               showStudent
+              calendarSummary={`Coaching session with ${booking.studentName}`}
               onCancel={() => setCancelBooking(booking)}
             />
           )) : (
@@ -408,6 +410,8 @@ export function CoachSchedule({
           )}
         </Card.Body>
       </Card>
+
+      <div className="xl:col-start-2"><CalendarFeedCard /></div>
 
       <Modal
         open={Boolean(cancelBooking)}

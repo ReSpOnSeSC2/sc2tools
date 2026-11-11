@@ -16,6 +16,12 @@ type Controls = {
   onMusic: () => void;
   onHelp: () => void;
   helpOpen: boolean;
+  /** V: cycle whose sight reveals the map. */
+  onVision?: () => void;
+  /** I: inspect the next unit outward from the map centre. */
+  onInspect?: () => void;
+  /** The owner's game page: B opens a private note at this moment. */
+  onNote?: () => void;
 };
 
 export function useReplayShortcuts(controls: Controls) {
@@ -41,7 +47,10 @@ export function useReplayShortcuts(controls: Controls) {
       case "end": seek(gameLength); break;
       case "n": case "p": { const next = adjacentReplayMarker(markers, time, key === "n" ? 1 : -1); if (next !== null) seek(next); break; }
       case "m": onMusic(); break;
+      case "v": if (!controls.onVision) return; controls.onVision(); break;
+      case "i": if (!controls.onInspect) return; controls.onInspect(); break;
       case "?": onHelp(); break;
+      case "b": if (!controls.onNote) return; controls.onNote(); break;
       case "f": {
         const request = document.fullscreenElement ? document.exitFullscreen?.() : root.current.requestFullscreen?.();
         void request?.catch(() => { /* Browser fullscreen may be unavailable. */ });

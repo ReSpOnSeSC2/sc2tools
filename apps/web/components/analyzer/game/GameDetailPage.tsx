@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import { NotesPanel } from "@/components/notes/NotesPanel";
+import { useGameNoteWorkspace } from "@/components/notes/useGameNoteWorkspace";
 import { useGameClock } from "./useGameClock";
 import { GameClockControls } from "./GameClockControls";
 import { GameClockLink } from "./GameClockLink";
@@ -18,6 +20,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import type { AutopsyGame } from "@/lib/lossAutopsy";
 import { GameNavigation } from "./GameNavigation";
+import { CompareGamesButton } from "@/components/analyzer/compare/CompareGamesButton";
 import { GameDetailShell } from "./GameDetailShell";
 import { GameExportMenu } from "./GameExportMenu";
 import dynamic from "next/dynamic";
@@ -31,10 +34,14 @@ import { GameContextCard } from "./GameContextCard";
 import { useGameContext } from "@/lib/useBenchmarks";
 import { checkedMatchPercentage, type BuildExecution } from "@/lib/buildExecution";
 const BuildOrderColumns = dynamic(() => import("./GameBuildOrderColumns").then((value) => value.GameBuildOrderColumns), { loading: () => <div role="status" aria-label="Loading build orders" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
+// Owner-only header controls, loaded after first paint.
+const GameReviewControl = dynamic(() => import("@/components/notes/GameReviewControl").then(value => value.GameReviewControl));
+const GameOpponentNote = dynamic(() => import("@/components/notes/GameOpponentNote").then(value => value.GameOpponentNote));
 const BuildWorkspaceActions = dynamic(() => import("./BuildWorkspaceActions").then(value => value.BuildWorkspaceActions));
 const GameDataMenu = dynamic(() => import("./GameDataMenu").then(value => value.GameDataMenu));
 const GameMacroSection = dynamic(() => import("./GameMacroSection").then((value) => value.GameMacroSection), { loading: () => <div role="status" aria-label="Loading macro breakdown" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
 const GameBattleReport = dynamic(() => import("@/components/battleReport/GameBattleReport").then((value) => value.GameBattleReport), { loading: () => <div role="status" aria-label="Loading battle report" className="h-52 animate-pulse rounded-lg bg-bg-elevated" /> });
+const ShareReportButton = dynamic(() => import("@/components/battleReport/ShareReportButton").then((value) => value.ShareReportButton));
 import { LossAutopsyCard } from "./LossAutopsyCard";
 import { GameStoryPanel } from "./GameStoryPanel";
 import type { GameStoryInput } from "@/lib/gameStory";
@@ -145,6 +152,13 @@ function GameDetailContent({
   const clock = useGameClock(gameId, initialTimeSec, gameReq.data?.durationSec ?? macroReq.data?.game_length_sec);
   const setScrubTime = clock.seek;
   const inspectMacroTime = useCallback((time: number) => setScrubTime(time, { reveal: false }), [setScrubTime]);
+  // Private game notes: the list below the replay, its dock button (B), pins and markers.
+  const noteWorkspace = useGameNoteWorkspace(gameId, setScrubTime);
+  const { startNote } = noteWorkspace;
+  const addNoteAt = useCallback((time: number) => {
+    if (typeof document !== "undefined" && document.fullscreenElement) void document.exitFullscreen?.().catch(() => { /* Fullscreen may already be closing. */ });
+    startNote(time);
+  }, [startNote]);
 
   const game = gameReq.data ?? null;
   const playbackController = useMapReplay(game?.gameId ?? null);
@@ -261,15 +275,20 @@ function GameDetailContent({
     <GuidedTours id="game" recordKey={gameId} ready={!gameReq.error && !gameReq.isLoading && !gameReq.isPreviousData && game.gameId === gameId}><GameDetailShell
       source={source}
       game={game}
+      shareTimeSec={clock.t}
       exportAction={<><GameExportMenu game={game} buildOrders={buildReq.data} macroBreakdown={breakdown} pending={buildStatus === "loading" || macroStatus === "loading"} /><GameDataMenu game={game} onComplete={async changes => { if (changes.some(change => change.deleted)) router.replace(source?.href || "/app/replays"); else await gameReq.mutate(); }} /></>}
       opponentContext={opponentContext}
+      noteActions={<><GameReviewControl gameId={game.gameId} review={game.review} onChanged={(review) => void gameReq.mutate(current => current ? { ...current, review } : current, { revalidate: false })} /><GameOpponentNote pulseId={game.opponent?.pulseId} /></>}
       streamLinks={streamLinks}
       buildLabel={checkinBuild ? checkinBuild.label : undefined}
       planned={checkinBuild ? checkinBuild.planned : undefined}
       oppStrategyLabel={checkinOpponent ? checkinOpponent.label : undefined}
       oppCorrected={checkinOpponent ? checkinOpponent.corrected : undefined}
     >
-      <GameNavigation game={game} source={source} opponentContext={opponentContext} buildLabel={checkinBuild ? checkinBuild.label : game.myBuild} />
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <GameNavigation game={game} source={source} opponentContext={opponentContext} buildLabel={checkinBuild ? checkinBuild.label : game.myBuild} />
+        <CompareGamesButton game={game} buildLabel={checkinBuild ? checkinBuild.label : game.myBuild} />
+      </div>
       <GameWorkspaceNav />
       <BuildCheckInCard
         gameId={gameId}
@@ -283,6 +302,7 @@ function GameDetailContent({
         playback={playbackController.playback} segmented={!!playbackController.manifest}
         pending={macroStatus === "loading" || buildStatus === "loading" || intentReq.isPreviousData || playbackController.isLoading}
         onSeek={setScrubTime}
+        actions={game.isResumedFromReplay ? undefined : <ShareReportButton gameId={game.gameId} />}
       /></SectionBoundary>
 
       <SectionBoundary key={`mechanics:${game.gameId}`} label="mechanics" title="Mechanics hit a problem"><GameStoryPanel input={storyInput} onSeek={setScrubTime} mechanics={<div className="space-y-4"><MechanicsPanel
@@ -292,6 +312,7 @@ function GameDetailContent({
           error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()}
           onSeek={setScrubTime}
           recomputeAction={recomputeAction} seekTarget="replay" currentTime={clock.t}
+          league={contextReq.data?.league?.table ?? null}
         /><GameContextCard game={game} context={contextReq.data} error={contextReq.error} loading={contextReq.isLoading} onRetry={() => void contextReq.mutate()} /></div>} lossAutopsy={loss && autopsyGame ? (
           <LossAutopsyCard game={autopsyGame} personalMedians={contextReq.data?.personal} seekTarget="replay" recomputeAction={recomputeAction} onSeek={setScrubTime} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} />
         ) : undefined} /></SectionBoundary>
@@ -314,11 +335,16 @@ function GameDetailContent({
         myRace={ghostMyRace}
         oppRace={ghostOpponentRace}
         patchEra={patchEraForGame(game)}
+        mapMarkers={noteWorkspace.mapMarkers} onWorldClick={noteWorkspace.onWorldClick} onMarkerClick={noteWorkspace.onMarkerClick}
+        commentMarkers={noteWorkspace.commentMarkers} onCommentMarker={noteWorkspace.onCommentMarker} commentLabel="Your notes on the timeline" onAddNote={addNoteAt}
       /></SectionBoundary>
 
       </section>
+      <section id="notes" className="scroll-mt-[var(--game-section-offset,8rem)]" aria-label="Game notes">
+        <SectionBoundary key={`notes:${game.gameId}`} label="game notes" title="Game notes hit a problem"><NotesPanel target={{ kind: "game", id: game.gameId }} workspace={noteWorkspace} currentTime={clock.t} onSeek={setScrubTime} /></SectionBoundary>
+      </section>
       <section data-tour="game-macro" id="macro" className="scroll-mt-[var(--game-section-offset,8rem)]" aria-label="Macro breakdown">
-        <SectionBoundary key={`macro:${game.gameId}`} label="the macro breakdown" title="The macro breakdown hit a problem"><GameMacroSection onBuildChanged={() => void gameReq.mutate()} inspectionTime={clock.t} onSeek={setScrubTime} onInspectTime={inspectMacroTime} gameId={game.gameId} data={breakdown} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} action={recomputeAction} onRecompute={() => void macroReq.recompute()} recomputing={macroReq.recomputing} headerMeta={{ playerName: myName, opponentName: oppName, myRace: ghostMyRace, opponentRace: ghostOpponentRace, dateIso: game.date, gameVersion: game.gameVersion, gameBuild: game.gameBuild }} /></SectionBoundary>
+        <SectionBoundary key={`macro:${game.gameId}`} label="the macro breakdown" title="The macro breakdown hit a problem"><GameMacroSection league={contextReq.data?.league?.table ?? null} onBuildChanged={() => void gameReq.mutate()} inspectionTime={clock.t} onSeek={setScrubTime} onInspectTime={inspectMacroTime} gameId={game.gameId} data={breakdown} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} action={recomputeAction} onRecompute={() => void macroReq.recompute()} recomputing={macroReq.recomputing} headerMeta={{ playerName: myName, opponentName: oppName, myRace: ghostMyRace, opponentRace: ghostOpponentRace, dateIso: game.date, gameVersion: game.gameVersion, gameBuild: game.gameBuild }} /></SectionBoundary>
       </section>
       <section data-tour="game-builds" id="builds" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]" aria-labelledby="game-builds-heading">
         <h2 id="game-builds-heading" className="font-display text-h3 font-bold">Builds <LazyHelpLink slug="game-page" anchor="build-orders">Help</LazyHelpLink></h2>

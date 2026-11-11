@@ -126,6 +126,8 @@ export function ReviewReplayPanel({
     onCommentMarker,
     mobileCompact: true,
     defaultShowProduction: false,
+    // The owner shared this replay's analysis, so a clip of it is too.
+    clip: "shared" as const,
   };
 
   if (manifest) {

@@ -19,6 +19,10 @@ export interface GameOpponentSummary {
 
 export interface GameSummary {
   gameId: string;
+  /** Owner-only review queue state (``PUT /v1/games/:id/review``). */
+  review?: import("@/lib/notes").GameReview | null;
+  /** Owner-only: how many private notes this game has. */
+  noteCount?: number;
   excluded?: boolean;
   exclusionReason?: string | null;
   /** ISO date-time of the replay's end. */
@@ -39,6 +43,8 @@ export interface GameSummary {
   macroScore?: number | null;
   apm?: number | null;
   spq?: number | null;
+  /** Reported analysis engine (SemVer) for owner reads; absent when unknown. */
+  engineVersion?: string | null;
   /** True when a confirmed build check-in overrides the classifier's label. */
   buildPlanned?: boolean;
   /** The classifier's own label while a check-in override is applied. */
@@ -47,6 +53,8 @@ export interface GameSummary {
   oppStrategyPlanned?: boolean;
   /** The classifier's own opponent label while that correction is applied. */
   detectedOppStrategy?: string | null;
+  /** A game resumed from a replay: kept out of stats and the public replay page. */
+  isResumedFromReplay?: boolean;
   /** Flattened replay fields used by opponent-history projections. */
   replayAvailable?: boolean;
   replayFilename?: string | null;

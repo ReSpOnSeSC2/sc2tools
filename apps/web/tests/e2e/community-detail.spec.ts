@@ -16,7 +16,7 @@ test("community detail keeps phone actions first, readable metadata and measured
   const details = main.getByLabel("Build details");
   await expect(details.getByText("Oct 3, 2026", { exact: true })).toBeVisible();
   await expect(details.getByText("Build to play", { exact: true })).toBeVisible();
-  expect(await details.locator("dt").allTextContents()).toEqual(["Matchup", "Type", "Rules", "Skill level", "Published", "Updated"]);
+  expect(await details.locator("dt").allTextContents()).toEqual(["Matchup", "Type", "Rules", "Skill level", "Published", "Updated", "Saved by"]);
   const about = page.getByRole("heading", { name: "About this build" }).locator("..");
   const more = about.getByRole("button", { name: "Show more" });
   if ((page.viewportSize()?.width ?? 0) < 1024) {

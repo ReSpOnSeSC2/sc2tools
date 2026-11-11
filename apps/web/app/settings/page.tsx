@@ -58,6 +58,10 @@ const SettingsMisc = dynamic(
   () => import("@/components/analyzer/settings/SettingsMisc").then((mod) => mod.SettingsMisc),
   { loading: () => <Skeleton rows={6} /> },
 );
+const DiscordSettings = dynamic(
+  () => import("@/components/integrations/DiscordSettings").then((mod) => mod.DiscordSettings),
+  { loading: () => <Skeleton rows={6} /> },
+);
 const SettingsHelp = dynamic(
   () => import("@/components/analyzer/settings/SettingsHelp").then((mod) => mod.SettingsHelp),
   { loading: () => <Skeleton rows={6} /> },
@@ -117,6 +121,8 @@ function renderTab(id: SettingsTabId, origin: string) {
       return <SettingsImport />;
     case "backups":
       return <SettingsBackups />;
+    case "integrations":
+      return <DiscordSettings />;
     case "preferences":
       return <SettingsMisc />;
     case "help":

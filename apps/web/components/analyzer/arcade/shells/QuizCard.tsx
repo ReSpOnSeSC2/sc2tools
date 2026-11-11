@@ -157,7 +157,7 @@ export function QuizAnswerButton({
         ? "border-danger/50 bg-danger/10 text-text"
         : selected
           ? "border-accent bg-accent/10 text-text"
-          : "border-line bg-bg-surface text-text hover:border-accent hover:bg-bg-elevated";
+          : "border-line bg-bg-surface text-text [@media(hover:hover)_and_(pointer:fine)]:hover:border-accent [@media(hover:hover)_and_(pointer:fine)]:hover:bg-bg-elevated";
   return (
     <button
       type="button"

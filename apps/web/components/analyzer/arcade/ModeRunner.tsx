@@ -74,6 +74,7 @@ function ModeRunnerView({ mode, isDaily, onPlayedFresh, forceMode = false, dataS
   const { recordPlay, earnBadge, state } = useArcadeState();
   const [round, setRound] = useState(0);
   const [question, setQuestion] = useState<GenerateResult<unknown> | null>(null);
+  const [questionRevision, setQuestionRevision] = useState(0);
   const [answered, setAnswered] = useState<unknown>(null);
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
 
@@ -102,12 +103,16 @@ function ModeRunnerView({ mode, isDaily, onPlayedFresh, forceMode = false, dataS
       tz: seed.tz,
       data: roundData,
     };
+    // Retire the previous question while its replacement is being generated.
+    // Otherwise clearing its score would reopen its old answer buttons.
+    setQuestion(null);
     setAnswered(null);
     setScoreResult(null);
     Promise.resolve(mode.generate(input))
       .then((q) => {
         if (cancelled) return;
         setQuestion(q);
+        setQuestionRevision((revision) => revision + 1);
       })
       .catch(() => {
         if (cancelled) return;
@@ -281,14 +286,16 @@ function ModeRunnerView({ mode, isDaily, onPlayedFresh, forceMode = false, dataS
   // Instead we present a lightweight "next" affordance under the round
   // when in QuickPlay.
   return (
-    <div className="space-y-3">
+    // Modes keep their own choice/game state. A newly generated question must
+    // get a fresh component lifetime, even when its options happen to repeat.
+    <div key={`${mode.id}:${questionRevision}`} className="space-y-3">
       {(mode.render as Mode<unknown, unknown, ScoreResult>["render"])(renderProps)}
       {scoreResult && !isDaily && mode.kind === "quiz" ? (
         <div className="flex justify-end">
           <button
             type="button"
             onClick={handleNext}
-            className="inline-flex min-h-[44px] items-center rounded-md bg-accent px-4 text-caption font-semibold uppercase tracking-wider text-bg hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="inline-flex min-h-[44px] items-center rounded-md bg-accent px-4 text-caption font-semibold uppercase tracking-wider text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Next round →
           </button>

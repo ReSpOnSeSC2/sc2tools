@@ -77,6 +77,8 @@ class SocketClient:
         session_enabled: bool = False,
         on_connection: Optional[Callable[[bool], None]] = None,
         on_sync_retry: Optional[Callable] = None,
+        on_reanalyze: Optional[Callable] = None,
+        on_reanalyze_cancel: Optional[Callable] = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._account_base_url = base_url
@@ -107,6 +109,10 @@ class SocketClient:
         self._session_enabled = session_enabled is True
         self._on_connection = on_connection
         self._on_sync_retry = on_sync_retry
+        # Managed re-analysis (sc2tools_agent.reanalysis). Advertised in the
+        # handshake only when wired, so older servers never send batches.
+        self._on_reanalyze = on_reanalyze
+        self._on_reanalyze_cancel = on_reanalyze_cancel
         from .sync_retry_socket import SyncRetrySocket
         self._sync_retry = SyncRetrySocket(self, on_sync_retry)
         self._session_lock = threading.RLock()
@@ -124,7 +130,8 @@ class SocketClient:
     def with_device_token(self, token: str) -> "SocketClient":
         """Rebuild a stopped socket with its existing event handlers."""
         names = ("recompute_games", "recompute_opp_build", "full_resync", "import_scan",
-                 "import_start", "import_cancel", "import_pick_folder", "bot_lab", "obs_add", "overlay_tokens_changed", "build_intent_changed", "scouting_brief", "sync_retry")
+                 "import_start", "import_cancel", "import_pick_folder", "bot_lab", "obs_add", "overlay_tokens_changed", "build_intent_changed", "scouting_brief", "sync_retry",
+                 "reanalyze", "reanalyze_cancel")
         callbacks = {"on_" + name: getattr(self, "_on_" + name) for name in names}
         return SocketClient(base_url=self._account_base_url, device_token=token,
             on_connection=self._on_connection,
@@ -237,6 +244,26 @@ class SocketClient:
             except Exception:
                 log.debug("socket_health_callback_failed")
 
+    async def _reanalyze_batch(self, payload):
+        """Accept a batch meant for this exact socket session."""
+        from .reanalysis import ack
+        if self._on_reanalyze is None or self._stop.is_set():
+            return ack(payload, "unsupported")
+        session = payload.get("sessionId") if isinstance(payload, dict) else None
+        if session is None or session != self._sync_retry.sid() or not self._device_connected:
+            return ack(payload, "owner_changed")
+        sio, loop = self._sio, self._loop
+
+        def emit(body):
+            if loop is not None and not loop.is_closed() and self._device_connected and not self._stop.is_set():
+                asyncio.run_coroutine_threadsafe(sio.emit("reanalyze:outcome", body), loop)
+
+        try:
+            return await asyncio.to_thread(self._on_reanalyze, payload, self._device_token, emit)
+        except Exception:  # noqa: BLE001
+            log.exception("reanalysis_dispatch_failed")
+            return ack(payload, "local_error")
+
     def _wire_handlers(self) -> None:
         sio = self._sio
         assert sio is not None
@@ -269,6 +296,18 @@ class SocketClient:
         @sio.on("sync:retry-request")
         async def _sync_request(payload):
             return await self._sync_retry.request(payload)
+
+        @sio.on("reanalyze:batch")
+        async def _on_reanalyze(payload):
+            return await self._reanalyze_batch(payload)
+
+        @sio.on("reanalyze:cancel")
+        async def _on_reanalyze_cancel(payload):
+            if self._on_reanalyze_cancel is not None:
+                try:
+                    self._on_reanalyze_cancel(payload)
+                except Exception:  # noqa: BLE001
+                    log.debug("reanalysis_cancel_failed")
 
         @sio.on("bot-lab:request")
         async def _on_bot_lab(payload):
@@ -578,7 +617,8 @@ class SocketClient:
                 await sio.connect(
                     self._base_url,
                     auth={"deviceToken": self._device_token, "obsAddSource": self.obs_capabilities(),
-                          **({"syncRetryVersion": 1} if self._on_sync_retry is not None else {})},
+                          **({"syncRetryVersion": 1} if self._on_sync_retry is not None else {}),
+                          **({"reanalysisVersion": 1} if self._on_reanalyze is not None else {})},
                     transports=["websocket", "polling"],
                     wait_timeout=10,
                 )

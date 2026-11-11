@@ -10,6 +10,7 @@ import { rawPayload } from "../replay/__tests__/fixtures";
 import type { GameContext } from "@/lib/benchmarks";
 import type { BuildExecution } from "@/lib/buildExecution";
 import { executionFixture } from "./buildExecutionFixtures";
+import { loadLazyHelpLink } from "@/components/help/__tests__/loadLazyHelpLink";
 
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
@@ -18,7 +19,9 @@ const routerReplaceMock = vi.fn();
 const editorHarness = vi.hoisted(() => ({ props: null as BuildEditorModalProps | null }));
 
 // Compile the real lazy chunks before assertions; bundler work is not UI latency.
-beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../GameBuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard"), import("../GhostGradeContent"), import("@/components/battleReport/GameBattleReport")]); });
+beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../GameBuildOrderColumns"), import("../BuildWorkspaceActions"), import("../replay/ReplayStage"), import("../GameStoryCard"), import("../GhostGradeContent"), import("@/components/battleReport/GameBattleReport"), import("@/components/notes/GameNotesPanel"), import("@/components/notes/GameReviewControl"), import("@/components/notes/GameOpponentNote")]); });
+// The page shows several lazy help links; load their chunk first (loadLazyHelpLink explains why).
+beforeAll(loadLazyHelpLink, 20_000);
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true, userId: "synthetic-owner" }),
@@ -545,7 +548,7 @@ describe("GameDetailPage", () => {
     expect(back.getAttribute("href")).toBe("/app");
   });
 
-  it("shows timestamped POV stream controls in the game hero", () => {
+  it("shows timestamped POV stream controls in the game hero", async () => {
     mockEndpoints({
       slim: {
         ...SLIM,
@@ -584,9 +587,16 @@ describe("GameDetailPage", () => {
     expect(download.textContent).toContain("Download replay");
     expect(download.getAttribute("title")).toContain("125 KB");
     const actionLine = screen.getByRole("toolbar", { name: "Game actions" });
+    // The owner's review queue controls lead the line, then Share, Export, Download and the VOD.
+    const reviewQueue = await within(actionLine).findByRole("group", { name: "Review queue" });
     const actions = Array.from(actionLine.querySelectorAll("a,button")).filter(action => !action.closest("details"));
     expect(within(actionLine).getByText("Export")).toBeTruthy();
-    expect(actions).toEqual([screen.getByRole("button", { name: "Share this game as an image" }), download, link]);
+    expect(actions).toEqual([
+      within(reviewQueue).getByRole("button", { name: "Mark to review" }),
+      within(reviewQueue).getByRole("button", { name: "Mark reviewed" }),
+      within(reviewQueue).getByRole("button", { name: "Review tags" }),
+      screen.getByRole("button", { name: "Share" }), download, link,
+    ]);
     expect(useApiMock).toHaveBeenCalledWith(
       "/v1/games/vod-links?gameId=g1",
       { revalidateOnFocus: false, shouldRetryOnError: false },

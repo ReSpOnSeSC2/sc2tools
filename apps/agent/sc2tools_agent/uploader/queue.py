@@ -17,7 +17,7 @@ import random
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
@@ -33,6 +33,7 @@ from ..errors import classify
 from ..game_activity import on_battery
 from ..config import AgentConfig
 from ..replay_pipeline import CloudGame
+from ..analysis_provenance import AnalysisProvenance, UNKNOWN_PROVENANCE
 from ..state import AgentState, _STATE_SAVE_LOCK, save_state
 from ..sync_filter import SyncFilter
 from .archive_journal import (
@@ -228,10 +229,44 @@ class _FilteredOutError(TerminalUploadError):
 
 
 @dataclass(frozen=True)
+class ReanalysisUpload:
+    """A managed re-analysis upload (``sc2tools_agent.reanalysis``).
+
+    It skips the uploaded-cursor dedupe and the sync date filter: the game is
+    already in the cloud and the owner asked for it. ``transient`` marks a
+    downloaded original that was deleted after parsing, so it leaves no local
+    cursor, path index entry or archive task. ``settle`` receives "uploaded"
+    or "rejected" once, after the outcome is durable.
+    """
+    transient: bool
+    settle: Callable[[str], None]
+
+
+def _settle_reanalysis(jobs, outcome: str) -> None:
+    for job in jobs:
+        if job.reanalysis is not None:
+            try:
+                job.reanalysis.settle(outcome)
+            except Exception:  # noqa: BLE001
+                log.warning("reanalysis_settle_callback_failed")
+
+
+def _keeps_marker(job) -> bool:
+    return job.reanalysis is None or not job.reanalysis.transient
+
+
+@dataclass(frozen=True)
 class UploadJob:
     file_path: Path
     game: CloudGame
     priority: bool = False
+    provenance: AnalysisProvenance = UNKNOWN_PROVENANCE
+    reanalysis: Optional[ReanalysisUpload] = field(default=None, compare=False)
+
+    def __post_init__(self):
+        if (not isinstance(self.provenance, AnalysisProvenance)
+                or getattr(self.game, "is_resumed_from_replay", False) is True):
+            object.__setattr__(self, "provenance", UNKNOWN_PROVENANCE)
 
 
 class UploadQueue:
@@ -578,7 +613,7 @@ class UploadQueue:
         with self._lock, _STATE_SAVE_LOCK:
             if current_guard is not None and current_guard() is False:
                 return False
-            if path_key in self._state.uploaded:
+            if job.reanalysis is None and path_key in self._state.uploaded:
                 log.debug("dedupe_skip_uploaded %s", job.file_path.name)
                 return False
             if path_key in self._pending_paths:
@@ -1100,6 +1135,10 @@ class UploadQueue:
         with self._lock:
             return self._paused or self._auth_held
 
+    def history_held(self) -> bool:
+        """Whether background (non-live) uploads are deliberately on hold."""
+        return self.is_paused() or self._history_held_for_match()
+
     def set_activity_gate(self, gate):
         self._activity_gate = gate
 
@@ -1368,7 +1407,7 @@ class UploadQueue:
                     break
                 try:
                     date_iso = getattr(job.game, "date_iso", None)
-                    if sync_filter.replay_in_range(date_iso):
+                    if job.reanalysis is not None or sync_filter.replay_in_range(date_iso):
                         keep.append((source_q, job))
                     else:
                         dropped_jobs.append(job)
@@ -1645,7 +1684,8 @@ class UploadQueue:
                                 "upload_rejected %s: %s",
                                 job.file_path.name, exc,
                             )
-                            self._state.uploaded[str(job.file_path)] = "rejected"
+                            if _keeps_marker(job):
+                                self._state.uploaded[str(job.file_path)] = "rejected"
                         save_state(self._cfg.state_dir, self._state)
                         for job in batch:
                             self._pending_paths.discard(str(job.file_path))
@@ -1671,6 +1711,7 @@ class UploadQueue:
                     self._notify_pending()
                     self._connection_success()
                     self._report_support_error(context, exc)
+                    _settle_reanalysis(batch, "rejected")
                     for job in batch:
                         if not self._upload_context_current(context):
                             break
@@ -1744,7 +1785,7 @@ class UploadQueue:
             filtered_out: List[UploadJob] = []
             for job in batch:
                 date_iso = getattr(job.game, "date_iso", None)
-                if sync_filter.replay_in_range(date_iso):
+                if job.reanalysis is not None or sync_filter.replay_in_range(date_iso):
                     kept.append(job)
                 else:
                     filtered_out.append(job)
@@ -1813,13 +1854,14 @@ class UploadQueue:
             with self._lock, _STATE_SAVE_LOCK:
                 self._require_upload_context(context)
                 for job in invalid_jobs:
-                    path_str = str(job.file_path)
-                    self._state.uploaded[path_str] = "rejected"
+                    if _keeps_marker(job):
+                        self._state.uploaded[str(job.file_path)] = "rejected"
                 save_state(self._cfg.state_dir, self._state)
                 for job in invalid_jobs:
                     self._pending_paths.discard(str(job.file_path))
                     self._pending_owners.pop(str(job.file_path), None)
             self._notify_pending()
+            _settle_reanalysis(invalid_jobs, "rejected")
             for job in invalid_jobs:
                 try:
                     self._notify_outcome(context, job.file_path, err)
@@ -1884,6 +1926,8 @@ class UploadQueue:
             self._require_upload_context(context)
             gid = acc.get("gameId") if isinstance(acc, dict) else None
             jobs = by_id.get(gid) if isinstance(gid, str) else None
+            # A downloaded original came from the archive and is already gone.
+            jobs = [job for job in jobs or () if _keeps_marker(job)]
             if jobs and isinstance(gid, str):
                 archive = acc.get("replayArchive")
                 already_available = replay_file_matches_archive_marker(
@@ -1954,9 +1998,10 @@ class UploadQueue:
                     if path_str in terminal_paths:
                         continue
                     terminal_paths.add(path_str)
-                    self._state.uploaded[path_str] = now_iso
-                    if isinstance(gid, str) and gid:
-                        self._state.path_by_game_id[gid] = path_str
+                    if _keeps_marker(job):
+                        self._state.uploaded[path_str] = now_iso
+                        if isinstance(gid, str) and gid:
+                            self._state.path_by_game_id[gid] = path_str
                     accepted_jobs.append(job)
                     accepted_summaries.append((job, acc))
                     if job.priority and live_job is None:
@@ -1986,7 +2031,8 @@ class UploadQueue:
                         retryable_jobs.append((job, err_msg))
                         continue
                     terminal_paths.add(path_str)
-                    self._state.uploaded[path_str] = "rejected"
+                    if _keeps_marker(job):
+                        self._state.uploaded[path_str] = "rejected"
                     rejected_jobs.append((job, err_msg))
             if accepted_jobs or rejected_jobs:
                 save_state(self._cfg.state_dir, self._state)
@@ -1998,6 +2044,8 @@ class UploadQueue:
             self._schedule_archive_task(task)
         if archive_tasks:
             self._notify_archive_pending()
+        _settle_reanalysis(accepted_jobs, "uploaded")
+        _settle_reanalysis((job for job, _message in rejected_jobs), "rejected")
 
         # User-facing callbacks + the sticky-MMR push happen OUTSIDE
         # the lock — they may take a network round-trip and we don't
@@ -2134,8 +2182,13 @@ class UploadQueue:
         those aliases with the marker so the API can quarantine legacy rows
         even if parser-version changes caused the newly derived ID to drift.
         """
-        payload = job.game.to_payload()
+        payload = dict(job.game.to_payload())
+        # Only a snapshot belonging to this parse may supply reported versions.
+        for field in ("engineVersion", "agentVersion", "ingestSource"):
+            payload.pop(field, None)
         if payload.get("isResumedFromReplay") is not True:
+            if isinstance(job.provenance, AnalysisProvenance):
+                payload.update(job.provenance.payload_fields())
             return payload
 
         game_id = payload.get("gameId")

@@ -14,6 +14,8 @@ const harness = vi.hoisted(() => ({
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "synthetic" }) }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: () => <Link href="/help/macro#progress">Help</Link> }));
 vi.mock("../macro/report/ReportGamesModal", () => ({ ReportGamesModal: () => null }));
+// Its own requests and states are covered by targets/__tests__/TargetsCard.test.tsx.
+vi.mock("../macro/targets/TargetsCard", () => ({ TargetsCard: () => null }));
 vi.mock("@/lib/timeseries", async importOriginal => ({ ...(await importOriginal<typeof import("@/lib/timeseries")>()), clientTimezone: () => "UTC" }));
 vi.mock("@/lib/clientApi", () => ({
   apiCall: (...args: unknown[]) => harness.apiCall(...args),

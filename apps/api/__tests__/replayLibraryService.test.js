@@ -112,7 +112,7 @@ describe("ReplayLibraryService", () => {
       },
       matchup: "PvT",
       replayAvailable: true,
-      replaySizeBytes: 123_456,
+      replaySizeBytes: 123_456, review: null, noteCount: 0,
     });
     expect(page.sourceGames[0]).toEqual(
       expect.objectContaining({

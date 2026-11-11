@@ -11,7 +11,7 @@ describe("Settings registry", () => {
     expect(inGroup("account")).toEqual(["account", "profile", "backups"]);
     expect(inGroup("gameplay")).toEqual(["checkin", "randomizer", "import"]);
     expect(inGroup("streaming")).toEqual(["overlay", "chat", "voice"]);
-    expect(inGroup("preferences")).toEqual(["preferences"]);
+    expect(inGroup("preferences")).toEqual(["preferences", "integrations"]);
     expect(inGroup("help")).toEqual(["help"]);
     expect(isSettingsTabId("devices")).toBe(false);
     expect(isSettingsTabId("chat")).toBe(true);
@@ -45,7 +45,7 @@ describe("Settings registry", () => {
 
   it("filters visibility without losing grouped keyboard order", () => {
     expect(visibleSettingsTabs((id) => !["profile", "import", "voice"].includes(id)))
-      .toEqual(["account", "backups", "checkin", "randomizer", "overlay", "chat", "preferences", "help"]);
+      .toEqual(["account", "backups", "checkin", "randomizer", "overlay", "chat", "preferences", "integrations", "help"]);
   });
 });
 

@@ -1,7 +1,7 @@
 import { API_BASE, buildApiError } from "./clientApi";
 import { accountFilter } from "./accountFilter";
 
-const KEYS = new Set(["since", "until", "patch_era", "race", "opp_race", "map", "map_exact", "mmr_min", "mmr_max", "opp_strategy", "build", "leak", "macro_min", "macro_max", "min_minutes", "max_minutes", "exclude_too_short", "regions", "accounts", "map_pool", "game_size", "result", "matchup", "search", "sort"]);
+const KEYS = new Set(["since", "until", "patch_era", "race", "opp_race", "map", "map_exact", "mmr_min", "mmr_max", "opp_strategy", "build", "leak", "macro_min", "macro_max", "min_minutes", "max_minutes", "exclude_too_short", "regions", "accounts", "map_pool", "game_size", "result", "matchup", "search", "sort", "review", "review_tag", "notes"]);
 
 export function replayCsvPath(raw: string, opponentId?: string): string {
   if (opponentId !== undefined && (!opponentId.length || opponentId.length > 160 || opponentId.trim() !== opponentId || /[\u0000-\u001f\u007f]/u.test(opponentId))) throw new Error("Choose a recorded opponent before exporting.");

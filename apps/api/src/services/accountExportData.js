@@ -116,6 +116,15 @@ async function* accountExportRecords(db, userId, options = {}) {
   }
   yield* collectionRecords(db, "playerIdentitySubmissions", { userId }, { _id: 0, reviewedBy: 0, evidenceMaxId: 0 }, signal);
   yield* collectionRecords(db, "multichatSounds", { userId }, { _id: 0, data: 0 }, signal);
+  // Delivery channels: a Discord webhook URL is a credential for someone
+  // else's server, so only its last four characters leave; push endpoints
+  // and their keys are the caller's own device registrations.
+  yield* collectionRecords(db, "streamSessions", { userId }, { _id: 0 }, signal);
+  yield* collectionRecords(db, "discordHooks", { userId }, { _id: 0, enc: 0 }, signal);
+  yield* collectionRecords(db, "pushSubscriptions", { userId }, { _id: 0, endpointHash: 0 }, signal);
+  // The link token is a bearer credential for the public page: the archive
+  // lists each share (game, dates, views) but never the token itself.
+  yield* collectionRecords(db, "gameShares", { userId }, { _id: 0, activeKey: 0 }, signal);
   if (db.coaching && options.includeSharedCoaching !== false) yield* coachingRecords(db, userId, signal);
   let user = null;
   const userProjection = { _id: 0, gameStats: 0, gameStatsRevision: 0, gameStatsProtocolVersion: 0,

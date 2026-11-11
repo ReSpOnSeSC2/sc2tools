@@ -599,6 +599,7 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
             on_recompute_opp_build=on_opp,
             on_full_resync=on_full_resync,
             on_sync_retry=SyncRetryController(cfg=cfg, state=state, cell=recovery_cell, stop_event=stop_event).handle,
+            **_reanalysis_callbacks(cfg, state, recovery_cell, stop_event),
             on_import_scan=import_ctl.handle_scan_request,
             on_import_start=import_ctl.handle_start_request,
             on_import_cancel=import_ctl.handle_cancel_request,
@@ -1225,6 +1226,7 @@ def _gui_boot_worker(
                 on_recompute_opp_build=on_opp,
                 on_full_resync=on_full_resync,
                 on_sync_retry=SyncRetryController(cfg=cfg, state=state, cell=cell, stop_event=stop_event).handle,
+                **_reanalysis_callbacks(cfg, state, cell, stop_event),
                 on_import_scan=import_ctl.handle_scan_request,
                 on_import_start=import_ctl.handle_start_request,
                 on_import_cancel=import_ctl.handle_cancel_request,
@@ -1683,6 +1685,16 @@ def _surface_replay_archive_prompt(
     callback = getattr(ui, "on_replay_archive_status", None)
     if callable(callback):
         callback(missing_games, total_games)
+
+
+def _reanalysis_callbacks(cfg, state, cell, stop_event):
+    """Managed re-analysis: one worker per agent, shared across socket rebuilds."""
+    controller = getattr(cell, "reanalysis", None)
+    if controller is None:
+        from .reanalysis import ReanalysisController
+        controller = ReanalysisController(cfg=cfg, state=state, cell=cell, stop_event=stop_event)
+        cell.reanalysis = controller
+    return {"on_reanalyze": controller.handle_batch, "on_reanalyze_cancel": controller.handle_cancel}
 
 
 def _queue_replays_for_resync(
@@ -3724,9 +3736,11 @@ class _RuntimeCell:
         "obs_lock",
         "obs_token_rotation",
         "no_obs",
+        "reanalysis",
     )
 
     def __init__(self) -> None:
+        self.reanalysis = None
         self.recent_history = None
         self.support = None
         self.resync_lock = threading.Lock()
