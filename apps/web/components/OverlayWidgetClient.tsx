@@ -4,6 +4,10 @@ import { useOverlaySeriesState } from "@/components/overlay/useOverlaySeriesStat
 const LazyStatsTickerWidget = dynamic(() => import("@/components/overlay/widgets/StatsTickerWidget").then(module => module.StatsTickerWidget), { ssr: false });
 const LazyBuildProfileWidget = dynamic(() => import("@/components/overlay/widgets/BuildProfileWidget").then(module => module.BuildProfileWidget), { ssr: false });
 const LazySeriesWidget = dynamic(() => import("@/components/overlay/widgets/SeriesWidget").then(module => module.SeriesWidget), { ssr: false });
+const LazyStreamSceneWidget = dynamic(() => import("@/components/overlay/widgets/StreamSceneWidget").then(module => module.StreamSceneWidget), { ssr: false });
+const LazySessionRecapWidget = dynamic(() => import("@/components/overlay/widgets/SessionRecapWidget").then(module => module.SessionRecapWidget), { ssr: false });
+const LazyChatOracleWidget = dynamic(() => import("@/components/overlay/widgets/ChatOracleWidget").then(module => module.ChatOracleWidget), { ssr: false });
+const LazySupporterWallWidget = dynamic(() => import("@/components/overlay/widgets/SupporterWallWidget").then(module => module.SupporterWallWidget), { ssr: false });
 
 import {
   useCallback,
@@ -81,13 +85,9 @@ import {
   ChatPollWidget,
   ChatAlertsWidget,
   StreamGoalsWidget,
-  ChatOracleWidget,
   ClipFlagWidget,
   LowerThirdWidget,
   CountdownTimerWidget,
-  SessionRecapWidget,
-  StreamSceneWidget,
-  SupporterWallWidget,
   type SessionSummary,
 } from "@/components/overlay/widgets/PrePostFlow";
 import type { RandomizerConfig } from "@/lib/randomizer/types";
@@ -582,7 +582,7 @@ export function WidgetRenderer({
       );
     case "session-recap":
       return (
-        <SessionRecapWidget
+        <LazySessionRecapWidget
           token={token}
           studioEvent={studioEvent}
           session={session}
@@ -593,17 +593,17 @@ export function WidgetRenderer({
       // Full-screen BRB / Starting Soon scene — driven entirely by
       // the Stream Dock's Scenes panel via the studio state.
       return (
-        <StreamSceneWidget token={token} studioEvent={studioEvent} live={live} />
+        <LazyStreamSceneWidget token={token} studioEvent={studioEvent} live={live} />
       );
     case "chat-oracle":
       // Engagement family — gated on the ``overlay:engagement``
       // stream (and the boot summary); ``live`` is Test-fire only.
       return (
-        <ChatOracleWidget token={token} engagementEvent={engagementEvent} live={live} />
+        <LazyChatOracleWidget token={token} engagementEvent={engagementEvent} live={live} />
       );
     case "supporter-wall":
       return (
-        <SupporterWallWidget token={token} engagementEvent={engagementEvent} live={live} />
+        <LazySupporterWallWidget token={token} engagementEvent={engagementEvent} live={live} />
       );
     case "clip-flag":
       return (
