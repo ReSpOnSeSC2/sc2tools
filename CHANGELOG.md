@@ -21,6 +21,12 @@ corresponding GitHub Release.
   Re-analyze older games from Settings → Backups & data after updating the
   desktop app.
 
+### Admin dashboard triage
+
+- See queues that need attention, open the relevant review or activity page,
+  and compare recent signups, download clicks and first agent connections.
+  Inspect sortable database storage details in Infrastructure.
+
 ### Practice targets and reports
 
 - Edit checkpoints for a private Ghost target and count a graded game toward

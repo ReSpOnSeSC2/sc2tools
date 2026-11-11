@@ -15,9 +15,22 @@ Grant admin. Server operators can also put the account's Clerk user ID in
 
 ## Daily triage
 
-Check Notifications for support messages, Moderation for reported content, and
-Infrastructure for failed dependencies or overdue backups. Refresh before acting.
-Read the content in context and leave a short resolution note for other admins.
+Open Dashboard and work through Needs attention in order.
+
+1. Read new support messages and check unread alerts for overdue jobs or stale backups.
+2. Resolve open community reports. Several reports may refer to the same target.
+3. Review pending identity submissions against their replay evidence.
+4. Review player channel submissions in the filtered directory.
+5. Open Infrastructure to investigate any capacity advisory or refresh provider data.
+
+All clear means the queues above were empty at the displayed check time and
+there was no cached watch or upgrade advisory. The dashboard
+uses the cached advisory and leaves provider checks to Infrastructure. Refresh
+the destination before acting and leave a short resolution note for other admins.
+
+Open **Database storage** below Background jobs in Infrastructure to inspect
+and sort individual collections. The dashboard links to that page from the
+combined application database data and index size.
 
 Tap or click an activity row's title, identity or message body to open its full
 details. Keyboard users can focus the row and press Enter or Space. The details
@@ -27,6 +40,24 @@ links. Status / Reply works inside the panel. Escape, Close or the backdrop
 closes it and returns focus to the row. Opening details does not mark activity
 read; use the row's own Mark as read control or a mark-all action (see
 [Notifications and support inbox](#notifications-and-support-inbox)).
+
+### Dashboard counters
+
+- **Total users** counts registered accounts. The signup series counts recorded
+  signups, including those in the two comparison weeks.
+- **Agent downloads** counts website download clicks, with platform subtotals.
+  A click does not confirm a completed download or installation.
+- **First connections** counts a paired device's first authenticated agent
+  connection. The app does not measure verified installations.
+- **Active agents** counts paired devices with authenticated activity in the
+  past 24 hours. The tile's labelled first-connection comparison measures newly
+  connected devices. The dashboard has no historical active-device series.
+- **Unread** counts activity and messages currently marked unread. Read status
+  is mutable and has no week-over-week series.
+
+The daily chart and its table use UTC dates. The current day is partial. The
+week-over-week figures compare the last seven completed UTC days with the
+seven before them. A zero baseline shows **new** when events begin.
 
 ## Moderation
 

@@ -1034,6 +1034,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     adminIds: () => [...adminClerkIds],
     gdpr,
     infrastructureUsage,
+    attentionQueues: { community, playerIdentities, playerChannels, adminEvents },
   });
   const adminInsights = buildAdminInsightServices(deps.db, pulseDirectory, mmrExpectation, gameDetails, presetPolicies);
   const { adminGlobalTrends } = adminInsights;
