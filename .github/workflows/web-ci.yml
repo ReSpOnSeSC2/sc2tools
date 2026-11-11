@@ -62,6 +62,11 @@ jobs:
   e2e-responsive:
     name: Responsive e2e smoke (public pages)
     runs-on: ubuntu-latest
+    # Keep the browser and its system fonts together. The official image avoids
+    # fetching OS packages during this job and matches the npm lockfile.
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      options: --ipc=host
     # Allow the full browser suite plus setup and the engine/web build.
     # Per-test deadlines, retries, workers and assertions stay unchanged.
     timeout-minutes: 35
@@ -101,8 +106,8 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: npm ci
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Check Playwright image version
+        run: node -e 'if (require("@playwright/test/package.json").version !== "1.61.1") throw new Error("Update the Playwright CI image to match the lockfile")'
       - name: Build
         run: npm run build
       # First-load JS per route against perf-budget.json (gzip, the build
