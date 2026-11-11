@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGifWorkerProtocol } from "@/lib/clip/gifWorkerProtocol";
 import { clipFrameCount } from "@/lib/clip/clipPlan";
-import { ClipError, recordGifClip, recordVideoClip } from "../clip/clipRecorder";
+import { recordGifClip, recordVideoClip } from "../clip/clipRecorder";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -12,10 +12,17 @@ function fakeWorker() {
     onerror: null as ((event: ErrorEvent) => void) | null,
     terminated: false,
     posted: 0,
+    framesPending: 0,
+    maxFramesPending: 0,
     terminate() { this.terminated = true; },
-    postMessage(message: unknown) {
+    postMessage(message: { type?: string }) {
       this.posted += 1;
-      setTimeout(() => protocol.receive(message), 0);
+      const frame = message.type === "frame";
+      if (frame) this.maxFramesPending = Math.max(this.maxFramesPending, ++this.framesPending);
+      setTimeout(() => {
+        if (frame) this.framesPending--;
+        protocol.receive(message);
+      }, 4);
     },
   };
   const protocol = createGifWorkerProtocol((message) => worker.onmessage?.({ data: message } as MessageEvent));
@@ -47,6 +54,7 @@ describe("GIF clips", () => {
     expect(count).toBe(24);
     expect(rendered).toEqual(Array.from({ length: 24 }, (_, i) => i));
     expect(progress.at(-1)).toBe(24);
+    expect(worker.maxFramesPending).toBe(1);
     expect(blob.type).toBe("image/gif");
     const bytes = await blobBytes(blob);
     expect(String.fromCharCode(...bytes.slice(0, 6))).toBe("GIF89a");
@@ -67,11 +75,14 @@ describe("GIF clips", () => {
     expect(worker.posted).toBeLessThan(50);
   });
 
-  it("reports a clip past the byte cap as too large", async () => {
-    await expect(recordGifClip({
-      count: 5, fps: 12, width: 8, height: 6, maxBytes: 100, signal: new AbortController().signal, onProgress: () => {},
+  it("enforces the GIF byte cap including the trailer", async () => {
+    const record = (maxBytes: number) => recordGifClip({
+      count: 1, fps: 12, width: 8, height: 6, maxBytes, signal: new AbortController().signal, onProgress: () => {},
       frame: () => pixels(8, 6), factory: () => fakeWorker() as unknown as Worker,
-    })).rejects.toBeInstanceOf(ClipError);
+    });
+    const size = (await record(1e6)).size;
+    expect((await record(size)).size).toBe(size);
+    await expect(record(size - 1)).rejects.toMatchObject({ reason: "too_large" });
   });
 });
 

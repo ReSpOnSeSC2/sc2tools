@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { clipFrameCount, clipFrameTime, GIF_FPS, VIDEO_FPS } from "@/lib/clip/clipPlan";
+import { clipFrameCount, clipFrameTime, GIF_FPS, GIF_MAX_BYTES, VIDEO_FPS } from "@/lib/clip/clipPlan";
 import type { MapPlayback } from "@/lib/mapReplay";
 import ClipDialog from "../clip/ClipDialog";
 import type { recordGifClip, recordVideoClip } from "../clip/clipRecorder";
@@ -111,21 +111,31 @@ it("renders across the section boundary and follows the same stable unit id in b
   expect(screen.getByRole("link", { name: /Download/ })).toBeTruthy();
 });
 
-it("reads each GIF frame from OffscreenCanvas without attaching an HTML canvas", async () => {
-  mocks.recordGif.mockImplementation(async ({ count, frame }) => {
+it.each([
+  ["1280×720", 1280, 720],
+  ["1080×1080", 1080, 1080],
+] as const)("requests %s GIF output from OffscreenCanvas", async (label, width, height) => {
+  mocks.recordGif.mockImplementation(async ({ count, frame, ...request }) => {
     expect(document.querySelector("canvas")).toBeNull();
+    expect(request).toMatchObject({ width, height, fps: GIF_FPS, maxBytes: GIF_MAX_BYTES });
     expect(count).toBe(clipFrameCount(range, 1, GIF_FPS));
     mocks.renderFrame.mockClear();
     for (let index = 0; index < count; index++) {
       expect(frame(index)).toBe(pixels.buffer);
       expect(mocks.renderFrame.mock.calls[index].slice(0, 3)).toEqual([context2d, expect.any(Offscreen), clipFrameTime(range, 1, GIF_FPS, index)]);
+      expect(mocks.renderFrame.mock.calls[index][1]).toMatchObject({ width, height });
     }
+    expect(getImageData).toHaveBeenCalledWith(0, 0, width, height);
     return new Blob(["clip"], { type: "image/gif" });
   });
-  open(); fireEvent.click(screen.getByRole("radio", { name: /GIF/i })); recordTwoSeconds();
+  open();
+  fireEvent.click(screen.getByRole("radio", { name: "GIF" }));
+  fireEvent.click(screen.getByRole("radio", { name: label }));
+  recordTwoSeconds();
   await act(async () => vi.advanceTimersByTimeAsync(500));
   expect(screen.getByRole("link", { name: /Download/ })).toBeTruthy();
   expect(HTMLCanvasElement.prototype.getContext).not.toHaveBeenCalled();
+  expect(mocks.recordGif).toHaveBeenCalledOnce();
 });
 
 it.each(["missing", "unsupported context", "copy failure"])("uses the HTML capture surface directly on %s", (failure) => {
