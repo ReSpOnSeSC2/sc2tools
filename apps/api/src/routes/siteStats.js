@@ -47,15 +47,7 @@ function buildSiteStatsRouter(deps) {
     store: new BoundedRateLimitStore({ maxEntries: 4096 }),
     message: { error: { code: "rate_limited", message: "rate_limited" } },
   });
-  router.get("/site/stats", readLimiter, async (_req, res, next) => {
-    res.set("Cache-Control", "no-store");
-    try {
-      res.json(await deps.siteStats.counts());
-    } catch (err) {
-      next(err);
-    }
-  });
-
+  registerSiteReads(router, readLimiter, deps.siteStats);
   router.post("/site/presence", express.json({ limit: "1kb" }), issuanceLimiter, visitorLimiter,
     (req, res, next) => {
       res.set("Cache-Control", "no-store");
@@ -81,6 +73,32 @@ function buildSiteStatsRouter(deps) {
     },
   );
   return router;
+}
+
+/** @param {import('express').Router} router @param {import('express').RequestHandler} limit
+ * @param {import('../services/siteStats').SiteStatsService} stats
+ */
+function registerSiteReads(router, limit, stats) {
+  const { landing } = stats;
+  /** @type {[string, () => Promise<unknown>, string][]} */
+  const routes = [
+    ["/site/stats", () => stats.counts(), "no-store"],
+    ["/site/totals", () => landing.totals(), "public, s-maxage=3600"],
+    ["/site/guide-trends", async () => ({ items: await landing.trends() }), "public, s-maxage=3600"],
+    ["/site/community-builds", async () => ({ items: await landing.communityBuilds() }), "no-store"],
+    ["/site/latest-answered", async () => ({ item: await landing.latestAnswered() }), "public, s-maxage=60"],
+  ];
+  for (const [path, read, cache] of routes) {
+    router.get(path, limit, async (_req, res, next) => {
+      res.set("Cache-Control", "no-store");
+      try {
+        const data = await read();
+        res.set("Cache-Control", cache).json(data);
+      } catch (err) {
+        next(err);
+      }
+    });
+  }
 }
 
 module.exports = { buildSiteStatsRouter };

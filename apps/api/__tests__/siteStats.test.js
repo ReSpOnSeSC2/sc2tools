@@ -11,6 +11,7 @@ const { buildAuth } = require("../src/middleware/auth");
 const { buildSiteStatsRouter } = require("../src/routes/siteStats");
 const { SiteStatsService } = require("../src/services/siteStats");
 const { COLLECTIONS } = require("../src/config/constants");
+const { GUIDE_CURRENT_ERA } = require("../src/config/guides");
 const { expectedVersion } = require("../src/db/schemaVersioning");
 
 jest.mock("@clerk/backend", () => ({
@@ -140,6 +141,68 @@ describe("public site statistics with persisted Mongo data", () => {
     expect(Object.keys(result.body).sort()).toEqual(["activeAgents", "activeUsers", "activityWindowSeconds", "agentDownloads", "generatedAt"]);
     expect(result.body.activeUsers).toBe(1);
     expect((await db.sitePresence.findOne({})).identityKey).toBe((await db.sitePresence.findOne({}))._id);
+  });
+
+  test("publishes only aggregate totals and refreshes them after one hour", async () => {
+    await db.guideStats.deleteMany({});
+    const run = { key: "run", kind: "run", computedAt: new Date(now), corpusGames: 1234, privateField: "secret" };
+    await db.guideStats.insertOne(run);
+    service = new SiteStatsService(db, { secret: Buffer.alloc(32), now: () => now, guidesEnabled: true });
+    const app = routerApp();
+    const first = await request(app).get("/v1/site/totals").expect(200);
+    expect(first.headers["cache-control"]).toBe("public, s-maxage=3600");
+    expect(first.body).toMatchObject({ guideGames: 1234, answeredReviews: null, thresholds: { games: { min: 10000 } } });
+    expect(first.body).not.toHaveProperty("privateField");
+    await db.guideStats.updateOne({ key: "run" }, { $set: { corpusGames: 4567 } });
+    expect((await request(app).get("/v1/site/totals").expect(200)).body.guideGames).toBe(1234);
+    now += 60 * 60 * 1000;
+    expect((await request(app).get("/v1/site/totals").expect(200)).body.guideGames).toBe(4567);
+  });
+
+  test("ranks positive trends from the latest complete guide run only", async () => {
+    await db.guideStats.deleteMany({});
+    const computedAt = new Date(now);
+    await db.guideStats.insertMany([
+      { kind: "run", key: "run", computedAt },
+      ...[0.04, 0.07, -0.02, 0.02, 0.01, 0.1, 0.3].map((winRateDelta, index) => ({
+        key: "build-" + index, kind: "build", buildKey: "PvZ - Opener " + index, buildSlug: "opener-" + index, matchup: "PvZ",
+        era: GUIDE_CURRENT_ERA, published: index !== 5, computedAt: index === 6 ? new Date(now + 100) : computedAt,
+        trend: { winRateDelta, since: new Date(now - 7 * 24 * 60 * 60 * 1000) },
+      })),
+    ]);
+    service = new SiteStatsService(db, { secret: Buffer.alloc(32), now: () => now, guidesEnabled: true });
+    const result = await request(routerApp()).get("/v1/site/guide-trends").expect(200);
+    expect(result.body.items.map((item) => item.buildSlug)).toEqual(["opener-1", "opener-0", "opener-3"]);
+  });
+
+  test("shows top fresh builds without private build or author fields", async () => {
+    await db.communityBuilds.deleteMany({});
+    await db.communityBuilds.insertMany(Array.from({ length: 27 }, (_, index) => ({
+      slug: "build-" + index, title: "Build " + index, removed: index === 26, ownerUserId: "secret", authorName: "secret",
+      votes: index, publishedAt: new Date(index === 25 ? now - 8 * 24 * 60 * 60 * 1000 : now - 100),
+      build: { race: "Zerg", notes: "secret", sourceGameId: "secret" },
+    })));
+    const result = await request(routerApp()).get("/v1/site/community-builds").expect(200);
+    expect(result.body.items.map((item) => item.slug)).toEqual(["build-24", "build-23", "build-22"]);
+    expect(JSON.stringify(result.body)).not.toContain("secret");
+  });
+
+  test("shows the latest still-listed accepted answer, only with public reviews enabled", async () => {
+    await db.reviewRequests.deleteMany({});
+    await db.reviewKarmaEvents.deleteMany({});
+    await db.reviewRequests.insertMany(Array.from({ length: 12 }, (_, index) => ({
+      _id: "review-" + index, listed: index !== 11, bestCommentId: "comment-" + index, status: "answered",
+      question: "Public review", askerDisplay: "named", askerName: "secret", myRace: "Zerg", createdAt: new Date(now - 100),
+    })));
+    await db.reviewKarmaEvents.insertMany(Array.from({ length: 12 }, (_, index) => ({
+      kind: "best", requestId: "review-" + index, commentId: "comment-" + (index === 10 ? 0 : index),
+      actorId: "reviewer-" + index, createdAt: new Date(now + index),
+    })));
+    expect((await request(routerApp()).get("/v1/site/latest-answered").expect(200)).body.item).toBeNull();
+    service = new SiteStatsService(db, { secret: Buffer.alloc(32), now: () => now, reviewsEnabled: true });
+    const result = await request(routerApp()).get("/v1/site/latest-answered").expect(200);
+    expect(result.body.item).toMatchObject({ id: "review-9", askerLabel: "Anonymous Zerg", hasBest: true });
+    expect(JSON.stringify(result.body)).not.toContain("secret");
   });
 
   test("verified Clerk accounts dedupe; forged and device credentials cannot record browser presence", async () => {

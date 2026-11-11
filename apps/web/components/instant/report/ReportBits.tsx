@@ -123,9 +123,9 @@ export function WinrateText({ wins, losses }: { wins: number; losses: number }) 
 export function WinrateBar({ wins, losses }: { wins: number; losses: number }) {
   const rate = winratePercent(wins, losses);
   return (
-    <div aria-hidden className="h-1.5 w-full overflow-hidden rounded-full bg-bg-elevated">
-      {rate === null ? null : <div className="h-full rounded-full bg-success" style={{ width: `${rate}%` }} />}
-    </div>
+    <span aria-hidden className="block h-1.5 w-full overflow-hidden rounded-full bg-bg-elevated">
+      {rate === null ? null : <span className="block h-full rounded-full bg-success" style={{ width: `${rate}%` }} />}
+    </span>
   );
 }
 
