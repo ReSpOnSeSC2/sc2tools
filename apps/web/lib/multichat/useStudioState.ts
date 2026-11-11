@@ -18,6 +18,7 @@ import { useOverlayPreview } from "@/lib/overlayPreviewContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { CHAT_PLATFORMS, type ChatPlatform } from "./types";
+import { isPollDuration, type PollDurationSec } from "./poll";
 
 /** Fallback refetch cadence — socket pushes are the fast path. */
 const STUDIO_REFRESH_MS = 60_000;
@@ -34,6 +35,14 @@ export interface StudioPoll {
   options: string[];
   startedAtMs: number;
   status: "open" | "closed";
+  /** Optional timer from the server's 30/60/120/300-second allowlist. */
+  durationSec?: PollDurationSec;
+  /** Server-stamped open time (equal to startedAtMs for new polls). */
+  openedAtMs?: number;
+  /** Server-stamped deadline of a timed poll. */
+  endsAtMs?: number;
+  /** Server-stamped vote cutoff once the poll closed. */
+  closedAtMs?: number;
   /** Build votes carry the candidates' real win-rates. */
   meta?: { kind: "build"; winRates: Record<string, number> };
 }
@@ -298,6 +307,11 @@ function sanitizePoll(raw: unknown): StudioPoll | null {
       : 0,
     status: p.status === "closed" ? "closed" : "open",
   };
+  if (isPollDuration(p.durationSec)) out.durationSec = p.durationSec;
+  for (const key of ["openedAtMs", "endsAtMs", "closedAtMs"] as const) {
+    const value = p[key];
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) out[key] = value;
+  }
   const meta = p.meta as Record<string, unknown> | undefined;
   if (meta && typeof meta === "object" && meta.kind === "build") {
     const winRates: Record<string, number> = {};

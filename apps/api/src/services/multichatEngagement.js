@@ -62,6 +62,16 @@ const CLIP_MIN_COUNT = 8;
 const CLIP_SPIKE_FACTOR = 3;
 const CLIP_COOLDOWN_MS = 90_000;
 const CLIP_SAMPLE_MAX = 5;
+/** Stored clip-moment kinds. Anything else is coerced to a chat spike. */
+const CLIP_MOMENT_KINDS = Object.freeze(["chat-spike", "game-event", "manual"]);
+/** One Dock "Flag moment" per token per this window. */
+const MANUAL_MOMENT_COOLDOWN_MS = 5_000;
+const MANUAL_MOMENT_NOTE_MAX = 80;
+const MANUAL_MOMENT_DEFAULT_REASON = "Flagged from Dock";
+/** Bounds the in-memory cooldown map; stale entries are pruned first. */
+const MANUAL_COOLDOWN_TOKENS_MAX = 2_048;
+/** Dock clip-log pages ("Show older"). */
+const CLIP_PAGE_MAX = 100;
 
 /** Fallback rank names (Protoss ladder). Level n needs xpForLevel(n);
  * clients re-theme by the streamer's chosen race. */
@@ -145,6 +155,8 @@ class MultichatEngagementService {
     this._lastClipAt = new Map();
     /** @type {Map<string, number>} token → last tally broadcast ms */
     this._lastTallyAt = new Map();
+    /** @type {Map<string, number>} token → last manual Dock flag ms */
+    this._lastManualAt = new Map();
   }
 
   /** @template T @param {string} token @param {()=>Promise<T>} work */
@@ -362,7 +374,8 @@ class MultichatEngagementService {
   }
 
   /**
-   * Persist + broadcast a clip moment (chat spike or game event).
+   * Persist + broadcast a clip moment (chat spike, game event or a manual
+   * Dock flag). Returns the moment as the Dock lists it.
    *
    * @param {string} token
    * @param {{kind: string, reason: string, sampleLines?: string[], gameKey?: string}} m
@@ -377,13 +390,77 @@ class MultichatEngagementService {
       token,
       atMs: this.now(),
       atDate: new Date(),
-      kind: m.kind === "game-event" ? "game-event" : "chat-spike",
+      kind: CLIP_MOMENT_KINDS.includes(m.kind) ? m.kind : "chat-spike",
       reason: String(m.reason).slice(0, 160),
       sampleLines: (m.sampleLines ?? []).slice(0, CLIP_SAMPLE_MAX),
       ...(m.gameKey ? { gameKey: String(m.gameKey).slice(0, 120) } : {}),
     };
     await this.clips.insertOne(doc);
-    this._emit(token, { type: "clip-moment", moment: { ...doc, _id: undefined } });
+    const { token: _token, atDate: _atDate, _id, ...moment } = /** @type {Record<string, any>} */ (doc);
+    this._emit(token, { type: "clip-moment", moment });
+    return moment;
+  }
+
+  /**
+   * "Flag moment" from the Dock: a manual clip moment with an optional
+   * note, at most one per token every MANUAL_MOMENT_COOLDOWN_MS. The note
+   * must already be validated (a single-line string of at most 80 chars).
+   *
+   * @param {string} token
+   * @param {string} note
+   * @returns {Promise<{ok: true, moment: Record<string, any>} | {ok: false, retryAfterMs: number}>}
+   */
+  async flagMoment(token, note) {
+    const now = this.now();
+    const elapsed = now - (this._lastManualAt.get(token) ?? Number.NEGATIVE_INFINITY);
+    if (elapsed < MANUAL_MOMENT_COOLDOWN_MS) {
+      return { ok: false, retryAfterMs: MANUAL_MOMENT_COOLDOWN_MS - elapsed };
+    }
+    // Claim the slot before awaiting so a double tap cannot record twice.
+    this._lastManualAt.set(token, now);
+    if (this._lastManualAt.size > MANUAL_COOLDOWN_TOKENS_MAX) {
+      for (const [key, at] of this._lastManualAt) {
+        if (now - at >= MANUAL_MOMENT_COOLDOWN_MS) this._lastManualAt.delete(key);
+      }
+      while (this._lastManualAt.size > MANUAL_COOLDOWN_TOKENS_MAX) {
+        const oldest = this._lastManualAt.keys().next().value;
+        if (oldest === undefined) break;
+        this._lastManualAt.delete(oldest);
+      }
+    }
+    try {
+      const moment = await this.recordMoment(token, {
+        kind: "manual",
+        reason: note || MANUAL_MOMENT_DEFAULT_REASON,
+      });
+      return { ok: true, moment };
+    } catch (error) {
+      // A failed write must not spend the streamer's next attempt.
+      if (this._lastManualAt.get(token) === now) this._lastManualAt.delete(token);
+      throw error;
+    }
+  }
+
+  /**
+   * One page of a token's clip-moment log, newest first. ``before`` pages
+   * back from an earlier page's oldest atMs ("Show older").
+   *
+   * @param {string} token
+   * @param {{before?: number | null, limit?: number}} [opts]
+   * @returns {Promise<{moments: Record<string, any>[], hasMore: boolean}>}
+   */
+  async listMoments(token, opts = {}) {
+    const limit = Math.min(CLIP_PAGE_MAX, Math.max(1, Math.trunc(Number(opts.limit) || CLIP_PAGE_MAX)));
+    const before = Number(opts.before);
+    /** @type {Record<string, any>} */
+    const query = { token };
+    if (opts.before !== null && opts.before !== undefined && Number.isFinite(before)) query.atMs = { $lt: before };
+    const rows = await this._withWrite(token, () => this.clips
+      .find(query, { projection: { _id: 0, token: 0, atDate: 0 } })
+      .sort({ atMs: -1 })
+      .limit(limit + 1)
+      .toArray());
+    return { moments: rows.slice(0, limit), hasMore: rows.length > limit };
   }
 
   /**
@@ -722,4 +799,9 @@ module.exports = {
   RANK_NAMES,
   PREDICTION_LOCK_MS,
   PREDICTION_STALE_MS,
+  CLIP_MOMENT_KINDS,
+  CLIP_PAGE_MAX,
+  MANUAL_MOMENT_COOLDOWN_MS,
+  MANUAL_MOMENT_NOTE_MAX,
+  MANUAL_MOMENT_DEFAULT_REASON,
 };

@@ -22,6 +22,10 @@ const { sanitizeBuildProfile, prepareBuildProfileUpdate } = require("./buildProf
 
 const POLL_MAX_OPTIONS = 6;
 const POLL_MAX_TEXT = 120;
+/** The only poll timers the Dock offers; anything else runs untimed. */
+const POLL_DURATIONS_SEC = Object.freeze([30, 60, 120, 300]);
+/** A Dock clock this far ahead still closes a timed poll at its deadline. */
+const POLL_CLOCK_SKEW_MS = 2_000;
 const GOALS_MAX = 4;
 const GOAL_MAX_LABEL = 40;
 const HIGHLIGHT_MAX_TEXT = 500;
@@ -55,12 +59,14 @@ const DEFAULT_BROLL = Object.freeze({
 class MultichatStudioService {
   /**
    * @param {{ multichatStudio: import('mongodb').Collection }} db
-   * @param {{ io?: import('socket.io').Server, overlayTokens?: Pick<import('./overlayTokens').OverlayTokensService, "withWrite"> }} [deps]
+   * @param {{ io?: import('socket.io').Server, overlayTokens?: Pick<import('./overlayTokens').OverlayTokensService, "withWrite">, now?: () => number }} [deps]
    */
   constructor(db, deps = {}) {
     this.col = db.multichatStudio;
     this.io = deps.io || null;
     this.overlayTokens = deps.overlayTokens;
+    /** Server clock for poll deadlines (injectable in tests). */
+    this.now = deps.now || (() => Date.now());
     /** Serialize same-token b-roll writes inside this API process. */
     this.brollUpdateQueues = new Map();
   }
@@ -119,7 +125,9 @@ class MultichatStudioService {
     );
     return {
       highlight: doc?.highlight ?? null,
-      poll: doc?.poll ?? null,
+      // An expired timed poll reads as closed, so the result is final even
+      // when no Dock is open to post the close.
+      poll: pollForRead(doc?.poll, this.now()),
       goals: Array.isArray(doc?.goals) ? doc.goals : [],
       blockedUsers: Array.isArray(doc?.blockedUsers) ? doc.blockedUsers : [],
       recapSeq: Number(doc?.recapSeq) || 0,
@@ -199,7 +207,10 @@ class MultichatStudioService {
       set.highlight = sanitizeHighlight(patch.highlight);
     }
     if ("poll" in patch) {
-      set.poll = sanitizePoll(patch.poll);
+      set.poll = preparePollUpdate(patch.poll, previousDocument?.poll, this.now());
+      set.pollWriteRevision = nextBrollWriteRevision(
+        sanitizeBrollWriteRevision(previousDocument?.pollWriteRevision),
+      );
     }
     if ("goals" in patch) {
       set.goals = sanitizeGoals(patch.goals);
@@ -242,7 +253,7 @@ class MultichatStudioService {
     /** @type {Record<string, any>} */
     const updateDoc = { $set: set, $setOnInsert: { token } };
     if (Object.keys(inc).length > 0) updateDoc.$inc = inc;
-    if ("broll" in patch || "buildProfile" in patch) {
+    if ("broll" in patch || "buildProfile" in patch || "poll" in patch) {
       const revisions = [];
       if ("broll" in patch) {
         revisions.push({ field: "brollWriteRevision", previous: previousWriteRevision });
@@ -251,6 +262,15 @@ class MultichatStudioService {
         revisions.push({
           field: "buildProfileWriteRevision",
           previous: sanitizeBrollWriteRevision(previousDocument?.buildProfileWriteRevision),
+        });
+      }
+      // A poll patch is merged with the stored poll (its server-owned
+      // timing, a final close). Two Docks closing or starting at once must
+      // not let the later write restore a poll the earlier one replaced.
+      if ("poll" in patch) {
+        revisions.push({
+          field: "pollWriteRevision",
+          previous: sanitizeBrollWriteRevision(previousDocument?.pollWriteRevision),
         });
       }
       const written = await this._writeStudioCompareAndSwap(
@@ -263,7 +283,7 @@ class MultichatStudioService {
         if (attempt + 1 >= BROLL_WRITE_MAX_ATTEMPTS) {
           const error = Object.assign(new Error("Concurrent studio update did not settle"), {
             status: 409,
-            code: "buildProfile" in patch ? "build_profile_conflict" : "broll_conflict",
+            code: "buildProfile" in patch ? "build_profile_conflict" : "broll" in patch ? "broll_conflict" : "poll_conflict",
           });
           throw error;
         }
@@ -408,6 +428,8 @@ function sanitizePoll(raw) {
     // "open" collects votes; "closed" shows final results until cleared.
     status: p.status === "closed" ? "closed" : "open",
   };
+  const durationSec = sanitizePollDuration(p.durationSec);
+  if (durationSec !== null) out.durationSec = durationSec;
   // Optional structured meta — currently only the build vote, which
   // lets the widget show the winner's real win-rate on close.
   if (p.meta && typeof p.meta === "object" && p.meta.kind === "build") {
@@ -424,6 +446,82 @@ function sanitizePoll(raw) {
     out.meta = { kind: "build", winRates };
   }
   return out;
+}
+
+/**
+ * A poll timer from the allowlist, in seconds, or null for an untimed poll.
+ * @param {unknown} raw @returns {number | null}
+ */
+function sanitizePollDuration(raw) {
+  const seconds = Number(raw);
+  return POLL_DURATIONS_SEC.includes(seconds) ? seconds : null;
+}
+
+/** @param {unknown} raw @returns {number | null} */
+function finiteMs(raw) {
+  const ms = Number(raw);
+  return raw !== null && raw !== undefined && raw !== "" && Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * The poll as clients should see it at ``nowMs``. An open poll whose
+ * server deadline has passed reads as closed at that deadline, so a stream
+ * with no Dock open still ends its vote. The stored poll is not rewritten.
+ *
+ * @param {unknown} raw
+ * @param {number} nowMs
+ * @returns {Record<string, any> | null}
+ */
+function pollForRead(raw, nowMs) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const poll = /** @type {Record<string, any>} */ (raw);
+  const endsAtMs = finiteMs(poll.endsAtMs);
+  if (poll.status !== "closed" && endsAtMs !== null && nowMs >= endsAtMs) {
+    return { ...poll, status: "closed", closedAtMs: endsAtMs };
+  }
+  return poll;
+}
+
+/**
+ * Merge a Dock poll patch with the stored poll. The server owns poll timing:
+ *
+ *   - a new poll is stamped startedAtMs = openedAtMs = now, and an
+ *     allowlisted durationSec adds endsAtMs = now + duration;
+ *   - a patch naming the stored poll (same startedAtMs) keeps its stored
+ *     question, options and timing. Closing is final: a second close, or a
+ *     late "open" echo, returns the closed poll unchanged (idempotent);
+ *   - a close arriving within POLL_CLOCK_SKEW_MS of the deadline closes at
+ *     the deadline, so a Dock clock slightly ahead cannot cut votes short;
+ *   - a close naming any other poll is stale (an older Dock) and leaves the
+ *     stored poll alone.
+ *
+ * ``closedAtMs`` is the vote cutoff every client tallies against, so the Dock
+ * and each Browser Source agree on the final result. null clears the poll.
+ *
+ * @param {unknown} raw
+ * @param {unknown} previousRaw
+ * @param {number} nowMs
+ * @returns {Record<string, any> | null}
+ */
+function preparePollUpdate(raw, previousRaw, nowMs) {
+  const next = sanitizePoll(raw);
+  if (!next) return null;
+  const previous = pollForRead(previousRaw, nowMs);
+  const named = finiteMs(/** @type {Record<string, any>} */ (raw).startedAtMs);
+  const current = previous && named !== null && named === finiteMs(previous.startedAtMs) ? previous : null;
+  if (current) {
+    if (current.status === "closed" || next.status !== "closed") return current;
+    const endsAtMs = finiteMs(current.endsAtMs);
+    const closedAtMs = endsAtMs !== null && endsAtMs - nowMs <= POLL_CLOCK_SKEW_MS
+      ? endsAtMs
+      : nowMs;
+    return { ...current, status: "closed", closedAtMs };
+  }
+  if (next.status === "closed") return previous;
+  /** @type {Record<string, any>} */
+  const opened = { ...next, startedAtMs: nowMs, openedAtMs: nowMs };
+  if (opened.durationSec) opened.endsAtMs = nowMs + opened.durationSec * 1000;
+  return opened;
 }
 
 /** @param {unknown} raw */
@@ -899,6 +997,10 @@ module.exports = {
   MultichatStudioService,
   sanitizeHighlight,
   sanitizePoll,
+  pollForRead,
+  preparePollUpdate,
+  POLL_DURATIONS_SEC,
+  POLL_CLOCK_SKEW_MS,
   sanitizeGoals,
   sanitizeBlockedUsers,
   sanitizeScene,
