@@ -4708,6 +4708,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Drop your StarCraft II replay folder at `/wrapped` to see a 2026 ladder recap and make a share card. The browser reads the files locally. The share card contains aggregate results and a link to the tool.
 
+### Browser-first home page
+
+- Start with browser replay analysis when it is publicly available, or download the Windows Agent. Public marketing pages skip live activity requests for signed-out visitors.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:
