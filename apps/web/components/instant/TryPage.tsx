@@ -55,13 +55,12 @@ export const PRIVACY_LINE =
   "Your replays are analyzed on this device. Nothing leaves your browser unless you choose to save the games to an account.";
 
 /**
- * /try analyses at most 25 replays (newest kept), 1v1 only, over all time:
- * the cap already bounds the work, and a 90-day window would hide the
- * games of someone who has not played for a while.
+ * Scan the selection before applying the deep-parse cap, so other
+ * match formats cannot take a slot from a 1v1 replay.
  */
 export const TRY_SESSION_OPTIONS: UseInstantSessionOptions = {
   refreshPolicy: false,
-  maxFiles: MAX_TRY_FILES,
+  maxParsedFiles: MAX_TRY_FILES,
   onlyOneVsOne: true,
   initialDateWindow: { kind: "all" },
 };
@@ -84,8 +83,8 @@ function TryHero() {
         </span>
       </h1>
       <p className="max-w-prose text-body-lg text-text-muted">
-        Drop up to {MAX_TRY_FILES} StarCraft II replays and get an instant report: your record by matchup, your
-        openers, your macro and why you lost your last game.
+        Drop StarCraft II replays or a folder. Get a report on your newest {MAX_TRY_FILES} eligible 1v1 games,
+        including your record by matchup, openers, macro and why you lost your last game.
       </p>
       <p className="flex max-w-prose items-start gap-2 rounded-xl border-2 border-line bg-bg-elevated/60 p-3 text-body font-semibold text-text">
         <ShieldCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-success" aria-hidden />
@@ -150,7 +149,7 @@ function IntakePanel({ session, onFiles, intakeFocusKey }: ToolViewProps) {
         onIntent={session.prewarm}
         focusKey={intakeFocusKey}
         disabled={session.busy}
-        maxFiles={MAX_TRY_FILES}
+        maxParsedFiles={MAX_TRY_FILES}
         dateWindow={session.dateWindow}
         onDateWindowChange={session.setDateWindow}
         fileCount={count}
@@ -230,12 +229,6 @@ function TryTool({ session, onCancelAdding, intakeFocusKey }: TryToolProps) {
   return (
     <section aria-label="Analyze replays" className="space-y-4">
       <ToolBody session={session} onFiles={onFiles} intakeFocusKey={intakeFocusKey} />
-      {session.truncatedCount > 0 ? (
-        <p className="text-caption text-text-muted">
-          Only the newest {MAX_TRY_FILES} replays are analyzed here; {session.truncatedCount} older{" "}
-          {session.truncatedCount === 1 ? "one was" : "ones were"} left out.
-        </p>
-      ) : null}
       {onCancelAdding && !session.busy && session.phase !== "choosing" ? (
         <Button variant="ghost" onClick={onCancelAdding}>
           Back to your report
@@ -445,8 +438,20 @@ function ReportArea({ ws, ...guideProps }: { ws: WorkspaceState } & TryGuideProp
 
 /** What the last run skipped, kept above the report once the tool has closed. */
 function RunFailures({ session }: { session: InstantSession }) {
-  if (session.phase !== "done" || session.failed.length === 0) return null;
-  return <ParseProgress progress={null} phase="done" total={session.files.length} failed={session.failed} onCancel={session.cancel} />;
+  if (session.phase !== "done" || (session.failed.length === 0 && session.truncatedCount === 0)) return null;
+  return (
+    <div className="space-y-2">
+      {session.truncatedCount > 0 ? (
+        <p role="status" className="text-caption text-text-muted">
+          The report analyzes up to {MAX_TRY_FILES} eligible games per run. {session.truncatedCount} older{" "}
+          {session.truncatedCount === 1 ? "game was" : "games were"} left out.
+        </p>
+      ) : null}
+      {session.failed.length > 0 ? (
+        <ParseProgress progress={null} phase="done" total={session.files.length} failed={session.failed} onCancel={session.cancel} />
+      ) : null}
+    </div>
+  );
 }
 
 function Workspace(props: TryGuideProps) {

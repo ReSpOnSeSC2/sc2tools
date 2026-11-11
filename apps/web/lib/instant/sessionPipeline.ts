@@ -32,12 +32,15 @@ export interface RunRules {
   /** Epoch ms the run started (one clock for the whole run). */
   now: number;
   onlyOneVsOne: boolean;
+  maxParsedFiles?: number;
 }
 
 /** A scanned replay that may be parsed. */
 export interface EligibleFile {
   file: IntakeFile;
   scan: MeScan;
+  /** Recorded end time, falling back to modification time when absent. */
+  playedAt: number;
 }
 
 type OkPlayers = Extract<PlayersResult, { ok: true }>;
@@ -66,6 +69,11 @@ function scanSkipKind(scan: OkPlayers, rules: RunRules): ErrorKind | null {
   return null;
 }
 
+function scanTime(scan: OkPlayers, file: IntakeFile): number {
+  const playedAt = Date.parse(scan.date ?? "");
+  return Number.isFinite(playedAt) ? playedAt : file.lastModified;
+}
+
 /**
  * Apply the header-scan rules (step 2 of the module comment).
  * `scans[i]` must belong to `files[i]` (engine order).
@@ -89,9 +97,14 @@ export function triageScans(
     } else {
       const skip = scanSkipKind(scan, rules);
       if (skip) failed.push(intakeFailure(file, skip));
-      else eligible.push({ file, scan: { key: file.key, players: scan.players, toonFromPath: scan.toonFromPath } });
+      else eligible.push({
+        file,
+        scan: { key: file.key, players: scan.players, toonFromPath: scan.toonFromPath },
+        playedAt: scanTime(scan, file),
+      });
     }
   });
+  if (rules.maxParsedFiles !== undefined) eligible.sort((a, b) => b.playedAt - a.playedAt);
   return { eligible, failed };
 }
 

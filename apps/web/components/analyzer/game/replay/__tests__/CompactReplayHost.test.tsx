@@ -28,6 +28,14 @@ vi.mock("@/lib/clientApi", () => ({
   useApi: () => api.result,
 }));
 
+const { getMapLayoutUrl } = vi.hoisted(() => ({
+  getMapLayoutUrl: vi.fn(() => "https://terrain.invalid/map"),
+}));
+vi.mock("@/lib/map-images", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/map-images")>(),
+  getMapLayoutUrl,
+}));
+
 /** A fake score that records the call stack depth of ``setPlaying`` so
  *  a test can prove it happened inside the click, not in an effect. */
 const music = vi.hoisted(() => ({
@@ -54,6 +62,8 @@ vi.mock("@/lib/replayMusic", () => ({
 }));
 
 const { MapReplaySection } = await import("../../MapReplaySection");
+const { CompactReplayHost } = await import("../CompactReplayHost");
+const { sanitizeMapPlayback } = await import("@/lib/mapReplay");
 
 describe("the compact drilldown host", () => {
   beforeEach(() => {
@@ -62,11 +72,24 @@ describe("the compact drilldown host", () => {
     music.setEnabled.mockClear();
     music.setVolume.mockClear();
     music.calls.length = 0;
+    getMapLayoutUrl.mockClear();
+  });
+
+  it("keeps the local replay's controls without requesting terrain or initializing audio", () => {
+    const playback = sanitizeMapPlayback(rawPayload());
+    if (!playback) throw new Error("Invalid replay fixture");
+    render(<CompactReplayHost local playback={playback} />);
+    fireEvent.click(screen.getByRole("button", { name: /▶ Play/ }));
+    expect(screen.getByRole("slider", { name: /playback position/i })).toBeTruthy();
+    expect(music.calls).toEqual([]);
+    expect(getMapLayoutUrl).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("replay-music")).toBeNull();
   });
 
   it("renders the music control alongside the bare replayer", () => {
     render(<MapReplaySection gameId="g1" compact />);
     expect(screen.getByTestId("map-replayer")).toBeTruthy();
+    expect(getMapLayoutUrl).toHaveBeenCalled();
     const strip = screen.getByTestId("replay-compact-controls");
     expect(within(strip).getByTestId("replay-music")).toBeTruthy();
     expect(

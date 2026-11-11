@@ -49,10 +49,9 @@ screenshots: [`screenshots/instant-analysis/`](screenshots/instant-analysis/).
 ### `/try` (anonymous)
 
 1. The visitor drops `.SC2Replay` files or a `.zip` onto the page, or picks
-   files or a folder. `/try` keeps the newest 25 replays per run
-   (`MAX_TRY_FILES`; zip entries carry their own stored times) and defaults
-   to "All time", because the 25-file cap already bounds the work and a
-   90-day window would hide the games of someone who has not played lately.
+   files or a folder. `/try` defaults to "All time" so the selection can
+   include older games. It scans the selection before applying the deep-parse
+   cap (`MAX_TRY_FILES`).
    The signed-in import defaults to "Last 90 days". The file's modification
    time is checked first, with the agent's 7-day slack. The replay's own
    date is checked again in the header scan and, finally, after parsing.
@@ -60,19 +59,25 @@ screenshots: [`screenshots/instant-analysis/`](screenshots/instant-analysis/).
    replays (pressing "Choose replays", dragging files over the drop zone,
    focusing the intake: `session.prewarm()`), never on page load. The first
    run downloads the analyzer once; later visits use the HTTP cache.
-3. A cheap header scan (`list_replay_players`) lists the players in each
-   replay. Games against the A.I. and, on `/try`, anything that is not a
-   1v1 are dropped here (`ai_game`, `not_1v1`), before anyone is asked
+3. A cheap header scan (`scan_replay_header` on `/try`, `list_replay_players`
+   in account import) lists the players in each replay. Games against the
+   A.I. and, on `/try`, anything that is not a 1v1 are dropped here
+   (`ai_game`, `not_1v1`), before anyone is asked
    which player they are. [Which player is me](#which-player-is-me) then
    picks the visitor, asking for a one-tap confirmation when it is guessing.
-4. Each remaining replay is parsed in the worker. `/try` also skips
-   "resume from replay" sessions (`resumed_replay`).
+4. `/try` deep-parses the newest 25 eligible games for that player, ordered
+   by recorded end time (or file modification time when the date is missing).
+   Team and A.I. games do not use a slot. The parse also skips "resume from
+   replay" sessions (`resumed_replay`).
 5. The report shows only cards the payloads support: record, record by
    matchup, your openers and your opponents' openers (with your W-L against
    each), most-faced opponent, macro score and top leaks, an MMR card, and
    "why you lost" for the latest loss (`lib/instant/report.ts`). "Game by
    game" lets the visitor pick a game and see both build orders side by side
    and the macro timeline, rendered offline from the payload (no API call).
+   **Watch this game** loads the compact player on click if the game has
+   local playback data. It draws units and buildings as geometric markers
+   from the recorded positions, without terrain images, sprites or music.
    MMR is the pre-game MMR the replay records; the per-game change is the
    difference to the next ladder game on the same account and queue in the
    set, and is labelled that way because it includes any games the visitor

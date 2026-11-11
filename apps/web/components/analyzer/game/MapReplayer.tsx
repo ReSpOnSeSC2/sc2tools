@@ -34,6 +34,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { statsAt, worldProjection, type MapPlayback } from "@/lib/mapReplay";
 
 import { spriteAssetsVersion } from "@/lib/spriteSheets";
+import { formatClock } from "@/lib/replayHud";
 import { computeLosses, morphConsumedIndices, statsHaveWorkers, tradeEfficiency, workerCountAt } from "@/lib/mapReplayLosses";
 import type { PatchEra } from "@/lib/meta";
 import { spellEffectsVersion } from "@/lib/spellEffects";
@@ -52,7 +53,7 @@ import { centeredReplayView, followView, inspectEntity, type ReplayEntityRef } f
 import { PlaybackAccuracyBadge } from "./PlaybackAccuracyBadge";
 import { markerAt, type ReplayMapMarker } from "@/lib/replayMarkers";
 
-import { renderFrame } from "./replay/mapCanvasRenderer";
+import { renderFrame, type MapFrameStyle } from "./replay/mapCanvasRenderer";
 import { ME_ARMY, OPP_ARMY, STAGE_VIEWPORT_FRACTION, STAGE_MIN_H_PX, STAGE_MAX_H_PX, STAGE_PAD_PX, derivedOf, assetsVersion, bumpReplayAssetsVersion, type ViewTransform } from "./replay/mapCanvasAssets";
 
 export type { ReplayMapMarker };
@@ -76,6 +77,8 @@ const VIEW_BUTTON_CLASS =
   "inline-flex h-8 w-8 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3ee0d6]";
 export function MapReplayer({
   playback,
+  skipTerrain = false,
+  frameStyle,
   playbackWindow,
   buffering = false,
   /** Cap on the stage height in CSS px. Hosts that embed the replay in
@@ -140,6 +143,9 @@ export function MapReplayer({
   handleRef,
 }: {
   playback: MapPlayback;
+  /** Draw from local positions without requesting a terrain image. */
+  skipTerrain?: boolean;
+  frameStyle?: MapFrameStyle;
   /** The loaded segment. The clock waits at its end until the next arrives. */
   playbackWindow?: { start: number; end: number };
   buffering?: boolean;
@@ -370,7 +376,11 @@ export function MapReplayer({
   }, [fullscreenTarget]);
 
   useEffect(() => {
-    layoutImageRef.current = null;
+    if (layoutImageRef.current) {
+      layoutImageRef.current = null;
+      bumpReplayAssetsVersion();
+    }
+    if (skipTerrain) return;
     const url = getMapLayoutUrl(playback.mapName);
     if (!url || typeof Image === "undefined") return;
     let cancelled = false;
@@ -387,7 +397,7 @@ export function MapReplayer({
     return () => {
       cancelled = true;
     };
-  }, [playback.mapName]);
+  }, [playback.mapName, skipTerrain]);
 
   const setTime = useCallback(
     (t: number) => {
@@ -483,7 +493,7 @@ export function MapReplayer({
         visionRef.current !== drawn.vi ||
         selectedRef.current !== drawn.se || camera !== drawn.camera;
       if (dirty) {
-        renderFrame(ctx, canvas, playback, timeRef.current, layoutImageRef.current, view, markersRef.current, undefined,
+        renderFrame(ctx, canvas, playback, timeRef.current, layoutImageRef.current, view, markersRef.current, frameStyle,
           { vision: visionRef.current, hits: hitsRef.current, selected: selectedRef.current, camera });
         drawn = {
           t: timeRef.current,
@@ -511,7 +521,7 @@ export function MapReplayer({
     } = { t: -1, v: -1, sv: -1, cw: 0, ch: 0, z: 1, ox: 0, oy: 0, mk: undefined, vi: "both", se: null, camera: "free" };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [playback, gameLength, emitTime, emitPlaying, hitsRef, selectedRef, followingRef, setFollowing]);
+  }, [playback, gameLength, emitTime, emitPlaying, hitsRef, selectedRef, followingRef, setFollowing, frameStyle]);
 
   // ── Stage sizing ────────────────────────────────────────────────
   //
@@ -846,7 +856,7 @@ export function MapReplayer({
         <div
           role="group"
           aria-label="Playback speed"
-          className="flex items-center gap-1"
+          className={frameStyle ? "flex flex-wrap items-center gap-0.5" : "flex items-center gap-1"}
         >
           {SPEEDS.map((s) => (
             <button
@@ -865,7 +875,7 @@ export function MapReplayer({
           ))}
         </div>
         <span className="ml-auto whitespace-nowrap text-caption tabular-nums text-text-muted">
-          {formatTime(timeSec)} / {formatTime(gameLength)}
+          {formatClock(timeSec)} / {formatClock(gameLength)}
         </span>
       </div>
       )}
@@ -983,7 +993,7 @@ export function MapReplayer({
       {/* The canvas carries no text, so the same state is spelled out
           for screen readers here and kept in sync with the scrubber. */}
       <p className="sr-only">
-        {`At ${formatTime(timeSec)} of ${formatTime(gameLength)} on ${
+        {`At ${formatClock(timeSec)} of ${formatClock(gameLength)} on ${
           playback.mapName || "this map"
         }: you have ${Math.round(me.army)} army value, ${Math.round(
           meWorkers,
@@ -1008,7 +1018,7 @@ export function MapReplayer({
         value={Math.round(timeSec)}
         onChange={(e) => setTime(Number(e.target.value))}
         aria-label="Playback position"
-        aria-valuetext={`${formatTime(timeSec)} of ${formatTime(gameLength)}`}
+        aria-valuetext={`${formatClock(timeSec)} of ${formatClock(gameLength)}`}
         className="h-6 w-full cursor-pointer accent-[#3ec0c7]"
       />
 
@@ -1034,13 +1044,13 @@ export function MapReplayer({
           up); each side lists WHAT died, priced in minerals/gas. */}
       <div className="grid gap-2 sm:grid-cols-2">
         <LossPanel
-          label="You"
+          label="You" showIcons={!frameStyle}
           color={ME_ARMY}
           losses={meLosses}
           efficiency={tradeEfficiency(meLosses, oppLosses)}
         />
         <LossPanel
-          label="Opponent"
+          label="Opponent" showIcons={!frameStyle}
           color={OPP_ARMY}
           losses={oppLosses}
           efficiency={tradeEfficiency(oppLosses, meLosses)}
@@ -1049,17 +1059,4 @@ export function MapReplayer({
       </>)}
     </div>
   );
-}
-
-/* ──────────────── resource glyphs ────────────────
- *
- * Procedural resource glyphs (mineral crystals, geysers, rocks,
- * towers) cached per (kind, dpr) — small enough to read at map scale,
- * matching the classic minimap language: blue crystals, green gas,
- * gray rocks.
- */
-function formatTime(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
 }

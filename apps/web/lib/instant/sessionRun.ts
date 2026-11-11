@@ -13,10 +13,11 @@
  *   if (scanned && !scanned.detection.needsConfirmation) await parseScanned(deps, scanned, null, rules, false);
  */
 import { medianMs, trackInstantError, trackInstantParseDone } from "./analytics";
+import { EngineError } from "./engineErrors";
 import { detectMe, type MeDetection } from "./meDetection";
 import { buildRequests, finalizeOutcomes, splitByDate, triageScans, type EligibleFile, type RunRules } from "./sessionPipeline";
 import type { ParsedWithFile, SessionAction } from "./sessionState";
-import type { EngineClient, EnginePhase, EngineProgress, ErrorKind, FailedParse, IntakeFile } from "./types";
+import type { EngineClient, EnginePhase, EngineProgress, ErrorKind, FailedParse, IntakeFile, PlayersResult } from "./types";
 
 /** What a pass needs from the hook. */
 export interface RunDeps {
@@ -40,13 +41,27 @@ export interface ScanOutcome {
 /** Result of the parse pass. */
 export interface RunOutcome {
   parsed: ParsedWithFile[];
+  deferredCount: number;
   /** Every failure of the run, scan pass included (all already dispatched). */
   failed: FailedParse[];
 }
 
+function readHeaders(
+  engine: EngineClient,
+  deps: RunDeps,
+  files: IntakeFile[],
+  rules: RunRules,
+): Promise<PlayersResult[]> {
+  if (rules.maxParsedFiles === undefined) {
+    return engine.listPlayers(files, { signal: deps.signal, onProgress: deps.progressFor("players") });
+  }
+  if (!engine.scanHeaders) throw new EngineError("engine_unavailable", "the browser engine does not support header scans");
+  return engine.scanHeaders(files, { signal: deps.signal, onProgress: deps.progressFor("header") });
+}
+
 function report(deps: RunDeps, sink: FailedParse[], failed: FailedParse[]): void {
   if (failed.length === 0) return;
-  sink.push(...failed);
+  for (const failure of failed) sink.push(failure);
   deps.dispatch({ type: "run-failed", failed });
 }
 
@@ -73,7 +88,7 @@ export async function scanFiles(
   if (!deps.isCurrent()) return null;
   deps.dispatch({ type: "engine-info", info });
   deps.dispatch({ type: "stage", phase: "scanning" });
-  const scans = await engine.listPlayers(inWindow, { signal: deps.signal, onProgress: deps.progressFor("players") });
+  const scans = await readHeaders(engine, deps, inWindow, rules);
   if (!deps.isCurrent()) return null;
   const triaged = triageScans(inWindow, scans, rules);
   report(deps, failed, triaged.failed);
@@ -85,7 +100,7 @@ export async function scanFiles(
 }
 
 /**
- * Parse every eligible replay as `chosenToon` (or the detected player).
+ * Parse eligible replays as `chosenToon` (or the detected player), up to the run cap.
  * Returns null when superseded.
  *
  * Example:
@@ -101,13 +116,15 @@ export async function parseScanned(
   const failed: FailedParse[] = [...scanned.failed];
   const { requests, failed: unresolved } = buildRequests(scanned.eligible, scanned.detection, chosenToon, wantDigests);
   report(deps, failed, unresolved);
-  if (requests.length === 0) return { parsed: [], failed };
+  const selected = rules.maxParsedFiles === undefined ? requests : requests.slice(0, Math.max(0, rules.maxParsedFiles));
+  const deferredCount = requests.length - selected.length;
+  if (selected.length === 0) return { parsed: [], failed, deferredCount };
   deps.dispatch({ type: "stage", phase: "parsing" });
-  const outcomes = await deps.getEngine().parseFiles(requests, { signal: deps.signal, onProgress: deps.progressFor("parse") });
+  const outcomes = await deps.getEngine().parseFiles(selected, { signal: deps.signal, onProgress: deps.progressFor("parse") });
   if (!deps.isCurrent()) return null;
-  const finalized = finalizeOutcomes(requests, outcomes, rules);
+  const finalized = finalizeOutcomes(selected, outcomes, rules);
   report(deps, failed, finalized.failed);
-  return { parsed: finalized.parsed, failed };
+  return { parsed: finalized.parsed, failed, deferredCount };
 }
 
 /**

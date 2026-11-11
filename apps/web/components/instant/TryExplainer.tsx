@@ -62,7 +62,7 @@ const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   },
   {
     q: "Which replays can it analyze?",
-    a: `1v1 StarCraft II replays (.SC2Replay). Add single files, a .zip, or a whole folder; the newest ${MAX_TRY_FILES} games are analyzed per run.`,
+    a: `1v1 StarCraft II replays (.SC2Replay). Add single files, a .zip, or a whole folder. We scan the selection and analyze up to ${MAX_TRY_FILES} eligible games, newest first.`,
   },
   {
     q: "Does it work on a Mac, Chromebook or iPad?",

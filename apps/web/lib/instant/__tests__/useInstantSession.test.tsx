@@ -18,6 +18,7 @@ import type {
   ParseOutcome,
   ParseRequest,
   PlayersResult,
+  ReplayHeaderResult,
   ReplayPlayer,
 } from "../types";
 import { useInstantSession, type UseInstantSessionOptions } from "../useInstantSession";
@@ -81,6 +82,19 @@ class MockEngine implements EngineClient {
 
   listPlayers = vi.fn(async (files: IntakeFile[]): Promise<PlayersResult[]> =>
     files.map((file) => this.scans.get(file.name) ?? scan(`2-S2-1-${file.name}`)),
+  );
+
+  scanHeaders = vi.fn(async (files: IntakeFile[], options?: ParseOptions): Promise<ReplayHeaderResult[]> =>
+    files.map((file, index) => {
+      const result = this.scans.get(file.name) ?? scan(`2-S2-1-${file.name}`);
+      options?.onProgress?.({ phase: "header", index, total: files.length, fileName: file.name });
+      if (!result.ok) return result;
+      return {
+        ...result,
+        players: result.players.map((player) => ({ ...player, selectedRace: null, mmr: null, leagueId: null })),
+        startedAt: null, utcOffsetHours: null, isLadderGame: null, gameVersion: null, gameBuild: null, expansion: null,
+      };
+    }),
   );
 
   parseFiles = vi.fn(async (requests: ParseRequest[], options?: ParseOptions): Promise<ParseOutcome[]> => {
@@ -370,6 +384,46 @@ describe("useInstantSession: filters", () => {
 });
 
 describe("useInstantSession: intake", () => {
+  it("scans the whole selection before parsing the newest 25 eligible 1v1 games", async () => {
+    const engine = new MockEngine();
+    const files = Array.from({ length: 27 }, (_, index) => {
+      const name = `game-${index}.SC2Replay`;
+      engine.scans.set(name, scan(`2-S2-1-${index}`, {
+        toonFromPath: ME,
+        date: new Date(RECENT_MS + index * 1000).toISOString(),
+      }));
+      return replay(name, RECENT_MS - index * 1000);
+    });
+    engine.scans.set("team.SC2Replay", scan("2-S2-1-500", { matchFormat: "team", playerCount: 4 }));
+    engine.scans.set("ai.SC2Replay", scan("2-S2-1-501", { isAiGame: true }));
+    const { result } = mount(engine, { maxParsedFiles: 25, onlyOneVsOne: true });
+    await add(result, [...files, replay("team.SC2Replay", NOW), replay("ai.SC2Replay", NOW)]);
+    expect(result.current.files).toHaveLength(29);
+    await start(result);
+    expect(engine.listPlayers).not.toHaveBeenCalled();
+    expect(engine.scanHeaders.mock.calls[0][0]).toHaveLength(29);
+    expect(engine.parseRequests.map(({ file }) => file.name)).toEqual(files.slice(2).reverse().map(({ name }) => name));
+    expect(result.current.failed.map(({ errorKind }) => errorKind)).toEqual(["not_1v1", "ai_game"]);
+    expect(result.current.truncatedCount).toBe(2);
+  });
+
+  it("applies the cap after resolving the selected player", async () => {
+    const engine = new MockEngine();
+    const otherToon = "1-S2-1-999";
+    engine.scans.set("new.SC2Replay", scan("2-S2-1-900", {
+      date: RECENT_ISO,
+      players: [player("Someone else", otherToon, 1), player("Opponent", "2-S2-1-900", 2)],
+    }));
+    engine.scans.set("mine.SC2Replay", scan("2-S2-1-901", { date: new Date(RECENT_MS - 1000).toISOString() }));
+    const { result } = mount(engine, { maxParsedFiles: 1, onlyOneVsOne: true });
+    await add(result, [replay("new.SC2Replay"), replay("mine.SC2Replay")]);
+    await start(result);
+    expect(result.current.phase).toBe("choosing");
+    await act(async () => { await result.current.choose(ME); });
+    expect(engine.parseRequests.map(({ file }) => file.name)).toEqual(["mine.SC2Replay"]);
+    expect(result.current.truncatedCount).toBe(0);
+  });
+
   it("ignores non-replays, dedupes, and keeps the newest maxFiles", async () => {
     const engine = new MockEngine();
     const { result } = mount(engine, { maxFiles: 2 });

@@ -51,6 +51,7 @@ export const MTIME_SLACK_MS = 7 * DAY_MS;
 export const COLD_BOOT_SECONDS = 6;
 /** Conservative per-replay parse time on a mid-range laptop. */
 export const PER_FILE_PARSE_SECONDS = 1.5;
+const PER_FILE_HEADER_SECONDS = 0.03;
 const SECONDS_PER_MINUTE = 60;
 /** Estimates at or above this many seconds are phrased in minutes. */
 const MINUTES_LABEL_THRESHOLD_SECONDS = 90;
@@ -244,11 +245,12 @@ export function isInDateWindow(
  */
 export function estimateParseSeconds(
   count: number,
-  options: { warm: boolean },
+  options: { warm: boolean; scanCount?: number },
 ): ParseEstimate {
   const files = Math.max(0, Math.floor(count));
   const boot = options.warm ? 0 : COLD_BOOT_SECONDS;
-  const seconds = Math.ceil(boot + files * PER_FILE_PARSE_SECONDS);
+  const headers = (options.scanCount ?? 0) * PER_FILE_HEADER_SECONDS;
+  const seconds = Math.ceil(boot + headers + files * PER_FILE_PARSE_SECONDS);
   return { seconds, label: estimateLabel(seconds) };
 }
 

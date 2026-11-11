@@ -234,6 +234,8 @@ export interface ParseOptions {
 export interface EngineClient {
   boot(options?: ParseOptions): Promise<EngineInfo>;
   listPlayers(files: IntakeFile[], options?: ParseOptions): Promise<PlayersResult[]>;
+  /** Header scans are required only for the scan-first browser flows. */
+  scanHeaders?(files: IntakeFile[], options?: ParseOptions): Promise<ReplayHeaderResult[]>;
   parseFiles(requests: ParseRequest[], options?: ParseOptions): Promise<ParseOutcome[]>;
   /** Unzip with Python's `zipfile` inside the worker; returns replay entries. */
   expandZip(file: IntakeFile, options?: ParseOptions): Promise<IntakeFile[]>;

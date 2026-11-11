@@ -15,6 +15,8 @@ import { useMemo } from "react";
 import { Info } from "lucide-react";
 import { BuildOrderColumns } from "@/components/analyzer/game/BuildOrderColumns";
 import type { ReportGame } from "@/lib/instant/report";
+import { patchEraForGame } from "@/lib/ladderPulse";
+import { LocalReplayPanel } from "./LocalReplayPanel";
 import { gameBuilds, macroChartProps, type GameBuilds } from "@/lib/instant/reportGameDetail";
 import { formatMmr, mmrGapLabel, signedMmr } from "@/lib/instant/reportMmr";
 import { formatGameClock } from "@/lib/macro";
@@ -146,6 +148,7 @@ export function GameDetail({ game }: { game: ReportGame }) {
     <div className="min-w-0 space-y-4" data-testid="report-game-detail">
       <GameHeading game={game} />
       <GameMmr mmr={game.mmr} next={game.nextMmr} />
+      {game.payload.mapPlayback ? <LocalReplayPanel data={game.payload.mapPlayback} patchEra={patchEraForGame(game.payload)} /> : null}
       <GameBuildOrders builds={builds} opponentName={game.opponentName} />
       {chart ? (
         <section
