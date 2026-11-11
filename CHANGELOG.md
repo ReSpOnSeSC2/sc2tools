@@ -269,6 +269,12 @@ corresponding GitHub Release.
   display names and focus notes. Roster saves create a local JSON backup
   with a revision-checked restore action.
 
+### Coaching Locker Worksheets
+
+- Open Worksheets from the Locker to create and send drafts, reuse templates,
+  annotate screenshots, or submit answers and replay files. Worksheets keeps a
+  local backup for revision-checked restore. Classic Locker remains available.
+
 ### Coaching sessions and prep digest
 
 - Add "Since last session" to each upcoming coaching session. Coaches see the
