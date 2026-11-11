@@ -1168,6 +1168,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 on_reset_positions=ui._on_build_checkin_reset,
                 assistance_reason=self._companion_page.assistance_off_reason,
             )
+            self._checkin_host.set_skin(ui._window_skin)
             if callable(ui._on_companion_action):
                 self._companion_page.assistanceChanged.connect(self._checkin_host.set_panels_enabled)
                 self._checkin_host.set_panels_enabled(self._companion_page.assistance_enabled())
@@ -3641,6 +3642,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             ui._window_skin, ui._window_animations = requested
             self._companion_page.set_appearance_notice("")
             self._apply_window_appearance()
+            self._checkin_host.set_skin(ui._window_skin)
 
         def _update_responsive_chrome(self):
             narrow = self.width() < 900

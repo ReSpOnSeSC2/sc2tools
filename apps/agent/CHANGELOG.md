@@ -31,6 +31,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   your own five games and **First meeting** on the opponent's side, never a guess.
 
 ### Changed
+- Restyle the floating build check-ins and Scouting report with shared controls,
+  readable build and status colors, and the selected skin's accent and race mark.
 - Refresh the Companion console, build selectors and Build Order Ghost with
   flat surfaces, shared type and controls, and a mark and accent for each skin.
 - Give the main window and its Dashboard a flat, modern look: quiet dark

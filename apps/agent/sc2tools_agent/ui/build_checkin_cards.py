@@ -44,11 +44,11 @@ from ..build_checkin.models import (
     opponent_change,
 )
 from ..build_checkin.view import HIDE_OPENED_WEB
-from . import win32_window
+from . import theme, win32_window
+from .brand_mark import create_brand_mark
 from .build_checkin_widgets import (
     BuildList,
     button,
-    card_stylesheet,
     link,
     plain_label,
     set_tone,
@@ -140,7 +140,7 @@ class CardWindow(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground, True)
         self.setAttribute(QtCore.Qt.WA_AlwaysShowToolTips, True)
-        self.setStyleSheet(card_stylesheet())
+        self.set_skin("default")
 
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -157,6 +157,7 @@ class CardWindow(QtWidgets.QWidget):
         self.content_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.content_scroll.setFocusPolicy(QtCore.Qt.NoFocus)
         self.content = QtWidgets.QWidget()
+        self.content_layout = QtWidgets.QVBoxLayout(self.content)
         self.content_scroll.setWidget(self.content)
         card_layout.addWidget(self.content_scroll)
         self._names_expanded = False
@@ -164,6 +165,14 @@ class CardWindow(QtWidgets.QWidget):
         self._topmost_timer = QtCore.QTimer(self)
         self._topmost_timer.setInterval(TOPMOST_INTERVAL_MS)
         self._topmost_timer.timeout.connect(self._tick)
+
+    def set_skin(self, name: str) -> None:
+        if self.property("checkinSkin") == name:
+            return
+        self.setProperty("checkinSkin", name)
+        self.setStyleSheet(theme.card_stylesheet(theme.SKINS[name]))
+        for mark in self.findChildren(QtWidgets.QWidget, "agentBrandMark"):
+            mark.set_skin(name)
 
     # ------------------------------------------------------ identity
 
@@ -383,10 +392,12 @@ def _header(
     header = QtWidgets.QWidget()
     row = QtWidgets.QHBoxLayout(header)
     row.setContentsMargins(0, 0, 0, 0)
-    row.setSpacing(8)
+    row.setSpacing(theme.SPACE_S)
     column = QtWidgets.QVBoxLayout()
     column.setContentsMargins(0, 0, 0, 0)
-    column.setSpacing(2)
+    column.setSpacing(theme.SPACE_2XS)
+    mark = create_brand_mark(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+    row.addWidget(mark, 0, QtCore.Qt.AlignVCenter)
     column.addWidget(eyebrow)
     column.addWidget(title_row)
     row.addLayout(column, 1)
@@ -401,8 +412,8 @@ def _intro_box(text_label: QtWidgets.QLabel, dismiss: QtWidgets.QPushButton) -> 
     box = QtWidgets.QFrame()
     box.setObjectName("checkinIntroBox")
     row = QtWidgets.QHBoxLayout(box)
-    row.setContentsMargins(10, 7, 10, 7)
-    row.setSpacing(8)
+    row.setContentsMargins(theme.SPACE_S, theme.SPACE_XS, theme.SPACE_S, theme.SPACE_XS)
+    row.setSpacing(theme.SPACE_S)
     row.addWidget(text_label, 1)
     row.addWidget(dismiss, 0, QtCore.Qt.AlignTop)
     return box
@@ -428,8 +439,8 @@ class LoadingCardWindow(CardWindow):
         super().__init__(host=host)
         self.model: Optional[LoadingCardModel] = None
 
-        layout = QtWidgets.QVBoxLayout(self.content)
-        layout.setContentsMargins(14, 12, 14, 12)
+        layout = self.content_layout
+        layout.setContentsMargins(theme.SPACE_M, theme.SPACE_M, theme.SPACE_M, theme.SPACE_M)
         layout.setSpacing(0)
         layout.addWidget(self.preview_chip)
 
@@ -437,7 +448,7 @@ class LoadingCardWindow(CardWindow):
         self.full = QtWidgets.QWidget()
         full = QtWidgets.QVBoxLayout(self.full)
         full.setContentsMargins(0, 0, 0, 0)
-        full.setSpacing(8)
+        full.setSpacing(theme.SPACE_S)
 
         self.eyebrow = plain_label("", "checkinEyebrow")
         self.title = plain_label("", "checkinTitle", wrap=True)
@@ -457,8 +468,8 @@ class LoadingCardWindow(CardWindow):
         self.strip = QtWidgets.QFrame()
         self.strip.setObjectName("checkinStrip")
         strip_row = QtWidgets.QHBoxLayout(self.strip)
-        strip_row.setContentsMargins(10, 6, 6, 6)
-        strip_row.setSpacing(8)
+        strip_row.setContentsMargins(theme.SPACE_S, theme.SPACE_XS, theme.SPACE_XS, theme.SPACE_XS)
+        strip_row.setSpacing(theme.SPACE_S)
         self.strip_label = plain_label("", None, wrap=True)
         strip_row.addWidget(self.strip_label, 1)
         self.roll_now = button("Randomize", "checkinSmall", focusable=False)
@@ -481,8 +492,8 @@ class LoadingCardWindow(CardWindow):
         full.addWidget(self.status)
 
         footer = QtWidgets.QHBoxLayout()
-        footer.setContentsMargins(0, 2, 0, 0)
-        footer.setSpacing(8)
+        footer.setContentsMargins(0, theme.SPACE_2XS, 0, 0)
+        footer.setSpacing(theme.SPACE_S)
         self.not_now = button("Not now", "checkinQuiet", focusable=False)
         self.not_now.setToolTip("Skip this game's check-in at loading")
         self.not_now.clicked.connect(self._not_now)
@@ -499,10 +510,10 @@ class LoadingCardWindow(CardWindow):
         self.bar = QtWidgets.QWidget()
         bar = QtWidgets.QVBoxLayout(self.bar)
         bar.setContentsMargins(0, 0, 0, 0)
-        bar.setSpacing(4)
+        bar.setSpacing(theme.SPACE_XS)
         bar_row = QtWidgets.QHBoxLayout()
         bar_row.setContentsMargins(0, 0, 0, 0)
-        bar_row.setSpacing(6)
+        bar_row.setSpacing(theme.SPACE_S)
         self.locked = plain_label("", "checkinLocked", wrap=True)
         self.locked.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
         bar_row.addWidget(self.locked, 1)
@@ -640,9 +651,9 @@ class PostgameCardWindow(CardWindow):
         """The model's own selection from the last untouched render."""
         self._last_interaction = 0.0
 
-        layout = QtWidgets.QVBoxLayout(self.content)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(8)
+        layout = self.content_layout
+        layout.setContentsMargins(theme.SPACE_L, theme.SPACE_M, theme.SPACE_L, theme.SPACE_M)
+        layout.setSpacing(theme.SPACE_S)
         layout.addWidget(self.preview_chip)
 
         self.eyebrow = plain_label("", "checkinEyebrow")
@@ -673,7 +684,7 @@ class PostgameCardWindow(CardWindow):
         self.opp_row = QtWidgets.QWidget()
         opp_row = QtWidgets.QHBoxLayout(self.opp_row)
         opp_row.setContentsMargins(0, 0, 0, 0)
-        opp_row.setSpacing(6)
+        opp_row.setSpacing(theme.SPACE_S)
         self.opp_label = plain_label("", "checkinOpponent", wrap=True)
         opp_row.addWidget(self.opp_label, 1)
         self.opp_changed = plain_label("", "checkinChanged")
@@ -691,7 +702,7 @@ class PostgameCardWindow(CardWindow):
         self.picker = QtWidgets.QWidget()
         picker = QtWidgets.QVBoxLayout(self.picker)
         picker.setContentsMargins(0, 0, 0, 0)
-        picker.setSpacing(6)
+        picker.setSpacing(theme.SPACE_S)
         self.builds = BuildList(selectable=True, searchable=True, focusable=True)
         self.builds.picked.connect(self._picked)
         self.builds.searched.connect(self._searched)
@@ -711,7 +722,7 @@ class PostgameCardWindow(CardWindow):
         self.opp_picker = QtWidgets.QWidget()
         opp_picker = QtWidgets.QVBoxLayout(self.opp_picker)
         opp_picker.setContentsMargins(0, 0, 0, 0)
-        opp_picker.setSpacing(6)
+        opp_picker.setSpacing(theme.SPACE_S)
         defaults = OpponentRowModel(label="", name="")
         self.opp_builds = BuildList(
             selectable=True, searchable=True, focusable=True,
@@ -733,7 +744,7 @@ class PostgameCardWindow(CardWindow):
         opp_picker.addWidget(self.opp_empty)
         opp_footer = QtWidgets.QHBoxLayout()
         opp_footer.setContentsMargins(0, 0, 0, 0)
-        opp_footer.setSpacing(8)
+        opp_footer.setSpacing(theme.SPACE_S)
         self.opp_add = link("")
         self.opp_add.clicked.connect(lambda: self._add_build("opponent"))
         opp_footer.addWidget(self.opp_add)
@@ -762,8 +773,8 @@ class PostgameCardWindow(CardWindow):
         layout.addWidget(self.opponent_note)
 
         actions = QtWidgets.QHBoxLayout()
-        actions.setContentsMargins(0, 2, 0, 0)
-        actions.setSpacing(8)
+        actions.setContentsMargins(0, theme.SPACE_2XS, 0, 0)
+        actions.setSpacing(theme.SPACE_S)
         self.primary = button("Confirm", "checkinPrimary")
         self.primary.setToolTip("Confirm (Ctrl+Enter)")
         self.primary.clicked.connect(self._primary_clicked)
