@@ -3,19 +3,19 @@ import type { HelpArticle } from "@/lib/help/types";
 const article: HelpArticle = {
   slug: "reanalyze",
   title: "Re-analyze old games after an update",
-  summary: "When an analysis update changes build labels, re-analyze the games an older engine labelled, in managed batches, without a full Re-sync.",
+  summary: "Refresh older build labels and add replay details from newer analysis engines without a full Re-sync.",
   category: "account-data",
   audience: "player",
   signedInOnly: true,
-  keywords: ["re-analyze", "reanalyze", "re-parse", "engine update", "old labels", "wrong build", "Blink", "Charge", "Oracle", "Widow Mine Drop", "macro score", "re-sync"],
-  updated: "2026-11-10",
+  keywords: ["re-analyze", "reanalyze", "re-parse", "engine update", "old labels", "wrong build", "Blink", "Charge", "Oracle", "Widow Mine Drop", "macro score", "kills and losses", "camera tracks", "re-sync"],
+  updated: "2026-11-11",
   order: 26,
   body: [
-    { type: "paragraph", text: "Some desktop agent updates change how games are labelled. Analysis engine 1.6.10 changed PvT Blink and Charge openings, and 1.6.11 changed Oracle-first openings and TvP Widow Mine Drop. Games you uploaded before an update keep the labels the older engine gave them until they are analyzed again." },
+    { type: "paragraph", text: "Analysis updates can change build labels or add replay details. Engine 1.6.10 changed PvT Blink and Charge openings, and 1.6.11 changed Oracle-first openings and TvP Widow Mine Drop. Engine 1.6.12 added timeline kills and losses, and 1.6.13 adds camera tracks, unit trade details and your own camera and control-group habits. Re-analyze an older game to read its original replay with the newer engine. Available details depend on what that replay recorded." },
     { type: "settingsLink", label: "Open Re-analyze games", href: "/settings?tab=backups#reanalyze" },
     { type: "heading", text: "Choose which games to re-analyze", anchor: "choose" },
     { type: "table", head: ["Group", "What it contains"], rows: [
-      ["Analyzed before engine X", "Games in the affected matchups that an older engine labelled. Each group says what changed in that release."],
+      ["Analyzed before engine X", "Games in the affected matchups with a known engine version older than the one shown. Each group says what changed in that release."],
       ["Missing a macro score", "Games saved without a macro score, for example when it could not be computed at the time."],
       ["Engine version unknown", "Games uploaded before the desktop agent reported its engine version, so their labels may be older."],
     ] },
@@ -28,7 +28,7 @@ const article: HelpArticle = {
       "Watch the progress and time left on the card. Use **Pause** while you play and **Resume** later. **Cancel re-analysis** stops it; games already updated keep their new labels.",
       "Your notification bell tells you when it finishes.",
     ] },
-    { type: "callout", tone: "info", title: "Historical stats will change", text: "Re-analyzed games get the current engine's build and opponent-strategy labels, so win rates by build, matchup trends and opponent records include the corrected labels." },
+    { type: "callout", tone: "info", title: "Historical stats can change", text: "The current engine can assign different build and opponent-strategy labels. Win rates by build, matchup trends and opponent records use the updated analysis." },
     { type: "heading", text: "If it waits or skips games", anchor: "waiting" },
     { type: "list", items: [
       "**Waiting for your desktop agent**: the agent is closed or offline. The re-analysis continues when it connects again.",

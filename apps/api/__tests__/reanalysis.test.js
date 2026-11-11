@@ -69,6 +69,7 @@ describe("milestone catalog", () => {
     expect(MILESTONE_CATALOG.milestones.map(({ engine, matchups }) => [engine, matchups])).toEqual([
       ["1.6.10", ["PvT", "TvP"]],
       ["1.6.11", ["PvT", "TvP"]],
+      ["1.6.12", ["PvP", "PvT", "PvZ", "TvP", "TvT", "TvZ", "ZvP", "ZvT", "ZvZ"]],
       ["1.6.13", ["PvP", "PvT", "PvZ", "TvP", "TvT", "TvZ", "ZvP", "ZvT", "ZvZ"]],
     ]);
     expect(MILESTONE_CATALOG.revision).toMatch(/^[0-9a-f]{16}$/);
@@ -102,7 +103,12 @@ describe("cohort counts", () => {
     expect(byId["engine-before:1.6.10"]).toMatchObject({ count: 11, unknown: 5 });
     expect(byId["engine-before:1.6.11"]).toMatchObject({ count: 13, unknown: 5 });
     expect(byId["engine-before:1.6.11"].versions).toEqual(["1.6.10", "1.6.11-rc.1", "1.6.9"]);
-    // 1.6.13 adds the 1.6.12 PvT row and the older ZvZ row; the current ZvZ row is up to date.
+    // 1.6.12 also covers the older ZvZ row. 1.6.13 includes the 1.6.12 PvT row too.
+    expect(byId["engine-before:1.6.12"]).toMatchObject({
+      count: 14,
+      unknown: 5,
+      versions: ["1.6.10", "1.6.11-rc.1", "1.6.9"],
+    });
     expect(byId["engine-before:1.6.13"]).toMatchObject({
       count: 15,
       unknown: 5,

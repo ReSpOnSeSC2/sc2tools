@@ -12,6 +12,12 @@
     "matchups": ["PvT", "TvP"]
   },
   {
+    "engine": "1.6.12",
+    "date": "2026-10-18",
+    "summary": "Add timeline counts and resource values for unit, building and worker kills and losses for both players.",
+    "matchups": ["PvP", "PvT", "PvZ", "TvP", "TvT", "TvZ", "ZvP", "ZvT", "ZvZ"]
+  },
+  {
     "engine": "1.6.13",
     "date": "2026-11-11",
     "summary": "Add camera tracks, unit trade details and own-side control-group and camera habits.",

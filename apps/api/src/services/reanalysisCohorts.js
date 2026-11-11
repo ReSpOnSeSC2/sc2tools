@@ -7,10 +7,10 @@ const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 const { parseStrictSemver, compareStrictSemver, STRICT_SEMVER_PATTERN, STRICT_SEMVER_MAX_LENGTH } = require("../util/strictSemver");
 
 /**
- * Re-analysis cohorts: which of an owner's games an older engine labelled.
+ * Re-analysis cohorts: which of an owner's games have older analysis.
  *
- * The catalog (config/analysisMilestones.json) lists label-changing engine
- * releases. `date` is the day the change entered the analysis engine source;
+ * The catalog (config/analysisMilestones.json) lists engine releases that
+ * changed labels or added replay data. `date` is the day the change entered the analysis engine source;
  * the agent installer that shipped it may be later, and dates never decide
  * membership: only the reported engine version on each game does.
  *
