@@ -1,6 +1,7 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useOverlaySeriesState } from "@/components/overlay/useOverlaySeriesState";
+const LocalCompositePreview = dynamic(() => import("@/components/overlay/LocalCompositePreview").then(module => module.LocalCompositePreview), { ssr: false });
 const LazySeriesWidget = dynamic(() => import("@/components/overlay/widgets/SeriesWidget").then(module => module.SeriesWidget), { ssr: false });
 
 import {
@@ -13,8 +14,9 @@ import {
   type RefObject,
   type ReactNode,
 } from "react";
-import { OverlayLocalPreviewFrame, localPreviewRandomizer } from "@/components/overlay/OverlayLocalPreviewFrame";
 import { CompositeTestWidgets } from "@/components/overlay/CompositeTestWidgets";
+import { OverlayPlacement } from "@/components/overlay/OverlayPlacement";
+import type { OverlayCanvas } from "@/lib/overlayLayout";
 import { useGameWidgetsPaused } from "@/components/overlay/useGameWidgetsPaused";
 import { newerSession } from "@/lib/multichat/sessionSnapshot";
 import { useOverlayTestLayer, type TestClear } from "@/components/overlay/useOverlayTestLayer";
@@ -115,16 +117,11 @@ export function OverlayClient(props: Parameters<typeof ConnectedOverlayClient>[0
   return <ConnectedOverlayClient key={props.token} {...props} />;
 }
 
-function LocalCompositePreview({ sample, themeParam }: { sample: LiveGamePayload; themeParam?: string | null }) {
-  const randomizer = useMemo(localPreviewRandomizer, []);
-  const theme = useMemo(() => themeToCssVars(decodeOverlayTheme(themeParam || null)), [themeParam]);
-  return <div className="relative h-screen w-screen" style={theme as CSSProperties}><OverlayLocalPreviewFrame sample={sample}>{(live) => <CompositeTestWidgets live={live} session={live.session as SessionSummary || null} randomizer={randomizer} targets={() => true} />}</OverlayLocalPreviewFrame></div>;
-}
-
 function ConnectedOverlayClient({
   token,
   themeParam = null,
   showCredit,
+  canvas = "landscape",
 }: {
   token: string;
   /**
@@ -139,10 +136,11 @@ function ConnectedOverlayClient({
    * screen (default). The server page turns it off for ``?credit=0``.
    */
   showCredit?: boolean;
+  canvas?: OverlayCanvas;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const { gameWidgetsPaused, receivePause, resetPause } = useGameWidgetsPaused(token);
-  const { themeVars, optionsRef, receiveProfile } = useOverlayProfile(token, themeParam);
+  const { profile, themeVars, optionsRef, receiveProfile } = useOverlayProfile(token, themeParam);
   const testLayer = useOverlayTestLayer(token, optionsRef);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
@@ -256,7 +254,10 @@ function ConnectedOverlayClient({
 
   const intel = liveIntelPayload(live, liveGame);
   const testTargets = (id: WidgetId) => enabled.has(id) && (!singleWidget || singleWidget === id) && testLayer.targets(id);
-  const realSlot = (id: WidgetId, card: ReactNode) => <div data-overlay-real={id} style={{ display: testTargets(id) ? "none" : undefined }}>{card}</div>;
+  const layout = singleWidget === null ? canvas === "vertical" ? profile.layoutVertical : profile.layout : undefined;
+  const realSlot = (id: WidgetId, card: ReactNode) => <div data-overlay-real={id} style={{ display: testTargets(id) ? "none" : undefined }}>
+    <OverlayPlacement placement={layout?.[id]}>{card}</OverlayPlacement>
+  </div>;
 
   if ((connectionStatus === "invalid" || connectionStatus === "replaced")) return <><OverlaySetupCard reason={connectionStatus === "replaced" ? "replaced" : "invalid-token"} /><OverlayCheckBadge status={connectionStatus} /></>;
 
@@ -286,17 +287,17 @@ function ConnectedOverlayClient({
           interruptions, so recovering the same match cannot replay it. */}
       {enabled.has("randomizer") && (!singleWidget || singleWidget === "randomizer") && (
         <div data-overlay-real="randomizer" style={{ display: shouldShow("randomizer") && !testTargets("randomizer") ? "block" : "none" }}>
-          <RandomizerWidget
+          <OverlayPlacement placement={layout?.randomizer}><RandomizerWidget
             live={randomizerLive}
             liveGame={randomizerLiveGame}
             config={randomizer}
             visible={shouldShow("randomizer")}
             intent={randomizerCheckin.intent}
             onSpin={randomizerCheckin.onSpin}
-          />
+          /></OverlayPlacement>
         </div>
       )}
-      {!gameWidgetsPaused && <CompositeTestWidgets live={testLayer.live} session={testLayer.session} randomizer={randomizer} targets={testTargets} />}
+      {!gameWidgetsPaused && <CompositeTestWidgets live={testLayer.live} session={testLayer.session} randomizer={randomizer} targets={testTargets} layout={layout} />}
       {/* A refused first handshake has no widget payload to make visible. */}
       {connectionStatus === "reconnecting" ? (
         <ReconnectDot />

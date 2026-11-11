@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Overlay layout
+
+- Arrange, scale and layer All-in-one widgets on separate landscape and vertical
+  canvases. The live overlay profile updates connected sources when you save.
+  Dedicated widget sources keep their own OBS positioning.
+
 ### Practice targets and reports
 
 - Edit checkpoints for a private Ghost target and count a graded game toward

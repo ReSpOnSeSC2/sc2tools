@@ -1,15 +1,21 @@
 "use strict";
 const rules = require("../../../web/lib/overlayProfileRules.json");
+const { compositeWidgets } = require("../../../web/lib/overlayPresenceRules.json");
+const LAYOUT_WIDGETS = new Set(compositeWidgets);
+const PLACEMENT_KEYS = new Set(["anchor", "xPct", "yPct", "scale", "zIndex"]);
+const LAYOUT_KEYS = /** @type {const} */ (["layout", "layoutVertical"]);
 const THEME_KEYS = new Set(["accent", "scale", "opacity", "radius", "font", "style"]);
 const plain = (/** @type {unknown} */ value) => !!value && typeof value === "object" && !Array.isArray(value)
   && [Object.prototype, null].includes(Object.getPrototypeOf(value));
-const invalid = () => Object.assign(new Error("Use a valid overlay profile, theme and display time."), { status: 400, code: "invalid_overlay_profile" });
+const invalid = () => Object.assign(new Error("Use a valid overlay profile, theme, display time and widget placement."), { status: 400, code: "invalid_overlay_profile" });
 /** Account-wide overlay choices Settings bakes into copied URLs. Absent
  * means "not chosen yet" (credit shown, Ghost voice off), so Settings can
  * move an older per-browser choice in once. */
 const FLAG_KEYS = /** @type {const} */ (["credit", "ghostVoice"]);
-const PROFILE_KEYS = new Set(["v", "theme", "widgetOptions", ...FLAG_KEYS]);
-/** @typedef {{v:1,theme:Record<string,any>,widgetOptions:Record<string,{durationSec:number|null}>,credit?:boolean,ghostVoice?:boolean}} OverlayProfile */
+const PROFILE_KEYS = new Set(["v", "theme", "widgetOptions", ...LAYOUT_KEYS, ...FLAG_KEYS]);
+/** @typedef {{anchor:"top"|"bottom",xPct:number,yPct:number,scale:number,zIndex:number}} WidgetPlacement */
+/** @typedef {Record<string,WidgetPlacement>} OverlayLayout */
+/** @typedef {{v:1,theme:Record<string,any>,widgetOptions:Record<string,{durationSec:number|null}>,layout?:OverlayLayout,layoutVertical?:OverlayLayout,credit?:boolean,ghostVoice?:boolean}} OverlayProfile */
 /** @returns {OverlayProfile} */
 function defaultOverlayProfile() { return { v: 1, theme: {}, widgetOptions: {} }; }
 
@@ -42,6 +48,29 @@ function validateProfileTheme(raw) {
   return theme;
 }
 
+/** @param {unknown} value @param {number} min @param {number} max @returns {value is number} */
+function inRange(value, min, max) {
+  return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
+}
+
+/** @param {unknown} raw @returns {OverlayLayout} */
+function validateLayout(raw) {
+  if (!plain(raw)) throw invalid();
+  const entries = Object.entries(/** @type {Record<string, any>} */ (raw));
+  if (entries.length > LAYOUT_WIDGETS.size) throw invalid();
+  /** @type {OverlayLayout} */
+  const layout = {};
+  for (const [id, value] of entries.sort(([a], [b]) => a.localeCompare(b))) {
+    if (!LAYOUT_WIDGETS.has(id) || !plain(value) || Object.keys(value).some(key => !PLACEMENT_KEYS.has(key))) throw invalid();
+    const { anchor, xPct, yPct, scale, zIndex = 0 } = value;
+    if ((anchor !== "top" && anchor !== "bottom") || !inRange(xPct, 0, 100) || !inRange(yPct, 0, 100)
+      || !inRange(scale, rules.layout.minScale, rules.layout.maxScale)
+      || !Number.isInteger(zIndex) || !inRange(zIndex, 0, rules.layout.maxLayer)) throw invalid();
+    layout[id] = { anchor, xPct, yPct, scale, zIndex };
+  }
+  return layout;
+}
+
 /** A bounded allowlist on the existing token; null clears a timed override.
  * Persistent sources have no event timer and cannot acquire inert overrides.
  * `credit` and `ghostVoice` are optional booleans; anything else is rejected.
@@ -63,6 +92,11 @@ function validateOverlayProfile(raw) {
   }
   /** @type {OverlayProfile} */
   const profile = { v: /** @type {1} */ (1), theme, widgetOptions };
+  for (const key of LAYOUT_KEYS) {
+    if (!Object.hasOwn(input, key)) continue;
+    const layout = validateLayout(input[key]);
+    if (Object.keys(layout).length) profile[key] = layout;
+  }
   for (const key of FLAG_KEYS) if (Object.hasOwn(input, key)) profile[key] = input[key];
   return profile;
 }
