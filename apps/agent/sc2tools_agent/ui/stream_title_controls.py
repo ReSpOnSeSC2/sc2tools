@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from ..streaming.title_template import TOKEN_REFERENCE, render_values
+from . import theme
 
 
 class StreamTitleControls:
@@ -91,6 +92,10 @@ def connect_platform(page, platform, QtWidgets):
     dialog = QtWidgets.QDialog(page)
     dialog.setWindowTitle("Connect " + platform.title())
     layout = QtWidgets.QFormLayout(dialog)
+    layout.setContentsMargins(*(theme.SPACE_L,) * 4)
+    layout.setHorizontalSpacing(theme.SPACE_M)
+    layout.setVerticalSpacing(theme.SPACE_S)
+    layout.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
     client_id = QtWidgets.QLineEdit()
     layout.addRow("Your OAuth app client ID", client_id)
     secret = QtWidgets.QLineEdit()

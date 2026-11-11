@@ -212,7 +212,7 @@ def test_tray_support_routes_gui_callbacks_and_headless_copy_honestly(tmp_path, 
         SEPARATOR = object()
         def __init__(self, *items): self.items = items
     pystray = SimpleNamespace(Menu=Menu, MenuItem=lambda label, action, **options: SimpleNamespace(label=label, action=action, options=options))
-    labels = [getattr(item, "label", None) for item in tray._build_menu(pystray).items]
+    labels = [item.label for item in tray._build_menu(pystray).items if item is not Menu.SEPARATOR]
     assert "Help and troubleshooting" in labels and "Copy support info" in labels
     assert labels[labels.index("Open dashboard") + 1:labels.index("Open dashboard") + 4] == [
         "Build check-in…", "Help and troubleshooting", "Copy support info"]

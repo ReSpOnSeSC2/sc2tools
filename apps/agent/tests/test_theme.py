@@ -79,7 +79,7 @@ def test_plain_containers_are_transparent_and_window_surfaces_are_explicit():
     base_rule = theme.STYLE.split("}", 1)[0]
     assert "background: transparent;" in base_rule
     assert "QMainWindow, QWidget#agentRoot { background: " + theme.BG in theme.STYLE
-    assert "QDialog, QMessageBox, QFileDialog, QInputDialog { background: " + theme.SURFACE in theme.STYLE
+    assert "QDialog, QMessageBox, QFileDialog, QInputDialog { background: " + theme.ELEVATED in theme.STYLE
     assert declared_colour(theme.STYLE, "QWidget#companionPanel", BACKGROUND) == theme.BG
     assert declared_colour(theme.STYLE, "QWidget#ghostPanel", BACKGROUND) == theme.SURFACE
     assert "QWidget#checkinWindow { background: transparent; }" in theme.STYLE
@@ -151,6 +151,23 @@ def test_text_tokens_read_at_4_5_to_1_on_every_surface_they_sit_on_in_each_skin(
 
 def test_the_default_skin_adds_nothing_and_an_unknown_name_falls_back_to_it():
     assert theme.skin_layer("default") == theme.skin_layer("unknown") == ""
+
+
+@pytest.mark.parametrize("name", theme.SKINS)
+def test_streams_menus_and_dialogs_use_readable_shared_surfaces(name):
+    skin = theme.SKINS[name]
+    desktop = dict(rules(theme.stylesheet(skin)))
+    assert f"background: {skin.canvas}" in desktop["QWidget#studioContent, QScrollArea#streamStudio"]
+    assert f"background: {theme.ELEVATED}" in desktop["QMenu"]
+    assert f"background: {skin.selected}" in desktop["QMenu::item:selected"]
+    assert f"background: {theme.ELEVATED}" in desktop["QDialog, QMessageBox, QFileDialog, QInputDialog"]
+    assert f"color: {theme.TEXT_MUTED}" in desktop["QMessageBox QLabel#qt_msgbox_informativelabel"]
+    assert f"border-color: {skin.focus}" in desktop["QToolButton#studioDisclosureToggle:focus"]
+    for background in (skin.canvas, theme.ELEVATED, skin.selected):
+        assert contrast(theme.TEXT, background) >= 4.5
+        assert contrast(theme.TEXT_MUTED, background) >= 4.5
+    for tone in (theme.SUCCESS, theme.DANGER, theme.WARNING):
+        assert contrast(tone, theme.blend(tone, theme.ELEVATED, 0.14)) >= 4.5
 
 
 @pytest.mark.parametrize("name", RACES)
