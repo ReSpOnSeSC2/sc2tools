@@ -2,7 +2,7 @@
 
 Settings > Accessibility > Visual effects > Animation effects is the switch
 browsers read for "prefers reduced motion". The agent's window motion plays
-only when both this switch and the player's Border & animations choice are on.
+only when both this switch and the player's Border and animations choice are on.
 """
 from __future__ import annotations
 
