@@ -72,7 +72,18 @@ def test_pool_edits_preserve_other_matchups_weights_and_opening_units(client_sta
     assert own["builds"][1] == {"id": "custom:second", "name": "My build", "race": "Protoss", "source": "custom", "weight": 1}
 
 
-@pytest.mark.parametrize("updates", [{"enabled": "false"}, {"buildKeys": ["unknown"]},
+def test_companion_writes_desktop_opt_in_only_for_the_explicit_switch(client_state):
+    client, state = client_state
+    base = {"action": "randomizer_settings", "matchup": "PvZ"}
+    pool = deepcopy(state["config"]["matchups"])
+    client.action({**base, "rollOnDesktop": True})
+    assert state["calls"][-1][2]["json"]["rollOnDesktop"] is True
+    assert state["config"]["matchups"] == pool
+    client.action({**base, "enabled": False})
+    assert "rollOnDesktop" not in state["calls"][-1][2]["json"]
+
+
+@pytest.mark.parametrize("updates", [{"enabled": "false"}, {"rollOnDesktop": "true"}, {"buildKeys": ["unknown"]},
                                      {"buildKeys": ["first", "first"]}, {"buildKeys": "first"}])
 def test_invalid_pool_mutations_never_write_preferences(client_state, updates):
     client, state = client_state

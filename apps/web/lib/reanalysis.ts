@@ -16,7 +16,7 @@ export type ReanalysisJobStatus =
 
 export interface ReanalysisCohort {
   id: string;
-  kind: "engine" | "macro" | "engine-unknown";
+  kind: "engine" | "macro" | "engine-unknown" | "camera";
   count: number;
   unknown?: number;
   engine?: string;
@@ -50,7 +50,7 @@ export interface ReanalysisOverview {
 const ACTIVE: ReadonlySet<ReanalysisJobStatus> = new Set(["running", "waiting_for_agent", "update_required", "paused"]);
 const STATUSES: ReadonlySet<string> = new Set([...ACTIVE, "completed", "cancelled", "failed"]);
 const AGENT: ReadonlySet<string> = new Set(["ready", "offline", "update_required"]);
-const KINDS: ReadonlySet<string> = new Set(["engine", "macro", "engine-unknown"]);
+const KINDS: ReadonlySet<string> = new Set(["engine", "macro", "engine-unknown", "camera"]);
 
 const count = (value: unknown): number => (Number.isSafeInteger(value) && (value as number) >= 0 ? (value as number) : 0);
 const text = (value: unknown, max = 300): string | undefined => (typeof value === "string" && value.length <= max ? value : undefined);
@@ -113,6 +113,7 @@ export function normalizeReanalysis(raw: unknown): ReanalysisOverview | null {
 export function cohortTitle(cohort: Pick<ReanalysisCohort, "kind" | "engine">): string {
   if (cohort.kind === "engine" && cohort.engine) return `Analyzed before engine ${cohort.engine}`;
   if (cohort.kind === "macro") return "Missing a macro score";
+  if (cohort.kind === "camera") return "Add camera data";
   return "Engine version unknown";
 }
 

@@ -235,56 +235,77 @@ describe("game share rate limits", () => {
   });
 });
 
-describe("presigned segment links", () => {
-  const ARTIFACT = "c".repeat(64);
-  function service({ segment = Buffer.from(JSON.stringify({ playback: { units: [{ owner: "me", name: "Marine" }] } })) } = {}) {
-    const playbackArtifacts = {
-      getSegment: jest.fn(async () => segment),
-      signSegment: jest.fn(async (_u, _g, artifactId, index, expiresIn) => ({ url: `https://storage.example/${artifactId}/${index}.json?sig=x`, expiresIn })),
-      getManifest: jest.fn(),
-    };
-    const shares = new GameSharesService({ gameShares: {}, games: {} }, {
-      replayLibrary: { getDetail: jest.fn() }, perGame: {}, playbackArtifacts,
-    });
-    shares.resolve = jest.fn(async () => ({ ownerId: "u_owner", gameId: "game-1", inlinePlayback: false }));
-    return { shares, playbackArtifacts };
-  }
+const SEGMENT_ARTIFACT = "c".repeat(64);
+function segmentShareFixture({ opaque = false, segment = Buffer.from(JSON.stringify({ playback: { units: [{ owner: "me", name: "Marine" }] } })) } = {}) {
+  const playbackArtifacts = {
+    getSegment: jest.fn(async (_u, _g, _artifactId, _index, options) => {
+      if (options?.requireOpaque && !opaque) {
+        throw Object.assign(new Error("Use the replay playback endpoint."), { status: 404, code: "playback_direct_unavailable" });
+      }
+      return segment;
+    }),
+    signSegment: jest.fn(async (_u, _g, artifactId, index, expiresIn) => ({ url: `https://storage.example/${artifactId}/${index}.json?sig=x`, expiresIn })),
+    getManifest: jest.fn(),
+  };
+  const shares = new GameSharesService({ gameShares: {}, games: {} }, {
+    replayLibrary: { getDetail: jest.fn() }, perGame: {}, playbackArtifacts,
+  });
+  shares.resolve = jest.fn(async () => ({ ownerId: "u_owner", gameId: "game-1", inlinePlayback: false }));
+  return { shares, playbackArtifacts };
+}
 
+describe("presigned segment links", () => {
   test("the public link declines legacy presigning and the verified proxy still serves the bytes", async () => {
-    const { shares, playbackArtifacts } = service();
+    const { shares, playbackArtifacts } = segmentShareFixture();
     const server = express();
     server.use("/v1", buildGameSharesRouter({ gameShares: shares, auth: (_req, _res, next) => next() }));
     server.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: { code: error.code } }));
-    const path = `/v1/shares/AAAAAAAAAAAAAAAA/map-playback/artifacts/${ARTIFACT}/segments/3`;
+    const path = `/v1/shares/AAAAAAAAAAAAAAAA/map-playback/artifacts/${SEGMENT_ARTIFACT}/segments/3`;
     const link = await request(server).get(path + "/link").expect(404);
     expect(link.headers["cache-control"]).toContain("no-store");
     expect(link.headers.location).toBeUndefined();
     expect(link.body).toEqual({ error: { code: "playback_direct_unavailable", message: "Use the replay playback endpoint." } });
     expect(playbackArtifacts.signSegment).not.toHaveBeenCalled();
-    expect(playbackArtifacts.getSegment).not.toHaveBeenCalled();
+    expect(playbackArtifacts.getSegment).toHaveBeenCalledWith("u_owner", "game-1", SEGMENT_ARTIFACT, 3, { requireOpaque: true });
 
     const proxied = await request(server).get(path).expect(200);
     expect(proxied.body).toEqual({ playback: { units: [{ owner: "me", name: "Marine" }] } });
-    expect(playbackArtifacts.getSegment).toHaveBeenCalledWith("u_owner", "game-1", ARTIFACT, 3);
+    expect(playbackArtifacts.getSegment).toHaveBeenCalledWith("u_owner", "game-1", SEGMENT_ARTIFACT, 3);
   });
 
   test("does not return segment bytes when the token becomes unavailable during storage read", async () => {
-    const { shares, playbackArtifacts } = service();
+    const { shares, playbackArtifacts } = segmentShareFixture();
     playbackArtifacts.getSegment.mockImplementationOnce(async () => {
       shares.resolve.mockRejectedValueOnce(Object.assign(new Error("Share unavailable"), { status: 404, code: "share_not_found" }));
       return Buffer.from(JSON.stringify({ playback: { units: [] } }));
     });
-    await expect(shares.playbackSegment("AAAAAAAAAAAAAAAA", ARTIFACT, 0)).rejects.toMatchObject({
+    await expect(shares.playbackSegment("AAAAAAAAAAAAAAAA", SEGMENT_ARTIFACT, 0)).rejects.toMatchObject({
       status: 404, code: "share_not_found",
     });
     expect(shares.resolve).toHaveBeenCalledTimes(2);
   });
 
+  test("signs only the verified opaque segment, then rechecks token availability", async () => {
+    const { shares, playbackArtifacts } = segmentShareFixture({ opaque: true });
+    const expected = { url: `https://storage.example/${SEGMENT_ARTIFACT}/3.json?sig=x`, expiresIn: 60 };
+    expect(await shares.segmentLink("AAAAAAAAAAAAAAAA", SEGMENT_ARTIFACT, 3)).toEqual(expected);
+    expect(await shares.segmentLink("AAAAAAAAAAAAAAAA", SEGMENT_ARTIFACT, 3)).toEqual(expected);
+    expect(playbackArtifacts.getSegment).toHaveBeenCalledTimes(1);
+    expect(playbackArtifacts.signSegment).toHaveBeenCalledWith("u_owner", "game-1", SEGMENT_ARTIFACT, 3, 60, { requireOpaque: true });
+    expect(shares.resolve).toHaveBeenCalledTimes(4);
+
+    playbackArtifacts.signSegment.mockImplementationOnce(async () => {
+      shares.resolve.mockRejectedValueOnce(Object.assign(new Error("Share unavailable"), { status: 404, code: "share_not_found" }));
+      return expected;
+    });
+    await expect(shares.segmentLink("AAAAAAAAAAAAAAAA", SEGMENT_ARTIFACT, 3)).rejects.toMatchObject({ code: "share_not_found" });
+  });
+
   test("a segment carrying identity keys gets no link and no bytes", async () => {
     const dirty = Buffer.from(JSON.stringify({ playback: { units: [{ owner: "opp", name: "Zergling", playerName: SECRET.name }] } }));
-    const { shares, playbackArtifacts } = service({ segment: dirty });
-    await expect(shares.segmentLink("AAAAAAAAAAAAAAAA", ARTIFACT, 0)).rejects.toMatchObject({ status: 404 });
-    await expect(shares.playbackSegment("AAAAAAAAAAAAAAAA", ARTIFACT, 0)).rejects.toMatchObject({ status: 404 });
+    const { shares, playbackArtifacts } = segmentShareFixture({ opaque: true, segment: dirty });
+    await expect(shares.segmentLink("AAAAAAAAAAAAAAAA", SEGMENT_ARTIFACT, 0)).rejects.toMatchObject({ status: 404 });
+    await expect(shares.playbackSegment("AAAAAAAAAAAAAAAA", SEGMENT_ARTIFACT, 0)).rejects.toMatchObject({ status: 404 });
     expect(playbackArtifacts.signSegment).not.toHaveBeenCalled();
   });
 });

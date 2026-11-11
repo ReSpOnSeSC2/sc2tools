@@ -1,7 +1,7 @@
 "use client";
 import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Download, Link2, Plus, RefreshCw, Search } from "lucide-react";
 import { apiCall, useApi } from "@/lib/clientApi";
@@ -9,9 +9,9 @@ import { directoryError, type PlayerChannelDirectoryResponse, type PlayerChannel
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Field } from "@/components/ui/Field";
-import { Input } from "@/components/ui/Input";
-import { ForbiddenCard } from "../components/AdminFragments";
+import { AdminSearchField } from "../components/AdminSearchField";
+import { useAdminQueryState } from "../components/useAdminQueryState";
+import { ForbiddenCard, LoadingRows } from "../components/AdminFragments";
 import { PlayerChannelEditor, PlayerChannelRow } from "./PlayerChannelEditor";
 import { formatNumber } from "@/lib/i18n/format";
 
@@ -19,12 +19,14 @@ const PAGE_SIZE = 25;
 type ImportResult = { imported: number; updated: number; skipped: number; total: number };
 
 export default function AdminPlayerChannelsPage() {
+  return <Suspense fallback={<LoadingRows rows={4} />}><AdminPlayerChannelsBody /></Suspense>;
+}
+
+function AdminPlayerChannelsBody() {
   const { getToken } = useAuth();
-  const [query, setQuery] = useState("");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-  const [includeRemoved, setIncludeRemoved] = useState(false);
-  const [pendingOnly, setPendingOnly] = useState(false);
+  const [view, setView] = useAdminQueryState({ search: "", page: 0, includeRemoved: false, pendingOnly: false });
+  const { page, includeRemoved, pendingOnly } = view;
+  const search = view.search.trim().slice(0, 100);
   const [editor, setEditor] = useState<PlayerChannelEntry | "new" | null>(null);
   const [removeTarget, setRemoveTarget] = useState<PlayerChannelEntry | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -32,11 +34,6 @@ export default function AdminPlayerChannelsPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const path = `/v1/admin/player-channels?search=${encodeURIComponent(search)}&page=${page}&limit=${PAGE_SIZE}&includeRemoved=${includeRemoved}&pendingOnly=${pendingOnly}`;
   const { data, error, isLoading, mutate } = useApi<PlayerChannelDirectoryResponse>(path);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => { setSearch(query.trim()); setPage(0); }, 300);
-    return () => window.clearTimeout(timer);
-  }, [query]);
 
   const closeEditor = useCallback(() => setEditor(null), []);
   const closeRemove = useCallback(() => { if (!busy) setRemoveTarget(null); }, [busy]);
@@ -64,7 +61,7 @@ export default function AdminPlayerChannelsPage() {
       await apiCall(getToken, `/v1/admin/player-channels/${encodeURIComponent(removeTarget.id)}`, { method: "DELETE" });
       setRemoveTarget(null);
       await refreshAfterMutation(`Channels for ${removeTarget.displayName || "this player"} removed from public views.`);
-      if (data?.entries.length === 1 && page > 0) setPage(page - 1);
+      if (data?.entries.length === 1 && page > 0) setView({ page: page - 1 }, { history: "replace" });
     } catch (err) {
       setMutationError(`Couldn't remove this player. ${directoryError(err)}`);
     } finally { setBusy(null); }
@@ -77,15 +74,14 @@ export default function AdminPlayerChannelsPage() {
       <AdminPageHeader anchor="identity-and-channel-review" title="Player channels" description="Review and maintain shared player channels." actions={<><Button variant="secondary" iconLeft={<Download className="h-4 w-4" aria-hidden />} loading={busy === "import"} disabled={Boolean(busy) || Boolean(error) || isLoading} onClick={() => void importPulse()}>Import SC2Pulse</Button><Button iconLeft={<Plus className="h-4 w-4" aria-hidden />} disabled={Boolean(busy) || Boolean(error) || isLoading} onClick={() => setEditor("new")}>Add player</Button></>} />
       <Card>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-          <Field className="min-w-0 flex-1" label="Search players" hint="Search by player name, channel, Pulse ID, or toon handle.">
-            <Input type="search" value={query} placeholder="Search the directory" onChange={(event) => setQuery(event.target.value)} />
-          </Field>
+          <AdminSearchField className="min-w-0 flex-1" label="Search players" hint="Search by player name, channel, Pulse ID, or toon handle."
+            value={view.search} queryKey="search" placeholder="Search the directory" onChange={(search) => setView({ search })} />
           <div className="flex flex-wrap items-center gap-4 pb-1">
             <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-caption text-text-muted">
-              <input type="checkbox" checked={pendingOnly} onChange={(event) => { setPendingOnly(event.target.checked); setPage(0); }} className="h-4 w-4 accent-accent" />Pending review only
+              <input type="checkbox" checked={pendingOnly} onChange={(event) => setView({ pendingOnly: event.target.checked }, { history: "push" })} className="h-4 w-4 accent-accent" />Pending review only
             </label>
             <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-caption text-text-muted">
-              <input type="checkbox" checked={includeRemoved} onChange={(event) => { setIncludeRemoved(event.target.checked); setPage(0); }} className="h-4 w-4 accent-accent" />Include removed
+              <input type="checkbox" checked={includeRemoved} onChange={(event) => setView({ includeRemoved: event.target.checked }, { history: "push" })} className="h-4 w-4 accent-accent" />Include removed
             </label>
             <Button variant="ghost" size="sm" aria-label="Refresh player channels" disabled={Boolean(busy)} iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={() => void mutate()}>Refresh</Button>
           </div>
@@ -101,7 +97,7 @@ export default function AdminPlayerChannelsPage() {
           {search ? <Search className="h-8 w-8 text-text-dim" aria-hidden /> : <Link2 className="h-8 w-8 text-accent" aria-hidden />}
           <h2 className="text-h3 font-bold">{search ? "No players match your search" : pendingOnly ? "No channels awaiting review" : "No players in this view"}</h2>
           <p className="max-w-md text-body text-text-muted">{search ? "Try a player name, channel, or stable StarCraft II identity." : pendingOnly ? "New player submissions will appear here when they need approval." : "Import SC2Pulse channels or add a player with a Twitch or YouTube channel."}</p>
-          {search ? <Button variant="secondary" onClick={() => { setQuery(""); setSearch(""); setPage(0); }}>Clear search</Button> : null}
+          {search ? <Button variant="secondary" onClick={() => setView({ search: "" })}>Clear search</Button> : null}
         </div></Card>
       ) : (
         <>
@@ -113,9 +109,9 @@ export default function AdminPlayerChannelsPage() {
             {data.entries.map((entry) => <li key={entry.id}><PlayerChannelRow entry={entry} busy={Boolean(busy)} onEdit={() => setEditor(entry)} onRemove={() => { setMutationError(null); setRemoveTarget(entry); }} /></li>)}
           </ul>
           <nav aria-label="Player channel pages" className="flex flex-wrap items-center justify-between gap-3">
-            <Button variant="secondary" size="sm" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>Previous</Button>
+            <Button variant="secondary" size="sm" disabled={page === 0} onClick={() => setView({ page: page - 1 })}>Previous</Button>
             <p className="text-caption text-text-muted">Page {page + 1} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}</p>
-            <Button variant="secondary" size="sm" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage((value) => value + 1)}>Next</Button>
+            <Button variant="secondary" size="sm" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setView({ page: page + 1 })}>Next</Button>
           </nav>
         </>
       )}

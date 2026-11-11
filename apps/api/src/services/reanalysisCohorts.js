@@ -32,6 +32,8 @@ const MAX_JOB_VERSIONS = 500;
 const COUNT_MAX_TIME_MS = 10_000;
 const COHORT_MISSING_MACRO = "missing-macro";
 const COHORT_NO_ENGINE = "no-engine-stamp";
+const COHORT_ADD_CAMERA = "add-camera-data";
+const CAMERA_ENGINE = /** @type {import("../util/strictSemver").StrictSemver} */ (parseStrictSemver("1.6.13"));
 const ENGINE_PREFIX = "engine-before:";
 const NUMBER_TYPES = ["double", "int", "long", "decimal"];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -133,7 +135,7 @@ const MACRO_EXPR = { $cond: [
 const cohortProjection = Object.freeze({ v: ENGINE_EXPR, m: MATCHUP_EXPR, macro: MACRO_EXPR });
 
 /**
- * @typedef {{id: string, kind: "engine"|"macro"|"engine-unknown", count: number, unknown?: number,
+ * @typedef {{id: string, kind: "engine"|"macro"|"engine-unknown"|"camera", count: number, unknown?: number,
  *   engine?: string, date?: string, summary?: string, matchups?: string[], versions?: string[]}} Cohort
  */
 
@@ -159,11 +161,17 @@ async function countCohorts(games, userId, catalog = MILESTONE_CATALOG) {
   }));
   let missingMacro = 0;
   let noEngine = 0;
+  let addCamera = 0;
+  const preCameraVersions = new Set();
   for (const group of groups) {
     const { v, m, macro } = group._id || {};
     const n = Number(group.n) || 0;
     const parsed = typeof v === "string" ? parseStrictSemver(v) : null;
     if (!parsed) noEngine += n;
+    if (!parsed || compareStrictSemver(parsed, CAMERA_ENGINE) === -1) {
+      addCamera += n;
+      if (parsed) preCameraVersions.add(v);
+    }
     if (macro !== true) missingMacro += n;
     for (const bucket of engine) {
       if (!bucket.milestone.matchups.includes(m)) continue;
@@ -182,6 +190,7 @@ async function countCohorts(games, userId, catalog = MILESTONE_CATALOG) {
   }));
   cohorts.push({ id: COHORT_MISSING_MACRO, kind: "macro", count: missingMacro });
   cohorts.push({ id: COHORT_NO_ENGINE, kind: "engine-unknown", count: noEngine });
+  cohorts.push({ id: COHORT_ADD_CAMERA, kind: "camera", count: addCamera, versions: [...preCameraVersions].sort() });
   return { catalogRevision: catalog.revision, cohorts };
 }
 
@@ -193,6 +202,7 @@ async function countCohorts(games, userId, catalog = MILESTONE_CATALOG) {
 function cohortMatch(job) {
   if (job.cohortId === COHORT_MISSING_MACRO) return { macro: false };
   if (job.cohortId === COHORT_NO_ENGINE) return { v: null };
+  if (job.cohortId === COHORT_ADD_CAMERA) return { $or: [{ v: null }, { v: { $in: job.versions || [] } }] };
   return { m: { $in: job.matchups || [] }, v: { $in: job.versions || [] } };
 }
 
@@ -233,7 +243,7 @@ function archivedOriginal(marker) {
 
 /** @param {unknown} id @param {MilestoneCatalog} [catalog] */
 function isKnownCohort(id, catalog = MILESTONE_CATALOG) {
-  return id === COHORT_MISSING_MACRO || id === COHORT_NO_ENGINE
+  return id === COHORT_MISSING_MACRO || id === COHORT_NO_ENGINE || id === COHORT_ADD_CAMERA
     || (typeof id === "string" && catalog.milestones.some((milestone) => milestone.id === id));
 }
 

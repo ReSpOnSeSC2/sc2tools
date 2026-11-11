@@ -10,6 +10,7 @@ export type PrepDigestRole = "coach" | "student";
 
 export type PrepDigestReplay = {
   gameId?: string;
+  evidenceRef?: string;
   playedAt: string | null;
   map: string | null;
   matchup: string | null;
@@ -87,8 +88,10 @@ export function parsePrepDigest(raw: unknown): PrepDigest | null {
     replays: list(body.replays, (row) => {
       const gameId = text(row.gameId);
       if (role === "student" && !gameId) return null;
+      const evidenceRef = role === "coach" && typeof row.evidenceRef === "string" && /^[A-Za-z0-9_-]{43}$/.test(row.evidenceRef)
+        ? row.evidenceRef : null;
       return {
-        ...(role === "student" && gameId ? { gameId } : {}), playedAt: text(row.playedAt), map: text(row.map), matchup: text(row.matchup),
+        ...(role === "student" && gameId ? { gameId } : {}), ...(evidenceRef ? { evidenceRef } : {}), playedAt: text(row.playedAt), map: text(row.map), matchup: text(row.matchup),
         result: row.result === "Win" || row.result === "Loss" ? row.result : null, build: text(row.build),
       };
     }),

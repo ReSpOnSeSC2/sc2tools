@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import type { KeyedMutator } from "swr";
 import type { ClientApiError } from "@/lib/clientApi";
 import { guideBuildOptions, guideBuildSlug } from "@/lib/guides/slugs";
 import type { GuideMatchup, GuideVideoOverrides } from "@/lib/guides/types";
@@ -54,7 +55,7 @@ export interface AdminResource<T> {
   data?: T;
   error?: ClientApiError;
   isLoading: boolean;
-  mutate: () => Promise<unknown>;
+  mutate: KeyedMutator<T>;
 }
 
 export interface AdminNoticeValue {

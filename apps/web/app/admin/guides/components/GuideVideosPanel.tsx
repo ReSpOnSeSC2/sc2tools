@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Plus, RefreshCw } from "lucide-react";
 import { apiCall } from "@/lib/clientApi";
@@ -18,6 +18,7 @@ import { GUIDE_LINK_CLASS } from "@/components/guides/guideUi";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { LoadingRows } from "../../components/AdminFragments";
@@ -156,6 +157,17 @@ function detectedText(video: GuideAdminVideo): string {
   return `${video.matchup} · builds: ${builds} · counters: ${counters}`;
 }
 
+const VIDEO_PAGE_SIZE = 50;
+const matched = (video: GuideAdminVideo) => video.builds.length > 0 || video.counters.length > 0;
+const VIDEO_FILTERS = [
+  { id: "all", label: "All", includes: (_video: GuideAdminVideo) => true, empty: "No channel videos yet" },
+  { id: "matched", label: "Matched", includes: matched, empty: "No matched videos" },
+  { id: "unmatched", label: "Unmatched", includes: (video: GuideAdminVideo) => !matched(video), empty: "No unmatched videos" },
+  { id: "hidden", label: "Hidden", includes: (video: GuideAdminVideo) => video.hidden, empty: "No hidden videos" },
+  { id: "eight-worker", label: "8-worker", includes: (video: GuideAdminVideo) => video.eightWorkerPatch, empty: "No 8-worker videos" },
+  { id: "shorts", label: "Shorts", includes: (video: GuideAdminVideo) => video.isShort, empty: "No Shorts" },
+] as const;
+
 function ChannelVideoList({
   items,
   busy,
@@ -165,14 +177,37 @@ function ChannelVideoList({
   busy: string | null;
   onSetHidden: (video: GuideAdminVideo, hidden: boolean) => void;
 }) {
+  const [search, setSearch] = useState("");
+  const [active, setActive] = useState<(typeof VIDEO_FILTERS)[number]["id"]>("all");
+  const [limit, setLimit] = useState(VIDEO_PAGE_SIZE);
+  const searched = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return query ? items.filter(video => video.title.toLowerCase().includes(query)) : items;
+  }, [items, search]);
+  const filters = VIDEO_FILTERS.map(filter => ({ ...filter, items: searched.filter(filter.includes) }));
+  const selected = filters.find(filter => filter.id === active) ?? filters[0];
+  const clear = () => { setSearch(""); setActive("all"); setLimit(VIDEO_PAGE_SIZE); };
   return (
     <Card>
       <h3 id={LIST_HEADING_ID} className="text-body font-semibold text-text">Channel videos ({formatNumber(items.length)})</h3>
-      {items.length === 0 ? (
-        <p className="mt-2 text-caption text-text-dim">No videos stored yet. Sync the channel or add one by URL.</p>
+      <div className="mt-3 space-y-3">
+        <Field label="Search video titles">
+          <Input type="search" value={search} onChange={event => { setSearch(event.target.value); setLimit(VIDEO_PAGE_SIZE); }} />
+        </Field>
+        <div role="group" aria-label="Filter channel videos" className="flex flex-wrap gap-2">
+          {filters.map(filter => <Button key={filter.id} size="sm" variant={active === filter.id ? "secondary" : "ghost"}
+            aria-pressed={active === filter.id} onClick={() => { setActive(filter.id); setLimit(VIDEO_PAGE_SIZE); }}>
+            {filter.label} ({formatNumber(filter.items.length)})
+          </Button>)}
+        </div>
+      </div>
+      {selected.items.length === 0 ? (
+        <EmptyStatePanel size="sm" title={search.trim() ? "No videos match this filter and search" : selected.empty}
+          description={items.length ? undefined : "Sync the channel or add a video by URL."}
+          action={search || active !== "all" ? <Button size="sm" variant="secondary" onClick={clear}>Clear filters</Button> : null} />
       ) : (
         <ul aria-labelledby={LIST_HEADING_ID} className="mt-2 divide-y divide-border">
-          {items.map((video) => (
+          {selected.items.slice(0, limit).map((video) => (
             <li key={video.youtubeId} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 space-y-1">
                 <a href={video.url} target="_blank" rel="noopener noreferrer" className={`${GUIDE_LINK_CLASS} break-words text-body`}>{video.title}</a>
@@ -199,6 +234,7 @@ function ChannelVideoList({
           ))}
         </ul>
       )}
+      {selected.items.length > limit ? <Button className="mt-3" variant="secondary" size="sm" onClick={() => setLimit(value => value + VIDEO_PAGE_SIZE)}>Show 50 more</Button> : null}
     </Card>
   );
 }

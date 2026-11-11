@@ -42,7 +42,7 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "**Base profile:** the public author name you chose, or your display name when you have no named publication; your main race, games, wins, losses, win rate, results against each race, most-played replay-detected builds and a featured community build. Public reviewer stats have their own tab.",
+        "**Base profile:** the public author name you chose, or your display name when you have no named publication; your main race, games, wins, losses, win rate, results against each race, most-played replay-detected builds and a featured community build. The featured build shows upvote and downvote totals when those counts are available. Public reviewer stats have their own tab.",
         "**Optional sections, initially off:** approved channels, recent results by matchup, a weekly MMR history, cached season records and map records with at least 10 games. Recent form shows up to 20 results from oldest to newest, a streak from two results and last-played time. Its card needs at least three games and never includes opponent names or maps.",
         "**Never in profile aggregates:** your opponents' names, battle tags or IDs, private notes or email. Optional recent results contain only result, matchup and date. Full replay rows and downloads need the separate replay-sharing choice below.",
       ],

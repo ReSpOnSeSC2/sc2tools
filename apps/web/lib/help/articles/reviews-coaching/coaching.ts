@@ -16,6 +16,7 @@ const article: HelpArticle = {
     "student",
     "lesson",
     "locker",
+    "worksheet",
     "private coaching",
     "invite",
     "practice",
@@ -32,7 +33,7 @@ const article: HelpArticle = {
     "past sessions",
     "prep digest",
   ],
-  updated: "2026-11-10",
+  updated: "2026-11-11",
   order: 20,
   body: [
     {
@@ -61,6 +62,10 @@ const article: HelpArticle = {
         "**Coaches:** pick a student in the left rail, then use **Weekly focus**, **Performance**, **Worksheets**, **Builds**, **Shelf** and **Inbox**. The Inbox lists the games your student picked or sent for review. The Locker's **?** button reopens its walkthrough and its own help, including backups of the whole Locker.",
       ],
     },
+    { type: "heading", anchor: "worksheets", text: "Worksheets" },
+    { type: "paragraph", text: "In **Locker**, choose **Open Worksheets**. Coaches can start from a blank worksheet, choose a template or use **Guided planning**. Guided planning notes stay in the current visit. The student sees only the sent worksheet and their own answers. Use **Classic Locker** to switch back." },
+    { type: "paragraph", text: "Students can answer a sent worksheet and attach .SC2Replay files up to 900 KB each. Typed answers stay in the current browser tab until sent. Attachments must be selected again if you leave the editor before sending." },
+    { type: "paragraph", text: "Before a save, Worksheets backs up the current Locker state on this device. **Restore previous version** is available after a successful save while its revision is still current. **Download backup** exports the same JSON format as Classic Locker." },
     { type: "heading", anchor: "practice-sharing", text: "Practice sharing (the student's consent)" },
     {
       type: "paragraph",
@@ -134,7 +139,7 @@ const article: HelpArticle = {
     { type: "heading", anchor: "session-prep-digest", text: "Session prep digest" },
     {
       type: "paragraph",
-      text: "**Since last session**, on each upcoming session, summarizes synced 1v1 replays since the student's previous session. Coaches see the ranked game count and wins and losses by matchup. Detected builds and recent replay details come from games the current practice-sharing approval lets the coach see in assignment evidence. Students see their own eligible games, including their checked-in builds, and can open their game pages. The next session opens the digest automatically.",
+      text: "**Since last session**, on each upcoming session, summarizes synced 1v1 replays since the student's previous session. Coaches see the ranked game count and wins and losses by matchup. Detected builds and recent replay details come from games the current practice-sharing approval lets the coach see in assignment evidence. Coaches can download an archived assigned replay directly from its digest row while sharing is active. On **Practice**, a student can separately share confirmed built-in check-in labels for assigned 1v1 games played after they opt in. They can stop sharing labels without revoking replay access. Custom check-in names and notes stay private. Students see their own eligible games, including their checked-in builds, and can open their game pages. The next session opens the digest automatically.",
     },
     {
       type: "list",

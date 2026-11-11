@@ -84,6 +84,15 @@ describe("PublicProfile (presentational)", () => {
     expect(screen.getByText(/get yours at sc2tools\.com/i)).toBeTruthy();
   });
 
+  test("labels both featured vote totals and preserves the historical net-score fallback", () => {
+    const view = render(<PublicProfile profile={PROFILE} />);
+    const feature = { ...PROFILE.featuredBuild!, voteCounts: { upvotes: 8, downvotes: 1 } };
+    expect(screen.getByRole("link", { name: /glaive adept timing.*7 net upvotes/i })).toBeTruthy();
+    view.rerender(<PublicProfile profile={{ ...PROFILE, featuredBuild: feature }} />);
+    const link = screen.getByRole("link", { name: /glaive adept timing.*8 upvotes, 1 downvote/i });
+    expect(link.getAttribute("href")).toBe("/community/builds/glaive-timing-abc123");
+  });
+
   test("unknown matchup races have an explicit label", () => {
     render(<PublicProfile profile={{ ...PROFILE, matchups: [{ matchup: "vs Unknown", games: 1, wins: 1, losses: 0, winRate: 1 }] }} />);
     expect(screen.getByText("vs Unknown race")).toBeTruthy();

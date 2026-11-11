@@ -105,7 +105,7 @@ describe("bounded export output", () => {
   it.each([161, 200, 201])("matches the actual build export game-ID limit at %i characters", async (length) => {
     const rows = [{ type: "metadata", format: "sc2tools-build-order-export", version: 1, games: 1,
       fields: ["gameId", "side", "time", "supply", "name"] },
-    { gameId: "g".repeat(length), side: "me", time: 63, supply: null, name: "Marine" },
+    { gameId: "g".repeat(length), side: "me", time: 63, supply: 17.5, name: "Marine" },
     { type: "complete", games: 1, events: 1, continuation: null }];
     const body = new ReadableStream<Uint8Array>({ start(source) { source.enqueue(encode.encode(rows.map(row => JSON.stringify(row) + "\n").join(""))); source.close(); } });
     const sink = memorySink();
@@ -114,7 +114,10 @@ describe("bounded export output", () => {
     else { await expect(work).rejects.toMatchObject({ code: "invalid" }); expect(sink.abort).toHaveBeenCalledOnce(); expect(sink.close).not.toHaveBeenCalled(); }
   });
 
-  it.each([{ time: 1.5 }, { time: Number.MAX_SAFE_INTEGER + 1 }, { supply: 18 }, { name: "   " }, { name: "private\nrow" }])("rejects malformed version1 build events before commit: %j", async (changed) => {
+  it.each([
+    { time: 1.5 }, { time: Number.MAX_SAFE_INTEGER + 1 }, { supply: "18" }, { supply: -1 }, { supply: 2001 },
+    { side: "opponent", supply: 18 }, { name: "   " }, { name: "private\nrow" },
+  ])("rejects malformed version1 build events before commit: %j", async (changed) => {
     const rows = [{ type: "metadata", format: "sc2tools-build-order-export", version: 1, games: 1,
       fields: ["gameId", "side", "time", "supply", "name"] },
     { gameId: "game-a", side: "me", time: 63, supply: null, name: "Marine", ...changed },

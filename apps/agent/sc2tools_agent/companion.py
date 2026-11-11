@@ -279,9 +279,15 @@ class CompanionClient:
             return {"config": config, "options": options, "intent": intent}
         if "enabled" in request and type(request["enabled"]) is not bool:
             raise CompanionError("The randomizer switch must be on or off.")
-        if "enabled" not in request and "buildKeys" not in request:
+        if "rollOnDesktop" in request and type(request["rollOnDesktop"]) is not bool:
+            raise CompanionError("The desktop roll switch must be on or off.")
+        if not any(key in request for key in ("enabled", "buildKeys", "rollOnDesktop")):
             raise CompanionError("Choose a randomizer setting to save.")
         config = deepcopy(config)
+        if "rollOnDesktop" in request:
+            config["rollOnDesktop"] = request["rollOnDesktop"]
+        else:
+            config.pop("rollOnDesktop", None)
         if not isinstance(config.get("matchups"), dict):
             config["matchups"] = {}
         current = config["matchups"].get(matchup)

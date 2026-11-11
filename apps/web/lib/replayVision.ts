@@ -164,7 +164,27 @@ function trackBox(wp: readonly number[]): [number, number, number, number] {
   return [minX, minY, maxX, maxY];
 }
 
-const firstSeenCache = new WeakMap<MapPlayback, Partial<Record<"me" | "opp", Float64Array>>>();
+type Side = "me" | "opp";
+const MAX_REMEMBERED_BUILDINGS = 4096;
+type SeenTimes = Record<Side, Map<string, number>>;
+const segmentSight = new WeakMap<MapPlayback, { start: number; end: number; seen: SeenTimes }>();
+const firstSeenCache = new WeakMap<MapPlayback, Partial<Record<Side, Float64Array>>>();
+
+/** One bounded sight history per open, verified playback. Decoded section
+ * objects can be evicted without losing their earlier sightings. */
+export class ReplaySightHistory {
+  private readonly seen: SeenTimes = { me: new Map(), opp: new Map() };
+
+  addWindow(playback: MapPlayback, start: number, end: number): void {
+    segmentSight.set(playback, { start, end, seen: this.seen });
+  }
+}
+
+export function structureSeenAt(playback: MapPlayback, viewer: Side, index: number, local: Float64Array): number {
+  const id = playback.buildings[index]?.id;
+  const earlier = id !== undefined ? segmentSight.get(playback)?.seen[viewer].get(String(id)) : undefined;
+  return Math.min(local[index], earlier ?? Infinity);
+}
 
 /**
  * When ``viewer`` first had (estimated) sight of each ENEMY structure,
@@ -188,7 +208,9 @@ export function buildingFirstSeen(
   const seenAt = new Float64Array(buildings.length).fill(Infinity);
   const enemy: number[] = [];
   buildings.forEach((b, i) => { if (b.owner === viewer) seenAt[i] = 0; else enemy.push(i); });
-  const end = Math.max(playback.gameLength, 0);
+  const window = segmentSight.get(playback);
+  const start = window?.start ?? 0;
+  const end = window?.end ?? Math.max(playback.gameLength, 0);
   const consider = (wp: readonly number[], born: number, died: number | null, r: number) => {
     if (wp.length < 3) return;
     const [minX, minY, maxX, maxY] = trackBox(wp);
@@ -196,8 +218,8 @@ export function buildingFirstSeen(
     for (const bi of enemy) {
       const b = buildings[bi];
       if (b.x < minX - r || b.x > maxX + r || b.y < minY - r || b.y > maxY + r) continue;
-      const until = Math.min(died ?? Infinity, b.died ?? Infinity, seenAt[bi]);
-      const at = firstInRange(wp, Math.max(born, b.t), until, died ?? end, b.x, b.y, r2);
+      const until = Math.min(died ?? Infinity, b.died ?? Infinity, seenAt[bi], end);
+      const at = firstInRange(wp, Math.max(born, b.t, start), until, died ?? end, b.x, b.y, r2);
       if (at < seenAt[bi]) seenAt[bi] = at;
     }
   };
@@ -209,6 +231,17 @@ export function buildingFirstSeen(
     if (b.owner !== viewer) continue;
     const r = (isTownHall(b.name) ? sight.hall : sight.building) * edge;
     consider([b.t, b.x, b.y, ...b.moves], b.t, b.died, r);
+  }
+  if (window) {
+    const seen = window.seen[viewer];
+    for (const i of enemy) {
+      const tag = buildings[i].id;
+      if (tag === undefined || !Number.isFinite(seenAt[i])) continue;
+      const id = String(tag);
+      const previous = seen.get(id);
+      if (seenAt[i] >= (previous ?? Infinity)) continue;
+      if (previous !== undefined || seen.size < MAX_REMEMBERED_BUILDINGS) seen.set(id, seenAt[i]);
+    }
   }
   bySide = bySide ?? {};
   bySide[viewer] = seenAt;

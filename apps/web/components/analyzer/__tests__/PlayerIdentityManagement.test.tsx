@@ -1,5 +1,6 @@
+import { navigation } from "@/app/admin/components/__tests__/navigationFixture";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PlayerIdentityPicker, type IdentityPlayer } from "../PlayerIdentityPicker";
 import { OpponentIdentitySubmission, type IdentityProposal } from "../OpponentIdentitySubmission";
 import AdminPlayerIdentitiesPage from "@/app/admin/player-identities/page";
@@ -8,6 +9,7 @@ const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
 const mutateMock = vi.fn();
 const getToken = vi.fn();
+vi.mock("next/navigation", () => import("@/app/admin/components/__tests__/navigationFixture"));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "owner-a", isLoaded: true, isSignedIn: true, getToken }) }));
 vi.mock("@/lib/clientApi", () => ({ useApi: (...args: unknown[]) => useApiMock(...args), apiCall: (...args: unknown[]) => apiCallMock(...args) }));
 
@@ -23,6 +25,7 @@ let listError: { status: number; message: string } | undefined;
 let proposal: IdentityProposal;
 
 beforeEach(() => {
+  navigation.visit("/admin/player-identities");
   useApiMock.mockReset(); apiCallMock.mockReset(); mutateMock.mockReset();
   context = { isAdmin: false, eligible: true, source: SOURCE, confirmed: null, submission: null, replayCount: 2, revision: 0 };
   searchError = undefined; detailError = undefined; listError = undefined; proposal = { ...PROPOSAL };
@@ -30,7 +33,7 @@ beforeEach(() => {
   useApiMock.mockImplementation((path: string | null) => {
     if (path?.includes("/identity-submissions")) return { data: context, isLoading: false, mutate: mutateMock };
     if (path?.startsWith("/v1/player-identities/search")) return { data: { items: path.includes("cursor=") ? [OTHER] : [TARGET, OTHER], nextCursor: path.includes("cursor=") ? null : "page2" }, error: searchError, isLoading: false, mutate: mutateMock };
-    if (path?.startsWith("/v1/admin/player-identities?")) return { data: { items: [proposal], nextCursor: "queue2" }, error: listError, isLoading: false, mutate: mutateMock };
+    if (path?.startsWith("/v1/admin/player-identities?")) return { data: { items: [proposal], nextCursor: "queue2", total: 8 }, error: listError, isLoading: false, mutate: mutateMock };
     if (path?.startsWith("/v1/admin/player-identities/submission1")) return { data: { submission: proposal, evidence: [{ gameId: "game1", date: "2026-09-06T18:30:00Z", map: "Acropolis LE", result: "Win", durationSec: 612, opponentName: SOURCE.displayName, hasReplay: true }], nextCursor: path.includes("cursor=") ? null : "evidence2" }, error: detailError, isLoading: false, mutate: mutateMock };
     return { isLoading: false, mutate: mutateMock };
   });
@@ -210,6 +213,17 @@ describe("admin identity review", () => {
     expect(useApiMock.mock.lastCall?.[0]).toContain("cursor=queue2");
     fireEvent.change(screen.getByLabelText("Submission status"), { target: { value: "rejected" } });
     expect(useApiMock.mock.lastCall?.[0]).toBe("/v1/admin/player-identities?status=rejected");
+  });
+
+  it("reads the URL status and exact total and follows history", () => {
+    navigation.visit("/admin/player-identities?status=approved");
+    render(<AdminPlayerIdentitiesPage />);
+    expect(screen.getByLabelText("Submission status")).toHaveProperty("value", "approved");
+    expect(screen.getByText("8 submissions")).toBeTruthy();
+    expect(useApiMock.mock.lastCall?.[0]).toBe("/v1/admin/player-identities?status=approved");
+    act(() => navigation.visit("/admin/player-identities?status=not-supported"));
+    expect(screen.getByLabelText("Submission status")).toHaveProperty("value", "pending");
+    expect(useApiMock.mock.lastCall?.[0]).toBe("/v1/admin/player-identities?status=pending");
   });
 
   it("does not render review controls for non-admins", () => {

@@ -258,7 +258,7 @@ instead of silently claiming playback.
 | Dashboard | Shared status and recovery; Last game and locally tracked Today W–L/MMR; Synced with today's uploads, Waiting, persistent relative Last upload, Failed (24 h), and history-import progress. Pause and Open dashboard remain here; Re-sync is in Settings → Maintenance and Updates is beside the sidebar version. |
 | Recent games | Latest 200 local outcomes, kept across restarts. When, result, matchup, opponent, map, length, own MMR and status; status/date filters and collapsed history imports. Double-click opens game analysis. Right-click selects the exact replay in Explorer, copies its path/error, retries or re-analyzes; select failed rows for Retry failed. |
 | Activity log | Incremental tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log`, with complete tracebacks, readable level filters, Ctrl+F search, follow/pause, copy selection or last 200 lines, and Open log folder. |
-| Settings | Replay folders and sync date range (including Last 30 days), start-up, updates, capture, build check-in and OBS. Save confirms what applied. API address, log level and import speed name their restart requirement. The API field supports Reset to default and Test. |
+| Settings | Replay folders and sync date range (including Last 30 days), start-up, updates, capture, build check-in and OBS. Use the section index or Jump menu to find a setting. Timing labels identify what applies instantly, what needs Save, and what takes effect after restart. The API field supports Reset to default and Test. |
 | Streams | Shared stream title and YouTube description, connected channels, and verified or accepted per-platform save results. |
 
 Closing the window hides it in the tray while syncing continues. A one-time reminder

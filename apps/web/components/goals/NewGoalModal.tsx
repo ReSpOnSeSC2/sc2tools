@@ -67,7 +67,9 @@ function NewGoalForm({ onClose, onCreated }: { onClose: () => void; onCreated: (
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<ClientApiError | null>(null);
-  const options = useBuildOptions(template.type === "build_reps" && matchup ? matchup : null);
+  const practice = template.type === "build_reps";
+  const rated = template.type === "mmr_reach";
+  const options = useBuildOptions(matchup || null);
 
   const season = seasonList.find((s) => s.number === seasonNumber) ?? seasonList.find((s) => s.isCurrent) ?? seasonList[0] ?? null;
   const minRule = GOAL_MIN_GAMES[template.type];
@@ -94,9 +96,9 @@ function NewGoalForm({ onClose, onCreated }: { onClose: () => void; onCreated: (
     params: {
       target: Number(target),
       ...(minRule ? { minGames: minGames === "" ? minRule.fallback : Number(minGames) } : {}),
-      ...(template.type === "build_reps" && build ? { build } : {}),
+      ...(practice && build ? { build } : {}),
     },
-    filters: { matchup: matchup || null, map: map || null, ranked },
+    filters: { matchup: matchup || null, map: rated ? null : map || null, ranked: rated || ranked, ...(!practice && build ? { build } : {}) },
     window: goalWindow,
     title: title.trim() || null,
   };
@@ -200,12 +202,12 @@ function NewGoalForm({ onClose, onCreated }: { onClose: () => void; onCreated: (
         </div>
 
         <label className="flex min-h-11 items-center gap-2 text-body text-text">
-          <input type="checkbox" checked={ranked} onChange={(event) => setRanked(event.target.checked)} />
+          <input type="checkbox" checked={rated || ranked} disabled={rated} onChange={(event) => setRanked(event.target.checked)} />
           Ranked 1v1 only
         </label>
 
-        {template.type === "build_reps" ? (
-          matchup ? (
+        {matchup ? (
+          <div className="space-y-2">
             <BuildPicker
               options={options.data?.builds}
               loading={!options.data && options.isLoading}
@@ -214,10 +216,11 @@ function NewGoalForm({ onClose, onCreated }: { onClose: () => void; onCreated: (
               value={build?.key ?? null}
               onChange={(option) => setBuild({ key: option.key, name: option.name, slug: option.slug, source: option.source })}
               usualKey={options.data?.usualKey ?? null}
-              label="Build to practise"
+              label={practice ? "Build to practise" : "Build filter (optional)"}
             />
-          ) : <p className="text-caption text-text-muted">Choose a matchup to pick the build.</p>
-        ) : null}
+            {!practice && build ? <Button variant="ghost" size="sm" onClick={() => setBuild(null)}>Clear build filter</Button> : null}
+          </div>
+        ) : practice ? <p className="text-caption text-text-muted">Choose a matchup to pick the build.</p> : null}
 
         <Field label="Name (optional)" hint="Shown instead of the sentence below.">
           <Input value={title} maxLength={80} onChange={(event) => setTitle(event.target.value)} />

@@ -33,7 +33,7 @@ export function SegmentedReplayHost({ manifest, compact, segmentPath, segmentLin
   const time = clock.scope === scope ? clock.time : initialTime;
   const previous = useRef({ scope, time });
   const [speed, setSpeed] = useState(8);
-  const { current, buffering, error, retry, castMarkers, loadClipSections } = usePlaybackSegments({ manifest, gameId: props.gameId,
+  const { current, buffering, error, retry, castMarkers, loadClipSections, readAttention } = usePlaybackSegments({ manifest, gameId: props.gameId,
     time, speed, backwards: clock.scope === scope && clock.backwards, anonymous, segmentPath, segmentLinkPath });
   const onPlaybackTimeChange = useCallback((next: number) => {
     const backwards = previous.current.scope === scope && next < previous.current.time;
@@ -50,7 +50,7 @@ export function SegmentedReplayHost({ manifest, compact, segmentPath, segmentLin
     castMarkers, buffering, playbackWindow: { start: current.entry.start, end: current.entry.end } };
   return <div className="relative" aria-busy={buffering && !error}>
     {compact ? <CompactReplayHost key={scope} {...shared} /> : <ReplayStage key={scope} {...shared} loadClipSections={loadClipSections} />}
-    {props.clip === "owner" ? <div className="mt-2"><AttentionCard playback={current.playback} start={current.entry.start} end={current.entry.end} /></div> : null}
+    {props.clip === "owner" ? <div className="mt-2"><AttentionCard key={scope} playback={current.playback} start={current.entry.start} end={current.entry.end} readAll={readAttention} /></div> : null}
     {buffering && (error ? <div className="absolute inset-0 z-30 flex items-center justify-center rounded-lg bg-bg-surface/95">{loading}</div>
       : <div role="status" className="pointer-events-none absolute right-3 top-3 z-30 rounded-md bg-black/80 px-3 py-2 text-caption text-white">Loading next replay section…</div>)}
   </div>;

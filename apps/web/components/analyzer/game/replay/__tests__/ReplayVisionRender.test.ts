@@ -94,6 +94,20 @@ describe("vision modes at the renderer", () => {
     expect(mine.hits.count).toBe(3);
   });
 
+  it("keeps the known structure form and never draws a hidden structure at a tracked new location", () => {
+    const known = playback();
+    known.buildings[1].forms = [{ t: 150, name: "Lair" }];
+    renderFrame(ctx(), canvas, known, 300, null, view, undefined, undefined, { vision: "me", dpr: 1 });
+    expect(draws.find(draw => draw.name === "Hatchery")?.alpha).toBeCloseTo(0.4);
+    expect(draws.some(draw => draw.name === "Lair")).toBe(false);
+
+    draws.length = 0;
+    const moved = playback();
+    moved.buildings[1].moves = [150, 180, 170];
+    renderFrame(ctx(), canvas, moved, 300, null, view, undefined, undefined, { vision: "me", dpr: 1 });
+    expect(draws.some(draw => draw.name === "Hatchery")).toBe(false);
+  });
+
   it("shows no ghost before the structure was first seen", () => {
     expect(frame("me", 90).names).toEqual(["CommandCenter", "Reaper"]);
   });

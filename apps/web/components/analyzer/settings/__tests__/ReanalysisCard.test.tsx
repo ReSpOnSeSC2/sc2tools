@@ -69,6 +69,15 @@ describe("ReanalysisCard", () => {
     expect(fixture.handlers).toBeNull();
   });
 
+  it("starts the named camera backfill cohort", async () => {
+    fixture.data = overview({ cohorts: [...COHORTS, { id: "add-camera-data", kind: "camera", count: 9 }] });
+    render(<ReanalysisCard />);
+    fireEvent.click(screen.getByRole("radio", { name: /Add camera data/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Start re-analysis" }));
+    await waitFor(() => expect(fixture.apiCall).toHaveBeenCalledTimes(1));
+    expect(fixture.apiCall.mock.calls[0][2]).toMatchObject({ body: JSON.stringify({ cohortId: "add-camera-data" }) });
+  });
+
   it("says when nothing needs re-analysis and hides Start", () => {
     fixture.data = overview({ cohorts: COHORTS.map((cohort) => ({ ...cohort, count: 0 })) });
     render(<ReanalysisCard />);

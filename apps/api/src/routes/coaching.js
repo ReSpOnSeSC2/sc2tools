@@ -1,11 +1,13 @@
 "use strict";
 const { mergeShelfWrite, selectLockerAssets } = require("../services/coachingLockerShelf");
+const { mergeClassicStudentWorksheets, mergeWorksheetWrite, preserveWorksheetReplayLinks, studentWorksheetRead } = require("../services/coachingWorksheetState");
+const LOCKER_CONFLICT = Object.freeze({ code: "conflict", message: "The Locker changed. Reload before editing." });
 
 const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
 const { REGION_LABELS } = require("../util/regionFromToonHandle");
 const { ASSIGNMENT_STATES } = require("../services/coachingAssignmentState");
-const { bookingDigestRoute, calendarRoute } = require("./coachingSessions");
+const { mountBookingDigestRoutes, calendarRoute } = require("./coachingSessions");
 
 // Whole-state payloads carry embedded media (voice memos, images,
 // small replays) as base64. Body parsing is owned by the app-level
@@ -23,7 +25,7 @@ const { bookingDigestRoute, calendarRoute } = require("./coachingSessions");
  *
  *   GET  /coaching/me                      — role + linkage for the signed-in user
  *   GET  /coaching/state                   — full state (admin/coach) or scoped (student)
- *   PUT  /coaching/state                   — CAS write {state, rev} (admin/coach)
+ *   PUT  /coaching/state                   — role-scoped CAS write {state, rev}
  *   GET  /coaching/users?q=                — signed-up directory + live agent check (admin/coach)
  *   GET  /coaching/practice-sharing        — live student-approved assignment/replay consent
  *   POST /coaching/students/:id/practice-sharing/request — coach requests or re-requests consent
@@ -120,8 +122,10 @@ function buildCoachingRouter(deps) {
     res.set("Cache-Control", "private, no-store, max-age=0");
     try {
       const { auth, cr } = ctx(req);
+      const guardedView = req.query.worksheets === "1" || req.query.shelf === "1";
       if (cr.role === "none" || !lockerRosterAllowed(req, auth, cr)) { coachingNotFound(res); return; }
       const { state, rev } = await deps.coaching.getDoc();
+      if (guardedView && cr.rev !== rev) { res.status(409).json({ error: LOCKER_CONFLICT }); return; }
       res.json({ rev, scoped: cr.role !== "admin", state: scopeLockerState(state, cr) });
     } catch (err) {
       next(err);
@@ -129,6 +133,7 @@ function buildCoachingRouter(deps) {
   });
 
   router.get("/coaching/alerts", withRole, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store, max-age=0");
     try {
       const { auth, cr } = ctx(req);
       res.json(await deps.coaching.alertSummary(auth.userId, cr));
@@ -138,6 +143,7 @@ function buildCoachingRouter(deps) {
   });
 
   router.post("/coaching/alerts/read", withRole, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store, max-age=0");
     try {
       const { auth, cr } = ctx(req);
       if (cr.role === "none") {
@@ -151,7 +157,7 @@ function buildCoachingRouter(deps) {
   });
 
   router.get("/coaching/calendar", withRole, calendarRoute(deps, ctx));
-  router.get("/coaching/calendar/bookings/:bookingId/digest", withRole, bookingDigestRoute(deps, ctx));
+  mountBookingDigestRoutes(router, withRole, deps, ctx);
 
   router.put("/coaching/calendar/availability", withRole, async (req, res, next) => {
     try {
@@ -222,21 +228,29 @@ function buildCoachingRouter(deps) {
       // Students write too — worksheet answers, intake, submissions all
       // mutate state. Scoped-write safety for students is enforced by the
       // merge below; coaches/admin write the full document.
+      const worksheets = req.query.worksheets === "1";
+      const shelf = req.query.shelf === "1";
+      const guardedView = worksheets || shelf;
       if (role === "none" || !lockerRosterAllowed(req, auth, cr)) { coachingNotFound(res); return; }
       const body = req.body || {};
       const incoming = body.state;
       const rev = Number(body.rev) || 0;
-      if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+      if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)
+        || worksheets && (!Number.isSafeInteger(body.rev) || body.rev < 0)) {
         res.status(400).json({ error: "bad_state" }); return;
       }
-      let toWrite = incoming;
+      if (shelf && (!Number.isSafeInteger(body.rev) || body.rev < 0)) { res.status(400).json({ error: "bad_revision" }); return; }
       const current = await deps.coaching.getDoc();
-      if (req.query.shelf === "1") {
-        if (!Number.isSafeInteger(body.rev) || body.rev < 0) { res.status(400).json({ error: "bad_revision" }); return; }
-        if (rev !== current.rev) {
-          res.status(409).json({ error: "conflict", rev: current.rev, state: scopeLockerState(current.state, cr) });
-          return;
-        }
+      if (guardedView && cr.rev !== current.rev) { res.status(409).json({ error: LOCKER_CONFLICT }); return; }
+      if (guardedView && rev !== current.rev) {
+        res.status(409).json({ error: LOCKER_CONFLICT, rev: current.rev, state: scopeLockerState(current.state, cr) });
+        return;
+      }
+      let toWrite = incoming;
+      if (worksheets) {
+        toWrite = mergeWorksheetWrite(current.state, incoming, cr);
+        if (!toWrite) { res.status(403).json({ error: "not_writer" }); return; }
+      } else if (shelf) {
         const shelfWrite = mergeShelfWrite(current.state, incoming, cr, scopeLockerState(current.state, cr).assets || {});
         if (!shelfWrite) { res.status(400).json({ error: "bad_attachment" }); return; }
         toWrite = shelfWrite;
@@ -251,12 +265,14 @@ function buildCoachingRouter(deps) {
           return;
         }
       }
+      if (!guardedView) toWrite = preserveWorksheetReplayLinks(current.state, toWrite);
       const out = await deps.coaching.putStateWithRosterGuard(
         toWrite,
         rev,
         [auth.userId],
       );
       if (!out.ok) {
+        if (guardedView) { res.status(409).json({ error: LOCKER_CONFLICT }); return; }
         res.status(409).json({ error: "conflict", rev: out.rev, state: scopeLockerState(out.state, cr) });
         return;
       }
@@ -672,6 +688,7 @@ function buildCoachingRouter(deps) {
 
 /** @param {import('express').Request} req @param {{source:string}} auth @param {{role:string}} cr */
 function lockerRosterAllowed(req, auth, cr) {
+  if (req.query.worksheets === "1") return auth.source === "clerk" && req.query.shelf !== "1" && req.query.roster !== "1";
   if (req.query.shelf === "1") return auth.source === "clerk" && (req.method === "GET" || cr.role === "coach" || cr.role === "admin");
   return req.query.roster !== "1" || (auth.source === "clerk" && (cr.role === "coach" || cr.role === "admin"));
 }
@@ -698,7 +715,10 @@ function mergeStudentWrite(serverState, incoming, studentId) {
   if (!mineIncoming) return null;
   const students = /** @type {any[]} */ (serverState.students || []).map((s) => {
     if (!s || s.id !== studentId) return s;
-    return { ...mineIncoming, coachId: s.coachId, userId: s.userId };
+    const { worksheets, ...changes } = mineIncoming;
+    return { ...changes, coachId: s.coachId, userId: s.userId,
+      ...(s.worksheets === undefined ? {} : { worksheets: mergeClassicStudentWorksheets(s.worksheets, worksheets) }),
+    };
   });
   // New assets referenced by the student's record (e.g. uploaded
   // replays) ride along; existing assets are never overwritten.
@@ -760,7 +780,7 @@ function mergeCoachWrite(serverState, incoming, coachId) {
 function scopeLockerState(state, actor) {
   if (actor.role === "coach") return scopeCoachState(state, actor.coachId);
   if (actor.role !== "student") return state;
-  const student = /** @type {any[]} */ (state.students || []).find((row) => row?.id === actor.studentId);
+  const student = studentWorksheetRead(state, actor).students[0];
   return {
     coach: state.coach,
     coaches: /** @type {any[]} */ (state.coaches || []).map((coach) => ({ id: coach.id, name: coach.name })),

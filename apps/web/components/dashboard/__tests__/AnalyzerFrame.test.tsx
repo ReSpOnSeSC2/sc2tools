@@ -5,16 +5,27 @@
  * analyzer provider, the filter bar and the Folder Sync runner are MOCKS.
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
+import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ browserImport: false, pathname: "/app" }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), usePathname: () => mocks.pathname }));
 vi.mock("next/dynamic", () => ({
-  default: (loader: unknown) => String(loader).includes("FilterBar")
-    ? function FilterBarMock() { return <div data-testid="filter-editor" />; }
-    : function FolderSyncAutoRunnerMock() { return <div data-testid="folder-sync-auto-runner" />; },
+  default: (loader: unknown) => {
+    const source = String(loader);
+    if (source.includes("FilterBar")) return function FilterBarMock() { return <div data-testid="filter-editor" />; };
+    if (source.includes("OnboardingChecklist")) {
+      return function LoadedChecklist(props: ComponentProps<typeof OnboardingChecklist>) {
+        return <OnboardingChecklist {...props} />;
+      };
+    }
+    if (source.includes("FolderSyncAutoRunner")) return function FolderSyncAutoRunnerMock() {
+      return <div data-testid="folder-sync-auto-runner" />;
+    };
+    return () => null;
+  },
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token" }) }));
 vi.mock("@/lib/clientApi", () => ({ apiCall: vi.fn() }));

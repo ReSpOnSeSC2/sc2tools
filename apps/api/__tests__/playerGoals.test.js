@@ -147,12 +147,27 @@ describe("progress", () => {
     expect(sq.progress).toMatchObject({ phase: "sample", needed: 1, games: 4, value: null });
     expect(mmr.progress).toMatchObject({ phase: "sample", noRatedGames: true, value: null, fraction: 0 });
     await db.games.insertMany([
-      game({ date: new Date(NOW - 3 * 3600_000), myMmr: 3900 }),
-      game({ date: new Date(NOW - 2 * 3600_000), myMmr: 3950 }),
+      game({ date: new Date(NOW - 3 * 3600_000), myMmr: 3900, myMmrSource: "replay" }),
+      game({ date: new Date(NOW - 2 * 3600_000), myMmr: 3950, myMmrSource: "replay" }),
+      game({ myMmr: 4900 }),
+      game({ myMmr: 5000, myMmrSource: "replay", isLadderGame: false }),
     ]);
     svc.invalidateForUser(OWNER);
     const after = (await svc.list(OWNER)).goals.find((g) => g.type === "mmr_reach");
     expect(after.progress).toMatchObject({ value: 3950, first: 3900, peak: 3950, met: false, fraction: 0.5 });
+  });
+
+  test("an ordinary game count can scope to a confirmed or detected custom build", async () => {
+    const build = { key: "custom:two-gate", name: "My two gate" };
+    await db.games.insertMany([
+      game({ myBuild: build.name, _customBuildSlug: "two-gate" }),
+      game({ myBuild: build.name, _customBuildSlug: "two-gate", buildIntent: { status: "confirmed", applied: true } }),
+      game({ myBuild: build.name, _customBuildSlug: "another-build" }),
+    ]);
+    const [view] = (await svc.create(OWNER, goal({ filters: { matchup: "PvZ", build }, params: { target: 5 } }))).goals;
+    expect(view.filters.build).toMatchObject({ ...build, source: "custom", slug: "two-gate" });
+    expect(view.label).toBe("Play 5 ranked PvZ games with My two gate each week");
+    expect(view.progress).toMatchObject({ value: 2, games: 2 });
   });
 
   test("build practice counts the effective build, including check-ins", async () => {

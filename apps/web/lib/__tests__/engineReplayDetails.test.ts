@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { replayCameraAt, sanitizeReplayCamera } from "@/lib/replayCamera";
-import { replayAttention } from "@/lib/replayAttention";
+import { fullReplayAttention, replayAttention } from "@/lib/replayAttention";
 import { sanitizeMapPlayback } from "@/lib/mapReplay";
 import { unitTrades } from "@/lib/unitTrades";
 
@@ -25,6 +25,24 @@ describe("additive replay details", () => {
     expect(attention?.nearBase).toBe(100);
     expect(attention?.grid.reduce((sum, item) => sum + item, 0)).toBe(10);
     expect(attention?.fights.map(fight => fight.lookedAway)).toEqual([null, true, false]);
+  });
+
+  it("weights full-replay samples and classifies fights across a segment seam", async () => {
+    const fixture = { v: 7, mapName: "Test", gameLength: 15,
+      bounds: { minX: 0, minY: 0, maxX: 100, maxY: 100 }, units: [],
+      buildings: [{ t: 0, x: 10, y: 10, owner: "me", name: "Nexus" }],
+      battles: [{ t: 8, x: 10, y: 10 }, { t: 13, x: 10, y: 10 }] };
+    const early = sanitizeMapPlayback({ ...fixture, camera: { me: [0, 80, 80, 4, 10, 10] } })!;
+    const late = sanitizeMapPlayback({ ...fixture, camera: { me: [7, 80, 80] } })!;
+    expect(replayAttention(late, "me", { start: 7, end: 15 })?.fights.map(fight => fight.lookedAway)).toEqual([null, true]);
+    async function* sections() {
+      yield { start: 0, end: 7, playback: early };
+      yield { start: 7, end: 15, playback: late };
+    }
+    const result = await fullReplayAttention(sections(), 15, new AbortController().signal);
+    expect(result.me).toMatchObject({ samples: 15, interval: 1, nearBase: 20 });
+    expect(result.me?.fights.map(fight => fight.lookedAway)).toEqual([false, true]);
+    expect(result.opp).toBeNull();
   });
 
   it("keeps unattributed kills separate and excludes impossible lifespans", () => {

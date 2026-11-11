@@ -46,6 +46,11 @@ export function CoachingBookingAlert({ compact = false }: { compact?: boolean })
 
   const socketHandlers = useMemo(
     () => ({
+      "notifications:changed": (payload: unknown) => {
+        if (payload && typeof payload === "object" && "kind" in payload && payload.kind === "read") {
+          window.dispatchEvent(new Event("coaching:alerts-read"));
+        }
+      },
       "coaching:booking": () => {
         refresh();
         window.dispatchEvent(new Event("coaching:booking-realtime"));

@@ -108,9 +108,11 @@ function PresetSwatch({ theme }: { theme: OverlayTheme }) {
 export function OverlayThemeSection({
   theme,
   onChange,
+  children,
 }: {
   theme: OverlayTheme;
   onChange: (next: OverlayTheme) => void;
+  children?: import("react").ReactNode;
 }) {
   const radioName = useId();
   const activeKey = themeKey(theme);
@@ -335,6 +337,7 @@ export function OverlayThemeSection({
           <OverlayThemePreview theme={theme} />
         </div>
       </Card>
+      {children}
     </Section>
   );
 }
@@ -352,7 +355,7 @@ const SAMPLE_LIVE: LiveGamePayload = {
   matchup: "PvZ",
   map: "Alcyone LE",
   durationSec: 754,
-  mmrDelta: 18,
+  mmrChangeBetweenStarts: 18,
   myMmr: 4211,
 };
 

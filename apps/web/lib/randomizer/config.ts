@@ -58,7 +58,7 @@ function sanitizeBuild(
     name,
     race,
     source: r.source === "custom" ? "custom" : "catalog",
-    weight: Number.isFinite(weightNum) && weightNum > 0 ? weightNum : 1,
+    weight: Number.isFinite(weightNum) && weightNum >= 0 ? weightNum : 1,
   };
   // Version-1 builds did not carry this block. Give every persisted Protoss
   // build a safe inferred default while leaving other races ineligible.
@@ -140,6 +140,7 @@ export function sanitizeRandomizerConfig(raw: unknown): RandomizerConfig {
   if (!raw || typeof raw !== "object") return cfg;
   const obj = raw as Record<string, unknown>;
   cfg.sound = sanitizeSound(obj.sound);
+  cfg.rollOnDesktop = obj.rollOnDesktop === true;
   const matchups = obj.matchups;
   if (!matchups || typeof matchups !== "object") return cfg;
   for (const m of MATCHUPS) {

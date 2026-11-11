@@ -1,15 +1,20 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { useSWRConfig } from "swr";
 import type { LockerDocument } from "./lockerRosterModel";
 
 const api = vi.hoisted(() => ({
-  data: undefined as LockerDocument | undefined, request: vi.fn(), mutate: vi.fn(),
+  data: undefined as LockerDocument | undefined, error: undefined as { status: number } | undefined, request: vi.fn(), mutate: vi.fn(),
+  cache: vi.fn(),
   toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "fixture" }) }));
 vi.mock("@/lib/clientApi", () => ({
-  useApi: () => ({ data: api.data, request: api.request, mutate: api.mutate }),
+  useApi: () => {
+    api.cache(useSWRConfig().cache);
+    return { data: api.data, error: api.error, request: api.request, mutate: api.mutate };
+  },
 }));
 vi.mock("@/components/ui/Toast", () => ({ useToast: () => ({ toast: api.toast }) }));
 
@@ -33,6 +38,8 @@ function locker(): LockerDocument {
 beforeEach(() => {
   vi.stubGlobal("indexedDB", new IDBFactory()); vi.stubGlobal("IDBKeyRange", IDBKeyRange);
   api.data = locker();
+  api.error = undefined;
+  api.cache.mockClear();
   api.request.mockReset().mockImplementation(async (request: RequestInit) => {
     const body = JSON.parse(String(request.body)); const current = api.data!;
     expect(body.rev).toBe(current.rev);
@@ -104,4 +111,42 @@ it("blocks unsafe links and active media while retaining safe Legacy attachment 
   expect(shelfLink("/app/game/example")).toBe("/app/game/example");
   expect(mediaSource("image", { n: "bad.svg", mime: "image/svg+xml", b64: "YWJj", size: 3 })).toBeUndefined();
   expect(mediaSource("voice", { n: "memo.webm", mime: "audio/webm;codecs=opus", b64: "YWJj", size: 3 })).toBe("data:audio/webm;codecs=opus;base64,YWJj");
+});
+
+it("keeps a Shelf draft through a 503, exposes retry in the editor, and gates restore and save", async () => {
+  const saved = await import("./lockerBackup");
+  await saved.stageLockerBackup(["fixture", "shelf:coach:c1"], { ...locker(), rev: 2 });
+  await saved.confirmLockerBackup(["fixture", "shelf:coach:c1"], 2, 3);
+  const view = render(coach);
+  const restore = screen.getByRole<HTMLButtonElement>("button", { name: "Restore previous version" });
+  await waitFor(() => expect(restore.disabled).toBe(false));
+  fireEvent.click(screen.getByRole("button", { name: "Add shelf item" }));
+  fireEvent.change(screen.getByLabelText(/Title/), { target: { value: "Unsaved drill" } });
+  api.error = { status: 503 };
+  view.rerender(<LockerShelf viewerRole="coach" memberId="c1" />);
+  const editor = within(screen.getByRole("dialog", { name: "Add shelf item" }));
+  expect(editor.getByLabelText<HTMLInputElement>(/Title/).value).toBe("Unsaved drill");
+  expect(editor.getByRole<HTMLButtonElement>("button", { name: "Add item" }).disabled).toBe(true);
+  expect(editor.getByRole<HTMLButtonElement>("button", { name: "Cancel" }).disabled).toBe(false);
+  expect(restore.disabled).toBe(true);
+  fireEvent.click(editor.getByRole("button", { name: "Retry Locker" }));
+  expect(api.mutate).toHaveBeenCalledOnce();
+  expect(api.request).not.toHaveBeenCalled();
+  api.error = undefined;
+  view.rerender(<LockerShelf viewerRole="coach" memberId="c1" />);
+  fireEvent.click(editor.getByRole("button", { name: "Add item" }));
+  await waitFor(() => expect(api.toast.success).toHaveBeenCalledWith("Item added"));
+  expect(api.data!.state.students![0].shelf).toEqual(expect.arrayContaining([expect.objectContaining({ t: "Unsaved drill" })]));
+});
+
+it("starts with a fresh read cache and clears the old editor when the linked coach changes", () => {
+  const view = render(coach);
+  const oldCache = api.cache.mock.lastCall?.[0];
+  fireEvent.click(screen.getByRole("button", { name: "Add shelf item" }));
+  fireEvent.change(screen.getByLabelText(/Title/), { target: { value: "Previous coach draft" } });
+  api.error = { status: 503 };
+  view.rerender(<LockerShelf viewerRole="coach" memberId="c2" />);
+  expect(api.cache.mock.lastCall?.[0]).not.toBe(oldCache);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Practice plan" })).toBeNull();
 });

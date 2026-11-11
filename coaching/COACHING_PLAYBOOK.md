@@ -107,6 +107,14 @@ Near term (manual, zero build cost): run the pipeline by hand, deliver cards as 
 Mid term: a `coaching/` watch-folder so submitted replays auto-grade; student packet page hosted on sc2tools.com behind their login; adherence trend chart from the accumulated `.grade.json` files.
 Long term: "Coach mode" as a product feature — coaches upload reference builds, students link accounts, grading + longitudinal analytics in-app. Your coaching practice becomes the design lab for a SaaS feature no competitor (human or AI-analyzer) currently ships.
 
+### Coaching notifications
+
+Booking and cancellation notices appear under **Coaching** in the shared
+notifications inbox. Opening Sessions acknowledges the notices for the
+bookings you just saw. Reading the same notices in the inbox clears the
+Sessions badge. Assignment and practice-sharing notifications also appear
+in the Coaching inbox.
+
 ### Locker roster
 
 Coaches and admins can choose **Open Locker roster** above the classic Locker. Link a student by searching for their account email, edit their display name or focus note, or remove their Locker profile. Admins can reassign students and manage linked coaches. **Roster help** opens in the coaching workspace.
@@ -117,7 +125,7 @@ Before each roster save, the browser stores the current Locker snapshot on that 
 
 Before each lesson, open **Since last session** on the booking (the next one opens by itself). It is the watch-list from the site plan, built from facts only:
 
-- Coaches see ranked 1v1 counts and W–L by matchup since the student's previous held session. Detected builds and recent replay details come from current practice-sharing assignment evidence. A matchup win percentage appears from five decided games.
+- Coaches see ranked 1v1 counts and W–L by matchup since the student's previous held session. Detected builds and recent replay details come from current practice-sharing assignment evidence. A matchup win percentage appears from five decided games. Use **Download replay** on a digest row to open that exact archived assignment replay. Students can separately allow confirmed built-in check-in labels for future assigned games. Custom check-in names and notes stay private.
 - No grades, scores, MMR, notes or practice-log data. The judgement stays yours: use it to pick the two or three replays worth opening together.
 - Only you and that student see it, and only while their practice sharing is accepted. It never reaches back before sharing started, or more than 90 days; with sharing off it says so and lists nothing.
 - The student sees their own eligible games and checked-in builds, with links to their own game pages.
@@ -155,3 +163,35 @@ that write is still the latest change. **Download backup** exports the
 existing Locker JSON format for that role. Keep Classic available until the
 owner has completed one week of real Shelf use and checked old media, sharing,
 backup and restore.
+
+## React Worksheets preview
+
+Open **Locker → Open Worksheets** and choose the student. Start blank, copy
+a worksheet template, or plan around evidence, a decision, practice and proof.
+The guided plan stays in memory for the current visit. Review the actual
+questions before sending. Students only receive sent worksheets and can attach
+replays when they answer. Keep private coaching thoughts in the guided plan.
+
+The view takes a local backup before every write. Confirm that a student can
+submit a disposable worksheet with a replay and restore that submission while
+its revision is current. Repeat with a staff draft. Use **Classic Locker** if
+you need the previous workflow. Keep it available through one week of real
+Worksheets use and owner review.
+
+## React Content Studio preview
+
+Open **Locker → Open Content Studio** as a coach, then choose a student and
+an item type. Use the editable note and matchup guides, record up to 90
+seconds of audio, add an HTTPS video link or short video file, or mark up a
+screenshot with a circle, arrow or pen. For replay feedback, choose a synced
+game for context. Give the student an authorized share link or replay file
+when they need to open that game. For a practice card, attach a PDF and add
+the instructions you want the student to see. A voice outline stays in the
+editor while you record.
+
+Content Studio saves an independent local backup before each write. Confirm
+that the selected student can open the new item, then use **Restore previous
+version** on the same browser while its Locker revision is current. Check that
+other students and existing shelf items survive the round trip. Keep **Classic
+Locker** available until the owner has used Content Studio for a week and
+checked creation, sharing, backups and restore.

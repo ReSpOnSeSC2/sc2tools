@@ -38,6 +38,7 @@ import { mulberry32, seedFromString, spinResult } from "@/lib/randomizer/engine"
 import { RandomizerSequence } from "@/components/randomizer/RandomizerSequence";
 import { gameKeyFromTriggerKey, useGameStartTriggerKey } from "../gameStartTrigger";
 import { randomizerSpinDelayMs } from "../buildIntentGate";
+import { useOverlayPlacement } from "../OverlayPlacement";
 import {
   setRevealSoundEnabled,
   setRevealSoundVolume,
@@ -66,6 +67,7 @@ export function RandomizerWidget({
   /** Called once per spin, as it starts. */
   onSpin?: (spin: RandomizerSpinEvent) => void;
 }) {
+  const placement = useOverlayPlacement();
   const matchup = deriveMatchup(live, liveGame);
   const spinKey = deriveSpinKey(matchup, live, liveGame);
   const triggerKey = useGameStartTriggerKey(live, liveGame);
@@ -172,9 +174,7 @@ export function RandomizerWidget({
     <div
       style={{
         position: "absolute",
-        top: "50%",
-        left: "50%",
-        transform: "translate(-50%, -50%)",
+        ...(placement ?? { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }),
         width: "min(680px, 96vw)",
         pointerEvents: "none",
       }}

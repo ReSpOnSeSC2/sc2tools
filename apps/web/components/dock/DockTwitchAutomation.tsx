@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { API_BASE, boundedApiRequest, buildApiError } from "@/lib/clientApi";
 import { twitchCurrent, twitchReason, TWITCH_STATE_LABELS, type TwitchCurrent } from "@/lib/twitchAutomation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -68,7 +69,11 @@ function ActiveTwitchControls({ token, onInvalid }: { token: string; onInvalid?:
   }
   const current = snapshot?.current;
   return <section aria-label="Twitch prediction controls" className="min-w-0 space-y-2 rounded border border-border p-3">
-    <h3 className="text-caption font-semibold">Twitch Channel Points</h3>
+    <div className="flex flex-wrap items-center justify-between gap-x-3">
+      <h3 className="text-caption font-semibold">Twitch Channel Points</h3>
+      <Link href="/settings?tab=chat#twitch-reward-actions" target="_blank" rel="noopener noreferrer" prefetch={false}
+        className="inline-flex min-h-11 items-center text-caption font-semibold text-link underline">Reward settings</Link>
+    </div>
     <p role="status" className="text-caption">{current ? `Prediction · ${TWITCH_STATE_LABELS[current.prediction]}` : snapshot ? "No Twitch prediction is open." : "Checking Twitch prediction…"}</p>
     {snapshot?.reason ? <p className="text-caption text-text-muted">{twitchReason(snapshot.reason)}</p> : null}
     {current?.reason ? <p className="text-caption text-text-muted">{twitchReason(current.reason)}</p> : null}

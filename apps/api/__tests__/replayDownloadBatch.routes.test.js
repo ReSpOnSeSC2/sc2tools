@@ -13,6 +13,7 @@ function req(owner = "owner-a", body = { gameIds: ["one"] }) { return Object.ass
 function res() {
   const result = Object.assign(new EventEmitter(), { headers: {}, destroyed: false, writableEnded: false,
     setHeader(name, value) { this.headers[name.toLowerCase()] = value; }, status(code) { this.statusCode = code; return this; },
+    vary(name) { this.setHeader("vary", name); },
     json(body) { this.body = body; this.writableEnded = true; this.emit("finish"); },
     destroy() { this.destroyed = true; this.emit("close"); } });
   result.on("error", () => {}); return result;
@@ -72,6 +73,7 @@ test("batch busy is shared with account JSON before reads and releases only afte
     for (const format of ["csv", "ndjson"]) {
       const builds = { request: jest.fn(() => ({})), prepare: jest.fn() }, buildResponse = res();
       await buildOrderExportHandler(builds, format)(req("owner-b"), buildResponse);
+      expect(buildResponse.headers.vary).toBe(format === "ndjson" ? "Accept" : undefined);
       expect(buildResponse.body).toEqual({ error: { code: "export_busy" } }); expect(builds.prepare).not.toHaveBeenCalled();
     }
     expect(seen.mock.calls[0][0]).toBe("owner-a");

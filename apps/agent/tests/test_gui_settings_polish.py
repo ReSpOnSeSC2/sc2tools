@@ -194,7 +194,7 @@ def test_revert_discards_unsaved_secret_entry_without_retaining_text(tmp_path):
     ''')
 
 
-def test_grouped_settings_remain_reachable_at_compact_and_standard_sizes(tmp_path):
+def test_grouped_settings_use_jump_or_persistent_index_at_each_size(tmp_path):
     run_gui_check(tmp_path, '''
         for name in ("segoeui.ttf", "seguisb.ttf", "segoeuib.ttf"):
             font = Path("C:/Windows/Fonts") / name
@@ -205,20 +205,52 @@ def test_grouped_settings_remain_reachable_at_compact_and_standard_sizes(tmp_pat
         ui, win = make_window()
         win._go_to_page("settings")
         win.show()
-        for width, height in [(820, 540), (1280, 800)]:
+        scroll = win._settings_scroll
+        jump = next(item for item in scroll.findChildren(QtWidgets.QComboBox)
+                    if item.accessibleName() == "Settings section")
+        index = next(item for item in scroll.findChildren(QtWidgets.QListWidget)
+                     if item.accessibleName() == "Settings section index")
+        expected = ["Replays", "App", "Updates", "Streaming & OBS", "Build check-in", "Map replay", "Advanced"]
+        assert [index.item(row).text() for row in range(index.count())] == expected
+        assert [jump.itemData(row) for row in range(1, jump.count())] == expected
+        for width, height, wide in [(820, 540, False), (1280, 800, True)]:
             win.resize(width, height)
             app.processEvents()
-            assert win._settings_scroll.verticalScrollBar().maximum() > 0
-            section = next(item for item in win.findChildren(QtWidgets.QComboBox)
-                           if item.accessibleName() == "Settings section")
-            assert section.findData("Streaming & OBS") > 0
+            assert jump.isVisible() is not wide
+            assert index.isVisible() is wide
+            assert scroll.verticalScrollBar().maximum() > 0
+            assert scroll.horizontalScrollBar().maximum() == 0
+            assert not win._api_input.isVisible()
+            scroll.verticalScrollBar().setValue(0)
+            app.processEvents()
             assert win.grab().save(str(base / f"settings-{width}x{height}.png"))
-        assert not win._api_input.isVisible()
-        advanced = section.findData("Advanced")
-        section.setCurrentIndex(advanced)
-        section.activated.emit(advanced)
+            if wide:
+                position = index.pos()
+                scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
+                app.processEvents()
+                assert index.isVisible() and index.pos() == position
+                assert index.geometry().right() < scroll.viewport().x()
+                index.setCurrentRow(index.count() - 1)
+                index.setFocus()
+                QtTest.QTest.keyClick(index, QtCore.Qt.Key_Return)
+            else:
+                advanced = jump.findData("Advanced")
+                jump.setCurrentIndex(advanced)
+                jump.activated.emit(advanced)
+                assert jump.currentIndex() == 0
+            QtTest.QTest.qWait(25)
+            assert win._api_input.isVisible()
+            advanced_top = win._settings_advanced.mapTo(scroll.viewport(), QtCore.QPoint()).y()
+            assert 0 <= advanced_top < scroll.viewport().height(), advanced_top
+            assert scroll.horizontalScrollBar().maximum() == 0
+            assert win.grab().save(str(base / f"settings-advanced-{width}x{height}.png"))
+            win._settings_advanced.setChecked(False)
+        win._handle_input.setText("Draft during resize")
+        win.resize(820, 540)
         app.processEvents()
-        assert win._api_input.isVisible()
+        assert jump.isVisible() and not index.isVisible()
+        assert win._handle_input.text() == "Draft during resize"
+        assert not saved
     ''')
 
 
@@ -255,6 +287,13 @@ def test_instant_settings_keep_their_confirmation_next_to_the_controls(tmp_path)
         assert saved[-1].show_summary is False
         assert "capture on" in win._replay_capture_feedback.text()
         button = next(item for item in win._upload_conc_group.buttons() if not item.isChecked())
+        for control in (win._obs_enable_check, win._replay_capture_check, win._checkin_settings.enabled_box, button):
+            assert control.accessibleDescription() == "Applies instantly"
+        for control in (win._handle_input, win._filter_combo, win._upload_batch_slider,
+                        win._obs_host_input, win._pause_history_check, win._autoupdate_check):
+            assert control.accessibleDescription() == "Saved with Save"
+        for control in (win._api_input, win._log_combo, win._speed_combo):
+            assert control.accessibleDescription() == "Needs restart"
         button.click()
         assert saved[-1].show_summary is False
         assert "Applied instantly" in win._upload_concurrency_feedback.text()

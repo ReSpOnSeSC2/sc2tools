@@ -4,19 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import type { ReactNode } from "react";
-import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
+import { useTrendsDataScope } from "@/lib/trendsDataContext";
 import { TrendsRequestError } from "./charts/TrendsRequestError";
-import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
-import { dayName, formatNumber } from "@/lib/i18n/format";
-import { useFormat } from "@/lib/i18n/useFormat";
+import { formatNumber } from "@/lib/i18n/format";
 import { Card, EmptyState, Skeleton, Stat } from "@/components/ui/Card";
-import {
-  apiToPeriods,
-  clientTimezone,
-  type ApiTimeseriesResponse,
-  type Period,
-} from "@/lib/timeseries";
+import { apiToPeriods, type Period } from "@/lib/timeseries";
+import { TrendsOverviewLoading, useTrendsOverview, type TrendsOverview } from "./TrendsOverview";
 import { FingerprintCard } from "./FingerprintCard";
 import { MatchupOverTimeChart } from "./charts/MatchupOverTimeChart";
 import { MatchupRatingCard } from "./charts/MatchupRatingCard";
@@ -34,8 +28,6 @@ import { WinRateTrendCard } from "./charts/WinRateTrendCard";
 import { DeferredTrendsExplorer } from "./explorer/DeferredTrendsExplorer";
 import { DeferredSection } from "./DeferredSection";
 
-const LS_BUCKET = "analyzer.trends.bucket";
-type Bucket = "day" | "week" | "month";
 const GROUPS = [
   ["overview", "Overview"], ["performance", "Performance & MMR"],
   ["time", "Time & activity"], ["explorer", "Explorer"], ["fingerprint", "Fingerprint"],
@@ -43,7 +35,6 @@ const GROUPS = [
 type Group = typeof GROUPS[number][0];
 // Explorer already owns trends-explorer-heading inside its real card.
 const groupHeadingId = (id: Group) => id === "explorer" ? "trends-explorer-section-heading" : `trends-${id}-heading`;
-const isBucket = (value: unknown): value is Bucket => value === "day" || value === "week" || value === "month";
 const isCollapsed = (value: unknown): value is Partial<Record<Group, boolean>> => Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.values(value).every((entry) => typeof entry === "boolean"));
 
 /** Window resize remains the fallback when observation cannot be installed. */
@@ -62,6 +53,11 @@ function watchSize(element: Element | null, update: () => void) {
 }
 
 export function TrendsTab() {
+  const overview = useTrendsOverview();
+  return <TrendsTabView overview={overview} />;
+}
+
+export function TrendsTabView({ overview }: { overview: TrendsOverview }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -72,8 +68,7 @@ export function TrendsTab() {
     return () => { stop(); window.removeEventListener("resize", update); };
   }, []);
   const { isGlobal } = useTrendsDataScope();
-  const { filters, dbRev } = useFilters();
-  const [bucket, setBucket] = useLocalStorageState<Bucket>(LS_BUCKET, "week", isBucket);
+  const { bucket, setBucket, tz, request: { data, isLoading, error, mutate } } = overview;
   const [collapsed, setCollapsed] = useLocalStorageState<Partial<Record<Group, boolean>>>("analyzer.trends.collapsed", {}, isCollapsed);
   const [activeGroup, setActiveGroup] = useState<Group>("overview");
   const [activationRequests, setActivationRequests] = useState<Partial<Record<Group, number>>>({});
@@ -130,16 +125,6 @@ export function TrendsTab() {
   };
   const groupProps = (id: Group) => ({ id, collapsed: Boolean(collapsed[id]), toggle: () => setCollapsed({ ...collapsed, [id]: !collapsed[id] }) });
 
-  const tz = useMemo(() => clientTimezone(), []);
-  // Weekly buckets start on the account's first day of the week.
-  const weekStart = dayName(useFormat().weekStartDay);
-  const params = useMemo(
-    () => ({ ...filters, interval: bucket, tz, weekStart }),
-    [filters, bucket, tz, weekStart],
-  );
-  const { data, isLoading, error, mutate } = useApi<ApiTimeseriesResponse>(
-    `/v1/timeseries${filtersToQuery(params)}#${dbRev}`,
-  );
   const series: Period[] = useMemo(
     () => apiToPeriods(data, tz),
     [data, tz],
@@ -171,7 +156,7 @@ export function TrendsTab() {
           <select
             id="trends-period"
             value={bucket}
-            onChange={(e) => setBucket(e.target.value as Bucket)}
+            onChange={(e) => setBucket(e.target.value as TrendsOverview["bucket"])}
             aria-describedby="trends-grouping-hint"
             className="rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors focus:border-accent focus:outline-none text-sm"
           >
@@ -184,7 +169,7 @@ export function TrendsTab() {
       </div>
 
       <TrendsGroup {...groupProps("overview")} title="Overview">
-      {isLoading ? <div role="status" aria-label="Loading summary" className="grid min-h-28 grid-cols-2 gap-3 md:grid-cols-4">{[0, 1, 2, 3].map((key) => <Card key={key}><Skeleton rows={2} /></Card>)}</div> : error ? <div className="min-h-28"><TrendsRequestError title="Summary" error={error} retry={mutate} /></div> : <div className="grid min-h-28 grid-cols-2 gap-3 md:grid-cols-4">
+      {isLoading ? <TrendsOverviewLoading /> : error ? <div className="min-h-28"><TrendsRequestError title="Summary" error={error} retry={mutate} /></div> : <div className="grid min-h-28 grid-cols-2 gap-3 md:grid-cols-4">
         <Stat
           label={isGlobal ? "Player game records" : "Games"}
           value={kpis.totalGames}
