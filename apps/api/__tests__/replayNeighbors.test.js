@@ -16,12 +16,13 @@ function game(/** @type {number} */ n, /** @type {Record<string, any>} */ overri
 
 test("neighbors use filtered public labels and _id ties, returning working game IDs only", async () => {
   await db.games.insertMany([game(1), game(2, { myBuild: "Planned", buildIntent: { status: "confirmed", applied: true, build: { name: "Planned" }, detected: { name: "Blink" } } }), game(3, { date: new Date("2026-10-22T12:00:00Z") }), game(4, { result: "Defeat" }), game(5, { userId: "other" }), game(6, { isResumedFromReplay: true })]);
-  const options = { filters: { map: "Alcyone", build: "Blink" }, result: "win", matchup: "PvZ", search: "rival" };
+  const options = { filters: { map: "Alcyone", build: "Blink" }, result: "win", matchup: "PvZ", search: "link" };
   expect(await service.neighbors("owner", "game-2", options)).toEqual({ olderGameId: "game-1", newerGameId: "game-3" });
   expect(await service.neighbors("owner", "game-1", options)).toEqual({ olderGameId: null, newerGameId: "game-2" });
   expect(await service.neighbors("owner", "game-3", options)).toEqual({ olderGameId: "game-2", newerGameId: null });
   for (const id of ["game-4", "game-5", "game-6", "missing"]) expect(await service.neighbors("owner", id, options)).toEqual({ olderGameId: null, newerGameId: null });
   for (const id of Object.values(await service.neighbors("owner", "game-2", options))) if (id) expect((await service.getDetail("owner", id))?.game.gameId).toBe(id);
+  expect(await service.neighbors("owner", "game-2", { ...options, search: "rival" })).toEqual({ olderGameId: null, newerGameId: null });
   expect(await service.neighbors("owner", "game-2", { filters: { build: "Planned" } })).toEqual({ olderGameId: null, newerGameId: null });
 });
 
