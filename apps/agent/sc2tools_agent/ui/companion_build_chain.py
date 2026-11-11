@@ -58,21 +58,10 @@ def build_build_chain(parent, *, QtCore, QtGui, QtWidgets, icon_provider):
             self._layout_signature = None
             self._tile_width = 112
             self._tile_width_override = None
-            self.setStyleSheet(f"""
-                QWidget#companionBuildChain {{ background: transparent; }}
-                QLabel#chainIcon {{ background: {theme.ELEVATED}; border: 2px solid #83cc63; border-radius: 4px; color: #b9f293; }}
-                QLabel#chainName {{ color: {theme.TEXT}; font-size: 11px; }}
-                QLabel#chainTime {{ color: {theme.ACCENT_CYAN}; font-size: 12px; font-weight: 600; }}
-                QLabel#chainTiming {{ background: {theme.SUBTLE}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 3px; color: {theme.TEXT_MUTED}; font-size: 10px; padding: 1px 3px; }}
-                QLabel#chainArrow {{ color: #90d56c; font-size: 18px; font-weight: 700; }}
-                QLabel#chainSummary, QLabel#chainEmpty {{ color: {theme.TEXT_MUTED}; font-size: 11px; background: transparent; }}
-                QPushButton#chainMore {{ background: {theme.BUTTON}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 5px; padding: 5px 8px; }}
-                QPushButton#chainMore:hover {{ background: {theme.BUTTON_HOVER}; border-color: {theme.ACCENT_HOVER}; }}
-                QPushButton#chainMore:focus {{ border-color: {theme.FOCUS}; }}
-            """)
+            self.setStyleSheet(theme.BUILD_CHAIN_STYLE)
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(4)
+            layout.setSpacing(theme.SPACE_XS)
             self.scroll = QtWidgets.QScrollArea()
             self.scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
             self.scroll.setWidgetResizable(True)
@@ -83,8 +72,8 @@ def build_build_chain(parent, *, QtCore, QtGui, QtWidgets, icon_provider):
             self.content.setMinimumWidth(0)
             self.grid = QtWidgets.QGridLayout(self.content)
             self.grid.setContentsMargins(2, 2, 2, 2)
-            self.grid.setHorizontalSpacing(8)
-            self.grid.setVerticalSpacing(8)
+            self.grid.setHorizontalSpacing(theme.SPACE_S)
+            self.grid.setVerticalSpacing(theme.SPACE_S)
             self.grid.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
             self.scroll.setWidget(self.content)
             layout.addWidget(self.scroll, 1)

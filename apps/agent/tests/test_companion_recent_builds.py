@@ -201,8 +201,8 @@ def test_an_opponent_not_identified_yet_is_not_called_a_first_meeting(report):
 def test_the_chosen_row_is_as_readable_as_the_others(report):
     panel, app = report
     style = panel.recent_builds.styleSheet()
-    chosen = re.search(r"QPushButton:checked \{ background: (#[0-9a-fA-F]{6})", style).group(1)
-    for text in (theme.SUCCESS, theme.DANGER, theme.TEXT_MUTED, theme.ACCENT_CYAN):
+    chosen = re.search(r"QPushButton#recentBuildRow:checked \{ background: (#[0-9a-fA-F]{6})", style).group(1)
+    for text in (theme.SUCCESS, theme.DANGER, theme.TEXT_MUTED, theme.DEFAULT_SKIN.accent):
         assert contrast(text, chosen) >= 4.5, (text, chosen)
 
 
@@ -240,7 +240,7 @@ def test_the_lists_fit_every_report_size_and_the_smallest_opens_on_the_opponent(
     assert columns["opp"].rows()[0].build.text().endswith("\N{HORIZONTAL ELLIPSIS}")
 
 
-@pytest.mark.parametrize("scale_factor", ["1", "1.5"])
+@pytest.mark.parametrize("scale_factor", ["1", "1.25", "1.5"])
 def test_the_lists_stay_inside_the_themed_frame_when_windows_scales_the_text(tmp_path, monkeypatch, scale_factor):
     monkeypatch.setenv("QT_SCALE_FACTOR", scale_factor)
     run_gui_check(tmp_path, '''
@@ -267,7 +267,8 @@ def test_the_lists_stay_inside_the_themed_frame_when_windows_scales_the_text(tmp
                     panel.resize(width, height)
                     panel.show()
                     QtTest.QTest.qWait(10)
-                    safe = QtCore.QRect(32, 30, width - 64, height - 58)
+                    inset = theme.SPACE_L
+                    safe = QtCore.QRect(inset, inset, width - 2 * inset, height - 2 * inset)
                     assert safe.contains(panel.scouting_scroll.geometry())
                     assert panel.scouting_scroll.horizontalScrollBar().maximum() == 0
                     viewport = panel.scouting_scroll.viewport()

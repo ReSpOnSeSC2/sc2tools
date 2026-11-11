@@ -8,6 +8,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..build_checkin.models import PostgameCardModel
 from ..build_checkin.scouting import ScoutingStripModel, plain_text
+from . import theme
 from .build_checkin_widgets import button, link, plain_label
 
 
@@ -51,7 +52,7 @@ class ElidedText(QtWidgets.QLabel):
             rows.append(metrics.elidedText(rest, QtCore.Qt.ElideRight, width))
         value = "\n".join(rows)
         if value != self.text(): self.setText(value)
-        self.setMaximumHeight(metrics.lineSpacing() * self._lines + 4)
+        self.setMaximumHeight(metrics.lineSpacing() * self._lines + theme.SPACE_XS)
 
 
 class ScoutingStrip(QtWidgets.QFrame):
@@ -61,8 +62,8 @@ class ScoutingStrip(QtWidgets.QFrame):
         super().__init__()
         self.setObjectName("checkinStrip")
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(4)
+        layout.setContentsMargins(theme.SPACE_S, theme.SPACE_S, theme.SPACE_S, theme.SPACE_S)
+        layout.setSpacing(theme.SPACE_XS)
         self.record = ElidedText()
         self.opening = ElidedText()
         # Each player's recent builds, newest first. With long names cut in
@@ -100,15 +101,15 @@ class OpponentNoteEditor(QtWidgets.QWidget):
         self._dirty = False
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(4)
+        outer.setSpacing(theme.SPACE_XS)
         self.toggle = button("Note for next time", "checkinMoreToggle")
         self.toggle.setCheckable(True)
         self.toggle.setAccessibleDescription("Private opponent note; saved separately from this game's check-in notes.")
         outer.addWidget(self.toggle)
         self.body = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(self.body)
-        layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(4)
+        layout.setContentsMargins(0, theme.SPACE_XS, 0, 0)
+        layout.setSpacing(theme.SPACE_XS)
         self.editor = QtWidgets.QPlainTextEdit()
         self.editor.setObjectName("checkinNotes")
         self.editor.setAccessibleName("Note for next time")

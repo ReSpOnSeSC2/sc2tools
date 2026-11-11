@@ -129,6 +129,7 @@ class BuildCheckinHost:
         self._settings = settings
         self._window_factory = window_factory or _qt_card_window
         self._windows: Dict[str, Any] = {}
+        self._skin = "default"
         self._models: Dict[str, Any] = {}
         self._panels_enabled = True
         self._feature_gates = {LOADING: True, POSTGAME: True}
@@ -248,7 +249,21 @@ class BuildCheckinHost:
         if window is None:
             window = self._window_factory(kind, self)
             self._windows[kind] = window
+            self._apply_window_skin(window)
         return window
+
+    def set_skin(self, skin: str) -> None:
+        """Refresh the existing cards and use the same skin for future cards."""
+        from .race_visuals import normalize_skin
+
+        self._skin = normalize_skin(skin)
+        for window in self._windows.values():
+            self._apply_window_skin(window)
+
+    def _apply_window_skin(self, window: Any) -> None:
+        set_skin = getattr(window, "set_skin", None)
+        if callable(set_skin):
+            set_skin(self._skin)
 
     def existing_window(self, kind: str) -> Optional[Any]:
         return self._windows.get(kind)

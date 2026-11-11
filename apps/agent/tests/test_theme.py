@@ -195,11 +195,12 @@ def declared_colour(style, selector, properties):
     return re.search(r"#[0-9a-f]{6}", values[-1]).group(0)
 
 
-def test_check_in_cards_keep_a_filled_primary_and_every_field_outlined_at_3_to_1():
-    from sc2tools_agent.ui.build_checkin_widgets import card_stylesheet
-
-    card = card_stylesheet()
+@pytest.mark.parametrize("name", list(theme.SKINS))
+def test_check_in_cards_keep_a_filled_primary_and_every_field_outlined_at_3_to_1(name):
+    skin = theme.SKINS[name]
+    card = theme.card_stylesheet(skin)
     fill = declared_colour(card, "QPushButton#checkinPrimary", BACKGROUND)
+    assert fill == skin.accent
     assert contrast(fill, theme.SURFACE) >= 3, fill
     assert contrast(declared_colour(card, "QPushButton#checkinPrimary", ("color",)), fill) >= 4.5
     for style, field in ((card, "QLineEdit#checkinSearch"), (card, "QPlainTextEdit#checkinNotes"),
@@ -210,6 +211,32 @@ def test_check_in_cards_keep_a_filled_primary_and_every_field_outlined_at_3_to_1
         outline = declared_colour(style, field, BORDER)
         for surface in (theme.SURFACE, declared_colour(style, field, BACKGROUND)):
             assert contrast(outline, surface) >= 3, (field, outline, surface)
+
+
+@pytest.mark.parametrize("name", list(theme.SKINS))
+def test_floating_card_chips_and_selected_scouting_rows_keep_readable_contrast(name):
+    skin = theme.SKINS[name]
+    card = theme.card_stylesheet(skin)
+    preview = "QLabel#checkinPreview"
+    assert contrast(declared_colour(card, preview, ("color",)), declared_colour(card, preview, BACKGROUND)) >= 4.5
+    for tone in ("rolled", "usual", "reason", "suggested"):
+        background, foreground = theme.checkin_chip_colours(skin, tone)
+        assert contrast(background, foreground) >= 4.5
+    assert contrast(skin.focus, skin.selected) >= 3
+    for selector in ("QPushButton#checkinPrimary", "QPushButton#checkinLink",
+                     "QLineEdit#checkinSearch", "QPlainTextEdit#checkinNotes"):
+        assert declared_colour(card, selector + ":focus", ("border-color",)) == skin.focus
+
+    scouting = theme.STYLE + theme.skin_layer(name)
+    row = "QPushButton#recentBuildRow"
+    selected = declared_colour(scouting, row + ":checked", BACKGROUND)
+    assert selected == skin.selected
+    assert declared_colour(scouting, row + ":focus", ("border-color",)) == skin.focus
+    for label in ("QLabel#recentBuildName[selected=\"true\"]", "QLabel#recentBuildDetails",
+                  "QLabel#recentBuildResult[result=\"Win\"]", "QLabel#recentBuildResult[result=\"Loss\"]"):
+        assert contrast(declared_colour(scouting, label, ("color",)), selected) >= 4.5, (name, label)
+    assert declared_colour(scouting, "QLabel#chainTime", ("color",)) == skin.accent
+    assert contrast(skin.accent, theme.ELEVATED) >= 4.5
 
 
 @pytest.mark.parametrize("name", list(theme.SKINS))
