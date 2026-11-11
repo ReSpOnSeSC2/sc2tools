@@ -28,6 +28,7 @@ vi.mock("@/lib/clientApi", () => ({
   }),
 }));
 vi.mock("./LockerRoster", () => ({ default: () => <div data-testid="locker-roster">Roster content</div> }));
+vi.mock("./LockerShelf", () => ({ default: ({ viewerRole }: { viewerRole: string }) => <div data-testid="locker-shelf">{viewerRole}</div> }));
 vi.mock("./LockerHost", () => ({
   default: () => <div data-testid="locker-host">Locker content</div>,
 }));
@@ -98,6 +99,15 @@ describe("CoachingWorkspace", () => {
     expect(screen.getByTestId("locker-host")).toBeTruthy();
     expect(screen.queryByTestId("locker-roster")).toBeNull();
     expect(screen.queryByRole("link", { name: "Open Locker roster" })).toBeNull();
+  });
+
+  it("opens a student's direct Shelf link without loading Classic or exposing the staff roster", async () => {
+    harness.search = "locker=shelf"; harness.role = "student";
+    render(<CoachingWorkspace />);
+    expect((await screen.findByTestId("locker-shelf")).textContent).toBe("student");
+    expect(screen.queryByTestId("locker-host")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open Locker roster" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Classic Locker" }).getAttribute("href")).toBe("/coaching");
   });
 
   it("opens a direct Sessions link without eagerly mounting Locker", () => {
