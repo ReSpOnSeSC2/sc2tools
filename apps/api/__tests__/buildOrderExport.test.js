@@ -43,18 +43,35 @@ test("strict singleton details preserve both sides, duplicates, exact raw names 
     { gameId: "game-1", side: "opponent", time: 0, supply: null, name: "Other" },
   ]);
   expect(out.at(-1)).toEqual({ type: "complete", games: 1, events: 4, continuation: null });
-  expect(gameDetails.findMany).toHaveBeenCalledWith("A", ["game-1"], expect.objectContaining({ fields: ["buildLog", "oppBuildLog"], strict: true, concurrency: 1, signal: expect.any(AbortSignal) }));
+  expect(gameDetails.findMany).toHaveBeenCalledWith("A", ["game-1"], expect.objectContaining({ fields: ["buildLog", "oppBuildLog", "buildLogSupply"], strict: true, concurrency: 1, signal: expect.any(AbortSignal) }));
   expect(games.find.mock.calls[0][1]).toMatchObject({ projection: { _id: 1, date: 1, gameId: 1 }, comment: REPLAY_SEARCH_COMMENT });
   expect(games.cursors[0].limit).toHaveBeenCalledWith(2001); expect(games.cursors[0].batchSize).toHaveBeenCalledWith(1);
   expect(games.cursors[0].close).toHaveBeenCalledTimes(1);
   expect(JSON.stringify(out)).not.toMatch(/never exported|macroBreakdown|private search/);
 });
 
-test("CSV has exactly five columns, formula-safe strings, null supply and no disguised summary row", async () => {
+test("NDJSON uses only valid owner supply aligned by step, including repeated clock times", async () => {
+  const detail = {
+    buildLog: Array(8).fill("[0:01] Worker"),
+    oppBuildLog: ["[0:01] Opponent worker"],
+    buildLogSupply: [0, 13.5, null, -1, 2001, "17", Infinity, 2000],
+  };
+  const misaligned = { buildLog: ["[0:01] Worker"], oppBuildLog: [], buildLogSupply: [12, 13] };
+  const { service } = serviceFor([row(), row(2)], async (_owner, ids) => new Map([[ids[0], ids[0] === "game-1" ? detail : misaligned]]));
+  const prepared = await service.prepare(service.request("A", {}, "ndjson"), new AbortController().signal);
+  const output = decoded(await bytes(prepared.stream)).slice(1, -1);
+  expect(output.map(record => [record.gameId, record.side, record.supply])).toEqual([
+    ...[0, 13.5, null, null, null, null, null, 2000].map(supply => ["game-1", "me", supply]),
+    ["game-1", "opponent", null],
+    ["game-2", "me", null],
+  ]);
+});
+
+test("CSV has exactly five columns, formula-safe strings, recorded or blank supply and no disguised summary row", async () => {
   const metadata = { ...row(), gameId: "=GAME()" };
-  const { service } = serviceFor([metadata], async () => new Map([[metadata.gameId, { buildLog: ['[0:10] =SUM(1,2)', '[0:11]   @bad', '[0:12] Quoted"Name'], oppBuildLog: [] }]]));
+  const { service } = serviceFor([metadata], async () => new Map([[metadata.gameId, { buildLog: ['[0:10] =SUM(1,2)', '[0:11]   @bad', '[0:12] Quoted"Name'], oppBuildLog: [], buildLogSupply: [16.5, null, 0] }]]));
   const prepared = await service.prepare(service.request("A", {}, "csv"), new AbortController().signal);
-  expect(await bytes(prepared.stream)).toBe('\uFEFFgameId,side,time,supply,name\r\n\'=GAME(),me,10,,"\'=SUM(1,2)"\r\n\'=GAME(),me,11,,\'  @bad\r\n\'=GAME(),me,12,,"Quoted""Name"\r\n');
+  expect(await bytes(prepared.stream)).toBe('\uFEFFgameId,side,time,supply,name\r\n\'=GAME(),me,10,16.5,"\'=SUM(1,2)"\r\n\'=GAME(),me,11,,\'  @bad\r\n\'=GAME(),me,12,0,"Quoted""Name"\r\n');
 });
 
 test.each([
@@ -173,7 +190,7 @@ describe("owned keyset metadata and real detail-store integration", () => {
       { userId: "paged", _deletionPending: true }, { userId: "paged", isResumedFromReplay: true },
     ].map((fields, index) => ({ ...row(3000 + index), ...fields }))]);
     const requested = [];
-    const details = { findMany: jest.fn(async (owner, ids, opts) => { requested.push([owner, ...ids]); expect(opts).toMatchObject({ strict: true, concurrency: 1, fields: ["buildLog", "oppBuildLog"] }); return new Map([[ids[0], { buildLog: ["[0:01] Worker"], oppBuildLog: [] }]]); }) };
+    const details = { findMany: jest.fn(async (owner, ids, opts) => { requested.push([owner, ...ids]); expect(opts).toMatchObject({ strict: true, concurrency: 1, fields: ["buildLog", "oppBuildLog", "buildLogSupply"] }); return new Map([[ids[0], { buildLog: ["[0:01] Worker"], oppBuildLog: [] }]]); }) };
     const service = new BuildOrderExportService({ games, users }, { gameDetails: details, pepper });
     const first = await service.prepare(service.request("paged", {}, "ndjson"), new AbortController().signal);
     expect(first.games).toBe(2000); expect(first.hasMore).toBe(true); expect(details.findMany).not.toHaveBeenCalled();
@@ -193,14 +210,14 @@ describe("owned keyset metadata and real detail-store integration", () => {
     const games = db.collection("games"), users = db.collection("users"), gameDetails = db.collection("gameDetails");
     await users.insertOne({ userId: "detail-owner" }); await games.insertOne({ ...row(5000), userId: "detail-owner" });
     await gameDetails.insertMany([
-      { userId: "detail-owner", gameId: "game-5000", buildLog: ["[1:02] Marine"], oppBuildLog: [], macroBreakdown: { secret: "private detail" } },
-      { userId: "foreign", gameId: "game-5000", buildLog: ["[0:01] Foreign secret"], oppBuildLog: [] },
+      { userId: "detail-owner", gameId: "game-5000", buildLog: ["[1:02] Marine"], oppBuildLog: [], buildLogSupply: [22.5], macroBreakdown: { secret: "private detail" } },
+      { userId: "foreign", gameId: "game-5000", buildLog: ["[0:01] Foreign secret"], oppBuildLog: [], buildLogSupply: [999] },
     ]);
     const details = new GameDetailsService(new MongoDetailsStore({ gameDetails }));
     const service = new BuildOrderExportService({ games, users }, { gameDetails: details, pepper });
     const first = await service.prepare(service.request("detail-owner", {}, "ndjson"), new AbortController().signal);
     const output = await bytes(first.stream);
-    expect(decoded(output)[1]).toEqual({ gameId: "game-5000", side: "me", time: 62, supply: null, name: "Marine" });
+    expect(decoded(output)[1]).toEqual({ gameId: "game-5000", side: "me", time: 62, supply: 22.5, name: "Marine" });
     expect(output).not.toMatch(/private detail|Foreign secret|macroBreakdown/);
     const deletedDetails = new GameDetailsService(new MongoDetailsStore({ gameDetails }), { deletedGameIds: async () => new Set(["game-5000"]) });
     const deletedService = new BuildOrderExportService({ games, users }, { gameDetails: deletedDetails, pepper });
