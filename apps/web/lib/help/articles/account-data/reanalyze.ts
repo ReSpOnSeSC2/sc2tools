@@ -17,6 +17,7 @@ const article: HelpArticle = {
     { type: "table", head: ["Group", "What it contains"], rows: [
       ["Analyzed before engine X", "Games in the affected matchups with a known engine version older than the one shown. Each group says what changed in that release."],
       ["Missing a macro score", "Games saved without a macro score, for example when it could not be computed at the time."],
+      ["Add camera data", "Games analyzed before engine 1.6.13 or with an unknown engine version. The replay must contain camera events to show a track."],
       ["Engine version unknown", "Games uploaded before the desktop agent reported its engine version, so their labels may be older."],
     ] },
     { type: "paragraph", text: "A game can appear in more than one group; the counts overlap. Each game page also shows the engine that analyzed it, with a **Re-analyze** link back to this card." },

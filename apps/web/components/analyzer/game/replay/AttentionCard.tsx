@@ -50,7 +50,8 @@ export function AttentionCard({ playback, start, end, readAll }: { playback: Map
       }
     });
   }, [data]);
-  if (!playback.camera && !full) return <p className="text-caption text-text-muted">Camera data unavailable. <Link className="text-accent underline" href="/settings?tab=backups">Re-analyze with the updated desktop app</Link>.</p>;
+  const reanalyze = <Link className="text-accent underline" href="/settings?tab=backups#reanalyze">Re-analyze with the updated desktop app</Link>;
+  if (!playback.camera && !readAll && !full) return <p className="text-caption text-text-muted">Camera data unavailable. {reanalyze}.</p>;
   return <details open={open} onToggle={event => {
     setOpen(event.currentTarget.open);
     if (!event.currentTarget.open) controller.current?.abort();
@@ -70,13 +71,13 @@ export function AttentionCard({ playback, start, end, readAll }: { playback: Map
         {readAll && !full ? <div className="flex flex-wrap items-center gap-2">
           {loading ? <><p role="status">Loading replay sections…</p><Button variant="ghost" size="sm" onClick={() => controller.current?.abort()}>Cancel</Button></>
             : <Button variant="secondary" size="sm" onClick={() => void analyzeReplay()}>Analyze full replay</Button>}
-          {error ? <p role="alert">Couldn&apos;t load the full replay. The current section is still available.</p> : null}
+          {error ? <p role="alert">Couldn&apos;t load the full replay. Try again.</p> : null}
         </div> : null}
         {data ? <>
           <p>{data.nearArmy}% near own army · {data.nearBase}% near own town halls</p>
           <p className="text-micro text-text-muted">{data.samples} camera samples, every {data.interval} s. Areas can overlap.</p>
           {data.fights.length ? <ul>{data.fights.map((fight, index) => <li key={index}>{formatGameClock(fight.time)} · {fight.lookedAway === null ? "Earlier camera position unavailable" : fight.lookedAway ? "Looked away in the prior 5 s" : "Looked near this fight in the prior 5 s"}</li>)}</ul> : null}
-        </> : <p className="text-text-muted">{full ? "No camera samples for this side in this replay." : "No camera samples for this side in the loaded section."}</p>}
+        </> : <p className="text-text-muted">{full ? "No camera samples for this side in this replay." : "No camera samples for this side in the loaded section."}{full && !full.me && !full.opp ? <> {reanalyze}.</> : null}</p>}
       </div>
     </div> : null}
   </details>;

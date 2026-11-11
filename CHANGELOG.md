@@ -19,6 +19,9 @@ corresponding GitHub Release.
 
 ### Replay camera and mechanics
 
+- Choose Add camera data in Re-analysis to backfill older games, and open
+  whole-replay attention from a section without camera samples.
+
 - Follow either player's recorded camera and open Camera attention to see
   where that player looked in the loaded replay section.
 - Open Units for recorded losses, credited kills, trades and lifespans. The
