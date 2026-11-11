@@ -2,7 +2,7 @@ import Link from "next/link";
 import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { WinRateCell } from "@/components/guides/WinRateCell";
 import { canLinkGuidePath, guidePaths } from "@/components/guides/guideMetadata";
-import { BuildAllMaps, BuildMatchupGroup } from "./BuildMatchupTables";
+import { BuildAllMaps, BuildMatchupGroup } from "./LazyBuildStatistics";
 import {
   GUIDE_LINK_CLASS,
   GUIDE_PANEL_CLASS,

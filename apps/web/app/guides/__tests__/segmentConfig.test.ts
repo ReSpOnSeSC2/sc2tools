@@ -15,8 +15,8 @@ import { GUIDE_REVALIDATE_SEC } from "@/lib/guides/api";
  *   cached (the last good render keeps serving; else an uncached 5xx).
  * - /guides, /guides/maps, and /guides/videos have no params, so a static
  *   prerender would run at `next build` (where the API is often unreachable), and
- *   /guides/[matchup] reads its band / era query: those render per
- *   request (their API reads stay cached by the fetch's own revalidate).
+ *   the matchup and compare pages read their query parameters. These
+ *   render per request, with API caching handled at the fetch boundary.
  */
 const GUIDES_DIR = path.resolve(process.cwd(), "app/guides");
 
@@ -26,7 +26,13 @@ const ISR_PAGES = [
   "[matchup]/counter/page.tsx",
   "maps/[map]/page.tsx",
 ];
-const PER_REQUEST_PAGES = ["[matchup]/page.tsx", "maps/page.tsx", "videos/page.tsx", "page.tsx"];
+const PER_REQUEST_PAGES = [
+  "[matchup]/compare/page.tsx",
+  "[matchup]/page.tsx",
+  "maps/page.tsx",
+  "videos/page.tsx",
+  "page.tsx",
+];
 
 function pageFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
