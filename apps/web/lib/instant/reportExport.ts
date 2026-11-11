@@ -21,6 +21,7 @@
  */
 import type { InstantReport } from "./report";
 import type { ReportGame } from "./reportGames";
+import { replayMmr } from "./reportMmr";
 import { DEFAULT_REPORT_FILTERS, reportFilterLabel, type ReportFilters } from "./reportFilters";
 import type { ReportCardModel } from "./reportSharing";
 
@@ -33,7 +34,7 @@ export const CSV_COLUMNS = [
 
 /** U+FEFF, written as a code point so no editor can drop or mangle it. */
 export const CSV_BOM = String.fromCharCode(0xfeff);
-const FORMULA_START = /^[=+\-@\t\r]/;
+const FORMULA_START = /^(?:[\t\r\n]|\s*[=+\-@])/;
 const NEEDS_QUOTES = /[",\r\n]/;
 /** Top openers listed in the text summary. */
 export const SUMMARY_TOP_OPENERS = 3;
@@ -76,7 +77,8 @@ function gameRow(game: ReportGame): CsvValue[] {
   const { payload } = game;
   return [
     isoDate(game.date), game.map, game.matchup, resultWord(game), game.opponentName,
-    payload.opponent?.race ?? null, game.mmr?.my ?? null, game.mmr?.opp ?? null,
+    payload.opponent?.race ?? null, replayMmr(payload.myMmr, payload.myMmrSource),
+    replayMmr(payload.opponent?.mmr ?? null, payload.opponent?.mmrSource ?? null),
     game.durationSec === null ? null : Math.round(game.durationSec), clockLabel(game.durationSec),
     payload.myBuild, payload.opponent?.strategy ?? null,
   ];

@@ -36,16 +36,16 @@ import type { InstantImportMode } from "@/lib/instant/flag";
 import { loadTryGames, saveTryGames, type TryGameInput } from "@/lib/instant/localStore";
 import { buildInstantReport, parseInstantPayload, type InstantReport as InstantReportData } from "@/lib/instant/report";
 import type { EngineInfo, ErrorKind, IntakeSource, ParsedGame } from "@/lib/instant/types";
+import type { InstantPayload } from "@/lib/instant/reportPayload";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
 import { useInstantSession, type InstantSession, type UseInstantSessionOptions } from "@/lib/instant/useInstantSession";
 import { BrowserVsAgentTable } from "./BrowserVsAgentTable";
-import { InstantReport } from "./InstantReport";
 import { LocalDataControls } from "./LocalDataControls";
 import { ParseProgress } from "./ParseProgress";
 import { PlayerChooser } from "./PlayerChooser";
 import { ReplayIntake } from "./ReplayIntake";
 import { SaveGamesCta, TryResume, useTryUpload, type TryUpload } from "./TryResume";
-import { ShareReportButton } from "./ShareReportButton";
+import { FilteredInstantReport } from "./report/FilteredInstantReport";
 import type { TryGuideProps } from "@/lib/instant/reportGuideTypes";
 import { reportGuideFocus } from "@/lib/instant/reportGuideTypes";
 import { SampleReportButton } from "./SampleReportButton";
@@ -332,19 +332,20 @@ function useTrackOpen(): void {
 }
 
 /** The report over the stored/parsed games (null when none is usable); tracks each view. */
-function useReport(games: ReadonlyArray<TryGameInput>): InstantReportData | null {
+function useReport(games: ReadonlyArray<TryGameInput>) {
+  const payloads = useMemo(() => games.flatMap((game) => parseInstantPayload(game.json) ?? []), [games]);
   const report = useMemo(() => {
-    if (games.length === 0) return null;
-    const built = buildInstantReport(games.flatMap((game) => parseInstantPayload(game.json) ?? []), new Date());
+    if (payloads.length === 0) return null;
+    const built = buildInstantReport(payloads, new Date());
     return built.totals.games > 0 ? built : null;
-  }, [games]);
+  }, [payloads]);
   const tracked = useRef<InstantReportData | null>(null);
   useEffect(() => {
     if (!report || tracked.current === report) return;
     tracked.current = report;
     trackInstantReportView();
   }, [report]);
-  return report;
+  return { report, payloads };
 }
 
 interface WorkspaceState {
@@ -352,6 +353,7 @@ interface WorkspaceState {
   stored: TryGames;
   upload: TryUpload;
   report: InstantReportData | null;
+  reportPayloads: InstantPayload[];
   /** The intake/progress panel is on screen (no report yet, adding, or a run in flight). */
   showTool: boolean;
   /** Adding to an existing report (shows "Back to your report"). */
@@ -388,7 +390,7 @@ function useWorkspace(): WorkspaceState {
     setReportFocusKey((key) => key + 1);
   });
   const upload = useTryUpload();
-  const report = useReport(stored.games);
+  const { report, payloads: reportPayloads } = useReport(stored.games);
   const markResume = useCallback(() => setResumeMode(true), []);
   const { reset } = session;
   const focusIntake = () => setIntakeFocusKey((key) => key + 1);
@@ -411,7 +413,7 @@ function useWorkspace(): WorkspaceState {
   const active = session.busy || session.phase === "choosing" || session.phase === "error";
   const showTool = report === null || adding || active;
   return {
-    session, stored, upload, report, showTool, adding, resumeMode, reportFocusKey, intakeFocusKey,
+    session, stored, upload, report, reportPayloads, showTool, adding, resumeMode, reportFocusKey, intakeFocusKey,
     markResume, startAdding, stopAdding, onCleared,
   };
 }
@@ -426,7 +428,8 @@ function FocusedReport({ ws, guideLinks }: { ws: WorkspaceState } & TryGuideProp
       Analyze more replays
     </Button>
   );
-  return <InstantReport report={ws.report} guideLinks={guideLinks} guideFocus={guideFocus} actions={<>{ws.showTool ? null : moreButton}<ShareReportButton report={ws.report} /></>} focusKey={ws.reportFocusKey} />;
+  return <FilteredInstantReport report={ws.report} payloads={ws.reportPayloads} guideLinks={guideLinks}
+    guideFocus={guideFocus} actions={ws.showTool ? null : moreButton} focusKey={ws.reportFocusKey} />;
 }
 
 function ReportArea({ ws, ...guideProps }: { ws: WorkspaceState } & TryGuideProps) {

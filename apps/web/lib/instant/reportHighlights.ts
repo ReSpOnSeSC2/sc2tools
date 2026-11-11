@@ -138,7 +138,7 @@ function lengthBucket(durationSec: number): LengthBucketKey {
 /**
  * W-L by game length: under 8 min (< 480 s), 8–15 min (480–899 s) and
  * 15+ min (≥ 900 s). Games without a length are counted in `missing`.
- * Null when no game has a length.
+ * Null when there are no games.
  *
  * Example:
  *   computeRecordByLength([bare({ durationSec: 479 }), bare({ durationSec: 480 })])?.buckets.map((row) => row.key); // -> ["short", "mid"]
@@ -161,5 +161,5 @@ export function computeRecordByLength(games: ReadonlyArray<InstantPayload>): Len
     const row = counts.get(key);
     return row ? [{ key, label, ...row, winrate: decidedWinrate(row) }] : [];
   });
-  return buckets.length > 0 ? { buckets, missing } : null;
+  return games.length > 0 ? { buckets, missing } : null;
 }
