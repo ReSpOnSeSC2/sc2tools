@@ -12,8 +12,8 @@ export function isSharedReplayDetailPath(pathname: string): boolean {
 }
 
 /** Legacy replay IDs can contain a player's opponent name. The public preview uses only opaque references. */
-export function isPublicReplayReference(value: string): boolean {
-  return /^r-[0-9a-f]{24}$/.test(value);
+export function isPublicReplayReference(value: unknown): value is string {
+  return typeof value === "string" && /^r-[0-9a-f]{24}$/.test(value);
 }
 
 export function isPublicReplayPreviewPath(pathname: string): boolean {

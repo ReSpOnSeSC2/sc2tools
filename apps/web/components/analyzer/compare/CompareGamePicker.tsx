@@ -6,16 +6,16 @@
  * build, the previous game against this opponent, the last game in this
  * matchup — and a search over your recent games covers everything else.
  * Every list comes from the replay library and game-navigation reads
- * the app already makes; nothing new on the server.
+ * the app already makes.
  */
 
 import { useEffect, useId, useState, type RefObject } from "react";
-import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { useApi } from "@/lib/clientApi";
-import { bestWinCandidate, compareHref } from "@/lib/gameCompare";
+import { bestWinCandidate } from "@/lib/gameCompare";
+import { useCompareNavigation } from "./useCompareNavigation";
 import { formatClock } from "@/lib/replayHud";
 import { ownerNeighborPath } from "@/components/analyzer/game/GameNavigation";
 import { resultLabel, type GameSummary } from "@/components/analyzer/game/types";
@@ -51,7 +51,7 @@ function SmartChip({ title, choice, loading, empty, onPick }: {
 export default function CompareGamePicker({ open, onClose, game, buildLabel, returnFocusRef }: {
   open: boolean; onClose: () => void; game: GameSummary; buildLabel?: string | null; returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
-  const router = useRouter();
+  const navigation = useCompareNavigation();
   const listId = useId();
   const build = (buildLabel ?? game.myBuild ?? "").trim();
   const winsReq = useApi<ReplayLibraryResponse>(build
@@ -70,10 +70,12 @@ export default function CompareGamePicker({ open, onClose, game, buildLabel, ret
     ...(search ? { search } : {}), limit: "8", sort: "date_desc", enrich: "none", window: "recent" })}`, OPTIONS);
   const best = winsReq.data ? bestWinCandidate(winsReq.data.items, game.gameId) : null;
   const recent = (recentReq.data?.items ?? []).filter((item) => item.gameId !== game.gameId);
-  const pick = (gameId: string) => { onClose(); router.push(compareHref(game.gameId, gameId)); };
+  const pick = (gameId: string) => void navigation.compare(game.gameId, gameId, onClose);
   return (
     <Modal open={open} onClose={onClose} title="Compare with…" description="This game is A. Choose game B." size="md" returnFocusRef={returnFocusRef}>
       <div className="space-y-4" data-testid="compare-picker">
+        {navigation.loading ? <p role="status" className="text-caption text-text-muted">Opening comparison…</p> : null}
+        {navigation.error ? <p role="alert" className="text-caption text-danger">{navigation.error}</p> : null}
         <div className="grid gap-2">
           <SmartChip title="Best recent win with this build" choice={best} loading={!!build && winsReq.isLoading}
             empty={build ? "No other win with this build yet" : "This game has no build label"} onPick={pick} />

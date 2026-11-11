@@ -224,6 +224,7 @@ const { buildGamesRouter } = require("./routes/games");
 const { buildBuildIntentsRouter } = require("./routes/buildIntents");
 const { buildGhostBuildsRouter } = require("./routes/ghostBuilds");
 const { buildReplaysRouter } = require("./routes/replays");
+const { buildCompareGamesRouter } = require("./routes/compareGames");
 const { buildReplayFilesRouter } = require("./routes/replayFiles");
 const { buildPlaybackArtifactsRouter } = require("./routes/playbackArtifacts");
 const { buildBotLabRouter } = require("./routes/botLab");
@@ -1744,6 +1745,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       auth,
     }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildCompareGamesRouter({ db: deps.db, games: services.games, perGame: services.perGame, auth }));
   // Authenticated replay-library reads and the owner's default-off sharing
   // switch. Every path in this router applies auth per route.
   app.use(
