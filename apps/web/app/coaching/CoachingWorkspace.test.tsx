@@ -37,6 +37,7 @@ vi.mock("./LockerShelf", () => ({
   },
 }));
 vi.mock("./LockerWorksheets", () => ({ default: ({ viewerRole }: { viewerRole: string }) => <div data-testid="locker-worksheets">{viewerRole}</div> }));
+vi.mock("./LockerContentStudio", () => ({ default: ({ viewerRole }: { viewerRole: string }) => <div data-testid="content-studio">{viewerRole}</div> }));
 vi.mock("./LockerHost", () => ({
   default: () => <div data-testid="locker-host">Locker content</div>,
 }));
@@ -126,6 +127,41 @@ describe("CoachingWorkspace", () => {
     expect(screen.queryByTestId("locker-host")).toBeNull();
     expect(screen.queryByTestId("locker-shelf")).toBeNull();
     expect(screen.getByRole("link", { name: "Classic Locker" }).getAttribute("href")).toBe("/coaching");
+  });
+
+  it.each(["coach", "admin"])("opens a direct %s Content Studio link without mounting Classic", async role => {
+    harness.role = role;
+    harness.search = "locker=content-studio";
+    render(<CoachingWorkspace />);
+    expect((await screen.findByTestId("content-studio")).textContent).toBe(role);
+    expect(screen.queryByTestId("locker-host")).toBeNull();
+    expect(screen.getByRole("link", { name: "Classic Locker" }).getAttribute("href")).toBe("/coaching");
+  });
+
+  it("places the staff Content Studio entry after Worksheets and keeps it hidden from students", () => {
+    const view = render(<CoachingWorkspace />);
+    const links = Array.from(screen.getByRole("navigation", { name: "Locker views" }).querySelectorAll("a"));
+    const studioLink = links.findIndex(link => link.textContent === "Open Content Studio");
+    const worksheetsLink = links.findIndex(link => link.textContent === "Open Worksheets");
+    expect(worksheetsLink).toBeGreaterThanOrEqual(0);
+    expect(studioLink).toBeGreaterThan(worksheetsLink);
+    harness.role = "student"; harness.search = "locker=content-studio";
+    view.rerender(<CoachingWorkspace />);
+    expect(screen.queryByTestId("content-studio")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open Content Studio" })).toBeNull();
+  });
+
+  it("retains the mounted Content Studio during a temporary identity read failure and clears it on refusal", async () => {
+    harness.search = "locker=content-studio";
+    harness.meIdentity = { role: "coach", coachId: "coach-1", studentId: null };
+    const view = render(<CoachingWorkspace />);
+    const panel = await screen.findByTestId("content-studio");
+    harness.meError = { status: 503 };
+    view.rerender(<CoachingWorkspace />);
+    expect(screen.getByTestId("content-studio")).toBe(panel);
+    harness.meError = { status: 403 };
+    view.rerender(<CoachingWorkspace />);
+    expect(screen.queryByTestId("content-studio")).toBeNull();
   });
 
   it("opens a direct Sessions link without eagerly mounting Locker", () => {

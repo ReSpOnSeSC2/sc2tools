@@ -169,3 +169,21 @@ submit a disposable worksheet with a replay and restore that submission while
 its revision is current. Repeat with a staff draft. Use **Classic Locker** if
 you need the previous workflow. Keep it available through one week of real
 Worksheets use and owner review.
+
+## React Content Studio preview
+
+Open **Locker → Open Content Studio** as a coach, then choose a student and
+an item type. Use the editable note and matchup guides, record up to 90
+seconds of audio, add an HTTPS video link or short video file, or mark up a
+screenshot with a circle, arrow or pen. For replay feedback, choose a synced
+game for context. Give the student an authorized share link or replay file
+when they need to open that game. For a practice card, attach a PDF and add
+the instructions you want the student to see. A voice outline stays in the
+editor while you record.
+
+Content Studio saves an independent local backup before each write. Confirm
+that the selected student can open the new item, then use **Restore previous
+version** on the same browser while its Locker revision is current. Check that
+other students and existing shelf items survive the round trip. Keep **Classic
+Locker** available until the owner has used Content Studio for a week and
+checked creation, sharing, backups and restore.

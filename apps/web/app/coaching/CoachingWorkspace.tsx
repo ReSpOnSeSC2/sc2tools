@@ -29,6 +29,10 @@ const LockerWorksheets = dynamic(() => import("./LockerWorksheets"), {
   loading: () => <p role="status" className="text-caption text-text-muted">Loading worksheets…</p>,
 });
 
+const LockerContentStudio = dynamic(() => import("./LockerContentStudio"), {
+  loading: () => <p role="status" className="text-caption text-text-muted">Loading Content Studio…</p>,
+});
+
 type CoachingMe = {
   role: "admin" | "coach" | "student" | "none";
   coachId: string | null;
@@ -52,7 +56,7 @@ export default function CoachingWorkspace() {
       ? "sessions"
       : "locker";
   const lockerView = searchParams.get("locker");
-  const preserveEditor = routeView === "locker" && (lockerView === "shelf" || lockerView === "worksheets");
+  const preserveEditor = routeView === "locker" && (lockerView === "shelf" || lockerView === "worksheets" || lockerView === "content-studio");
   const retainIdentity = preserveEditor && retryableLockerRead(error) && identity === lastIdentity.current;
   const data = !error || retainIdentity ? identity : undefined;
   useLayoutEffect(() => { lastIdentity.current = data; }, [data]);
@@ -60,8 +64,9 @@ export default function CoachingWorkspace() {
   const manageLocker = workspaceRole === "admin" || workspaceRole === "coach";
   const rosterOpen = manageLocker && routeView === "locker" && lockerView === "roster";
   const shelfOpen = routeView === "locker" && lockerView === "shelf";
+  const contentStudioOpen = manageLocker && routeView === "locker" && lockerView === "content-studio";
   const worksheetsOpen = routeView === "locker" && lockerView === "worksheets";
-  const modernLocker = rosterOpen || shelfOpen || worksheetsOpen;
+  const modernLocker = rosterOpen || shelfOpen || contentStudioOpen || worksheetsOpen;
   const [view, setView] = useState<WorkspaceView>(routeView);
   const [lockerActivated, setLockerActivated] = useState(routeView === "locker");
   const [classicActivated, setClassicActivated] = useState(false);
@@ -163,10 +168,12 @@ export default function CoachingWorkspace() {
             {manageLocker && !rosterOpen ? <Link href="/coaching?locker=roster" prefetch={false} className={LOCKER_LINK}>Open Locker roster</Link> : null}
             {!shelfOpen ? <Link href="/coaching?locker=shelf" prefetch={false} className={LOCKER_LINK}>Open Locker shelf</Link> : null}
             {!worksheetsOpen ? <Link href="/coaching?locker=worksheets" prefetch={false} className={LOCKER_LINK}>Open Worksheets</Link> : null}
+            {manageLocker && !contentStudioOpen ? <Link href="/coaching?locker=content-studio" prefetch={false} className={LOCKER_LINK}>Open Content Studio</Link> : null}
           </nav>
           {rosterOpen && manageLocker && view === "locker" ? <LockerRoster viewerRole={workspaceRole} coachId={data.coachId} /> : null}
           {shelfOpen && view === "locker" ? <LockerShelf viewerRole={data.role} memberId={data.role === "student" ? data.studentId : data.coachId} /> : null}
           {worksheetsOpen && view === "locker" ? <LockerWorksheets viewerRole={data.role} memberId={data.role === "student" ? data.studentId : data.coachId} /> : null}
+          {contentStudioOpen && manageLocker && view === "locker" ? <LockerContentStudio viewerRole={workspaceRole} memberId={data.coachId} /> : null}
           {classicActivated ? <div hidden={view !== "locker" || modernLocker} inert={view !== "locker" || modernLocker}><LockerHost /></div> : null}
         </Tabs.Content>
       ) : null}
