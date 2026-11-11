@@ -1,3 +1,4 @@
+import { POLL_VOTE_HINT } from "@/lib/multichat/poll";
 import { WIDGET_DURATION_MS, type WidgetId } from "@/components/overlay/widgetLifecycle";
 import widgetSizes from "./widgetRecommendedSizes.json";
 
@@ -334,8 +335,8 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   {
     id: "chat-poll", name: "Chat poll", group: "community",
     summary: "Ask viewers a question and collect votes across connected chats.",
-    explanation: "Create a question with two to six options in Stream Dock. Viewers vote with an option number, such as !1, 1, or !vote 1; a later vote replaces that viewer's earlier choice on the same platform. Close poll freezes the on-stream result, and Clear removes the graphic.",
-    example: { headline: "Which opener next? · illustrative", lines: ["1. Macro · 60%", "2. Aggression · 40%", "Vote with !1 or !2"] },
+    explanation: `Create a question with two to six options or pick a preset in Stream Dock. Choose an optional timer. ${POLL_VOTE_HINT}. A later vote replaces that viewer's earlier choice on the same platform. The timer or Close poll ends voting. Clear removes the graphic.`,
+    example: { headline: "Which opener next? · illustrative", lines: ["1. Macro · 60%", "2. Aggression · 40%", POLL_VOTE_HINT] },
     appears: "After Start poll in Stream Dock, through the closed result, until Clear.",
     needs: [configuredChat, "An open poll and messages arriving after it starts."],
     setup: [...dockSetup("Chat poll", "In Poll, choose Custom poll, enter Poll question and at least two options, then press Start poll. Finish with Close poll, then Clear."), "For a Build vote, choose Build vote in Poll, filter the matchup and select two or three saved builds. Start the vote, close it to see the winner, then Open build or Clear."],
@@ -502,7 +503,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     example: { headline: "CLIP THAT! · illustrative", lines: ["Chat is going off", "Find the timestamp in Stream Dock → Clips"] },
     appears: "Briefly after a clip-moment event; transparent between moments.",
     needs: ["Reported engagement or a qualifying game event.", "For chat spikes, configured chat and an active engagement-reporting surface."],
-    setup: dockSetup("Clip-moment flag", "Use Clips to review Clip moments. After the stream, paste the VOD URL and press Save to make supported timestamps clickable."),
+    setup: dockSetup("Clip-moment flag", "Open Clips to review or flag moments. Use Copy YouTube chapters or Download CSV to save the log. After the stream, paste the VOD URL and press Save to make supported timestamps clickable."),
     check: "Test shows a sample pulse. A real detected moment should also appear in the dock's Clip moments log.",
     troubleshooting: "The flag does not automatically record or publish a clip. If the log is empty, check engagement reporting and game events; use Test only to check the graphic's placement.",
     placement: "Put the small pulse near your webcam where it can be noticed without hiding the moment itself.",

@@ -1,7 +1,7 @@
 "use client";
 
 import { DockCopyText } from "./DockCopyText";
-import { Circle, Flame, Play } from "lucide-react";
+import { Circle, Flag, Flame, Play } from "lucide-react";
 import { DockInput, DockButton } from "./DockControls";
 
 /**
@@ -22,9 +22,12 @@ import { DockInput, DockButton } from "./DockControls";
  *     lines — paste into YouTube chapters or an editor's marker list.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { ClipMoment } from "@/lib/multichat/useEngagementState";
-import { formatOffset, vodLinkAt } from "@/lib/vodLinks";
+import { formatOffset, toYouTubeChapters, vodLinkAt } from "@/lib/vodLinks";
+import { csvFilename, downloadCsv } from "@/lib/csvExport";
+import { MOMENT_KIND_LABELS, clipMomentsCsv, clipTimestampText, momentKey } from "@/lib/multichat/clipLog";
+import { useDockClipLog } from "./useDockClipLog";
 
 import type { DockPost } from "./dockActions";
 import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
@@ -33,14 +36,20 @@ import { formatTime } from "@/lib/i18n/format";
 export { formatOffset, vodLinkAt } from "@/lib/vodLinks";
 
 export function DockClips({
+  token = "",
+  loadHistory = true,
   moments,
+  markUndo,
   streamStartMs,
   vodUrl,
   busy,
   studioReady = true,
   onPost,
 }: {
+  token?: string;
+  loadHistory?: boolean;
   moments: ReadonlyArray<ClipMoment>;
+  markUndo?: ReactNode;
   streamStartMs: number | null;
   vodUrl: string | null;
   busy: boolean;
@@ -48,6 +57,7 @@ export function DockClips({
   onPost: DockPost;
 }) {
   const [vodDraft, setVodDraft] = useState("");
+  const log = useDockClipLog(token, studioReady && loadHistory, moments);
   const { run, notice, pending } = useDockPanelActions(studioReady, busy, onPost, {
     saveVod: () => vodDraft.trim() ? { patch: { vodUrl: vodDraft.trim() }, message: "VOD link saved", after: () => setVodDraft("") } : null,
     clearVod: () => ({ patch: { vodUrl: null }, message: "VOD link cleared" }),
@@ -55,22 +65,6 @@ export function DockClips({
     clearMark: () => ({ patch: { streamStartMs: null }, message: "Stream start cleared" }),
   });
   if (!studioReady) return <DockSnapshotState />;
-
-  const timestamps = [...moments]
-      .sort((a, b) => a.atMs - b.atMs)
-      .map((m) => {
-        const stamp =
-          streamStartMs && m.atMs >= streamStartMs
-            ? formatOffset(m.atMs - streamStartMs)
-            : formatTime(new Date(m.atMs), {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              });
-        return `${stamp} — ${m.reason}`;
-      })
-      .join("\n");
-
 
   return (
     <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2.5">
@@ -107,9 +101,7 @@ export function DockClips({
             </span>
           </>
         )}
-        {moments.length > 0 ? (
-          <DockCopyText value={timestamps} label="Copy timestamps" disabled={busy} />
-        ) : null}
+        {markUndo}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -144,25 +136,60 @@ export function DockClips({
         )}
       </div>
 
-      {moments.length === 0 ? (
-        <p className="text-caption text-text-dim">
-          No clip moments yet — when chat spikes or a big game moment
-          lands, it's logged here with the time and what caused it.
-        </p>
-      ) : (
-        <ul className="space-y-1.5">
-          {moments.map((m) => (
-            <MomentRow
-              key={`${m.atMs}:${m.reason}`}
-              moment={m}
-              streamStartMs={streamStartMs}
-              vodUrl={vodUrl}
-            />
-          ))}
-        </ul>
-      )}
+      {token ? <FlagMoment log={log} /> : null}
+      <ClipLog log={log} streamStartMs={streamStartMs} vodUrl={vodUrl} />
     </div></fieldset>
   );
+}
+
+function FlagMoment({ log }: { log: ReturnType<typeof useDockClipLog> }) {
+  const [note, setNote] = useState("");
+  return <form className="space-y-1" onSubmit={(event) => {
+    event.preventDefault();
+    void log.flag(note).then((saved) => { if (saved) setNote(""); });
+  }}>
+    <div className="flex flex-wrap items-center gap-2">
+      <DockInput aria-label="Moment note (optional)" placeholder="Moment note (optional)" maxLength={80}
+        value={note} onChange={(event) => setNote(event.target.value)} className="min-w-0 flex-1" />
+      <DockButton type="submit" disabled={log.flagging}><Flag aria-hidden className="h-4 w-4" /> Flag moment</DockButton>
+    </div>
+    {log.flagError ? <p role="alert" className="text-caption text-danger">{log.flagError}</p> : null}
+  </form>;
+}
+
+function ClipLog({ log, streamStartMs, vodUrl }: { log: ReturnType<typeof useDockClipLog>; streamStartMs: number | null; vodUrl: string | null }) {
+  const [filter, setFilter] = useState<ClipMoment["kind"] | "all">("all");
+  const available = Object.keys(MOMENT_KIND_LABELS).filter((kind) => log.moments.some((moment) => moment.kind === kind)) as Array<ClipMoment["kind"]>;
+  const selected = filter !== "all" && available.includes(filter) ? filter : "all";
+  const visible = selected === "all" ? log.moments : log.moments.filter((moment) => moment.kind === selected);
+  return <div className="space-y-2">
+    {available.length ? <div role="group" aria-label="Moment kind" className="flex flex-wrap gap-1">
+      {(["all", ...available] as const).map((kind) => <DockButton key={kind} type="button" aria-pressed={kind === selected} onClick={() => setFilter(kind)}>
+        {kind === "all" ? "All" : MOMENT_KIND_LABELS[kind]}
+      </DockButton>)}
+    </div> : null}
+    <ClipExports moments={visible} streamStartMs={streamStartMs} />
+    {log.error ? <p role="alert" className="text-caption text-danger">{log.error} <DockButton onClick={() => void log.retry()}>Retry</DockButton></p> : null}
+    {log.loading ? <p role="status" className="text-caption text-text-muted">Loading clip moments…</p> : null}
+    {visible.length ? <ul className="space-y-1.5">{visible.map((moment) => <MomentRow key={momentKey(moment)} moment={moment} streamStartMs={streamStartMs} vodUrl={vodUrl} />)}</ul>
+      : !log.loading && !log.error ? <p className="text-caption text-text-dim">No clip moments yet.</p> : null}
+    {log.hasMore ? <DockButton disabled={log.loading} onClick={() => void log.loadOlder()}>Show older</DockButton> : null}
+  </div>;
+}
+
+function ClipExports({ moments, streamStartMs }: { moments: ReadonlyArray<ClipMoment>; streamStartMs: number | null }) {
+  if (!moments.length) return null;
+  const chapters = toYouTubeChapters(moments, streamStartMs);
+  const note = streamStartMs === null ? "Mark stream start first" : chapters.length < 3 ? "YouTube needs at least 3 chapters" : "";
+  const timestamps = clipTimestampText(moments, streamStartMs);
+  return <div className="space-y-1">
+    <div className="flex flex-wrap gap-2">
+      <DockCopyText value={timestamps} label="Copy timestamps" disabled={!timestamps} />
+      <DockCopyText value={chapters.join("\n")} label="Copy YouTube chapters" disabled={Boolean(note)} />
+      <DockButton onClick={() => downloadCsv(csvFilename("clip-moments"), clipMomentsCsv(moments, streamStartMs))}>Download CSV</DockButton>
+    </div>
+    {note ? <p className="text-micro text-text-muted">{note}</p> : null}
+  </div>;
 }
 
 function MomentRow({
@@ -212,7 +239,7 @@ function MomentRow({
             m.kind === "game-event" ? "text-accent-cyan" : "text-warning"
           }`}
         >
-          {m.kind === "game-event" ? "Game" : <><Flame aria-hidden className="inline h-3 w-3" /> Chat</>}
+          {m.kind === "chat-spike" ? <Flame aria-hidden className="mr-1 inline h-3 w-3" /> : null}{MOMENT_KIND_LABELS[m.kind]}
         </span>
       </div>
       <div className="mt-0.5 break-words text-caption text-text">
