@@ -48,6 +48,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   keyboard shortcut and drew a gap.
 - Activity log and Recent games scroll at the smallest window size instead of
   squeezing their heading, filters and search over one another.
+- Build check-in preview buttons in Settings wrap when space is tight, so the
+  page fits the smallest window without horizontal scrolling.
 - The Dashboard's four counts and their captions sit on one line; View
   problems moves to the foot of its card.
 

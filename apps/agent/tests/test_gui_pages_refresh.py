@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import os
+from textwrap import dedent
 
 import pytest
 
 from tests._gui_offscreen import run_gui_check
+from tests.test_companion_resize_shell import THEMED_SETUP
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
@@ -90,7 +92,7 @@ def test_a_page_fills_a_tall_window_without_a_scroll_bar(app, tmp_path, kind):
         settle(app)
 
 
-@pytest.mark.parametrize("skin", ["default", "zerg"])
+@pytest.mark.parametrize("skin", list(theme.SKINS))
 def test_a_checked_segment_button_wears_the_skin_accent_and_its_own_padding(app, skin):
     button = QtWidgets.QPushButton("2")
     button.setObjectName("segment")
@@ -128,6 +130,27 @@ def test_the_settings_form_keeps_its_labels_on_the_left_at_every_width(tmp_path)
             assert form.labelAlignment() & QtCore.Qt.AlignLeft, width
             assert not form.labelAlignment() & QtCore.Qt.AlignRight, width
     ''')
+
+
+def test_checkin_previews_wrap_without_clipping_at_125_percent(tmp_path, monkeypatch):
+    monkeypatch.setenv("QT_SCALE_FACTOR", "1.25")
+    run_gui_check(tmp_path, THEMED_SETUP.replace("FONT_SIZE", "10") + dedent('''
+        from sc2tools_agent.ui.build_checkin_settings import CheckinSettingsGroup
+
+        group = CheckinSettingsGroup(controller=lambda: None, available=True,
+                                     on_preview=lambda _kind: None)
+        loading, postgame = group.preview_loading, group.preview_postgame
+        group.show()
+        for width, wraps in ((320, True), (560, False), (320, True)):
+            group.resize(width, 720)
+            app.processEvents()
+            assert group.width() == width
+            assert (postgame.y() > loading.y()) is wraps
+            for button in (loading, postgame):
+                assert button.width() >= button.sizeHint().width()
+                assert group.rect().contains(button.geometry())
+        group.close()
+    '''))
 
 
 def amber_pixels(widget):

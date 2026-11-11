@@ -16,6 +16,7 @@ UI = Path(__file__).resolve().parents[1] / "sc2tools_agent" / "ui"
 CONVERTED = {
     "activity_log.py": None,
     "brand_mark.py": None,
+    "build_checkin_settings.py": None,
     "folder_rows.py": None,
     "game_dashboard.py": None,
     "gui.py": None,
@@ -23,6 +24,7 @@ CONVERTED = {
     "help_links.py": None,
     "help_page.py": None,
     "pairing_card.py": None,
+    "qt_helpers.py": ("scrolling_page", "install_responsive_forms"),
     "recent_games.py": None,
     "service_notice.py": None,
     "system_motion.py": None,

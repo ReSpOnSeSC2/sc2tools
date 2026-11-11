@@ -69,6 +69,8 @@ corresponding GitHub Release.
   same flat look, with one page margin and the shared status colours. Activity
   log and Recent games scroll at the smallest window size instead of squeezing
   their controls over one another.
+- Build check-in preview buttons wrap to keep Settings usable without
+  horizontal scrolling at the smallest window size.
 
 ### Agent 0.24.11
 

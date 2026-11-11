@@ -59,6 +59,8 @@ win._set_window_size("Standard")
 win._on_update_state(SimpleNamespace(latest="0.24.0", release_notes="Audit sample"), "failed", "Retry when ready.")
 win._game_dashboard.set_progress({"phase": "importing", "total": 700, "completed": 123})
 win._on_replay_archive_status(12, 100)
+# This check uses widget geometry. Avoid repainting the race artwork on every resize.
+win.setUpdatesEnabled(False)
 win.show()
 for skin in ("default", "protoss", "terran", "zerg"):
     page = win._companion_page
@@ -66,7 +68,7 @@ for skin in ("default", "protoss", "terran", "zerg"):
     for route in ("dashboard", "settings"):
         win._go_to_page(route)
         for width in (520, 480, 1300, 480):
-            win.resize(width, 480)
+            win.resize(width, 360)
             QtTest.QTest.qWait(15)
             scroll = win._stack.currentWidget()
             wait_for_page_width(win, scroll, width, skin, route)
