@@ -230,6 +230,9 @@ describe("ShareGameButton menu", () => {
     fireEvent.click(await within(openMenu()).findByRole("menuitem", { name: /Turn on public replays/ }));
     const dialog = await screen.findByRole("dialog", { name: "Turn on public replays?" });
     expect(within(dialog).getByText(/Exactly what visitors can see/)).toBeTruthy();
+    expect(within(dialog).getByText(/archive and analysis keep opponents anonymous/)).toBeTruthy();
+    expect(within(dialog).getByText(/files can contain player names, account identifiers, chat/)).toBeTruthy();
+    expect(within(dialog).getByText(/disable the page, analysis access, and new downloads/)).toBeTruthy();
     expect(mocks.fetch.mock.calls.some(([, init]) => ["POST", "PUT"].includes(init?.method ?? ""))).toBe(false);
     fireEvent.click(within(dialog).getByRole("button", { name: "Turn on and copy link" }));
     await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(PUBLIC_URL));
