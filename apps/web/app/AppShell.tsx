@@ -12,6 +12,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 import { clerkAppearanceBase } from "@/lib/clerk-appearance";
 import { isTokenAuthRoute } from "@/lib/tokenAuthRoutes";
 import { isPublicStatusRoute } from "@/lib/publicStatusRoute";
+import { isReportCardPath } from "@/lib/instant/reportCardRoute";
 import { isUntrackedPath } from "@/lib/analytics/pageLocation";
 import { syncAnalyticsPage } from "@/lib/analytics/gtag";
 import { AppChrome } from "@/components/chrome/AppChrome";
@@ -35,7 +36,7 @@ const MAIN_CLASS =
  * an OBS source and a missing/blocked Clerk script cannot blank the broadcast.
  * The toast context remains available because dock controls use the same app
  * primitives as the signed-in site.
- * The local year recap shares that bare shell to keep replay activity local.
+ * The local year recap and report card viewer share the bare shell so replay data stays on the device.
  *
  * Every signed-in surface — /app, /builds, /community, /devices,
  * /settings, /admin — renders inside AppChrome instead: one rail, one context
@@ -78,7 +79,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Reachability checks must work even when authentication or app APIs fail.
   if (isPublicStatusRoute(pathname)) return <>{children}</>;
 
-  if (isTokenSurface || pathname === "/wrapped") {
+  if (isTokenSurface || pathname === "/wrapped" || isReportCardPath(pathname)) {
     return (
       <ToastProvider>
         <main id="main-content" className={MAIN_CLASS}>

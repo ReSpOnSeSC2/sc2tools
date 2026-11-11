@@ -12,8 +12,8 @@ afterEach(() => {
 });
 
 describe("browser Sentry", () => {
-  it("does not initialize or report errors on the local year recap", async () => {
-    window.history.replaceState(null, "", "/wrapped");
+  it.each(["/wrapped", "/card/report/summary#LocalData"])("does not initialize or report errors on %s", async pathname => {
+    window.history.replaceState(null, "", pathname);
     vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@example.ingest/1");
     const { captureException, initClientSentry } = await import("../sentry");
     await initClientSentry();
@@ -21,12 +21,12 @@ describe("browser Sentry", () => {
     expect(sdk.calls).toEqual([]);
   });
 
-  it("drops local recap events and breadcrumbs after client-side navigation", async () => {
+  it.each(["/wrapped", "/card/report/summary#LocalData"])("drops events and breadcrumbs after navigating to %s", async pathname => {
     window.history.replaceState(null, "", "/help");
     vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@example.ingest/1");
     const { initClientSentry } = await import("../sentry");
     await initClientSentry();
-    window.history.replaceState(null, "", "/wrapped");
+    window.history.replaceState(null, "", pathname);
     for (const key of ["beforeBreadcrumb", "beforeSend", "beforeSendTransaction"]) {
       const hook = sdk.options?.[key];
       expect(typeof hook === "function" ? hook({}) : undefined).toBeNull();

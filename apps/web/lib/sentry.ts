@@ -11,6 +11,8 @@
  * the app.
  */
 
+import { isReportCardPath } from "./instant/reportCardRoute";
+
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
 type Sentry = {
@@ -21,8 +23,9 @@ type Sentry = {
 
 let client: Promise<Sentry | null> | null = null;
 
-function onLocalRecap(): boolean {
-  return globalThis.location?.pathname === "/wrapped";
+function onLocalReplaySurface(): boolean {
+  const pathname = globalThis.location?.pathname;
+  return pathname === "/wrapped" || isReportCardPath(pathname);
 }
 
 /**
@@ -31,7 +34,7 @@ function onLocalRecap(): boolean {
  * anything can report, so no event is captured unscrubbed or before init.
  */
 function clientSentry(): Promise<Sentry | null> {
-  if (onLocalRecap()) return Promise.resolve(null);
+  if (onLocalReplaySurface()) return Promise.resolve(null);
   client ??= (async () => {
     if (!DSN) return null;
     try {
@@ -46,11 +49,11 @@ function clientSentry(): Promise<Sentry | null> {
         replaysSessionSampleRate: 0.0,
         environment: process.env.NEXT_PUBLIC_SC2TOOLS_ENV || "production",
         beforeBreadcrumb: (crumb: Parameters<typeof privacy.scrubBreadcrumb>[0]) =>
-          onLocalRecap() ? null : privacy.scrubBreadcrumb(crumb),
-        beforeSend: (event: unknown) => onLocalRecap() ? null : event,
+          onLocalReplaySurface() ? null : privacy.scrubBreadcrumb(crumb),
+        beforeSend: (event: unknown) => onLocalReplaySurface() ? null : event,
         beforeSendSpan: privacy.scrubSpan,
         beforeSendTransaction: (event: Parameters<typeof privacy.scrubTransaction>[0]) =>
-          onLocalRecap() ? null : privacy.scrubTransaction(event),
+          onLocalReplaySurface() ? null : privacy.scrubTransaction(event),
       });
       return s;
     } catch {
@@ -70,7 +73,7 @@ export async function initClientSentry(): Promise<void> {
  * is off (no DSN) and the error only went to the console.
  */
 export async function captureException(err: unknown): Promise<string | null> {
-  if (onLocalRecap()) return null;
+  if (onLocalReplaySurface()) return null;
   const s = await clientSentry();
   if (s) {
     const eventId = s.captureException(err);

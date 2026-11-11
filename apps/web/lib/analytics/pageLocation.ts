@@ -40,6 +40,7 @@ const DYNAMIC_ROUTES: ReadonlyArray<readonly [RegExp, string]> = [
   [/^\/builds\/[^/]+/, "/builds/:slug"],
   [/^\/community\/opponents\/[^/]+/, "/community/opponents/:pulseId"],
   [/^\/community\/authors\/[^/]+/, "/community/authors/:userId"],
+  [/^\/card(?:\/.*)?$/, "/card/:type/:class"],
   // A share link's token is the page's credential.
   [/^\/g\/[^/]+/, "/g/:token"],
 ];

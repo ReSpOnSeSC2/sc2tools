@@ -145,7 +145,7 @@ function summaryFromReport(report: InstantReport): string[] {
   ].filter((line): line is string => line !== null);
 }
 
-function summaryFromModel(model: ReportCardModel): string[] {
+export function summaryFromModel(model: ReportCardModel): string[] {
   const totals = model.totals;
   return [
     totals ? `SC2 Tools /try report: ${totals.games} ${totals.games === 1 ? "game" : "games"}, ${record(totals.wins, totals.losses)}` : "SC2 Tools /try report",

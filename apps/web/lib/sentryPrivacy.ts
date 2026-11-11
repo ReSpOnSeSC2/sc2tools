@@ -1,4 +1,5 @@
 import { sanitiseRequestPath } from "./feedback/sanitise";
+import { isReportCardPath, REPORT_CARD_PATH } from "./instant/reportCardRoute";
 
 // Browser Sentry keeps no typed search text or credential path (ADR 0069,
 // 2026-11-01 amendment). Request URLs in fetch and XHR breadcrumbs and in
@@ -18,9 +19,22 @@ function scrubUrl(value: unknown): unknown {
   return typeof value === "string" ? sanitiseRequestPath(value) || "[redacted]" : value;
 }
 
+function scrubCardNavigation(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return isReportCardPath(new URL(value, "https://sc2tools.com").pathname) ? REPORT_CARD_PATH : value;
+  } catch {
+    return value;
+  }
+}
+
 /** Example: a fetch breadcrumb for "https://api/v1/replays?search=Bob" keeps "/v1/replays?search=%5Bredacted%5D". */
 export function scrubBreadcrumb<T extends Breadcrumb>(breadcrumb: T): T {
   const data = breadcrumb.data;
+  if (breadcrumb.category === "navigation" && data) {
+    const from = scrubCardNavigation(data.from), to = scrubCardNavigation(data.to);
+    if (from !== data.from || to !== data.to) return { ...breadcrumb, data: { ...data, from, to } };
+  }
   if ((breadcrumb.category !== "fetch" && breadcrumb.category !== "xhr") || !data || !Object.hasOwn(data, "url")) return breadcrumb;
   return { ...breadcrumb, data: { ...data, url: scrubUrl(data.url) } };
 }

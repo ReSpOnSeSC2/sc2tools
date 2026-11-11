@@ -4,6 +4,7 @@ import { realWin } from "./fixtures/reportGames";
 import { defaultReportSelection, reportCardModel } from "../reportSharing";
 import { reportSummaryText } from "../reportExport";
 import { drawReportCard, reportPng } from "../reportCard";
+import { decodeReportCard, encodeReportCard } from "../reportCardLink";
 
 function report(games = 3) {
   return buildInstantReport(Array.from({ length: games }, (_, index) => ({ ...realWin(), gameId: `unit-${index}` })), new Date("2026-10-01T00:00:00Z"));
@@ -24,6 +25,10 @@ describe("private report sharing projection", () => {
     expect(hidden).toEqual({ totals: null, matchups: [], opener: null, macro: null });
     expect(reportSummaryText(source, undefined, hidden)).not.toContain("3 games");
     expect(text).toContain("utm_medium=share");
+    const fragment = encodeReportCard(model)!;
+    const publicModel = decodeReportCard(fragment);
+    expect(publicModel).toEqual(model);
+    expect(Buffer.from(fragment, "base64url").toString()).not.toMatch(/Squirtuoz|Tourmaline|267727|unit-/);
   });
 
   it("requires three observed games and omits unknown macro and injected names", () => {
