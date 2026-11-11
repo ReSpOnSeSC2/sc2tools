@@ -46,6 +46,13 @@ jest.mock("@clerk/backend", () => ({
   })),
 }));
 
+async function expectUnlinkNotice(db, userId, deviceId) {
+  const deliveryKey = crypto.createHash("sha256").update(`agent-unlinked:${deviceId}`).digest("base64url");
+  await expect(db.notifications.findOne({ userId, kind: "agent.unlinked", deliveryKeys: deliveryKey })).resolves.toMatchObject({
+    title: "Desktop app unlinked", href: "/devices",
+  });
+}
+
 describe("Devices API", () => {
   let mongo;
   let db;
@@ -350,8 +357,8 @@ describe("Devices API", () => {
     const userId = await userIdFor(TEST_CLERK_USER_ID);
     const { deviceId } = await insertToken(userId);
 
-    const del = await withAuth(request(app).delete(`/v1/devices/${deviceId}`));
-    expect(del.status).toBe(204);
+    await withAuth(request(app).delete(`/v1/devices/${deviceId}`)).expect(204);
+    await expectUnlinkNotice(db, userId, deviceId);
 
     const list = await withAuth(request(app).get("/v1/devices"));
     expect(list.body.items).toHaveLength(0);
