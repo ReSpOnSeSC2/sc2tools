@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { STREAMS_MIN_AGENT_VERSION } from "@/lib/agentNotice";
 import { LandingPageContent } from "../LandingPageContent";
-const mocks = vi.hoisted(() => ({ mode: "all", signedIn: false }));
-vi.mock("@clerk/nextjs", () => ({ SignedIn: ({ children }: { children: React.ReactNode }) => mocks.signedIn ? children : null, SignedOut: ({ children }: { children: React.ReactNode }) => mocks.signedIn ? null : children }));
+const mocks = vi.hoisted(() => ({ mode: "all", signedIn: false as boolean | undefined }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isSignedIn: mocks.signedIn }) }));
 vi.mock("@/lib/instant/flag", () => ({ getInstantImportMode: () => mocks.mode }));
 vi.mock("@/components/landing/ReplayDemo", () => ({ ReplayDemo: () => <div>Build editor demo</div> }));
 vi.mock("@/components/landing/GuidesStrip", () => ({ GuidesStrip: () => null }));
@@ -33,6 +33,34 @@ it("gives signed-in visitors dashboard and update paths in both CTA rows", () =>
   expect(screen.queryByRole("link", { name: "Download the free agent" })).toBeNull();
   expect(container.querySelector("header.border-y")).toBeNull();
 });
+
+it("puts the public browser analyzer first while Clerk loads", () => {
+  mocks.signedIn = undefined;
+  const { rerender } = render(<LandingPageContent />);
+  const hero = within(screen.getByRole("heading", { level: 1 }).closest("section")!);
+  const browser = hero.getByRole("link", { name: /No download/ });
+  const download = hero.getByRole("link", { name: "Download the free agent" });
+  expect(hero.getAllByRole("link").slice(0, 2)).toEqual([browser, download]);
+  expect(browser.classList.contains("bg-accent")).toBe(true);
+  expect(download.classList.contains("bg-bg-surface")).toBe(true);
+
+  mocks.signedIn = true;
+  rerender(<LandingPageContent />);
+  expect(hero.getByRole("link", { name: "Open your dashboard" }).getAttribute("href")).toBe("/app");
+  expect(hero.queryByRole("link", { name: /No download/ })).toBeNull();
+});
+
+it.each(["admins", "off"])("keeps download first when browser access is %s", mode => {
+  mocks.mode = mode;
+  render(<LandingPageContent />);
+  const hero = within(screen.getByRole("heading", { level: 1 }).closest("section")!);
+  const [download, demo] = hero.getAllByRole("link");
+  expect(download.getAttribute("href")).toBe("/download");
+  expect(download.classList.contains("bg-accent")).toBe(true);
+  expect(demo.getAttribute("href")).toBe("#replay-demo");
+  expect(hero.queryByRole("link", { name: /No download/ })).toBeNull();
+});
+
 it("keeps visitor download choices and gates the Getting started browser option", () => {
   const { rerender } = render(<LandingPageContent />);
   expect(screen.getByRole("link", { name: "Download the free agent" })).toBeTruthy();

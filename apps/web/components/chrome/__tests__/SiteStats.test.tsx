@@ -24,30 +24,54 @@ afterEach(() => {
   vi.useRealTimers(); vi.restoreAllMocks(); localStorage.clear();
 });
 
-function snapshot() {
+function snapshot(counts: Partial<Pick<NonNullable<typeof response.data>, "agentDownloads" | "activeAgents" | "activeUsers">> = {}) {
   response.data = {
     agentDownloads: 12345,
-    activeAgents: 12,
-    activeUsers: 0,
+    activeAgents: 24,
+    activeUsers: 7,
     generatedAt: new Date().toISOString(),
     activityWindowSeconds: 180,
     receivedAt: Date.now(),
+    ...counts,
   };
 }
 
 describe("public community activity", () => {
-  it("shows exact counts including a real zero and accessible definitions", () => {
+  it("shows exact counts above the floors and accessible definitions", () => {
     snapshot();
     render(<SiteStats />);
     expect(screen.getByText("12,345")).toBeTruthy();
-    expect(screen.getByText("12")).toBeTruthy();
-    expect(screen.getByText("0")).toBeTruthy();
+    expect(screen.getByText("24")).toBeTruthy();
+    expect(screen.getByText("7")).toBeTruthy();
     const toggle = screen.getByRole("button", { name: "About these activity counts" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText(/completed installations are not measured/)).toBeTruthy();
     expect(screen.getByText(/Signed-in users count once across devices/)).toBeTruthy();
+  });
+
+  it.each([
+    { field: "agentDownloads", below: 99, floor: 100 },
+    { field: "activeAgents", below: 19, floor: 20 },
+    { field: "activeUsers", below: 4, floor: 5 },
+  ] as const)("hides a $field count below $floor and shows it at the floor", ({ field, below, floor }) => {
+    snapshot({ [field]: below });
+    const { rerender } = render(<SiteStats />);
+    expect(screen.queryByText(String(below))).toBeNull();
+    const group = screen.getByRole("group", { name: "Game sync and site activity" });
+    expect(group.querySelectorAll("dd")).toHaveLength(2);
+
+    snapshot({ [field]: floor });
+    rerender(<SiteStats />);
+    expect(screen.getByText(String(floor))).toBeTruthy();
+    expect(group.querySelectorAll("dd")).toHaveLength(3);
+  });
+
+  it("omits the marketing strip when all three known counts are below their floors", () => {
+    snapshot({ agentDownloads: 99, activeAgents: 19, activeUsers: 4 });
+    render(<SiteStats />);
+    expect(screen.queryByRole("region", { name: "SC2 Tools community activity" })).toBeNull();
   });
 
   it("uses decorative loading placeholders with readable text and one aggregate status", () => {
@@ -76,7 +100,7 @@ describe("public community activity", () => {
     response.data!.activeUsers = null;
     render(<SiteStats />);
     expect(screen.getByText("12,345")).toBeTruthy();
-    expect(screen.getByText("12")).toBeTruthy();
+    expect(screen.getByText("24")).toBeTruthy();
     expect(screen.getAllByText("Unavailable")).toHaveLength(1);
     expect(screen.getByRole("status").textContent).toBe("Some counts unavailable");
   });
@@ -117,7 +141,7 @@ describe("public community activity", () => {
 
 describe("compact app activity", () => {
   it("keeps community counts in a persisted disclosure and includes the supplied agent pill", () => {
-    snapshot(); const first = render(<SiteStats variant="app" signedIn analyzer syncStatus={<span>Agent online</span>} />);
+    snapshot({ activeUsers: 0 }); const first = render(<SiteStats variant="app" signedIn analyzer syncStatus={<span>Agent online</span>} />);
     const toggle = screen.getByRole("button", { name: /Community · 0 online/ }); const details = document.getElementById(toggle.getAttribute("aria-controls")!)!;
     expect(details.hidden).toBe(true); expect(screen.getByText("Agent online")).toBeTruthy(); fireEvent.click(toggle); expect(details.hidden).toBe(false); expect(localStorage.getItem("sc2tools:activity-details:v1")).toBe("expanded");
     first.unmount(); render(<SiteStats variant="app" signedIn analyzer />); expect(screen.getByRole("button", { name: /Community/ }).getAttribute("aria-expanded")).toBe("true");

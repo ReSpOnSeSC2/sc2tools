@@ -357,7 +357,12 @@ for (const theme of ["light", "dark"] as const) {
         }
         await expect(page.getByRole("link", { name: "Open your dashboard", exact: true })).toHaveCount(audience === "player" ? 2 : 0);
         await expect(page.getByRole("link", { name: "Download the free agent", exact: true })).toHaveCount(audience === "visitor" ? 1 : 0);
-        const focus = hero.getByRole("link", { name: audience === "visitor" ? "Download the free agent" : "Open your dashboard", exact: true });
+        const focus = hero.getByRole("link", {
+          name: audience === "visitor" ? "No download — analyze your replays in your browser" : "Open your dashboard",
+          exact: true,
+        });
+        // React can reuse the primary link when the fixture changes audience.
+        await focus.blur();
         await page.mouse.move(0, 899);
         const rest = await focus.evaluate(node => { const style = getComputedStyle(node); return { shadow: style.boxShadow, color: style.color, background: style.backgroundColor }; });
         await checkAccessibility(page, info, `/landing-cta/${width}/${audience}/rest`, theme);
