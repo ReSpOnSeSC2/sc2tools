@@ -75,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [core, ui]
+        suite: [core, ui-companion, ui-desktop]
     defaults:
       run:
         working-directory: apps/agent
@@ -90,16 +90,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt pytest
-      - name: Test
+      - name: Test Agent ${{ matrix.suite }} suite
         env:
           AGENT_TEST_SUITE: ${{ matrix.suite }}
         run: |
           $uiPattern = '^test_(companion|gui|opponent_card|overlay_input|race_artwork|window_sizes|compact_transparency)'
-          if ($env:AGENT_TEST_SUITE -notin @('core', 'ui')) { throw 'Unknown Agent test partition.' }
-          $isUiSuite = $env:AGENT_TEST_SUITE -eq 'ui'
+          $companionPattern = '^test_(companion|compact_transparency)'
+          if ($env:AGENT_TEST_SUITE -notin @('core', 'ui-companion', 'ui-desktop')) { throw 'Unknown Agent test partition.' }
           $files = @(Get-ChildItem tests -Recurse -File -Filter 'test_*.py' |
             Sort-Object FullName |
-            Where-Object { ($_.Name -match $uiPattern) -eq $isUiSuite } |
+            Where-Object {
+              $suite = if ($_.Name -notmatch $uiPattern) { 'core' }
+                       elseif ($_.Name -match $companionPattern) { 'ui-companion' }
+                       else { 'ui-desktop' }
+              $suite -eq $env:AGENT_TEST_SUITE
+            } |
             ForEach-Object FullName)
           if (-not $files.Count) { throw 'Agent test partition is empty.' }
           Write-Host "Testing $($files.Count) files in the $env:AGENT_TEST_SUITE partition."
