@@ -15,6 +15,7 @@ def test_race_choices_persist_without_changing_geometry_drafts_or_selected_oppon
         win._handle_input.setText("Unsaved player")
         initial_geometry = win.geometry()
         initial_context = page.console.context()
+        mark = page.console.findChild(QtWidgets.QWidget, "agentBrandMark")
         assert page.current_appearance() == {"skin": "default", "animations": True}
         assert css_for_skin("default") == ""
         base_style = app.styleSheet()
@@ -27,6 +28,7 @@ def test_race_choices_persist_without_changing_geometry_drafts_or_selected_oppon
             assert page.console.context() == initial_context
             assert win._handle_input.text() == "Unsaved player"
             assert page.compact_card.property("raceSkin") == skin
+            assert mark.skin == skin
             if skin == "default":
                 assert app.styleSheet() == base_style
             else:

@@ -7,7 +7,6 @@ _ROSTER_SETUP = dedent('''
     import os
     from types import SimpleNamespace
     from sc2tools_agent.ui import theme
-    from sc2tools_agent.ui.companion_page import _STYLE
     from sc2tools_agent.ui.team_roster import build_team_roster
 
     fonts = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
@@ -19,7 +18,7 @@ _ROSTER_SETUP = dedent('''
     app.setStyleSheet(theme.STYLE)
     host = QtWidgets.QWidget()
     host.setObjectName("companionDesk")
-    host.setStyleSheet(_STYLE)
+    host.setStyleSheet(theme.COMPANION_PAGE_STYLE)
     layout = QtWidgets.QVBoxLayout(host)
     layout.setContentsMargins(0, 0, 0, 0)
     roster = build_team_roster(host, QtCore=QtCore, QtWidgets=QtWidgets)
