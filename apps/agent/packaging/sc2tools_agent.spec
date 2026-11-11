@@ -38,7 +38,10 @@ acceptable.
 
 # noqa: E501
 
+import re
 from pathlib import Path
+
+from PyInstaller.compat import is_win  # type: ignore[import-not-found]
 
 # PyInstaller helpers for collecting whole packages — used for PySide6
 # (Qt plugins) and sc2reader (CSV game-data files loaded via
@@ -55,6 +58,39 @@ HERE = Path.cwd()
 REPO_ROOT = HERE / ".." / ".."
 ANALYZER_DIR = REPO_ROOT / "apps" / "replay-engine"
 ICON_DIR = HERE / "sc2tools_agent" / "ui"
+
+def build_version_info():
+    from PyInstaller.utils.win32 import versioninfo
+
+    init_file = HERE / "sc2tools_agent" / "__init__.py"
+    match = re.search(r'^__version__\s*=\s*"([0-9]{1,5}(?:\.[0-9]{1,5}){2})"',
+                      init_file.read_text(encoding="utf-8"), re.MULTILINE)
+    if match is None:
+        raise ValueError("Expected a literal X.Y.Z agent version in sc2tools_agent/__init__.py")
+    version = match.group(1)
+    parts = tuple(int(part) for part in version.split(".")) + (0,)
+    if any(part > 65535 for part in parts):
+        raise ValueError("Agent version components must fit Windows VERSIONINFO (0..65535)")
+    strings = {
+        "ProductName": "SC2 Tools Agent",
+        "CompanyName": "SC2 Tools",
+        "FileDescription": "SC2 Tools Agent",
+        "OriginalFilename": "sc2tools-agent.exe",
+        "FileVersion": version,
+        "ProductVersion": version,
+    }
+    return versioninfo.VSVersionInfo(
+        ffi=versioninfo.FixedFileInfo(filevers=parts, prodvers=parts),
+        kids=[
+            versioninfo.StringFileInfo([versioninfo.StringTable(
+                "040904B0", [versioninfo.StringStruct(key, value) for key, value in strings.items()],
+            )]),
+            versioninfo.VarFileInfo([versioninfo.VarStruct("Translation", [0x0409, 1200])]),
+        ],
+    )
+
+
+VERSION_INFO = build_version_info() if is_win else None
 
 # Bring the replay engine + its data dirs along so the bundled .exe can
 # ``import core.sc2_replay_parser`` / ``core.event_extractor`` / etc.
@@ -232,6 +268,7 @@ if ONE_FILE:
         a.datas,
         [],
         name=EXE_NAME,
+        version=VERSION_INFO,
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
@@ -252,6 +289,7 @@ else:
         [],
         exclude_binaries=True,
         name=EXE_NAME,
+        version=VERSION_INFO,
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,

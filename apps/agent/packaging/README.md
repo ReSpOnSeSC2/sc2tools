@@ -19,8 +19,10 @@ cd apps/agent
 pwsh packaging/build-installer.ps1 -Installer
 ```
 
-The version defaults to the canonical `sc2tools_agent.__version__` and
-the output is `dist/SC2ToolsAgent-Setup-<version>.exe`.
+Both executables use the canonical `sc2tools_agent.__version__` in Windows
+file properties. An optional `-Version` asserts the expected version before the
+build. The output is `dist/SC2ToolsAgent-Setup-<version>.exe`. `-PackageOnly`
+checks the existing agent executable’s version before packaging.
 
 ## Signed release build
 
