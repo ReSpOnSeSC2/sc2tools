@@ -17,42 +17,6 @@ from .sc2_icons import icon_root as _icon_root, icon_token as _icon_token, load_
 from . import theme
 
 
-_STYLE = f"""
-QWidget#companionDesk, QWidget#companionContent, QWidget#companionPanel {{ background: {theme.BG}; color: {theme.TEXT}; }}
-QWidget#companionDesk[textOverlay="true"], QWidget#companionPanel[textOverlay="true"] {{ background: transparent; border: none; }}
-QWidget#companionDesk QLabel, QWidget#companionPanel QLabel {{ color: {theme.TEXT}; background: transparent; }}
-QFrame#companionCard {{ background: {theme.SURFACE}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 12px; }}
-QLabel#companionTitle {{ font-size: 25px; font-weight: 700; color: {theme.TEXT}; }}
-QLabel#companionHeading {{ font-size: 17px; font-weight: 650; color: {theme.TEXT}; }}
-QLabel#companionMuted {{ color: {theme.TEXT_MUTED}; font-size: 12px; }}
-QLabel#companionAccent {{ color: {theme.ACCENT_CYAN}; font-size: 12px; font-weight: 600; }}
-QWidget#companionDesk QLineEdit, QWidget#companionDesk QPlainTextEdit,
-QWidget#companionDesk QComboBox, QWidget#companionPanel QComboBox {{
-    background: {theme.ELEVATED}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_CONTROL}; border-radius: 6px; padding: 7px;
-}}
-QWidget#companionDesk QPushButton, QWidget#companionPanel QPushButton {{
-    background: {theme.BUTTON}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 6px; padding: 7px 12px;
-}}
-QWidget#companionDesk QPushButton:hover, QWidget#companionPanel QPushButton:hover {{ background: {theme.BUTTON_HOVER}; border-color: {theme.ACCENT_HOVER}; }}
-QWidget#companionDesk QPushButton:checked {{ background: {theme.BUTTON_CHECKED}; border-color: {theme.ACCENT_HOVER}; }}
-QWidget#companionDesk QPushButton:focus, QWidget#companionPanel QPushButton:focus {{ border-color: {theme.FOCUS}; }}
-QWidget#companionDesk QPushButton:disabled {{ color: {theme.TEXT_DIM}; border-color: {theme.BORDER}; background: {theme.ELEVATED}; }}
-QWidget#companionDesk QCheckBox, QWidget#companionPanel QCheckBox {{ color: {theme.TEXT}; spacing: 8px; }}
-QWidget#companionDesk QTreeWidget, QWidget#companionDesk QListWidget, QWidget#companionPanel QTreeWidget {{
-    background: {theme.SURFACE}; alternate-background-color: {theme.ELEVATED}; color: {theme.TEXT};
-    border: 1px solid {theme.BORDER_STRONG}; border-radius: 7px; outline: none;
-}}
-QWidget#companionDesk QTreeWidget::item, QWidget#companionPanel QTreeWidget::item {{ padding: 6px 3px; }}
-QWidget#companionDesk QListWidget::item {{ padding: 12px 7px; border-bottom: 1px solid {theme.BORDER}; }}
-QWidget#companionDesk QListWidget::item:selected {{ background: {theme.BUTTON_CHECKED}; color: {theme.TEXT}; }}
-QWidget#companionDesk QHeaderView::section, QWidget#companionPanel QHeaderView::section {{
-    background: {theme.SUBTLE}; color: {theme.TEXT_MUTED}; padding: 7px; border: none; font-size: 11px;
-}}
-QWidget#companionDesk QTabWidget::pane {{ border: 1px solid {theme.BORDER_STRONG}; border-radius: 6px; }}
-QWidget#companionDesk QTabBar::tab {{ background: {theme.SURFACE}; color: {theme.TEXT_MUTED}; padding: 9px 14px; }}
-QWidget#companionDesk QTabBar::tab:selected {{ background: {theme.BUTTON_CHECKED}; color: {theme.TEXT}; }}
-"""
-
 def _display_name(name):
     prefix, separator, remainder = name.partition(" · ")
     if separator and prefix in {"YOU", "OPP"}:
@@ -327,7 +291,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.setWindowTitle("SC2TOOLS · " + kind.title())
             self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
             self.setAttribute(QtCore.Qt.WA_QuitOnClose, False)
-            self.setStyleSheet(_STYLE)
+            self.setStyleSheet(theme.COMPANION_PAGE_STYLE)
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(16, 16, 16, 16)
             self.title = label("Waiting for a match", "Heading")
@@ -671,7 +635,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
         def __init__(self):
             super().__init__(parent)
             self.setObjectName("companionDesk")
-            self.setStyleSheet(_STYLE)
+            self.setStyleSheet(theme.COMPANION_PAGE_STYLE)
             self._closed = False
             self._sequence = 0
             self._requests = {}
@@ -1465,9 +1429,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.style().polish(self)
             for widget in self._normal_chrome:
                 widget.setVisible(not compact and (widget is not self.window_size_notice or bool(self.window_size_notice.text())))
-            margin = 0 if compact else 4 if level == "standard" else 8
+            margin = 0 if compact else theme.SPACE_XS if level == "standard" else theme.SPACE_S
             self.layout().setContentsMargins(margin, margin, margin, margin)
-            self.layout().setSpacing(6)
+            self.layout().setSpacing(theme.SPACE_XS)
             self.compact_card.setVisible(compact)
             self.team_roster_widget.set_density(level)
             self.console.setVisible(not compact)

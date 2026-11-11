@@ -91,7 +91,6 @@ DANGER_SOLID = "#c42b1c"
 ON_DANGER_SOLID = "#ffffff"
 # Companion's second highlight and console frame, until Companion takes the skin tokens.
 ACCENT_CYAN = "#71e2d2"
-CONSOLE_GRADIENT = "qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #7737b3,stop:0.5 #56218a,stop:1 #9146c8)"
 
 # ---- motion: short, and only when the player and Windows both allow it
 MOTION_EXPAND_MS = 300
@@ -182,7 +181,6 @@ QMainWindow[textOverlay="true"], QWidget#agentRoot[textOverlay="true"],
 QFrame#agentFrame[textOverlay="true"], QFrame#agentDisplay[textOverlay="true"],
 QStackedWidget#agentPageStack[textOverlay="true"] {{ background: transparent; border: none; }}
 QDialog, QMessageBox, QFileDialog, QInputDialog {{ background: {SURFACE}; color: {TEXT}; }}
-QWidget#companionPanel, QWidget#ghostPanel {{ background: {SURFACE}; color: {TEXT}; }}
 QWidget#checkinWindow {{ background: transparent; }}
 QDialogButtonBox {{ background: transparent; }}
 QStackedWidget, QStackedWidget > QWidget {{ background: {SURFACE}; }}
@@ -515,7 +513,111 @@ QToolButton#studioDisclosureToggle:disabled {{ background: {SURFACE}; color: {TE
 """
 
 
-_SECTIONS = (_base, window_controls_style, _shell, _content, _buttons, _inputs, _choices, _views, _overlays, _studio)
+def _companion_page(skin):
+    return f"""
+QWidget#companionDesk, QWidget#companionContent, QWidget#companionPanel {{
+    background: {skin.canvas}; color: {TEXT};
+}}
+QWidget#companionDesk[textOverlay="true"], QWidget#companionPanel[textOverlay="true"] {{
+    background: transparent; border: none;
+}}
+QFrame#companionCard {{ background: {ELEVATED}; border: none; border-radius: {RADIUS_L}px; }}
+QLabel#companionHeading {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QLabel#companionMuted {{ color: {TEXT_MUTED}; font-size: {TYPE_SMALL}px; }}
+QLabel#companionAccent {{ color: {skin.accent}; font-size: {TYPE_SMALL}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QWidget#companionDesk QLineEdit, QWidget#companionDesk QPlainTextEdit,
+QWidget#companionDesk QComboBox, QWidget#companionPanel QComboBox {{
+    background: {SUNKEN}; border: 1px solid {BORDER_CONTROL}; border-radius: {RADIUS_M}px;
+}}
+QWidget#companionDesk QLineEdit:focus, QWidget#companionDesk QPlainTextEdit:focus,
+QWidget#companionDesk QComboBox:focus, QWidget#companionPanel QComboBox:focus {{ border-color: {skin.focus}; }}
+QWidget#companionDesk QTreeWidget, QWidget#companionDesk QListWidget, QWidget#companionPanel QTreeWidget {{
+    background: {SURFACE}; alternate-background-color: {ELEVATED}; color: {TEXT};
+    border: 1px solid {BORDER_STRONG}; border-radius: {RADIUS_M}px; outline: none;
+}}
+QWidget#companionDesk QTreeWidget:focus, QWidget#companionDesk QListWidget:focus,
+QWidget#companionPanel QTreeWidget:focus {{ border-color: {skin.focus}; }}
+QWidget#companionDesk QTreeWidget::item, QWidget#companionPanel QTreeWidget::item {{
+    padding: {SPACE_XS}px {SPACE_S}px;
+}}
+QWidget#companionDesk QCheckBox:disabled, QWidget#companionPanel QCheckBox:disabled {{ color: {TEXT_DIM}; }}
+QWidget#companionDesk QListWidget::item {{ padding: {SPACE_M}px {SPACE_S}px; border-bottom: 1px solid {BORDER}; }}
+QWidget#companionDesk QListWidget::item:selected {{ background: {skin.selected}; color: {TEXT}; }}
+"""
+
+
+def _companion_console(skin):
+    return f"""
+QFrame#companionConsole {{
+    background: {skin.canvas}; border: 1px solid {BORDER}; border-radius: {RADIUS_XL}px; color: {TEXT};
+}}
+QFrame#consoleProfile {{ background: {ELEVATED}; border: none; border-radius: {RADIUS_L}px; }}
+QFrame#consoleDisplay {{ background: {SURFACE}; border: none; border-radius: {RADIUS_L}px; }}
+QWidget#consoleHome, QScrollArea#consoleHomeScroll, QStackedWidget#consolePages, QScrollArea#consoleProfileScroll,
+QScrollArea#consoleHomeScroll > QWidget > QWidget,
+QScrollArea#consoleProfileScroll > QWidget > QWidget {{ background: transparent; border: none; }}
+QLabel#consoleBrand {{
+    font-family: {FONT_FAMILY_DISPLAY}; font-size: {TYPE_TITLE}px; font-weight: {WEIGHT_SEMIBOLD};
+}}
+QLabel#consoleEdition {{
+    color: {TEXT_MUTED}; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_SEMIBOLD}; letter-spacing: 1px;
+}}
+QLabel#consoleBreadcrumb, QLabel#consoleOpponentRecord {{ color: {TEXT_MUTED}; font-size: {TYPE_SMALL}px; }}
+QLabel#consoleGameTitle {{ color: {skin.accent}; font-size: {TYPE_SMALL}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QLabel#consolePageHeading {{
+    font-family: {FONT_FAMILY_DISPLAY}; font-size: {TYPE_HEADLINE}px; font-weight: {WEIGHT_SEMIBOLD};
+}}
+QLabel#consolePageDescription {{ color: {TEXT_MUTED}; font-size: {TYPE_BODY}px; }}
+QLabel#consoleOpponentIdentity {{ color: {TEXT}; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QPushButton#consoleHomeAction {{
+    text-align: left; padding: {SPACE_S}px {SPACE_M}px; background: {ELEVATED}; border-color: transparent;
+}}
+QPushButton#consoleHomeAction:hover {{ background: {BUTTON_HOVER}; }}
+QPushButton#consoleHomeAction:focus {{ border-color: {skin.focus}; }}
+QFrame#companionConsole QPushButton:disabled, QFrame#companionConsole QToolButton:disabled {{ color: {TEXT_DIM}; }}
+QFrame#consoleDivider {{ background: {BORDER}; border: none; max-height: 1px; }}
+"""
+
+
+def _companion_ghost(skin):
+    return f"""
+QWidget#ghostDesk, QWidget#ghostPanel, QWidget#ghostContent, QWidget#ghostSource {{
+    background: {SURFACE}; color: {TEXT}; font-size: {TYPE_BODY}px;
+}}
+QLabel#ghostHeading {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QWidget#ghostDesk QLineEdit, QWidget#ghostDesk QComboBox {{ background: {SUNKEN}; border-color: {BORDER_CONTROL}; }}
+QWidget#ghostDesk QLineEdit:focus, QWidget#ghostDesk QComboBox:focus {{ border-color: {skin.focus}; }}
+QWidget#ghostDesk QCheckBox:disabled {{ color: {TEXT_DIM}; }}
+QWidget#ghostDesk QTreeWidget, QWidget#ghostPanel QTreeWidget {{
+    background: {ELEVATED}; color: {TEXT}; border: 1px solid {BORDER_STRONG};
+    border-radius: {RADIUS_M}px; selection-background-color: {skin.selected}; selection-color: {TEXT};
+}}
+QWidget#ghostDesk QTreeWidget:focus, QWidget#ghostPanel QTreeWidget:focus {{ border-color: {skin.focus}; }}
+QToolButton#ghostHistory {{
+    background: transparent; color: {TEXT_MUTED}; border: 1px solid transparent;
+    border-radius: {RADIUS_S}px; padding: {SPACE_XS}px {SPACE_S}px;
+}}
+QToolButton#ghostHistory:hover {{ background: {BUTTON_HOVER}; color: {TEXT}; }}
+QToolButton#ghostHistory:focus {{ border-color: {skin.focus}; }}
+"""
+
+
+def _companion_builds(skin):
+    return f"""
+QLabel#companionBuildsHeading {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; color: {TEXT}; }}
+QWidget#companionBuilds QTabWidget::pane {{ background: {SURFACE}; border: none; }}
+QWidget#companionBuilds QTabBar::tab {{
+    background: transparent; color: {TEXT_MUTED}; border: none; border-bottom: 2px solid transparent;
+    padding: {SPACE_S}px {SPACE_M}px;
+}}
+QWidget#companionBuilds QTabBar::tab:hover {{ color: {TEXT}; }}
+QWidget#companionBuilds QTabBar::tab:selected {{ color: {TEXT}; border-bottom-color: {skin.accent}; }}
+QWidget#companionBuilds QTabBar::tab:focus {{ border-bottom-color: {skin.focus}; }}
+"""
+
+
+_SECTIONS = (_base, window_controls_style, _shell, _content, _buttons, _inputs, _choices, _views, _overlays, _studio,
+             _companion_page, _companion_console, _companion_ghost, _companion_builds)
 
 
 def stylesheet(skin=DEFAULT_SKIN):
@@ -562,3 +664,7 @@ def skin_layer(name):
 
 STYLE = stylesheet()
 WINDOW_CONTROLS_STYLE = window_controls_style(DEFAULT_SKIN)
+COMPANION_PAGE_STYLE = _companion_page(DEFAULT_SKIN)
+COMPANION_CONSOLE_STYLE = _companion_console(DEFAULT_SKIN)
+COMPANION_GHOST_STYLE = _companion_ghost(DEFAULT_SKIN)
+COMPANION_BUILDS_STYLE = _companion_builds(DEFAULT_SKIN)
