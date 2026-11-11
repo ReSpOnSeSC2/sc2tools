@@ -17,7 +17,11 @@ function recapRequestPaths() {
   const nextAssets = readdirSync(staticRoot, { recursive: true, encoding: "utf8" })
     .filter((name) => statSync(path.join(staticRoot, name)).isFile())
     .map((name) => `/_next/static/${name.replaceAll(path.sep, "/")}`);
-  return new Set(["/wrapped", "/engine/current.json", pointer.manifest, ...manifest.assets.map((asset) => asset.path), ...nextAssets]);
+  return new Set([
+    "/wrapped", "/manifest.webmanifest",
+    "/icons/pwa/icon-192.png", "/icons/pwa/icon-512.png", "/icons/pwa/apple-touch-icon.png",
+    "/engine/current.json", pointer.manifest, ...manifest.assets.map((asset) => asset.path), ...nextAssets,
+  ]);
 }
 
 function isRecapRequest(request: Request, site: string, allowedPaths: ReadonlySet<string>): boolean {
