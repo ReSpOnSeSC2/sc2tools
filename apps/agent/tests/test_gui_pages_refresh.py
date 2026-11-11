@@ -81,6 +81,7 @@ def test_a_page_scrolls_at_the_smallest_window_and_never_overlaps_its_controls(a
         for above, below in zip(widgets, widgets[1:]):
             assert above.geometry().bottom() < below.geometry().top(), (above, below)
         listing = page.table if kind == "recent" else page.view
+        assert listing.minimumHeight() >= theme.PAGE_LIST_MIN_HEIGHT
         assert listing.height() >= theme.PAGE_LIST_MIN_HEIGHT
     finally:
         page.close()

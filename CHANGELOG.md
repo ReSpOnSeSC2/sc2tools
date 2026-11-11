@@ -237,6 +237,7 @@ corresponding GitHub Release.
   their controls over one another.
 - Build check-in preview buttons wrap to keep Settings usable without
   horizontal scrolling at the smallest window size.
+- Pressing Enter or F3 in the Activity log brings the selected match into view.
 
 ### Agent 0.24.11
 
