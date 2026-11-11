@@ -1945,4 +1945,4 @@ function summarizeOpponentGames(pulseId, pulseCharacterId, games) {
   };
 }
 
-module.exports = { CommunityService, K_ANONYMITY_THRESHOLD };
+module.exports = { CommunityService, K_ANONYMITY_THRESHOLD, publicCommunityBuildSnapshot };

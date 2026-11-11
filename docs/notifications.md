@@ -36,7 +36,7 @@ Everything below runs on the API's existing in-process timers (`jobs/deliveryJob
 
 | Job | Interval | Work | Idempotency |
 | --- | --- | --- | --- |
-| `reports` | 1 h (first run 5 min after boot) | Close streams idle for four hours, then deliver due weekly reports | `users.streamSession` claimed with a conditional `$unset`; `users.reports.weeklyWeek` claimed per ISO week; notification keys `report.stream:<id>` / `report.weekly:<week>` |
+| `reports` | 1 h (first run 5 min after boot) | Resume pending stream reports, close streams idle for four hours, then deliver due weekly reports | Stream closure persisted before clearing `users.streamSession`; `users.reports.weeklyWeek` claimed per ISO week; notification keys `report.stream:<id>` / `report.weekly:<week>` |
 | `discord-outbox` | 30 s (only with webhook storage) | Drain ≤20 due posts; session summaries every 5 min | Unique `dedupeKey` per hook and event; per-row claim before posting; `jobLock` single flight |
 | `coaching-reminders` | 5 min | Reminders 24 h and 1 h before booked sessions | Notification key `coaching:reminder:<booking>:<window>` |
 
@@ -46,7 +46,9 @@ Everything below runs on the API's existing in-process timers (`jobs/deliveryJob
 
 ### Stream reports
 
-The Dock's **Start new session** opens `users.streamSession`; **End stream** (game desk action `streamEnd`), a new session, or four quiet hours closes it. The closer computes one report document (≤5 kB, newest 100 per user) in `stream_sessions`: record, matchups, maps, builds, MMR start/end/peak with a 40-point line, best win (opponent MMR, never a name), randomizer games, Crystal Ball accuracy (verified rounds only; a percentage from five calls), supporter event and distinct viewer counts, and up to eight clip moments. `GET /v1/reports/streams` and `/v1/reports/streams/:id` are owner-only. `preferences.reports.stream=false` saves nothing.
+The Dock's **Start new session** opens `users.streamSession`. **End stream**, a new session, or four quiet hours closes it. The original closure time is saved before clearing the open stream. If a build or notice is interrupted, the hourly job resumes it. The newest 100 finished reports per owner are kept in `stream_sessions` (≤5 kB each). A report includes record, matchups, maps, builds, MMR start/end/peak, best win by opponent MMR, randomizer games, verified Crystal Ball results, anonymous top-five supporter and oracle counts, and up to eight clip moments. The owner can attach a Twitch or YouTube recording with timestamp links.
+
+The owner can publish each report at `/players/<slug>/streams/<public-id>` while the public player page and stream reports are enabled. The public response includes date, record, time played, MMR change and matchup counts. It omits clip notes, recording URLs and opponent or viewer data. The owner can revoke one address. Turning off the public player page or stream reports invalidates every address created before that change. The public page and image check current eligibility on every request.
 
 ### Web Push
 

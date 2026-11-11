@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 /**
  * StreamGoalsWidget — the streamer's goal bars (sub goal, follower
  * goal, donation goal…) as compact dark cards with a green gradient
@@ -51,7 +53,7 @@ export function StreamGoalsWidget({
         );
         const done = goal.current >= goal.target;
         return (
-          <div key={`${i}:${goal.label}`} style={cardStyle}>
+          <OverlayPanel key={`${i}:${goal.label}`} style={cardStyle} contentStyle={{ padding: "var(--ov-padding, 10px 14px)" }}>
             <div style={labelRowStyle}>
               <span style={labelStyle}>{goal.label}</span>
               <span style={numbersStyle}>
@@ -71,7 +73,7 @@ export function StreamGoalsWidget({
                 }}
               />
             </div>
-          </div>
+          </OverlayPanel>
         );
       })}
     </div>
@@ -102,12 +104,7 @@ const cardStyle: CSSProperties = {
   width: "100%",
   minWidth: 220,
   maxWidth: 340,
-  background:
-    "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
-  border: "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))",
-  borderRadius: "var(--ov-radius, 12px)",
   boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
-  padding: "10px 14px",
   color: "#e6e8ee",
 };
 

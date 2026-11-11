@@ -1,3 +1,4 @@
+import { formatNumber } from "@/lib/i18n/format";
 /** Private Settings actions. Keep this separate from the count-only header
  * and Devices helpers so those surfaces never load identity controls. */
 export const SYNC_RETRY_REASONS = ["player_unresolved", "parse_failed", "analysis_failed", "file_unstable", "playback_budget_exceeded", "unsupported_replay"] as const;
@@ -29,7 +30,7 @@ export function syncActionFeedback(kind: SyncHealthAction["kind"], result: SyncA
     return { error: true, text: "Couldn't save this account. Check your profile, then try adding it again.", link: profile };
   }
   if (result && code === "accepted" && Number.isSafeInteger(result.count) && result.count >= 0) return {
-    error: false, text: `${result.count.toLocaleString("en-US")} ${result.count === 1 ? "replay queued" : "replays queued"} for retry. This keeps your sync date range. Press Check again after the desktop app syncs.`,
+    error: false, text: `${formatNumber(result.count)} ${result.count === 1 ? "replay queued" : "replays queued"} for retry. This keeps your sync date range. Press Check again after the desktop app syncs.`,
   };
   if (result && code === "no_matches" && result.count === 0) return { error: false, text: "No matching local replays are ready to retry. Press Check again to refresh the counts." };
   if (code === "sync_agent_unsupported" || code === "unsupported") return { error: true, text: "Update and restart the desktop app on this PC, then retry here.", link: update };

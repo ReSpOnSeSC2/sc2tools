@@ -15,6 +15,7 @@
  */
 import { agentPresence } from "@/lib/agentPresence";
 import { ERROR_CODE_COPY, isBenignImportSkip } from "@/lib/syncReasons";
+import { formatNumber } from "@/lib/i18n/format";
 
 /** The API's rule order. */
 export const SYNC_HEALTH_CODES = [
@@ -93,7 +94,7 @@ export interface SyncReason {
 
 /** Where every Sync health link lands: one section of the article per reason. */
 const article = (anchor: string) => ({ helpSlug: "my-game-didnt-show-up", anchor });
-const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many: string) => `${formatNumber(n)} ${n === 1 ? one : many}`;
 
 /** The Settings section (id "sync-health" in lib/settingsIndex.ts). */
 export const SYNC_HEALTH_SETTINGS_HREF = "/settings?tab=account#sync-health";
@@ -346,9 +347,9 @@ export function deviceSyncSummary(device: { sync?: SyncReport | null; syncReport
   const skipped = Object.values(sync.skipped ?? {}).reduce<number>((sum, n) => sum + countOf(n), 0);
   const details = [
     countOf(sync.foldersWatched) > 0 ? plural(countOf(sync.foldersWatched), "folder", "folders") : "",
-    typeof sync.pending === "number" ? `${countOf(sync.pending).toLocaleString("en-US")} waiting` : "",
-    skipped > 0 ? `${skipped.toLocaleString("en-US")} skipped` : "",
-    countOf(sync.filtered) > 0 ? `${countOf(sync.filtered).toLocaleString("en-US")} outside sync range` : "",
+    typeof sync.pending === "number" ? `${formatNumber(countOf(sync.pending))} waiting` : "",
+    skipped > 0 ? `${formatNumber(skipped)} skipped` : "",
+    countOf(sync.filtered) > 0 ? `${formatNumber(countOf(sync.filtered))} outside sync range` : "",
   ].filter(Boolean);
   const age = now - Date.parse(device.syncReportedAt ?? "");
   const stale = !(age >= 0 && age <= SYNC_REPORT_FRESH_MS);

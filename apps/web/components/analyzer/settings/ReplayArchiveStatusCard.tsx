@@ -15,6 +15,7 @@ import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { Section } from "@/components/ui/Section";
+import { formatNumber } from "@/lib/i18n/format";
 
 export type ReplayArchiveStatus = {
   totalGames: number;
@@ -127,9 +128,9 @@ function ArchiveStatus({ status }: { status: ReplayArchiveStatus }) {
 
   const presentation = archivePresentation(status);
   const Icon = presentation.Icon;
-  const archived = status.archivedGames.toLocaleString("en-US");
-  const missing = status.missingGames.toLocaleString("en-US");
-  const total = status.totalGames.toLocaleString("en-US");
+  const archived = formatNumber(status.archivedGames);
+  const missing = formatNumber(status.missingGames);
+  const total = formatNumber(status.totalGames);
   const coverage = status.totalGames > 0
     ? Math.round((status.archivedGames / status.totalGames) * 100)
     : 100;
@@ -283,7 +284,7 @@ function archivePresentation(status: ReplayArchiveStatus): {
     return {
       title: "Full re-sync required",
       description:
-        `${status.missingGames.toLocaleString("en-US")} saved ${status.missingGames === 1 ? "game is" : "games are"} missing the original file. `
+        `${formatNumber(status.missingGames)} saved ${status.missingGames === 1 ? "game is" : "games are"} missing the original file. `
         + "Install the latest agent, choose All time, then click Re-sync replay library once. Files still on this PC will upload without duplicating games.",
       badge: "Action needed",
       badgeVariant: "warning",

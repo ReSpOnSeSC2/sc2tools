@@ -48,6 +48,7 @@ import type {
   MultichatConfig,
   PlatformState,
 } from "@/lib/multichat/types";
+import { formatNumber, formatTime } from "@/lib/i18n/format";
 
 const STATE_DOT: Record<PlatformState, string> = {
   off: "#6b7280",
@@ -77,7 +78,7 @@ function configuredPlatforms(config: MultichatConfig | null): ChatPlatform[] {
 function timeLabel(atMs: number): string {
   const d = new Date(atMs);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return formatTime(d, { hour: "2-digit", minute: "2-digit" });
 }
 
 export function DockChat({
@@ -200,7 +201,7 @@ export function DockChat({
                   data-testid={`dock-viewers-${p}`}
                   className="tabular-nums text-text"
                   title={
-                    `${platformViewers?.partial ? "At least " : ""}${count.toLocaleString("en-US")} currently watching on ${PLATFORM_META[p].label}` +
+                    `${platformViewers?.partial ? "At least " : ""}${formatNumber(count)} currently watching on ${PLATFORM_META[p].label}` +
                     (platformViewers?.partial ? " — some live stream counts are unavailable" : "") +
                     (platformViewers?.raidAdjusted
                       ? " — includes a recent raid while the platform count refreshes"
@@ -219,10 +220,10 @@ export function DockChat({
             className="ml-auto inline-flex items-baseline gap-1 whitespace-nowrap"
             title={
               viewers.settlingRaid
-                ? `${viewers.total.toLocaleString("en-US")} estimated across platforms while a recent raid settles into the official count`
+                ? `${formatNumber(viewers.total)} estimated across platforms while a recent raid settles into the official count`
                 : viewers.partial
-                ? `${viewers.total.toLocaleString("en-US")} currently watching across the platforms we could reach — at least one didn't report`
-                : `${viewers.total.toLocaleString("en-US")} currently watching across all platforms`
+                ? `${formatNumber(viewers.total)} currently watching across the platforms we could reach — at least one didn't report`
+                : `${formatNumber(viewers.total)} currently watching across all platforms`
             }
           >
             <span className="tabular-nums text-caption font-semibold text-text">

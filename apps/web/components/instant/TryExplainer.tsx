@@ -21,7 +21,8 @@ import { MAX_TRY_FILES } from "@/lib/instant/fileIntake";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
 
 const REPORT_ITEMS: ReadonlyArray<string> = [
-  "Your record by matchup: wins and losses against each race.",
+  "Highlights from your replays, including your longest win streak, biggest upset, favorite map and nemesis.",
+  "Your record by matchup, map and game length.",
   "Your openers: the win rate of every build SC2 Tools detects in your games.",
   "What your opponents opened with, and how you did against each strategy.",
   "Your most-faced opponent and your MMR on each account and ladder queue.",
@@ -35,6 +36,14 @@ const FOLDERS: ReadonlyArray<{ os: string; path: string }> = [
 ];
 
 const FAQ: ReadonlyArray<{ q: string; a: string }> = [
+  {
+    q: "Can I filter the report?",
+    a: "Yes. Filter by matchup or result, show the latest 10 or 25 games, or limit the report to the last 90 days.",
+  },
+  {
+    q: "Can I keep my report without an account?",
+    a: "Yes. Open Export to download the filtered games as CSV or copy a summary. Your parsed games stay on this device for seven days.",
+  },
   {
     q: "Can I share my report?",
     a: "Yes. Choose Share report, then untick any rows you do not want in the preview. Share the PNG, download it, or copy the matching text. The image contains selected totals, up to three matchup records, a catalog opener with at least three games, and a measured macro score. Player names, accounts and individual game details are excluded. Nothing is published automatically.",

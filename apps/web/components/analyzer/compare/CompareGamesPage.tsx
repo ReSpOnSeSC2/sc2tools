@@ -10,7 +10,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { RequestError } from "@/components/ui/RequestError";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { resultLabel } from "@/components/analyzer/game/types";
-import { compareHref } from "@/lib/gameCompare";
+import { compareHref } from "@/lib/compareGameLinks";
 import { formatClock } from "@/lib/replayHud";
 import { useCompareSide, type CompareSide } from "./useCompareSide";
 import { CompareTimelines } from "./CompareTimelines";
@@ -51,7 +51,7 @@ function SideCard({ label, side }: { label: "A" | "B"; side: CompareSide }) {
                   game.opponent?.displayName ? `vs ${game.opponent.displayName}` : null].filter(Boolean).join(" · ")}
               </p>
               {game.myBuild ? <p className="truncate text-caption text-text">Build: {game.myBuild}</p> : null}
-              <Link href={`/app/game/${encodeURIComponent(game.gameId)}`} className="inline-flex min-h-11 items-center text-caption font-semibold text-accent underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+              <Link prefetch={false} href={`/app/game/${encodeURIComponent(game.gameId)}`} className="inline-flex min-h-11 items-center text-caption font-semibold text-accent underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
                 Open game {label}
               </Link>
             </>

@@ -1,5 +1,6 @@
 "use strict";
-const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
+const { LIVE_GAME_MATCH, STATS_GAME_MATCH } = require("../util/gameVisibility");
+const { publicReplayReference, publicReplayObjectId } = require("../util/publicReplayReference");
 const { parseAccounts } = require("../util/accountFilter");
 const { parseExactMapNames } = require("../util/exactMapFilter");
 
@@ -248,7 +249,7 @@ class ReplayLibraryService {
    *
    * @param {string} userId
    * @param {string} gameId
-   * @param {{ view?: ReplayLibraryView }} [opts]
+   * @param {{ view?: ReplayLibraryView, publicReference?: boolean }} [opts]
    * @returns {Promise<{
    *   game: Record<string, any>,
    *   sourceGame: Record<string, any>,
@@ -256,18 +257,19 @@ class ReplayLibraryService {
    */
   async getDetail(userId, gameId, opts = {}) {
     const ownerId = cleanOwnerId(userId);
-    const replayId = cleanGameId(gameId);
-    if (!ownerId || !replayId) return null;
+    const reference = opts.publicReference ? publicReplayObjectId(gameId) : null;
+    const replayId = opts.publicReference ? null : cleanGameId(gameId);
+    if (!ownerId || (!reference && !replayId)) return null;
+    const view = replayLibraryView(opts.view);
     const row = await this.db.games.findOne(
       {
         userId: ownerId,
-        gameId: replayId,
-        ...LIVE_GAME_MATCH,
+        ...(reference ? { _id: reference } : { gameId: replayId }),
+        ...(view === "detector" ? STATS_GAME_MATCH : LIVE_GAME_MATCH),
         isResumedFromReplay: { $ne: true },
       },
       { projection: REPLAY_LIBRARY_PROJECTION },
     );
-    const view = replayLibraryView(opts.view);
     return row
       ? {
         game: serializeReplayLibraryGame(row, view),
@@ -278,7 +280,7 @@ class ReplayLibraryService {
 
   /** Two indexed directional reads after verifying the current filtered position.
    * @param {string} userId @param {string} gameId
-   * @param {{filters?:import('../util/parseQuery').GlobalFilters,result?:unknown,matchup?:unknown,search?:unknown}} [opts] */
+   * @param {{filters?:import('../util/parseQuery').GlobalFilters,result?:unknown,matchup?:unknown,search?:unknown,publicReferences?:boolean}} [opts] */
   async neighbors(userId, gameId, opts = {}) {
     const ownerId = cleanOwnerId(userId); const replayId = cleanGameId(gameId);
     const empty = { olderGameId: null, newerGameId: null };
@@ -288,10 +290,13 @@ class ReplayLibraryService {
     if (!current) return empty;
     const read = (/** @type {'date_desc'|'date_asc'} */ sort) => this.db.games.findOne(
       { $and: [match, { $or: replayNeighborBranches(current.date, current._id, sort) }] },
-      { projection: { _id: 0, gameId: 1 }, sort: sort === "date_asc" ? { date: 1, _id: 1 } : { date: -1, _id: -1 } },
+      { projection: opts.publicReferences ? { _id: 1 } : { _id: 0, gameId: 1 },
+        sort: sort === "date_asc" ? { date: 1, _id: 1 } : { date: -1, _id: -1 } },
     );
     const [older, newer] = await Promise.all([read("date_desc"), read("date_asc")]);
-    return { olderGameId: cleanGameId(older?.gameId), newerGameId: cleanGameId(newer?.gameId) };
+    const idOf = (/** @type {Record<string,any>|null} */ row) =>
+      opts.publicReferences ? publicReplayReference(row?._id) : cleanGameId(row?.gameId);
+    return { olderGameId: idOf(older), newerGameId: idOf(newer) };
   }
 }
 
@@ -460,7 +465,7 @@ function replaySearchClause(raw, view = "owner", noteGameIds = /** @type {string
   return {
     $or: [
       { map: pattern },
-      { "opponent.displayName": pattern },
+      ...(view === "owner" ? [{ "opponent.displayName": pattern }] : []),
       view === "detector" ? detectorLabelMatch("name", pattern) : { myBuild: pattern },
       view === "detector"
         ? opponentDetectorLabelMatch("name", pattern)
@@ -516,6 +521,7 @@ function serializeReplayLibraryGame(row, view = "owner") {
     ? boundedIdentityString(opponent.pulseId, 200) : null;
   return {
     gameId: cleanGameId(row?.gameId),
+    ...(view === "detector" ? { publicReference: publicReplayReference(row?._id) } : {}),
     date: outputDate(row?.date),
     result: boundedOutputString(row?.result, 24),
     map: boundedOutputString(row?.map, 200),

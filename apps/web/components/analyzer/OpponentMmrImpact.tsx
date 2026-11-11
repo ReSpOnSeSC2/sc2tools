@@ -2,6 +2,7 @@
 
 import { TrendingDown, TrendingUp } from "lucide-react";
 import type { NetMmrOpponentRow } from "@/lib/netMmrOpponents";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * The Opponents list's verified MMR-impact pieces: the two leader cards
@@ -182,14 +183,14 @@ export function MmrImpactCells({ opponent, columns = { netMmr: true, mmrWon: tru
       >
         <span className="font-semibold">{formatSignedMmr(net)}</span>
         <span className="block text-micro font-normal leading-tight text-text-dim">
-          {pairs.toLocaleString()} {pairs === 1 ? "pair" : "pairs"}
+          {formatNumber(pairs)} {pairs === 1 ? "pair" : "pairs"}
         </span>
       </td> : null}
       {columns.mmrWon ? <td className="px-2 py-1 text-right font-medium tabular-nums text-success">
-        +{Math.round(opponent.mmrWon || 0).toLocaleString()}
+        +{formatNumber(Math.round(opponent.mmrWon || 0))}
       </td> : null}
       {columns.mmrLost ? <td className="px-2 py-1 text-right font-medium tabular-nums text-danger">
-        -{Math.round(opponent.mmrLost || 0).toLocaleString()}
+        -{formatNumber(Math.round(opponent.mmrLost || 0))}
       </td> : null}
     </>
   );
@@ -198,7 +199,7 @@ export function MmrImpactCells({ opponent, columns = { netMmr: true, mmrWon: tru
 function formatSignedMmr(value: number | null | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "—";
   const rounded = Math.round(value);
-  return `${rounded > 0 ? "+" : ""}${rounded.toLocaleString()}`;
+  return `${rounded > 0 ? "+" : ""}${formatNumber(rounded)}`;
 }
 
 function formatSignedDecimal(value: number | null | undefined): string {

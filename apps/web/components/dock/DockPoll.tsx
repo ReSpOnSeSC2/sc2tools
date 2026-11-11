@@ -1,181 +1,122 @@
 "use client";
 
-import { DockInput, DockButton } from "./DockControls";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
-
-/**
- * DockPoll — chat-poll controls for the Stream Dock.
- *
- * No poll: a form (question + 2-6 options) that starts one. Running
- * (or closed) poll: live tallies computed from the dock's OWN merged
- * feed via tallyPollVotes — the same pure counter the overlay uses,
- * so both screens agree — plus Close (freezes on stream, stops
- * accepting the vote display as "live") and Clear (removes it).
- *
- * The parent owns the POST round-trip; this component only shapes the
- * partial studio patches.
- */
-
-import { useState } from "react";
-import { usePollTally } from "./usePollTally";
+import { useLocalStorageState } from "@/lib/useLocalStorageState";
+import { POLL_PRESETS, POLL_VOTE_HINT, formatPollRemaining, pollIsClosed, pollRemainingMs, sanitizePollForm, type PollDurationSec, type PollForm } from "@/lib/multichat/poll";
+import { usePollClock } from "@/lib/multichat/usePollClock";
+import { usePollTally } from "@/lib/multichat/usePollTally";
 import type { StudioPoll } from "@/lib/multichat/useStudioState";
 import type { ChatMessage } from "@/lib/multichat/types";
-
+import { DockButton, DockInput } from "./DockControls";
+import { PollDurationSelect } from "./PollDurationSelect";
 import type { DockPost } from "./dockActions";
 import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
+const EMPTY_FORM: PollForm = { question: "", options: ["", ""], durationSec: null };
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 6;
 
-export function DockPoll({
-  poll,
-  messages,
-  busy,
-  studioReady = true,
-  onPost,
-}: {
-  poll: StudioPoll | null;
-  messages: ReadonlyArray<ChatMessage>;
-  busy: boolean;
-  studioReady?: boolean;
-  onPost: DockPost;
+export function DockPoll({ token = "", poll, messages, busy, studioReady = true, onPost, chooseBuild }: {
+  token?: string; poll: StudioPoll | null; messages: ReadonlyArray<ChatMessage>; busy: boolean; studioReady?: boolean;
+  onPost: DockPost; chooseBuild?: () => void;
 }) {
-  const tally = usePollTally(messages, poll);
-  const [question, setQuestion] = useState("");
-  const [options, setOptions] = useState<string[]>(["", ""]);
-  const filled = options.map((o) => o.trim()).filter(Boolean);
-  const canStart = question.trim().length > 0 && filled.length >= MIN_OPTIONS;
+  const now = usePollClock(poll);
+  const tally = usePollTally(messages, poll, now);
+  const closed = poll ? pollIsClosed(poll, now) : false;
+  const remaining = poll ? pollRemainingMs(poll, now) : null;
+  const requestedClose = useRef<number | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [savedForm, remember] = useLocalStorageState<unknown>(`sc2tools:dock:poll-form:${token}`, null);
+  const lastForm = useMemo(() => sanitizePollForm(savedForm), [savedForm]);
+  const currentForm = useMemo(() => poll?.meta?.kind === "build" ? null : sanitizePollForm(poll), [poll]);
+  const draft = sanitizePollForm(form);
+  useEffect(() => { if (token && currentForm) remember(currentForm); }, [token, currentForm, remember]);
   const { run, notice, pending } = useDockPanelActions(studioReady, busy, onPost, {
-    start: () => canStart ? { patch: { poll: { question: question.trim(), options: filled, status: "open" } }, message: "Poll started", after: () => { setQuestion(""); setOptions(["", ""]); } } : null,
-    close: () => poll ? { patch: { poll: { ...poll, status: "closed" } }, message: "Poll closed" } : null,
+    start: () => draft ? {
+      patch: { poll: { question: draft.question, options: draft.options, status: "open", ...(draft.durationSec ? { durationSec: draft.durationSec } : {}) } },
+      message: "Poll started",
+      after: () => { if (token) remember(draft); setForm(EMPTY_FORM); },
+    } : null,
+    close: () => poll?.status === "open" ? { patch: { poll: { ...poll, status: "closed" } }, message: "Poll closed" } : null,
     clear: () => ({ patch: { poll: null }, message: "Poll cleared" }),
+    again: () => currentForm ? { patch: { poll: null }, message: "Poll form restored", after: () => setForm(currentForm) } : null,
   });
+  useEffect(() => {
+    if (poll?.status !== "open" || !closed || busy || pending || !studioReady || requestedClose.current === poll.startedAtMs) return;
+    requestedClose.current = poll.startedAtMs;
+    void run("close");
+  }, [poll, closed, busy, pending, studioReady, run]);
   if (!studioReady) return <DockSnapshotState />;
 
-  if (poll) {
-    const { counts, total } = tally!;
-    return (
-      <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2">
-        <DockActionNotice message={notice} />
-        <div className="flex items-center gap-2">
-          <span
-            className={`rounded px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider ${
-              poll.status === "open"
-                ? "bg-success/15 text-success"
-                : "bg-bg-elevated text-text-muted"
-            }`}
-          >
-            {poll.status}
-          </span>
-          <span className="min-w-0 break-words text-caption font-medium text-text">
-            {poll.question}
-          </span>
-        </div>
-        <div className="space-y-1.5">
-          {poll.options.map((opt, i) => {
-            const count = counts[i] ?? 0;
-            const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-            return (
-              <div key={`${i}-${opt}`} className="min-w-0">
-                <div className="flex items-baseline justify-between gap-2 text-caption">
-                  <span className="min-w-0 break-words text-text">
-                    <span className="mr-1 tabular-nums text-text-dim">
-                      {i + 1}.
-                    </span>
-                    {opt}
-                  </span>
-                  <span className="whitespace-nowrap tabular-nums text-text-muted">
-                    {count} · {pct}%
-                  </span>
-                </div>
-                <div className="mt-0.5 h-1.5 overflow-hidden rounded bg-bg-elevated">
-                  <div
-                    className="h-full rounded bg-accent-cyan/70"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="text-micro text-text-dim">
-          {total} vote{total === 1 ? "" : "s"} — chat votes with the option
-          number ("2" or "!vote 2").
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {poll.status === "open" ? (
-            <DockButton
-              disabled={busy}
-              onClick={() =>
-                void run("close")
-              }
-            >
-              Close poll
-            </DockButton>
-          ) : null}
-          <DockButton
-            danger
-            disabled={busy}
-            onClick={() => void run("clear")}
-          >
-            Clear
-          </DockButton>
-        </div>
-      </div></fieldset>
-    );
-  }
-
-  const setOption = (i: number, v: string) =>
-    setOptions((prev) => prev.map((o, j) => (j === i ? v : o)));
-
-  return (
-    <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2">
-      <DockActionNotice message={notice} />
-      <DockInput
-        type="text"
-        value={question}
-        onChange={(e) => setQuestion(e.target.value)}
-        placeholder="Poll question"
-        className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption text-text placeholder:text-text-muted focus:border-accent"
-      />
-      {options.map((opt, i) => (
-        <div key={i} className="flex min-w-0 items-center gap-1.5">
-          <DockInput
-            type="text"
-            value={opt}
-            onChange={(e) => setOption(i, e.target.value)}
-            placeholder={`Option ${i + 1}`}
-            className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption text-text placeholder:text-text-muted focus:border-accent"
-          />
-          {options.length > MIN_OPTIONS ? (
-            <DockButton
-              type="button"
-              aria-label={`Remove option ${i + 1}`}
-              onClick={() =>
-                setOptions((prev) => prev.filter((_, j) => j !== i))
-              }
-              className="rounded border border-border px-1.5 py-1 text-micro text-text-muted hover:border-danger hover:text-danger"
-            >
-              <X aria-hidden className="h-4 w-4" />
-            </DockButton>
-          ) : null}
-        </div>
-      ))}
+  return <fieldset disabled={busy || pending} className="min-w-0 space-y-2">
+    <DockActionNotice message={notice} />
+    {poll && tally ? <>
+      <PollResult poll={poll} tally={tally} closed={closed} remaining={remaining} />
       <div className="flex flex-wrap gap-2">
-        {options.length < MAX_OPTIONS ? (
-          <DockButton
-            onClick={() => setOptions((prev) => [...prev, ""])}
-          >
-            + Add option
-          </DockButton>
-        ) : null}
-        <DockButton disabled={busy || !canStart} onClick={() => void run("start")}>
-          Start poll
-        </DockButton>
+        {!closed ? <DockButton onClick={() => void run("close")}>Close poll</DockButton> : null}
+        {closed && currentForm ? <DockButton onClick={() => void run("again")}>Run again</DockButton> : null}
+        <DockButton danger onClick={() => void run("clear")}>Clear</DockButton>
       </div>
-      <p className="text-micro text-text-dim">
-        Viewers vote by typing the option number in any connected chat.
-      </p>
-    </div></fieldset>
-  );
+    </> : <PollFormFields form={form} setForm={setForm} lastForm={lastForm} chooseBuild={chooseBuild}
+      canStart={Boolean(draft)} onStart={() => void run("start")} />}
+  </fieldset>;
+}
+
+function PollResult({ poll, tally, closed, remaining }: {
+  poll: StudioPoll; tally: { counts: number[]; total: number }; closed: boolean; remaining: number | null;
+}) {
+  return <>
+    <div className="flex flex-wrap items-center gap-2">
+      <span className={`rounded px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider ${closed ? "bg-bg-elevated text-text-muted" : "bg-success/15 text-success"}`}>{closed ? "closed" : "open"}</span>
+      <span className="min-w-0 break-words text-caption font-medium text-text">{poll.question}</span>
+      {!closed && remaining !== null ? <span className="tabular-nums text-caption text-text-muted">{formatPollRemaining(remaining)} left</span> : null}
+    </div>
+    <div className="space-y-1.5">
+      {poll.options.map((option, index) => {
+        const count = tally.counts[index] ?? 0;
+        const pct = tally.total ? Math.round(count / tally.total * 100) : 0;
+        return <div key={index} className="min-w-0">
+          <div className="flex items-baseline justify-between gap-2 text-caption">
+            <span className="min-w-0 break-words text-text">{index + 1}. {option}</span>
+            <span className="whitespace-nowrap tabular-nums text-text-muted">{count} · {pct}%</span>
+          </div>
+          <div className="mt-0.5 h-1.5 overflow-hidden rounded bg-bg-elevated"><div className="h-full rounded bg-accent-cyan/70" style={{ width: `${pct}%` }} /></div>
+        </div>;
+      })}
+    </div>
+    <p className="text-micro text-text-dim">{tally.total} vote{tally.total === 1 ? "" : "s"}. {closed ? null : POLL_VOTE_HINT}</p>
+  </>;
+}
+
+function PollFormFields({ form, setForm, lastForm, chooseBuild, canStart, onStart }: {
+  form: PollForm; setForm: (value: PollForm) => void; lastForm: PollForm | null; chooseBuild?: () => void;
+  canStart: boolean; onStart: () => void;
+}) {
+  const changeDuration = (durationSec: PollDurationSec | null) => setForm({ ...form, durationSec });
+  return <>
+    <div className="flex flex-wrap gap-1" role="group" aria-label="Poll presets">
+      {POLL_PRESETS.filter((preset) => preset.mode === "custom" || chooseBuild).map((preset) =>
+        <DockButton key={preset.id} type="button" onClick={() => {
+          if (preset.mode === "build") chooseBuild?.();
+          else setForm({ ...form, question: preset.question, options: [...preset.options] });
+        }}>{preset.question}</DockButton>)}
+      {lastForm ? <DockButton type="button" onClick={() => setForm(lastForm)}>Run again</DockButton> : null}
+    </div>
+    <DockInput type="text" value={form.question} maxLength={120} onChange={(event) => setForm({ ...form, question: event.target.value })}
+      placeholder="Poll question" aria-label="Poll question" className="w-full min-w-0" />
+    {form.options.map((option, index) => <div key={index} className="flex min-w-0 items-center gap-1.5">
+      <DockInput type="text" value={option} maxLength={120}
+        onChange={(event) => setForm({ ...form, options: form.options.map((value, at) => at === index ? event.target.value : value) })}
+        placeholder={`Option ${index + 1}`} aria-label={`Option ${index + 1}`} className="w-full min-w-0" />
+      {form.options.length > MIN_OPTIONS ? <DockButton type="button" aria-label={`Remove option ${index + 1}`}
+        onClick={() => setForm({ ...form, options: form.options.filter((_, at) => at !== index) })}><X aria-hidden className="h-4 w-4" /></DockButton> : null}
+    </div>)}
+    <PollDurationSelect value={form.durationSec} onChange={changeDuration} />
+    <div className="flex flex-wrap gap-2">
+      {form.options.length < MAX_OPTIONS ? <DockButton type="button" onClick={() => setForm({ ...form, options: [...form.options, ""] })}>+ Add option</DockButton> : null}
+      <DockButton disabled={!canStart} onClick={onStart}>Start poll</DockButton>
+    </div>
+    <p className="text-micro text-text-dim">{POLL_VOTE_HINT}</p>
+  </>;
 }

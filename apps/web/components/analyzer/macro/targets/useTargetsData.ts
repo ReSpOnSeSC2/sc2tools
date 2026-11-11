@@ -59,7 +59,7 @@ export function useTargetsData(requestedMatchup: string | null, includeTimings =
   const era = targets.data?.timings?.era ?? "after";
   const current = useLeagueTable(bands?.current ?? null, matchup);
   const next = useLeagueTable(bands?.next ?? null, matchup);
-  const timingMatchup = includeTimings ? matchup : null;
+  const timingMatchup = includeTimings && targets.data?.timings?.era ? matchup : null;
   const currentTimings = useTimingTable(bands?.current ?? null, timingMatchup, era);
   const nextTimings = useTimingTable(bands?.next ?? null, timingMatchup, era);
   return {

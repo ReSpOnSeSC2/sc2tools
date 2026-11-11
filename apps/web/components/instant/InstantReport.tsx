@@ -26,6 +26,9 @@ import { MmrCard } from "./report/MmrCard";
 import { MostFacedCard } from "./report/MostFacedCard";
 import { OpenersCard, OpponentOpenersCard } from "./report/OpenersCard";
 import { RecordByMatchupCard } from "./report/RecordByMatchupCard";
+import { HighlightsStrip } from "./report/HighlightsStrip";
+import { RecordByLengthCard, RecordByMapCard } from "./report/RecordSplitCards";
+import type { ReportMatchupFilter } from "@/lib/instant/reportFilters";
 import { WinLoss, gamesLabel, winratePercent } from "./report/ReportBits";
 import type { TryGuideProps } from "@/lib/instant/reportGuideTypes";
 
@@ -33,6 +36,8 @@ export interface InstantReportProps extends TryGuideProps {
   report: InstantReportData;
   /** Actions shown next to the heading (e.g. "Analyze more replays"). */
   actions?: ReactNode;
+  controls?: ReactNode;
+  onMatchupChange?: (matchup: Exclude<ReportMatchupFilter, "all">) => void;
   /**
    * Bump (> 0) after a finished analysis to move keyboard focus to the
    * report heading — the panel that had focus just went away. 0 (the
@@ -70,7 +75,7 @@ function CardPair({ show, children }: { show: boolean; children: ReactNode }) {
  * Example:
  *   <InstantReport report={report} actions={<Button>Analyze more replays</Button>} />
  */
-export function InstantReport({ report, actions, focusKey = 0, className = "", guideLinks, guideFocus, title = "Your instant report" }: InstantReportProps) {
+export function InstantReport({ report, actions, controls, onMatchupChange, focusKey = 0, className = "", guideLinks, guideFocus, title = "Your instant report" }: InstantReportProps) {
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const completedFocus = useRef(0);
@@ -81,7 +86,8 @@ export function InstantReport({ report, actions, focusKey = 0, className = "", g
     completedFocus.current = focusKey;
     if (!explicitOpener) heading.current?.focus();
   }, [focusKey, explicitOpener]);
-  if (report.totals.games === 0) return null;
+  const hasGames = report.totals.games > 0;
+  if (!hasGames && !controls) return null;
   return (
     <section aria-labelledby={headingId} className={["space-y-4", className].filter(Boolean).join(" ")}>
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -89,24 +95,32 @@ export function InstantReport({ report, actions, focusKey = 0, className = "", g
           <h2 id={headingId} ref={heading} tabIndex={-1} className="font-display text-h2 text-text focus:outline-none">
             {title}
           </h2>
-          <TotalsLine report={report} />
+          {hasGames ? <TotalsLine report={report} /> : null}
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </header>
-      <CardPair show={report.recordByMatchup !== null || report.macro !== null}>
-        <RecordByMatchupCard rows={report.recordByMatchup} />
-        <MacroCard macro={report.macro} />
-      </CardPair>
-      <CardPair show={report.openers !== null || report.opponentOpeners !== null}>
-        <OpenersCard rows={report.openers} games={report.games} guideLinks={guideLinks} guideFocus={guideFocus} focusEpoch={focusKey} />
-        <OpponentOpenersCard rows={report.opponentOpeners} games={report.games} guideLinks={guideLinks} />
-      </CardPair>
-      <CardPair show={report.mmr !== null || report.mostFaced !== null}>
-        <MmrCard rows={report.mmr} />
-        <MostFacedCard opponent={report.mostFaced} />
-      </CardPair>
-      <LastLossCard lastLoss={report.lastLoss} />
-      <LazyGamesSection games={report.games} />
+      {controls}
+      {hasGames ? <>
+        <HighlightsStrip highlights={report.highlights} />
+        <CardPair show={report.recordByMatchup !== null || report.macro !== null}>
+          <RecordByMatchupCard rows={report.recordByMatchup} onMatchupChange={onMatchupChange} />
+          <MacroCard macro={report.macro} />
+        </CardPair>
+        <CardPair show={Boolean(report.recordByMap || report.recordByLength)}>
+          <RecordByMapCard rows={report.recordByMap} />
+          <RecordByLengthCard record={report.recordByLength} />
+        </CardPair>
+        <CardPair show={report.openers !== null || report.opponentOpeners !== null}>
+          <OpenersCard rows={report.openers} games={report.games} guideLinks={guideLinks} guideFocus={guideFocus} focusEpoch={focusKey} />
+          <OpponentOpenersCard rows={report.opponentOpeners} games={report.games} guideLinks={guideLinks} />
+        </CardPair>
+        <CardPair show={report.mmr !== null || report.mostFaced !== null}>
+          <MmrCard rows={report.mmr} />
+          <MostFacedCard opponent={report.mostFaced} />
+        </CardPair>
+        <LastLossCard lastLoss={report.lastLoss} />
+        <LazyGamesSection games={report.games} />
+      </> : null}
     </section>
   );
 }

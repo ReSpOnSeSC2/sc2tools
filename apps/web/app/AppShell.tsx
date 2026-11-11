@@ -21,6 +21,8 @@ import { SitePresence } from "@/components/chrome/SitePresence";
 import { DeviceHistoryGuard } from "@/components/chrome/DeviceHistoryGuard";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { CommandSearchProvider } from "@/components/chrome/CommandSearchProvider";
+import { AppearanceAccountSync } from "@/components/chrome/AppearanceAccountSync";
+import { applyAppearanceAttributes, readStoredAppearance } from "@/lib/appearance";
 
 const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
@@ -66,6 +68,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (pathname) syncAnalyticsPage(pathname, window.location.search);
   }, [pathname]);
+  // Text size and density never apply to OBS sources, even after a
+  // client-side move onto one (the head script covers the first load).
+  useEffect(() => {
+    if (pathname) applyAppearanceAttributes(readStoredAppearance(), pathname);
+  }, [pathname]);
 
   // Reachability checks must work even when authentication or app APIs fail.
   if (isPublicStatusRoute(pathname)) return <>{children}</>;
@@ -93,6 +100,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Skip to content
           </a>
           <SitePresence />
+          <AppearanceAccountSync />
           <DeviceHistoryGuard />
           <AppChrome>{children}</AppChrome>
           <CookieBanner />
@@ -118,6 +126,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </a>
         <Header />
         <SitePresence />
+        <AppearanceAccountSync />
         <DeviceHistoryGuard />
         <SiteStats sameOrigin={sameOriginStats} />
         <main id="main-content" tabIndex={-1} className={MAIN_CLASS}>

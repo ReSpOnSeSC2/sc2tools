@@ -11,6 +11,7 @@ import { AllGamesTable } from "../../AllGamesTable";
 import type { ProfileGame } from "../../Last5GamesTimeline";
 import type { ReportDrill } from "./types";
 import { GameSourceProvider } from "@/lib/useGameSource";
+import { formatNumber } from "@/lib/i18n/format";
 
 const GAMES_LIMIT = 100;
 
@@ -115,8 +116,8 @@ export function ReportGamesModal({
           <GameSourceProvider filters={query ?? ""} replace><AllGamesTable games={games} myName={myName} /></GameSourceProvider>
           {data && (data.total || 0) > games.length ? (
             <p className="mt-3 text-micro text-text-dim">
-              Showing the {games.length.toLocaleString()} most recent of{" "}
-              {(data.total || 0).toLocaleString()} matching games.
+              Showing the {formatNumber(games.length)} most recent of{" "}
+              {formatNumber(data.total || 0)} matching games.
             </p>
           ) : null}
         </>

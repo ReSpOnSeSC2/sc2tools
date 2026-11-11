@@ -2,6 +2,7 @@ import { ImageResponse } from "next/og";
 import { createHash } from "node:crypto";
 import { fetchPublicPlayer } from "@/lib/publicPlayer";
 import type { PublicPlayerProfile } from "./types";
+import { formatNumber } from "@/lib/i18n/format";
 
 export type PlayerImageOptions = { style: "record" | "build" | "mmr"; theme: "light" | "dark"; height: 100 | 160; large?: boolean };
 const NO_STORE = "private, no-store, max-age=0";
@@ -56,7 +57,7 @@ export function playerImageData(profile: PublicPlayerProfile | null, style: Play
   const games = Number.isFinite(totals.games) ? Math.max(0, Math.trunc(totals.games)) : 0;
   const wins = Number.isFinite(totals.wins) ? Math.max(0, Math.trunc(totals.wins)) : 0;
   const losses = Number.isFinite(totals.losses) ? Math.max(0, Math.trunc(totals.losses)) : 0;
-  return { name, headline: `${wins} wins · ${losses} losses`, detail: `${games.toLocaleString("en-US")} games tracked · SC2 Tools`, neutral: false };
+  return { name, headline: `${wins} wins · ${losses} losses`, detail: `${formatNumber(games)} games tracked · SC2 Tools`, neutral: false };
 }
 
 type ImageCardData = ReturnType<typeof playerImageData>;

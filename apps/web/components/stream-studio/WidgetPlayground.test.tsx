@@ -1,7 +1,9 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlaygroundWidget, WidgetPlayground } from "./WidgetPlayground";
-import { ALL_WIDGETS } from "@/components/overlay/widgetLifecycle";
+import { ALL_WIDGETS, type WidgetId } from "@/components/overlay/widgetLifecycle";
+import { themeToCssVars } from "@/lib/overlayTheme";
+import type { CSSProperties } from "react";
 import { MultiChatWidget, ChatOracleWidget, SupporterWallWidget, BuildProfileWidget, StatsTickerWidget } from "@/components/overlay/widgets/PrePostFlow";
 
 const { socket } = vi.hoisted(() => ({ socket: vi.fn(() => { throw new Error("Preview opened a socket"); }) }));
@@ -21,7 +23,23 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 function expectOffline() { expect(fetchSpy).not.toHaveBeenCalled(); expect(socket).not.toHaveBeenCalled(); expect(transport).not.toHaveBeenCalled(); expect(audio).not.toHaveBeenCalled(); expect(speak).not.toHaveBeenCalled(); }
 
+const cardWidgets: WidgetId[] = ["chat-poll", "chat-highlight", "stream-goals", "lower-third", "countdown-timer",
+  "supporter-wall", "chat-oracle", "session-recap", "build-profile", "clip-flag", "chat-alerts"];
+
 describe("real local widget previews", () => {
+  it.each(cardWidgets)("renders the Large creative frame for %s", (widget) => {
+    const { container } = render(<div style={themeToCssVars({ style: "arena-broadcast", scale: 1.25 }) as CSSProperties}>
+      <PlaygroundWidget widget={widget} scenario="victory" />
+    </div>);
+    const panel = container.querySelector<HTMLElement>('[data-overlay-panel="framed"]');
+    expect(panel).not.toBeNull();
+    expect(panel?.style.zoom).toContain("--ov-scale");
+    expect(panel?.style.clipPath).toContain("--ov-clip");
+    expect(panel?.querySelector<HTMLElement>(".widget-shell__texture")?.style.background).toContain("--ov-texture");
+    expect(panel?.querySelector<HTMLElement>(".widget-shell__ornament")?.style.background).toContain("--ov-ornament");
+    expectOffline();
+  });
+
   it.each(ALL_WIDGETS)("keeps %s offline through feed refresh and test expiry", async widget => {
     render(<PlaygroundWidget widget={widget} scenario="victory" />);
     await act(async () => { vi.advanceTimersByTime(90_000); });
@@ -41,6 +59,11 @@ describe("real local widget previews", () => {
     fireEvent.change(screen.getByRole("combobox", { name: /^Widget$/ }), { target: { value: "all" } });
     expect(screen.getAllByRole("img", { name: /sample preview$/ })).toHaveLength(ALL_WIDGETS.length);
     expect(document.querySelectorAll("[inert]")).toHaveLength(ALL_WIDGETS.length);
+    fireEvent.change(screen.getByRole("combobox", { name: "Theme preset" }), { target: { value: "arena-broadcast" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Scale" }), { target: { value: "1.25" } });
+    const sample = document.querySelector<HTMLElement>("[inert]");
+    expect(sample?.style.getPropertyValue("--ov-scale")).toBe("1.25");
+    expect(sample?.style.getPropertyValue("--ov-clip")).not.toBe("");
     fireEvent.click(screen.getByRole("button", { name: /^Replay sample$/ }));
     await act(async () => { vi.advanceTimersByTime(90_000); });
     expectOffline();

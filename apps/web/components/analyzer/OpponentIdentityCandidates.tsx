@@ -18,6 +18,7 @@ import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { CandidateEvidenceDetails } from "./OpponentIdentityCandidateEvidence";
 
 import type { EvidenceMode, EvidenceConfidence, IdentityCandidate, OpponentIdentityCandidatesResponse, OpponentIdentityCandidatesProps } from "./OpponentIdentityCandidates.types";
+import { formatDateTime, formatNumber } from "@/lib/i18n/format";
 export type { IdentityMatchEligibility, IdentityMatchTarget, BuildOrderMatchEvidence, BehaviorMatchDimension, ControlGroupMatchEvidence, ControlGroupOpeningStep, ActionMatchEvidence, IdentityCandidate, OpponentIdentityCandidatesResponse, OpponentIdentityCandidatesProps } from "./OpponentIdentityCandidates.types";
 
 /**
@@ -353,7 +354,7 @@ function MiniStat({ label, value }: { label: string; value: number }) {
         {label}
       </dt>
       <dd className="mt-0.5 font-display text-caption font-bold tabular-nums text-text">
-        {finiteCount(value).toLocaleString()}
+        {formatNumber(finiteCount(value))}
       </dd>
     </div>
   );
@@ -432,11 +433,11 @@ function CandidateCard({
               {candidate.region ? <span>{candidate.region}</span> : null}
               {validPositive(candidate.mmr) ? (
                 <span className="tabular-nums">
-                  {Math.round(candidate.mmr as number).toLocaleString()} MMR
+                  {formatNumber(Math.round(candidate.mmr as number))} MMR
                 </span>
               ) : null}
               <span className="tabular-nums">
-                {finiteCount(candidate.gamesInProfile).toLocaleString()} profile games
+                {formatNumber(finiteCount(candidate.gamesInProfile))} profile games
               </span>
             </p>
           </div>
@@ -759,7 +760,7 @@ function evidenceModeLabel(mode: EvidenceMode | undefined): string {
 function formatGeneratedAt(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "recently";
-  return date.toLocaleString();
+  return formatDateTime(date);
 }
 
 function validPositive(value: number | null | undefined): boolean {

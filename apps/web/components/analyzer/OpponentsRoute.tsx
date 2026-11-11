@@ -10,6 +10,7 @@ import type { OpponentExportAction } from "./opponents/types";
 import { useOpponentUrlControls } from "./useOpponentUrlControls";
 import { useFilters } from "@/lib/filterContext";
 import { replaceViewQuery } from "@/lib/analyzerViews";
+import { formatNumber } from "@/lib/i18n/format";
 
 // Keep the page header available while its interactive, authenticated table
 // loads. Subsequent refreshes stay inside the mounted table and retain rows.
@@ -33,7 +34,7 @@ export function OpponentsRoute() {
   const [exportAction, setExportAction] = useState<OpponentExportAction | null>(null);
   return (
     <div className="space-y-5">
-      <SectionHeader tab="opponents" description="Everyone you've faced, keyed to their SC2Pulse ID" actions={<>{count === null ? null : <span className="rounded-full border border-line px-2 py-1 text-caption tabular-nums">{count.toLocaleString()} results</span>}{exportAction ? <Button variant="secondary" disabled={exportAction.disabled} onClick={exportAction.download} title={`Export all ${exportAction.count.toLocaleString()} matching opponents, including rows outside the render window`}>Export CSV</Button> : null}</>} />
+      <SectionHeader tab="opponents" description="Everyone you've faced, keyed to their SC2Pulse ID" actions={<>{count === null ? null : <span className="rounded-full border border-line px-2 py-1 text-caption tabular-nums">{formatNumber(count)} results</span>}{exportAction ? <Button variant="secondary" disabled={exportAction.disabled} onClick={exportAction.download} title={`Export all ${formatNumber(exportAction.count)} matching opponents, including rows outside the render window`}>Export CSV</Button> : null}</>} />
       <OpponentsTab
         location={location}
         controls={controls}

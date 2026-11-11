@@ -1,7 +1,8 @@
 import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
 import type { InstantReport } from "./report";
 
-export const REPORT_SHARE_URL = "https://sc2tools.com/try?utm_source=report&utm_medium=share&utm_campaign=instant";
+/** The share text is reportSummaryText (reportExport.ts) over this projection, so there is one summary builder. */
+
 export interface ReportSelection { totals: boolean; matchups: string[]; opener: boolean; macro: boolean }
 export interface ReportCardModel {
   totals: { games: number; wins: number; losses: number } | null;
@@ -35,12 +36,4 @@ export function reportCardModel(report: InstantReport, selection?: ReportSelecti
 
 export function defaultReportSelection(model: ReportCardModel): ReportSelection {
   return { totals: !!model.totals, matchups: model.matchups.map((row) => row.label.slice(-1)), opener: !!model.opener, macro: !!model.macro };
-}
-
-export function reportCardText(model: ReportCardModel): string {
-  return ["My StarCraft II replay report", model.totals ? `${model.totals.games} games · ${model.totals.wins}W ${model.totals.losses}L` : null,
-    ...model.matchups.map((row) => `${row.label}: ${row.wins}W ${row.losses}L`),
-    model.opener ? `Best opener: ${model.opener.name} · ${model.opener.wins}W ${model.opener.losses}L (${model.opener.games} games)` : null,
-    model.macro ? `Macro score: ${model.macro.score}/100 (${model.macro.games} measured games)` : null,
-    REPORT_SHARE_URL].filter(Boolean).join("\n");
 }

@@ -27,6 +27,7 @@ import {
   netMmrByMatchupPath,
   type NetMmrByMatchupResponseBase,
 } from "@/lib/netMmrOpponents";
+import { formatNumber } from "@/lib/i18n/format";
 
 type MmrPoint = {
   bucket: string;
@@ -88,7 +89,7 @@ type MmrResponse = {
 };
 
 type MmrTableRow = { date: string; series: string; mmr: number; min: number; max: number; games: number; wins: number; losses: number; average?: boolean };
-const knownNumber = (value: number) => Number.isFinite(value) ? value.toLocaleString() : "Unavailable";
+const knownNumber = (value: number) => Number.isFinite(value) ? formatNumber(value) : "Unavailable";
 const MMR_COLUMNS: readonly ChartTableColumn<MmrTableRow>[] = [
   { key: "date", label: "Local bucket", render: row => row.date },
   { key: "series", label: "Account and ladder", render: row => row.series },
@@ -175,7 +176,7 @@ export function mmrCoverageNotice(
   const noun = count === 1 ? "record was" : "records were";
   return {
     title: "MMR history needs a resync",
-    sub: `${count.toLocaleString()} older numeric MMR ${noun} excluded because the replay source cannot be verified. Resync with the latest agent to rebuild this chart from ranked 1v1 replay ratings.`,
+    sub: `${formatNumber(count)} older numeric MMR ${noun} excluded because the replay source cannot be verified. Resync with the latest agent to rebuild this chart from ranked 1v1 replay ratings.`,
   };
 }
 
@@ -460,7 +461,7 @@ export function MmrProgressionChart({
                 domain={yDomain}
                 width={52}
                 tickMargin={4}
-                tickFormatter={(v: number) => v.toLocaleString()}
+                tickFormatter={(v: number) => formatNumber(v)}
               />
               <Tooltip
                 cursor={{ stroke: kit.tokens.accent, strokeDasharray: "3 3" }}
@@ -473,7 +474,7 @@ export function MmrProgressionChart({
                       return {
                         key: String(p.name),
                         label: series ? series.label : String(p.name),
-                        value: `${Number(p.value).toLocaleString()} · n=${Number.isFinite(Number(p.payload?.[`${p.name}__wins`]) + Number(p.payload?.[`${p.name}__losses`])) ? Number(p.payload?.[`${p.name}__wins`]) + Number(p.payload?.[`${p.name}__losses`]) : "unknown"}`,
+                        value: `${formatNumber(Number(p.value))} · n=${Number.isFinite(Number(p.payload?.[`${p.name}__wins`]) + Number(p.payload?.[`${p.name}__losses`])) ? Number(p.payload?.[`${p.name}__wins`]) + Number(p.payload?.[`${p.name}__losses`]) : "unknown"}`,
                         dot: series?.color,
                       };
                     });
@@ -547,7 +548,7 @@ type MultiSeries = {
  * ResponsiveContainer.
  */
 function displayMmr(value: number, isGlobal: boolean) {
-  return (isGlobal ? Math.round(value) : value).toLocaleString();
+  return formatNumber(isGlobal ? Math.round(value) : value);
 }
 
 function mmrSampleDot(color: string, kit: ReturnType<typeof useChartKit>, showAll: boolean, winsKey = "wins", lossesKey = "losses") {
@@ -613,7 +614,7 @@ function SingleSeriesChart({
         domain={yDomain}
         width={52}
         tickMargin={4}
-        tickFormatter={(v: number) => v.toLocaleString()}
+        tickFormatter={(v: number) => formatNumber(v)}
       />
       {data?.latest ? (
         <ReferenceLine
@@ -643,7 +644,7 @@ function SingleSeriesChart({
                   label: "Recorded range",
                   value: `${displayMmr(row.band[0], isGlobal)}–${displayMmr(row.band[1], isGlobal)}`,
                 }] : []),
-                ...(typeof row.games === "number" ? [{ key: "games", label: "Games with a rating", value: row.games.toLocaleString() }] : []),
+                ...(typeof row.games === "number" ? [{ key: "games", label: "Games with a rating", value: formatNumber(row.games) }] : []),
                 { key: "sample", label: "Decided sample", value: `${knownNumber(Number(row.wins) + Number(row.losses))}${isLowSample(Number(row.wins) + Number(row.losses)) ? " · small sample" : ""}` },
               ]}
             />
@@ -726,7 +727,7 @@ function MmrHeadline({
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:max-w-3xl">
         {multiSeries.map((s) => {
           const sub = s.peak && s.trough
-            ? `Peak ${s.peak.mmr.toLocaleString()} · Trough ${s.trough.mmr.toLocaleString()}`
+            ? `Peak ${formatNumber(s.peak.mmr)} · Trough ${formatNumber(s.trough.mmr)}`
             : undefined;
           return (
             <div
@@ -745,7 +746,7 @@ function MmrHeadline({
                 className="mt-0.5 text-lg font-semibold tabular-nums"
                 style={{ color: s.color }}
               >
-                {s.latest ? s.latest.mmr.toLocaleString() : "—"}
+                {s.latest ? formatNumber(s.latest.mmr) : "—"}
               </div>
               {sub ? (
                 <div className="text-micro tabular-nums text-text-dim">

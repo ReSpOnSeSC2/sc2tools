@@ -18,6 +18,7 @@ import { OpponentRace } from "./OpponentRace";
 import { RevealedChip } from "../RevealedChip";
 import { type Opp, type OpenOpponent, notePreview } from "./types";
 import { OpponentDetailCells, UNSORTED_OPPONENT_COLUMNS } from "./OpponentDetailColumns";
+import { formatDateTime, formatNumber } from "@/lib/i18n/format";
 
 const EXTRA_COLUMNS = [{ key: "pulseId", label: "Pulse ID", termId: "pulse-id" }, { key: "mmr", label: "Last MMR", termId: "last-mmr" }, { key: "netMmr", label: "Net MMR", termId: "net-mmr" }, { key: "mmrWon", label: "MMR won", termId: "mmr-won" }, { key: "mmrLost", label: "MMR lost", termId: "mmr-lost" }] as const;
 const MOBILE_SORTS = [
@@ -104,7 +105,7 @@ export function OpponentHistory({ items, expanded, visibleCount, onMore, sort, c
         {loading ? <tr><td colSpan={8 + extra} className="p-3"><Skeleton rows={8} /></td></tr> : rows.map(entry => entry.kind === "identity" ? <IdentityRow key={`identity:${entry.row.pulseId}`} identity={entry.row} channels={channelsFor(entry.row)} onOpen={onOpen} onPrefetch={onPrefetch} columns={columns} /> : <OpponentRow key={entry.row.pulseId} row={entry.row} expanded={expanded.has(entry.row.pulseId)} onToggle={onToggle} onOpen={onOpen} onPrefetch={onPrefetch} channelsFor={channelsFor} columns={columns} star={star(entry.row)} />)}
       </tbody>
     </table></div>}
-    {!loading ? <div className="flex flex-wrap items-center justify-between gap-2 p-3"><span className="text-caption text-text-dim">{rows.length.toLocaleString()} of {total.toLocaleString()} rows shown</span>{total > visibleCount ? <Button variant="secondary" onClick={onMore}>Show 100 more</Button> : null}</div> : null}
+    {!loading ? <div className="flex flex-wrap items-center justify-between gap-2 p-3"><span className="text-caption text-text-dim">{formatNumber(rows.length)} of {formatNumber(total)} rows shown</span>{total > visibleCount ? <Button variant="secondary" onClick={onMore}>Show 100 more</Button> : null}</div> : null}
   </div>;
 }
 
@@ -115,6 +116,6 @@ function MobileOpponent({ row, onOpen, onPrefetch }: { row: Opp; onOpen: OpenOpp
     <RevealedChip name={row.globalIdentity?.displayName || row.revealedName} displayedName={row.name} confirmed={!!row.globalIdentity} />
     <span className="my-2 flex h-1.5 overflow-hidden rounded-full bg-bg-elevated" aria-hidden><span className="bg-success" style={{ width: decided ? `${100 * row.wins / decided}%` : "0%" }} /><span className="bg-danger" style={{ width: decided ? `${100 * row.losses / decided}%` : "0%" }} /></span>
     <span className="flex flex-wrap justify-between gap-2 text-caption"><span><span className="sr-only">Wins–losses: </span>{row.wins}–{row.losses} · {pct1(row.winRate)} · {row.games} games</span><span className={`rounded-full border border-line px-1.5 tabular-nums ${typeof row.netMmr === "number" && row.netMmr < 0 ? "text-danger" : "text-text-muted"}`}>{(row.mmrPairs || 0) > 0 && typeof row.netMmr === "number" ? `${row.netMmr > 0 ? "+" : ""}${row.netMmr} MMR` : "MMR unmeasured"}</span></span>
-    <span className="mt-1 block text-caption text-text-dim">Last played {row.lastPlayed ? <time dateTime={row.lastPlayed} title={new Date(row.lastPlayed).toLocaleString()}>{fmtAgo(row.lastPlayed)}</time> : "unknown"}</span>
+    <span className="mt-1 block text-caption text-text-dim">Last played {row.lastPlayed ? <time dateTime={row.lastPlayed} title={formatDateTime(new Date(row.lastPlayed))}>{fmtAgo(row.lastPlayed)}</time> : "unknown"}</span>
   </OpponentLink>;
 }

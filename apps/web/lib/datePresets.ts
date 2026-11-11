@@ -1,6 +1,7 @@
 import type { PatchEra } from "@/lib/meta";
 import { currentSeason, seasonRange } from "@/lib/seasonCatalog";
 import type { LogicalSeason } from "@/lib/useSeasons";
+import { activeWeekStartDay } from "@/lib/i18n/format";
 
 // Date-range presets used by the global Analyzer filter bar.
 //
@@ -96,11 +97,15 @@ function startOfYear(d: Date): Date {
   return new Date(d.getFullYear(), 0, 1, 0, 0, 0, 0);
 }
 
-/** ISO day-of-week (Mon=1 … Sun=7) for "last week" calculations. */
-function startOfWeek(d: Date): Date {
+/**
+ * The start of `d`'s week for a first day of the week (0 = Sunday … 6 =
+ * Saturday; the account's Appearance choice by default).
+ *
+ * Example: startOfWeek(new Date(2026, 10, 11), 1) // Mon 9 Nov 2026, 00:00
+ */
+export function startOfWeek(d: Date, weekStartDay: number = activeWeekStartDay()): Date {
   const out = startOfDay(d);
-  const day = out.getDay() === 0 ? 7 : out.getDay();
-  return addDays(out, -(day - 1));
+  return addDays(out, -((out.getDay() - weekStartDay + 7) % 7));
 }
 
 export const PRESETS: ReadonlyArray<Preset> = [

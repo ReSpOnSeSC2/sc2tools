@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { SeriesPoint } from "@/components/analyzer/macro/activeArmyLayout";
+import { compareHref, isLegacyCompareGameId } from "@/lib/compareGameLinks";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import {
-  alignBuildOrders, bestWinCandidate, compareBuildSteps, compareHref, compareMechanics, deltaTone, formatDelta, isCompareGameId,
+  alignBuildOrders, bestWinCandidate, compareBuildSteps, compareMechanics, deltaTone, formatDelta,
   metricDelta, pointAt,
 } from "@/lib/gameCompare";
 
@@ -88,11 +89,13 @@ describe("picker and links", () => {
     expect(bestWinCandidate([{ gameId: "self" }], "self")).toBeNull();
   });
 
-  it("validates ids and builds the shareable link", () => {
-    expect(isCompareGameId("abc-123")).toBe(true);
-    expect(isCompareGameId("a/b")).toBe(false);
-    expect(isCompareGameId("x".repeat(201))).toBe(false);
-    expect(isCompareGameId(["a"])).toBe(false);
-    expect(compareHref("g 1", "g&2")).toBe("/app/compare?a=g+1&b=g%262");
+  it("accepts legacy IDs for private resolution and only writes opaque references to the URL", () => {
+    const legacy = "date|Rival Name|Map / 600";
+    const reference = "r-0123456789abcdef01234567";
+    expect(isLegacyCompareGameId(legacy)).toBe(true);
+    expect(isLegacyCompareGameId("x".repeat(201))).toBe(false);
+    expect(isLegacyCompareGameId(["a"])).toBe(false);
+    expect(compareHref(legacy, reference)).toBe("/app/compare?b=" + reference);
+    expect(compareHref(legacy, null)).toBe("/app/compare");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSharedReplayDetailPath } from "./replayRouteAccess";
+import { isPublicReplayPreviewPath, isSharedReplayDetailPath, legacyReplayArchivePath } from "./replayRouteAccess";
 
 describe("shared replay middleware boundary", () => {
   it.each([
@@ -22,4 +22,12 @@ describe("shared replay middleware boundary", () => {
   ])("requires sign-in for replay detail at %s", (pathname) => {
     expect(isSharedReplayDetailPath(pathname)).toBe(true);
   });
+});
+
+it("allows an opaque signed-out teaser without unprotecting old raw replay identifiers", () => {
+  expect(isPublicReplayPreviewPath("/players/reaver/replays/r-0123456789abcdef01234567")).toBe(true);
+  expect(isPublicReplayPreviewPath("/players/reaver/replays/legacy%7CPrivateOpponent%7CMap")).toBe(false);
+  expect(isPublicReplayPreviewPath("/players/reaver/replays/")).toBe(false);
+  expect(legacyReplayArchivePath("/players/reaver/replays/legacy%7CPrivateOpponent%7CMap/")).toBe("/players/reaver/replays");
+  expect(legacyReplayArchivePath("/players/reaver/replays/r-0123456789abcdef01234567")).toBeNull();
 });

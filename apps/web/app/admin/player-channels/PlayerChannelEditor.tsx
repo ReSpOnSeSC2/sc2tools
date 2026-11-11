@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/Card";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { formatDateTime } from "@/lib/i18n/format";
 
 export function PlayerChannelRow({ entry, busy, onEdit, onRemove }: {
   entry: PlayerChannelEntry; busy: boolean; onEdit: () => void; onRemove: () => void;
@@ -43,7 +44,7 @@ export function PlayerChannelRow({ entry, busy, onEdit, onRemove }: {
             })}
           </div>
           {entry.pending ? <p className="text-caption text-text-muted">Player-submitted links awaiting review. Open the editor to verify the identities and approve them.</p> : null}
-          <p className="text-micro text-text-dim">Updated {new Date(entry.updatedAt).toLocaleString()}</p>
+          <p className="text-micro text-text-dim">Updated {formatDateTime(new Date(entry.updatedAt))}</p>
         </div>
         <div className="flex flex-wrap gap-2 lg:flex-col lg:items-stretch">
           <Button variant="secondary" size="sm" disabled={busy} onClick={onEdit} iconLeft={<Pencil className="h-3.5 w-3.5" aria-hidden />} aria-label={`${entry.removed ? "Edit or restore" : entry.pending ? "Review" : "Edit"} ${entry.displayName || "player"}`}>{entry.removed ? "Edit / restore" : entry.pending ? "Review" : "Edit"}</Button>

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTime } from "@/lib/i18n/format";
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { History, RotateCcw } from "lucide-react";
@@ -84,7 +85,7 @@ export function BuildHistorySheet({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-semibold text-text">{String(item.build.name || "Untitled build")}</p>
-                    <p className="text-micro text-text-dim" title={new Date(item.savedAt).toLocaleString()}>
+                    <p className="text-micro text-text-dim" title={formatDateTime(new Date(item.savedAt))}>
                       Replaced {fmtAgo(item.savedAt)}
                     </p>
                   </div>

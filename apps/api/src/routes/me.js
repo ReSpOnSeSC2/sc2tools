@@ -4,7 +4,7 @@ const express = require("express");
 const { accountExportHandler } = require("./accountExport");
 const { buildDoctor, buildSyncHealth, withReplayResyncState, emptyReplayArchiveCounts } = require("../services/doctor");
 const { NOTIFICATIONS_PREF_TYPE, sanitizeNotificationPrefs } = require("../services/notificationPrefs");
-const { REPORTS_PREF_TYPE, sanitizeReportPrefs } = require("../services/reportPreferences");
+const { REPORTS_PREF_TYPE, sanitizeReportPrefs, todayReportWeek } = require("../services/reportPreferences");
 const { validateProfile } = require("../validation/profile");
 const { publicDataRetention } = require("../services/dataInventory");
 const {
@@ -16,6 +16,7 @@ const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
 const { sanitizeRivals } = require("../util/rivalsPreferences");
 const { OPPONENT_SCOUTING_PREF_TYPE, sanitizeOpponentScouting } = require("../util/opponentScoutingPreferences");
 const { LEAGUE_TARGETS_PREF_TYPE, sanitizeLeagueTargets } = require("../util/leagueTargetsPreferences");
+const { APPEARANCE_PREF_TYPE, sanitizeAppearance } = require("../util/appearancePreferences");
 const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("../services/twitchAutomationPolicy");
 const { sanitizeChatCommands } = require("../services/chatCommands");
 const { activationTimestamp } = require("../services/activation");
@@ -155,12 +156,11 @@ function buildMeRouter(deps) {
           // inject them keep working — the fields just come back null.
           deps.imports ? deps.imports.activeJob(auth.userId) : null,
         ]);
-      const { summary, onboarding } = snapshot;
       // Lazy email backfill: if the row pre-dates the webhook (or no
       // webhook is configured), pull the email from Clerk on first read
       // and cache it. Best-effort — clerk.getEmail returns null on
       // failure and we just render "—" until the next request.
-      let email = summary.email;
+      let email = snapshot.summary.email;
       if (!email && clerk && auth.source === "clerk" && auth.clerkUserId) {
         const fresh = await clerk.getEmail(auth.clerkUserId);
         if (fresh) {
@@ -223,7 +223,8 @@ function buildMeRouter(deps) {
         // mount the progress card on first paint.
         activeImportJob: activeImportJob || null,
         // Client-only onboarding bits (downloadStartedAt, dismissedAt).
-        onboarding: onboarding || {},
+        onboarding: snapshot.onboarding || {},
+        weeklyReportWeek: stats.total > 0 ? todayReportWeek(snapshot.reportPrefs) : null,
         isAdmin: admin,
       });
     } catch (err) {
@@ -467,6 +468,7 @@ function buildMeRouter(deps) {
     TWITCH_PREF_TYPE,
     "ghost",
     CHECKIN_PREF_TYPE, LEAGUE_TARGETS_PREF_TYPE,
+    APPEARANCE_PREF_TYPE,
   ]);
 
   router.get("/me/analyzer-default-view", deps.auth, async (req, res, next) => {
@@ -482,7 +484,7 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
-      if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE) res.set("Cache-Control", "private, no-store");
+      if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE || type === APPEARANCE_PREF_TYPE) res.set("Cache-Control", "private, no-store");
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
         return;
@@ -493,13 +495,7 @@ function buildMeRouter(deps) {
         return;
       }
       const prefs = await deps.users.getPreferences(auth.userId, type);
-      res.json(type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(prefs)
-        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(prefs) : type === REPORTS_PREF_TYPE ? sanitizeReportPrefs(prefs)
-          : type === "analyzerViews" ? sanitizeAnalyzerViews(prefs)
-            : type === "rivals" ? sanitizeRivals(prefs)
-              : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(prefs)
-                : type === "chatCommands" ? sanitizeChatCommands(prefs)
-                : type === OPPONENT_SCOUTING_PREF_TYPE ? sanitizeOpponentScouting(prefs) : type === LEAGUE_TARGETS_PREF_TYPE ? sanitizeLeagueTargets(prefs) : prefs);
+      res.json(preferenceValue(type, prefs, false));
     } catch (err) {
       next(err);
     }
@@ -510,7 +506,7 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
-      if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE) res.set("Cache-Control", "private, no-store");
+      if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE || type === APPEARANCE_PREF_TYPE) res.set("Cache-Control", "private, no-store");
       if (type === TWITCH_PREF_TYPE && auth.source !== "clerk") { res.status(403).json({ error: { code: "clerk_required" } }); return; }
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
@@ -539,13 +535,7 @@ function buildMeRouter(deps) {
         res.status(400).json({ error: { code: "invalid_level_up_dismissed_at" } }); return;
       }
       if (type === "onboarding" && Object.hasOwn(req.body, "toursDone")) validateOnboardingToursDone(req.body.toursDone);
-      const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body)
-        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body) : type === REPORTS_PREF_TYPE ? sanitizeReportPrefs(req.body)
-          : type === "analyzerViews" ? sanitizeAnalyzerViews(req.body, true)
-            : type === "rivals" ? sanitizeRivals(req.body, true)
-              : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(req.body, true)
-                : type === "chatCommands" ? sanitizeChatCommands(req.body, true)
-                : type === OPPONENT_SCOUTING_PREF_TYPE ? sanitizeOpponentScouting(req.body, true) : type === LEAGUE_TARGETS_PREF_TYPE ? sanitizeLeagueTargets(req.body, true) : req.body;
+      const body = preferenceValue(type, req.body, true);
       const saved = await deps.users.updatePreferences(auth.userId, type, body);
       if (type === "rivals") {
         try { deps.onRivalsChanged?.(auth.userId); } catch { /* Advisory cache refresh; preferences are already saved. */ }
@@ -1017,7 +1007,7 @@ async function readMeSnapshot(users, userId) {
   const [summary, onboarding] = await Promise.all([
     users.getSummary(userId), users.getPreferences(userId, "onboarding"),
   ]);
-  return { summary, onboarding, statsCandidate: null };
+  return { summary, onboarding, statsCandidate: null, reportPrefs: null };
 }
 
 /**
@@ -1039,3 +1029,20 @@ module.exports = {
   buildMeRouter,
   _internals: { withReplayResyncState },
 };
+
+/** @param {string} type @param {any} value @param {boolean} strict */
+function preferenceValue(type, value, strict) {
+  switch (type) {
+    case CHECKIN_PREF_TYPE: return sanitizeCheckinPrefs(value);
+    case NOTIFICATIONS_PREF_TYPE: return sanitizeNotificationPrefs(value);
+    case REPORTS_PREF_TYPE: return sanitizeReportPrefs(value);
+    case "analyzerViews": return sanitizeAnalyzerViews(value, strict);
+    case "rivals": return sanitizeRivals(value, strict);
+    case TWITCH_PREF_TYPE: return sanitizeTwitchAutomation(value, strict);
+    case "chatCommands": return sanitizeChatCommands(value, strict);
+    case OPPONENT_SCOUTING_PREF_TYPE: return sanitizeOpponentScouting(value, strict);
+    case LEAGUE_TARGETS_PREF_TYPE: return sanitizeLeagueTargets(value, strict);
+    case APPEARANCE_PREF_TYPE: return sanitizeAppearance(value, strict);
+    default: return value;
+  }
+}

@@ -34,10 +34,16 @@ describe("owned live overlay profiles", () => {
     profile({ theme: { opacity: "0.5" } }), profile({ theme: { scale: 2 } }), profile({ theme: { css: "color:red" } }),
     profile({ widgetOptions: { constructor: { durationSec: 15 } } }), profile({ widgetOptions: { session: { durationSec: 15 } } }),
     profile({ widgetOptions: { "match-result": { durationSec: 37 } } }), profile({ widgetOptions: { "match-result": { durationSec: 15, style: "extra" } } }),
-    profile({ v: 2 }), profile({ extra: "field" }),
+    profile({ v: 2 }), profile({ extra: "field" }), profile({ credit: "false" }), profile({ ghostVoice: 1 }),
   ])("rejects hostile/unknown profile values before writing or broadcasting: %j", async invalid => {
     expect((await put({ profile: invalid, expectedRevision: 0 })).status).toBe(400);
     expect(await collection.findOne({ token: "synthetic-token" })).not.toHaveProperty("profile"); expect(emit).not.toHaveBeenCalled();
+  });
+  test("saved overlay flags round-trip through the owner and widget reads", async () => {
+    const flags = profile({ credit: false, ghostVoice: true });
+    await put({ profile: flags, expectedRevision: 0 }).expect(200, { profile: flags, profileRevision: 1 });
+    expect((await service.list("owner"))[0].profile).toEqual(flags);
+    expect((await service.resolve("synthetic-token")).profile).toEqual(flags);
   });
   test("prototype keys and nonfinite values fail the direct validator too", () => {
     expect(() => validateOverlayProfile(JSON.parse('{"v":1,"theme":{"__proto__":{}},"widgetOptions":{}}'))).toThrow();

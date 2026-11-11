@@ -27,6 +27,7 @@ vi.mock("@/lib/clientApi", () => ({
     mutate: harness.mutate,
   }),
 }));
+vi.mock("./LockerRoster", () => ({ default: () => <div data-testid="locker-roster">Roster content</div> }));
 vi.mock("./LockerHost", () => ({
   default: () => <div data-testid="locker-host">Locker content</div>,
 }));
@@ -80,6 +81,23 @@ describe("CoachingWorkspace", () => {
         "aria-selected",
       ),
     ).toBe("true");
+  });
+
+  it("opens the staff roster without mounting the classic Locker", async () => {
+    harness.search = "locker=roster";
+    render(<CoachingWorkspace />);
+    expect(await screen.findByTestId("locker-roster")).toBeTruthy();
+    expect(screen.queryByTestId("locker-host")).toBeNull();
+    expect(screen.getByRole("link", { name: "Classic Locker" }).getAttribute("href")).toBe("/coaching");
+  });
+
+  it("leaves the roster route inaccessible to students", () => {
+    harness.role = "student";
+    harness.search = "locker=roster";
+    render(<CoachingWorkspace />);
+    expect(screen.getByTestId("locker-host")).toBeTruthy();
+    expect(screen.queryByTestId("locker-roster")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open Locker roster" })).toBeNull();
   });
 
   it("opens a direct Sessions link without eagerly mounting Locker", () => {

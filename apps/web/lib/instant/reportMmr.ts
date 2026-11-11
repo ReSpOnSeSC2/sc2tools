@@ -51,7 +51,7 @@ export interface MmrQueueRow extends RecapMmrJourney {
   games: number;
 }
 
-function replayMmr(value: number | null, source: string | null): number | null {
+export function replayMmr(value: number | null, source: string | null): number | null {
   return value !== null && source === REPLAY_MMR_SOURCE ? value : null;
 }
 

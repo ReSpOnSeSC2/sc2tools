@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminEvent } from "../components/adminTypes";
 import { navigation } from "../components/__tests__/navigationFixture";
@@ -6,7 +6,7 @@ vi.mock("next/navigation", () => import("../components/__tests__/navigationFixtu
 
 const { useApiMock, socketMock, countsMutate, feedMutate, apiCallMock, scenario, auth } = vi.hoisted(() => ({
   useApiMock: vi.fn(), socketMock: vi.fn(), countsMutate: vi.fn(), feedMutate: vi.fn(), apiCallMock: vi.fn(),
-  scenario: { items: [] as AdminEvent[], unreadCount: 0 },
+  scenario: { items: [] as AdminEvent[], unreadCount: 0, unreadByType: undefined as Record<string, number> | undefined },
   auth: { userId: "admin-a", getToken: vi.fn() },
 }));
 
@@ -46,12 +46,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   scenario.items = [];
   scenario.unreadCount = 0;
+  scenario.unreadByType = undefined;
   auth.userId = "admin-a";
   countsMutate.mockResolvedValue(undefined);
   feedMutate.mockResolvedValue(undefined);
   apiCallMock.mockResolvedValue({ markedRead: 1 });
   useApiMock.mockImplementation((path: string) => {
-    if (path === "/v1/admin/events/counts") return { data: { unreadCount: scenario.unreadCount }, mutate: countsMutate };
+    if (path === "/v1/admin/events/counts") return { data: { unreadCount: scenario.unreadCount, unreadByType: scenario.unreadByType }, mutate: countsMutate };
     const params = new URL(path, "https://api.sc2tools.test").searchParams;
     const eligible = scenario.items.filter((event) =>
       (params.get("unread") !== "true" || !event.readAt) &&
@@ -97,7 +98,7 @@ describe("admin unread activity", () => {
     fireEvent.click(screen.getByRole("button", { name: "Messages" }));
     expect(screen.getByText("No unread messages in this filter.")).toBeTruthy();
     expect(screen.getByText("9 unread across all activity.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Mark all 9 unread as read" })).toBeTruthy();
+    expect((screen.getByRole("button", { name: "All caught up" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "View all 9 unread notifications" }));
     expect(screen.getByText("installed@example.com · confirmed by agent")).toBeTruthy();
   });
@@ -147,7 +148,7 @@ describe("admin unread activity", () => {
       return { markedRead: 1 };
     });
     render(<AdminNotificationsPage />);
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Mark all 1 unread as read" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Mark all 1 read" })); });
     expect(screen.queryByText("installed@example.com · confirmed by agent")).toBeNull();
     expect(screen.getByText("No unread notifications.")).toBeTruthy();
     expect(feedMutate).toHaveBeenCalledOnce();
@@ -224,7 +225,84 @@ it("retains the user scope in the feed URL and disables global mark-read", () =>
   render(<AdminNotificationsPage />);
   expect(lastFeedPath()).toContain("userId=fixture-owner");
   expect(lastFeedPath()).not.toContain("unread=true");
-  expect((screen.getByRole("button", { name: "Mark all 3 unread as read" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Mark all 3 read" }) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Clear user filter" }));
   expect(lastFeedPath()).not.toContain("userId=");
+});
+
+describe("per-type unread counts, scoped mark-all and per-row read state", () => {
+  it("chips are pressed toggles with unread counts that hide at zero", () => {
+    scenario.items = [message(1), message(2), installed];
+    scenario.unreadCount = 3;
+    scenario.unreadByType = { user_message: 2, agent_connected: 1, user_signup: 0 };
+    render(<AdminNotificationsPage />);
+    const all = screen.getByRole("button", { name: "All, 3 unread" });
+    expect(all.getAttribute("aria-pressed")).toBe("true");
+    const messages = screen.getByRole("button", { name: "Messages, 2 unread" });
+    expect(messages.getAttribute("aria-pressed")).toBe("false");
+    expect(messages.textContent).toBe("Messages2");
+    expect(screen.getByRole("button", { name: "Signups" }).textContent).toBe("Signups");
+    fireEvent.click(messages);
+    expect(screen.getByRole("button", { name: "Messages, 2 unread" }).getAttribute("aria-pressed")).toBe("true");
+    expect(all.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("names the mark-all scope and only marks the active type", async () => {
+    scenario.items = [message(1), message(2), message(3), installed];
+    scenario.unreadCount = 12;
+    scenario.unreadByType = { user_message: 3, agent_connected: 9 };
+    render(<AdminNotificationsPage />);
+    expect(screen.getByRole("button", { name: "Mark all 12 read" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Messages, 3 unread" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Mark 3 messages read" })); });
+    expect(apiCallMock).toHaveBeenCalledWith(auth.getToken, "/v1/admin/events/mark-read", { method: "POST", body: JSON.stringify({ type: "user_message" }) });
+    expect(countsMutate).toHaveBeenCalled();
+    scenario.unreadByType = { user_message: 1 };
+    fireEvent.click(screen.getByRole("button", { name: "Installs, 9 unread" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Messages/ }));
+    expect(screen.getByRole("button", { name: "Mark 1 message read" })).toBeTruthy();
+  });
+
+  it("a failed mark-all shows an alert with Retry instead of failing silently", async () => {
+    scenario.items = [installed];
+    scenario.unreadCount = 1;
+    apiCallMock.mockRejectedValueOnce({ status: 503, message: "busy" });
+    render(<AdminNotificationsPage />);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Mark all 1 read" })); });
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("Couldn't mark activity read");
+    expect(feedMutate).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(within(alert).getByRole("button", { name: "Retry" })); });
+    expect(apiCallMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(feedMutate).toHaveBeenCalledOnce();
+  });
+
+  it("marks one row read through its own route and revalidates the shared counts", async () => {
+    scenario.items = [installed];
+    scenario.unreadCount = 1;
+    apiCallMock.mockResolvedValueOnce({ event: { ...installed, readAt: "2026-10-17T13:00:00Z" } });
+    render(<AdminNotificationsPage />);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^Mark as read: Agent connected/ })); });
+    expect(apiCallMock).toHaveBeenCalledWith(auth.getToken, "/v1/admin/events/installed-1/read", { method: "POST" });
+    expect(countsMutate).toHaveBeenCalledOnce();
+    const update = feedMutate.mock.calls.at(-1);
+    expect(update?.[1]).toEqual({ revalidate: false });
+    const next = (update?.[0] as (current: unknown) => { items: AdminEvent[] })({ items: [installed], nextBefore: null });
+    expect(next.items[0].readAt).toBe("2026-10-17T13:00:00Z");
+    expect(screen.getByRole("button", { name: /^Mark as unread: Agent connected/ })).toBeTruthy();
+  });
+
+  it("hides pagination for an empty list and the debug source line unless ?debug=1", () => {
+    render(<AdminNotificationsPage />);
+    expect(screen.getByText("No unread notifications")).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Pagination" })).toBeNull();
+    expect(screen.queryByText(/Source:/)).toBeNull();
+    cleanup();
+    navigation.visit("/admin/notifications?debug=1");
+    scenario.items = [installed];
+    render(<AdminNotificationsPage />);
+    expect(screen.getByText(/Source:/).textContent).toContain("https://api.sc2tools.test/v1/admin/events");
+    expect(screen.getByRole("navigation", { name: "Pagination" })).toBeTruthy();
+  });
 });

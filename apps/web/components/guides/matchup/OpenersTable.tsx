@@ -12,6 +12,7 @@ import { guidePaths } from "../guideMetadata";
 import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS, GUIDE_TABLE_CLASS, GUIDE_TABLE_WRAP_CLASS, GUIDE_TD_CLASS, GUIDE_TD_NUM_CLASS, GUIDE_TH_CLASS, GUIDE_THEAD_CLASS } from "../guideUi";
 import { fmtCount, fmtCountNoun, fmtPct, GUIDE_TREND_FLAT_THRESHOLD } from "@/lib/guides/format";
 import type { GuideOpenerRow } from "@/lib/guides/types";
+import { CompareOpenerCheckbox, OpenerComparisonBar, useOpenerComparison, type OpenerComparison } from "./OpenerComparisonSelection";
 
 type RankedOpener = GuideOpenerRow & { rank: number };
 const SORTS: Readonly<Record<string, GuideTableSort<RankedOpener>>> = {
@@ -33,18 +34,19 @@ function PopularityMovement({ row }: { row: GuideOpenerRow }) {
   return <span className="block text-micro text-text-dim"><span aria-hidden>{delta > 0 ? "↑" : "↓"} {(Math.abs(delta) * 100).toFixed(1)} pp {movement} popular</span><span className="sr-only">Played in {(Math.abs(delta) * 100).toFixed(1)} percentage points {movement} games than the previous week</span></span>;
 }
 
-function OpenerCards({ rows, matchupSlug, canLinkGuides }: { rows: RankedOpener[]; matchupSlug: string; canLinkGuides: boolean }) {
+function OpenerCards({ rows, matchupSlug, canLinkGuides, comparison }: { rows: RankedOpener[]; matchupSlug: string; canLinkGuides: boolean; comparison: OpenerComparison }) {
   return <ol aria-label="Opener cards" className="space-y-3 sm:hidden">{rows.map((row) => <li key={row.buildKey} value={row.rank} className={`${GUIDE_PANEL_CLASS} space-y-3 p-4`}>
     <p className="font-semibold text-text"><span className="mr-2 text-text-dim">#{row.rank}</span><OpenerName row={row} matchupSlug={matchupSlug} canLinkGuides={canLinkGuides} /></p>
     <div className="flex items-center justify-between gap-3"><span className="text-caption text-text-muted">Win rate</span><WinRateCell winRate={row.winRate} ci={row.ci} showWhisker={false} /></div>
     <div className="flex flex-wrap justify-between gap-3 text-caption text-text-muted"><span>{fmtCountNoun(row.games, "game")}</span><TrendBadge trend={row.trend} isNew={row.isNew} showDelta /></div>
     {row.prevalence != null ? <p className="text-caption text-text-muted">Played in {fmtPct(row.prevalence)}<PopularityMovement row={row} /></p> : null}
+    {canLinkGuides ? <CompareOpenerCheckbox row={row} comparison={comparison} /> : null}
   </li>)}</ol>;
 }
 
 type Controls = ReturnType<typeof useGuideTableControls<RankedOpener>>;
-function OpenerTable({ rows, id, caption, matchupSlug, canLinkGuides, hasPrevalence, sortProps }: {
-  rows: RankedOpener[]; id: string; caption: string; matchupSlug: string; canLinkGuides: boolean; hasPrevalence: boolean; sortProps: Controls["sortProps"];
+function OpenerTable({ rows, id, caption, matchupSlug, canLinkGuides, hasPrevalence, sortProps, comparison }: {
+  rows: RankedOpener[]; id: string; caption: string; matchupSlug: string; canLinkGuides: boolean; hasPrevalence: boolean; sortProps: Controls["sortProps"]; comparison: OpenerComparison;
 }) {
   const [scrolled, setScrolled] = useState(false);
   const sticky = `sticky left-0 z-10 bg-bg-surface ${scrolled ? "shadow-[3px_0_4px_rgb(0_0_0_/_0.2)]" : ""}`;
@@ -52,6 +54,7 @@ function OpenerTable({ rows, id, caption, matchupSlug, canLinkGuides, hasPrevale
     <table id={id} className={GUIDE_TABLE_CLASS}><caption className="sr-only">{caption}</caption><thead className={GUIDE_THEAD_CLASS}><tr>
       <th scope="col" className={GUIDE_TH_CLASS}>#</th><th scope="col" className={`${GUIDE_TH_CLASS} sticky left-0 z-10 bg-bg-elevated`}>Opener</th>
       {Object.entries(SORTS).filter(([key]) => key !== "prevalence" || hasPrevalence).map(([key, sort]) => <SortableTh key={key} col={key} label={sort.label} {...sortProps} align="right" />)}
+      {canLinkGuides ? <th scope="col" className={GUIDE_TH_CLASS}>Compare</th> : null}
     </tr></thead><tbody className="divide-y divide-border">{rows.map((row) => <tr key={row.buildKey}>
       <td className={`${GUIDE_TD_CLASS} w-8 tabular-nums text-text-dim`}>{row.rank}</td>
       <th scope="row" className={`${GUIDE_TD_CLASS} ${sticky} text-left font-medium`}><OpenerName row={row} matchupSlug={matchupSlug} canLinkGuides={canLinkGuides} /></th>
@@ -59,12 +62,14 @@ function OpenerTable({ rows, id, caption, matchupSlug, canLinkGuides, hasPrevale
       <td className={GUIDE_TD_NUM_CLASS}>{fmtCount(row.games)}<span className="block text-micro text-text-dim">{fmtCountNoun(row.users, "player")}</span></td>
       {hasPrevalence ? <td className={GUIDE_TD_NUM_CLASS}>{row.prevalence == null ? "—" : fmtPct(row.prevalence)}<PopularityMovement row={row} /></td> : null}
       <td className={GUIDE_TD_NUM_CLASS}><TrendBadge trend={row.trend} isNew={row.isNew} showDelta /></td>
+      {canLinkGuides ? <td className={GUIDE_TD_CLASS}><CompareOpenerCheckbox row={row} comparison={comparison} /></td> : null}
     </tr>)}</tbody></table>
   </div>;
 }
 
 export function OpenersTable({ openers, matchupSlug, caption, canLinkGuides }: { openers: ReadonlyArray<GuideOpenerRow>; matchupSlug: string; caption: string; canLinkGuides: boolean }) {
   const id = useId(); const [onlyGuides, setOnlyGuides] = useState(false);
+  const comparison = useOpenerComparison(matchupSlug, canLinkGuides);
   const ranked = openers.slice(0, 30).map((row, index) => ({ ...row, rank: index + 1 }));
   const controls = useGuideTableControls(ranked, { sorts: SORTS, defaultSort: null, filterFn: (row, query) => normalizeGuideSearch(row.name).includes(query) && (!canLinkGuides || !onlyGuides || row.published) });
   const hasPrevalence = ranked.some((row) => row.prevalence != null);
@@ -79,7 +84,8 @@ export function OpenersTable({ openers, matchupSlug, caption, canLinkGuides }: {
       <option value="rank">Ranked</option>{Object.entries(SORTS).filter(([key]) => key !== "prevalence" || hasPrevalence).flatMap(([key, sort]) => [<option key={`${key}:desc`} value={`${key}:desc`}>{sort.label}: high to low</option>, <option key={`${key}:asc`} value={`${key}:asc`}>{sort.label}: low to high</option>])}
     </select></label>
     {!controls.count ? <p role="status" className={`${GUIDE_PANEL_CLASS} p-4 text-caption text-text`}>No opener matches “{controls.query}” <Button variant="secondary" size="sm" onClick={() => { controls.setQuery(""); setOnlyGuides(false); }}>Clear</Button></p> : null}
-    <OpenerCards rows={controls.visibleRows} matchupSlug={matchupSlug} canLinkGuides={canLinkGuides} />
-    <OpenerTable rows={controls.visibleRows} id={id} caption={caption} matchupSlug={matchupSlug} canLinkGuides={canLinkGuides} hasPrevalence={hasPrevalence} sortProps={controls.sortProps} />
+    <OpenerCards rows={controls.visibleRows} matchupSlug={matchupSlug} canLinkGuides={canLinkGuides} comparison={comparison} />
+    <OpenerTable rows={controls.visibleRows} id={id} caption={caption} matchupSlug={matchupSlug} canLinkGuides={canLinkGuides} hasPrevalence={hasPrevalence} sortProps={controls.sortProps} comparison={comparison} />
+    {canLinkGuides ? <OpenerComparisonBar matchupSlug={matchupSlug} comparison={comparison} /> : null}
   </div>;
 }

@@ -9,6 +9,7 @@ import { privateScouting, projectDockScouting } from "@/lib/liveScouting";
 import type { LiveGameEnvelope } from "@/components/overlay/types";
 import { ScoutingFacts } from "./ScoutingFacts";
 import { ScoutingNotePopover } from "./ScoutingNotePopover";
+import { formatNumber } from "@/lib/i18n/format";
 
 export function ScoutingBriefCard({ live, unavailable = false, large = false, onRetry }: { live: LiveGameEnvelope | null; unavailable?: boolean; large?: boolean; onRetry?: () => void }) {
   const { userId } = useAuth();
@@ -34,7 +35,7 @@ export function ScoutingBriefCard({ live, unavailable = false, large = false, on
       {!large ? <Link href="/app/live" className="ml-auto inline-flex min-h-11 shrink-0 items-center px-2 text-caption font-semibold text-accent underline">Second screen</Link> : null}
     </div>
     <div id={detailsId} hidden={compact} className="mt-3 space-y-4">
-      <div className="flex flex-wrap gap-2 text-caption text-text-muted">{data.aka && data.aka !== data.name ? <span>AKA {data.aka}</span> : null}<span>{data.mmr === null ? "MMR unavailable" : `${data.mmr.toLocaleString("en-US")} MMR`}</span>{data.league ? <span>· {data.league}</span> : null}{data.rival ? <span className="font-semibold text-text">{data.rival}</span> : null}{data.rematch ? <span className="font-semibold text-text">Rematch</span> : null}</div>
+      <div className="flex flex-wrap gap-2 text-caption text-text-muted">{data.aka && data.aka !== data.name ? <span>AKA {data.aka}</span> : null}<span>{data.mmr === null ? "MMR unavailable" : `${formatNumber(data.mmr)} MMR`}</span>{data.league ? <span>· {data.league}</span> : null}{data.rival ? <span className="font-semibold text-text">{data.rival}</span> : null}{data.rematch ? <span className="font-semibold text-text">Rematch</span> : null}</div>
       {!data.enriched ? <div role="status" className="space-y-2 text-body text-text-muted"><p>{unavailable ? "Scouting history unavailable. The next update may recover it." : data.name ? "Looking up your shared history…" : "Pulse lookup pending…"}</p>{unavailable && onRetry ? <Button variant="secondary" size="sm" onClick={onRetry}>Retry scouting</Button> : <div aria-label="Loading scouting history" className="h-3 max-w-sm animate-pulse rounded bg-bg-elevated" />}</div> : <ScoutingFacts data={data} compactOnPhone={!large} />}
       {details.note ? <blockquote className="break-words rounded-lg border-l-4 border-accent bg-accent/5 p-3 text-body">{details.note}<span className="mt-1 block text-caption text-text-muted">{details.noteVisibility === "stream" ? "Shows on stream" : "Private"}</span></blockquote> : null}
       {details.linkedNotes.length ? <div className="space-y-1"><h3 className="text-caption font-semibold text-text-muted">From their other accounts</h3><ul className="space-y-1">{details.linkedNotes.map((row, i) => <li key={i} className="break-words rounded-lg border border-border p-2 text-caption">{row.account ? <span className="font-semibold">{row.account}: </span> : null}{row.text}{row.tags.length ? <span className="text-text-muted"> · {row.tags.join(", ")}</span> : null}</li>)}</ul></div> : null}

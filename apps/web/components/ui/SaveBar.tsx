@@ -67,7 +67,7 @@ export function SaveBar({
             aria-hidden
             className="inline-block h-2 w-2 flex-shrink-0 rounded-full bg-accent-cyan"
           />
-          <span className="truncate">{message}</span>
+          <span className={stackOnMobile ? "min-w-0 break-words" : "truncate"}>{message}</span>
         </div>
         <div className={`flex flex-shrink-0 items-center justify-end gap-2 ${stackOnMobile ? "flex-wrap" : ""}`}>
           {onReset ? (

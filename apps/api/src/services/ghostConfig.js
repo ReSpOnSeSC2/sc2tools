@@ -1,6 +1,7 @@
 "use strict";
 
 const { targetHash } = require("./practiceGrade");
+const { normalizeCheckpoints } = require("./practiceCheckpoints");
 
 // Keep the pure model in parity with web/lib/ghostBuild.ts. The account
 // transport additionally caps expanded UTF-8 JSON; legacy compact URLs keep
@@ -89,6 +90,26 @@ function armStamps(before, after, now) {
   return { set, unset: Object.keys(unset).length > 0 ? { $unset: unset } : {} };
 }
 
+/** Private slot metadata survives edits by clients that know only the public
+ * Ghost target. A different build starts with no checkpoints.
+ * @param {any} raw @param {Record<string,any>} slots */
+function preserveCheckpoints(raw, slots) {
+  for (const [key, target] of Object.entries(slots)) {
+    const before = raw?.slots?.[key];
+    const normalized = normalizeGhostTarget(before);
+    if (!normalized || targetHash(normalized) !== targetHash(target)) continue;
+    const checkpoints = normalizeCheckpoints(before.checkpoints, target.steps.length);
+    if (checkpoints?.length) slots[key] = { ...target, checkpoints };
+  }
+}
+
+/** Stored slot metadata is private and doesn't count towards the transport limit.
+ * @param {unknown} raw */
+function readStoredGhostBuildConfig(raw) {
+  const config = normalizeGhostBuildConfig(raw);
+  return config && normalizeSyncedGhostBuildConfig(config);
+}
+
 class GhostConfigService {
   /** @param {{db:any, overlayTokens?:any, io?:any}} deps */
   constructor({ db, overlayTokens, io }) {
@@ -101,7 +122,7 @@ class GhostConfigService {
    * @param {string} owner */
   async get(owner) {
     const row = await this.db.users.findOne({ userId: owner }, { projection: { _id: 0, [ROOT]: 1, [REVISION]: 1 } });
-    const config = normalizeSyncedGhostBuildConfig(row?.preferences?.ghost);
+    const config = readStoredGhostBuildConfig(row?.preferences?.ghost);
     if (!config) return null;
     const raw = row?.preferences?.ghostRevision;
     const revision = Number.isSafeInteger(raw) && raw >= 0 ? raw : 0;
@@ -115,13 +136,14 @@ class GhostConfigService {
     const clean = normalizeSyncedGhostBuildConfig(input);
     // Reserve the largest legal revision's transport overhead at admission.
     if (!clean || !normalizeSyncedGhostBuildConfig({ ...clean, revision: Number.MAX_SAFE_INTEGER })) throw failure("invalid_ghost_config");
-    const row = await this.db.users.findOne({ userId: owner }, { projection: { _id: 0, [ROOT]: 1 } });
-    const previous = normalizeSyncedGhostBuildConfig(row?.preferences?.ghost) || { v: 2, slots: {} };
-    const stamps = armStamps(previous.slots, clean.slots, new Date());
-    const result = await this.db.users.updateOne({ userId: owner }, { $set: { [ROOT]: clean, ...stamps.set }, $inc: { [REVISION]: 1 }, ...stamps.unset });
-    if (!result.matchedCount) throw failure("user_not_found", 404);
-    await this.changed(owner);
-    return this.get(owner);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const row = await this.db.users.findOne({ userId: owner }, { projection: { _id: 0, [ROOT]: 1 } });
+      if (!row) throw failure("user_not_found", 404);
+      const raw = row.preferences?.ghost;
+      const previous = readStoredGhostBuildConfig(raw) || { v: 2, slots: {} };
+      if (await this.write(owner, raw, previous.slots, clean)) return this.get(owner);
+    }
+    throw failure("ghost_config_changed", 409);
   }
 
   /** Bounded optimistic merge: no revision documents, leases or background
@@ -143,7 +165,7 @@ class GhostConfigService {
       const row = await this.db.users.findOne({ userId: owner }, { projection: { _id: 0, [ROOT]: 1 } });
       if (!row) throw failure("user_not_found", 404);
       const raw = row.preferences?.ghost;
-      const current = normalizeSyncedGhostBuildConfig(raw) || { v: 2, slots: {} };
+      const current = readStoredGhostBuildConfig(raw) || { v: 2, slots: {} };
       if (expects && JSON.stringify(current.slots[body.matchup] ?? null) !== JSON.stringify(expected)) throw failure("ghost_config_changed", 409);
       /** @type {Record<string, any>} */ const slots = { ...current.slots };
       if (incoming) {
@@ -152,13 +174,23 @@ class GhostConfigService {
       else delete slots[body.matchup];
       const next = normalizeSyncedGhostBuildConfig({ v: 2, slots });
       if (!next || !normalizeSyncedGhostBuildConfig({ ...next, revision: Number.MAX_SAFE_INTEGER })) throw failure("invalid_ghost_config");
-      const stamps = armStamps(current.slots, next.slots, new Date());
-      const result = await this.db.users.updateOne({ userId: owner,
-        [ROOT]: raw === undefined ? { $exists: false } : { $eq: raw },
-      }, { $set: { [ROOT]: next, ...stamps.set }, $inc: { [REVISION]: 1 }, ...stamps.unset });
-      if (result.matchedCount) { await this.changed(owner); return this.get(owner); }
+      if (await this.write(owner, raw, current.slots, next)) return this.get(owner);
     }
     throw failure("ghost_config_changed", 409);
+  }
+
+  /** @param {string} owner @param {any} raw @param {Record<string,any>} previous
+   * @param {{v:number,slots:Record<string,any>}} next */
+  async write(owner, raw, previous, next) {
+    const stored = { ...next, slots: { ...next.slots } };
+    preserveCheckpoints(raw, stored.slots);
+    const stamps = armStamps(previous, stored.slots, new Date());
+    const result = await this.db.users.updateOne({ userId: owner,
+      [ROOT]: raw === undefined ? { $exists: false } : { $eq: raw },
+    }, { $set: { [ROOT]: stored, ...stamps.set }, $inc: { [REVISION]: 1 }, ...stamps.unset });
+    if (!result.matchedCount) return false;
+    await this.changed(owner);
+    return true;
   }
 
   /** Only the owner's active token rooms receive targets. The web advisory
@@ -182,4 +214,4 @@ class GhostConfigService {
   }
 }
 
-module.exports = { MATCHUPS, MAX_GHOST_JSON_BYTES, normalizeGhostTarget, normalizeGhostBuildConfig, normalizeSyncedGhostBuildConfig, GhostConfigService };
+module.exports = { MATCHUPS, MAX_GHOST_JSON_BYTES, readStoredGhostBuildConfig, normalizeGhostTarget, normalizeGhostBuildConfig, normalizeSyncedGhostBuildConfig, GhostConfigService };

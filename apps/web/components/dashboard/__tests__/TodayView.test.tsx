@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   useApi: vi.fn(() => ({ data: { defaultTab: "battlefield" }, isLoading: false, error: null })),
   firstRunVisible: false,
   totalGames: 42,
+  weeklyReportWeek: null as string | null,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -28,6 +29,7 @@ vi.mock("@/components/dashboard/AnalyzerFrame", () => ({
     agentPaired: true,
     agentVersion: "1.0.0",
     agentLastSeenAt: null,
+    get weeklyReportWeek() { return mocks.weeklyReportWeek; },
     get games() { return { total: mocks.totalGames, latest: null }; },
   }),
   onboardingView: () => ({ checklist: mocks.firstRunVisible, noGamesYet: false }),
@@ -63,7 +65,7 @@ beforeEach(() => {
   window.sessionStorage.clear();
   window.history.replaceState(null, "", "/app");
   mocks.useApi.mockClear();
-  mocks.firstRunVisible = false; mocks.totalGames = 42;
+  mocks.firstRunVisible = false; mocks.totalGames = 42; mocks.weeklyReportWeek = null;
 });
 
 afterEach(() => {
@@ -89,6 +91,14 @@ describe("TodayView", () => {
     expect(url.searchParams.get("accounts")).toBe("1-S2-1-42");
     expect(url.searchParams.get("filters")).toBe("1");
   });
+  it("opens the completed week supplied by the dashboard snapshot", () => {
+    const view = render(<TodayView />);
+    expect(screen.queryByRole("heading", { name: "Last week" })).toBeNull();
+    mocks.weeklyReportWeek = "2026-W45";
+    view.rerender(<TodayView />);
+    expect(screen.getByRole("link", { name: "Open weekly report" }).getAttribute("href")).toBe("/app/reports/weekly/2026-W45");
+  });
+
   it("places Daily Pulse above Ladder Pulse", async () => {
     render(<TodayView />);
 

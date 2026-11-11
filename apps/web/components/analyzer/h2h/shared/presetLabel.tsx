@@ -7,6 +7,7 @@ import {
   toDateInputValue,
   type PresetId,
 } from "@/lib/datePresets";
+import { formatDate } from "@/lib/i18n/format";
 
 /**
  * Helpers for surfacing the active global date preset inside the H2H
@@ -50,7 +51,7 @@ function compactDate(iso: string): string {
   if (Number.isNaN(d.getTime())) return toDateInputValue(undefined);
   // A custom range can sit entirely in a past year — the year is
   // load-bearing, not decoration.
-  return d.toLocaleDateString(undefined, {
+  return formatDate(d, {
     month: "short",
     day: "numeric",
     year: "numeric",
