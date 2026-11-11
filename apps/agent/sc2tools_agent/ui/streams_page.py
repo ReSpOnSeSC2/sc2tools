@@ -6,15 +6,16 @@ import webbrowser
 import re
 import copy
 
+from . import theme
+from .qt_helpers import install_responsive_forms
+from .stream_studio_layout import AUTO_REARM_LABEL, build_stream_studio
+
 CATALOG_PLACEHOLDERS = {
     "idle": "Connect YouTube first", "loading": "Loading…",
     "failed": "Not loaded — press Refresh keys", "retrying": "Not loaded yet — retrying…",
     "ready": "Choose…",
 }
 DEFAULT_STREAM_DESCRIPTION = "Live StarCraft II games, ranked matches, and practice.\n\nThanks for watching! Join the chat and enjoy the stream."
-
-
-from .qt_helpers import install_wheel_guard
 
 
 def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
@@ -47,7 +48,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self._obs_account_mode = None
             self._account_context = None
             self._job_generation = 0
-            self.setWidget(self._content())
+            self.setWidget(build_stream_studio(self, QtCore, QtWidgets))
+            self._responsive_forms = install_responsive_forms(self, QtCore=QtCore, QtWidgets=QtWidgets)
             self._responsive_rows = self.widget().findChildren(QtWidgets.QHBoxLayout)
             self._narrow_layout = None
             self._update_responsive_rows()
@@ -73,6 +75,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 row.setDirection(direction)
             for toggle in self.widget().findChildren(QtWidgets.QToolButton, "studioDisclosureToggle"):
                 toggle.setText(toggle.property("compactTitle") if narrow else toggle.property("fullTitle"))
+            self.auto_check.setText(("\n" if narrow else " ").join(AUTO_REARM_LABEL))
 
         def _label(self, text, muted=False, *, name=None):
             label = QtWidgets.QLabel(text)
@@ -95,8 +98,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             card = QtWidgets.QFrame()
             card.setObjectName(name)
             layout = QtWidgets.QVBoxLayout(card)
-            layout.setContentsMargins(18, 14, 18, 14)
-            layout.setSpacing(8)
+            layout.setContentsMargins(theme.SPACE_L, theme.SPACE_M, theme.SPACE_L, theme.SPACE_M)
+            layout.setSpacing(theme.SPACE_S)
             return card, layout
 
         def _badge(self, text):
@@ -119,7 +122,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             container.setObjectName("studioTransparent")
             layout = QtWidgets.QVBoxLayout(container)
             layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(8)
+            layout.setSpacing(theme.SPACE_S)
             toggle = QtWidgets.QToolButton()
             toggle.setObjectName("studioDisclosureToggle")
             toggle.setText(title + "  ·  " + detail)
@@ -140,265 +143,6 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             layout.addWidget(toggle)
             layout.addWidget(body)
             return container, toggle, body, body_layout
-
-        def _content(self):
-            content = QtWidgets.QWidget()
-            content.setObjectName("studioContent")
-            layout = QtWidgets.QVBoxLayout(content)
-            layout.setContentsMargins(28, 24, 28, 24)
-            layout.setSpacing(14)
-            heading = QtWidgets.QHBoxLayout()
-            heading.addWidget(self._label("Streams", name="h1"))
-            heading.addStretch()
-            heading.addWidget(self._label("SC2TOOLS  /  STREAM STUDIO", name="studioEyebrow"))
-            layout.addLayout(heading)
-
-            command, command_layout = self._card("studioCommand")
-            label_row = QtWidgets.QHBoxLayout()
-            label_row.addWidget(self._label("ONE TITLE. EVERY DESTINATION.", name="studioEyebrow"))
-            label_row.addStretch()
-            self.counter = self._label("0 / 70", name="studioCounter")
-            label_row.addWidget(self.counter)
-            command_layout.addLayout(label_row)
-            self.title_input = QtWidgets.QLineEdit()
-            self.title_input.setObjectName("streamTitle")
-            self.title_input.setMaxLength(500)
-            self.title_input.setPlaceholderText("Give your next stream a title")
-            self.title_input.setMinimumHeight(44)
-            self.title_input.textEdited.connect(self._title_edited)
-            self.title_input.returnPressed.connect(self.save_title)
-            command_layout.addWidget(self.title_input)
-            from .stream_title_controls import StreamTitleControls
-            self.title_controls = StreamTitleControls(self, command_layout, QtCore, QtWidgets)
-            description_header = QtWidgets.QHBoxLayout()
-            self.description_label = self._label("YouTube description", name="studioEyebrow")
-            self.description_scope = self._label("Applies to both YouTube formats", True)
-            description_header.addWidget(self.description_label)
-            description_header.addWidget(self.description_scope, 1)
-            command_layout.addLayout(description_header)
-            self.description_input = QtWidgets.QPlainTextEdit()
-            self.description_input.setObjectName("streamDescription")
-            self.description_input.setFixedHeight(112)
-            self.description_input.textChanged.connect(self._description_edited)
-            command_layout.addWidget(self.description_input)
-            self.description_link_note = self._label("The vertical-to-horizontal watch link is added automatically.", True)
-            command_layout.addWidget(self.description_link_note)
-            actions = QtWidgets.QHBoxLayout()
-            actions.setSpacing(10)
-            self.save_button = self._button("Save title and description", self.save_title, primary=True)
-            self.prepare_button = self._button("Prepare YouTube session", lambda: self.job({"action": "prepare"}))
-            self.prepare_button.setToolTip("Save your title, description and YouTube setup, then prepare both destinations before starting Aitum.")
-            actions.addWidget(self.save_button)
-            actions.addWidget(self.prepare_button)
-            actions.addStretch()
-            actions.addWidget(self._label("YouTube · Twitch · Kick", True))
-            command_layout.addLayout(actions)
-            self.notice = self._label("Loading stream settings…", name="studioNotice")
-            command_layout.addWidget(self.notice)
-            layout.addWidget(command)
-
-            youtube_section = QtWidgets.QVBoxLayout()
-            youtube_section.setSpacing(8)
-            youtube_header = QtWidgets.QHBoxLayout()
-            youtube_header.addWidget(self._label("YouTube destinations", name="h2"))
-            youtube_header.addStretch()
-            self.import_google_button = self._button("Import Google client…", self.import_google, quiet=True)
-            youtube_header.addWidget(self.import_google_button)
-            self.refresh_accounts_button = self._button("Refresh connections", lambda: self.job({"action": "refresh_accounts"}), quiet=True)
-            youtube_header.addWidget(self.refresh_accounts_button)
-            self.youtube_setup_button = QtWidgets.QPushButton("Setup")
-            self.youtube_setup_button.setObjectName("quietButton")
-            self.youtube_setup_button.setCursor(QtCore.Qt.PointingHandCursor)
-            self.youtube_setup_button.clicked.connect(self.open_setup)
-            youtube_header.addWidget(self.youtube_setup_button)
-            self.youtube_connect_button = self._button("Connect YouTube", lambda: self.job({"action": "connect_youtube"}), quiet=True)
-            youtube_header.addWidget(self.youtube_connect_button)
-            youtube_section.addLayout(youtube_header)
-            self.platform_labels["youtube"] = self._label("YouTube · connection required", True)
-            youtube_section.addWidget(self.platform_labels["youtube"])
-            destinations = QtWidgets.QHBoxLayout()
-            destinations.setSpacing(14)
-            for scope, title, canvas, ratio in (
-                ("horizontal", "Horizontal", "OBS main canvas", "16:9"),
-                ("portrait", "Vertical", "OBS vertical canvas", "9:16"),
-            ):
-                card, card_layout = self._card("studioDestination")
-                row = QtWidgets.QHBoxLayout()
-                row.setSpacing(12)
-                marker = self._label(ratio, name="canvasLandscape" if scope == "horizontal" else "canvasPortrait")
-                marker.setAlignment(QtCore.Qt.AlignCenter)
-                marker.setFixedSize(54, 32) if scope == "horizontal" else marker.setFixedSize(28, 40)
-                marker_box = QtWidgets.QWidget()
-                marker_box.setObjectName("studioTransparent")
-                marker_box.setFixedWidth(58)
-                marker_layout = QtWidgets.QHBoxLayout(marker_box)
-                marker_layout.setContentsMargins(0, 0, 0, 0)
-                marker_layout.addWidget(marker, 0, QtCore.Qt.AlignCenter)
-                row.addWidget(marker_box)
-                names = QtWidgets.QVBoxLayout()
-                names.setSpacing(3)
-                names.addWidget(self._label(title, name="studioDestinationTitle"))
-                names.addWidget(self._label(canvas, True))
-                row.addLayout(names, 1)
-                self.format_labels[scope] = self._badge("Setup needed")
-                row.addWidget(self.format_labels[scope], 0, QtCore.Qt.AlignTop)
-                connect = self._button(
-                    "Connect YouTube",
-                    lambda _checked=False, key=scope: self.connect_youtube(key),
-                    quiet=True,
-                )
-                connect.setToolTip("Connect your YouTube account in your browser.")
-                connect.setVisible(False)
-                self.format_connect_buttons[scope] = connect
-                row.addWidget(connect, 0, QtCore.Qt.AlignTop)
-                card_layout.addLayout(row)
-                footer = QtWidgets.QHBoxLayout()
-                footer.addWidget(self._label("Reusable key · separate link & chat", True), 1)
-                view = QtWidgets.QPushButton("View ↗")
-                view.setObjectName("quietButton")
-                view.setCursor(QtCore.Qt.PointingHandCursor)
-                view.clicked.connect(lambda _checked=False, key=scope: self.view_stream(key))
-                view.setEnabled(False)
-                self.format_links[scope] = view
-                footer.addWidget(view)
-                card_layout.addLayout(footer)
-                destinations.addWidget(card, 1)
-            youtube_section.addLayout(destinations)
-            session_row = QtWidgets.QHBoxLayout()
-            session_row.setSpacing(8)
-            self.auto_label = self._label("Next session: manual", True)
-            session_row.addWidget(self.auto_label, 1)
-            session_row.addWidget(self._button("Check / recover", lambda: self.job({"action": "recover"}), quiet=True))
-            self.pause_auto_button = self._button("Pause auto", lambda: self.job({"action": "pause_auto"}), quiet=True)
-            self.resume_auto_button = self._button("Enable auto", lambda: self.job({"action": "resume_auto"}), quiet=True)
-            session_row.addWidget(self.pause_auto_button)
-            session_row.addWidget(self.resume_auto_button)
-            youtube_section.addLayout(session_row)
-            youtube_section.addWidget(self._label("Start the two YouTube Output buttons in Aitum when both destinations show Ready.", True))
-            layout.addLayout(youtube_section)
-
-            accounts = QtWidgets.QHBoxLayout()
-            accounts.setSpacing(14)
-            for platform in ("twitch", "kick"):
-                card, account_layout = self._card()
-                row = QtWidgets.QHBoxLayout()
-                text = QtWidgets.QVBoxLayout()
-                text.setSpacing(4)
-                title_row = QtWidgets.QHBoxLayout()
-                title_row.addWidget(self._label(platform.title(), name="h2"))
-                self.platform_badges[platform] = self._badge("Not connected")
-                title_row.addWidget(self.platform_badges[platform])
-                title_row.addStretch()
-                text.addLayout(title_row)
-                self.platform_labels[platform] = self._label("Connect your streaming account", True)
-                text.addWidget(self.platform_labels[platform])
-                row.addLayout(text, 1)
-                row.addWidget(self._button("Connect", lambda _checked=False, name=platform: self.connect_platform(name), quiet=True))
-                account_layout.addLayout(row)
-                accounts.addWidget(card, 1)
-            layout.addLayout(accounts)
-
-            setup_section, self.setup_toggle, self.setup_box, setup_layout = self._disclosure("YouTube setup", "Channel, keys & session options")
-            setup = QtWidgets.QFormLayout()
-            setup.setHorizontalSpacing(18)
-            setup.setVerticalSpacing(12)
-            setup.setFieldGrowthPolicy(QtWidgets.QFormLayout.AllNonFixedFieldsGrow)
-            self.channel_combo = QtWidgets.QComboBox()
-            self.horizontal_combo = QtWidgets.QComboBox()
-            self.portrait_combo = QtWidgets.QComboBox()
-            for combo in (self.channel_combo, self.horizontal_combo, self.portrait_combo):
-                combo.addItem("Choose…", None)
-            setup.addRow("Channel", self.channel_combo)
-            setup.addRow("Horizontal reusable key", self.horizontal_combo)
-            setup.addRow("Vertical reusable key", self.portrait_combo)
-            self.catalog_note = self._label("Connect YouTube to load your channel and reusable keys.", True)
-            setup.addRow("", self.catalog_note)
-            self.privacy = QtWidgets.QComboBox()
-            for text, data in (("Choose visibility…", None), ("Unlisted (for testing)", "unlisted"), ("Private", "private"), ("Public", "public")):
-                self.privacy.addItem(text, data)
-            setup.addRow("Visibility", self.privacy)
-            self.audience = QtWidgets.QComboBox()
-            self.audience.addItem("Choose audience setting…", None)
-            self.audience.addItem("No, not made for kids", False)
-            self.audience.addItem("Yes, made for kids", True)
-            setup.addRow("Audience", self.audience)
-            self.auto_check = QtWidgets.QCheckBox("Prepare the next pair automatically after both streams end")
-            self.auto_check.setChecked(False)
-            setup.addRow(self.auto_check)
-            from ..streaming.obs_reader import DEFAULT_OUTPUTS
-            self.output_inputs = {}
-            for scope, text in (("horizontal", "OBS horizontal output name"), ("portrait", "OBS vertical output name")):
-                field = QtWidgets.QLineEdit(DEFAULT_OUTPUTS[scope])
-                self.output_inputs[scope] = field
-                setup.addRow(text, field)
-            setup_layout.addLayout(setup)
-            setup_actions = QtWidgets.QHBoxLayout()
-            setup_actions.addWidget(self._button("Refresh keys", lambda: self.job({"action": "refresh_keys"})))
-            setup_actions.addWidget(self._button("Save YouTube setup", self.configure, primary=True))
-            setup_actions.addStretch()
-            setup_layout.addLayout(setup_actions)
-            self.connection_note = self._label("Authorize your accounts through SC2Tools once. Provider credentials stay on the server.", True)
-            setup_layout.addWidget(self.connection_note)
-            account_actions = QtWidgets.QHBoxLayout()
-            self.local_setup_button = self._button("Advanced local setup…", self.change_connection_mode, quiet=True)
-            account_actions.addWidget(self.local_setup_button)
-            account_actions.addStretch()
-            setup_layout.addLayout(account_actions)
-            layout.addWidget(setup_section)
-
-            obs_section, self.obs_toggle, self.obs_box, obs_layout = self._disclosure("OBS connection details", "Server & key for the selected YouTube destination")
-            obs_layout.addWidget(self._label("Save your channel and both reusable keys with Save YouTube setup first. Then choose a destination and Fetch its server and key for the matching Aitum output in OBS.", True))
-            obs_form = QtWidgets.QFormLayout()
-            self.obs_destination = QtWidgets.QComboBox()
-            self.obs_destination.addItem("Horizontal", "horizontal")
-            self.obs_destination.addItem("Vertical", "portrait")
-            obs_form.addRow("Destination", self.obs_destination)
-            self.obs_selected_key = self._label("Save your YouTube setup first.", True)
-            obs_form.addRow("Reusable key", self.obs_selected_key)
-            self.obs_output_name = self._label("", True)
-            obs_form.addRow("OBS / Aitum output", self.obs_output_name)
-            self.obs_server = QtWidgets.QLineEdit()
-            self.obs_server.setReadOnly(True)
-            obs_form.addRow("Server URL", self.obs_server)
-            self.obs_key = QtWidgets.QLineEdit()
-            self.obs_key.setReadOnly(True)
-            self.obs_key.setEchoMode(QtWidgets.QLineEdit.Password)
-            obs_form.addRow("Stream key", self.obs_key)
-            obs_layout.addLayout(obs_form)
-            obs_actions = QtWidgets.QHBoxLayout()
-            self.obs_fetch_button = self._button("Fetch connection details", self.fetch_obs_connection)
-            self.obs_copy_server = QtWidgets.QPushButton("Copy server")
-            self.obs_copy_key = QtWidgets.QPushButton("Copy key")
-            for button, field, message in (
-                (self.obs_copy_server, self.obs_server, "Server URL copied."),
-                (self.obs_copy_key, self.obs_key, "Stream key copied. Paste it into the selected OBS output."),
-            ):
-                button.setObjectName("quietButton")
-                button.setCursor(QtCore.Qt.PointingHandCursor)
-                button.clicked.connect(lambda _checked=False, item=field, text=message: self.copy_obs_detail(item, text))
-            self.obs_reveal = QtWidgets.QCheckBox("Reveal key")
-            self.obs_reveal.toggled.connect(self.reveal_obs_key)
-            for control in (self.obs_fetch_button, self.obs_copy_server, self.obs_copy_key, self.obs_reveal):
-                obs_actions.addWidget(control)
-            obs_actions.addStretch()
-            obs_layout.addLayout(obs_actions)
-            self.obs_note = self._label("Connection details appear only after Fetch; the key stays hidden until you reveal or copy it.", True)
-            obs_layout.addWidget(self.obs_note)
-            self.obs_destination.currentIndexChanged.connect(self._obs_selection_changed)
-            self.obs_toggle.toggled.connect(lambda opened: None if opened else self._clear_obs_connection())
-            layout.addWidget(obs_section)
-
-            layout.addStretch()
-            # Scrolling the page over an unfocused dropdown must never change a
-            # saved choice (channel, key, visibility, audience, destination).
-            for combo in (self.channel_combo, self.horizontal_combo, self.portrait_combo, self.privacy, self.audience, self.obs_destination):
-                install_wheel_guard(combo, QtCore)
-            for combo, key in ((self.channel_combo, "channel_id"), (self.horizontal_combo, "horizontal_id"), (self.portrait_combo, "portrait_id"), (self.privacy, "privacy"), (self.audience, "made_for_kids")):
-                combo.currentIndexChanged.connect(lambda _index, name=key: self._setup_edited(name))
-            self.auto_check.toggled.connect(lambda _checked: self._setup_edited("auto_rearm"))
-            for scope, field in self.output_inputs.items():
-                field.textEdited.connect(lambda _text, name=scope: self._setup_edited("output_" + name))
-            return content
 
         def _setup_edited(self, field=None):
             self.setup_dirty = True
