@@ -149,6 +149,15 @@ const PUBLIC_AGGREGATE_PROJECTION = Object.freeze({
   build: publicBuildMongoExpression("$build"),
 });
 
+// Compute the featured build's vote totals in Mongo without fetching voters.
+const PUBLIC_AUTHOR_VOTE_COUNTS = {
+  $cond: [
+    { $and: [{ $isArray: "$upvotes" }, { $isArray: "$downvotes" }] },
+    { upvotes: { $size: "$upvotes" }, downvotes: { $size: "$downvotes" } },
+    null,
+  ],
+};
+
 // Publish reads only fields that can enter the public snapshot. A historical
 // private doc may contain a multi-megabyte unknown child; never fetch that
 // object wholesale merely to publish a handful of known leaves.
@@ -1406,7 +1415,7 @@ class CommunityService {
       { $match: { ownerUserId: userId, removed: false } },
       { $sort: { publishedAt: -1 } },
       { $limit: PUBLIC_AUTHOR_BUILD_LIMIT },
-      { $project: projection },
+      { $project: { ...projection, voteCounts: PUBLIC_AUTHOR_VOTE_COUNTS } },
     ], queryOptions).toArray();
     const allBuilds = rawBuilds.map((row) => publicCommunityBuildSnapshot(row));
     if (allBuilds.length === 0) return null;
@@ -1439,6 +1448,7 @@ class CommunityService {
       if (!best) return cur;
       return (cur.votes ?? 0) > (best.votes ?? 0) ? cur : best;
     }, /** @type {any} */ (null));
+    const voteCounts = rawBuilds[allBuilds.indexOf(topBuild)]?.voteCounts;
     const joinedAt = builds.length
       ? builds.reduce((earliest, b) => {
           const t = b.publishedAt ? new Date(b.publishedAt).getTime() : NaN;
@@ -1456,7 +1466,7 @@ class CommunityService {
       totalVotes,
       primaryRace,
       topMatchup,
-      topBuild,
+      topBuild: voteCounts ? { ...topBuild, voteCounts } : topBuild,
       recent: builds.slice(0, 5),
     };
   }
