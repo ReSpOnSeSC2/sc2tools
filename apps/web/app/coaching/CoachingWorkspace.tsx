@@ -20,6 +20,10 @@ const LockerRoster = dynamic(() => import("./LockerRoster"), {
   loading: () => <p role="status" className="text-caption text-text-muted">Loading the Locker roster…</p>,
 });
 
+const LockerShelf = dynamic(() => import("./LockerShelf"), {
+  loading: () => <p role="status" className="text-caption text-text-muted">Loading the Locker shelf…</p>,
+});
+
 type CoachingMe = {
   role: "admin" | "coach" | "student" | "none";
   coachId: string | null;
@@ -27,6 +31,7 @@ type CoachingMe = {
 };
 
 type WorkspaceView = "locker" | "practice" | "sessions";
+const LOCKER_LINK = "inline-flex min-h-11 items-center font-semibold text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
 export default function CoachingWorkspace() {
   const { data, error, isLoading, mutate } = useApi<CoachingMe>("/v1/coaching/me");
@@ -42,7 +47,9 @@ export default function CoachingWorkspace() {
       : "locker";
   const workspaceRole = data?.role;
   const manageLocker = workspaceRole === "admin" || workspaceRole === "coach";
-  const rosterOpen = manageLocker && routeView === "locker" && searchParams.get("locker") === "roster";
+  const lockerView = searchParams.get("locker");
+  const rosterOpen = manageLocker && routeView === "locker" && lockerView === "roster";
+  const shelfOpen = routeView === "locker" && lockerView === "shelf";
   const [view, setView] = useState<WorkspaceView>(routeView);
   const [lockerActivated, setLockerActivated] = useState(routeView === "locker");
   const [classicActivated, setClassicActivated] = useState(false);
@@ -54,10 +61,10 @@ export default function CoachingWorkspace() {
     setView(routeView);
     if (routeView === "locker") {
       setLockerActivated(true);
-      if (workspaceRole && !rosterOpen) setClassicActivated(true);
+      if (workspaceRole && !rosterOpen && !shelfOpen) setClassicActivated(true);
     }
     if (routeView === "sessions") setSessionsActivated(true);
-  }, [workspaceRole, rosterOpen, routeView]);
+  }, [workspaceRole, rosterOpen, shelfOpen, routeView]);
 
   if (isLoading || (!data && !error)) {
     return <CoachingShellSkeleton />;
@@ -139,17 +146,14 @@ export default function CoachingWorkspace() {
           re-executes/redeclares that bundle. */}
       {lockerActivated ? (
         <Tabs.Content value="locker" keepMounted className="space-y-3">
-          {rosterOpen && manageLocker ? (
-            <>
-              <a href="/coaching" className="inline-flex min-h-11 items-center font-semibold text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Classic Locker</a>
-              {view === "locker" ? <LockerRoster viewerRole={workspaceRole} coachId={data.coachId} /> : null}
-            </>
-          ) : (
-            <>
-              {manageLocker ? <Link href="/coaching?locker=roster" prefetch={false} className="inline-flex min-h-11 items-center font-semibold text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Open Locker roster</Link> : null}
-              {classicActivated ? <LockerHost /> : null}
-            </>
-          )}
+          <nav className="flex flex-wrap items-center gap-x-4" aria-label="Locker views">
+            {rosterOpen || shelfOpen ? <Link href="/coaching" prefetch={false} className={LOCKER_LINK}>Classic Locker</Link> : null}
+            {manageLocker && !rosterOpen ? <Link href="/coaching?locker=roster" prefetch={false} className={LOCKER_LINK}>Open Locker roster</Link> : null}
+            {!shelfOpen ? <Link href="/coaching?locker=shelf" prefetch={false} className={LOCKER_LINK}>Open Locker shelf</Link> : null}
+          </nav>
+          {rosterOpen && manageLocker && view === "locker" ? <LockerRoster viewerRole={workspaceRole} coachId={data.coachId} /> : null}
+          {shelfOpen && view === "locker" ? <LockerShelf viewerRole={data.role} memberId={data.role === "student" ? data.studentId : data.coachId} /> : null}
+          {classicActivated ? <div hidden={view !== "locker" || rosterOpen || shelfOpen} inert={view !== "locker" || rosterOpen || shelfOpen}><LockerHost /></div> : null}
         </Tabs.Content>
       ) : null}
       <Tabs.Content value="practice"><CoachingPractice role={data.role} /></Tabs.Content>
