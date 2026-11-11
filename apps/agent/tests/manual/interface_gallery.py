@@ -6,8 +6,9 @@ Run from any directory with the desktop development Python:
 
 It saves ``<surface>-<skin>-<size>.png`` for the main window's seven pages,
 the Dashboard needing attention and on a PC waiting to be linked, the
-loading-screen and post-game check-in cards and the floating scouting
-report, in the Default, Protoss, Terran and Zerg skins. Everything is sample
+loading-screen and post-game check-in cards, the floating scouting report,
+expanded Streams controls, desktop menus and dialogs in the Default,
+Protoss, Terran and Zerg skins. Everything is sample
 data: no paired account, service, runner, OBS connection, network request or
 user setting is loaded. ``--scale`` renders as Windows does at that display
 scaling (1.25 or 1.5), to find text that clips.
@@ -219,6 +220,7 @@ def render_scouting_report(window, folder, skin, *, QtWidgets):
 
 def capture(folder):
     from PySide6 import QtCore, QtGui, QtWidgets
+    from interface_gallery_details import render_details
     from sc2tools_agent.ui import theme
     from sc2tools_agent.ui.race_visuals import RACE_SKINS
 
@@ -228,7 +230,7 @@ def capture(folder):
     app.setFont(QtGui.QFont("Segoe UI", 9))
     app.setStyleSheet(theme.STYLE)
     folder.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as logs:
+    with tempfile.TemporaryDirectory(dir=folder) as logs:
         ui, window = build_window(Path(logs), QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
         skins = [skin for _title, skin in RACE_SKINS]
         for skin in skins:
@@ -236,6 +238,7 @@ def capture(folder):
             render_pages(window, folder, skin, QtWidgets=QtWidgets)
             render_checkin_cards(window, folder, skin, QtWidgets=QtWidgets)
             render_scouting_report(window, folder, skin, QtWidgets=QtWidgets)
+            render_details(window, folder, skin, WINDOW_SIZES, save=save, QtCore=QtCore, QtWidgets=QtWidgets)
         render_dashboard_states(window, ui, folder, skins, QtCore=QtCore, QtWidgets=QtWidgets)
         window._companion_page.shutdown()
         window.hide()

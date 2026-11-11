@@ -8,6 +8,8 @@ a bare environment.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from sc2tools_agent.health import HealthSnapshot
 from sc2tools_agent.ui.tray import TrayUI
 
@@ -149,3 +151,23 @@ def test_build_checkin_menu_item_only_when_wired() -> None:
     labels = _labels(wired)
     assert labels.index("Build check-in…") == labels.index("Open dashboard") + 1
     assert "Build check-in…" not in _labels(TrayUI(dashboard_url="https://example.test"))
+
+
+def test_tray_separates_status_navigation_help_and_sync_controls() -> None:
+    tray = TrayUI(dashboard_url="https://example.test", on_show_window=lambda: None,
+                  on_build_checkin=lambda: None, on_pause_for=lambda _until: None)
+    tray._site_notices.current = SimpleNamespace(message="Sample service notice")
+    groups = [[]]
+    for item in tray._build_menu(_FakePystray).items:
+        if item is _FakeMenu.SEPARATOR:
+            groups.append([])
+        else:
+            groups[-1].append(item.text)
+    assert groups == [
+        [tray._title, tray._second_line, tray._third_line, "Sample service notice"],
+        ["Open SC2 Tools", "Open dashboard", "Build check-in…"],
+        ["Help and troubleshooting", "Copy support info"],
+        [tray._pause_label, "Pause"],
+        ["More"],
+        ["Quit"],
+    ]

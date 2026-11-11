@@ -36,6 +36,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, List, Optional
 
+from . import theme
 from .tray_images import _square_pad, render_tray_image, dot_color
 from .tray_notices import TrayNotices
 
@@ -123,8 +124,6 @@ class TrayUI:
 
     def start(self, *, on_quit: Callable[[], None]) -> None:
         import pystray
-        from PIL import Image, ImageDraw
-
         self._stop_cb = on_quit
         icon_img = self._load_icon_image()
         self._base_icon = icon_img
@@ -175,9 +174,9 @@ class TrayUI:
                 # Asset is corrupt — fall through to the procedural icon.
                 pass
 
-        icon_img = Image.new("RGB", (64, 64), color=(124, 140, 255))
+        icon_img = Image.new("RGB", (64, 64), color=theme.ACCENT)
         draw = ImageDraw.Draw(icon_img)
-        draw.text((18, 16), "SC2", fill=(11, 13, 18))
+        draw.text((18, 16), "SC2", fill=theme.ON_ACCENT)
         return icon_img
 
     def _query_synced(self, default: int) -> int:
@@ -280,9 +279,10 @@ class TrayUI:
     def _build_menu(self, pystray):
         items = [pystray.MenuItem(self._title, None, enabled=False),
                  pystray.MenuItem(self._second_line, None, enabled=False),
-                 pystray.MenuItem(self._third_line, None, enabled=False), pystray.Menu.SEPARATOR]
+                 pystray.MenuItem(self._third_line, None, enabled=False)]
         if self._site_notices.current:
             items.append(pystray.MenuItem(self._site_notices.current.message, None, enabled=False))
+        items.append(pystray.Menu.SEPARATOR)
         if self._update_pending and self._on_install_update:
             items.append(pystray.MenuItem(f"Install update v{self._update_pending}", lambda *_: self._on_install_update()))
         if self._on_show_window_cb:
@@ -290,8 +290,10 @@ class TrayUI:
         items.append(pystray.MenuItem("Open dashboard", self._open_dashboard))
         if self._on_build_checkin_cb:
             items.append(pystray.MenuItem("Build check-in…", self._build_checkin_clicked))
+        items.append(pystray.Menu.SEPARATOR)
         items.append(pystray.MenuItem("Help and troubleshooting", self._support_help_clicked))
         items.append(pystray.MenuItem("Copy support info", self._support_copy_clicked, enabled=self._support_enabled))
+        items.append(pystray.Menu.SEPARATOR)
         items.append(pystray.MenuItem(self._pause_label, self._toggle_pause))
         if self._on_pause_for:
             items.append(pystray.MenuItem("Pause", pystray.Menu(

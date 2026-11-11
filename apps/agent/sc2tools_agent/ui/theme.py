@@ -49,6 +49,11 @@ PAGE_LIST_MIN_HEIGHT = 160
 # The round "?" beside a setting or a status line.
 HELP_LINK_SIZE = 20
 CHECKIN_ROW_HEIGHT = 30
+STREAM_TITLE_HEIGHT = 44
+STREAM_DESCRIPTION_HEIGHT = 112
+STREAM_CANVAS_LANDSCAPE = (54, 32)
+STREAM_CANVAS_PORTRAIT = (28, 40)
+STREAM_CANVAS_WIDTH = 58
 
 # ---- surfaces: elevation is tone, never a shadow; each level is one step lighter
 # The window canvas below them belongs to each skin (``Skin.canvas``; ``BG`` is the default's).
@@ -182,7 +187,9 @@ QMainWindow, QWidget#agentRoot {{ background: {skin.canvas}; }}
 QMainWindow[textOverlay="true"], QWidget#agentRoot[textOverlay="true"],
 QFrame#agentFrame[textOverlay="true"], QFrame#agentDisplay[textOverlay="true"],
 QStackedWidget#agentPageStack[textOverlay="true"] {{ background: transparent; border: none; }}
-QDialog, QMessageBox, QFileDialog, QInputDialog {{ background: {SURFACE}; color: {TEXT}; }}
+QDialog, QMessageBox, QFileDialog, QInputDialog {{ background: {ELEVATED}; color: {TEXT}; }}
+QMessageBox QLabel#qt_msgbox_label {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QMessageBox QLabel#qt_msgbox_informativelabel {{ color: {TEXT_MUTED}; }}
 QWidget#checkinWindow {{ background: transparent; }}
 QDialogButtonBox {{ background: transparent; }}
 QStackedWidget, QStackedWidget > QWidget {{ background: {SURFACE}; }}
@@ -463,11 +470,11 @@ QSplitter::handle:hover {{ background: {BORDER_STRONG}; }}
 QMenuBar {{ background: {SURFACE}; color: {TEXT}; }}
 QMenuBar::item {{ background: transparent; padding: 6px 10px; }}
 QMenuBar::item:selected {{ background: {BUTTON_HOVER}; }}
-QMenu {{ background: {SUBTLE}; color: {TEXT}; border: 1px solid {BORDER_STRONG}; padding: {SPACE_XS}px; }}
-QMenu::item {{ padding: 7px {SPACE_XL}px 7px {SPACE_M}px; border-radius: {RADIUS_S}px; }}
+QMenu {{ background: {ELEVATED}; color: {TEXT}; border: 1px solid {BORDER_STRONG}; padding: {SPACE_XS}px; }}
+QMenu::item {{ padding: {SPACE_S}px {SPACE_XL}px {SPACE_S}px {SPACE_M}px; border-radius: {RADIUS_M}px; }}
 QMenu::item:selected {{ background: {skin.selected}; color: {TEXT}; }}
 QMenu::item:disabled {{ color: {TEXT_DISABLED}; }}
-QMenu::separator {{ height: 1px; background: {BORDER_STRONG}; margin: 5px 6px; }}
+QMenu::separator {{ height: 1px; background: {BORDER_STRONG}; margin: {SPACE_XS}px {SPACE_S}px; }}
 QToolTip {{
     background: {SUBTLE}; color: {TEXT}; border: 1px solid {BORDER_STRONG};
     border-radius: {RADIUS_S}px; padding: 6px {SPACE_S}px;
@@ -483,10 +490,10 @@ QPlainTextEdit#log {{
     border: 1px solid {BORDER_STRONG}; border-radius: {RADIUS_L}px;
 }}
 QPlainTextEdit#log:focus {{ border-color: {skin.focus}; }}
-QWidget#studioContent, QScrollArea#streamStudio {{ background: {SURFACE}; }}
+QWidget#studioContent, QScrollArea#streamStudio {{ background: {skin.canvas}; }}
 QWidget#studioTransparent {{ background: transparent; }}
 QLineEdit#streamTitle {{
-    font-size: {TYPE_TITLE}px; font-weight: {WEIGHT_SEMIBOLD}; background: {SUNKEN}; padding: {SPACE_S}px 14px;
+    font-size: {TYPE_TITLE}px; font-weight: {WEIGHT_SEMIBOLD}; background: {SUNKEN}; padding: {SPACE_S}px {SPACE_M}px;
 }}
 QLineEdit#streamTitle:focus {{ border-color: {skin.focus}; }}
 QLabel#studioEyebrow {{ color: {TEXT_MUTED}; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_SEMIBOLD}; letter-spacing: 1px; }}
@@ -498,14 +505,14 @@ QLabel#canvasLandscape, QLabel#canvasPortrait {{
 }}
 QLabel#studioBadge {{
     background: {SUBTLE}; color: {TEXT_MUTED}; border: 1px solid {BORDER_STRONG};
-    border-radius: {RADIUS_L}px; padding: {SPACE_XS}px 9px; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_SEMIBOLD};
+    border-radius: {RADIUS_L}px; padding: {SPACE_XS}px {SPACE_S}px; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_SEMIBOLD};
 }}
 QLabel#studioBadge[tone="good"] {{ background: {SUCCESS_TINT}; border-color: {SUCCESS_TINT}; color: {SUCCESS}; }}
 QLabel#studioBadge[tone="live"] {{ background: {DANGER_TINT}; border-color: {DANGER_TINT}; color: {DANGER}; }}
 QLabel#studioBadge[tone="warning"] {{ background: {WARNING_TINT}; border-color: {WARNING_TINT}; color: {WARNING}; }}
 QToolButton#studioDisclosureToggle {{
     background: {ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER_STRONG};
-    border-radius: {RADIUS_L}px; text-align: left; padding: 11px 14px; font-weight: {WEIGHT_SEMIBOLD};
+    border-radius: {RADIUS_L}px; text-align: left; padding: {SPACE_M}px; font-weight: {WEIGHT_SEMIBOLD};
 }}
 QToolButton#studioDisclosureToggle:hover, QToolButton#studioDisclosureToggle:checked {{
     background: {BUTTON_HOVER}; color: {TEXT}; border-color: {skin.accent};

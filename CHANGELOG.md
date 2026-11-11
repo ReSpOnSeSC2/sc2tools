@@ -224,6 +224,9 @@ corresponding GitHub Release.
 
 ### Agent 0.25.0
 
+- Refresh Streams, menus and dialogs, keep Stream setup reachable at the smallest
+  window size, and group native tray actions by purpose. See the
+  [before-and-after gallery](docs/images/agent-0.25.0/interface-gallery/README.md).
 - Apply the shared Agent theme to floating build check-ins and the Scouting
   report, including a race mark, clearer selected builds and a slimmer frame.
 - List the builds from each player's last five games in the floating Scouting
