@@ -6,10 +6,10 @@ import { useToast } from "@/components/ui/Toast";
 import { confirmLockerBackup, loadLockerBackup, stageLockerBackup } from "./lockerBackup";
 import type { LockerDocument, LockerState } from "./lockerRosterModel";
 
-export function useLockerRoster(accountId: string, role: "admin" | "coach", coachId: string | null) {
-  const document = useApi<LockerDocument>("/v1/coaching/state?roster=1", { revalidateOnFocus: true });
-  const current = !document.error && document.data?.scoped === (role === "coach") ? document.data : undefined;
-  const scope = useMemo(() => [accountId, "roster:" + role + ":" + (coachId ?? "")] as const, [accountId, role, coachId]);
+export function useLockerView(accountId: string, view: "roster" | "shelf", role: "admin" | "coach" | "student", memberId: string | null) {
+  const document = useApi<LockerDocument>(`/v1/coaching/state?${view}=1`, { revalidateOnFocus: true });
+  const current = !document.error && document.data?.scoped === (role !== "admin") ? document.data : undefined;
+  const scope = useMemo(() => [accountId, view + ":" + role + ":" + (memberId ?? "")] as const, [accountId, view, role, memberId]);
   const rev = current?.rev;
   const [backup, setBackup] = useState<Awaited<ReturnType<typeof loadLockerBackup>>>(null);
   const [busy, setBusy] = useState(false);
@@ -29,7 +29,7 @@ export function useLockerRoster(accountId: string, role: "admin" | "coach", coac
   }, [scope, rev]);
 
   async function save(state: LockerState, fromRev: number, message: string): Promise<boolean> {
-    if (saving.current) return false;
+    if (saving.current || role === "student") return false;
     if (!current || current.rev !== fromRev) {
       toast.warning("The Locker changed", { description: "Open the editor again to review the latest version." });
       return false;

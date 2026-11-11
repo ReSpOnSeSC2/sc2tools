@@ -39,7 +39,8 @@ function Host() {
 async function open(options: CommandOpening) {
   render(<SWRConfig value={{ provider: () => new Map() }}><CommandSearchProvider><Host /></CommandSearchProvider></SWRConfig>);
   act(() => h.open!(options));
-  return screen.findByRole("combobox", { name: options.scope === "guides" ? "Find a guide" : "Search" });
+  await act(async () => { await vi.dynamicImportSettled(); });
+  return screen.getByRole("combobox", { name: options.scope === "guides" ? "Find a guide" : "Search" });
 }
 const settle = () => act(() => new Promise(resolve => setTimeout(resolve, 260)));
 beforeEach(() => {
