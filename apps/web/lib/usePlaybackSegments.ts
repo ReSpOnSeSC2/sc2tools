@@ -7,6 +7,7 @@ import { decodePlaybackSegment, decodedPlaybackBytes, PLAYBACK_CACHE_BYTES, Play
 import { CLIP_MAX_SECONDS, type ClipRange } from "./clip/clipPlan";
 import type { MapPlayback } from "./mapReplay";
 import { ReplaySightHistory } from "./replayVision";
+import type { ReadAttentionSections } from "./replayAttention";
 import { replayCastMarkers, mergeMarkers, type TimelineMarker } from "./replayHud";
 
 export type ClipPlaybackSection = { start: number; end: number; playback: MapPlayback };
@@ -126,12 +127,20 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [scope, manifest, prefetchIndex, load]);
 
+  const readAttention: ReadAttentionSections = useCallback(async function* (signal) {
+    for (const entry of manifest.segments) {
+      const playback = await load(entry, signal);
+      yield { start: entry.start, end: entry.end, playback };
+    }
+  }, [manifest, load]);
+  const canReadAttention = useMemo(() => manifest.segments.reduce((bytes, entry) => bytes + entry.sizeBytes, 0) <= PLAYBACK_CACHE_BYTES, [manifest]);
+
   const casts = useRef({ scope: "", revision: -1, value: [] as TimelineMarker[] });
   if (casts.current.scope !== scope || casts.current.revision !== revision) {
     casts.current = { scope, revision, value: mergeMarkers([...store.current.casts.values()].flat().sort((a, b) => a.t - b.t)) };
   }
   const completeCasts = useMemo(() => manifest.timeline ? replayCastMarkers(manifest.timeline.casts) : null, [manifest.timeline]);
-  return { scope, current, buffering, loadClipSections, castMarkers: completeCasts ?? casts.current.value,
+  return { scope, current, buffering, loadClipSections, readAttention: canReadAttention ? readAttention : undefined, castMarkers: completeCasts ?? casts.current.value,
     error: failure.scope === scope && failure.index === desired.index ? failure.message : "",
     retry: () => setAttempt(value => value + 1) };
 }
