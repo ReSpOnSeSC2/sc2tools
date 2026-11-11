@@ -46,6 +46,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   youtubeCreateOperations: import('mongodb').Collection,
  *   platformWebhookReceipts: import('mongodb').Collection,
  *   platformEvents: import('mongodb').Collection,
+ *   twitchRewardReceipts: import('mongodb').Collection<any>,
  *   twitchAutomationReceipts: import('mongodb').Collection<any>,
  *   importJobs: import('mongodb').Collection,
  *   macroJobs: import('mongodb').Collection,
@@ -175,6 +176,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     youtubeCreateOperations: db.collection(COLLECTIONS.YOUTUBE_CREATE_OPERATIONS),
     platformWebhookReceipts: db.collection(COLLECTIONS.PLATFORM_WEBHOOK_RECEIPTS),
     platformEvents: db.collection(COLLECTIONS.PLATFORM_EVENTS),
+    twitchRewardReceipts: db.collection(COLLECTIONS.TWITCH_REWARD_RECEIPTS),
     twitchAutomationReceipts: db.collection(COLLECTIONS.TWITCH_AUTOMATION_RECEIPTS),
     importJobs: db.collection(COLLECTIONS.IMPORT_JOBS),
     macroJobs: db.collection(COLLECTIONS.MACRO_JOBS),
@@ -653,6 +655,7 @@ async function ensureIndexes(ctx, opts = {}) {
     { expiresAt: 1 },
     { expireAfterSeconds: 0 },
   );
+  await new (require("../services/twitchRewardReceipts").TwitchRewardReceipts)(ctx.twitchRewardReceipts).ensureIndexes();
   await new (require("../services/twitchAutomationReceipts").TwitchAutomationReceipts)({ collection: ctx.twitchAutomationReceipts }).ensureIndexes();
 
   await ctx.deviceTokens.createIndex({ tokenHash: 1 }, { unique: true });

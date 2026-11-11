@@ -39,6 +39,10 @@ corresponding GitHub Release.
   canvases. The live overlay profile updates connected sources when you save.
   Dedicated widget sources keep their own OBS positioning.
 
+### Twitch Channel Points rewards
+
+- Map Twitch rewards to Studio actions with per-viewer cooldowns and an activity log. Rewards created through SC2 Tools can opt into automatic fulfillment or refunds.
+
 ### Practice targets and reports
 
 - Edit checkpoints for a private Ghost target and count a graded game toward
