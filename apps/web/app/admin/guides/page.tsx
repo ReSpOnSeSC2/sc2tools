@@ -41,6 +41,7 @@ function GuidesContent({ owner }: { owner: RefObject<string | null | undefined> 
   const select = (next: GuideSelection) => setQuery({ matchup: next.matchup, build: guideBuildSlug(next.matchup, next.buildKey) || "" });
   const key = guideNoteKey(selection.matchup, selection.buildKey);
   const editor = useGuideDrafts(notes, owner);
+  const { save: saveNotes } = editor;
   const dirty = editor.dirtyKeys.length;
   const navigation = useUnsavedChangesGuard(dirty > 0 && !forbidden);
   const [discardAll, setDiscardAll] = useState(false);
@@ -51,11 +52,11 @@ function GuidesContent({ owner }: { owner: RefObject<string | null | undefined> 
     const shortcut = (event: KeyboardEvent) => {
       if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== "s") return;
       event.preventDefault();
-      void editor.save([key], true);
+      void saveNotes([key], true);
     };
     document.addEventListener("keydown", shortcut);
     return () => document.removeEventListener("keydown", shortcut);
-  }, [editor.save, key, query.section, forbidden, discardAll, navigation.open]);
+  }, [saveNotes, key, query.section, forbidden, discardAll, navigation.open]);
 
   if (forbidden) return <ForbiddenCard />;
   return (

@@ -151,7 +151,7 @@ function GlobalTrendsContent() {
         <Button className="mt-3" variant="secondary" size="sm" onClick={() => { void options.mutate(); }}>Retry filter suggestions</Button>
       </div> : options.isLoading ? <p role="status" className="text-caption text-text-muted">Loading filter suggestions.</p> : null}
 
-      <div className="space-y-5" onKeyDown={event => {
+      <div role="presentation" className="space-y-5" onKeyDown={event => {
         if (event.key === "Enter" && !event.nativeEvent.isComposing && event.target instanceof HTMLInputElement
           && ["number", "text", "date"].includes(event.target.type)) {
           event.preventDefault();
