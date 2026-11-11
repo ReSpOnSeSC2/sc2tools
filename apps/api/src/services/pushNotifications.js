@@ -35,15 +35,24 @@ const PUSH_HOSTS = [
 
 /** Ordered: a kind belongs to the first group that matches. */
 const PUSH_GROUPS = Object.freeze([
-  { id: "reviews", label: "Review answers", match: (/** @type {string} */ kind) => kind === "review.new" || kind === "review.reply" },
-  { id: "coaching", label: "Coaching bookings and reminders", match: (/** @type {string} */ kind) => kind.startsWith("coaching.") },
+  { id: "reviews", label: "Review answers", match: (/** @type {string} */ kind) => kind === "review.reply" },
+  { id: "review-requests", label: "New reviews", match: (/** @type {string} */ kind) => kind === "review.new" },
+  { id: "coaching-reminders", label: "Coaching reminders", match: (/** @type {string} */ kind) => kind === "coaching.reminder" },
+  { id: "coaching", label: "Coaching bookings and assignments", match: (/** @type {string} */ kind) => kind.startsWith("coaching.") },
   { id: "playback", label: "Accurate playback ready", match: (/** @type {string} */ kind) => kind === "playback_ready" },
-  { id: "reports", label: "Weekly and stream reports", match: (/** @type {string} */ kind) => kind.startsWith("report.") },
-  { id: "desktop", label: "Desktop app and integrations", match: (/** @type {string} */ kind) => kind.startsWith("agent.") || kind.startsWith("integration.") },
+  { id: "reports", label: "Weekly report", match: (/** @type {string} */ kind) => kind === "report.weekly" },
+  { id: "stream-reports", label: "Stream reports", match: (/** @type {string} */ kind) => kind === "report.stream" },
+  { id: "goals", label: "Goal met", match: (/** @type {string} */ kind) => kind === "goal_met" },
+  { id: "agent-unlinked", label: "Desktop app unlinked", match: (/** @type {string} */ kind) => kind === "agent.unlinked" },
+  { id: "desktop", label: "Desktop app updates and integrations", match: (/** @type {string} */ kind) => kind.startsWith("agent.") || kind.startsWith("integration.") },
   { id: "other", label: "Everything else", match: () => true },
 ]);
 const GROUP_IDS = new Set(PUSH_GROUPS.map((group) => group.id));
-const DEFAULT_GROUPS = ["reviews", "coaching", "playback", "reports", "desktop"];
+const GROUP_VERSION = 2;
+const DEFAULT_GROUPS = ["reviews", "review-requests", "coaching", "coaching-reminders", "playback", "reports", "stream-reports", "agent-unlinked", "desktop"];
+const SPLIT_GROUPS = new Map([
+  ["reviews", "review-requests"], ["coaching", "coaching-reminders"], ["reports", "stream-reports"], ["desktop", "agent-unlinked"], ["other", "goals"],
+]);
 
 /** @param {string} kind */
 function pushGroupFor(kind) {
@@ -54,6 +63,15 @@ function pushGroupFor(kind) {
 function sanitizePushGroups(input) {
   if (!Array.isArray(input)) return [...DEFAULT_GROUPS];
   return [...new Set(input.filter((id) => typeof id === "string" && GROUP_IDS.has(id)))];
+}
+
+/** Expand legacy groups before they are first edited, keeping each prior choice. @param {{groups?: unknown, groupVersion?: unknown}|undefined} preferences */
+function storedPushGroups(preferences) {
+  const groups = sanitizePushGroups(preferences?.groups);
+  if (!Array.isArray(preferences?.groups) || preferences.groupVersion === GROUP_VERSION) return groups;
+  const expanded = new Set(groups);
+  for (const [oldGroup, newGroup] of SPLIT_GROUPS) if (expanded.has(oldGroup)) expanded.add(newGroup);
+  return [...expanded];
 }
 
 /**
@@ -114,7 +132,7 @@ class PushNotificationsService {
     return {
       enabled: this.enabled,
       publicKey: this.vapid ? this.vapid.publicKey : null,
-      groups: sanitizePushGroups(user?.preferences?.push?.groups),
+      groups: storedPushGroups(user?.preferences?.push),
       available: PUSH_GROUPS.map(({ id, label }) => ({ id, label })),
       devices: rows.map((row) => ({
         id: String(row._id), label: row.label, key: String(row.endpointHash || "").slice(0, 16),
@@ -183,7 +201,7 @@ class PushNotificationsService {
   async setGroups(userId, groups) {
     if (!Array.isArray(groups)) throw pushError(400, "invalid_push_groups", "Choose which notifications to push.");
     const value = sanitizePushGroups(groups);
-    await this.db.users.updateOne({ userId }, { $set: { "preferences.push": { groups: value } } });
+    await this.db.users.updateOne({ userId }, { $set: { "preferences.push": { groups: value, groupVersion: GROUP_VERSION } } });
     return { groups: value };
   }
 
@@ -207,7 +225,7 @@ class PushNotificationsService {
     try {
       const user = await this.db.users.findOne({ userId }, { projection: { _id: 0, "preferences.push": 1, _gdprMutation: 1 } });
       if (!user || user._gdprMutation) return { sent: 0, removed: 0 };
-      if (!sanitizePushGroups(user.preferences?.push?.groups).includes(pushGroupFor(row.kind))) return { sent: 0, removed: 0 };
+      if (!storedPushGroups(user.preferences?.push).includes(pushGroupFor(row.kind))) return { sent: 0, removed: 0 };
       return await this._fanOut(userId, { title: row.title, body: row.body || "", href: row.href || "/notifications", tag: `n:${String(row._id || row.kind)}` });
     } catch (err) {
       this.logger?.warn({ code: errorCode(err) }, "push_delivery_failed");

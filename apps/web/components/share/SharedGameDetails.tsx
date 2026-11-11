@@ -11,6 +11,7 @@ import { GetYourOwnCTA } from "@/components/public-profile/GetYourOwnCTA";
 import { PublicMacroLeakCard } from "@/components/public-profile/PublicMacroLeakCard";
 import { Card } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { API_BASE } from "@/lib/clientApi";
 import { BENCHMARK_METRICS, percentileOf, type BenchmarkMetric } from "@/lib/benchmarks";
 import { macroScoreTone } from "@/lib/format";
 import { shareApiPath } from "@/lib/gameShares";
@@ -39,7 +40,11 @@ export function SharedGameDetails({ token, data, seekRequest, onSeek, initialTim
   const inlineReq = usePublicApi<Record<string, unknown>>(data.playback.mode === "inline" ? `${shareApiPath(token)}/map-playback` : null,
     { revalidateOnFocus: false, shouldRetryOnError: false });
   const inline = useMemo(() => (inlineReq.data ? sanitizeMapPlayback(inlineReq.data) : null), [inlineReq.data]);
-  const reportInput = useMemo(() => sharedReportInput(data, key, inline), [data, key, inline]);
+  const reportInput = useMemo(() => sharedReportInput(data, key), [data, key]);
+  const loadSnapshotFrames = async (times: number[]) => {
+    const replay = await import("@/lib/battleReport/sharedReplayFrames");
+    return replay.loadSharedReplayFrames(API_BASE, token, data.playback.mode, times);
+  };
   const timeHref = useCallback((t: number) => `/g/${encodeURIComponent(token)}?t=${Math.floor(t)}#replay`, [token]);
   const seek = (t: number) => { setScrubTime(t); onSeek(t, true); };
   const scrub = (t: number) => { setScrubTime(t); onSeek(t); };
@@ -51,7 +56,9 @@ export function SharedGameDetails({ token, data, seekRequest, onSeek, initialTim
   }) : [];
   return <div className="space-y-6">
     <BattleReportSection input={reportInput} onSeek={seek} segmented={data.playback.mode === "segmented"}
-      pending={data.playback.mode === "inline" && inlineReq.isLoading} timeHref={timeHref} />
+      pending={data.playback.mode === "inline" && inlineReq.isLoading} timeHref={timeHref}
+      snapshotPlayback={inline?.fidelity?.complete === false ? null : inline}
+      loadSnapshotFrames={inline ? undefined : loadSnapshotFrames} />
 
     <section id="replay" aria-labelledby="shared-replay-title" className="scroll-mt-24 space-y-3">
       <h2 id="shared-replay-title" className="font-display text-h3 font-bold text-text">Map replay</h2>

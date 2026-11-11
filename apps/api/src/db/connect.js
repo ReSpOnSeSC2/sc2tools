@@ -932,6 +932,8 @@ function deliveryCollections(db) {
 async function ensureDeliveryIndexes(ctx) {
   await ctx.streamSessions.createIndex({ userId: 1, streamId: 1 }, { unique: true });
   await ctx.streamSessions.createIndex({ userId: 1, startAt: -1 });
+  await ctx.streamSessions.createIndex({ userId: 1, publicId: 1 }, { unique: true, partialFilterExpression: { publicId: { $type: "string" } } });
+  await ctx.streamSessions.createIndex({ reportState: 1, endAt: 1 }, { partialFilterExpression: { reportState: { $exists: true } } });
   // Open streams waiting for "End stream" or the four-hour idle close.
   await ctx.users.createIndex({ "streamSession.startAt": 1 }, { sparse: true });
   await ctx.users.createIndex({ "calendarFeed.hash": 1 }, { unique: true, sparse: true });

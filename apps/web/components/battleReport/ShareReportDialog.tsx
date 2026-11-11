@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { useToastOptional } from "@/components/ui/Toast";
 import { battleReportFacts } from "@/lib/battleReport/facts";
 import { planBattleReport } from "@/lib/battleReport/plan";
-import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
+import { API_BASE, apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import { activeShare, gameSharesPath, shareApiPath, shareLinkUrl, type GameShare, type GameShareList } from "@/lib/gameShares";
 import { sharedReportInput, type SharedGameAnalysis } from "@/lib/sharedGame";
 import { useCopy } from "@/lib/useCopy";
@@ -49,12 +49,14 @@ export function ShareReportDialog({ gameId, open, onClose }: { gameId: string; o
     }
   };
   const saveImage = async () => {
-    if (!report || !shared.data) return;
+    if (!report || !shared.data || !live) return;
     setSaving(true);
     try {
-      const image = await import("@/lib/battleReportImage");
+      const [image, replay] = await Promise.all([import("@/lib/battleReportImage"), import("@/lib/battleReport/sharedReplayFrames")]);
+      const frames = await replay.loadSharedReplayFrames(API_BASE, live.token, shared.data.playback.mode, image.reportImageMoments(report).map((moment) => moment.time));
       const blob = await image.renderBattleReportPng(report, {
-        mine: shared.data.macroBreakdown?.stats_events, opponent: shared.data.macroBreakdown?.opp_stats_events, result: shared.data.game.result,
+        mine: shared.data.macroBreakdown?.stats_events, opponent: shared.data.macroBreakdown?.opp_stats_events, result: shared.data.game.result, frames,
+        myRace: shared.data.game.myRace, oppRace: shared.data.game.oppRace,
       });
       if (!blob) throw new Error("no canvas");
       image.downloadBlob(blob, image.battleReportImageFilename(report));

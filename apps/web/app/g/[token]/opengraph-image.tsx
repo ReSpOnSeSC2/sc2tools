@@ -1,12 +1,14 @@
 import { ImageResponse } from "next/og";
 import { SHARE_TOKEN_RE } from "@/lib/gameShares";
+import { snapshotColor, snapshotPositions } from "@/lib/battleReport/mapSnapshot";
+import { loadSharedReplayFrames } from "@/lib/battleReport/sharedReplayFrames";
 import { mapThumbnail, truncate } from "@/lib/og/mapThumbnail";
 import { reportPreview, SNAPSHOT_BOX } from "@/lib/og/reportSnapshot";
 import { sharedResultWord, type SharedGameAnalysis } from "@/lib/sharedGame";
 
 /**
  * Link preview card for a shared game: result, matchup, the battle report's
- * headline and its turning point (army-value lines), both builds and the
+ * headline and its turning point (recorded positions or army values), both builds and the
  * macro score, with the map art when no snapshot can be drawn. Built from
  * the same redacted payload and share-safe report as the page (no names,
  * no ratings). A missing or turned-off link renders a
@@ -40,6 +42,10 @@ export default async function SharedGameOpenGraphImage({ params }: { params: Pro
   const game = share?.game ?? null;
   const preview = share ? safePreview(share, token) : null;
   const snapshot = preview?.turningPoint ?? null;
+  const moment = preview?.moment;
+  const frames = share && moment ? await loadSharedReplayFrames(API_BASE, token, share.playback.mode, [moment.time]) : null;
+  const playback = moment && frames?.get(moment.time);
+  const mapFrame = playback && moment ? snapshotPositions(playback, moment.time, SNAPSHOT_BOX.width, SNAPSHOT_BOX.height, moment.point) : null;
   const thumb = game?.map ? await mapThumbnail(game.map) : null;
   const result = game ? sharedResultWord(game.result) : null;
   const accent = game?.result === "Win" ? WIN : game?.result === "Loss" ? LOSS : CYAN;
@@ -49,7 +55,7 @@ export default async function SharedGameOpenGraphImage({ params }: { params: Pro
     (
       <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between",
         background: `radial-gradient(1000px 500px at 100% 0%, rgba(21, 125, 140, 0.3) 0%, ${BG} 55%), ${BG}`, padding: "56px 72px", fontFamily: "sans-serif", position: "relative" }}>
-        {thumb && snapshot ? (
+        {thumb && (snapshot || mapFrame) ? (
           // Satori draws plain <img> elements only; next/image does not apply.
           // eslint-disable-next-line @next/next/no-img-element
           <img src={thumb} alt="" width={1200} height={630} style={{ position: "absolute", left: 0, top: 0, width: 1200, height: 630, objectFit: "cover", opacity: 0.14 }} />
@@ -76,7 +82,13 @@ export default async function SharedGameOpenGraphImage({ params }: { params: Pro
             </div>
             {builds ? <div style={{ display: "flex", fontSize: 24, color: MUTED }}>{truncate(builds, 80)}</div> : null}
           </div>
-          {snapshot ? (
+          {mapFrame && moment ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 16, borderRadius: 18, background: SURFACE, border: `2px solid ${LINE}` }}>
+              <div style={{ display: "flex", fontSize: 22, color: MUTED }}>{`${moment.caption} · ${clock(moment.time)}`}</div>
+              <MapSnapshot frame={mapFrame} myRace={game?.myRace} oppRace={game?.oppRace} />
+              <div style={{ display: "flex", fontSize: 18, color: MUTED }}>Replay positions · filled player, outlined opponent</div>
+            </div>
+          ) : snapshot ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 16, borderRadius: 18, background: SURFACE, border: `2px solid ${LINE}` }}>
               <div style={{ display: "flex", fontSize: 22, color: MUTED }}>{`${snapshot.caption} · ${clock(snapshot.time)}`}</div>
               <svg width={SNAPSHOT_BOX.width} height={SNAPSHOT_BOX.height} viewBox={`0 0 ${SNAPSHOT_BOX.width} ${SNAPSHOT_BOX.height}`}>
@@ -87,7 +99,7 @@ export default async function SharedGameOpenGraphImage({ params }: { params: Pro
               <div style={{ display: "flex", fontSize: 18, color: MUTED }}>Army value · player in cyan, opponent in red</div>
             </div>
           ) : null}
-          {thumb && !snapshot ? (
+          {thumb && !snapshot && !mapFrame ? (
             // Satori draws plain <img> elements only; next/image does not apply.
             // eslint-disable-next-line @next/next/no-img-element
             <img src={thumb} alt="" width={300} height={169} style={{ borderRadius: 18, border: `2px solid ${LINE}`, objectFit: "cover" }} />
@@ -103,6 +115,19 @@ export default async function SharedGameOpenGraphImage({ params }: { params: Pro
     ),
     { ...size },
   );
+}
+
+function MapSnapshot({ frame, myRace, oppRace }: { frame: NonNullable<ReturnType<typeof snapshotPositions>>; myRace?: string | null; oppRace?: string | null }) {
+  return <svg width={SNAPSHOT_BOX.width} height={SNAPSHOT_BOX.height} viewBox={`0 0 ${SNAPSHOT_BOX.width} ${SNAPSHOT_BOX.height}`}>
+    <rect {...frame.terrain} fill={LINE} />
+    {frame.points.map((point, index) => {
+      const color = snapshotColor(point.side === "me" ? myRace : oppRace, point.side);
+      const style = point.side === "me" ? { fill: color } : { fill: "none", stroke: color, strokeWidth: 1.5 };
+      return point.structure ? <rect key={index} x={point.x - 2.5} y={point.y - 2.5} width={5} height={5} {...style} />
+        : <circle key={index} cx={point.x} cy={point.y} r={1.9} {...style} />;
+    })}
+    {frame.fight ? <circle cx={frame.fight.x} cy={frame.fight.y} r={6} fill="none" stroke="#ffd15c" strokeWidth={2} /> : null}
+  </svg>;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

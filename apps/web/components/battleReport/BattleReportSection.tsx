@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { ImageDown } from "lucide-react";
 import { battleReportFacts, type BattleReportInput, type ReportTone } from "@/lib/battleReport/facts";
 import { planBattleReport } from "@/lib/battleReport/plan";
+import type { MapPlayback } from "@/lib/mapReplay";
 import { formatGameClock } from "@/lib/macro";
 import { shareSafeReportInput } from "@/lib/sharedGame";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
@@ -21,11 +22,13 @@ const TONES: { value: ReportTone; label: string }[] = [{ value: "battle", label:
  * ``actions`` adds the owner's share controls. The image is always drawn from
  * the share-safe report (players by race, no ratings), whoever saves it.
  */
-export function BattleReportSection({ input, onSeek, segmented = false, pending = false, timeHref, actions }: {
+export function BattleReportSection({ input, onSeek, segmented = false, pending = false, timeHref, actions, snapshotPlayback, loadSnapshotFrames }: {
   input: BattleReportInput; onSeek: (time: number) => void; segmented?: boolean; pending?: boolean;
   /** Where a time link points when opened in a new tab (default: the owner's game page). */
   timeHref?: (time: number) => string;
   actions?: ReactNode;
+  snapshotPlayback?: MapPlayback | null;
+  loadSnapshotFrames?: (times: number[]) => Promise<ReadonlyMap<number, MapPlayback>>;
 }) {
   const [tone, setTone] = useState<ReportTone>("battle");
   const [saving, setSaving] = useState(false);
@@ -45,7 +48,11 @@ export function BattleReportSection({ input, onSeek, segmented = false, pending 
       const image = await import("@/lib/battleReportImage");
       const safe = shareSafeReportInput({ ...input, playback: completePlayback });
       const shared = planBattleReport(battleReportFacts(safe), tone);
-      const blob = await image.renderBattleReportPng(shared, { mine: breakdown?.stats_events, opponent: breakdown?.opp_stats_events, result: game.result });
+      const frames = await loadSnapshotFrames?.(image.reportImageMoments(shared).map((moment) => moment.time));
+      const blob = await image.renderBattleReportPng(shared, {
+        mine: breakdown?.stats_events, opponent: breakdown?.opp_stats_events, result: game.result, frames, playback: snapshotPlayback ?? completePlayback,
+        myRace: game.myRace, oppRace: game.opponent?.race,
+      });
       if (!blob) throw new Error("no canvas");
       image.downloadBlob(blob, image.battleReportImageFilename(shared));
     } catch {
@@ -59,7 +66,7 @@ export function BattleReportSection({ input, onSeek, segmented = false, pending 
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-5 sm:px-6 sm:py-8">
       <header className="space-y-2"><p className="text-micro uppercase tracking-widest text-text-dim">From the replay record</p><h3 className="break-words font-display text-h2 font-bold leading-tight text-text">{report.headline}</h3>{dateline ? <p className="text-caption text-text-muted">{dateline}</p> : null}{pending ? <p role="status" className="text-caption text-text-muted">Loading recorded details for the report…</p> : null}</header>
       {report.paragraphs.map((paragraph, index) => <Fragment key={paragraph.id}><p data-report-paragraph className={`mx-auto max-w-[68ch] break-words font-serif text-lg leading-relaxed text-text ${index === 0 ? "first-letter:float-left first-letter:mr-2 first-letter:font-display first-letter:text-5xl first-letter:font-bold first-letter:leading-none" : ""}`}>{paragraph.sentences.map((sentence, sentenceIndex) => <Fragment key={sentence.factId}>{sentenceIndex ? " " : ""}<ReportSentence sentence={sentence} gameId={facts.gameId} onSeek={onSeek} href={timeHref} /></Fragment>)}</p>
-        {moments.slice(index * perParagraph, (index + 1) * perParagraph).length ? <div className="grid gap-4 sm:grid-cols-2">{moments.slice(index * perParagraph, (index + 1) * perParagraph).map((moment) => <BattleSnapshot key={moment.id} moment={moment} playback={completePlayback} breakdown={breakdown} duration={facts.length} segmented={partialPlayback} myRace={game.myRace} oppRace={game.opponent?.race} onSeek={onSeek} meLabel={meLabel} />)}</div> : null}</Fragment>)}
+        {moments.slice(index * perParagraph, (index + 1) * perParagraph).length ? <div className="grid gap-4 sm:grid-cols-2">{moments.slice(index * perParagraph, (index + 1) * perParagraph).map((moment) => <BattleSnapshot key={moment.id} moment={moment} playback={snapshotPlayback ?? completePlayback} breakdown={breakdown} duration={facts.length} segmented={partialPlayback} myRace={game.myRace} oppRace={game.opponent?.race} onSeek={onSeek} meLabel={meLabel} />)}</div> : null}</Fragment>)}
       <div className="space-y-3 border-t border-border pt-5">
         <div className="flex flex-wrap items-start gap-2">
           <ReportCopy key={`${facts.gameId}:${tone}`} report={report} pending={pending} linkFor={timeHref} />

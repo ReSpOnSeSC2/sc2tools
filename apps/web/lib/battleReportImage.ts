@@ -5,9 +5,9 @@
  *
  * Callers pass a report planned from a share-safe input
  * (lib/sharedGame.ts ``shareSafeReportInput``): the player and opponent
- * appear by race only and no rating is printed (ADR 0075). Snapshots are
- * recorded army-value samples, so no map image can taint the canvas.
- * No network, no model: the same fixed-rule text the page shows.
+ * appear by race only and no rating is printed (ADR 0075). Snapshots use
+ * recorded replay positions with army-value charts as the fallback.
+ * It uses the same fixed-rule text the page shows.
  */
 
 import {
@@ -22,6 +22,8 @@ import {
 import type { StatsEvent } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import type { SnapshotMoment } from "./battleReport/facts";
 import type { BattleReport } from "./battleReport/plan";
+import type { MapPlayback } from "./mapReplay";
+import { snapshotColor, snapshotPositions } from "./battleReport/mapSnapshot";
 
 const CONTENT_W = CARD_W - CARD_PAD * 2;
 const ACCENT = { win: "rgb(40, 160, 107)", loss: "rgb(218, 65, 80)", neutral: "rgb(125, 200, 255)" } as const;
@@ -64,7 +66,10 @@ export function battleReportImageFilename(report: BattleReport): string {
  */
 export async function renderBattleReportPng(
   report: BattleReport,
-  samples: { mine?: readonly StatsEvent[] | null; opponent?: readonly StatsEvent[] | null; result?: string | null },
+  samples: {
+    mine?: readonly StatsEvent[] | null; opponent?: readonly StatsEvent[] | null; result?: string | null;
+    playback?: MapPlayback | null; frames?: ReadonlyMap<number, MapPlayback>; myRace?: string | null; oppRace?: string | null;
+  },
 ): Promise<Blob | null> {
   if (typeof document === "undefined") return null;
   const canvas = document.createElement("canvas");
@@ -97,10 +102,49 @@ export async function renderBattleReportPng(
   const gap = 24, top = 392, height = 168;
   const width = moments.length > 1 ? (CONTENT_W - gap) / 2 : CONTENT_W;
   moments.forEach((moment, index) => {
-    drawSnapshot(ctx, moment, CARD_PAD + index * (width + gap), top, width, height, samples, report.facts.length);
+    const x = CARD_PAD + index * (width + gap);
+    const replay = samples.frames?.get(moment.time) ?? samples.playback;
+    const frame = replay ? snapshotPositions(replay, moment.time, width, height - 40, moment.point) : null;
+    if (frame) drawMapSnapshot(ctx, moment, frame, x, top, width, height, samples.myRace, samples.oppRace);
+    else drawSnapshot(ctx, moment, x, top, width, height, samples, report.facts.length);
   });
   drawCardFooter(ctx, { brand: "SC2 Tools · Battle report", tag: "Written from the replay with fixed rules" });
   return await new Promise<Blob | null>((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
+}
+
+function drawMapSnapshot(
+  ctx: CanvasRenderingContext2D, moment: SnapshotMoment, frame: NonNullable<ReturnType<typeof snapshotPositions>>,
+  x: number, y: number, width: number, height: number, myRace: string | null | undefined, oppRace: string | null | undefined,
+) {
+  ctx.fillStyle = PANEL;
+  ctx.fillRect(x, y, width, height);
+  ctx.fillStyle = TEXT;
+  ctx.font = `600 18px ${FONT_STACK}`;
+  ctx.fillText(`${moment.caption} · ${clock(moment.time)}`, x + 14, y + 10);
+  ctx.save();
+  ctx.translate(x, y + 36);
+  const { terrain, points, fight } = frame;
+  ctx.fillStyle = GRID;
+  ctx.fillRect(terrain.x, terrain.y, terrain.width, terrain.height);
+  for (const point of points) {
+    const color = snapshotColor(point.side === "me" ? myRace : oppRace, point.side);
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    if (point.structure) ctx.rect(point.x - 2.5, point.y - 2.5, 5, 5);
+    else ctx.arc(point.x, point.y, 1.9, 0, Math.PI * 2);
+    if (point.side === "me") ctx.fill();
+    else ctx.stroke();
+  }
+  if (fight) {
+    ctx.strokeStyle = "#ffd15c";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(fight.x, fight.y, 6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawSnapshot(
