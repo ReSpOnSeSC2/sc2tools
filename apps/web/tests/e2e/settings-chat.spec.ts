@@ -26,9 +26,11 @@ for (const theme of ["light", "dark"] as const) {
     const panel = page.getByRole("tabpanel", { name: "Chat & alerts", exact: true });
     const list = page.getByRole("tablist", { name: "Settings sections", exact: true });
     const manager = page.getByRole("region", { name: "Shared streaming token controls", exact: true });
+    const saveBar = page.getByRole("region", { name: "Unsaved changes", exact: true });
     await expect(manager).toHaveCount(1);
     await expect(panel.getByLabel(/Loyalty rank theme/)).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Save bot settings", exact: true })).toBeVisible();
+    await expect(panel.getByLabel("Bot username", { exact: true })).toBeVisible();
+    await expect(saveBar).toHaveCount(0);
     await expect(panel.locator("#platform-connections")).toHaveAttribute("data-section-flash", /.+/);
     for (const id of ["platforms", "platform-connections", "appearance", "alerts", "tts", "translation", "commands", "dock", "stream-dock", "bot", "twitch-automation"]) await expect(panel.locator(`[id="${id}"]`)).toHaveCount(1);
     expect(evidence.reads.filter(row => row.path === "/v1/overlay-tokens")).toEqual([{ owner: "owner-a", path: "/v1/overlay-tokens" }]);
@@ -53,14 +55,14 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page).toHaveURL(/\?tab=chat&ref=legacy#platform-connections$/);
     expect(evidence.writes).toEqual([]);
 
-    await panel.getByRole("button", { name: "Save bot settings", exact: true }).click();
-    await expect(panel.getByRole("button", { name: "Save bot settings", exact: true })).toBeDisabled();
-    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toBeDisabled();
-    await panel.getByRole("button", { name: "Save chat settings", exact: true }).click();
+    await expect(saveBar).toHaveCount(1);
+    await expect(saveBar.getByRole("status")).toHaveText("Unsaved changes to chat settings and bot settings");
+    await saveBar.getByRole("button", { name: "Save all", exact: true }).click();
+    await expect(saveBar).toHaveCount(0);
     await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toBeEnabled();
     expect(evidence.writes).toEqual([
-      { owner: "owner-a", method: "PUT", path: "/v1/me/chatbot" },
       { owner: "owner-a", method: "PUT", path: "/v1/me/preferences/multichat" },
+      { owner: "owner-a", method: "PUT", path: "/v1/me/chatbot" },
     ]);
     await manager.getByRole("combobox", { name: "URLs shown for", exact: true }).selectOption("owner-a-two");
     await list.getByRole("tab", { name: "Overlay", exact: true }).click();
@@ -75,6 +77,8 @@ for (const theme of ["light", "dark"] as const) {
     await list.getByRole("tab", { name: "Chat & alerts", exact: true }).click();
     await guard.getByRole("button", { name: "Discard & switch", exact: true }).click();
     await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toHaveValue("owner-a-two");
+    await expect(panel.getByLabel("Bot username", { exact: true })).toHaveValue("synthetic-bot");
+    await expect(panel.getByLabel(/Loyalty rank theme/)).toHaveValue("zerg");
     expect(evidence.reads.filter(row => row.path === "/v1/overlay-tokens")).toHaveLength(1);
 
     await page.evaluate(() => (window as ChatWindow).chatSetOwner("owner-b"));
