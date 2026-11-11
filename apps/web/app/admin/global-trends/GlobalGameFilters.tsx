@@ -7,7 +7,7 @@ import { Select } from "@/components/ui/Select";
 import { applyFilterPatch, useFilters } from "@/lib/filterContext";
 import { RACES, mmrRangeError, type TrendFilterOptions } from "./globalTrendsState";
 
-export const INPUT = "min-h-11 w-full rounded-lg border-2 border-line bg-bg-surface px-3 text-sm text-text focus:border-accent focus:outline-none";
+export const INPUT = "min-h-11 w-full rounded-lg border-2 border-line bg-bg-surface px-3 text-sm text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40";
 
 export function GlobalGameFilters({ options, min, max, onMin, onMax }: {
   options: TrendFilterOptions;
