@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 
 def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidgets):
-    from .build_checkin_widgets import BuildList, button, card_stylesheet, plain_label, set_tone
+    from .build_checkin_widgets import BuildList, button, plain_label, set_tone
     from .private_scouting import OpponentNoteEditor
     from .qt_helpers import build_flow_layout
 
@@ -21,7 +21,7 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
         def __init__(self):
             super().__init__(parent)
             self.setObjectName("companionBuilds")
-            self.setStyleSheet(card_stylesheet() + theme.COMPANION_BUILDS_STYLE)
+            self.set_skin("default")
             self.loading_model = None
             self.postgame_model = None
             self._loading_open = False
@@ -43,6 +43,10 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
             self._planned = None
             self._build_ui()
             self.refresh()
+
+        def set_skin(self, name):
+            self.setProperty("checkinSkin", name)
+            self.setStyleSheet(theme.companion_builds_stylesheet(theme.SKINS[name]))
 
         def _build_ui(self):
             outer = QtWidgets.QVBoxLayout(self)

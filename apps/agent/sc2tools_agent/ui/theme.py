@@ -31,6 +31,7 @@ WEIGHT_SEMIBOLD = 600
 WEIGHT_BOLD = 700
 
 # ---- spacing on a 4 px grid, and corner radius
+SPACE_2XS = 2
 SPACE_XS = 4
 SPACE_S = 8
 SPACE_M = 12
@@ -47,6 +48,7 @@ PAGE_MARGIN_Y = 24
 PAGE_LIST_MIN_HEIGHT = 160
 # The round "?" beside a setting or a status line.
 HELP_LINK_SIZE = 20
+CHECKIN_ROW_HEIGHT = 30
 
 # ---- surfaces: elevation is tone, never a shadow; each level is one step lighter
 # The window canvas below them belongs to each skin (``Skin.canvas``; ``BG`` is the default's).
@@ -523,6 +525,7 @@ QWidget#companionDesk[textOverlay="true"], QWidget#companionPanel[textOverlay="t
 }}
 QFrame#companionCard {{ background: {ELEVATED}; border: none; border-radius: {RADIUS_L}px; }}
 QLabel#companionHeading {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QLabel#companionHeading[scoutingCompact="true"] {{ font-size: {TYPE_SMALL}px; }}
 QLabel#companionMuted {{ color: {TEXT_MUTED}; font-size: {TYPE_SMALL}px; }}
 QLabel#companionAccent {{ color: {skin.accent}; font-size: {TYPE_SMALL}px; font-weight: {WEIGHT_SEMIBOLD}; }}
 QWidget#companionDesk QLineEdit, QWidget#companionDesk QPlainTextEdit,
@@ -616,8 +619,109 @@ QWidget#companionBuilds QTabBar::tab:focus {{ border-bottom-color: {skin.focus};
 """
 
 
+def companion_builds_stylesheet(skin=DEFAULT_SKIN):
+    return card_stylesheet(skin) + _companion_builds(skin)
+
+
+def card_stylesheet(skin=DEFAULT_SKIN):
+    """Compact, self-contained theme for parentless build check-in cards."""
+    return f"""
+QWidget {{ background-color: transparent; color: {TEXT}; font-family: {FONT_FAMILY}; font-size: {TYPE_SMALL}px; }}
+QFrame#card {{ background: {SURFACE}; border: 1px solid {BORDER_STRONG}; border-radius: {RADIUS_XL}px; }}
+QLabel {{ background: transparent; border: none; }}
+QLabel#checkinPreview {{
+    color: {skin.accent}; background: {skin.selected}; border-radius: {RADIUS_M}px; padding: 2px {SPACE_S}px;
+}}
+QLabel#checkinEyebrow, QLabel#checkinSection {{
+    color: {TEXT_MUTED}; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_SEMIBOLD}; letter-spacing: 1px;
+}}
+QLabel#checkinTitle, QLabel#checkinResult {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QLabel#checkinResult, QLabel#checkinMuted, QLabel#checkinCounter, QLabel#checkinStatus {{ color: {TEXT_MUTED}; }}
+QLabel#checkinResult[tone="success"] {{ color: {SUCCESS}; }}
+QLabel#checkinResult[tone="danger"], QLabel#checkinCounter[tone="danger"] {{ color: {DANGER}; }}
+QLabel#checkinCounter[tone="warning"], QLabel#checkinStatus[tone="warning"] {{ color: {WARNING}; }}
+QLabel#checkinGrip {{ color: {TEXT_DIM}; font-size: {TYPE_SUBTITLE}px; }}
+QLabel#checkinCounter, QLabel#checkinIntro, QLabel#checkinChanged {{ font-size: {TYPE_CAPTION}px; }}
+QLabel#checkinChanged {{ color: {skin.accent}; font-weight: {WEIGHT_SEMIBOLD}; }}
+QLabel#checkinLocked {{ font-weight: {WEIGHT_SEMIBOLD}; }}
+QLabel#checkinLocked[saving="true"] {{ color: {TEXT_MUTED}; }}
+QLabel#checkinPrompt {{ font-size: {TYPE_BODY}px; }}
+QFrame#checkinStrip, QFrame#checkinIntroBox {{ background: {ELEVATED}; border: none; border-radius: {RADIUS_L}px; }}
+QPushButton {{
+    background: {BUTTON}; color: {TEXT}; border: 1px solid {BORDER_STRONG}; border-radius: {RADIUS_M}px;
+    padding: {SPACE_XS}px {SPACE_M}px; min-height: 18px; font-weight: {WEIGHT_SEMIBOLD};
+}}
+QPushButton:hover {{ background: {BUTTON_HOVER}; }}
+QPushButton:pressed {{ background: {BUTTON_PRESSED}; }}
+QPushButton#checkinPrimary {{ background: {skin.accent}; color: {skin.on_accent}; border-color: {skin.accent}; }}
+QPushButton#checkinPrimary:hover {{ background: {skin.accent_hover}; border-color: {skin.accent_hover}; }}
+QPushButton#checkinPrimary:pressed {{ background: {skin.accent_pressed}; border-color: {skin.accent_pressed}; }}
+QPushButton:disabled, QPushButton#checkinPrimary:disabled {{ background: {ELEVATED}; color: {TEXT_DIM}; border-color: {BORDER}; }}
+QPushButton#checkinQuiet {{ background: transparent; border-color: transparent; color: {TEXT_MUTED}; }}
+QPushButton#checkinQuiet:hover {{ background: {SUBTLE}; color: {TEXT}; }}
+QPushButton#checkinSmall {{ padding: 2px {SPACE_S}px; min-height: {SPACE_L}px; font-size: {TYPE_CAPTION}px; }}
+QPushButton#checkinLink, QPushButton#checkinMoreToggle {{
+    background: transparent; border: 1px solid transparent; padding: 0; min-height: 0;
+    color: {skin.accent}; font-size: {TYPE_CAPTION}px; text-align: left;
+}}
+QPushButton#checkinMoreToggle {{ color: {TEXT_MUTED}; }}
+QPushButton#checkinLink:hover, QPushButton#checkinMoreToggle:hover {{ color: {TEXT}; text-decoration: underline; }}
+QPushButton#checkinLink:disabled, QPushButton#checkinQuiet:disabled {{ background: transparent; border-color: transparent; color: {TEXT_DIM}; }}
+QPushButton:focus, QPushButton#checkinPrimary:focus, QPushButton#checkinQuiet:focus,
+QPushButton#checkinLink:focus, QPushButton#checkinMoreToggle:focus {{ border-color: {skin.focus}; }}
+QLineEdit#checkinSearch, QPlainTextEdit#checkinNotes {{
+    background: {SUNKEN}; color: {TEXT}; border: 1px solid {BORDER_CONTROL}; border-radius: {RADIUS_M}px;
+    padding: {SPACE_XS}px {SPACE_S}px; selection-background-color: {skin.accent}; selection-color: {skin.on_accent};
+}}
+QLineEdit#checkinSearch:focus, QPlainTextEdit#checkinNotes:focus {{ border-color: {skin.focus}; }}
+QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
+QProgressBar#checkinBusy {{ background: {BORDER}; border: none; border-radius: 1px; max-height: 2px; min-height: 2px; }}
+QProgressBar#checkinBusy::chunk {{ background: {skin.accent}; border-radius: 1px; }}
+""" + _overlays(skin)
+
+
+def checkin_chip_colours(skin, tone):
+    if tone == "rolled":
+        return blend(WARNING, SURFACE, SELECTED_TINT), WARNING
+    if tone == "usual":
+        return SUBTLE, skin.accent
+    return skin.selected, skin.accent
+
+
+def _recent_builds(skin):
+    return f"""
+QPushButton#recentBuildRow {{ background: {ELEVATED}; border: 1px solid transparent; border-radius: {RADIUS_M}px; padding: 0; text-align: left; }}
+QPushButton#recentBuildRow:hover {{ background: {SUBTLE}; }}
+QPushButton#recentBuildRow:checked {{ background: {skin.selected}; border-color: {skin.accent}; }}
+QPushButton#recentBuildRow:focus {{ border-color: {skin.focus}; }}
+QFrame#recentBuildMarker {{ background: transparent; border: none; border-radius: 1px; }}
+QFrame#recentBuildMarker[selected="true"] {{ background: {skin.accent}; }}
+QLabel#recentBuildResult {{ color: {TEXT_MUTED}; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_BOLD}; }}
+QLabel#recentBuildResult[result="Win"] {{ color: {SUCCESS}; }}
+QLabel#recentBuildResult[result="Loss"] {{ color: {DANGER}; }}
+QLabel#recentBuildName {{ color: {TEXT}; font-size: {TYPE_SMALL}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QLabel#recentBuildName[selected="true"] {{ color: {skin.accent}; }}
+QLabel#recentBuildDetails {{ color: {TEXT_MUTED}; font-size: {TYPE_CAPTION}px; }}
+"""
+
+
+def _build_chain(skin):
+    return f"""
+QWidget#companionBuildChain {{ background: transparent; }}
+QLabel#chainIcon {{ background: {ELEVATED}; border: 1px solid {BORDER_STRONG}; border-radius: {RADIUS_M}px; color: {skin.accent}; }}
+QLabel#chainName {{ color: {TEXT}; font-size: {TYPE_CAPTION}px; }}
+QLabel#chainTime {{ color: {skin.accent}; font-size: {TYPE_SMALL}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QLabel#chainTiming {{ background: {SUBTLE}; border-radius: {RADIUS_S}px; color: {TEXT_MUTED}; font-size: {TYPE_CAPTION}px; padding: 1px {SPACE_XS}px; }}
+QLabel#chainArrow {{ color: {TEXT_DIM}; font-size: {TYPE_TITLE}px; font-weight: {WEIGHT_BOLD}; }}
+QLabel#chainSummary, QLabel#chainEmpty {{ color: {TEXT_MUTED}; font-size: {TYPE_CAPTION}px; background: transparent; }}
+QPushButton#chainMore {{ background: {BUTTON}; color: {TEXT}; border: 1px solid {BORDER_STRONG}; border-radius: {RADIUS_M}px; padding: {SPACE_XS}px {SPACE_S}px; }}
+QPushButton#chainMore:hover {{ background: {BUTTON_HOVER}; }}
+QPushButton#chainMore:focus {{ border-color: {skin.focus}; }}
+"""
+
+
 _SECTIONS = (_base, window_controls_style, _shell, _content, _buttons, _inputs, _choices, _views, _overlays, _studio,
-             _companion_page, _companion_console, _companion_ghost, _companion_builds)
+             _companion_page, _companion_console, _companion_ghost, _companion_builds, _recent_builds, _build_chain)
 
 
 def stylesheet(skin=DEFAULT_SKIN):
@@ -668,3 +772,5 @@ COMPANION_PAGE_STYLE = _companion_page(DEFAULT_SKIN)
 COMPANION_CONSOLE_STYLE = _companion_console(DEFAULT_SKIN)
 COMPANION_GHOST_STYLE = _companion_ghost(DEFAULT_SKIN)
 COMPANION_BUILDS_STYLE = _companion_builds(DEFAULT_SKIN)
+RECENT_BUILDS_STYLE = _recent_builds(DEFAULT_SKIN)
+BUILD_CHAIN_STYLE = _build_chain(DEFAULT_SKIN)

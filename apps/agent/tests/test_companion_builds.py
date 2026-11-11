@@ -14,6 +14,7 @@ from sc2tools_agent.build_checkin.models import (
     BuildOptionModel, CheckinPrefs, LoadingCardModel, OpponentRowModel,
     PostgameCardModel, RandomizerStripModel, STATUS_SAVE_FAILED,
 )
+from sc2tools_agent.ui import theme
 from sc2tools_agent.ui.companion_builds import build_companion_builds
 
 
@@ -149,6 +150,20 @@ def test_postgame_drafts_survive_updates_and_confirm_current_values(desk):
     assert controller.actions("confirm") == [(("card-1", "stargate", "Pressure interrupted the plan"), {})]
     assert controller.actions("update_draft")[-1] == (("card-1", "stargate", "Pressure interrupted the plan"), {})
     assert all(name != "declare" for name, args, kwargs in controller.calls)
+
+
+def test_selected_embedded_build_row_repaints_when_the_skin_changes(desk):
+    widget, _, _, app = desk
+    widget.dispatch("show_postgame", (postgame(),))
+    widget.tabs.setCurrentIndex(1)
+    row = widget.postgame_builds.row("blink")
+    for name in ("default", "terran", "protoss", "zerg"):
+        widget.set_skin(name)
+        app.processEvents()
+        assert row.isVisible()
+        image = row.grab().toImage()
+        assert image.pixelColor(image.width() // 2, 3).name() == theme.SKINS[name].selected
+        assert widget.selection() == "blink"
 
 
 def test_postgame_opponent_correction_and_replay_restore_use_shared_draft(desk):

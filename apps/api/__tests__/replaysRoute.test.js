@@ -172,6 +172,43 @@ describe("authenticated replay-library routes", () => {
   });
 });
 
+describe("public replay reference lookup", () => {
+  const path = "/v1/me/replay-sharing/reference";
+  const gameId = "2026-11-01T20:00:00|PrivateRival#1234|Alcyone LE|700";
+  const reference = "r-0123456789abcdef01234567";
+
+  test("authenticates the owner and returns only the opaque archive reference", async () => {
+    const getDetail = jest.fn(async () => ({
+      game: { gameId, publicReference: reference },
+      sourceGame: { opponent: { toonHandle: "private-rival-id" } },
+    }));
+    const { app, users } = testApp({ replayLibrary: { getDetail } });
+    await request(app).post(path).send({ gameId }).expect(401);
+    await request(app).post(path).set("Authorization", "Bearer test")
+      .send({ gameId, userId: "another-owner" }).expect(400);
+    const response = await request(app).post(path).set("Authorization", "Bearer test")
+      .send({ gameId }).expect(200);
+
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.body).toEqual({ reference });
+    expect(getDetail).toHaveBeenCalledTimes(1);
+    expect(getDetail).toHaveBeenCalledWith("owner-id", gameId, { view: "detector" });
+    expect(users.setReplaySharing).not.toHaveBeenCalled();
+  });
+
+  test.each([null, { game: { publicReference: gameId } }])(
+    "returns a neutral unavailable response when the archive reference is missing",
+    async (detail) => {
+      const { app } = testApp({ replayLibrary: { getDetail: jest.fn(async () => detail) } });
+      const response = await request(app).post(path).set("Authorization", "Bearer test")
+        .send({ gameId }).expect(404);
+      expect(response.headers["cache-control"]).toBe("private, no-store");
+      expect(response.body.error.code).toBe("replay_not_shareable");
+      expect(response.text).not.toContain(gameId);
+    },
+  );
+});
+
 /** A replay library that serves only quick search's recent games. */
 const recentLibrary = (impl) => ({
   list: jest.fn(async () => { throw new Error("list must not run"); }),

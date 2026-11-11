@@ -1,6 +1,7 @@
 """Shared build-vs-build cards for the Companion and floating scouting report."""
 from __future__ import annotations
 
+from . import theme
 from .companion_build_chain import build_build_chain
 
 
@@ -16,7 +17,7 @@ def build_scouting_comparison(parent, *, QtCore, QtGui, QtWidgets, icon_provider
             self.chain_reference_buttons, self.chain_cards = {}, []
             self.chain_cards_layout = QtWidgets.QGridLayout(self)
             self.chain_cards_layout.setContentsMargins(0, 0, 0, 0)
-            self.chain_cards_layout.setSpacing(10)
+            self.chain_cards_layout.setSpacing(theme.SPACE_S)
             self._density = "detailed"
             self._stacked = None
             self._references = {}
@@ -62,9 +63,10 @@ def build_scouting_comparison(parent, *, QtCore, QtGui, QtWidgets, icon_provider
         def set_density(self, density):
             self._density = density
             standard = density == "standard"
+            inset = theme.SPACE_S if standard else theme.SPACE_M
             for card in self.chain_cards:
-                card.layout().setContentsMargins(*(8, 8, 8, 8) if standard else (12, 12, 12, 12))
-                card.layout().setSpacing(4 if standard else 8)
+                card.layout().setContentsMargins(*(inset,) * 4)
+                card.layout().setSpacing(theme.SPACE_XS if standard else theme.SPACE_S)
             for side in self.build_chains:
                 self.upgrade_chains[side].setVisible(density == "detailed")
                 self.upgrade_headings[side].setVisible(density == "detailed")
@@ -74,7 +76,10 @@ def build_scouting_comparison(parent, *, QtCore, QtGui, QtWidgets, icon_provider
                 label.setWordWrap(not standard)
                 label.setMaximumHeight(20 if standard else 16777215)
                 label.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
-                label.setStyleSheet("font-size: 12px; font-weight: 600;" if standard else "")
+                if label.property("scoutingCompact") != standard:
+                    label.setProperty("scoutingCompact", standard)
+                    label.style().unpolish(label)
+                    label.style().polish(label)
                 self.build_chains[side].setMinimumHeight(156 if standard else 166)
                 self.build_chains[side].set_tile_width(80 if standard else None)
             self._reflow_cards()
@@ -86,7 +91,8 @@ def build_scouting_comparison(parent, *, QtCore, QtGui, QtWidgets, icon_provider
             # both builds into single-icon columns.
             scrollbar = self.style().pixelMetric(QtWidgets.QStyle.PM_ScrollBarExtent)
             frame = max(card.frameWidth() for card in self.chain_cards)
-            minimum_card = 2 * 80 + 8 + 4 + scrollbar + 2 * (frame + (8 if self._density == "standard" else 12))
+            inset = theme.SPACE_S if self._density == "standard" else theme.SPACE_M
+            minimum_card = 2 * 80 + theme.SPACE_S + theme.SPACE_XS + scrollbar + 2 * (frame + inset)
             stacked = self.width() < 2 * minimum_card + self.chain_cards_layout.spacing()
             if stacked == self._stacked:
                 return

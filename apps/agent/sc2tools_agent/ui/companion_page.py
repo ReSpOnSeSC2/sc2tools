@@ -315,12 +315,16 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.subtitle.hide()
                 self.detail.hide()
             if kind == "scouting":
+                from .brand_mark import create_brand_mark
                 from .window_chrome import build_window_controls
-                layout.setContentsMargins(32, 30, 32, 28)
+                layout.setContentsMargins(*(theme.SPACE_L,) * 4)
                 layout.removeWidget(self.title)
                 self.header = QtWidgets.QFrame(self)
                 header_layout = QtWidgets.QHBoxLayout(self.header)
                 header_layout.setContentsMargins(0, 0, 0, 0)
+                header_layout.setSpacing(theme.SPACE_S)
+                self.scouting_mark = create_brand_mark(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, parent=self.header)
+                header_layout.addWidget(self.scouting_mark, 0, QtCore.Qt.AlignVCenter)
                 header_layout.addWidget(self.title, 1)
                 self.window_controls = build_window_controls(self.header, window=self, QtCore=QtCore, QtWidgets=QtWidgets)
                 self.window_controls.maximize_button.hide()
@@ -398,7 +402,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.resize(650, 450)
             from .race_visuals import create_race_effects
             from .window_chrome import install_window_interactions
-            self._race_effects = create_race_effects(self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+            self._race_effects = create_race_effects(
+                self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, compact_bezel=kind == "scouting",
+            )
             self._window_interactions = install_window_interactions(
                 self, drag_widgets=[self.identity_card if kind == "opponent" else self.header],
                 QtCore=QtCore, QtWidgets=QtWidgets, can_maximize=lambda: False,
@@ -418,6 +424,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                     widget.setStyleSheet(base_style + override)
             if self.kind == "opponent":
                 self.identity_card.set_skin(skin)
+            else:
+                self.scouting_mark.set_skin(skin)
             self._race_effects.apply_skin(skin)
             self._race_effects.set_motion_enabled(animations)
 
