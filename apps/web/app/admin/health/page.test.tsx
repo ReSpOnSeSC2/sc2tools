@@ -15,6 +15,7 @@ vi.mock("@/lib/clientApi", () => ({ useApi: (path: string, options?: { refreshIn
 } }));
 vi.mock("../components/InfrastructureOverview", () => ({ InfrastructureOverview: () => <div>Provider capacity still visible</div> }));
 vi.mock("../components/BackgroundJobs", () => ({ BackgroundJobs: () => <div>Background jobs still visible</div> }));
+vi.mock("../components/DonationLedgerCard", () => ({ DonationLedgerCard: () => null }));
 vi.mock("../components/DatabaseBackupsCard", () => ({ DatabaseBackupsCard: () => <div>Database backups still visible</div> }));
 beforeEach(() => {
   mocks.healthRetry.mockClear(); mocks.infrastructureRetry.mockClear(); mocks.requests.length = 0;

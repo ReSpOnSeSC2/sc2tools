@@ -116,7 +116,11 @@ describe("activity calendar", () => {
     render(<ActivityCalendarChart weeks={2} />);
     expect(screen.getByText("4 games shown")).toBeTruthy();
     expect(screen.getByRole("status").textContent).toContain("2W · 1L · 1 other");
-    expect(screen.getAllByRole("button")).toHaveLength(12);
+    // The default en-US Sunday start leaves thirteen visible dates in
+    // these two calendar weeks, including the selected Friday.
+    expect(screen.getAllByRole("button")).toHaveLength(13);
+    expect(screen.getByRole("button", { name: /2026-09-06/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /2026-09-05/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /2026-09-19/ })).toBeNull();
   });
   it("keeps every local calendar day exactly once through a DST clock change", () => {

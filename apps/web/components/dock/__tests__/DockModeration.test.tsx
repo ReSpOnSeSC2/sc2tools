@@ -59,6 +59,6 @@ it.each(["dock", "settings"])("excludes case-insensitive %s blocks from the Dock
   if (source === "dock") studio.blockedUsers = ["vIeWeR"]; else managed = "VIEWER";
   studio.poll = { question: "Vote?", options: ["A", "B"], startedAtMs: 1, status: "open" };
   render(<DockClient token="token" />); await drain();
-  expect(screen.getByText(/0 votes —/)).toBeTruthy();
+  expect(screen.getByText(/^0 votes\./)).toBeTruthy();
   expect(within(screen.getByTestId("dock-chat-list")).queryByText("2")).toBeNull();
 });

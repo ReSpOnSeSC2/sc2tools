@@ -41,7 +41,7 @@ export function SyncHealthCard() {
   const [reporting, setReporting] = useState(false);
   if (!hasQueryData(health)) return <QueryState q={health} skeleton={<SyncHealthSkeleton />} errorTitle="Sync health" />;
   const data = health.data;
-  const items = syncHealthItems(data);
+  const items = syncHealthItems(data, formatNumber);
   const status = syncHealthStatus(data, items);
   return <SyncHealthActionsProvider><Card title={status.title} headingLevel={2}>
     <p className="mb-3 text-caption text-text-muted">Sync health · <LazyHelpLink slug={SYNC_HEALTH_HELP.helpSlug} anchor={SYNC_HEALTH_HELP.anchor}>What these rows mean</LazyHelpLink></p>
