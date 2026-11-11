@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import bisect
 import json
+import math
 import os
 from typing import Dict, List, Optional, Tuple
 
 from .ability_casts import extract_ability_casts
 from .paths import APP_DIR
-from .timebase import event_seconds, real_game_length
+from .timebase import event_seconds, event_seconds_precise, real_game_length
 from .replay_loader import load_replay_with_fallback
 from .event_extractor import (
     PlayerStatsEvent,
@@ -304,6 +305,43 @@ def detect_spawn_locations(my_events: List[Dict], opp_events: List[Dict]) -> Lis
     return out
 
 
+# Optional replay-camera data. Bound the per-side history even for long games.
+MAX_CAMERA_POINTS = 14400
+
+
+def extract_camera_tracks(replay, me_pid, opp_pid, game_length):
+    """Use the latest observed camera per second, keeping moves of at least two world units."""
+    sides = {me_pid: "me", opp_pid: "opp"}
+    frames = {"me": {}, "opp": {}}
+    for event in getattr(replay, "game_events", ()) or ():
+        if getattr(event, "name", type(event).__name__) != "CameraEvent":
+            continue
+        side = sides.get(getattr(getattr(event, "player", None), "pid", None))
+        x, y = getattr(event, "x", None), getattr(event, "y", None)
+        # sc2reader uses (0, 0) for camera updates without a target.
+        if side is None or (x == 0 and y == 0) or not all(
+            isinstance(v, (int, float)) and math.isfinite(v) and abs(v) <= 4096 for v in (x, y)
+        ):
+            continue
+        second = event_seconds_precise(event, replay)
+        if math.isfinite(second) and 0 <= second <= game_length:
+            frames[side][int(second)] = (round(second, 3), x, y)
+
+    tracks = {}
+    for side, by_second in frames.items():
+        track = []
+        for second in sorted(by_second):
+            time, x, y = by_second[second]
+            if not track or math.hypot(x - track[-2], y - track[-1]) >= 2:
+                track.extend((time, round(x, 2), round(y, 2)))
+                if len(track) > MAX_CAMERA_POINTS * 3:
+                    track = []
+                    break
+        if track:
+            tracks[side] = track
+    return tracks
+
+
 def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
     """Walk the replay once and produce all data the viewer needs."""
     try:
@@ -516,6 +554,9 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
             "complete": tracks.get("complete", False),
         },
     }
+    camera = extract_camera_tracks(replay, me.pid, opp.pid, game_length)
+    if camera:
+        playback["camera"] = camera
     # Optional engine observations are keyed to the exact replay bytes and
     # player perspective by the helper. Ordinary parsing never starts SC2.
     try:

@@ -68,7 +68,11 @@ describe("ingest-time practice grading", () => {
   });
 
   test("a game without a build log counts as ungraded until an upload brings one", async () => {
-    expect(await ingest(game("g2", "2026-11-02T00:00:00Z", { buildLog: undefined }))).toMatchObject({ status: "no_build_log" });
+    const missing = game("g2", "2026-11-02T00:00:00Z", { buildLog: undefined });
+    expect(await ingest(missing)).toMatchObject({ status: "no_build_log", gradedAt: NOW });
+    const later = new PracticeLogService(db, { gameDetails: details, now: () => new Date("2026-11-06T10:00:00Z") });
+    expect(await later.recordIngested("u1", missing, await later.ingestContext("u1"))).toBeNull();
+    expect((await db.games.findOne({ gameId: "g2" })).practice.gradedAt).toEqual(NOW);
     const healed = await practice.recordIngested("u1", game("g2", "2026-11-02T00:00:00Z"), await practice.ingestContext("u1"));
     expect(healed).toMatchObject({ grade: "S" });
   });

@@ -36,6 +36,8 @@ import { BreakdownCard, TopOpponentsCard } from "./BuildBreakdownCards";
 import { BuildGamesTable } from "./BuildGamesTable";
 import { BuildCompositionExplorer } from "./BuildCompositionExplorer";
 import { BuildWinRateTrend } from "./BuildWinRateTrend";
+import type { UnitTradeSample } from "@/components/analyzer/UnitTradeSampleCard";
+import dynamic from "next/dynamic";
 import { BuildDossierEmpty } from "./BuildDossierEmpty";
 import { BuildDossierNav } from "./BuildDossierNav";
 import { KeyTimingsCard } from "./KeyTimingsCard";
@@ -46,6 +48,8 @@ import type {
   BuildRecentGame,
   BuildTransitionsPayload,
 } from "./types";
+
+const UnitTradeSampleCard = dynamic(() => import("@/components/analyzer/UnitTradeSampleCard").then(module => module.UnitTradeSampleCard));
 
 const PHASE_LABELS: Record<Phase, string> = {
   early: "Early",
@@ -84,6 +88,7 @@ export interface BuildDossierData extends BuildDossierInsightsData {
   resumedRecent: BuildRecentGame[];
   resumedCount: number;
   topStrategies?: StrategyEntry[];
+  unitTrades?: UnitTradeSample;
   predictedStrategies?: Prediction[];
   myRace?: string;
   oppRaceModal?: string;
@@ -232,6 +237,7 @@ export function BuildDossier({
       <PerformanceTiles totals={data.totals} />
       {data.totals.total > 0 && data.totals.total < 5 ? <p className="text-caption text-warning">Only {data.totals.total} games so far: treat percentages as early signals.</p> : null}
       {showMacro ? <MacroAggregate macro={data.macro} /> : null}
+      {data.unitTrades?.replays.length ? <UnitTradeSampleCard sample={data.unitTrades} /> : null}
       </section>
       <section id={sectionNavigation ? "timings" : undefined} className="scroll-mt-24" aria-label="Build key timings"><KeyTimingsCard key={scope} data={data} initialSource={phasePerspective === "opponent" ? "opp_build_log" : "build_log"} onSelect={openFilteredGames} /></section>
       {hasPlanSurvival(data.plan) ? <section id={sectionNavigation ? "plan" : undefined} className="scroll-mt-24" aria-label="Declared build plan survival"><PlanSurvivalCard plan={data.plan} onSelect={openFilteredGames} /></section> : null}

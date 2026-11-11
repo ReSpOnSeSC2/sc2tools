@@ -74,6 +74,8 @@ def test_standard_agent_pages_keep_navigation_drafts_and_window_controls_at_smal
         win._handle_input.setText("Draft remains")
         win._api_input.setText("https://draft.example.test")
         for index, page in enumerate(page_keys):
+            if page == "streams":
+                keep_settings_draft_via_help(win)
             win._go_to_page(page)
             app.processEvents()
             assert win._PAGE_KEYS[win._stack.currentIndex()] == page and win._stack.currentWidget() is pages[index]

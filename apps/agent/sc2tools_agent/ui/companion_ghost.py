@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 import math
+import sys
 import re
 import threading
 
 from ..companion_ghost import GhostError, GhostSession, TeamGhostSession, MATCHUPS, concrete_race, local_ghost_state, normalize_ghost_state, normalize_target, supports_ghost_game
-from . import theme
+from ..practice_hud import PracticeVoice, normalize_practice_preferences
+from . import theme, win32_window
+from .companion_speech import build_scouting_speech
 from .sc2_icons import load_icon
 
 
@@ -23,7 +26,7 @@ def _display(name):
     return names.get(name, re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", name))
 
 
-def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
+def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_help=None):
     from .qt_helpers import build_flow_layout
 
     def label(text):
@@ -75,7 +78,13 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             super().__init__(None, QtCore.Qt.Tool | QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.FramelessWindowHint)
             self.owner = owner
             self.setObjectName("ghostPanel")
-            self.setWindowTitle("SC2TOOLS · Build Order Ghost")
+            self.setWindowTitle("SC2TOOLS · Practice HUD")
+            self._move_mode = False
+            self._capture = None
+            self._scale = 100
+            self._last_paint = None
+            self.setWindowFlag(QtCore.Qt.WindowTransparentForInput, True)
+            self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
             self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
             self.setAttribute(QtCore.Qt.WA_QuitOnClose, False)
             self.setStyleSheet(theme.COMPANION_GHOST_STYLE)
@@ -91,6 +100,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             from .window_chrome import build_window_controls, install_window_interactions
             self.window_controls = build_window_controls(self.header, window=self, QtCore=QtCore, QtWidgets=QtWidgets)
             self.window_controls.maximize_button.hide()
+            self.window_controls.hide()
             header_layout.addWidget(self.window_controls)
             self.subtitle = label("")
             self.steps = tree()
@@ -119,23 +129,65 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._race_effects.apply_skin(skin)
             self._race_effects.set_motion_enabled(animations)
 
+        def set_move_mode(self, enabled):
+            if self._move_mode == enabled:
+                return
+            self._move_mode = enabled
+            position = self.pos()
+            # Qt derives window flags from the mouse transparency attribute.
+            self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, not enabled)
+            self.setWindowFlag(QtCore.Qt.WindowTransparentForInput, not enabled)
+            self.window_controls.setVisible(enabled)
+            self.move(position)
+            self._capture = None
+
+        def apply_preferences(self, prefs):
+            self.setWindowOpacity(prefs["opacity"] / 100)
+            scale = prefs["scale"]
+            if scale != self._scale:
+                self._scale = scale
+                self.setFont(QtGui.QFont("Segoe UI", max(8, round(10 * scale / 100))))
+                self.setMinimumSize(round(420 * scale / 100), round(275 * scale / 100))
+                self.resize(round(510 * scale / 100), round(315 * scale / 100))
+            if sys.platform != "win32" or QtWidgets.QApplication.platformName() == "offscreen":
+                return True
+            handle = int(self.winId())
+            mode = (handle, prefs["hideCapture"])
+            if mode == self._capture:
+                return True
+            applied = (win32_window.exclude_from_capture(handle) is not None if mode[1]
+                       else win32_window.allow_capture(handle))
+            if applied:
+                self._capture = mode
+            return applied
+
         def closeEvent(self, event):
             if not self.owner._closed:
-                self.owner._set_enabled(False)
+                if self.owner._hud_preview:
+                    self.owner._finish_hud_preview()
+                else:
+                    self.owner._set_enabled(False)
             event.accept()
 
         def paint_view(self, view):
-            self.title.setText(view["target"]["name"])
-            self.subtitle.setText(view["matchup"] + " · SC2 clock " + _clock(view["clock"]))
-            self.steps.clear()
             steps = view["target"]["steps"]
+            paint_key = (view["matchup"], view["target"]["name"], id(steps), int(view["clock"]), view["index"])
+            if paint_key == self._last_paint:
+                return
+            self._last_paint = paint_key
+            self.title.setText(view["target"]["name"])
+            label = "Preview" if view.get("preview") else view["matchup"]
+            next_step = next((step for step in steps if step["t"] > view["clock"]), None)
+            next_text = " · Next in " + str(math.ceil(next_step["t"] - view["clock"])) + "s" if next_step else ""
+            self.subtitle.setText(label + " · SC2 clock " + _clock(view["clock"]) + next_text)
+            self.steps.clear()
             current = view["index"]
-            for index in range(max(0, current - 1), min(len(steps), current + 4)):
+            for index in range(max(0, current - 1), min(len(steps), current + 3)):
                 step = steps[index]
                 if step["t"] > view["clock"]:
                     status = "In " + str(int(step["t"] - view["clock"])) + "s"
                 elif index == current:
-                    status = "Target now" if view["clock"] - step["t"] < 1 else "Target +" + str(int(view["clock"] - step["t"])) + "s"
+                    status = "Target now" if view["clock"] - step["t"] < 1 else "Target passed " + str(int(view["clock"] - step["t"])) + "s ago"
                 else:
                     status = "Earlier target"
                 row = add_step(self.steps, step, status)
@@ -157,6 +209,16 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._assistance_reason = "Hidden by the master assistance switch"
             self._state = normalize_ghost_state(None)
             self._session = GhostSession()
+            self._practice = {}
+            self._practice_request_key = None
+            self._practice_refresh_pending = False
+            self._practice_voice = PracticeVoice()
+            self._speech = build_scouting_speech(self, QtCore=QtCore)
+            self._speaking_practice = False
+            self._hud_preview = None
+            self._hud_preview_timer = QtCore.QTimer(self)
+            self._hud_preview_timer.setSingleShot(True)
+            self._hud_preview_timer.timeout.connect(self._finish_hud_preview)
             self._team_session = TeamGhostSession()
             self._team_context = None
             self._team_game = False
@@ -212,6 +274,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.enabled_toggle = QtWidgets.QCheckBox("Show Build Order Ghost during matching games")
             self.enabled_toggle.toggled.connect(self._set_enabled)
             layout.addWidget(self.enabled_toggle)
+            layout.addWidget(self._practice_controls())
             self.status = label("Loading saved Ghost settings…")
             layout.addWidget(self.status)
             self.live_status = label("1v1 automatic · teams manual · targets follow recorded replay timings")
@@ -410,7 +473,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             layout.addWidget(self.notice)
             self._update_history_controls()
             self.timer = QtCore.QTimer(self)
-            self.timer.setInterval(500)
+            self.timer.setInterval(1000)
             self.timer.timeout.connect(self._render)
             self.timer.start()
             if callable(handler):
@@ -422,6 +485,104 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self.refresh_button.setEnabled(False)
                 self.examples_button.setEnabled(False)
                 self.notice.setText("Ghost will be available when the agent service connects.")
+
+        def _practice_controls(self):
+            group = QtWidgets.QGroupBox("Practice HUD")
+            form = QtWidgets.QFormLayout(group)
+            self._practice_fields = {}
+            for key, caption in (("voice", "Read upcoming steps aloud"), ("hideCapture", "Hide from screen capture")):
+                field = QtWidgets.QCheckBox(caption)
+                field.toggled.connect(lambda value, key=key: self._set_practice_pref(key, value))
+                self._practice_fields[key] = field
+                form.addRow(field)
+            from .qt_helpers import install_wheel_guard
+            for key, caption, minimum, maximum, suffix in (
+                ("lead", "Voice lead time", 1, 15, " s"), ("opacity", "Opacity", 45, 100, "%"),
+                ("scale", "Size", 75, 150, "%"),
+            ):
+                field = QtWidgets.QSpinBox()
+                field.setRange(minimum, maximum)
+                field.setSuffix(suffix)
+                field.valueChanged.connect(lambda value, key=key: self._set_practice_pref(key, value))
+                install_wheel_guard(field, QtCore)
+                self._practice_fields[key] = field
+                form.addRow(caption, field)
+            actions = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets, spacing=theme.SPACE_S)
+            self._hud_preview_button = QtWidgets.QPushButton("Preview Practice HUD")
+            self._hud_preview_button.clicked.connect(self._toggle_hud_preview)
+            self._hud_move_button = QtWidgets.QPushButton("Move Practice HUD")
+            self._hud_move_button.setCheckable(True)
+            self._hud_move_button.toggled.connect(self._move_hud)
+            for action in (self._hud_preview_button, self._hud_move_button):
+                actions.addWidget(action)
+            if open_help:
+                help_button = QtWidgets.QPushButton("How it works")
+                help_button.setAccessibleName("Help: Practice HUD")
+                help_button.clicked.connect(lambda: open_help("practice-hud"))
+                actions.addWidget(help_button)
+            action_row = QtWidgets.QWidget()
+            action_row.setLayout(actions)
+            form.addRow(action_row)
+            self._hud_notice = label("The HUD follows planned timings. It cannot see which steps you built live.")
+            form.addRow(self._hud_notice)
+            self._sync_practice_controls()
+            return group
+
+        def _sync_practice_controls(self):
+            prefs = normalize_practice_preferences(self._state.get("practice"))
+            for key, field in self._practice_fields.items():
+                with QtCore.QSignalBlocker(field):
+                    if isinstance(field, QtWidgets.QCheckBox):
+                        field.setChecked(prefs[key])
+                    else:
+                        field.setValue(prefs[key])
+
+        def _set_practice_pref(self, key, value):
+            self._state["practice"] = {**normalize_practice_preferences(self._state.get("practice")), key: value}
+            self._save({"practice": {key: value}})
+            self._render()
+
+        def _toggle_hud_preview(self):
+            if self._hud_preview:
+                self._finish_hud_preview()
+                return
+            if self._session.game_key:
+                self._hud_notice.setText("Preview is available between games.")
+                return
+            self._hud_preview = {"preview": True, "matchup": "PvZ", "clock": 40, "index": 1, "complete": False,
+                "target": {"name": "Practice HUD preview", "steps": [
+                    {"name": "Pylon", "t": 17, "kind": "building", "supply": 14},
+                    {"name": "Gateway", "t": 39, "kind": "building", "supply": 16},
+                    {"name": "Assimilator", "t": 47, "kind": "building", "supply": 17},
+                    {"name": "CyberneticsCore", "t": 68, "kind": "building", "supply": 20},
+                ]}}
+            self._hud_preview_timer.start(30_000)
+            self._hud_preview_button.setText("Close Practice HUD preview")
+            self._render()
+
+        def _finish_hud_preview(self):
+            self._hud_preview = None
+            self._hud_preview_timer.stop()
+            self._hud_preview_button.setText("Preview Practice HUD")
+            self._hud_move_button.setChecked(False)
+            self._render()
+
+        def toggle_hud_move(self):
+            self._hud_move_button.toggle()
+
+        def _move_hud(self, moving):
+            # Changing native window flags can temporarily hide a visible HUD.
+            needs_preview = moving and not self.panel.isVisible()
+            if needs_preview and self._session.game_key:
+                self._hud_move_button.setChecked(False)
+                self._hud_notice.setText("A Practice HUD target is needed to move it during a game.")
+                return
+            self.panel.set_move_mode(moving)
+            self._hud_move_button.setText("Finish moving" if moving else "Move Practice HUD")
+            if needs_preview and not self._hud_preview:
+                self._toggle_hud_preview()
+            else:
+                self._render()
 
         def _call(self, channel, payload):
             if self._closed or not callable(handler) or channel in self._busy:
@@ -514,6 +675,13 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                         folders = result.get("replayFolders")
                         if isinstance(folders, list):
                             self._replay_folders = [folder for folder in folders if isinstance(folder, str)]
+                        if result.get("displayMode") == 2:
+                            self._hud_notice.setText("If the HUD is hidden in exclusive Fullscreen, choose Windowed Fullscreen in StarCraft II.")
+                        if channel == "state" and self._practice_request_key is not None:
+                            self.refresh_practice()
+                elif channel == "practice":
+                    if response["payload"].get("gameKey") == self._session.game_key:
+                        self._practice = result
                 elif channel == "reference":
                     if isinstance(result.get("ghost"), dict):
                         self._accept_state(result["ghost"])
@@ -561,6 +729,9 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self._history_reference_changed()
             if channel == "comparison":
                 self.compare_button.setEnabled(bool(self.games.currentData()))
+            if channel == "practice" and self._practice_refresh_pending:
+                self._practice_refresh_pending = False
+                self.refresh_practice()
             if channel == "local" and self._pending_local:
                 path = self._pending_local
                 self._pending_local = None
@@ -602,7 +773,11 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                     self._desired_enabled = None
                 else:
                     normalized["enabled"] = self._desired_enabled
+            pending_practice = [payload["practice"] for payload in self._pending_saves if "practice" in payload]
+            for changes in pending_practice:
+                normalized["practice"] = {**normalize_practice_preferences(normalized.get("practice")), **changes}
             self._state = normalized
+            self._sync_practice_controls()
             self.enabled_toggle.blockSignals(True)
             self.enabled_toggle.setChecked(self._state["enabled"])
             self.enabled_toggle.blockSignals(False)
@@ -1074,6 +1249,11 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._team_session.update_context(None)
             self._team_session.update_snapshot({})
             self._session.update_snapshot({})
+            self._practice = {}
+            self._practice_request_key = None
+            self._practice_refresh_pending = False
+            self._practice_voice = PracticeVoice()
+            self._speech.stop()
             self.enabled_toggle.setEnabled(callable(handler))
             self.more_button.setEnabled(False)
             self._update_library_filters()
@@ -1102,12 +1282,22 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                         self.refresh()
                         if self.sources.currentIndex() == 2:
                             self._call("examples", {"action": "ghost_examples"})
+            previous_key = self._session.game_key
             self._session.update_snapshot(snapshot)
+            if previous_key != self._session.game_key:
+                self._practice = {}
+                self._practice_request_key = None
+                self._practice_refresh_pending = False
+                if self._session.game_key and self._hud_preview:
+                    self._finish_hud_preview()
             self._team_session.update_snapshot(snapshot)
             envelope = snapshot.get("liveGame") if isinstance(snapshot, dict) else None
             players = envelope.get("players") if isinstance(envelope, dict) else None
             self._team_game = bool(isinstance(envelope, dict) and
                 (isinstance(players, list) and len(players) > 2 or not supports_ghost_game(envelope)))
+            if (isinstance(envelope, dict) and envelope.get("phase") in ("match_started", "match_in_progress")
+                    and not self._team_game and self._practice_request_key != self._session.game_key):
+                self.refresh_practice()
             ready = not self._owner_context_known or bool(self._account_key)
             self.refresh_button.setEnabled(ready and callable(handler))
             self.examples_button.setEnabled(ready and callable(handler))
@@ -1148,10 +1338,21 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             steps = view["target"]["steps"][view["index"]:view["index"] + max(1, min(3, limit))]
             return view["target"]["name"] + "\n" + "\n".join(_clock(step["t"]) + " · " + _display(step["name"]) + " · " + step["timing"] for step in steps)
 
+        def refresh_practice(self, game_key=None):
+            key = self._session.game_key
+            if not self._account_key or not key or not self._state["enabled"] or self._team_game:
+                return
+            if game_key is not None and key != game_key:
+                return
+            if "practice" in self._busy:
+                self._practice_refresh_pending = True
+            elif self._call("practice", {"action": "ghost_practice_state", "gameKey": key}):
+                self._practice_request_key = key
+
         def _current_view(self):
             if self._team_game or self._team_context is not None:
                 return self._team_session.view()
-            return self._session.view(self._state)
+            return self._session.view(self._state, practice=self._practice)
 
         def _render(self):
             if self._closed:
@@ -1170,20 +1371,36 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                                 "Ghost is off · Turn it on above to follow an assigned replay target." if not self._state["enabled"] else self._assistance_reason + " · Targets stay saved.")
             self.live_status.setText(f"{len(self._state['slots'])} of 9 matchups assigned · 1v1 automatic / teams manual · "
                                     + (f"Live {view['matchup']} · SC2 clock {_clock(view['clock'])}" if view else status))
-            visible = bool(self._state["enabled"] and self._assistance_enabled and view)
-            if visible:
-                self.panel.paint_view(view)
+            live = bool(self._state["enabled"] and self._assistance_enabled and view)
+            prefs = normalize_practice_preferences(self._state.get("practice"))
+            voice_allowed = live and prefs["voice"] and not manual
+            if voice_allowed:
+                line = self._practice_voice.next_line(self._session.game_key, view["target"], view["clock"], prefs["lead"])
+                if line:
+                    self._speaking_practice = self._speech.speak(line)
+                    if not self._speaking_practice:
+                        self._hud_notice.setText("Windows voice is unavailable. The Practice HUD still shows upcoming steps.")
+            elif self._speaking_practice:
+                self._speech.stop()
+                self._speaking_practice = False
+            preview_or_live = view if live else self._hud_preview
+            if preview_or_live and self.panel.apply_preferences(prefs):
+                self.panel.paint_view(preview_or_live)
                 if self._panel_restore_requested:
                     self.panel.showNormal()
                     self._panel_restore_requested = False
                 elif not self.panel.isVisible():
                     self.panel.show()
             else:
+                if preview_or_live:
+                    self._hud_notice.setText("Windows could not apply the capture setting. The HUD stays hidden until this can be applied.")
                 self.panel.hide()
 
         def shutdown(self):
             self._closed = True
             self.timer.stop()
+            self._hud_preview_timer.stop()
+            self._speech.shutdown()
             self._team_session.clear_target()
             self.panel.close()
 

@@ -1162,7 +1162,7 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     me = SimpleNamespace(
         pid=1, name="Me", race="Protoss", result="Win",
         selected_race="Random",
-        handle="1-S2-1-267727", mmr=4500, apm=180.0, spq=82.0,
+        handle="1-S2-1-267727", mmr=4500, apm=180.0, spq=82.0, league_id=0,
     )
     opp = SimpleNamespace(
         pid=2, name="Opp", race="Zerg", result="Loss",
@@ -1210,8 +1210,7 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
         opp_build_log=[],
         opp_early_build_log=[],
         macro_score=None,
-        raw=object(),  # any non-None placeholder; the macro / apm
-                       # extractors below are stubbed and never read it
+        raw=SimpleNamespace(category="Ladder"),
         file_path=str(tmp_path / "fake.SC2Replay"),
     )
 
@@ -1399,9 +1398,9 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     # ``opponent.leagueId`` — if this field silently drops off the
     # payload again, every (league, matchup) stays below its
     # k-anonymity floor and the /meta page shows "Not enough games"
-    # forever. ``raw`` here is a bare object() → ladder-ness unknown →
-    # the field is trusted and shipped.
+    # forever. The replay also supplies the owner's observed league.
     assert payload["opponent"]["leagueId"] == 5
+    assert payload["myLeagueId"] == 0
     assert payload["gameVersion"] == "5.0.16.97425"
     assert payload["gameBuild"] == 97425
     assert payload["startedAt"] == "2026-05-06T17:38:32Z"

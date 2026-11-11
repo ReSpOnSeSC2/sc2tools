@@ -25,7 +25,7 @@ def folder_identity(path):
     return region_from_toon_handle(toon), toon
 
 
-def describe_folder(path):
+def describe_folder(path, *, on_replay_mtime=None):
     path = Path(path)
     region, toon = folder_identity(path)
     count, newest = 0, None
@@ -39,6 +39,8 @@ def describe_folder(path):
                 try:
                     mtime = (Path(directory) / name).stat().st_mtime
                     newest = mtime if newest is None else max(newest, mtime)
+                    if on_replay_mtime:
+                        on_replay_mtime(mtime)
                 except OSError:
                     pass
     return FolderInfo(path, region, toon, count, newest, exists)

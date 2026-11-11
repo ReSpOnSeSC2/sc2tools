@@ -47,6 +47,8 @@
  */
 const HEAVY_FIELDS = Object.freeze([
   "buildLog",
+  "buildLogFull",
+  "buildLogSupply",
   "oppBuildLog",
   "macroBreakdown",
   "apmCurve",

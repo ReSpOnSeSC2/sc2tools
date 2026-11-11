@@ -97,6 +97,7 @@ export interface GameBuildOrderResponse {
   result: string | null;
   events: GameBuildOrderEvent[];
   early_events: GameBuildOrderEvent[];
+  recorded_units_built?: Record<string, number>;
   opp_events: GameBuildOrderEvent[];
   opp_early_events: GameBuildOrderEvent[];
   my_status?: "ok" | "empty" | "not_extracted";

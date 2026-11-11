@@ -69,8 +69,8 @@ function OpenerTable({ rows, id, caption, matchupSlug, canLinkGuides, hasPrevale
 
 export function OpenersTable({ openers, matchupSlug, caption, canLinkGuides }: { openers: ReadonlyArray<GuideOpenerRow>; matchupSlug: string; caption: string; canLinkGuides: boolean }) {
   const id = useId(); const [onlyGuides, setOnlyGuides] = useState(false);
-  const comparison = useOpenerComparison(matchupSlug, canLinkGuides);
   const ranked = openers.slice(0, 30).map((row, index) => ({ ...row, rank: index + 1 }));
+  const comparison = useOpenerComparison(matchupSlug, canLinkGuides, ranked);
   const controls = useGuideTableControls(ranked, { sorts: SORTS, defaultSort: null, filterFn: (row, query) => normalizeGuideSearch(row.name).includes(query) && (!canLinkGuides || !onlyGuides || row.published) });
   const hasPrevalence = ranked.some((row) => row.prevalence != null);
   const mobileSort = controls.sortProps.sortBy ? `${controls.sortProps.sortBy}:${controls.sortProps.sortDir}` : "rank";

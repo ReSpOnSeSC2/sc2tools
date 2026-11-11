@@ -221,6 +221,10 @@ function RecapCard() {
           flip auto-update off in Settings and the agent only notifies.
         </li>
       </ul>
+      <p className="text-caption text-text-muted">
+        After linking, follow the desktop setup prompts to choose replay folders, a history range, and whether SC2 Tools starts with Windows.{" "}
+        <Link href="/help/desktop-app-first-run" className="text-accent-cyan underline underline-offset-2">First-run setup</Link>
+      </p>
       <p className="pt-1 text-caption text-text-dim">
         Already have an account?{" "}
         <Link

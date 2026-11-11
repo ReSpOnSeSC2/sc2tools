@@ -68,3 +68,21 @@ it("limits comparison to three published openers and restores selection for the 
   expect(screen.queryByRole("link", { name: /Compare 3 openers/ })).toBeNull();
   expect(within(table()).getByRole<HTMLInputElement>("checkbox", { name: "Compare Delta" }).disabled).toBe(false);
 });
+
+it("drops retired and unpublished openers from restored comparison slots", () => {
+  const key = "sc2tools.guides.compare.v1.pvz";
+  sessionStorage.setItem(key, JSON.stringify(["alpha", "retired", "unpublished"]));
+  const openers = ["Alpha", "Bravo", "Unpublished"].map((name, index) => ({
+    ...rows[0], name, buildSlug: name.toLowerCase(), buildKey: name, published: index < 2,
+  }));
+  try {
+    render(<OpenersTable {...props} openers={openers} />);
+    expect(screen.queryByRole("link", { name: /Compare .* openers/ })).toBeNull();
+    const bravo = within(table()).getByRole<HTMLInputElement>("checkbox", { name: "Compare Bravo" });
+    expect(bravo.disabled).toBe(false);
+    fireEvent.click(bravo);
+    expect(screen.getByRole("link", { name: /Compare 2 openers/ }).getAttribute("href")).toBe("/guides/pvz/compare?builds=alpha,bravo");
+  } finally {
+    sessionStorage.removeItem(key);
+  }
+});

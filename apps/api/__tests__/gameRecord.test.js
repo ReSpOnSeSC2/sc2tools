@@ -861,3 +861,19 @@ describe("validateGameRecord - reported agent parse version", () => {
     expect(result.value).toHaveProperty("futureAnalyzerField", { enabled: true });
   });
 });
+
+
+test("accepts the optional heavy engine fields and rejects misaligned supply or unbounded mechanics", () => {
+  const game = { gameId: "new-engine", date: "2026-11-11T10:00:00Z", result: "Victory",
+    myRace: "Protoss", map: "Arena", buildLog: ["[0:00] Nexus", "[0:15] Pylon"],
+    buildLogFull: ["[0:00] Probe", "[0:00] Nexus", "[0:15] Pylon"], buildLogSupply: [12, null],
+    groupsUsed: 1, cameraReturnsPerMin: 0,
+    macroBreakdown: { myMechanics: { activeSeconds: 120, phases: [{ startSec: 0, endSec: 120 }],
+      groups: [{ slot: 2, sets: 1, recalls: 5, recallsPerMin: 2.5 }] } },
+  };
+  expect(validateGameRecord(game).valid).toBe(true);
+  expect(validateGameRecord({ ...game, buildLogSupply: [12] }).valid).toBe(false);
+  expect(validateGameRecord({ ...game, groupsUsed: 11 }).valid).toBe(false);
+  game.macroBreakdown.myMechanics.groups[0].slot = 10;
+  expect(validateGameRecord(game).valid).toBe(false);
+});

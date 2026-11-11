@@ -98,7 +98,9 @@ def test_native_panel_follows_exact_live_clock_and_master_switch_without_erasing
     assert page.panel.steps.topLevelItem(1).text(0) == "Stalker"
     assert page.panel.steps.topLevelItem(1).font(0).bold()
     assert not page.panel.steps.topLevelItem(0).font(0).bold()
-    assert page.panel.steps.topLevelItem(1).text(3) == "Target +25s"
+    assert page.panel.steps.topLevelItem(1).text(3) == "Target passed 25s ago"
+    assert page.panel.testAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+    assert "Next in" in page.panel.subtitle.text()
     before = len(calls)
     page.set_assistance_enabled(False)
     assert not page.panel.isVisible()
@@ -328,3 +330,39 @@ def test_late_comparison_does_not_show_under_another_selected_replay(ghost_page)
     wait_until(app, lambda: "comparison" not in page._busy)
     assert page.comparison_tree.isHidden()
     assert page.comparison_status.isHidden()
+
+
+def test_practice_preview_uses_no_account_write_and_move_mode_restores_click_through(ghost_page):
+    page, _, saved, calls, _ = ghost_page
+    count = len(calls)
+    assert page._practice_fields["hideCapture"].isChecked()
+    assert not page._practice_fields["voice"].isChecked()
+    page._hud_preview_button.click()
+    assert page.panel.isVisible()
+    assert page.panel.steps.topLevelItemCount() == 4
+    assert page.panel.testAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+    page._hud_move_button.click()
+    assert not page.panel.testAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+    page._hud_move_button.click()
+    assert page.panel.testAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+    page.update_snapshot(live_snapshot(opponent={"race": "Random"}))
+    assert not page.panel.isVisible()
+    assert page._hud_preview is None
+    assert len(calls) == count
+    assert "practice" not in saved[0]
+
+
+def test_practice_voice_is_opt_in_and_speaks_one_due_step(ghost_page, monkeypatch):
+    page, app, saved, _, _ = ghost_page
+    spoken = []
+    monkeypatch.setattr(page._speech, "speak", lambda line: spoken.append(line) or True)
+    page.set_assistance_enabled(True)
+    page.update_snapshot(live_snapshot(45))
+    assert spoken == []
+    page._practice_fields["voice"].setChecked(True)
+    wait_until(app, lambda: saved[0].get("practice", {}).get("voice") is True)
+    assert spoken == ["Next: Gateway"]
+    page.update_snapshot(live_snapshot(48))
+    assert spoken == ["Next: Gateway"]
+    page.update_snapshot(live_snapshot(195))
+    assert spoken == ["Next: Gateway", "Next: Blink Tech"]

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { HotkeyHabits } from "./HotkeyHabits";
 import { Card } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
@@ -40,6 +41,7 @@ export interface MechanicsPanelProps {
   macroScoreToneClassName?: string;
   /** The game's league table: the SQ hint reads "pXX · League MU" instead of a fixed tier. */
   league?: LeagueBenchmark | null;
+  privateHotkeys?: boolean;
 }
 
 /**
@@ -67,7 +69,9 @@ export function MechanicsPanel({
   seekTarget = "timeline",
   macroScoreToneClassName,
   league = null,
+  privateHotkeys = false,
 }: MechanicsPanelProps) {
+  const [hotkeys, setHotkeys] = useState(false);
   const raw = breakdown?.raw;
   const race = computeEffectiveRace(breakdown?.race ?? game?.myRace, raw);
   const raceDetail = getRaceDetail(race);
@@ -187,7 +191,11 @@ export function MechanicsPanel({
 
   return (
     <Card title="Mechanics" right={recomputeAction} data-testid="mechanics-panel">
-      <div className="space-y-4">
+      {privateHotkeys ? <div role="group" aria-label="Mechanics view" className="mb-3 flex gap-2">
+        <button type="button" aria-pressed={!hotkeys} onClick={() => setHotkeys(false)} className="min-h-11 rounded-md border border-border px-3 text-caption aria-pressed:border-accent">Overview</button>
+        <button type="button" aria-pressed={hotkeys} onClick={() => setHotkeys(true)} className="min-h-11 rounded-md border border-border px-3 text-caption aria-pressed:border-accent">Hotkeys</button>
+      </div> : null}
+      {privateHotkeys && hotkeys ? <HotkeyHabits data={breakdown?.myMechanics} /> : <div className="space-y-4">
         <dl className="grid grid-cols-2 gap-3">
           <MechanicStat
             label="Macro score"
@@ -306,7 +314,7 @@ export function MechanicsPanel({
           </dd>
         </div>
         </dl>
-      </div>
+      </div>}
     </Card>
   );
 }

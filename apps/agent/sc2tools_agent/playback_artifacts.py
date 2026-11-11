@@ -78,6 +78,10 @@ def slice_playback(playback, start, end):
             record["aim"] = [v for i in range(0, len(aim), 3) if inside(aim[i]) for v in aim[i:i + 3]]
             records.append(record)
         out[key] = records
+    camera = playback.get("camera")
+    if isinstance(camera, dict):
+        out["camera"] = {side: _track_window(values, start, end, flat=True)
+                         for side, values in camera.items() if side in ("me", "opp") and values}
     out["ability_casts"] = [c for c in playback.get("ability_casts") or [] if inside(c["t"])]
     out["effects"] = [e for e in playback.get("effects") or [] if e["t"] <= end and e["end"] >= start]
     creep = playback.get("creep")
@@ -110,6 +114,7 @@ def build_bundle(playback, directory: Path, *, source_sha256: str, battle_marker
     directory.mkdir(parents=True, exist_ok=True)
     segments = []
     max_error = 0.0
+    cast_timeline = []
 
     def write_window(start, end):
         nonlocal max_error
@@ -142,6 +147,9 @@ def build_bundle(playback, directory: Path, *, source_sha256: str, battle_marker
             write_window(start, middle)
             write_window(middle, end)
             return
+        if len(cast_timeline) <= 2000:
+            cast_timeline.extend({key: cast[key] for key in ("t", "o", "a")}
+                                 for cast in compact.get("casts", []))
         digest = hashlib.sha256(body).hexdigest()
         _write_immutable(directory / f"{digest}.json", body)
         segments.append({"index": len(segments), "start": start, "end": end,
@@ -157,6 +165,10 @@ def build_bundle(playback, directory: Path, *, source_sha256: str, battle_marker
                 "sourceArtifactSha256": source_sha256, "mapName": str(playback.get("map_name") or ""),
                 "gameLength": length, "fidelity": {**fidelity, "positionError": max_error},
                 "segments": segments}
+    if 0 < len(cast_timeline) <= 2000:
+        manifest["timeline"] = {"casts": sorted(cast_timeline, key=lambda cast: cast["t"])}
+        if len(compact_json_bytes(manifest)) > 200_000:
+            del manifest["timeline"]
     body = compact_json_bytes(manifest)
     manifest_path = directory / f"manifest-{hashlib.sha256(body).hexdigest()}.json"
     _write_immutable(manifest_path, body)

@@ -44,6 +44,8 @@
  *    drawing code to retune a storm.
  */
 
+import type { ReplayCanvasContext } from "./replayCanvas";
+import type { ReplayView } from "./replayInspect";
 import {
   buildingAliveAt,
   buildingPositionAt,
@@ -944,15 +946,9 @@ interface Proj {
   oy: number;
 }
 
-interface ViewTransform {
-  z: number;
-  ox: number;
-  oy: number;
-}
-
 /** Frame-local draw context, so primitives take one argument. */
 interface DrawCtx {
-  g: CanvasRenderingContext2D;
+  g: ReplayCanvasContext;
   bounds: PlaybackBounds;
   proj: Proj;
   /** Pixels per world unit — THE scale. */
@@ -966,7 +962,7 @@ interface DrawCtx {
 }
 
 const dc: DrawCtx = {
-  g: null as unknown as CanvasRenderingContext2D,
+  g: null as unknown as ReplayCanvasContext,
   bounds: { minX: 0, minY: 0, maxX: 1, maxY: 1 },
   proj: { k: 1, ox: 0, oy: 0 },
   k: 1,
@@ -995,11 +991,11 @@ const NO_DASH: number[] = [];
  * Returns the number of effects drawn (0 on a v4 payload, always).
  */
 export function drawSpellEffects(
-  ctx: CanvasRenderingContext2D,
+  ctx: ReplayCanvasContext,
   playback: MapPlayback,
   now: number,
   proj: Proj,
-  view: ViewTransform,
+  view: ReplayView,
   w: number, h: number,
   layer: SpellLayer,
   /** Single-side replay vision: effects for which this returns false

@@ -109,3 +109,24 @@ def test_build_playback_data_reads_workers_active_count(monkeypatch):
     # The killed/lost resource totals ride along for efficiency views.
     assert data["my_stats"][0]["lost"] == 125
     assert data["my_stats"][0]["killed"] == 250
+
+
+
+def test_camera_tracks_keep_latest_movement_per_second_and_ignore_observers():
+    from types import SimpleNamespace
+
+    def camera(pid, frame, x, y):
+        return SimpleNamespace(name="CameraEvent", player=SimpleNamespace(pid=pid), pid=0, frame=frame, x=x, y=y)
+
+    replay = SimpleNamespace(
+        frames=160, length=SimpleNamespace(seconds=10), game_events=[
+            camera(1, 0, 40, 50), camera(1, 8, 41, 50),
+            camera(1, 16, 42, 50), camera(1, 32, 47, 51),
+            camera(2, 32, 60, 70), camera(3, 32, 20, 22),
+            camera(2, 64, float("nan"), 50), camera(2, 68, 0, 0),
+            SimpleNamespace(name="CameraEvent", pid=2, frame=80, x=10, y=10),
+        ],
+    )
+    assert mpd.extract_camera_tracks(replay, 1, 2, 10) == {
+        "me": [0.5, 41, 50, 2, 47, 51], "opp": [2, 60, 70],
+    }

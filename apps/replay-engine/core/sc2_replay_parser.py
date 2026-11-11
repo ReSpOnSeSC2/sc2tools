@@ -118,6 +118,8 @@ class ReplayContext:
     my_build: Optional[str] = None
     opp_strategy: Optional[str] = None
     build_log: List[str] = field(default_factory=list)
+    build_log_full: List[str] = field(default_factory=list)
+    build_log_supply: List[Optional[float]] = field(default_factory=list)
     early_build_log: List[str] = field(default_factory=list)  # first 5 min, for !build
     graph_data: Optional[Dict[str, Any]] = None
 
@@ -505,7 +507,10 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     if not ctx.me or not ctx.opponent:
         return ctx  # caller already gets enough metadata to skip cleanly
 
-    my_events, opp_events, ext_stats = extract_events(replay, me.pid)
+    own_supply_buildings: List[Dict] = []
+    my_events, opp_events, ext_stats = extract_events(
+        replay, me.pid, own_supply_buildings=own_supply_buildings, include_source_frames=True,
+    )
     ctx.my_events = my_events
     ctx.opp_events = opp_events
     ctx.extract_stats = ext_stats
@@ -548,8 +553,19 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     ctx.opp_strategy = name_for_game_version(ctx.opp_strategy, ctx.game_version)
     ctx.my_build = name_for_game_version(ctx.my_build, ctx.game_version)
 
-    ctx.build_log = build_log_lines(my_events, cutoff_seconds=None)
+    supply = {
+        event.frame: event.food_used for event in getattr(replay, "tracker_events", ())
+        if isinstance(event, PlayerStatsEvent) and event.pid == me.pid
+        and isinstance(event.food_used, (int, float)) and 0 <= event.food_used <= 2000
+    }
+    ctx.build_log = build_log_lines(my_events, cutoff_seconds=None,
+                                    supply_by_frame=supply, supply_output=ctx.build_log_supply)
     ctx.early_build_log = build_log_lines(my_events, cutoff_seconds=300)
+    for events in (my_events, opp_events):
+        for event in events:
+            event.pop("frame", None)
+    if depth == "deep":
+        ctx.build_log_full = build_log_lines([*my_events, *own_supply_buildings], include_workers=True)[:5000]
 
     ctx.graph_data = _extract_graph_data(replay, me, opp)
 

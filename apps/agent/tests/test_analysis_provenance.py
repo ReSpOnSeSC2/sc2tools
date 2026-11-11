@@ -12,6 +12,9 @@ import pytest
 from sc2tools_agent import analysis_provenance as provenance
 
 
+SOURCE_ENGINE = Path(__file__).resolve().parents[2] / "replay-engine"
+
+
 def parser_root(tmp_path, *, frozen=False):
     root = tmp_path / "_MEIPASS" / "apps" / "replay-engine" if frozen else tmp_path / "source" / "apps" / "replay-engine"
     (root / "core").mkdir(parents=True)
@@ -26,12 +29,12 @@ def test_real_source_engine_origin_is_used_instead_of_agent_parser_wrapper():
     replay_pipeline.bootstrap_analyzer_path()
     engine = importlib.import_module("core.sc2_replay_parser")
     engine_root = Path(engine.__file__).resolve().parent.parent
-    expected_root = Path(__file__).resolve().parents[2] / "replay-engine"
-    assert engine_root == expected_root
+    assert engine_root == SOURCE_ENGINE
     assert engine_root != Path(replay_pipeline.__file__).resolve().parent
-    assert (engine_root / "VERSION").read_text(encoding="utf-8").strip() == "1.6.12"
+    expected_version = (SOURCE_ENGINE / "VERSION").read_text(encoding="utf-8").strip()
     captured = provenance.capture_provenance()
-    assert captured.engine_version == "1.6.12" and captured.agent_version == sc2tools_agent.__version__
+    assert captured.engine_version == expected_version
+    assert captured.agent_version == sc2tools_agent.__version__
 
 
 @pytest.mark.parametrize("frozen", [False, True])
@@ -91,14 +94,18 @@ def test_packaging_places_existing_version_beside_the_frozen_engine(tmp_path):
                   and node.value.func.attr == "append" and any(isinstance(child, ast.Constant) and child.value == "VERSION" for child in ast.walk(node))]
     assert len(statements) == 1
     root, module = parser_root(tmp_path, frozen=True)
-    source_version = Path(__file__).resolve().parents[2] / "replay-engine" / "VERSION"
-    (root / "VERSION").write_bytes(source_version.read_bytes())
+    source_version = SOURCE_ENGINE / "VERSION"
     data = []
     # Execute only the selected pure DATAS append, never the PyInstaller spec.
-    exec(compile(ast.Module(body=statements, type_ignores=[]), str(spec), "exec"), {"__builtins__": {}, "str": str, "ANALYZER_DIR": root, "DATAS": data})
-    assert data == [(str(root / "VERSION"), "apps/replay-engine")]
-    origin = root / "core" / "sc2_replay_parser.py"
+    exec(compile(ast.Module(body=statements, type_ignores=[]), str(spec), "exec"),
+         {"__builtins__": {}, "str": str, "ANALYZER_DIR": SOURCE_ENGINE, "DATAS": data})
+    assert data == [(str(source_version), "apps/replay-engine")]
+    bundled_source, bundled_directory = data[0]
+    bundled_version = tmp_path / "_MEIPASS" / bundled_directory / "VERSION"
+    assert bundled_version.parent == root
+    bundled_version.write_bytes(Path(bundled_source).read_bytes())
+    origin = Path(module.__file__)
     definition = importlib.util.spec_from_file_location("fixture_frozen_parser", origin)
     loaded = importlib.util.module_from_spec(definition)
     definition.loader.exec_module(loaded)  # Empty synthetic parser file only, never a native app.
-    assert provenance.capture_provenance(parser_module=loaded).engine_version == Path(data[0][0]).read_text().strip() == "1.6.12"
+    assert provenance.capture_provenance(parser_module=loaded).engine_version == source_version.read_text(encoding="utf-8").strip()

@@ -22,7 +22,7 @@ export type DiscordHook = { id: string; label: string; last4: string; events: Ev
   disabledReason: string | null; failureCount: number; previewed: boolean; lastPostAt: string | null; lastResult: string | null; createdAt: string };
 type DiscordState = { available: boolean; maxHooks: number; hooks: DiscordHook[] };
 
-const EVENT_LABELS: Array<[keyof Events, string]> = [["result", "Each ranked result"], ["session", "Session summaries"], ["weekly", "Weekly recap"], ["milestone", "New MMR peaks"]];
+const EVENT_LABELS: Array<[keyof Events, string]> = [["result", "Each ranked result"], ["session", "Session summaries"], ["weekly", "Weekly recap"], ["milestone", "MMR peaks and promotions"]];
 const OPTION_LABELS: Array<[keyof Options, string, string]> = [
   ["opponentNames", "Show opponent names", "Off by default. Posts say the opponent's race and MMR only."],
   ["mmr", "Show MMR", "Your rating and its change after each game."],
@@ -49,7 +49,7 @@ function DiscordSettingsPanel() {
     finally { setBusy(false); }
   }
   const data = state.data;
-  return <Section id="discord" className="scroll-mt-28" title="Post to Discord" description="Send your results, session summaries, weekly recap and new MMR peaks to a channel in your Discord server. Nothing is posted until you turn a channel on.">
+  return <Section id="discord" className="scroll-mt-28" title="Post to Discord" description="Send your results, session summaries, weekly recap, MMR peaks and promotions to a channel in your Discord server. Nothing is posted until you turn a channel on.">
     {state.error && !data ? <RequestError error={state.error} onRetry={() => state.mutate()} /> : !data ? <Skeleton rows={4} /> : <div className="space-y-4">
       {error ? <RequestError error={error} onRetry={() => setError(null)} /> : null}
       {!data.available ? <Card><p className="text-caption text-text-muted">Posting to Discord isn&apos;t available on this server yet.</p></Card> : <>

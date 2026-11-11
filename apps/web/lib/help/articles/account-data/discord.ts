@@ -2,7 +2,7 @@ import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
   slug: "discord", title: "Post your games to Discord",
-  summary: "Send ranked results, session summaries, your weekly recap and new MMR peaks to a channel in your own Discord server through a webhook. Off until you turn it on.",
+  summary: "Send ranked results, session summaries, your weekly recap, MMR peaks and league promotions to a channel in your own Discord server through a webhook. Off until you turn it on.",
   category: "account-data", audience: "all", signedInOnly: true, order: 27, updated: "2026-11-10",
   keywords: ["discord", "webhook", "post results", "clan", "team channel", "session summary", "weekly recap", "mmr peak"],
   body: [
@@ -16,10 +16,10 @@ const article: HelpArticle = {
     { type: "paragraph", text: "Only Discord webhook links are accepted. The link is stored encrypted and shown afterwards only as its last four characters. It is never included in your data export. You can connect up to three channels." },
     { type: "heading", text: "What is posted", anchor: "what-is-posted" },
     { type: "list", items: [
-      "**Each ranked result:** win or loss, matchup, map, your build, MMR change and game length. Unranked and custom games are never posted.",
+      "**Each ranked result:** win or loss, matchup, map, your build, recorded starting MMR and game length. Unranked and custom games are never posted.",
       "**Session summaries:** your record, time played, MMR change and matchups once a session ends (after your session gap passes with no new game).",
       "**Weekly recap:** the headline numbers from your [weekly report](/help/weekly-report).",
-      "**New MMR peaks:** when a rated game takes an account and race above its previous best, once you have at least 20 rated games there.",
+      "**MMR peaks and promotions:** a rated game can set a new best after at least 20 rated games on the account and race. A promotion appears when two successive ranked 1v1 replays on the same account and ladder race show a higher league. Replays without league data can still report results.",
     ] },
     { type: "paragraph", text: "Tick or untick each kind per channel. Posts are queued and sent within about a minute; if Discord is busy they are retried for a while, then dropped." },
     { type: "heading", text: "Privacy", anchor: "privacy" },

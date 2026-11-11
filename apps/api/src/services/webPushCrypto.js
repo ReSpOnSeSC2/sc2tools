@@ -60,7 +60,10 @@ function parseVapidKeys(publicKey, privateKey) {
 function generateVapidKeys() {
   const ecdh = crypto.createECDH("prime256v1");
   ecdh.generateKeys();
-  return { publicKey: b64url(ecdh.getPublicKey()), privateKey: b64url(ecdh.getPrivateKey()) };
+  const rawScalar = ecdh.getPrivateKey();
+  const privateKey = Buffer.alloc(32);
+  rawScalar.copy(privateKey, privateKey.length - rawScalar.length);
+  return { publicKey: b64url(ecdh.getPublicKey()), privateKey: b64url(privateKey) };
 }
 
 /**

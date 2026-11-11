@@ -126,3 +126,13 @@ def test_reduced_legacy_fast_path_never_promotes_incomplete_artifact(tmp_path):
     bad_manifest.write_text(json.dumps({"schema": "sc2tools-playback-manifest-v1", "fidelity": fidelity, "segments": [{}]}))
     game.playback_artifact_path = str(bad_manifest)
     assert not has_engine_playback(game, allow_reduced_legacy=True)
+
+
+
+def test_camera_track_slicing_keeps_boundary_points_for_the_viewer():
+    playback = {
+        "game_length": 90,
+        "camera": {"me": [0, 3, 3, 7, 10, 10, 11, 20, 20, 20, 30, 30, 40, 50, 50]},
+    }
+    assert slice_playback(playback, 8, 15)["camera"] == {"me": [7, 10, 10, 11, 20, 20, 20, 30, 30]}
+    assert len(playback["camera"]["me"]) == 15

@@ -63,7 +63,8 @@ def test_manual_team_source_can_only_arm_explicitly_for_current_same_race_roster
     assert page.panel.isVisible()
     assert "Team · Protoss" in page.panel.subtitle.text()
     assert page.panel.title.text() == target()["name"]
-    assert "Target +25s" == page.panel.steps.topLevelItem(1).text(3)
+    assert page.panel.steps.topLevelItem(1).text(3) == "Target passed 25s ago"
+    assert page.panel.note.text() == "Target schedule only · elapsed time does not confirm a built step."
     assert "not verified production" in page.status.text()
     assert saved[0] == before and calls == actions_before
     assert page._state["slots"]["PvT"]["name"] == before["slots"]["PvT"]["name"]

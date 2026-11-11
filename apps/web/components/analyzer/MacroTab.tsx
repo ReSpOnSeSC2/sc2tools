@@ -8,6 +8,8 @@ import { QueryState } from "@/components/ui/QueryState";
 import { SectionBoundary } from "@/components/ui/SectionBoundary";
 import { MacroSummaryCard } from "./MacroSummaryCard";
 import { MacroEmptyState } from "./MacroEmptyState";
+import type { UnitTradeSample } from "./UnitTradeSampleCard";
+import dynamic from "next/dynamic";
 import { MechanicsTrendCard } from "./MechanicsTrendCard";
 import { useMacroBackfill } from "./useMacroBackfill";
 import { FocusCard } from "./macro/report/FocusCard";
@@ -17,6 +19,8 @@ import { LeakLedgerCard } from "./macro/report/LeakLedgerCard";
 import { ReportGamesModal } from "./macro/report/ReportGamesModal";
 import { TargetsCard } from "./macro/targets/TargetsCard";
 import type { MacroReportData, ReportDrill } from "./macro/report/types";
+
+const UnitTradeSampleCard = dynamic(() => import("./UnitTradeSampleCard").then(module => module.UnitTradeSampleCard));
 
 /**
  * Macro tab — the aggregate macro report.
@@ -41,11 +45,13 @@ import type { MacroReportData, ReportDrill } from "./macro/report/types";
  */
 export function MacroTab() {
   const { filters, dbRev } = useFilters();
+  const [tradeOpen, setTradeOpen] = useState(false);
   const [drill, setDrill] = useState<ReportDrill | null>(null);
 
   const report = useApi<MacroReportData>(
     `/v1/macro/report${filtersToQuery(filters)}#${dbRev}`,
   );
+  const trade = useApi<UnitTradeSample>(tradeOpen ? `/v1/macro/unit-trades${filtersToQuery(filters)}#${dbRev}` : null);
   const backfill = useMacroBackfill(() => { void report.mutate(); });
 
   return (
@@ -53,6 +59,12 @@ export function MacroTab() {
       <SectionBoundary label="your league targets"><TargetsCard onDrill={setDrill} /></SectionBoundary>
       <MacroSummaryCard backfill={backfill} />
       <MechanicsTrendCard />
+      <details onToggle={event => setTradeOpen(event.currentTarget.open)} className="rounded-lg border border-border bg-bg-surface p-4">
+        <summary className="min-h-9 cursor-pointer text-body font-semibold">Unit trades by matchup</summary>
+        {tradeOpen ? <QueryState q={trade} errorTitle="Unit trades" skeleton={<Skeleton rows={3} />}>{data =>
+          <UnitTradeSampleCard sample={data} />
+        }</QueryState> : null}
+      </details>
       <QueryState
         q={report}
         skeleton={<Skeleton rows={6} />}

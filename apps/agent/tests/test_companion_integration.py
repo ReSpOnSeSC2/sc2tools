@@ -9,11 +9,13 @@ import textwrap
 
 import pytest
 
+from tests._gui_offscreen import DRAFT_DIALOG_DRIVER
+
 
 def test_companion_extends_the_existing_agent_and_preserves_navigation(tmp_path: Path):
     if importlib.util.find_spec("PySide6") is None:
         pytest.skip("Qt is not installed")
-    script = textwrap.dedent("""
+    script = DRAFT_DIALOG_DRIVER + textwrap.dedent("""
         import sys
         from dataclasses import replace
         from pathlib import Path
@@ -70,6 +72,8 @@ def test_companion_extends_the_existing_agent_and_preserves_navigation(tmp_path:
         paired._handle_input.setText('Unsaved companion navigation draft')
         paired._api_input.setText('https://draft.example.test')
         for index, key in enumerate(page_keys):
+            if key == 'streams':
+                keep_settings_draft_via_help(paired)
             paired._nav_group.button(index).click()
             app.processEvents()
             assert paired._PAGE_KEYS[paired._stack.currentIndex()] == key

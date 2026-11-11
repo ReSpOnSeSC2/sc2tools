@@ -51,16 +51,16 @@ def test_exact_deaths_preserve_time_side_and_disjoint_categories(extractor):
         event(ee.UnitBornEvent, 0, uid=2, pid=2, name="Marine"),
         # An unfinished enemy building killed during construction counts.
         event(ee.UnitInitEvent, 5, uid=3, pid=2, name="PhotonCannon"),
-        event(ee.UnitDiedEvent, 10.25, killing_player_id=2),
+        event(ee.UnitDiedEvent, 10.25, killing_player_id=2, killing_unit_id=2),
         event(ee.UnitDiedEvent, 11, uid=2, killing_player_id=1),
         event(ee.UnitDiedEvent, 12, uid=3, killing_player_id=1),
         # A duplicate tracker notification cannot count another casualty.
         event(ee.UnitDiedEvent, 12.5, uid=3, killing_player_id=1),
     ]
     assert ee.extract_macro_events(replay(rows), 1, 2)["casualty_events"] == [
-        {"time": 10.25, "owner": "me", "killer": "opp", "category": "workers", "name": "SCV"},
-        {"time": 11, "owner": "opp", "killer": "me", "category": "units", "name": "Marine"},
-        {"time": 12, "owner": "opp", "killer": "me", "category": "buildings", "name": "PhotonCannon"},
+        {"time": 10.25, "owner": "me", "killer": "opp", "category": "workers", "name": "SCV", "killerUnit": "Marine", "bornAt": 0},
+        {"time": 11, "owner": "opp", "killer": "me", "category": "units", "name": "Marine", "bornAt": 0},
+        {"time": 12, "owner": "opp", "killer": "me", "category": "buildings", "name": "PhotonCannon", "bornAt": 5},
     ]
     # Owner and killer labels are relative to the selected player, not pid 1.
     reversed_rows = ee.extract_macro_events(replay(rows), 2, 1)["casualty_events"]
@@ -160,7 +160,7 @@ def test_structure_aliases_and_stances_never_count_as_units(extractor, raw_name,
         event(ee.UnitDiedEvent, 5, killing_player_id=2),
     ]
     assert ee.extract_macro_events(replay(rows), 1, 2)["casualty_events"] == [
-        {"time": 5, "owner": "me", "killer": "opp", "category": "buildings", "name": canonical},
+        {"time": 5, "owner": "me", "killer": "opp", "category": "buildings", "name": canonical, "bornAt": 0},
     ]
 
 
@@ -198,3 +198,16 @@ def test_macro_score_preserves_unavailable_versus_tracked_empty():
 
     assert "casualty_events" not in compute_macro_score({}, "Protoss", 60)
     assert compute_macro_score({"casualty_events": []}, "Protoss", 60)["casualty_events"] == []
+
+
+def test_build_log_supply_only_uses_aligned_observations_and_preserves_legacy_lines():
+    from core.event_extractor import build_log_lines
+
+    events = [{"type": "building", "name": "Pylon", "time": 20, "frame": 450},
+              {"type": "building", "name": "Nexus", "time": 0, "frame": 0},
+              {"type": "worker", "name": "Probe", "time": 0, "frame": 0}]
+    measured = []
+    assert build_log_lines(events, supply_by_frame={0: 12, 451: 14}, supply_output=measured) == [
+        "[0:00] Nexus", "[0:20] Pylon"]
+    assert measured == [12, None]
+    assert build_log_lines(events, include_workers=True) == ["[0:00] Nexus", "[0:00] Probe", "[0:20] Pylon"]

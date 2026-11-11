@@ -153,9 +153,37 @@ def test_build_checkin_menu_item_only_when_wired() -> None:
     assert "Build check-in…" not in _labels(TrayUI(dashboard_url="https://example.test"))
 
 
+def test_practice_move_is_a_native_tray_action_only_when_wired():
+    calls = []
+    tray = TrayUI(dashboard_url="https://example.test", on_move_practice_hud=lambda: calls.append("move"))
+    menu = tray._build_menu(_FakePystray)
+    item = next(item for item in menu.items if getattr(item, "text", None) == "Move Practice HUD")
+    item.action(None, item)
+    assert calls == ["move"]
+    without_gui = TrayUI(dashboard_url="https://example.test")
+    assert "Move Practice HUD" not in _labels(without_gui)
+
+
+def test_off_preference_mutes_windows_notifications_without_removing_the_tray():
+    notices = []
+    enabled = [False]
+    tray = TrayUI(dashboard_url="https://example.test", notifications_enabled=lambda: enabled[0])
+    tray._icon = SimpleNamespace(notify=lambda *args: notices.append(args))
+    tray.show_notice("quiet")
+    assert notices == []
+    enabled[0] = True
+    tray.show_notice("important")
+    assert notices == [("important", "SC2 Tools Agent")]
+
+
 def test_tray_separates_status_navigation_help_and_sync_controls() -> None:
-    tray = TrayUI(dashboard_url="https://example.test", on_show_window=lambda: None,
-                  on_build_checkin=lambda: None, on_pause_for=lambda _until: None)
+    tray = TrayUI(
+        dashboard_url="https://example.test",
+        on_show_window=lambda: None,
+        on_build_checkin=lambda: None,
+        on_move_practice_hud=lambda: None,
+        on_pause_for=lambda _until: None,
+    )
     tray._site_notices.current = SimpleNamespace(message="Sample service notice")
     groups = [[]]
     for item in tray._build_menu(_FakePystray).items:
@@ -165,7 +193,7 @@ def test_tray_separates_status_navigation_help_and_sync_controls() -> None:
             groups[-1].append(item.text)
     assert groups == [
         [tray._title, tray._second_line, tray._third_line, "Sample service notice"],
-        ["Open SC2 Tools", "Open dashboard", "Build check-in…"],
+        ["Open SC2 Tools", "Open dashboard", "Build check-in…", "Move Practice HUD"],
         ["Help and troubleshooting", "Copy support info"],
         [tray._pause_label, "Pause"],
         ["More"],

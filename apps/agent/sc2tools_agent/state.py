@@ -138,6 +138,8 @@ class AgentState:
     Useful when the agent is set to launch on login."""
 
     notify_every_game: bool = False
+    notifications_muted: bool = False
+    close_to_tray: bool = True
     """Opt-in local notification for newly synced live games; never history imports."""
 
     companion_preferences: Dict[str, bool] = field(default_factory=dict)
@@ -203,6 +205,12 @@ class AgentState:
     cloud alongside ``last_known_mmr`` so the overlay's region label
     stays accurate even when SC2Pulse is unreachable."""
 
+    setup_pending: bool = False
+    """Desktop setup began before linking and still needs an import choice."""
+
+    setup_completed_at: Optional[float] = None
+    """Unix time of setup completion or a pre-wizard linked-device migration."""
+
     sync_filter_preset: Optional[str] = None
     """Date-range filter the watcher applies before uploading a parsed
     replay. Mirrors the website's date presets so the agent and web
@@ -210,6 +218,7 @@ class AgentState:
 
       * ``None`` / ``"all"``   — no filter (default)
       * ``"current_season"``    — replays played this ladder season
+      * ``"last_30_days"``      — replays played today or during the prior 29 UTC dates
       * ``"season:67"``         — replays from a specific season number
       * ``"custom"``            — bounded by ``sync_filter_since`` /
                                   ``sync_filter_until``
@@ -518,6 +527,8 @@ def _state_from_raw(raw):
         autostart_enabled=bool(raw.get("autostart_enabled") or False),
         start_minimized=bool(raw.get("start_minimized") or False),
         notify_every_game=raw.get("notify_every_game") is True,
+        notifications_muted=raw.get("notifications_muted") is True,
+        close_to_tray=raw.get("close_to_tray") is not False,
         companion_preferences={
             key: value for key, value in (
                 raw.get("companion_preferences")
@@ -542,6 +553,8 @@ def _state_from_raw(raw):
         last_known_mmr=_coerce_mmr(raw.get("last_known_mmr")),
         last_known_mmr_date_iso=_coerce_str(raw.get("last_known_mmr_date_iso")),
         last_known_mmr_region=_coerce_str(raw.get("last_known_mmr_region")),
+        setup_pending=raw.get("setup_pending") is True,
+        setup_completed_at=_coerce_timestamp(raw.get("setup_completed_at")),
         sync_filter_preset=_coerce_str(raw.get("sync_filter_preset")),
         sync_filter_since=_coerce_str(raw.get("sync_filter_since")),
         sync_filter_until=_coerce_str(raw.get("sync_filter_until")),
