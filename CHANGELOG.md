@@ -40,6 +40,8 @@ corresponding GitHub Release.
 - Public player pages show overview, archive and share controls. Shared replay
   previews show a short card before sign-in, and original replay downloads
   honor the player's current sharing preference.
+- Shared replay segments keep private storage identifiers out of their URLs
+  and recheck access before a segment is returned.
 
 ### Replay and account fixes
 
