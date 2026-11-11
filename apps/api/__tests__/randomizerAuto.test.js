@@ -37,8 +37,9 @@ function envelope(fields = {}) {
   };
 }
 
-function setPool(rollOnDesktop) {
-  return setPrefs(db, account.userId, { randomizer: { ...randomizerPrefs(MATCHUP, [BUILD]), rollOnDesktop } });
+async function setPool(rollOnDesktop, ids = [BUILD]) {
+  await setPrefs(db, account.userId, { randomizer: { ...randomizerPrefs(MATCHUP, ids), rollOnDesktop } });
+  await services.buildIntents.preferencesChanged(account.userId, "randomizer");
 }
 
 function liveRow() {
@@ -148,4 +149,65 @@ test.each([
 ])("does not auto-roll ineligible telemetry %j", async (fields) => {
   await deliver(envelope(fields));
   expect((await liveRow())?.randomizer ?? null).toBeNull();
+});
+
+test("paired desktop rerolls one current draw atomically and cannot replay the action", async () => {
+  await setPool(true, [BUILD, "pvz-robo-opener"]);
+  await deliver();
+  const initial = (await liveRow()).randomizer.key;
+  const endpoint = "/v1/build-intents/live/" + encodeURIComponent(key) + "/randomizer/reroll";
+  const roll = (auth, expectedBuildKey = initial) => request(app).post(endpoint).set("Authorization", auth)
+    .send({ matchup: MATCHUP, expectedBuildKey });
+  await roll(account.web).expect(403);
+  expect((await roll(account.device, "stale-pick").expect(409)).body.error.code).toBe("randomizer_changed");
+  // Both callers resolve an alternate for the same old pick before either
+  // may write. The database guard, rather than request timing, picks one.
+  const options = services.buildIntents.options;
+  const resolveKey = options.resolveKey.bind(options);
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  let arrived = 0;
+  const resolve = jest.spyOn(options, "resolveKey").mockImplementation(async (...args) => {
+    const ref = await resolveKey(...args);
+    if (++arrived === 2) release();
+    await gate;
+    return ref;
+  });
+  let replies;
+  try { replies = await Promise.all([roll(account.device), roll(account.device)]); }
+  finally { resolve.mockRestore(); }
+  expect(replies.map((reply) => reply.status).sort()).toEqual([200, 409]);
+  const saved = (await liveRow()).randomizer;
+  expect(saved.key).not.toBe(initial);
+  expect(saved).toMatchObject({ native: true, widgetReveal: false, rerolledAt: expect.any(Date) });
+  expect(replies.find((reply) => reply.status === 200).body).toMatchObject({
+    desktopRandomizer: true, randomizerCanReroll: false, randomizer: { key: saved.key },
+  });
+  expect((await roll(account.device, saved.key).expect(409)).body.error.code).toBe("randomizer_already_rerolled");
+  expect((await liveRow()).randomizer).toEqual(saved);
+});
+
+test("an automatic desktop pick stays local if a viewer reward arrives without a connected source", async () => {
+  await setPool(true, [BUILD, "pvz-robo-opener"]);
+  await deliver(envelope({ phase: "match_started" }));
+  const local = (await liveRow()).randomizer;
+  // Revoking auto-roll does not convert an already saved local draw.
+  await setPool(false, [BUILD, "pvz-robo-opener"]);
+  await expect(services.buildIntents.live.rewardReroll(account.userId, key, MATCHUP, "viewer-redemption"))
+    .rejects.toMatchObject({ code: "desktop_roll_local" });
+  expect((await liveRow()).randomizer).toEqual(local);
+});
+
+test("a default-off account does not re-read randomizer preferences on every early tick", async () => {
+  await setPool(false);
+  const prefs = jest.spyOn(db.users, "findOne");
+  const reads = () => prefs.mock.calls.filter(([, options]) => options?.projection?.["preferences.randomizer"] === 1);
+  try {
+    await deliver();
+    expect(reads()).toHaveLength(1);
+    now += 3000;
+    await deliver(envelope({ phase: "match_in_progress", displayTime: 10 }));
+    expect(reads()).toHaveLength(1);
+    expect((await liveRow()).randomizer).toBeNull();
+  } finally { prefs.mockRestore(); }
 });

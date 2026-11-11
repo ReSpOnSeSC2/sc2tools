@@ -261,6 +261,34 @@ test("randomizer waits for a different eligible desktop game and settles after t
   expect((await recent())[0]).toMatchObject({ state: "applied", settlement: "fulfilled" });
 });
 
+test("a desktop-only game leaves its viewer reroll queued for the next eligible game", async () => {
+  await db.users.updateOne({ userId: OWNER }, { $set: { "preferences.randomizer": { rollOnDesktop: true, matchups: { PvZ: {
+    enabled: true, builds: [{ id: "a", name: "Macro" }, { id: "b", name: "Pressure" }],
+  } } } } });
+  const game = key => ({ gameKey: key, phase: "match_started", isReplay: false, receivedAt: now, capturedAt: now,
+    user: { name: "My player", race: "Protoss" }, opponent: { name: "Opponent", race: "Zerg" },
+    players: [{ name: "My player", type: "user" }, { name: "Opponent", type: "user" }] });
+  current = game("Opponent|My player|123");
+  await save("randomizer", "both");
+  await webhook("delivery-1").expect(204);
+  await service.sweep();
+  const before = await receipts.waiting(OWNER);
+  roll.mockRejectedValueOnce(Object.assign(new Error("local draw"), { code: "desktop_roll_local" }));
+  now += 2000;
+  current = game("Opponent|My player|456");
+  await service.onDeviceGame(OWNER, current);
+  const waiting = await receipts.waiting(OWNER);
+  expect(waiting).toMatchObject({ gameKey: current.gameKey, deadlineAt: before.deadlineAt });
+  expect(patchCalls()).toHaveLength(0);
+  await service.onDeviceGame(OWNER, current);
+  expect(roll).toHaveBeenCalledTimes(1);
+  now += 2000;
+  current = game("Opponent|My player|789");
+  await service.onDeviceGame(OWNER, current);
+  expect(roll).toHaveBeenCalledTimes(2);
+  expect((await recent())[0]).toMatchObject({ state: "applied", settlement: "fulfilled" });
+});
+
 test("recovery marks an abandoned dispatch unconfirmed without replaying its action or refund", async () => {
   await save("recap", "both");
   await webhook("delivery-1").expect(204);

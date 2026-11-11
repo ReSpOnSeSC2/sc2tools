@@ -21,13 +21,20 @@ function earlyRandomizerEnvelope(raw) {
  */
 async function allowAutomaticRoll(service, userId, gameKey, randomizer) {
   const unavailable = () => new BuildIntentError(409, "desktop_roll_unavailable", "Automatic desktop roll is unavailable.");
-  if (randomizer.rollOnDesktop !== true) throw unavailable();
+  if (randomizer.rollOnDesktop !== true) throw new BuildIntentError(409, "desktop_roll_disabled", "Automatic desktop roll is turned off.");
   if (await service.notifier.hasConnectedRandomizerWidget(userId) !== false) throw unavailable();
-  if (!service.broker?.isTrustedDeviceGame(userId, gameKey)
-      || earlyRandomizerEnvelope(service.broker.latest(userId))?.gameKey !== gameKey) throw unavailable();
+  requireTrustedEarlyGame(service, userId, gameKey);
 }
 
-module.exports = { allowAutomaticRoll, earlyRandomizerEnvelope };
+/** @param {import("./buildIntentLive").BuildIntentLive} service @param {string} userId @param {string} gameKey */
+function requireTrustedEarlyGame(service, userId, gameKey) {
+  if (!service.broker?.isTrustedDeviceGame(userId, gameKey)
+      || earlyRandomizerEnvelope(service.broker.latest(userId))?.gameKey !== gameKey) {
+    throw new BuildIntentError(409, "stale_game", "This loading card no longer belongs to the current device game.");
+  }
+}
+
+module.exports = { allowAutomaticRoll, earlyRandomizerEnvelope, requireTrustedEarlyGame };
 
 /** @param {Record<string,any>} envelope */
 function earlyPlayingPhase(envelope) {

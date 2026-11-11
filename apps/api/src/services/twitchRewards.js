@@ -173,8 +173,9 @@ class TwitchRewardsService {
     } catch (error) {
       const code = errorCode(error);
       if (code === "reward_action_unconfirmed") return { state: "unknown", reason: "dispatch_unconfirmed" };
-      if (code === "reward_hold_active" && row.state === "awaiting_game") {
-        await receipts.waitForGame(row, row.gameKey);
+      if ((code === "reward_hold_active" || code === "reward_desktop_roll_local") && row.state === "awaiting_game") {
+        const skippedGame = code === "reward_desktop_roll_local" ? envelope?.gameKey : null;
+        await receipts.waitForGame(row, skippedGame || row.gameKey);
         return { state: "awaiting_game", reason: "next_game_queued" };
       }
       if (code.startsWith("reward_") || ["overlay_rotation_pending", "invalid_overlay_token"].includes(code)) return refused(code.replace(/^reward_/, ""));

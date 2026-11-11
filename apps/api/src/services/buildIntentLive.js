@@ -149,6 +149,11 @@ class BoundedMap {
     return this.map.get(key);
   }
 
+  /** @param {string} key */
+  delete(key) {
+    this.map.delete(key);
+  }
+
   /** @param {string} key @param {any} value */
   set(key, value) {
     this.map.delete(key);
@@ -264,6 +269,11 @@ class BuildIntentLive {
     return nativeRandomizerRoll(this, userId, gameKey, body);
   }
 
+  /** @param {string} userId @param {string} gameKey @param {string} matchup @param {string} expectedBuildKey */
+  desktopReroll(userId, gameKey, matchup, expectedBuildKey) {
+    return nativeRandomizerRoll(this, userId, gameKey, { matchup, releaseHold: true, rerollOf: expectedBuildKey });
+  }
+
   /** Server-only viewer redemption. Manual callers cannot supply this option.
    * @param {string} userId @param {string} gameKey @param {string} matchup @param {string} redemptionId */
   rewardReroll(userId, gameKey, matchup, redemptionId) {
@@ -288,10 +298,17 @@ class BuildIntentLive {
       attempt.retryAt = Infinity;
     } catch (err) {
       if (!(err instanceof BuildIntentError)) throw err;
-      if (err.code === "build_declared" || err.code === "already_bound") attempt.retryAt = Infinity;
+      if (["desktop_roll_disabled", "randomizer_disabled", "unknown_build", "build_declared", "already_bound"].includes(err.code)) {
+        attempt.retryAt = Infinity;
+      }
     } finally {
       attempt.inFlight = false;
     }
+  }
+
+  /** @param {string} userId */
+  resetDesktopAttempt(userId) {
+    this.autoRollAttempts.delete(userId);
   }
 
   /**
@@ -619,6 +636,8 @@ class BuildIntentLive {
   async _state(userId, doc) {
     const prefs = await readBuildIntentPrefs(this.users, userId);
     const matchup = typeof doc.matchup === "string" ? doc.matchup : null;
+    const pool = matchup ? randomizerPool(prefs.randomizer, matchup) : null;
+    const roll = doc.randomizer;
     return {
       gameKey: String(doc.gameKey),
       matchup,
@@ -627,10 +646,13 @@ class BuildIntentLive {
       oppName: doc.oppName || null,
       declared: liveRef(doc.declared, true),
       randomizer: liveRef(doc.randomizer, false),
-      randomizerEnabled: matchup ? randomizerPool(prefs.randomizer, matchup).enabled : false,
+      randomizerEnabled: pool?.enabled === true,
+      ...(roll?.native === true ? { desktopRandomizer: true,
+        randomizerCanReroll: !roll.rerolledAt && roll.rewardRerolled !== true && !doc.declared && !doc.gameId
+          && pool?.enabled === true && pool.ids.length > 1 } : {}),
       holdRemainingMs: holdRemainingMs(doc.hold, this.now()),
       gameId: typeof doc.gameId === "string" ? doc.gameId : null,
-      prefs: prefs.checkin,
+      prefs: { ...prefs.checkin, ...(prefs.randomizer.rollOnDesktop === true ? { rollOnDesktop: true } : {}) },
     };
   }
 }
