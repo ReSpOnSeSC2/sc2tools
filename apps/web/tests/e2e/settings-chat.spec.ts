@@ -57,13 +57,18 @@ for (const theme of ["light", "dark"] as const) {
 
     await expect(saveBar).toHaveCount(1);
     await expect(saveBar.getByRole("status")).toHaveText("Unsaved changes to chat settings and bot settings");
+    evidence.holdNextBotSave();
     await saveBar.getByRole("button", { name: "Save all", exact: true }).click();
-    await expect(saveBar).toHaveCount(0);
-    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toBeEnabled();
-    expect(evidence.writes).toEqual([
+    await expect.poll(() => evidence.writes.slice()).toEqual([
       { owner: "owner-a", method: "PUT", path: "/v1/me/preferences/multichat" },
       { owner: "owner-a", method: "PUT", path: "/v1/me/chatbot" },
     ]);
+    await expect(saveBar.getByRole("button", { name: /^Save / })).toBeDisabled();
+    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toBeDisabled();
+    await evidence.releaseAll();
+    await expect(saveBar).toHaveCount(0);
+    await expect(manager.getByRole("combobox", { name: "URLs shown for", exact: true })).toBeEnabled();
+    expect(evidence.writes).toHaveLength(2);
     await manager.getByRole("combobox", { name: "URLs shown for", exact: true }).selectOption("owner-a-two");
     await list.getByRole("tab", { name: "Overlay", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Synthetic Overlay body", exact: true })).toBeVisible();
