@@ -44,10 +44,26 @@ describe("personal Trends query reuse integration", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(aggregate).toHaveBeenCalledTimes(1);
-    pending.resolve([{ bucket: new Date("2026-09-01"), wins: 2, losses: 1, total: 3, avgMacroScore: 71.234, macroN: 2, avgApm: 123.456, apmN: 3, avgSpq: null, spqN: 0 }]);
-    const expected = { interval: "month", points: [{ bucket: new Date("2026-09-01"), wins: 2, losses: 1, total: 3, avgMacroScore: 71.2, macroN: 2, avgApm: 123.5, apmN: 3, avgSpq: null, spqN: 0, winRate: 2 / 3 }] };
-    await expect(first).resolves.toEqual(expected);
-    await expect(second).resolves.toEqual(expected);
+    pending.resolve([{
+      bucket: new Date("2026-09-01"), wins: 2, losses: 1, total: 3,
+      avgMacroScore: 71.234, macroN: 2, avgApm: 123.456, apmN: 3,
+      avgSpq: null, spqN: 0, avgGroupsUsed: 6.666, groupsUsedN: 2,
+    }]);
+    const expected = { interval: "month", points: [{
+      bucket: "2026-09-01T00:00:00.000Z", wins: 2, losses: 1, total: 3, winRate: 2 / 3,
+      avgMacroScore: 71.2, macroN: 2, avgApm: 123.5, apmN: 3, avgSpq: null, spqN: 0,
+      avgGroupsUsed: 6.7, groupsUsedN: 2, avgCameraReturns: null, cameraReturnsN: 0,
+    }] };
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult).not.toBe(secondResult);
+    for (const result of [firstResult, secondResult]) {
+      // structuredClone returns Dates in the host realm under Jest.
+      // Calling the Date method still requires a real Date with this timestamp.
+      const points = /** @type {any} */ (result).points.map((/** @type {any} */ point) => ({
+        ...point, bucket: Date.prototype.toISOString.call(point.bucket),
+      }));
+      expect({ ...result, points }).toEqual(expected);
+    }
     await agg.timeseries("user-a", { interval: "month", tz: "UTC" }, { map: "Arena" });
     expect(aggregate).toHaveBeenCalledTimes(2);
   });
