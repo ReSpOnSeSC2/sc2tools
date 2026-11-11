@@ -95,6 +95,13 @@ def test_log_search_copy_follow_and_help_navigation(tmp_path):
         app.processEvents()
         for line in win._health_view.lines:
             if line.help_button: line.help_button.click()
+        ghost_help = next(button for button in win._companion_page.ghost_page.findChildren(QtWidgets.QPushButton)
+                          if button.accessibleName() == "Help: Practice HUD")
+        ghost_help.click()
+        from sc2tools_agent.first_run import FirstRunSetup
+        win._show_first_run(FirstRunSetup(folders=[], start_with_windows=None, save=lambda _: None))
+        win._first_run_wizard.button(QtWidgets.QWizard.HelpButton).click()
+        win._first_run_wizard.reject()
         assert {url.split("/help/")[1].split("?")[0] for url in opened} == set(AGENT_HELP_SLUGS)
         assert all(url.startswith("https://example.test/help/") and url.split("#")[0].endswith("?src=agent") for url in opened)
     ''')

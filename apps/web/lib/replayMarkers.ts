@@ -1,3 +1,4 @@
+import type { ReplayCanvasContext } from "./replayCanvas";
 import { projectX, projectY, type PlaybackBounds } from "./mapReplay";
 
 /**
@@ -60,7 +61,7 @@ export function markerAt(
  * a constant, legible size at every zoom and are never darkened.
  */
 export function drawMarkers(
-  ctx: CanvasRenderingContext2D,
+  ctx: ReplayCanvasContext,
   bounds: PlaybackBounds,
   proj: Projection,
   t: number,

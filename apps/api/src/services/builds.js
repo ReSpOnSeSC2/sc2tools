@@ -1,6 +1,7 @@
 "use strict";
 
 const { gamesMatchStage } = require("../util/parseQuery");
+const { tradeSample } = require("./unitTradePreview");
 const { computeDossierExtras } = require("./buildDossier");
 const { hydrateDossierTimings } = require("./buildDossierTimingSample");
 const { naturalTimingBaselines } = require("./buildExecutionTimings");
@@ -25,6 +26,7 @@ const DOSSIER_PROJECTION = {
   // Patch era, with ``date`` (util/patchEra): DNA timings' 8- vs 12-worker
   // build durations.
   gameVersion: 1,
+  engineVersion: 1,
   gameBuild: 1,
   result: 1,
   map: 1,
@@ -292,6 +294,7 @@ class BuildsService {
     return {
       name,
       naturalTimings: naturalTimingBaselines(timingGames.filter(agreesWithDetector)),
+      unitTrades: tradeSample(timingGames),
       plan: finishPlan(doc),
       communityTimings: await readCommunityTimings(this.db.guideStats, name, timingGames),
       timingSampleGames: timingGames.filter(game => game.buildLog.length > 0 || game.oppBuildLog.length > 0).length,

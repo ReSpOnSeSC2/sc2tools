@@ -1,4 +1,6 @@
 "use client";
+
+import { OverlayPanel } from "../OverlayPanel";
 import { withOverlayDemo } from "../OverlayDemoBoundary";
 
 import { useEffect, useId, useRef, type CSSProperties } from "react";
@@ -56,7 +58,7 @@ export function BuildProfileChart({ profile, preview = false }: {
   ];
 
   return (
-    <section className="build-profile-card" aria-label={`Build profile: ${profile.title || "Untitled build"}`} style={cardStyle}>
+    <OverlayPanel as="section" className="build-profile-card" aria-label={`Build profile: ${profile.title || "Untitled build"}`} style={cardStyle} contentStyle={{ padding: "var(--ov-padding, 24px 20px 22px)" }}>
       <style>{`
         .build-profile-card { box-sizing: border-box; }
       `}</style>
@@ -105,7 +107,7 @@ export function BuildProfileChart({ profile, preview = false }: {
       <div style={{ fontSize: 22, color: "#b7c9df", textAlign: "center", lineHeight: 1.3 }}>
         {preview ? "Preview ratings · 1–5" : "Personal ratings · 1–5"}
       </div>
-    </section>
+    </OverlayPanel>
   );
 }
 
@@ -124,12 +126,11 @@ function ConnectedBuildProfileWidget({ token, studioEvent }: {
 const cardStyle: CSSProperties = {
   width: "100%",
   maxWidth: 800,
-  background: "var(--ov-panel-bg, #0c182bef)",
-  border: "var(--ov-shell-border, 1px solid #28435c)",
-  borderRadius: "var(--ov-radius, 16px)",
-  padding: "24px 20px 22px",
   color: "#eaf1fa",
-  fontFamily: "var(--ov-font, Segoe UI, ui-sans-serif, system-ui, sans-serif)",
+  background: "#0c182bef",
+  border: "1px solid #28435c",
+  borderRadius: "16px",
+  fontFamily: "Segoe UI, ui-sans-serif, system-ui, sans-serif",
 };
 
 export const BuildProfileWidget = withOverlayDemo(ConnectedBuildProfileWidget);

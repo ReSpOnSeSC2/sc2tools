@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDate } from "@/lib/i18n/format";
 import { useState } from "react";
 import Link from "next/link";
 import { useApi } from "@/lib/clientApi";
@@ -44,7 +45,7 @@ function GamesPage({ path, last, onMore }: { path: string; last: boolean; onMore
 
 function GameRow({ row }: { row: PracticeGameRow }) {
   const p = row.practice;
-  const when = row.date ? new Date(row.date).toLocaleDateString() : "Unknown date";
+  const when = row.date ? formatDate(new Date(row.date)) : "Unknown date";
   return (
     <li className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-center sm:gap-4">
       <span className={`w-8 shrink-0 font-display text-h3 font-bold ${p.grade ? GRADE_TEXT_CLASS[p.grade] : "text-text-dim"}`}>

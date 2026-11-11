@@ -10,6 +10,7 @@
  * component stays a thin draw loop and the hard parts unit-test.
  */
 
+import { sanitizeReplayCamera } from "./replayCamera";
 import { motionSample, sampleTrack } from "./replayMotion";
 
 export interface PlaybackForm {
@@ -142,6 +143,8 @@ export interface MapPlayback {
    *  payloads have no casts at all and must keep rendering exactly as
    *  before, so this is undefined rather than an empty array there. */
   casts?: ReplayCast[];
+  /** Downsampled camera points per side as flat [time, world x, world y] triples. */
+  camera?: Partial<Record<"me" | "opp", number[]>>;
   creep?: ReplayCreep;
   effects?: ReplayObservedEffect[];
   fidelity?: {
@@ -431,6 +434,7 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
       t: num(e.t), end: num(e.end), x: num(e.x), y: num(e.y), radius: num(e.radius) });
   }
   if (fidelity && truncated) fidelity.complete = false;
+  const camera = sanitizeReplayCamera(p.camera, gameLength);
   return {
     v: Number.isFinite(num(p.v)) ? num(p.v) : 1,
     ...(terminalAttackInclusive ? { terminalAttackInclusive: true } : {}),
@@ -446,6 +450,7 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
     ...(creep ? { creep } : {}),
     ...(Array.isArray(p.effects) ? { effects: effects.sort((a, b) => a.t - b.t) } : {}),
     ...(casts.length ? { casts } : {}),
+    ...(camera ? { camera } : {}),
     stats: { me: statsMe, opp: statsOpp },
   };
 }

@@ -7,6 +7,7 @@ import {
 } from "@/components/analyzer/arcade/hooks/useAnalysisGames";
 import { deviceNote } from "@/lib/analysisCorpus/deviceNote";
 import { defaultIndexedDb } from "@/lib/instant/idb";
+import { formatNumber } from "@/lib/i18n/format";
 
 const PILL =
   "inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-bg-surface px-3 text-micro font-semibold text-accent transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent aria-disabled:cursor-not-allowed aria-disabled:opacity-60";
@@ -33,10 +34,10 @@ export function DailyPulseFooter({ games, accountKey }: { games: AnalysisGamesRe
   const offerKeep = !updating && !games.error && !kept && canStore && !games.hitCorpusLimit;
   const keptHere = !updating && !games.error && games.onDevice && kept;
   const countText = games.hitCorpusLimit
-    ? `Latest ${ANALYSIS_GAMES_CORPUS_MAX.toLocaleString()} games`
-    : `${count.toLocaleString()} ${count === 1 ? "game" : "games"}${games.onDevice && kept ? " on this device" : ""}`;
+    ? `Latest ${formatNumber(ANALYSIS_GAMES_CORPUS_MAX)} games`
+    : `${formatNumber(count)} ${count === 1 ? "game" : "games"}${games.onDevice && kept ? " on this device" : ""}`;
   const explanation = games.hitCorpusLimit
-    ? `Too many games to keep on this device (over ${ANALYSIS_GAMES_CORPUS_MAX.toLocaleString()}), so they load each visit.`
+    ? `Too many games to keep on this device (over ${formatNumber(ANALYSIS_GAMES_CORPUS_MAX)}), so they load each visit.`
     : !canStore
       ? "This browser isn’t letting us store data, so your history loads each visit."
       : games.keepFailed

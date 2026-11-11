@@ -1,6 +1,8 @@
 "use strict";
 
+const { randomUUID } = require("crypto");
 const { gamesMatchStage } = require("../util/parseQuery");
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { sanitizeReportPrefs } = require("./reportPreferences");
 const { canonicalTimeZone, localParts, mondayOf, weekBounds, shiftWeek, weekKeyAt } = require("./reportTime");
@@ -14,21 +16,47 @@ const facts = require("./reportFacts");
  * Delivery: jobs/deliveryJobs.js calls ``sweep`` hourly on the existing
  * in-process timer. A user is due from Monday 09:00 to the end of
  * Wednesday in their report time zone (Settings > Preferences > Reports;
- * UTC until saved). ``reports.weeklyWeek`` on the user row is claimed with
- * a conditional update and the notification carries the delivery key
- * ``report.weekly:<week>``, so a restart, catch-up after downtime or two
- * overlapping instances deliver each week once. Weeks with fewer than
- * five games are claimed and skipped.
+ * UTC until saved). A short-lived claim coordinates workers. The
+ * completed week is recorded after eligible delivery, including muted bell rows.
+ * Bell and Discord delivery keys make a retry safe after a partial write.
  */
 
 const MIN_GAMES = 5;
 const ROW_LIMIT = 3000;
 const SEND_HOUR = 9;
-const CANDIDATE_TTL_MS = 6 * 60 * 60 * 1000;
+const DELIVERY_CLAIM_MS = 15 * 60_000;
+const HOUR_MS = 60 * 60 * 1000;
+const CANDIDATE_TTL_MS = 6 * HOUR_MS;
+const CANDIDATE_LIMIT = 20000;
+const ZONE_PADDING_MS = 14 * HOUR_MS;
+const PREFS_PROJECTION = { _id: 0, "preferences.reports": 1 };
 const ROW_PROJECTION = {
   _id: 0, gameId: 1, date: 1, result: 1, myRace: 1, "opponent.race": 1, "opponent.strategy": 1, map: 1, myBuild: 1,
   durationSec: 1, myMmr: 1, myToonHandle: 1, macroScore: 1, "top3Leaks.name": 1,
 };
+
+/** Resolve the report week using current consent and the saved time zone.
+ * @param {unknown} input @param {number} now */
+function dueReport(input, now) {
+  const prefs = sanitizeReportPrefs(input);
+  if (!prefs.weekly) return null;
+  const tz = prefs.timezone || "UTC";
+  const { weekday, hour } = localParts(now, tz);
+  if (weekday > 2 || (weekday === 0 && hour < SEND_HOUR)) return null;
+  const week = shiftWeek(weekKeyAt(now, tz), -1);
+  return week ? { week, tz } : null;
+}
+
+/** Time zones due before UTC Monday use the current UTC week.
+ * @param {number} now */
+function candidateWeek(now) {
+  const { weekday, hour } = localParts(now, "UTC");
+  if (weekday === 6 && hour >= 19) return weekKeyAt(now, "UTC");
+  // UTC+14 is first due at Sunday 19:00 UTC; UTC−12 is last to finish
+  // Wednesday at Thursday 12:00 UTC.
+  if (weekday < 3 || (weekday === 3 && hour < 12)) return shiftWeek(weekKeyAt(now, "UTC"), -1);
+  return null;
+}
 
 class WeeklyReportService {
   /**
@@ -45,8 +73,11 @@ class WeeklyReportService {
     this.logger = opts.logger || null;
     this.now = opts.now || Date.now;
     this.onWeekly = opts.onWeekly || null;
-    /** @type {Map<string, {ids: string[], at: number}>} */
+    /** @type {Map<string, {ids: string[], at: number, through: number}>} */
     this.candidateCache = new Map();
+    /** Under-floor builds are quiet until another eligible upload or a full scan.
+     * @type {Map<string, {week:string,tz:string}>} */
+    this.quietWeeks = new Map();
   }
 
   /** The owner's report for ``query.week`` (default: last complete week). @param {string} userId @param {{week?: unknown, tz?: unknown}} query */
@@ -114,64 +145,126 @@ class WeeklyReportService {
   }
 
   /**
-   * Users with at least MIN_GAMES uploads in a week some time zone is now
-   * reporting on, from the global ``createdAt`` index. Cached per week.
+   * Find candidates by played date, driving discovery from the bounded
+   * global createdAt index. The ingest timestamp may be days later than
+   * the replay, so its range ends at this tick, not at the end of play.
    * @param {number} now
    */
   async candidates(now) {
-    const utcWeek = weekKeyAt(now, "UTC");
-    const sunday = localParts(now, "UTC").weekday === 6 && localParts(now, "UTC").hour >= 19;
-    const weeks = [shiftWeek(utcWeek, -1), ...(sunday ? [utcWeek] : [])].filter((week) => typeof week === "string");
-    /** @type {Set<string>} */
-    const ids = new Set();
-    for (const week of /** @type {string[]} */ (weeks)) {
-      const cached = this.candidateCache.get(week);
-      if (!cached || now - cached.at > CANDIDATE_TTL_MS) {
-        const bounds = weekBounds(week, "UTC");
-        if (!bounds) continue;
-        const rows = await this.db.games.aggregate([
-          { $match: { createdAt: { $gte: new Date(bounds.start.getTime() - 14 * 3600_000), $lt: new Date(Math.min(now, bounds.end.getTime() + 14 * 3600_000)) } } },
-          { $group: { _id: "$userId", n: { $sum: 1 } } },
-          { $match: { n: { $gte: MIN_GAMES } } },
-          { $limit: 20000 },
-        ], { allowDiskUse: true, maxTimeMS: 60_000 }).toArray();
-        this.candidateCache.set(week, { ids: rows.map((row) => String(row._id)), at: now });
-        for (const key of this.candidateCache.keys()) if (!weeks.includes(key)) this.candidateCache.delete(key);
-      }
-      for (const id of this.candidateCache.get(week)?.ids || []) ids.add(id);
+    const week = candidateWeek(now);
+    const bounds = week ? weekBounds(week, "UTC") : null;
+    if (!week || !bounds) return [];
+    const cached = this.candidateCache.get(week);
+    if (cached?.through === now) return cached.ids;
+    const incremental = cached && now > cached.through && now - cached.at < CANDIDATE_TTL_MS ? cached : null;
+    const start = bounds.start.getTime() - ZONE_PADDING_MS;
+    const date = { $gte: new Date(start), $lt: new Date(bounds.end.getTime() + ZONE_PADDING_MS) };
+    const rows = await this.scanCandidates(date, incremental?.through ?? start, now, Boolean(incremental));
+    if (incremental) {
+      for (const row of rows) this.quietWeeks.delete(String(row._id));
+    } else {
+      this.quietWeeks.clear();
     }
-    return [...ids];
+    const ids = [...new Set([...(incremental?.ids ?? []), ...rows.map(row => String(row._id))])].slice(0, CANDIDATE_LIMIT);
+    this.candidateCache.clear();
+    this.candidateCache.set(week, { ids, at: incremental?.at ?? now, through: now });
+    return ids;
+  }
+
+  /** A recent upload can make an owner cross the floor even if fewer than
+   * five games arrived since the last tick. Use the indexed per-owner
+   * date lookup for those changed owners only, stopping after five games.
+   * @param {{ $gte: Date, $lt: Date }} date
+   * @param {number} after @param {number} through @param {boolean} incremental */
+  async scanCandidates(date, after, through, incremental) {
+    const eligible = { ...STATS_GAME_MATCH, date, isResumedFromReplay: { $ne: true } };
+    const played = incremental ? [
+      { $limit: CANDIDATE_LIMIT },
+      { $lookup: {
+        from: this.db.games.collectionName, localField: "_id", foreignField: "userId", as: "played",
+        pipeline: [{ $match: eligible }, { $limit: MIN_GAMES }, { $project: { _id: 1 } }],
+      } },
+      { $match: { ["played." + (MIN_GAMES - 1)]: { $exists: true } } },
+    ] : [{ $match: { n: { $gte: MIN_GAMES } } }, { $limit: CANDIDATE_LIMIT }];
+    return this.db.games.aggregate([
+      { $match: { ...eligible, createdAt: { $gte: new Date(after), $lt: new Date(through) } } },
+      { $group: { _id: "$userId", n: { $sum: 1 } } },
+      ...played,
+      { $project: { _id: 1 } },
+    ], { hint: { createdAt: 1, _id: 1 }, allowDiskUse: true, maxTimeMS: 60_000 }).toArray();
   }
 
   /** @param {string} userId @param {number} now @returns {Promise<"skipped"|"quiet"|"sent">} */
   async deliverIfDue(userId, now) {
-    const user = await this.db.users.findOne({ userId }, { projection: { _id: 0, "preferences.reports": 1, "reports.weeklyWeek": 1, _gdprMutation: 1 } });
+    const user = await this.db.users.findOne({ userId }, { projection: { ...PREFS_PROJECTION, "reports.weeklyWeek": 1, _gdprMutation: 1 } });
     if (!user || user._gdprMutation) return "skipped";
-    const prefs = sanitizeReportPrefs(user.preferences?.reports);
-    const tz = prefs.timezone || "UTC";
-    const local = localParts(now, tz);
-    const due = (local.weekday === 0 && local.hour >= SEND_HOUR) || local.weekday === 1 || local.weekday === 2;
-    const week = shiftWeek(weekKeyAt(now, tz), -1);
-    if (!prefs.weekly || !due || !week || user.reports?.weeklyWeek === week) return "skipped";
+    const due = dueReport(user.preferences?.reports, now);
+    if (!due || user.reports?.weeklyWeek === due.week) return "skipped";
+    const { week } = due;
+    const quiet = this.quietWeeks.get(userId);
+    if (quiet?.week === week && quiet.tz === due.tz) return "skipped";
     let lease;
     try { lease = await claimUserDataLease(this.db.users, userId); } catch { return "skipped"; }
     try {
-      const claim = await this.db.users.updateOne({ userId, "reports.weeklyWeek": { $ne: week } }, { $set: { "reports.weeklyWeek": week } });
-      if (claim.modifiedCount !== 1) return "skipped";
-      let report;
-      try { report = await this.build(userId, week, tz); }
-      catch (err) {
-        // Give the week back so the next hourly tick can try again.
-        await this.db.users.updateOne({ userId, "reports.weeklyWeek": week }, { $unset: { "reports.weeklyWeek": "" } }).catch(() => {});
-        throw err;
+      const token = randomUUID();
+      const claim = await this.claimWeek(userId, week, token);
+      if (!claim) return "skipped";
+      const owner = { userId, "reports.weeklyClaim.token": token };
+      try {
+        const schedule = dueReport(claim.preferences?.reports, this.now());
+        if (schedule?.week !== week) return "skipped";
+        const report = await this.build(userId, week, schedule.tz);
+        await lease.assert();
+        // An erasure lease does not freeze Settings. Check consent and the
+        // report's time zone in the same operation that renews our claim.
+        const confirmed = await this.confirmClaim(owner, schedule);
+        if (!confirmed) return "skipped";
+        if (report.totals.games < MIN_GAMES) {
+          this.quietWeeks.set(userId, schedule);
+          return "quiet";
+        }
+        const sent = await this.sendWeekly(userId, week, report);
+        await this.db.users.updateOne(owner, { $set: { "reports.weeklyWeek": week }, $unset: { "reports.weeklyClaim": "" } });
+        return sent ? "sent" : "quiet";
+      } finally {
+        // A stale worker cannot release a replacement worker's claim.
+        await this.db.users.updateOne(owner, { $unset: { "reports.weeklyClaim": "" } }).catch(() => {});
       }
-      if (report.totals.games < MIN_GAMES) return "quiet";
-      const row = await this.notifications.notify(userId, { kind: "report.weekly", ...weeklyNotice(report), href: `/app/reports/weekly/${week}`, eventKey: `report.weekly:${week}` });
-      // Already delivered (the key is idempotent) or muted: nothing more to send.
-      if (!row) return "quiet";
-      if (this.onWeekly) await this.onWeekly(userId, report).catch(() => {});
-      return "sent";
     } finally { await lease.release(); }
+  }
+
+  /** @param {string} userId @param {string} week @param {string} token */
+  async claimWeek(userId, week, token) {
+    const now = this.now();
+    return this.db.users.findOneAndUpdate({
+      userId, "reports.weeklyWeek": { $ne: week }, _gdprMutation: { $exists: false },
+      $or: [
+        { "reports.weeklyClaim.expiresAt": { $exists: false } },
+        { "reports.weeklyClaim.expiresAt": { $lte: new Date(now) } },
+      ],
+    }, { $set: { "reports.weeklyClaim": { week, token, expiresAt: new Date(now + DELIVERY_CLAIM_MS) } } },
+    { projection: PREFS_PROJECTION, returnDocument: "after" });
+  }
+
+  /** @param {Record<string,string>} owner @param {{week:string,tz:string}} schedule */
+  async confirmClaim(owner, schedule) {
+    const now = this.now();
+    const current = await this.db.users.findOneAndUpdate({
+      ...owner, _gdprMutation: { $exists: false }, "reports.weeklyClaim.expiresAt": { $gt: new Date(now) },
+    }, { $set: { "reports.weeklyClaim.expiresAt": new Date(now + DELIVERY_CLAIM_MS) } },
+    { projection: PREFS_PROJECTION, returnDocument: "after" });
+    const due = current ? dueReport(current.preferences?.reports, now) : null;
+    return due?.week === schedule.week && due.tz === schedule.tz;
+  }
+
+  /** @param {string} userId @param {string} week @param {Awaited<ReturnType<WeeklyReportService['build']>>} report */
+  async sendWeekly(userId, week, report) {
+    const kind = "report.weekly", eventKey = `report.weekly:${week}`;
+    const row = await this.notifications.notify(userId, { kind, ...weeklyNotice(report), href: `/app/reports/weekly/${week}`, eventKey });
+    if (this.onWeekly && (row || await this.notifications.canResumeDelivery(userId, kind, eventKey))) {
+      await this.onWeekly(userId, report);
+    }
+    return !!row;
   }
 }
 

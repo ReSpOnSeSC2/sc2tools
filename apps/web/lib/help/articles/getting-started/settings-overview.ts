@@ -40,7 +40,7 @@ const article: HelpArticle = {
   body: [
     {
       type: "paragraph",
-      text: "[Settings](/settings) groups your account, gameplay and streaming tools, followed by Preferences, Integrations and Help. Each tab has one job. Form edits stay in draft until you press **Save**; browser choices such as analytics cookies say when they take effect immediately.",
+      text: "[Settings](/settings) groups your account, gameplay and streaming tools, followed by Preferences, Integrations and Help. Each tab has one job. Most settings save when you press **Save**. Use the Save bar at the bottom of the tab to save your changes. Controls marked **Instant** (such as overlay widget switches, the credit line, Ghost voice and analytics cookies) apply right away.",
     },
     { type: "heading", text: "What each tab is for" },
     {
@@ -84,7 +84,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "A dot next to a tab's name means it has edits you haven't saved. Switch tabs with unsaved edits and Settings asks first: **Stay on this tab** keeps them, **Discard & switch** drops them. The sidebar's Devices link also asks before leaving a draft behind: choose **Discard & open Devices** to leave. Opening Devices in a new tab keeps your current Settings draft. Chat & alerts tracks the multi-platform chat and bot forms independently, so saving one does not clear the other's draft. Overlay tracks its profile draft; Preferences includes notification choices and the start page. Commands and Twitch automation keep their own save controls and are not included in this tab-level draft guard.",
+      text: "A dot next to a tab's name means it has edits you haven't saved. Switch tabs with unsaved edits and Settings asks first: **Stay on this tab** keeps them, **Discard & switch** drops them. The sidebar's Devices link also asks before leaving a draft behind: choose **Discard & open Devices** to leave. Opening Devices in a new tab keeps your current Settings draft. The Save bar lists what is unsaved and saves it in order: on Profile, your profile first, then channels and your public page; on Chat & alerts, chat settings, the chat bot and Twitch automation. **Discard** resets all of them. If one part fails, the bar says what saved and what didn't (for example “Saved chat settings. Couldn't save bot settings.”); your unsaved draft stays and **Retry** tries again. Commands keep their own save controls and are not included in this tab-level draft guard.",
     },
     { type: "paragraph", text: "Overlay and Chat & alerts use one streaming-token manager while either tab is open. Save or discard the guarded drafts before selecting, minting, rotating or revoking a token; renaming its label keeps those drafts. Account only checks setup health and never creates a token. If a creation response is lost, choose **Check token status** first. An empty status cannot prove the earlier creation failed, so another token requires the explicit Create action." },
     { type: "heading", text: "Start page, setup and analytics (Preferences)", anchor: "start-page-setup-and-analytics-misc" },

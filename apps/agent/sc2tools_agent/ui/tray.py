@@ -70,6 +70,8 @@ class TrayUI:
         on_check_updates: Optional[Callable[[], None]] = None,
         on_show_window: Optional[Callable[[], None]] = None,
         on_build_checkin: Optional[Callable[[], None]] = None,
+        on_move_practice_hud: Optional[Callable[[], None]] = None,
+        notifications_enabled: Optional[Callable[[], bool]] = None,
         synced_count_provider: Optional[Callable[[], int]] = None,
         initial_paused: bool = False,
         initial_paused_until=None,
@@ -102,6 +104,8 @@ class TrayUI:
         # "Build check-in…": re-opens the newest end card the player has
         # not answered, else the web queue. Omitted when not wired.
         self._on_build_checkin_cb = on_build_checkin
+        self._on_move_practice_hud = on_move_practice_hud
+        self._notifications_enabled = notifications_enabled or (lambda: True)
         # Same authoritative synced-total source the GUI stat card
         # uses (count over state.uploaded's dated entries). Without it
         # the tooltip falls back to the legacy session-local counter,
@@ -213,6 +217,8 @@ class TrayUI:
 
     def show_notice(self, message: str, *, title: str = "SC2 Tools Agent") -> None:
         """Show an OS notification without opening or focusing a window."""
+        if not self._notifications_enabled():
+            return
         icon = self._icon
         if icon is not None and hasattr(icon, "notify"):
             icon.notify(str(message), str(title))
@@ -290,6 +296,8 @@ class TrayUI:
         items.append(pystray.MenuItem("Open dashboard", self._open_dashboard))
         if self._on_build_checkin_cb:
             items.append(pystray.MenuItem("Build check-in…", self._build_checkin_clicked))
+        if self._on_move_practice_hud:
+            items.append(pystray.MenuItem("Move Practice HUD", self._move_practice_clicked))
         items.append(pystray.MenuItem("Help and troubleshooting", self._support_help_clicked))
         items.append(pystray.MenuItem("Copy support info", self._support_copy_clicked, enabled=self._support_enabled))
         items.append(pystray.MenuItem(self._pause_label, self._toggle_pause))
@@ -398,6 +406,13 @@ class TrayUI:
             self._on_show_window_cb()
         except Exception:  # noqa: BLE001
             log.exception("show_window_failed")
+
+    def _move_practice_clicked(self, _icon, _item) -> None:
+        try:
+            if self._on_move_practice_hud:
+                self._on_move_practice_hud()
+        except Exception:
+            log.exception("practice_hud_move_failed")
 
     def _build_checkin_clicked(self, _icon, _item) -> None:
         if not self._on_build_checkin_cb:

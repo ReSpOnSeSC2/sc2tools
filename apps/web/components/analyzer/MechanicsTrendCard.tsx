@@ -14,7 +14,7 @@ import { BENCHMARK_MIN_SAMPLE, percentileOf } from "@/lib/benchmarks";
 import { MacroTrendChart } from "./charts/MacroTrendChart";
 
 const LEAGUES = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"];
-const BENCHMARK_KEY = { macro: "macroScore", apm: "apm", sq: "spq" } as const;
+const BENCHMARK_KEY = { macro: "macroScore", apm: "apm", sq: "spq", groups: null, camera: null } as const;
 const RACE_LETTER: Record<string, string> = { P: "P", Protoss: "P", T: "T", Terran: "T", Z: "Z", Zerg: "Z" };
 
 export function MechanicsTrendCard() {
@@ -27,7 +27,8 @@ export function MechanicsTrendCard() {
   const left = RACE_LETTER[filters.race ?? ""], right = RACE_LETTER[filters.opp_race ?? ""], matchup = left && right ? `${left}v${right}` : null;
   const comparable = !!matchup && filters.game_size === "1v1" && filters.map_pool === "ladder";
   const benchmark = useBenchmarks(league === "" || !comparable ? null : Number(league), comparable ? matchup : null);
-  const table = benchmark.data?.table, sample = table?.metrics[BENCHMARK_KEY[metric]];
+  const table = benchmark.data?.table, benchmarkKey = BENCHMARK_KEY[metric];
+  const sample = benchmarkKey ? table?.metrics[benchmarkKey] : undefined;
   const median = sample?.deciles?.[4];
   const reference = comparable && league !== "" && !q.isPreviousData && !benchmark.error && !benchmark.isPreviousData && table?.leagueId === Number(league) && table.matchup === matchup && sample && sample.n >= BENCHMARK_MIN_SAMPLE && typeof median === "number" && median >= 0 && (metric !== "macro" || median <= 100) && percentileOf(sample, median)
     ? { value: median, label: `${table.league} opponent bracket · ${table.matchup} median · n=${sample.n}` } : null;

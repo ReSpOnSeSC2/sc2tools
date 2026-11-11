@@ -12,9 +12,10 @@ import { exportBusy, withExportAdmission } from "@/lib/exports/exportAdmission";
 vi.hoisted(async () => { const codecs = await import("node:util"); Object.assign(globalThis, { TextEncoder: codecs.TextEncoder, TextDecoder: codecs.TextDecoder }); });
 const state = vi.hoisted(() => ({ cursor: null as string | null, pending: false, previous: false, search: "", owner: "owner-a" }));
 const mocks = vi.hoisted(() => ({ run: vi.fn(async (_rows: readonly PackNameMetadata[], _template: PackNameTemplate) => true), cancel: vi.fn(), clear: vi.fn(), scopes: [] as string[], targets: [] as string[][],
-  token: vi.fn(async (): Promise<string | null> => "synthetic"), feedback: null as null | { message: string; result?: ReplayPackResult; progress?: ReplayPackProgress } }));
+  push: vi.fn(), request: vi.fn(), token: vi.fn(async (): Promise<string | null> => "synthetic"), feedback: null as null | { message: string; result?: ReplayPackResult; progress?: ReplayPackProgress } }));
 type PackControlsModule = typeof import("../ReplayPackControls");
 vi.mock("next/dynamic", async () => { const react = await import("react"); return { default: (loader: () => Promise<PackControlsModule>) => react.lazy(loader) }; });
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: state.owner, getToken: mocks.token }) }));
 vi.mock("@/lib/filterContext", async original => ({ ...await original<object>(), useFilters: () => ({ filters: { since: "2026-08-01" }, seasons: [], dbRev: 1, setFilters: vi.fn() }) }));
 vi.mock("@/lib/useReplayListFilters", () => ({ useReplayListFilters: () => ({ search: state.search, setSearch: (value: string) => { state.search = value; state.pending = true; },
@@ -23,7 +24,7 @@ vi.mock("@/lib/useReplayListFilters", () => ({ useReplayListFilters: () => ({ se
   reset: vi.fn(), clearCursor: () => { state.cursor = null; }, setCursor: (cursor: string | null) => { state.cursor = cursor; } }) }));
 vi.mock("@/lib/clientApi", async original => ({ ...await original<typeof import("@/lib/clientApi")>(), useApi: () => ({
   data: { profile: { handle: "owner", displayName: "Owner" }, items: Array.from({ length: 25 }, (_, index) => ({ gameId: `id-${(state.cursor ? 100 : 0) + index}`, result: "Win" })), page: { hasMore: !state.cursor, nextCursor: state.cursor ? null : "next" }, total: 140 },
-  isPreviousData: state.previous, isLoading: false, isValidating: false, mutate: vi.fn() }) }));
+  isPreviousData: state.previous, isLoading: false, isValidating: false, mutate: vi.fn(), request: mocks.request }) }));
 vi.mock("../ReplayShareControl", () => ({ ReplayShareControl: () => <span>Share</span> }));
 vi.mock("../ReplayCsvExportButton", () => ({ ReplayCsvExportButton: () => <span>CSV</span> }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ slug, children }: { slug: string; children: ReactNode }) => <a href={`/help/${slug}`}>{children}</a> }));
@@ -43,6 +44,7 @@ function show() { return <Suspense fallback={<p>Loading pack…</p>}><ReplayLibr
 beforeEach(() => {
   state.cursor = null; state.pending = false; state.previous = false; state.search = ""; state.owner = "owner-a";
   mocks.run.mockReset().mockResolvedValue(true); mocks.cancel.mockClear(); mocks.clear.mockClear(); mocks.scopes.length = 0; mocks.targets.length = 0; mocks.feedback = null;
+  mocks.push.mockClear(); mocks.request.mockClear();
   window.localStorage.clear(); window.sessionStorage.clear(); window.requestAnimationFrame = callback => { callback(0); return 1; };
   HTMLElement.prototype.scrollIntoView = vi.fn();
 });
@@ -84,6 +86,9 @@ describe("separate ReplayLibrary pack mode", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select replays" })); fireEvent.click(screen.getByRole("button", { name: "Select this page" }));
     expect(screen.getByText("Manage targets: 25")).toBeTruthy(); expect(mocks.targets.every(targets => targets.length <= 25)).toBe(true);
     expect(mocks.targets.at(-1)).toEqual(Array.from({ length: 25 }, (_, index) => `id-${index + 100}`));
+    expect((screen.getByRole("button", { name: "Compare (select exactly two replays)" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(mocks.request).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
     expect((screen.getByRole("button", { name: "Replay pack" }) as HTMLButtonElement).disabled).toBe(true);
   });
 

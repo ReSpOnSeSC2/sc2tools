@@ -11,6 +11,7 @@
  */
 import type { ReactNode } from "react";
 import { PERCENT } from "@/lib/instant/displayUnits";
+import { formatDate } from "@/lib/i18n/format";
 
 /**
  * Win rate over decided games as a whole percentage, or null when no
@@ -35,7 +36,7 @@ const DATE_FORMAT: Intl.DateTimeFormatOptions = { year: "numeric", month: "short
  */
 export function formatReportDate(iso: string): string | null {
   const parsed = Date.parse(iso);
-  return Number.isFinite(parsed) ? new Date(parsed).toLocaleDateString("en-US", DATE_FORMAT) : null;
+  return Number.isFinite(parsed) ? formatDate(new Date(parsed), DATE_FORMAT) : null;
 }
 
 /**
@@ -123,9 +124,9 @@ export function WinrateText({ wins, losses }: { wins: number; losses: number }) 
 export function WinrateBar({ wins, losses }: { wins: number; losses: number }) {
   const rate = winratePercent(wins, losses);
   return (
-    <div aria-hidden className="h-1.5 w-full overflow-hidden rounded-full bg-bg-elevated">
-      {rate === null ? null : <div className="h-full rounded-full bg-success" style={{ width: `${rate}%` }} />}
-    </div>
+    <span aria-hidden className="block h-1.5 w-full overflow-hidden rounded-full bg-bg-elevated">
+      {rate === null ? null : <span className="block h-full rounded-full bg-success" style={{ width: `${rate}%` }} />}
+    </span>
   );
 }
 

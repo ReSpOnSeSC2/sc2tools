@@ -338,7 +338,8 @@ describe("replay library", () => {
     const app = makeApp(buildPublicReplaysRouter, routerDeps(new ReplayLibraryService(db)));
 
     const list = await request(app).get("/v1/public/replays/owner").expect(200);
-    const rows = byId(list.body.items);
+    const ids = new Map((await db.games.find({ userId: USER }).toArray()).map((row) => ["r-" + row._id, row.gameId]));
+    const rows = byId(list.body.items.map((row) => ({ ...row, gameId: ids.get(row.gameId) })));
     expect(rows.normal.myBuild).toBe(STARGATE);
     expect(rows.disagree.myBuild).toBe(UNCLASSIFIED);
     expect(rows.agree.myBuild).toBe(STARGATE);
@@ -348,7 +349,7 @@ describe("replay library", () => {
     const filtered = await request(app)
       .get(`/v1/public/replays/owner?build=${encodeURIComponent(STARGATE)}`)
       .expect(200);
-    expect(filtered.body.items.map((row) => row.gameId).sort()).toEqual(["agree", "normal"]);
+    expect(filtered.body.items.map((row) => ids.get(row.gameId)).sort()).toEqual(["agree", "normal"]);
 
     const detail = await request(app).get("/v1/public/replays/owner/disagree").expect(200);
     expect(detail.body.game.myBuild).toBe(UNCLASSIFIED);
@@ -361,7 +362,7 @@ describe("replay library", () => {
   test("an owner-view row reaching the public serializer still hides the check-in", async () => {
     const library = {
       list: async () => ({
-        items: [{ gameId: "x", myBuild: STARGATE, buildPlanned: true, detectedBuild: UNCLASSIFIED }],
+        items: [{ gameId: "x", publicReference: "r-0123456789abcdef01234567", myBuild: STARGATE, buildPlanned: true, detectedBuild: UNCLASSIFIED }],
         sourceGames: [],
         hasMore: false,
         nextCursor: null,

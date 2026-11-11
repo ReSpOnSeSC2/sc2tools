@@ -11,6 +11,7 @@ import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { ChartFrame, ChartLegend, type ChartTableColumn } from "@/components/analyzer/charts/ChartFrame";
 import { fmtMmr } from "@/lib/format";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
+import { formatDate } from "@/lib/i18n/format";
 
 interface ProgressionPoint { date: string; mmr: number; result: "win" | "loss" }
 interface BuildSeries { build: string; points: ProgressionPoint[] }
@@ -72,7 +73,7 @@ export function shapeProgressionForChart(series: BuildSeries[], minPlays: number
       const date = new Date(point.date); if (Number.isNaN(date.getTime())) continue;
       const dateKey = localDateKey(date, tz); if (!dateKey) continue;
       let row = rowByKey.get(dateKey);
-      if (!row) { row = { dateKey, dateLabel: date.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: tz }) }; rowByKey.set(dateKey, row); }
+      if (!row) { row = { dateKey, dateLabel: formatDate(date, { month: "short", day: "numeric", timeZone: tz }) }; rowByKey.set(dateKey, row); }
       row[build.build] = point.mmr; row[`${build.build}__decided`] = decided;
       if (point.mmr < minMmr) minMmr = point.mmr; if (point.mmr > maxMmr) maxMmr = point.mmr;
     }

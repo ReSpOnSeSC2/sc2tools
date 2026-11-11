@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { validateDateRange } from "./analyticsExport";
+import { localIsoDate } from "@/lib/i18n/format";
 
 export function AnalyticsRangePicker({ value, onPreset, onCustom, disabled }: {
   value: number | "custom"; onPreset: (days: number) => void;
@@ -13,7 +14,7 @@ export function AnalyticsRangePicker({ value, onPreset, onCustom, disabled }: {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const today = new Date().toLocaleDateString("en-CA");
+  const today = localIsoDate();
   return <div className="space-y-3">
     <div className="flex flex-wrap gap-1" role="group" aria-label="Date range">
       {[1, 7, 28, 90, 365].map((days) => <Button key={days} variant="secondary" size="sm" disabled={disabled}

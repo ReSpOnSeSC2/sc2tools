@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/Input";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { DEFAULT_TWITCH_AUTOMATION, twitchReason, validTwitchTemplate, type TwitchAutomationPreferences } from "@/lib/twitchAutomation";
 import { useTwitchAutomationSettings } from "./useTwitchAutomationSettings";
+import { useSaveSource } from "./SettingsContext";
 
 function Choice({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled: boolean; onChange: (value: boolean) => void }) {
   return <Button role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} variant="secondary" fullWidth className="min-h-11 justify-between gap-3 text-left" style={{ height: "auto", paddingBlock: 8 }}><span className="min-w-0 break-words">{label}</span><span aria-hidden className="shrink-0">{checked ? "On" : "Off"}</span></Button>;
@@ -24,10 +25,20 @@ function Editor({ model }: { model: ReturnType<typeof useTwitchAutomationSetting
   const baseReady = status?.serverEnabled === true && status.eligible === true;
   const predictionReady = baseReady && status.predictionPermission, markerReady = baseReady && status.markerPermission;
   const valid = Number.isInteger(draft.windowSec) && draft.windowSec >= 30 && draft.windowSec <= 300 && validTwitchTemplate(draft.titleTemplate);
-  const canSave = status && dirty && valid && (!draft.predictionsEnabled || predictionReady) && (!draft.markersEnabled || markerReady);
+  const permitted = (!draft.predictionsEnabled || predictionReady) && (!draft.markersEnabled || markerReady);
+  // Saved with the rest of Chat by the tab's one SaveBar.
+  useSaveSource("chat", {
+    label: "Twitch automation",
+    dirty,
+    save: async () => !dirty || await model.save(draft),
+    reset: () => { if (status) setDraft(status.preferences); setDirty(false); },
+    blocked: !status ? "Checking Twitch status…" : !valid ? "Fix the Twitch automation window or title to save"
+      : !permitted ? "Connect Twitch for the automation you switched on, then save" : null,
+    order: 2,
+  }, "twitch-automation");
   return <section aria-labelledby={`${id}-title`} className="min-w-0 space-y-3 rounded-lg border border-border bg-bg-surface p-3">
     <h3 id={`${id}-title`} className="text-body font-semibold">Twitch automation</h3>
-    <p className="text-caption text-text-muted">Optional Twitch Channel Points Predictions and stream markers for affiliate or partner broadcasters. Both start off and use their own Save.</p>
+    <p className="text-caption text-text-muted">Optional Twitch Channel Points Predictions and stream markers for affiliate or partner broadcasters. Both start off; press Save at the bottom of the page to apply a change.</p>
     <p className="text-caption text-text-muted">{twitchReason("ranked_status_unavailable")}</p>
     {status?.reason ? <p role="status" className="rounded border border-border bg-bg-elevated p-3 text-caption">{twitchReason(status.reason)}</p> : null}
     {!status && !error ? <p role="status" className="text-caption">Checking Twitch status…</p> : null}
@@ -44,6 +55,6 @@ function Editor({ model }: { model: ReturnType<typeof useTwitchAutomationSetting
     <p className="text-caption text-text-muted">Markers require a live channel with VODs enabled. Description: vs Opp · PvZ · Map. Games under 60 seconds, no verified result within 20 minutes, or a confirmed Dock cancellation request a prediction refund.</p>
     {!valid ? <p role="alert" className="text-caption text-danger">Use a whole window from 30 to 300 and a plain title with the supported variables.</p> : null}
     {error ? <p role="alert" className="text-caption text-danger">{error}</p> : null}{message ? <p role="status" className="text-caption text-success">{message}</p> : null}
-    <div className="flex flex-wrap items-center gap-3"><Button className="min-h-11" disabled={!canSave || busy} onClick={() => void model.save(draft)} loading={busy && dirty}>Save Twitch automation</Button><LazyHelpLink slug="viewer-engagement" anchor="twitch-predictions" className="inline-flex min-h-11 items-center underline">Twitch prediction setup</LazyHelpLink></div>
+    <div className="flex flex-wrap items-center gap-3"><LazyHelpLink slug="viewer-engagement" anchor="twitch-predictions" className="inline-flex min-h-11 items-center underline">Twitch prediction setup</LazyHelpLink></div>
   </section>;
 }

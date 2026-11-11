@@ -4,7 +4,7 @@ const express = require("express");
 const { accountExportHandler } = require("./accountExport");
 const { buildDoctor, buildSyncHealth, withReplayResyncState, emptyReplayArchiveCounts } = require("../services/doctor");
 const { NOTIFICATIONS_PREF_TYPE, sanitizeNotificationPrefs } = require("../services/notificationPrefs");
-const { REPORTS_PREF_TYPE, sanitizeReportPrefs } = require("../services/reportPreferences");
+const { REPORTS_PREF_TYPE, sanitizeReportPrefs, todayReportWeek } = require("../services/reportPreferences");
 const { validateProfile } = require("../validation/profile");
 const { publicDataRetention } = require("../services/dataInventory");
 const {
@@ -16,6 +16,8 @@ const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
 const { sanitizeRivals } = require("../util/rivalsPreferences");
 const { OPPONENT_SCOUTING_PREF_TYPE, sanitizeOpponentScouting } = require("../util/opponentScoutingPreferences");
 const { LEAGUE_TARGETS_PREF_TYPE, sanitizeLeagueTargets } = require("../util/leagueTargetsPreferences");
+const { isPlausibleMmr } = require("../util/leagueBands");
+const { APPEARANCE_PREF_TYPE, sanitizeAppearance } = require("../util/appearancePreferences");
 const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("../services/twitchAutomationPolicy");
 const { sanitizeChatCommands } = require("../services/chatCommands");
 const { activationTimestamp } = require("../services/activation");
@@ -33,6 +35,7 @@ const {
 const ME_MMR_MAX_TOONS = 8;
 // PulseMmrService admits two distinct upstream requests at once.
 const ME_MMR_LOOKUP_CONCURRENCY = 2;
+const MMR_LADDER_RACES = new Map([["P", "Protoss"], ["T", "Terran"], ["Z", "Zerg"], ["R", "Random"]]);
 
 /**
  * /v1/me — sanity endpoint for the web app. Returns the user record
@@ -80,6 +83,7 @@ const ME_MMR_LOOKUP_CONCURRENCY = 2;
  *       characterId?: string | null,
  *     } | null>,
  *     getBattleTags?(ids: string[]): Promise<string[]>,
+ *     getRaceBreakdown?: import('../services/pulseMmr').PulseMmrService['getRaceBreakdown'],
  *   },
  *   auth: import('express').RequestHandler,
  *   isAdmin?: (req: import('express').Request) => boolean,
@@ -155,12 +159,11 @@ function buildMeRouter(deps) {
           // inject them keep working — the fields just come back null.
           deps.imports ? deps.imports.activeJob(auth.userId) : null,
         ]);
-      const { summary, onboarding } = snapshot;
       // Lazy email backfill: if the row pre-dates the webhook (or no
       // webhook is configured), pull the email from Clerk on first read
       // and cache it. Best-effort — clerk.getEmail returns null on
       // failure and we just render "—" until the next request.
-      let email = summary.email;
+      let email = snapshot.summary.email;
       if (!email && clerk && auth.source === "clerk" && auth.clerkUserId) {
         const fresh = await clerk.getEmail(auth.clerkUserId);
         if (fresh) {
@@ -223,7 +226,8 @@ function buildMeRouter(deps) {
         // mount the progress card on first paint.
         activeImportJob: activeImportJob || null,
         // Client-only onboarding bits (downloadStartedAt, dismissedAt).
-        onboarding: onboarding || {},
+        onboarding: snapshot.onboarding || {},
+        weeklyReportWeek: stats.total > 0 ? todayReportWeek(snapshot.reportPrefs) : null,
         isAdmin: admin,
       });
     } catch (err) {
@@ -467,6 +471,7 @@ function buildMeRouter(deps) {
     TWITCH_PREF_TYPE,
     "ghost",
     CHECKIN_PREF_TYPE, LEAGUE_TARGETS_PREF_TYPE,
+    APPEARANCE_PREF_TYPE,
   ]);
 
   router.get("/me/analyzer-default-view", deps.auth, async (req, res, next) => {
@@ -482,7 +487,7 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
-      if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE) res.set("Cache-Control", "private, no-store");
+      if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE || type === APPEARANCE_PREF_TYPE) res.set("Cache-Control", "private, no-store");
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
         return;
@@ -493,13 +498,7 @@ function buildMeRouter(deps) {
         return;
       }
       const prefs = await deps.users.getPreferences(auth.userId, type);
-      res.json(type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(prefs)
-        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(prefs) : type === REPORTS_PREF_TYPE ? sanitizeReportPrefs(prefs)
-          : type === "analyzerViews" ? sanitizeAnalyzerViews(prefs)
-            : type === "rivals" ? sanitizeRivals(prefs)
-              : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(prefs)
-                : type === "chatCommands" ? sanitizeChatCommands(prefs)
-                : type === OPPONENT_SCOUTING_PREF_TYPE ? sanitizeOpponentScouting(prefs) : type === LEAGUE_TARGETS_PREF_TYPE ? sanitizeLeagueTargets(prefs) : prefs);
+      res.json(preferenceValue(type, prefs, false));
     } catch (err) {
       next(err);
     }
@@ -510,7 +509,7 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
-      if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE) res.set("Cache-Control", "private, no-store");
+      if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE || type === APPEARANCE_PREF_TYPE) res.set("Cache-Control", "private, no-store");
       if (type === TWITCH_PREF_TYPE && auth.source !== "clerk") { res.status(403).json({ error: { code: "clerk_required" } }); return; }
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
@@ -539,13 +538,7 @@ function buildMeRouter(deps) {
         res.status(400).json({ error: { code: "invalid_level_up_dismissed_at" } }); return;
       }
       if (type === "onboarding" && Object.hasOwn(req.body, "toursDone")) validateOnboardingToursDone(req.body.toursDone);
-      const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body)
-        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body) : type === REPORTS_PREF_TYPE ? sanitizeReportPrefs(req.body)
-          : type === "analyzerViews" ? sanitizeAnalyzerViews(req.body, true)
-            : type === "rivals" ? sanitizeRivals(req.body, true)
-              : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(req.body, true)
-                : type === "chatCommands" ? sanitizeChatCommands(req.body, true)
-                : type === OPPONENT_SCOUTING_PREF_TYPE ? sanitizeOpponentScouting(req.body, true) : type === LEAGUE_TARGETS_PREF_TYPE ? sanitizeLeagueTargets(req.body, true) : req.body;
+      const body = preferenceValue(type, req.body, true);
       const saved = await deps.users.updatePreferences(auth.userId, type, body);
       if (type === "rivals") {
         try { deps.onRivalsChanged?.(auth.userId); } catch { /* Advisory cache refresh; preferences are already saved. */ }
@@ -916,7 +909,7 @@ function buildMeRouter(deps) {
    * /  miss for a single pulseId just drops that row, never blocks
    * the others.
    */
-  router.get("/me/mmr", deps.auth, async (req, res, next) => {
+  router.get("/me/mmr", deps.auth, scopedMmrByRace(deps), async (req, res, next) => {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
@@ -990,6 +983,34 @@ function buildMeRouter(deps) {
   return router;
 }
 
+/** Targets requests one ladder race; the dashboard's unscoped read uses
+ * the per-toon contract below the middleware in the route chain.
+ * @param {Pick<Parameters<typeof buildMeRouter>[0], "users"|"pulseMmr">} deps
+ * @returns {import('express').RequestHandler}
+ */
+function scopedMmrByRace(deps) {
+  return async (req, res, next) => {
+    const requested = req.query.race;
+    if (requested === undefined) { next(); return; }
+    res.set("Cache-Control", "private, no-store");
+    const race = typeof requested === "string" ? MMR_LADDER_RACES.get(requested) : undefined;
+    if (!race) {
+      res.status(400).json({ error: { code: "invalid_ladder_race" } });
+      return;
+    }
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      const profile = await deps.users.getProfile(req.auth.userId);
+      const ids = Array.isArray(profile?.pulseIds) ? profile.pulseIds.slice(0, ME_MMR_MAX_TOONS) : [];
+      const races = ids.length ? await deps.pulseMmr?.getRaceBreakdown?.(ids).catch(() => []) ?? [] : [];
+      const rating = races.find((row) => row.race === race && row.games > 0 && isPlausibleMmr(row.mmr));
+      res.json({ race: requested, mmr: rating?.mmr ?? null });
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
 /**
  * GET /v1/me/sync-health (roadmap item 76). Private and uncached: a current
  * report can name players the agent could not match to this account. Takes
@@ -1017,7 +1038,7 @@ async function readMeSnapshot(users, userId) {
   const [summary, onboarding] = await Promise.all([
     users.getSummary(userId), users.getPreferences(userId, "onboarding"),
   ]);
-  return { summary, onboarding, statsCandidate: null };
+  return { summary, onboarding, statsCandidate: null, reportPrefs: null };
 }
 
 /**
@@ -1039,3 +1060,20 @@ module.exports = {
   buildMeRouter,
   _internals: { withReplayResyncState },
 };
+
+/** @param {string} type @param {any} value @param {boolean} strict */
+function preferenceValue(type, value, strict) {
+  switch (type) {
+    case CHECKIN_PREF_TYPE: return sanitizeCheckinPrefs(value);
+    case NOTIFICATIONS_PREF_TYPE: return sanitizeNotificationPrefs(value);
+    case REPORTS_PREF_TYPE: return sanitizeReportPrefs(value);
+    case "analyzerViews": return sanitizeAnalyzerViews(value, strict);
+    case "rivals": return sanitizeRivals(value, strict);
+    case TWITCH_PREF_TYPE: return sanitizeTwitchAutomation(value, strict);
+    case "chatCommands": return sanitizeChatCommands(value, strict);
+    case OPPONENT_SCOUTING_PREF_TYPE: return sanitizeOpponentScouting(value, strict);
+    case LEAGUE_TARGETS_PREF_TYPE: return sanitizeLeagueTargets(value, strict);
+    case APPEARANCE_PREF_TYPE: return sanitizeAppearance(value, strict);
+    default: return value;
+  }
+}

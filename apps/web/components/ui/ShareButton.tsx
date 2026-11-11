@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, Share2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button, type ButtonProps } from "@/components/ui/Button";
 import { CopyRecoveryDialog } from "@/components/ui/CopyRecoveryDialog";
 import { useToastOptional } from "@/components/ui/Toast";
 import { useCopy } from "@/lib/useCopy";
@@ -17,17 +17,22 @@ type ShareScope = {
 type NativeState = { scope: ShareScope; status: "idle" | "sharing" | "shared" };
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-/** Mobile-native sharing with a clipboard/manual-copy desktop fallback. */
-export function PublicReplayShareButton({
-  path,
-  playerName,
-}: {
+interface ShareButtonProps extends Pick<ButtonProps, "variant" | "size" | "className" | "fullWidth" | "aria-label"> {
   path: string;
-  playerName: string;
-}) {
+  title?: string;
+  text?: string;
+  label?: string;
+  copiedLabel?: string;
+}
+
+/** Native sharing with clipboard and keyboard-accessible manual copy. */
+export function ShareButton({
+  path, title, text, label = "Share", copiedLabel = "Link copied",
+  variant = "secondary", size = "md", className, fullWidth, "aria-label": ariaLabel,
+}: ShareButtonProps) {
   const toast = useToastOptional()?.toast;
   const button = useRef<HTMLButtonElement>(null);
-  const identity = useMemo(() => ({ path, playerName }), [path, playerName]);
+  const identity = useMemo(() => ({ path, title, text }), [path, title, text]);
   const scopeRef = useRef<ShareScope>({ identity, active: false, attempt: 0, busy: false, timer: null });
   if (scopeRef.current.identity !== identity) {
     scopeRef.current.active = false;
@@ -38,7 +43,7 @@ export function PublicReplayShareButton({
   const nativeStatus = nativeState.scope === scope ? nativeState.status : "idle";
   const clipboard = useCopy({
     scopeKey: identity,
-    onCopied: () => toast?.success("Replay page link copied"),
+    onCopied: () => toast?.success("Link copied"),
   });
 
   useClientLayoutEffect(() => {
@@ -69,11 +74,7 @@ export function PublicReplayShareButton({
         if (typeof navigator.share === "function") {
           // Keep this in the click's activation; no effect or awaited work
           // precedes the platform share sheet.
-          await navigator.share({
-            title: `${playerName}'s StarCraft II replays`,
-            text: `View and download ${playerName}'s shared StarCraft II replays.`,
-            url: href,
-          });
+          await navigator.share({ title, text, url: href });
           shared = true;
         }
       } catch (error) {
@@ -92,7 +93,7 @@ export function PublicReplayShareButton({
       if (!current()) return;
       if (shared) {
         setNativeState({ scope, status: "shared" });
-        toast?.success("Replay page shared");
+        toast?.success("Link shared");
         scope.timer = window.setTimeout(() => {
           if (!current()) return;
           scope.timer = null;
@@ -114,12 +115,13 @@ export function PublicReplayShareButton({
     <>
       <Button
         ref={button}
-        variant="secondary"
-        size="md"
-        className="w-full sm:w-auto"
+        variant={variant}
+        size={size}
+        className={className}
+        fullWidth={fullWidth}
         onClick={() => void sharePage()}
         loading={sharing}
-        aria-label={`Share ${playerName}'s replay page`}
+        aria-label={ariaLabel}
         iconLeft={complete
           ? <Check className="h-4 w-4 text-success" aria-hidden />
           : <Share2 className="h-4 w-4" aria-hidden />}
@@ -129,12 +131,12 @@ export function PublicReplayShareButton({
           : nativeStatus === "shared"
             ? "Shared"
             : clipboard.copied
-              ? "Link copied"
-              : "Share replay page"}
+              ? copiedLabel
+              : label}
       </Button>
       <CopyRecoveryDialog text={clipboard.fallbackText} inputRef={clipboard.inputRef}
         triggerRef={button} scopeKey={identity} onDismiss={clipboard.clear}
-        title="Copy replay page link manually" label="Copy replay page link manually" />
+        title="Copy link manually" label="Copy link manually" />
     </>
   );
 }

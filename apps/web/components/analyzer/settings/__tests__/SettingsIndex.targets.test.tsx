@@ -90,7 +90,7 @@ describe("actual Settings section owners", () => {
     mount(<SettingsRandomizer />); expectTargets(SETTINGS_SECTIONS.randomizer.map(section => section.id));
   });
   it("keeps the real player channel Section as a navigation target without connecting a provider", () => {
-    mount(<SettingsPlayerChannels savedPulseIds={[]} profileDirty={false} onDirtyChange={() => {}} />);
+    mount(<SettingsPlayerChannels savedPulseIds={[]} profileDirty={false} />);
     expectTargets(["player-channels"]);
   });
   it("keeps Voice's one actual Section without starting speech or saving", () => {

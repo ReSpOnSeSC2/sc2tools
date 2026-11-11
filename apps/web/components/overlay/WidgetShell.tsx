@@ -3,6 +3,8 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { coerceRace } from "@/lib/race";
 import { resolveRaceIcon } from "@/lib/sc2-icons";
+import { OVERLAY_RACE_COLORS, overlayRaceColor } from "@/lib/overlayRaceColors";
+import { OverlayPanel, OVERLAY_PANEL_SCALE } from "./OverlayPanel";
 
 type Slot =
   | "top-left-series"
@@ -61,24 +63,9 @@ const ACCENT_HALO: Record<Accent, string> = {
   neutral: "rgba(124,140,255,0.18)",
 };
 
-const RACE_COLOR: Record<string, string> = {
-  T: "#ff6b6b",
-  Z: "#a78bfa",
-  P: "#7c8cff",
-  R: "#9aa3b2",
-};
-
-/**
- * Map a free-form race string to an Accent token. Used by widgets that
- * want their accent bar tinted by the opponent's race ("opponent
- * widget" → cyan for Protoss, red for Terran, magenta for Zerg).
- */
-export function raceToAccent(race?: string): Accent {
-  const r = (race || "").charAt(0).toUpperCase();
-  if (r === "T") return "red";
-  if (r === "Z") return "magenta";
-  if (r === "P") return "cyan";
-  return "neutral";
+/** Resolve the canonical overlay accent for a race name or letter. */
+export function raceToAccent(race?: string): string {
+  return overlayRaceColor(race) ?? OVERLAY_RACE_COLORS.R;
 }
 
 /**
@@ -111,44 +98,18 @@ export function WidgetShell({
   children,
 }: WidgetShellProps) {
   const placement = SLOT_STYLE[slot];
-  const effectiveAccent: Accent = race ? raceToAccent(race) : accent;
-  const haloColor = ACCENT_HALO[effectiveAccent];
+  const accentColor = race ? raceToAccent(race) : ACCENT_BG[accent];
+  const haloColor = race ? `${accentColor}2e` : ACCENT_HALO[accent];
 
   return (
     <div
       className="widget-shell"
       style={shellStyle(placement, width || 380, visible, haloColor)}
     >
-      <div
-        className="widget-shell__panel"
-        style={panelStyle()}
-      >
-        <span
-          aria-hidden
-          className="widget-shell__texture"
-          style={textureStyle()}
-        />
-        <span
-          aria-hidden
-          className="widget-shell__ornament"
-          style={ornamentStyle()}
-        />
-        {halo ? (
-          <span
-            aria-hidden
-            className="widget-halo"
-            style={haloStyle(haloColor)}
-          />
-        ) : null}
-        <span
-          aria-hidden
-          className="widget-shell__accent"
-          style={accentStyle(effectiveAccent)}
-        />
-        <div className="widget-shell__content" style={contentStyle()}>
-          {children}
-        </div>
-      </div>
+      <OverlayPanel scale={false} accent={accentColor} accentSize="6px" halo={halo ? haloColor : undefined}
+        style={{ width: "100%" }} contentStyle={{ padding: "var(--ov-padding, 14px 18px)" }}>
+        {children}
+      </OverlayPanel>
     </div>
   );
 }
@@ -170,87 +131,9 @@ function shellStyle(
     color: "#e6e8ee",
     borderRadius: "var(--ov-radius, 12px)",
     boxShadow: `var(--ov-shell-shadow, 0 6px 20px rgba(0,0,0,0.55), 0 0 0 1px var(--ov-rim, rgba(62,192,199,0.10)), 0 0 28px var(--ov-halo, ${haloColor}))`,
-    zoom: "var(--ov-scale, 1)",
+    ...OVERLAY_PANEL_SCALE,
     pointerEvents: "none",
-    fontFamily:
-      "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
     fontFeatureSettings: '"tnum"',
-  };
-}
-
-function panelStyle(): CSSProperties {
-  return {
-    position: "relative",
-    width: "100%",
-    display: "flex",
-    flexDirection: "var(--ov-panel-flow, row)" as CSSProperties["flexDirection"],
-    overflow: "hidden",
-    isolation: "isolate",
-    background:
-      "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
-    borderRadius: "var(--ov-radius, 12px)",
-    border: "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))",
-    clipPath: "var(--ov-clip, none)",
-    color: "#e6e8ee",
-    minWidth: 0,
-  };
-}
-
-function textureStyle(): CSSProperties {
-  return {
-    position: "absolute",
-    inset: 0,
-    zIndex: 0,
-    pointerEvents: "none",
-    background: "var(--ov-texture, none)",
-    backgroundSize: "var(--ov-texture-size, auto)",
-    opacity: "var(--ov-texture-opacity, 0)",
-  };
-}
-
-function ornamentStyle(): CSSProperties {
-  return {
-    position: "absolute",
-    inset: "var(--ov-ornament-inset, 0 0 auto auto)",
-    width: "var(--ov-ornament-width, 0px)",
-    height: "var(--ov-ornament-height, 0px)",
-    zIndex: 1,
-    pointerEvents: "none",
-    background: "var(--ov-ornament-bg, transparent)",
-    clipPath: "var(--ov-ornament-clip, none)",
-    opacity: "var(--ov-ornament-opacity, 0)",
-  };
-}
-
-function haloStyle(haloColor: string): CSSProperties {
-  return {
-    position: "absolute",
-    inset: -2,
-    borderRadius: "calc(var(--ov-radius, 12px) + 2px)",
-    background: `radial-gradient(closest-side, var(--ov-halo, ${haloColor}) 0%, transparent 70%)`,
-    opacity: 0.7,
-    animation: "widgetHaloPulse 8s ease-in-out infinite",
-    pointerEvents: "none",
-    zIndex: 0,
-  };
-}
-
-function accentStyle(accent: Accent): CSSProperties {
-  return {
-    flex: "0 0 var(--ov-accent-size, 6px)",
-    background: `var(--ov-accent-track, var(--ov-accent, ${ACCENT_BG[accent]}))`,
-    position: "relative",
-    zIndex: 2,
-  };
-}
-
-function contentStyle(): CSSProperties {
-  return {
-    flex: 1,
-    padding: "var(--ov-padding, 14px 18px)",
-    position: "relative",
-    zIndex: 2,
-    minWidth: 0,
   };
 }
 
@@ -372,7 +255,7 @@ export function RaceIcon({
 }) {
   const [errored, setErrored] = useState(false);
   const r = (race || "").charAt(0).toUpperCase();
-  const colour = RACE_COLOR[r] || RACE_COLOR.R;
+  const colour = raceToAccent(race);
   // Resolve to a canonical race name so the SVG path lookup works for
   // every shape the agent might emit: "Protoss", "P", "protoss", etc.
   const canonical = race ? coerceRace(race) : null;

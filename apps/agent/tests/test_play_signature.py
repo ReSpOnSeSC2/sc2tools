@@ -353,3 +353,20 @@ def test_real_replay_signature_agrees_with_decoded_event_counts():
         assert signature["controlGroups"]["phases"][-1]["endSec"] == 470
         assert signature["controlGroups"]["commandFollowup"]
         assert signature["actions"]["abilityUsage"]
+
+
+def test_owner_mechanics_include_recalled_groups_after_opponent_window():
+    from sc2tools_agent.camera_signature import extract_my_mechanics
+    from sc2tools_agent.play_signature import extract_behavior_signature
+
+    events = [_event("SetControlGroupEvent", 30, control_group=4),
+              _event("GetControlGroupEvent", 750, control_group=4),
+              _command(751, queued=True)]
+    replay = SimpleNamespace(events=events)
+    opponent = extract_behavior_signature(replay, opponent_pid=2, game_length_sec=900)
+    assert opponent["controlGroups"]["slots"][0]["recall"] == 0
+    result = extract_my_mechanics(replay, 2, 900)
+    assert result["groups"] == [{"slot": 4, "sets": 1, "recalls": 1, "recallsPerMin": 0.07}]
+    assert result["phases"][-1]["endSec"] == 900
+    assert result["phases"][-1]["groups"][0]["recalls"] == 1
+    assert result["phases"][-1]["queuedCommandShare"] == 1

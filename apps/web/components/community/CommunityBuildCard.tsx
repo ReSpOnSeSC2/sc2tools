@@ -6,17 +6,16 @@ import { fmtAgo } from "@/lib/format";
 import { SKILL_LEVELS } from "@/lib/build-rules";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorChip } from "./AuthorChip";
-import { CommunityBuildOwnerControls } from "./CommunityBuildOwnerControls";
-import { CommunityOwnerReplayCount } from "./CommunityOwnerReplayCount";
+import { CommunityCardOwnerActions } from "./CommunityCardOwnerActions";
 import { KeySteps } from "./KeySteps";
 import { CommunityTrustLine } from "./CommunityTrustLine";
 import { VoteScore } from "./VoteScore";
 import type { CommunityBuildListItem } from "./types";
 
-export interface CommunityBuildCardProps { build: CommunityBuildListItem; hideAuthor?: boolean }
+export interface CommunityBuildCardProps { build: CommunityBuildListItem; hideAuthor?: boolean; showOwnerActions?: boolean }
 
 /** Stretched title link, with independently reachable author and owner actions. */
-export function CommunityBuildCard({ build, hideAuthor = false }: CommunityBuildCardProps) {
+export function CommunityBuildCard({ build, hideAuthor = false, showOwnerActions = true }: CommunityBuildCardProps) {
   const race = coerceRace(build.build?.race);
   const tint = raceTint(race);
   const level = SKILL_LEVELS.find((item) => item.id === build.build?.skillLevel);
@@ -37,8 +36,7 @@ export function CommunityBuildCard({ build, hideAuthor = false }: CommunityBuild
         <VoteScore votes={build.votes} />
         <CommunityTrustLine build={build} />
         <span className="text-micro text-text-dim">Updated {fmtAgo(build.contentUpdatedAt || build.updatedAt || build.publishedAt)}</span>
-        <CommunityBuildOwnerControls slug={build.slug} title={build.title} compact />
-        <CommunityOwnerReplayCount publicSlug={build.slug} />
+        {showOwnerActions ? <CommunityCardOwnerActions slug={build.slug} title={build.title} /> : null}
       </footer>
     </div>
   </Card>;

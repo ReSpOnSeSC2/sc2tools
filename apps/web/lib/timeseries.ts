@@ -29,6 +29,10 @@ export type ApiTimeseriesPoint = {
   macroN?: number | null;
   apmN?: number | null;
   spqN?: number | null;
+  avgGroupsUsed?: number | null;
+  avgCameraReturns?: number | null;
+  groupsUsedN?: number | null;
+  cameraReturnsN?: number | null;
 };
 
 export type ApiTimeseriesResponse = {
@@ -48,6 +52,10 @@ export type Period = {
   macroN?: number | null;
   apmN?: number | null;
   spqN?: number | null;
+  avgGroupsUsed?: number | null;
+  avgCameraReturns?: number | null;
+  groupsUsedN?: number | null;
+  cameraReturnsN?: number | null;
 };
 
 /**
@@ -158,6 +166,10 @@ export function apiToPeriods(
     ...("macroN" in p ? { macroN: measuredCount(p.macroN) } : {}),
     ...("apmN" in p ? { apmN: measuredCount(p.apmN) } : {}),
     ...("spqN" in p ? { spqN: measuredCount(p.spqN) } : {}),
+    ...("avgGroupsUsed" in p ? { avgGroupsUsed: measuredAverage(p.avgGroupsUsed) } : {}),
+    ...("avgCameraReturns" in p ? { avgCameraReturns: measuredAverage(p.avgCameraReturns) } : {}),
+    ...("groupsUsedN" in p ? { groupsUsedN: measuredCount(p.groupsUsedN) } : {}),
+    ...("cameraReturnsN" in p ? { cameraReturnsN: measuredCount(p.cameraReturnsN) } : {}),
   }));
 }
 

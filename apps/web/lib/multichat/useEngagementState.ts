@@ -66,7 +66,7 @@ export interface OracleRecap {
 
 export interface ClipMoment {
   atMs: number;
-  kind: "chat-spike" | "game-event";
+  kind: "chat-spike" | "game-event" | "manual";
   reason: string;
   sampleLines: string[];
   gameKey?: string;
@@ -110,6 +110,18 @@ export function sanitizeTally(raw: unknown): PredictionTally {
   return { win, loss, total: win + loss };
 }
 
+export function sanitizeClipMoments(raw: unknown, limit = 100): ClipMoment[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, limit).flatMap((value): ClipMoment[] => {
+    if (!value || typeof value !== "object") return [];
+    const { atMs, kind, reason, sampleLines, gameKey } = value;
+    if (!Number.isSafeInteger(atMs) || atMs <= 0 || atMs > 8.64e15 || !str(reason, 160)) return [];
+    return [{ atMs, kind: kind === "game-event" || kind === "manual" ? kind : "chat-spike", reason: str(reason, 160),
+      sampleLines: (Array.isArray(sampleLines) ? sampleLines.slice(0, 5) : []).map((line) => str(line, 200)).filter(Boolean),
+      ...(str(gameKey) ? { gameKey: str(gameKey) } : {}) }];
+  });
+}
+
 export function sanitizeEngagement(raw: unknown): EngagementSummary {
   if (!raw || typeof raw !== "object") return EMPTY_ENGAGEMENT;
   const s = raw as Record<string, unknown>;
@@ -144,23 +156,7 @@ export function sanitizeEngagement(raw: unknown): EngagementSummary {
   const p = (s.prediction && typeof s.prediction === "object"
     ? s.prediction
     : null) as Record<string, unknown> | null;
-  const clipMoments = (Array.isArray(s.clipMoments) ? s.clipMoments : [])
-    .map((m) => {
-      const e = (m && typeof m === "object" ? m : {}) as Record<string, unknown>;
-      if (!str(e.reason, 160)) return null;
-      return {
-        atMs: num(e.atMs),
-        kind: e.kind === "game-event" ? ("game-event" as const) : ("chat-spike" as const),
-        reason: str(e.reason, 160),
-        sampleLines: (Array.isArray(e.sampleLines) ? e.sampleLines : [])
-          .map((l) => str(l, 200))
-          .filter(Boolean)
-          .slice(0, 5),
-        ...(str(e.gameKey) ? { gameKey: str(e.gameKey) } : {}),
-      };
-    })
-    .filter((m): m is ClipMoment => m !== null)
-    .slice(0, 20);
+  const clipMoments = sanitizeClipMoments(s.clipMoments, 20);
   const recapRaw = (s.oracleRecap && typeof s.oracleRecap === "object"
     ? s.oracleRecap
     : {}) as Record<string, unknown>;

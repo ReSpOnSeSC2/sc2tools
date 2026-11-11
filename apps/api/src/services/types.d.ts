@@ -567,7 +567,7 @@ export interface CustomBuildsService {
     truncated: boolean;
   }>;
   get(userId: string, slug: string): Promise<object | null>;
-  upsert(userId: string, build: object & { slug: string }): Promise<void>;
+  upsert(userId: string, build: object & { slug: string }, options?: { recordLibraryHistory?: boolean }): Promise<void>;
   softDelete(userId: string, slug: string): Promise<void>;
   evaluateBuild(
     userId: string,
@@ -866,7 +866,7 @@ export interface OverlayTokensService {
       rotationPending?: boolean;
       replacedBy?: string;
       enabledWidgets: string[];
-      profile?: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }> };
+      profile?: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }>; credit?: boolean; ghostVoice?: boolean };
       profileRevision?: number;
     }>
   >;
@@ -875,7 +875,7 @@ export interface OverlayTokensService {
         userId: string;
         label: string;
         enabledWidgets: string[];
-        profile?: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }> };
+        profile?: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }>; credit?: boolean; ghostVoice?: boolean };
         profileRevision?: number;
       }
     | null
@@ -888,7 +888,7 @@ export interface OverlayTokensService {
     enabled: boolean,
   ): Promise<{ enabledWidgets: string[] }>;
   setEnabledWidgets(userId: string, token: string, enabled: unknown, expectedEnabled?: unknown): Promise<{ enabledWidgets: string[] }>;
-  setProfile(userId: string, token: string, profile: unknown, expectedRevision: unknown): Promise<{ profile: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }> }; profileRevision: number }>;
+  setProfile(userId: string, token: string, profile: unknown, expectedRevision: unknown): Promise<{ profile: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }>; credit?: boolean; ghostVoice?: boolean }; profileRevision: number }>;
   tokenBelongsToUser(userId: string, token: string): Promise<boolean>;
 }
 
@@ -930,6 +930,7 @@ export interface AggregationsService {
     }>
   >;
   mapMatchups(userId: string, filters: object, snapshot?: import('./strengthCurveSnapshots').CurveSnapshot): Promise<object>;
+  unitTradePreview(userId: string, filters: object): Promise<object>;
   macroSummary(userId: string, filters: object): Promise<object>;
   matchupTimeseries(
     userId: string,

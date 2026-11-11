@@ -14,6 +14,7 @@
  * Follow in its details card.
  */
 
+import Link from "next/link";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Settings2 } from "lucide-react";
 import type { ReplaySide } from "@/lib/replayHud";
@@ -55,6 +56,10 @@ export function ReplaySettings({
   vision = "both",
   onVision,
   approximateVision = true,
+  camera = "free",
+  cameraTracks,
+  onCamera,
+  canReanalyzeCamera = false,
 }: {
   showProductionRail: boolean;
   onShowProductionRail: (v: boolean) => void;
@@ -69,6 +74,10 @@ export function ReplaySettings({
   onVision?: (vision: ReplayVision) => void;
   /** Single-side vision is estimated from sight radii (no engine data). */
   approximateVision?: boolean;
+  camera?: import("@/lib/replayCamera").ReplayCameraMode;
+  cameraTracks?: import("@/lib/mapReplay").MapPlayback["camera"];
+  onCamera?: (mode: import("@/lib/replayCamera").ReplayCameraMode) => void;
+  canReanalyzeCamera?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -139,6 +148,20 @@ export function ReplaySettings({
               </p>
             </>
           ) : null}
+          {onCamera ? <fieldset className="space-y-1 px-3 pb-2">
+            <legend className="text-micro font-semibold uppercase tracking-wider text-text-dim">Camera</legend>
+            {cameraTracks ? (
+              <div className="grid grid-cols-3 gap-1">
+                {([["free", "Free"], ["me", "Follow you"], ["opp", "Follow opponent"]] as const).map(([mode, label]) =>
+                  <button key={mode} type="button" aria-pressed={camera === mode}
+                    disabled={mode !== "free" && !cameraTracks[mode]} onClick={() => onCamera(mode)}
+                    className="min-h-11 rounded-md border border-border px-1 text-micro aria-pressed:border-accent aria-pressed:bg-accent/15 disabled:opacity-50">
+                    {label}
+                  </button>
+                )}
+              </div>
+            ) : <p className="text-micro text-text-muted">Camera tracks unavailable. {canReanalyzeCamera ? <Link href="/settings?tab=backups" className="text-accent underline">Re-analyze this game</Link> : null}</p>}
+          </fieldset> : null}
           <p className="px-3 pb-1 pt-1.5 text-micro font-semibold uppercase tracking-wider text-text-dim">
             Panels
           </p>

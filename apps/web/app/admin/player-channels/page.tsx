@@ -13,6 +13,7 @@ import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { ForbiddenCard } from "../components/AdminFragments";
 import { PlayerChannelEditor, PlayerChannelRow } from "./PlayerChannelEditor";
+import { formatNumber } from "@/lib/i18n/format";
 
 const PAGE_SIZE = 25;
 type ImportResult = { imported: number; updated: number; skipped: number; total: number };
@@ -50,7 +51,7 @@ export default function AdminPlayerChannelsPage() {
     setBusy("import"); setMutationError(null); setNotice(null);
     try {
       const result = await apiCall<ImportResult>(getToken, "/v1/admin/player-channels/import-pulse", { method: "POST" });
-      await refreshAfterMutation(`SC2Pulse import complete: ${result.imported.toLocaleString()} added, ${result.updated.toLocaleString()} updated, ${result.skipped.toLocaleString()} skipped (${result.total.toLocaleString()} checked).`);
+      await refreshAfterMutation(`SC2Pulse import complete: ${formatNumber(result.imported)} added, ${formatNumber(result.updated)} updated, ${formatNumber(result.skipped)} skipped (${formatNumber(result.total)} checked).`);
     } catch (err) {
       setMutationError(`Couldn't import SC2Pulse channels. ${directoryError(err)}`);
     } finally { setBusy(null); }
@@ -105,8 +106,8 @@ export default function AdminPlayerChannelsPage() {
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2 text-caption text-text-dim">
-            <p role="status">{total.toLocaleString()} player{total === 1 ? "" : "s"}{pendingOnly ? " awaiting review" : " in the directory"}{search ? ` matching “${search}”` : ""}</p>
-            <p>Showing {(page * PAGE_SIZE + 1).toLocaleString()}–{Math.min((page + 1) * PAGE_SIZE, total).toLocaleString()}</p>
+            <p role="status">{formatNumber(total)} player{total === 1 ? "" : "s"}{pendingOnly ? " awaiting review" : " in the directory"}{search ? ` matching “${search}”` : ""}</p>
+            <p>Showing {formatNumber(page * PAGE_SIZE + 1)}–{formatNumber(Math.min((page + 1) * PAGE_SIZE, total))}</p>
           </div>
           <ul className="space-y-4" aria-label="Player channel directory">
             {data.entries.map((entry) => <li key={entry.id}><PlayerChannelRow entry={entry} busy={Boolean(busy)} onEdit={() => setEditor(entry)} onRemove={() => { setMutationError(null); setRemoveTarget(entry); }} /></li>)}

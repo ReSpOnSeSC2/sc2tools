@@ -177,7 +177,14 @@ export function followView(
   w: number, h: number, pad: number, minZoom = FOLLOW_MIN_ZOOM,
 ): ReplayView | null {
   const pos = entityPositionAt(playback, ref, t);
-  if (!pos || !(w > 0) || !(h > 0)) return null;
+  return pos ? centeredReplayView(playback, pos, view, w, h, pad, minZoom) : null;
+}
+
+export function centeredReplayView(
+  playback: MapPlayback, pos: { x: number; y: number }, view: ReplayView,
+  w: number, h: number, pad: number, minZoom: number,
+): ReplayView | null {
+  if (!(w > 0) || !(h > 0)) return null;
   const proj = worldProjection(playback.bounds, w, h, pad);
   if (!(proj.k > 0)) return null;
   const z = Math.min(8, Math.max(view.z, minZoom));

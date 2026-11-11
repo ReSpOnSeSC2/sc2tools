@@ -50,6 +50,7 @@
  */
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { overlayRaceColor } from "@/lib/overlayRaceColors";
 
 /**
  * Master animation cycle. Every duration below must divide this
@@ -64,18 +65,6 @@ const NEAR_STAR_COUNT = 26;
 
 /** How long an accent change takes to crossfade. */
 const ACCENT_FADE_MS = 800;
-
-/**
- * Race accents, matching ``--color-race-*`` in docs/design-system.md.
- * These are identity colours, not semantic ones — a Zerg loss is still
- * red elsewhere in the product.
- */
-const RACE_ACCENTS: Record<string, string> = {
-  terran: "#3B82F6",
-  zerg: "#A855F7",
-  protoss: "#F59E0B",
-  random: "#94A3B8",
-};
 
 /** Stock accent when no game is in flight. Matches the overlay default. */
 export const DEFAULT_BACKDROP_ACCENT = "#3EC0C7";
@@ -109,8 +98,7 @@ const VARIANT_HEADLINE: Record<BackdropVariant, string | null> = {
  * a wrong tint mid-match is worse than a neutral one.
  */
 export function accentForRace(race?: string | null): string {
-  if (!race) return DEFAULT_BACKDROP_ACCENT;
-  return RACE_ACCENTS[race.trim().toLowerCase()] ?? DEFAULT_BACKDROP_ACCENT;
+  return overlayRaceColor(race) ?? DEFAULT_BACKDROP_ACCENT;
 }
 
 /* ──────────────── deterministic field generation ──────────────── */
@@ -474,7 +462,7 @@ const glowB = (accent: string): CSSProperties => ({
   height: "82%",
   borderRadius: "50%",
   background:
-    `radial-gradient(circle, #7A5AD824 0%, ${accent}0F 42%, transparent 72%)`,
+    `radial-gradient(circle, ${accent}24 0%, ${accent}0F 42%, transparent 72%)`,
 });
 
 /** Thin accent wash along the canvas edges — reads as rim light. */

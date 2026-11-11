@@ -60,3 +60,49 @@ it("describes the bounded browser cohort without claiming it includes every publ
   expect(screen.getByText("Oct 2026")).toBeTruthy();
   expect(screen.queryByText("Jan 2025")).toBeNull();
 });
+
+it("uses a single identity hero and ranks only matchups with ten decided games", () => {
+  const profile = {
+    ...PUBLIC_PLAYER, mainRace: "Protoss", joinedAt: "2024-03-14T00:00:00Z", publishedBuildCount: 1,
+    totals: { games: 25, wins: 15, losses: 4, winRate: 15 / 19 },
+    matchups: [
+      { matchup: "vs Z", games: 14, wins: 9, losses: 0, winRate: 1 },
+      { matchup: "vs T", games: 11, wins: 6, losses: 4, winRate: 0.6 },
+    ],
+  };
+  const view = render(<PublicPlayerPage profile={profile} />);
+  expect(screen.getByText("Protoss player · Member since Mar 2024 · 1 published build")).toBeTruthy();
+  expect(screen.getAllByRole("button", { name: "Share profile" })).toHaveLength(1);
+  expect(screen.getByText("Best matchup")).toBeTruthy();
+  expect(screen.getByText("vs Terran · 60%")).toBeTruthy();
+  view.rerender(<PublicPlayerPage profile={{ ...profile, matchups: profile.matchups.slice(0, 1) }} />);
+  expect(screen.getByText("Most played")).toBeTruthy();
+  expect(screen.getByText("vs Zerg · 56% of games")).toBeTruthy();
+  view.rerender(<PublicPlayerPage profile={{ ...profile, publishedBuildCount: 0, matchups: [], totals: { games: 0, wins: 0, losses: 0, winRate: 0 } }} />);
+  expect(screen.getByText("Member since Mar 2024")).toBeTruthy();
+  const kpi = screen.getByText("Most played").parentElement!;
+  expect(kpi.textContent).toContain("—");
+  expect(screen.queryByText(/Protoss player|published builds/)).toBeNull();
+});
+
+it("links only eligible matchup and build rows to the published replay archive", () => {
+  const profile = {
+    ...PUBLIC_PLAYER, mainRace: "Protoss", sections: { ...PUBLIC_PLAYER.sections!, showReplays: true },
+    replayArchive: { handle: "archive", total: 25 },
+    matchups: [
+      { matchup: "vs Z", games: 14, wins: 9, losses: 0, winRate: 1 },
+      { matchup: "Unknown", games: 11, wins: 6, losses: 4, winRate: 0.6 },
+    ],
+    signatureBuilds: [{ name: "Blink & Charge", games: 6, wins: 4, losses: 2, winRate: 4 / 6 }],
+  };
+  const view = render(<PublicPlayerPage profile={profile} />);
+  expect(screen.getByRole("link", { name: /vs Zerg.*View replays/ }).getAttribute("href")).toBe("/players/archive/replays?matchup=PvZ");
+  expect(screen.getByRole("link", { name: /Blink & Charge.*View replays/ }).getAttribute("href")).toBe("/players/archive/replays?build=Blink%20%26%20Charge");
+  expect(screen.queryByRole("link", { name: /Unknown race.*View replays/ })).toBeNull();
+  expect(screen.getByRole("button", { name: "About detected build counts" })).toBeTruthy();
+  view.rerender(<PublicPlayerPage profile={{ ...profile, mainRace: "Random" }} />);
+  expect(screen.queryByRole("link", { name: /vs Zerg.*View replays/ })).toBeNull();
+  expect(screen.getByRole("link", { name: /Blink & Charge.*View replays/ })).toBeTruthy();
+  view.rerender(<PublicPlayerPage profile={{ ...profile, replayArchive: null }} />);
+  expect(screen.queryByRole("link", { name: /View replays/ })).toBeNull();
+});

@@ -36,6 +36,7 @@ import type {
   ChatMessage,
   ChatPlatform,
 } from "@/lib/multichat/types";
+import { formatTime } from "@/lib/i18n/format";
 
 export const PLATFORM_META: Record<
   ChatPlatform,
@@ -65,7 +66,7 @@ const ANIMATION_CSS: Record<string, string> = {
 function timeLabel(atMs: number): string {
   const d = new Date(atMs);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString(undefined, {
+  return formatTime(d, {
     hour: "2-digit",
     minute: "2-digit",
   });

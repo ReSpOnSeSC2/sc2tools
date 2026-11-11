@@ -293,6 +293,8 @@ describe("reviews and coaching articles", () => {
       "your-reviewer-profile",
       "my-reviews",
       "closing-and-sharing",
+      "sharing-a-moment",
+      "keyboard-shortcuts",
       "blocking-and-reporting",
     ]);
     const text = allTextFields(article!).join(" ");
@@ -317,6 +319,7 @@ describe("reviews and coaching articles", () => {
       "practice-plans",
       "how-progress-is-counted",
       "sessions",
+      "session-prep-digest",
     ]);
     expect(allTextFields(article!).join(" ")).toContain("the workspace never grades or scores your play");
     const urls = helpSitemapRows("https://sc2tools.com").map((row) => row.url);

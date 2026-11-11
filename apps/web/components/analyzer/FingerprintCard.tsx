@@ -7,6 +7,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { longLabelFor } from "@/lib/datePresets";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { formatNumber } from "@/lib/i18n/format";
 
 type FingerprintAxis = {
   key: string;
@@ -420,7 +421,7 @@ function FingerprintBody({
               label="Detected builds"
               value={
                 axisAvailable(repertoire)
-                  ? repertoireMeasures(fp, repertoire).distinct.toLocaleString()
+                  ? formatNumber(repertoireMeasures(fp, repertoire).distinct)
                   : "Still forming"
               }
             />
@@ -880,7 +881,7 @@ function PaceEvidence({ fp }: { fp: FingerprintData }) {
       <p className="mt-3 border-t border-border pt-3 text-caption leading-relaxed text-text-muted">
         {available
           ? paceProfileEvidence(pace, summary)
-          : `${pace.sampleSize.toLocaleString()} valid timed replay${pace.sampleSize === 1 ? " is" : "s are"} available. The distribution is real, but the pace label stays unranked until ${pace.needed ?? "more"} are available.`}
+          : `${formatNumber(pace.sampleSize)} valid timed replay${pace.sampleSize === 1 ? " is" : "s are"} available. The distribution is real, but the pace label stays unranked until ${pace.needed ?? "more"} are available.`}
       </p>
     </section>
   );
@@ -998,20 +999,20 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
 
       <div className="border-t border-border px-3 py-4 sm:px-4">
         <p className="text-caption leading-relaxed text-text-muted">
-          Build variety and game length use {fp.games.toLocaleString()} {fp.matchup}{" "}
+          Build variety and game length use {formatNumber(fp.games)} {fp.matchup}{" "}
           1v1 replay{fp.games === 1 ? "" : "s"}. The matchup-edge track compares
           this matchup against separate windows for your other two. Each track
           needs enough games before it receives a rating.{" "}
           {fp.windowMode === "range"
             ? "These windows follow your dashboard date range."
-            : `With no date range set, each window uses your latest ${fp.windowGames.toLocaleString()} games.`}{" "}
+            : `With no date range set, each window uses your latest ${formatNumber(fp.windowGames)} games.`}{" "}
           Your race and matchup come from the picker above, not the dashboard
           race filter.
         </p>
         <p className="mt-2 text-caption leading-relaxed text-text-muted">
           Spectrum markers show the absolute replay measurement.{" "}
           {fullyPopulationCalibrated
-            ? `The separate 0–1 naming score compares one recent fingerprint per player in ${fp.matchup}: continuous measures use distance from the population median, while distribution signatures use how rare their tier is. The current reference contains ${(fp.populationCalibration?.populationSize ?? 0).toLocaleString()} qualifying player profiles.`
+            ? `The separate 0–1 naming score compares one recent fingerprint per player in ${fp.matchup}: continuous measures use distance from the population median, while distribution signatures use how rare their tier is. The current reference contains ${formatNumber(fp.populationCalibration?.populationSize ?? 0)} qualifying player profiles.`
             : "Population calibration is still building for one or more tracks. Until it is ready, the provisional name composes every rated trait measured in this timeframe, so category changes still change the name. Marker position never chooses it."}
         </p>
 
@@ -1038,7 +1039,7 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
               </p>
               {repertoire.distinct > 0 && isFiniteNumber(repertoire.effective) ? (
                 <p className="rounded-md border border-accent/20 bg-accent/5 p-2 text-text-muted">
-                  In this window, {repertoire.distinct.toLocaleString()} detected
+                  In this window, {formatNumber(repertoire.distinct)} detected
                   build{repertoire.distinct === 1 ? "" : "s"} become{" "}
                   {formatEffectiveBuilds(repertoire.effective)} effective builds.
                   In plain English, your usage mix is as diverse as{" "}
@@ -1048,7 +1049,7 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
               ) : (
                 <p className="rounded-md border border-border bg-bg-elevated/40 p-2 text-text-dim">
                   {repertoire.distinct > 0
-                    ? `${repertoire.distinct.toLocaleString()} detected build${repertoire.distinct === 1 ? " is" : "s are"} available, but an effective-build value was not returned for this window.`
+                    ? `${formatNumber(repertoire.distinct)} detected build${repertoire.distinct === 1 ? " is" : "s are"} available, but an effective-build value was not returned for this window.`
                     : "No named build has been classified in this window yet, so effective diversity is unavailable."}
                 </p>
               )}
@@ -1143,7 +1144,7 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
           from ordinary, so it describes what is distinctive about you rather
           than merely listing buckets. The response currently supplies{" "}
           {combinationCount > 0
-            ? `${combinationCount.toLocaleString()} possible three-trait profiles`
+            ? `${formatNumber(combinationCount)} possible three-trait profiles`
             : "the available trait vocabulary"}
           ; names are composed from that same vocabulary, not maintained in a
           separate hardcoded catalog. If a track needs more games, your profile
@@ -1206,7 +1207,7 @@ function ArchetypeVocabulary({ fp }: { fp: FingerprintData }) {
         <span>The archetype vocabulary</span>
         {combinationCount > 0 ? (
           <span className="rounded-full border border-border bg-bg-surface px-2 py-0.5 text-micro tabular-nums text-text-dim">
-            {combinationCount.toLocaleString()} possible profiles
+            {formatNumber(combinationCount)} possible profiles
           </span>
         ) : null}
         <ChevronDown
@@ -1267,7 +1268,7 @@ function ArchetypeVocabulary({ fp }: { fp: FingerprintData }) {
                           Your trait
                           {component
                             ? typeof component.distinctiveness === "number"
-                              ? ` · ${component.role} · ${formatNumber(component.distinctiveness, 2)} distinctive`
+                              ? ` · ${component.role} · ${formatMetricNumber(component.distinctiveness, 2)} distinctive`
                               : ` · ${component.role} · provisional`
                             : ""}
                         </span>
@@ -1319,7 +1320,7 @@ function findCategory(
 function axisValueLabel(key: string, axis: FingerprintAxis): string {
   if (axis.value == null) return "—";
   if (key === "repertoire") {
-    return `${Math.round(axis.value).toLocaleString()} detected`;
+    return `${formatNumber(Math.round(axis.value))} detected`;
   }
   if (key === "pace") return `${formatDuration(axis.value)} avg`;
   if (key === "matchup_edge") {
@@ -1328,7 +1329,7 @@ function axisValueLabel(key: string, axis: FingerprintAxis): string {
       typeof score === "number" ? ` · score ${formatSignedScore(score)}` : ""
     }`;
   }
-  return formatNumber(axis.value, 2);
+  return formatMetricNumber(axis.value, 2);
 }
 
 /**
@@ -1371,11 +1372,11 @@ function axisEvidence(
   axis: FingerprintAxis,
   fp: FingerprintData,
 ): string {
-  const sample = axis.sampleSize.toLocaleString();
+  const sample = formatNumber(axis.sampleSize);
   const plural = axis.sampleSize === 1 ? "" : "s";
   if (key === "repertoire") {
     const repertoire = repertoireMeasures(fp, axis);
-    const base = `We detected ${repertoire.distinct.toLocaleString()} distinct build${repertoire.distinct === 1 ? "" : "s"} across ${sample} classified ${fp.matchup} replay${plural}.`;
+    const base = `We detected ${formatNumber(repertoire.distinct)} distinct build${repertoire.distinct === 1 ? "" : "s"} across ${sample} classified ${fp.matchup} replay${plural}.`;
     if (!isFiniteNumber(repertoire.effective)) {
       return `${base} The server selected ${axis.categoryLabel}, but did not return a frequency-adjusted effective count for this response.`;
     }
@@ -1466,15 +1467,15 @@ function paceProfileEvidence(
 
 /** One line describing which replays fed the profile. */
 function windowSummary(fp: FingerprintData, rangeLabel: string): string {
-  const games = fp.games.toLocaleString();
+  const games = formatNumber(fp.games);
   const plural = fp.games === 1 ? "" : "s";
   if (fp.windowMode === "range") {
     const truncated = fp.windowTruncated
-      ? ` Capped at the most recent ${fp.windowGames.toLocaleString()} per matchup.`
+      ? ` Capped at the most recent ${formatNumber(fp.windowGames)} per matchup.`
       : "";
     return `Based on ${games} ${fp.matchup} 1v1 replay${plural} in ${rangeLabel.toLowerCase()}.${truncated}`;
   }
-  return `Based on ${games} recent ${fp.matchup} 1v1 replay${plural}, using up to your latest ${fp.windowGames.toLocaleString()}.`;
+  return `Based on ${games} recent ${fp.matchup} 1v1 replay${plural}, using up to your latest ${formatNumber(fp.windowGames)}.`;
 }
 
 const STRIPPED_FILTER_NAMES: Record<string, string> = {
@@ -1577,34 +1578,34 @@ function taxonomyCombinationCount(axes: TaxonomyAxis[]): number {
  */
 function formatWinRate(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  return `${formatNumber(value, 1)}%`;
+  return `${formatMetricNumber(value, 1)}%`;
 }
 
 function formatSharePercent(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  return `${formatNumber(value, 1)}%`;
+  return `${formatMetricNumber(value, 1)}%`;
 }
 
 function formatPercentValue(value: number): string {
   if (!Number.isFinite(value)) return "—";
   const percent = Math.abs(value) <= 1 ? value * 100 : value;
-  return `${formatNumber(percent, 1)}%`;
+  return `${formatMetricNumber(percent, 1)}%`;
 }
 
 function formatPointGap(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  return `${formatNumber(value, 1)} pts`;
+  return `${formatMetricNumber(value, 1)} pts`;
 }
 
 function formatSignedPoints(value: number): string {
   if (!Number.isFinite(value)) return "—";
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  return `${sign}${formatNumber(Math.abs(value), 1)} pts`;
+  return `${sign}${formatMetricNumber(Math.abs(value), 1)} pts`;
 }
 
 function formatSignedScore(value: number): string {
   if (!Number.isFinite(value)) return "—";
-  return `${value > 0 ? "+" : ""}${formatNumber(value, 0)}`;
+  return `${value > 0 ? "+" : ""}${formatMetricNumber(value, 0)}`;
 }
 
 function formatEffectiveBuilds(value: number): string {
@@ -1612,7 +1613,7 @@ function formatEffectiveBuilds(value: number): string {
   const nearBoundary = [1.5, 2.5, 5, 10].some(
     (boundary) => Math.abs(value - boundary) > 0 && Math.abs(value - boundary) < 0.01,
   );
-  return formatNumber(value, nearBoundary ? 6 : 2);
+  return formatMetricNumber(value, nearBoundary ? 6 : 2);
 }
 
 function formatOptionalEffective(value: number | null): string {
@@ -1644,8 +1645,8 @@ function formatOptionalDuration(value: number | null): string {
   return value == null ? "Unavailable" : formatDuration(value);
 }
 
-function formatNumber(value: number, places: number): string {
-  return value.toLocaleString(undefined, {
+function formatMetricNumber(value: number, places: number): string {
+  return formatNumber(value, {
     minimumFractionDigits: 0,
     maximumFractionDigits: places,
   });

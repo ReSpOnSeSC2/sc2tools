@@ -9,6 +9,8 @@
  * clip is made to be shared.
  */
 
+import { getServerFormatter } from "@/lib/i18n/format";
+import type { ReplayCanvas, ReplayCanvasContext } from "@/lib/replayCanvas";
 import { statsAt, worldProjection, type MapPlayback } from "@/lib/mapReplay";
 import { statsHaveWorkers, workerCountAt } from "@/lib/mapReplayLosses";
 import { formatClock } from "@/lib/replayHud";
@@ -62,7 +64,7 @@ export function clipCamera(
 }
 
 /** Draw clip frame ``t`` onto ``canvas`` (whose 2D context is ``ctx``). */
-export function renderClipFrame(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, t: number, options: ClipFrameOptions): void {
+export function renderClipFrame(ctx: ReplayCanvasContext, canvas: ReplayCanvas, t: number, options: ClipFrameOptions): void {
   const width = canvas.width;
   const height = canvas.height;
   if (options.follow) {
@@ -88,10 +90,10 @@ const FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 function sideLine(playback: MapPlayback, side: "me" | "opp", t: number): string {
   const stats = statsAt(playback.stats[side], t);
   const workers = statsHaveWorkers(playback.stats[side]) ? stats.workers : workerCountAt(playback.units, side, t);
-  return `Supply ${Math.round(stats.supply)} · Workers ${Math.round(workers)} · Army ${Math.round(stats.army).toLocaleString("en-US")}`;
+  return `Supply ${Math.round(stats.supply)} · Workers ${Math.round(workers)} · Army ${getServerFormatter().number(Math.round(stats.army))}`;
 }
 
-function drawScoreboard(ctx: CanvasRenderingContext2D, options: ClipFrameOptions, t: number, width: number, scale: number): void {
+function drawScoreboard(ctx: ReplayCanvasContext, options: ClipFrameOptions, t: number, width: number, scale: number): void {
   const band = Math.max(40, 66 * scale);
   const inset = Math.max(10, 22 * scale);
   ctx.save();
@@ -123,7 +125,7 @@ function drawScoreboard(ctx: CanvasRenderingContext2D, options: ClipFrameOptions
   ctx.restore();
 }
 
-function drawWatermark(ctx: CanvasRenderingContext2D, text: string, width: number, height: number, scale: number): void {
+function drawWatermark(ctx: ReplayCanvasContext, text: string, width: number, height: number, scale: number): void {
   if (!text) return;
   ctx.save();
   ctx.font = `600 ${px(18 * scale, 10)} ${FONT}`;

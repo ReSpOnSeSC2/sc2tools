@@ -152,6 +152,9 @@ class SettingsPayload:
         "autostart_enabled",
         "start_minimized",
         "notify_every_game",
+        "notifications_muted",
+        "close_to_tray",
+        "show_summary",
         "player_handle",
         "player_handle_origin",
         "parse_concurrency",
@@ -189,6 +192,9 @@ class SettingsPayload:
         autostart_enabled: Optional[bool] = None,
         start_minimized: Optional[bool] = None,
         notify_every_game: Optional[bool] = None,
+        notifications_muted: Optional[bool] = None,
+        close_to_tray: Optional[bool] = None,
+        show_summary: bool = True,
         player_handle: Optional[str] = None,
         player_handle_origin=None,
         parse_concurrency: Optional[int] = None,
@@ -227,6 +233,9 @@ class SettingsPayload:
         self.autostart_enabled = autostart_enabled
         self.start_minimized = start_minimized
         self.notify_every_game = notify_every_game
+        self.notifications_muted = notifications_muted
+        self.close_to_tray = close_to_tray
+        self.show_summary = show_summary
         # Player handle (battleTag without the # discriminator, or any
         # substring that uniquely identifies the user in their own
         # replays). ``None`` means "no change"; an empty string clears
@@ -801,6 +810,9 @@ class GuiUI:
         """Ask the GUI to close (e.g. from the tray's Quit menu)."""
         self._dispatch("quitRequested")
 
+    def toggle_practice_hud_move(self):
+        self._dispatch("practiceMoveRequested")
+
     def show_window(self) -> None:
         """Bring the window to the foreground (e.g. from a tray click)."""
         self._dispatch("showRequested")
@@ -879,6 +891,9 @@ def _make_signals():
         # Build check-in view calls from the controller's state thread:
         # (BuildCheckinView method name, args tuple of frozen models).
         buildCheckin = QtCore.Signal(str, object)
+        practiceChanged = QtCore.Signal(object)
+        practiceMoveRequested = QtCore.Signal()
+        setupRequested = QtCore.Signal(object)
         quitRequested = QtCore.Signal()
         showRequested = QtCore.Signal()
 
@@ -1155,6 +1170,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._find_log_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+F"), self)
             self._find_log_shortcut.setContext(QtCore.Qt.WindowShortcut)
             self._find_log_shortcut.activated.connect(self._focus_log_search)
+            from .page_shortcuts import install_page_shortcuts
+            self._page_shortcuts = install_page_shortcuts(
+                self, QtCore=QtCore, QtGui=QtGui, go_to=self._go_to_page,
+                refresh=self._refresh_open_page, save=self._save_settings_shortcut,
+                nav_buttons=self._nav_focus_order,
+            )
             self._stack.currentChanged.connect(lambda _index: self._schedule_window_state())
             guard_value_widgets(self._stack.widget(3), QtCore, QtWidgets)
             from .build_checkin_window import BuildCheckinHost
@@ -1185,6 +1206,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._refresh_stats()
             self._refresh_pairing_card()
             self._populate_settings()
+            self._install_settings_draft()
             self._saved_api_base = self._api_input.text().strip().rstrip("/")
             self._loaded_restart_values = (
                 self._saved_api_base, self._log_combo.currentText(),
@@ -1266,7 +1288,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 menu.addAction(title, lambda _checked=False, destination=route: self._go_to_page(destination))
             menu.addSeparator()
             menu.addAction("Border and animations…", self._open_companion_appearance)
-            menu.addAction("Help and troubleshooting", lambda: self._go_to_page("help"))
+            menu.addAction("Help and troubleshooting", lambda: self._go_to_page("help", keep_settings_draft=True))
             self._check_updates_action = menu.addAction("Check for updates", self._check_updates_from_menu)
             menu.addSeparator()
             menu.addAction("Quit SC2 Tools", ui._on_quit)
@@ -1333,7 +1355,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 checkin_controller_provider=ui._build_checkin_controller,
                 panel_positions=ui._companion_panel_positions,
                 on_panel_positions=ui._on_companion_panel_positions,
-                agent_menu=self._agent_menu,
+                agent_menu=self._agent_menu, open_help=self._open_help,
             )
             self._stack.addWidget(self._companion_page)
             from .help_page import build_help_page
@@ -1401,6 +1423,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             self._nav_group = QtWidgets.QButtonGroup(self)
             self._nav_group.setExclusive(True)
+            self._nav_focus_order = []
 
             for index, label in [
                 (5, "Companion"), (0, "Dashboard"), (1, "Recent games"),
@@ -1416,6 +1439,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                     lambda _checked=False, key=self._PAGE_KEYS[index]: self._go_to_page(key),
                 )
                 self._nav_group.addButton(btn, index)
+                self._nav_focus_order.append(btn)
                 layout.addWidget(btn)
 
             layout.addStretch(1)
@@ -1825,6 +1849,18 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             title = QtWidgets.QLabel("Settings")
             title.setObjectName("h1")
             v.addWidget(title)
+            navigation = QtWidgets.QHBoxLayout()
+            section_label = QtWidgets.QLabel("Settings section")
+            section_select = QtWidgets.QComboBox()
+            section_select.setAccessibleName("Settings section")
+            section_label.setBuddy(section_select)
+            navigation.addWidget(section_label)
+            navigation.addWidget(section_select, 1)
+            navigation.addWidget(help_button(QtWidgets, "Desktop app settings",
+                                             lambda: self._open_help("desktop-app-settings")))
+            navigation.addWidget(help_button(QtWidgets, "Keyboard shortcuts",
+                                             lambda: self._open_help("desktop-app-shortcuts")))
+            v.addLayout(navigation)
 
             form_card = QtWidgets.QFrame()
             form_card.setObjectName("card")
@@ -1874,6 +1910,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._api_input.editingFinished.connect(self._validate_api_address)
             self._api_input.textChanged.connect(self._on_api_text_changed)
             api_label = QtWidgets.QLabel(f"API base URL<br/><span style='color:{_TEXT_MUTED}'>Needs restart</span>")
+            api_label.setBuddy(self._api_input)
             form.addRow(api_label, api_block)
 
             self._handle_input = QtWidgets.QLineEdit()
@@ -2032,6 +2069,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             upload_conc_hint.setWordWrap(True)
             upload_conc_hint.setObjectName("hint")
             upload_conc_h.addWidget(upload_conc_hint, 2)
+            self._upload_concurrency_feedback = upload_conc_hint
             form.addRow("Upload concurrency", upload_conc_block)
 
             # Auto-save handler. Connected via ``buttonClicked``
@@ -2047,12 +2085,18 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 n = self._upload_conc_group.id(btn)
                 if n == self._upload_conc_last_saved:
                     return
-                self._upload_conc_last_saved = n
-                payload = SettingsPayload(upload_concurrency=n)
+                payload = SettingsPayload(upload_concurrency=n, show_summary=False)
                 try:
                     ui._on_save_settings(payload)
                 except Exception:  # noqa: BLE001
-                    log.exception("upload_concurrency_save_failed")
+                    log.warning("upload_concurrency_save_failed")
+                    saved_button = self._upload_conc_group.button(self._upload_conc_last_saved)
+                    if saved_button:
+                        saved_button.setChecked(True)
+                    self._upload_concurrency_feedback.setText("Couldn't save upload concurrency. Try again.")
+                else:
+                    self._upload_conc_last_saved = n
+                    self._upload_concurrency_feedback.setText(f"Applied instantly · {n} concurrent upload" + ("s" if n != 1 else ""))
 
             self._upload_conc_group.buttonClicked.connect(
                 _on_upload_conc_clicked,
@@ -2123,6 +2167,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._filter_combo.addItem(
                 f"Current season (Season {cur})", "current_season",
             )
+            self._filter_combo.addItem("Last 30 days", sf.PRESET_LAST_30_DAYS)
+            if ui._initial_settings.sync_filter_preset == sf.PRESET_SINCE_SETUP:
+                self._filter_combo.addItem("Only games since setup", sf.PRESET_SINCE_SETUP)
             for n in range(cur, max(cur - 6, 0), -1):
                 self._filter_combo.addItem(f"Season {n}", f"season:{n}")
             self._filter_combo.addItem("Custom date range…", "custom")
@@ -2289,9 +2336,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             form.addRow("", self._minimized_check)
 
-            self._game_notifications_check = QtWidgets.QCheckBox("Notify me after every new game syncs")
-            self._game_notifications_check.setToolTip("Shows the result, opponent and map on this PC. Replay-history imports stay quiet.")
-            form.addRow("", self._game_notifications_check)
+            self._notifications_combo = QtWidgets.QComboBox()
+            for label, mode in (("Off", "off"), ("Important", "important"), ("Every game", "all")):
+                self._notifications_combo.addItem(label, mode)
+            self._notifications_combo.setToolTip("Every game includes a result notification on this PC. Replay-history imports stay quiet.")
+            form.addRow("Desktop notifications", self._notifications_combo)
+            self._close_behavior_combo = QtWidgets.QComboBox()
+            self._close_behavior_combo.addItem("Keep syncing in the tray", True)
+            self._close_behavior_combo.addItem("Quit SC2 Tools", False)
+            form.addRow("When closing the window", self._close_behavior_combo)
 
             # Auto-update consent — the state flag shipped in 0.13.4's
             # updater hardening but had no UI surface, so the only way
@@ -2318,6 +2371,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "Automatically capture map replays (uses more CPU)",
             )
             capture_v.addWidget(self._replay_capture_check)
+            self._replay_capture_feedback = self._instant_feedback()
+            capture_v.addWidget(self._replay_capture_feedback)
             capture_help = QtWidgets.QLabel(
                 "Automatically records detailed movement, attacks, spells and creep "
                 "for new and re-synced replays. Uses StarCraft II in the background "
@@ -2331,7 +2386,30 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             capture_v.addWidget(capture_help)
             form.addRow("Map replay", capture_block)
 
-            v.addWidget(form_card)
+            def section(name, fields):
+                group = QtWidgets.QGroupBox(name, page)
+                destination = QtWidgets.QFormLayout(group)
+                destination.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
+                for field in fields:
+                    row = form.takeRow(field)
+                    caption = row.labelItem.widget() if row.labelItem else None
+                    if caption is not None:
+                        if isinstance(caption, QtWidgets.QLabel) and field.focusPolicy() != QtCore.Qt.NoFocus:
+                            caption.setBuddy(field)
+                        destination.addRow(caption, field)
+                    else:
+                        destination.addRow(field)
+                return group, destination
+
+            replays, _ = section("Replays", (folder_block, filter_block, self._handle_input))
+            app_group, _ = section("App · Saved with Save", (self._autostart_check, self._minimized_check,
+                                                               self._notifications_combo, self._close_behavior_combo))
+            updates, _ = section("Updates · Saved with Save", (self._autoupdate_check,))
+            map_replay, _ = section("Map replay · Applies instantly", (capture_block,))
+            advanced, advanced_form = section("Advanced", (api_block, concurrency_block, upload_conc_block,
+                                                             upload_batch_block, performance, self._log_combo))
+            for group in (replays, app_group, updates):
+                v.addWidget(group)
             from .build_checkin_settings import CheckinSettingsGroup
 
             # Applies immediately (cloud preference), like the toggles above.
@@ -2343,20 +2421,60 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 on_reset_positions=lambda: self._checkin_host.reset_positions(),
                 on_open_queue=lambda: self._open_checkin_queue(),
             )
+            obs = self._build_obs_card()
+            v.addWidget(obs)
             v.addWidget(self._checkin_settings)
-            v.addWidget(self._build_obs_card())
+            v.addWidget(map_replay)
+            self._settings_advanced = QtWidgets.QPushButton("Show Advanced settings")
+            self._settings_advanced.setCheckable(True)
+            self._settings_advanced.toggled.connect(advanced.setVisible)
+            self._settings_advanced.toggled.connect(lambda opened: self._settings_advanced.setText(
+                "Hide Advanced settings" if opened else "Show Advanced settings",
+            ))
+            advanced.hide()
+            reset = QtWidgets.QPushButton("Reset advanced draft defaults")
+            reset.clicked.connect(self._reset_advanced_draft_defaults)
+            advanced_form.addRow(reset)
+            v.addWidget(self._settings_advanced)
+            v.addWidget(advanced)
+            anchors = {"Replays": replays, "App": app_group, "Updates": updates, "Streaming & OBS": obs,
+                       "Build check-in": self._checkin_settings, "Map replay": map_replay,
+                       "Advanced": self._settings_advanced}
+            section_select.addItem("Jump to a section…", None)
+            for section_name in anchors:
+                section_select.addItem(section_name, section_name)
+            def jump_to_section(index):
+                name = section_select.itemData(index)
+                if name == "Advanced":
+                    self._settings_advanced.setChecked(True)
+                if name in anchors:
+                    scroller.ensureWidgetVisible(anchors[name], 8, 8)
+                    section_select.setCurrentIndex(0)
+            section_select.activated.connect(jump_to_section)
 
-            row = QtWidgets.QHBoxLayout()
-            row.addStretch(1)
             self._settings_status = QtWidgets.QLabel("")
             self._settings_status.setObjectName("muted")
-            row.addWidget(self._settings_status)
+            self._settings_status.setWordWrap(True)
+            self._settings_status.setAccessibleName("Settings save status")
+            v.addWidget(self._settings_status)
+            self._settings_restart_button = QtWidgets.QPushButton("Restart agent now")
+            self._settings_restart_button.clicked.connect(self._confirm_restart)
+            self._settings_restart_button.hide()
+            v.addWidget(self._settings_restart_button, alignment=QtCore.Qt.AlignRight)
             self._settings_page = page
-            save_btn = self._save_settings_btn = QtWidgets.QPushButton("Save settings")
+            self._settings_draft_footer = QtWidgets.QWidget(page)
+            row = QtWidgets.QHBoxLayout(self._settings_draft_footer)
+            row.setContentsMargins(0, 0, 0, 0)
+            self._settings_draft_label = QtWidgets.QLabel()
+            row.addWidget(self._settings_draft_label, 1)
+            revert = QtWidgets.QPushButton("Revert")
+            revert.clicked.connect(self._revert_settings_draft)
+            row.addWidget(revert)
+            save_btn = self._save_settings_btn = QtWidgets.QPushButton("Save (Ctrl+S)")
             save_btn.setObjectName("primary")
             save_btn.clicked.connect(self._click_save_settings)
             row.addWidget(save_btn)
-            v.addLayout(row)
+            v.addWidget(self._settings_draft_footer)
 
             maintenance = QtWidgets.QGroupBox("Maintenance")
             maintenance_layout = QtWidgets.QVBoxLayout(maintenance)
@@ -2486,6 +2604,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "Enable WebSocket server. This switch applies immediately.",
             )
             outer.addWidget(self._obs_enable_check)
+            self._obs_toggle_feedback = self._instant_feedback()
+            outer.addWidget(self._obs_toggle_feedback)
 
             conn = QtWidgets.QFormLayout()
             conn.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
@@ -2902,6 +3022,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             signals.chooseFolderRequested.connect(self._click_choose_folder)
             signals.resyncRequested.connect(self._click_archive_resync)
             signals.checkUpdatesRequested.connect(self._click_check_updates)
+            signals.practiceChanged.connect(self._companion_page.ghost_page.refresh_practice, QtCore.Qt.QueuedConnection)
+            signals.practiceMoveRequested.connect(self._companion_page.ghost_page.toggle_hud_move, QtCore.Qt.QueuedConnection)
+            signals.setupRequested.connect(self._show_first_run, QtCore.Qt.QueuedConnection)
             signals.pairingState.connect(self._on_pairing_state, QtCore.Qt.QueuedConnection)
             signals.unlinked.connect(self._on_unlinked)
             signals.unlinkedCurrent.connect(self._on_unlinked_current, QtCore.Qt.QueuedConnection)
@@ -2997,6 +3120,36 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if not self.isVisible():
                 self.showNormal()
                 self.raise_()
+
+        def _show_first_run(self, request):
+            from .setup_wizard import build_setup_wizard
+
+            self.showNormal()
+            self._first_run_wizard = build_setup_wizard(
+                self, request, QtCore=QtCore, QtWidgets=QtWidgets,
+                open_help=lambda: self._open_help("desktop-app-first-run"),
+            )
+            self._first_run_wizard.rejected.connect(ui._on_quit)
+            self._first_run_wizard.completed.connect(self._first_run_completed)
+            self._first_run_wizard.show()
+
+        def _first_run_completed(self, result):
+            from ..sync_filter import PRESET_SINCE_SETUP
+
+            choices, replay_range = result
+            initial = ui._initial_settings
+            initial.sync_filter_preset = replay_range.preset
+            initial.sync_filter_since = replay_range.since_iso
+            initial.sync_filter_until = replay_range.until_iso
+            if choices.start_with_windows is not None:
+                initial.autostart_enabled = choices.start_with_windows
+                self._autostart_check.setChecked(choices.start_with_windows)
+            if choices.preset == PRESET_SINCE_SETUP and self._filter_combo.findData(PRESET_SINCE_SETUP) < 0:
+                self._filter_combo.addItem("Only games since setup", PRESET_SINCE_SETUP)
+            self._filter_combo.setCurrentIndex(self._filter_combo.findData(choices.preset))
+            self._settings_draft.commit()
+            self._refresh_settings_draft()
+            self._go_to_page("dashboard")
 
         def _on_paired(self, user_id: str) -> None:
             self._help_page.clear()
@@ -3389,8 +3542,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._show_settings_toast("Replay folder change undone.", "success")
 
         def _open_companion_appearance(self):
-            self._go_to_page("companion")
-            self._companion_page.show_appearance_settings()
+            self._go_to_page("companion", keep_settings_draft=True)
+            if self._stack.currentWidget() is self._companion_page:
+                self._companion_page.show_appearance_settings()
 
         def _check_updates_from_menu(self):
             self._go_to_page("dashboard")
@@ -3498,7 +3652,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if self._api_test_generation == generation and self._api_input.text().strip().rstrip("/") == requested:
                 self._api_test_status.setText(message)
 
-        def _go_to_page(self, key):
+        def _go_to_page(self, key, *, keep_settings_draft=False):
+            if (key != "settings" and self._stack.currentIndex() == self._PAGE_KEYS.index("settings")
+                    and not self._can_leave_settings(allow_keep=keep_settings_draft)):
+                self._nav_group.button(self._stack.currentIndex()).setChecked(True)
+                return
             if key != "companion" and self._window_information_layout == "compact":
                 if not self._set_window_size("Standard"):
                     return
@@ -3514,6 +3672,111 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._companion_page.set_active(key == "companion")
             self._apply_window_chrome()
             self._schedule_window_state()
+
+        def _reset_advanced_draft_defaults(self):
+            from ..config import _DEFAULT_UPLOAD_BATCH_SIZE
+
+            self._api_input.clear()
+            self._log_combo.setCurrentText("INFO")
+            self._speed_combo.setCurrentIndex(self._speed_combo.findData("balanced"))
+            self._upload_batch_slider.setValue(_DEFAULT_UPLOAD_BATCH_SIZE)
+
+        def _install_settings_draft(self):
+            from .settings_draft import SettingsDraft
+
+            self._settings_draft = draft = SettingsDraft()
+
+            def bind(widget, read, write, signal):
+                draft.add(getattr(widget, read), getattr(widget, write))
+                getattr(widget, signal).connect(self._refresh_settings_draft)
+
+            for widget in (self._api_input, self._handle_input, self._obs_host_input):
+                bind(widget, "text", "setText", "textChanged")
+            for widget in (self._log_combo, self._filter_combo, self._speed_combo, self._notifications_combo, self._close_behavior_combo):
+                bind(widget, "currentIndex", "setCurrentIndex", "currentIndexChanged")
+            for widget in (self._filter_since, self._filter_until):
+                bind(widget, "date", "setDate", "dateChanged")
+            for widget in (self._concurrency_slider, self._upload_batch_slider, self._obs_port_input, self._obs_debounce_spin):
+                bind(widget, "value", "setValue", "valueChanged")
+            for widget in (self._pause_history_check, self._battery_check, self._autostart_check, self._minimized_check,
+                           self._autoupdate_check, self._obs_replay_check,
+                           self._obs_website_add_check, self._obs_clear_password):
+                bind(widget, "isChecked", "setChecked", "toggled")
+            for widget in self._obs_scene_combos.values():
+                bind(widget, "currentText", "setCurrentText", "currentTextChanged")
+
+            # A dirty bit is sufficient for a password. Never copy it into a draft.
+            draft.add(lambda: bool(self._obs_password_input.text()), lambda _: self._obs_password_input.clear())
+            self._obs_password_input.textChanged.connect(self._refresh_settings_draft)
+            draft.commit()
+            self._refresh_settings_draft()
+
+        def _refresh_settings_draft(self, *_):
+            count = self._settings_draft.count()
+            self._settings_draft_label.setText(f"{count} unsaved change" + ("s" if count != 1 else ""))
+            self._settings_draft_footer.setVisible(count > 0 or self._settings_save_pending)
+            self._save_settings_btn.setEnabled(count > 0 and not self._settings_save_pending)
+
+        def _revert_settings_draft(self):
+            self._settings_draft.revert()
+            self._handle_input.setModified(False)
+            self._handle_edit_origin = None
+            self._validate_api_address()
+            self._refresh_settings_draft()
+
+        def _can_leave_settings(self, *, allow_keep=False):
+            if self._settings_save_pending:
+                return True
+            draft = getattr(self, "_settings_draft", None)
+            if not draft or not draft.count():
+                return True
+            if allow_keep:
+                return self._confirm_settings_detour()
+            answer = QtWidgets.QMessageBox.question(
+                self, "Discard unsaved settings?", "Save your changes before leaving Settings, or discard them.",
+                QtWidgets.QMessageBox.Discard | QtWidgets.QMessageBox.Cancel, QtWidgets.QMessageBox.Cancel,
+            )
+            if answer != QtWidgets.QMessageBox.Discard:
+                return False
+            self._revert_settings_draft()
+            return True
+
+        def _confirm_settings_detour(self):
+            dialog = QtWidgets.QMessageBox(self)
+            dialog.setWindowTitle("Unsaved settings")
+            dialog.setText("Keep this draft open while you visit another page, or discard it.")
+            dialog.setStandardButtons(QtWidgets.QMessageBox.Discard | QtWidgets.QMessageBox.Cancel)
+            dialog.setDefaultButton(QtWidgets.QMessageBox.Cancel)
+            keep = dialog.addButton("Keep draft", QtWidgets.QMessageBox.AcceptRole)
+            dialog.exec()
+            selected = dialog.clickedButton()
+            if selected is keep:
+                return True
+            if selected is dialog.button(QtWidgets.QMessageBox.Discard):
+                self._revert_settings_draft()
+                return True
+            return False
+
+        def _save_settings_shortcut(self):
+            if self._PAGE_KEYS[self._stack.currentIndex()] == "settings" and not self._settings_save_pending:
+                self._save_settings_btn.click()
+
+        def _refresh_open_page(self):
+            key = self._PAGE_KEYS[self._stack.currentIndex()]
+            if key == "dashboard":
+                self._refresh_controls()
+                self._refresh_stats()
+            elif key == "recent":
+                self._refresh_recent()
+            elif key == "log":
+                self._tail_log_now()
+            elif key == "settings":
+                self._validate_api_address()
+                self._refresh_obs_credential_status()
+            elif key == "streams":
+                self._stack.currentWidget().refresh()
+            elif key == "companion":
+                self._companion_page.refresh()
 
         def _preferred_paired_page(self):
             if ui._window_page in self._PAGE_KEYS:
@@ -3804,6 +4067,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 return
             if not self._validate_api_address():
                 self._show_settings_toast("Fix the API address before saving.", "error")
+                self._settings_advanced.setChecked(True)
                 self._api_input.setFocus()
                 return
             api_base = self._api_input.text().strip().rstrip("/")
@@ -3828,6 +4092,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if preset == "custom":
                 since_iso = self._filter_since.date().toString(_ISO_DATE)
                 until_iso = self._filter_until.date().toString(_ISO_DATE)
+            elif preset == "since_setup":
+                since_iso = ui._initial_settings.sync_filter_since
             # Upload concurrency comes from the QButtonGroup's
             # ``checkedId()`` (1 or 2). Falls back to whatever we
             # last saved if no button is checked — should never
@@ -3856,7 +4122,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 replay_folder=folders[0] if folders else None,
                 autostart_enabled=self._autostart_check.isChecked(),
                 start_minimized=self._minimized_check.isChecked(),
-                notify_every_game=self._game_notifications_check.isChecked(),
+                notify_every_game=self._notifications_combo.currentData() == "all",
+                notifications_muted=self._notifications_combo.currentData() == "off",
+                close_to_tray=self._close_behavior_combo.currentData() is True,
                 auto_update_enabled=self._autoupdate_check.isChecked(),
                 replay_capture_enabled=self._replay_capture_last_saved,
                 player_handle=(self._handle_input.text().strip() if self._handle_input.isModified()
@@ -3883,7 +4151,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             context = dict(api_base=api_base, preset=preset, since_iso=since_iso,
                            until_iso=until_iso, removals=self._folders_removed,
-                           dirty=self._folders_dirty)
+                           dirty=self._folders_dirty, close_to_tray=payload.close_to_tray)
             self._folders_removed = []
             self._folders_dirty = False
             self._save_ack = False
@@ -3918,7 +4186,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._settings_save_pending = False
             self._settings_page.setEnabled(True)
             self._game_dashboard.season.setEnabled(True)
-            self._save_settings_btn.setText("Save settings")
+            self._save_settings_btn.setText("Save (Ctrl+S)")
             if error:
                 self._folders_removed = context["removals"]
                 self._folders_dirty = context["dirty"]
@@ -3943,12 +4211,23 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 )
                 if not self._save_ack:
                     self._show_settings_toast("Saved." + self._settings_restart_notice, "success")
+            if not error:
+                self._settings_draft.commit()
+                self._close_to_tray_last_saved = context["close_to_tray"]
+                self._settings_restart_button.setVisible(bool(self._settings_restart_notice))
+            self._refresh_settings_draft()
             self._refresh_controls()
 
         def _refresh_capture_notice(self) -> None:
             self._replay_capture_notice.setVisible(
                 self._replay_capture_last_saved,
             )
+
+        def _instant_feedback(self):
+            feedback = QtWidgets.QLabel("Applies instantly")
+            feedback.setObjectName("muted")
+            feedback.setWordWrap(True)
+            return feedback
 
         def _toggle_replay_capture(self, enabled: bool) -> None:
             desired = bool(enabled)
@@ -3975,25 +4254,22 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                     return
             try:
                 ui._on_save_settings(SettingsPayload(
-                    replay_capture_enabled=desired,
+                    replay_capture_enabled=desired, show_summary=False,
                 ))
-            except Exception as exc:  # noqa: BLE001
-                log.exception("gui_replay_capture_toggle_failed")
+            except Exception:  # noqa: BLE001
+                log.warning("gui_replay_capture_toggle_failed")
                 self._replay_capture_check.blockSignals(True)
                 self._replay_capture_check.setChecked(
                     self._replay_capture_last_saved,
                 )
                 self._replay_capture_check.blockSignals(False)
-                self._show_settings_toast(
-                    f"Could not save replay capture setting: {exc}", "error",
-                )
+                self._replay_capture_feedback.setText("Couldn't save replay capture. Try again.")
                 return
             self._replay_capture_last_saved = desired
             self._refresh_capture_notice()
-            self._show_settings_toast(
-                "Automatic replay capture on — new and re-synced replays record automatically"
-                if desired
-                else "Automatic replay capture off — stopping automatic capture",
+            self._replay_capture_feedback.setText(
+                "Applied instantly · automatic replay capture on" if desired
+                else "Applied instantly · automatic replay capture off",
             )
 
         def _toggle_obs_scene_switch(self, enabled: bool) -> None:
@@ -4005,25 +4281,21 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 # A partial payload changes only the gate. Connection fields,
                 # scene mappings, and other unsaved form edits remain drafts.
                 ui._on_save_settings(SettingsPayload(
-                    obs_scene_switch_enabled=desired,
+                    obs_scene_switch_enabled=desired, show_summary=False,
                 ))
-            except Exception as exc:  # noqa: BLE001
-                log.exception("gui_obs_scene_toggle_failed")
+            except Exception:  # noqa: BLE001
+                log.warning("gui_obs_scene_toggle_failed")
                 self._obs_enable_check.blockSignals(True)
                 self._obs_enable_check.setChecked(
                     self._obs_enable_last_saved,
                 )
                 self._obs_enable_check.blockSignals(False)
-                self._show_settings_toast(
-                    f"Could not {'enable' if desired else 'disable'} "
-                    f"automatic scene switching: {exc}", "error",
-                )
+                self._obs_toggle_feedback.setText("Couldn't save automatic scene switching. Try again.")
                 return
             self._obs_enable_last_saved = desired
-            self._show_settings_toast(
-                "Automatic scene switching on"
-                if desired
-                else "Automatic scene switching off",
+            self._obs_toggle_feedback.setText(
+                "Applied instantly · automatic scene switching on" if desired
+                else "Applied instantly · automatic scene switching off",
             )
 
         def _copy_pairing_code(self) -> None:
@@ -4196,6 +4468,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._window_state_timer.stop()
             if self._really_quit:
                 event.accept()
+                return
+            if not self._close_to_tray_last_saved:
+                if self._stack.currentIndex() == self._PAGE_KEYS.index("settings") and not self._can_leave_settings():
+                    event.ignore()
+                    return
+                event.accept()
+                ui._on_quit()
                 return
             if not ui._tray_available:
                 policy = ui._close_without_tray
@@ -4513,7 +4792,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._minimized_check.setChecked(
                 bool(initial.start_minimized),
             )
-            self._game_notifications_check.setChecked(initial.notify_every_game is True)
+            notification_mode = "off" if initial.notifications_muted else "all" if initial.notify_every_game else "important"
+            self._notifications_combo.setCurrentIndex(self._notifications_combo.findData(notification_mode))
+            self._close_to_tray_last_saved = initial.close_to_tray is not False
+            self._close_behavior_combo.setCurrentIndex(self._close_behavior_combo.findData(self._close_to_tray_last_saved))
             # Default ON when the runner didn't say otherwise — matches
             # the state field's default so a fresh install reads true.
             self._autoupdate_check.setChecked(

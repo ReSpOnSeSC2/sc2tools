@@ -423,6 +423,14 @@ class SocketClient:
         _bind_import_event("import:cancel_request", self._on_import_cancel)
         _bind_import_event("import:pick_folder_request", self._on_import_pick_folder)
 
+        @sio.on("ghost:changed")
+        async def _on_ghost_preferences_changed(payload) -> None:
+            if payload is True and self._on_build_intent_changed:
+                try:
+                    self._on_build_intent_changed({"ghostPrefs": True})
+                except Exception:
+                    log.exception("socket_client_ghost_preferences_changed_failed")
+
         @sio.on("build-intent:changed")
         async def _on_build_intent_changed(payload: Optional[Dict[str, Any]]) -> None:
             cb = self._on_build_intent_changed

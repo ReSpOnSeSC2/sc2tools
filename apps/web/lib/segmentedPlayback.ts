@@ -1,4 +1,4 @@
-import { sanitizeMapPlayback, type MapPlayback } from "./mapReplay";
+import { sanitizeMapPlayback, type MapPlayback, type ReplayCast } from "./mapReplay";
 
 export const MAX_SEGMENT_BYTES = 2 * 1024 * 1024;
 export const PLAYBACK_CACHE_BYTES = 24 * 1024 * 1024;
@@ -11,6 +11,7 @@ export type PlaybackManifest = {
   gameLength: number;
   fidelity: NonNullable<MapPlayback["fidelity"]>;
   segments: PlaybackSegmentEntry[];
+  timeline?: { casts: ReplayCast[] };
 };
 const hash = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
@@ -47,9 +48,24 @@ export function sanitizePlaybackManifest(raw: unknown): PlaybackManifest | null 
     priorEnd = value.end;
   }
   if (priorEnd !== manifest.gameLength) return null;
+  const timeline = manifest.timeline === undefined ? undefined : readCastTimeline(manifest.timeline?.casts, manifest.gameLength);
+  if (manifest.timeline !== undefined && !timeline) return null;
   return { artifactId: response.artifactId, replaySha256: manifest.replaySha256,
     sourceArtifactSha256: manifest.sourceArtifactSha256, mapName: manifest.mapName,
-    gameLength: manifest.gameLength, fidelity, segments };
+    gameLength: manifest.gameLength, fidelity, segments, ...(timeline ? { timeline } : {}) };
+}
+
+function readCastTimeline(raw: unknown, duration: number): PlaybackManifest["timeline"] {
+  if (!Array.isArray(raw) || raw.length > 2000) return undefined;
+  const casts: ReplayCast[] = [];
+  let last = -1;
+  for (const row of raw) {
+    if (!row || !finite(row.t) || row.t < 0 || row.t < last || row.t > duration ||
+      (row.o !== 0 && row.o !== 1) || typeof row.a !== "string" || row.a.length < 1 || row.a.length > 120) return undefined;
+    casts.push({ t: row.t, o: row.o, a: row.a });
+    last = row.t;
+  }
+  return { casts };
 }
 
 export function segmentAt(manifest: PlaybackManifest, time: number): PlaybackSegmentEntry {

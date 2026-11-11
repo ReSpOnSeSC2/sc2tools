@@ -22,6 +22,7 @@ const { toStartSeconds, isFinishTimeEvent } = require("./buildDurations");
 const { proxyEvidence } = require("./proxyClassification");
 const { stampBuildSupply } = require("./buildOrderSupply");
 const { gamesMatchStage } = require("../util/parseQuery");
+const { validateMyMechanics } = require("../validation/myMechanics");
 const { validateCasualtyEvents } = require("../validation/casualtyEvents");
 const {
   AGREES_WITH_DETECTOR_MATCH,
@@ -276,7 +277,7 @@ class PerGameComputeService {
    */
   async buildOrder(userId, gameId) {
     const { slim, blob } = await this._readGameWithDetails(userId, gameId, {
-      fields: ["buildLog", "oppBuildLog", "macroBreakdown"],
+      fields: ["buildLog", "buildLogFull", "buildLogSupply", "oppBuildLog", "macroBreakdown"],
     });
     if (!slim) return null;
     // Merge so ``readEarlyBuildLog`` / ``readOppEarlyBuildLog`` see
@@ -303,11 +304,11 @@ class PerGameComputeService {
     const myProxy = proxyEvidence(merged.spatial, "my");
     const oppProxy = proxyEvidence(merged.spatial, "opp");
     const rawEvents = parseBuildLogLines(
-      merged.buildLog || [], this.catalog, myProxy.rows, myProxy.known,
+      merged.buildLog || [], this.catalog, myProxy.rows, myProxy.known, merged.buildLogSupply,
     );
-    const rawEarly = parseBuildLogLines(
-      readEarlyBuildLog(merged), this.catalog, myProxy.rows, myProxy.known,
-    );
+    const rawEarly = Array.isArray(merged.buildLogSupply) && !merged.earlyBuildLog?.length
+      ? rawEvents.filter(event => event.time <= EARLY_BUILD_LOG_CUTOFF_SEC)
+      : parseBuildLogLines(readEarlyBuildLog(merged), this.catalog, myProxy.rows, myProxy.known);
     const rawOpp = parseBuildLogLines(
       merged.oppBuildLog || [], this.catalog, oppProxy.rows, oppProxy.known,
     );
@@ -338,6 +339,7 @@ class PerGameComputeService {
       early_events: stampBuildSupply(eventsToStartTime(rawEarly, slim), merged.macroBreakdown?.stats_events),
       opp_events: stampBuildSupply(eventsToStartTime(rawOpp, slim), merged.macroBreakdown?.opp_stats_events),
       opp_early_events: stampBuildSupply(eventsToStartTime(rawOppEarly, slim), merged.macroBreakdown?.opp_stats_events),
+      ...(Array.isArray(merged.buildLogFull) ? { recorded_units_built: recordedBuildCounts(merged.buildLogFull, this.catalog) } : {}),
       my_status: diagBuildStatus(buildLogPresent, rawEvents.length),
       opp_status: diagBuildStatus(oppBuildLogPresent, rawOpp.length),
     };
@@ -486,6 +488,9 @@ class PerGameComputeService {
       err.code = "invalid_casualty_events";
       err.status = 400;
       throw err;
+    }
+    if (payload.breakdown && "myMechanics" in payload.breakdown && !validateMyMechanics(payload.breakdown.myMechanics)) {
+      throw Object.assign(new Error("invalid_my_mechanics"), { code: "invalid_my_mechanics", status: 400 });
     }
     // Slim-row update keeps the surface fields the Recent Games table
     // and aggregations read directly: macroScore + top3Leaks for
@@ -1434,17 +1439,20 @@ class MacroBackfillService {
  *   canonical spatial.my_proxies or spatial.opp_proxies list, as resolved by
  *   ``proxyEvidence`` (which understands the stamp's version).
  * @param {boolean} [proxyClassificationKnown]
+ * @param {unknown} [alignedSupply]
  */
 function parseBuildLogLines(
   lines,
   catalog,
   proxyBuildings,
   proxyClassificationKnown = false,
+  alignedSupply,
 ) {
-  /** @type {Array<{time: number, time_display: string, name: string, display: string, race: string, category: string, tier: number, is_building: boolean, is_proxy?: boolean, comp: any}>} */
+  /** @type {Array<{supply?: number, supplyApprox?: boolean, time: number, time_display: string, name: string, display: string, race: string, category: string, tier: number, is_building: boolean, is_proxy?: boolean, comp: any}>} */
   const events = [];
   if (!Array.isArray(lines)) return events;
-  for (const line of lines) {
+  const supplies = Array.isArray(alignedSupply) && alignedSupply.length === lines.length ? alignedSupply : [];
+  for (const [index, line] of lines.entries()) {
     const m = BUILD_LOG_LINE_RE.exec(String(line || ""));
     if (!m) continue;
     const minutes = Number.parseInt(m[1], 10);
@@ -1479,7 +1487,9 @@ function parseBuildLogLines(
     const category = entry
       ? entry.category
       : (isBuilding ? "building" : (isUpgradeFallback ? "upgrade" : "unknown"));
+    const supply = supplies[index];
     events.push({
+      ...(typeof supply === "number" && Number.isFinite(supply) && supply >= 0 && supply <= 2000 ? { supply, supplyApprox: false } : {}),
       time: minutes * 60 + seconds,
       time_display: `${minutes}:${String(seconds).padStart(2, "0")}`,
       name: rawName,
@@ -1499,6 +1509,16 @@ function parseBuildLogLines(
     proxyBuildings,
     proxyClassificationKnown,
   );
+}
+
+/** @param {string[]} lines @param {Parameters<typeof parseBuildLogLines>[1]} catalog */
+function recordedBuildCounts(lines, catalog) {
+  const counts = new Map();
+  for (const event of parseBuildLogLines(lines, catalog)) {
+    if (event.is_building || ["upgrade", "unknown"].includes(event.category)) continue;
+    if (counts.size < 128 || counts.has(event.name)) counts.set(event.name, (counts.get(event.name) || 0) + 1);
+  }
+  return Object.fromEntries(counts);
 }
 
 /**
@@ -1747,8 +1767,10 @@ function eventsToStartTime(events, game) {
     const m = Math.floor(startSec / 60);
     const s = startSec - m * 60;
     const completeTime = isFinishTimeEvent(ev.name, hints) ? ev.time : undefined;
+    const { supply, supplyApprox, ...step } = ev;
     return {
-      ...ev,
+      ...step,
+      ...(startSec === ev.time && supply !== undefined ? { supply, supplyApprox } : {}),
       time: startSec,
       time_display: `${m}:${String(s).padStart(2, "0")}`,
       ...(completeTime != null ? { complete_time: completeTime } : {}),

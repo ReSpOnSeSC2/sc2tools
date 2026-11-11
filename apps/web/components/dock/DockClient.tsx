@@ -52,8 +52,7 @@ import { DOCK_BLOCKLIST_MAX, DOCK_CONFIG_REFRESH_MS } from "./dockConstants";
 import { DockPollCard } from "./DockPollCard";
 import { DockGoals } from "./DockGoals";
 import { DockScenes, DockTimer } from "./DockScenes";
-import { DockClips } from "./DockClips";
-import { BuildProfileEditor } from "./BuildProfileEditor";
+import { DockMarkUndoNotice, useDockMarkUndo } from "./DockMarkUndo";
 import { useEngagementState } from "@/lib/multichat/useEngagementState";
 import { newestStudioSnapshot, useStudioUpdates } from "@/lib/multichat/useStudioUpdates";
 import type { DockPost } from "./dockActions";
@@ -67,11 +66,13 @@ import { SectionCard } from "./SectionCard";
 import { useDockLayout } from "./useDockLayout";
 import { useDockScrollSpy } from "./useDockScrollSpy";
 import { useDockSummaries } from "./useDockSummaries";
-import { usePollTally } from "./usePollTally";
+import { usePollTally } from "@/lib/multichat/usePollTally";
 export { DockButton } from "./DockControls";
 import { DockStatusHeader } from "./DockStatusHeader";
 import { loadGameDesk } from "./dockLazyLoaders";
 import { DockLazyPanel } from "./DockLazyPanel";
+const loadClips = () => import("./DockClips").then(module => module.DockClips);
+const loadBuildProfile = () => import("./BuildProfileEditor").then(module => module.BuildProfileEditor);
 const loadScout = () => import("./DockScout").then(module => module.DockScout);
 const loadTwitchAutomation = () => import("./DockTwitchAutomation").then(module => module.DockTwitchAutomation);
 const loadSeries = () => import("./DockSeries").then(module => module.DockSeries);
@@ -271,7 +272,16 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
     [studioUrl, token, adoptStudioSnapshot, onInvalid],
   );
 
-  const postStudioAction = postStudio;
+  const { active: markUndo, offer, undo } = useDockMarkUndo(token, studio.streamStartMs, postStudio);
+  const postStudioAction: DockPost = useCallback(async function sendStudioAction(patch: Parameters<DockPost>[0], retry?: Parameters<DockPost>[1]) {
+    const previous = latestStudioRef.current?.state.streamStartMs;
+    const saved = await postStudio(patch, retry ?? (() => sendStudioAction(patch)));
+    if (saved && previous && previous !== saved.streamStartMs) {
+      if (patch.action === "sessionReset") offer(previous, saved.streamStartMs, "game");
+      else if (patch.streamStartMs === null) offer(previous, saved.streamStartMs, "clips");
+    }
+    return saved;
+  }, [offer, postStudio]);
 
   const highlightMessage = useCallback(
     (m: ChatMessage) =>
@@ -381,7 +391,8 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
     tally?.total ?? 0, engagement.clipMoments.length, engagementReady);
   summaries["dock-series"] = seriesSummary;
   const panels: Record<DockSectionId, ReactNode> = {
-    "dock-game": <><DockLazyPanel label="game desk" loader={loadGameDesk} componentProps={{ token, live: updates?.liveGame ?? null, lastLiveAt: updates?.lastLiveAt ?? null, gameStatus: updates?.gameStatus ?? null, session: updates?.session ?? null, studio, engagement, ready: studioSnapshotReady && engagementReady, busy, onPost: postStudioAction }} /><DockLazyPanel label="Twitch prediction controls" loader={loadTwitchAutomation} componentProps={{ token, onInvalid }} /></>,
+    "dock-game": <><DockLazyPanel label="game desk" loader={loadGameDesk} componentProps={{ token, live: updates?.liveGame ?? null, lastLiveAt: updates?.lastLiveAt ?? null, gameStatus: updates?.gameStatus ?? null, session: updates?.session ?? null, studio, engagement, ready: studioSnapshotReady && engagementReady, busy, onPost: postStudioAction,
+      markUndo: markUndo?.surface === "game" ? <DockMarkUndoNotice surface="game" busy={busy} undo={() => void undo()} /> : null }} /><DockLazyPanel label="Twitch prediction controls" loader={loadTwitchAutomation} componentProps={{ token, onInvalid }} /></>,
     "dock-series": <DockLazyPanel label="Series controls" loader={loadSeries} componentProps={{ token, rawEvent: updates?.seriesEvent, live: updates?.liveGame ?? null, lastOpponent: updates?.lastOpponent ?? null, onInvalid, onSummary: receiveSeriesSummary }} />,
     "dock-scout": <DockLazyPanel label="live scouting" loader={loadScout} componentProps={{ live: updates?.liveGame ?? null, lastUpdatedAt: updates?.lastLiveAt ?? null }} />,
     "dock-chat": <>
@@ -455,13 +466,12 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
               />
     </>,
     "dock-build-profile": <>
-<BuildProfileEditor
-                key={token}
-                profile={studio.buildProfile}
-                busy={busy}
-                ready={studioSnapshotReady}
-                onPost={postStudio}
-              />
+<DockLazyPanel key={token} label="build assessment" loader={loadBuildProfile} componentProps={{
+                profile: studio.buildProfile,
+                busy: busy,
+                ready: studioSnapshotReady,
+                onPost: postStudio,
+              }} />
     </>,
     "dock-timer": <>
 <DockTimer
@@ -489,16 +499,23 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
                 onPost={postStudioAction}
               />
     </>,
-    "dock-clips": <>
-<DockClips
-                studioReady={studioSnapshotReady}
-                moments={engagement.clipMoments}
-                streamStartMs={studio.streamStartMs}
-                vodUrl={studio.vodUrl}
-                busy={busy}
-                onPost={postStudioAction}
-              />
-    </>,
+    "dock-clips": <DockLazyPanel
+      key={token}
+      label="clip log"
+      loader={loadClips}
+      componentProps={{
+        token,
+        loadHistory: !layout.collapsed.includes("dock-clips"),
+        markUndo: markUndo?.surface === "clips"
+          ? <DockMarkUndoNotice surface="clips" busy={busy} undo={() => void undo()} /> : null,
+        studioReady: studioSnapshotReady,
+        moments: engagement.clipMoments,
+        streamStartMs: studio.streamStartMs,
+        vodUrl: studio.vodUrl,
+        busy,
+        onPost: postStudioAction,
+      }}
+    />,
     "dock-actions": <>
 <div className="space-y-3">
                 <DockButton

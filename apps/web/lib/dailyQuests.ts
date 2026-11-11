@@ -9,8 +9,8 @@
 //   - Every quest verifies ONLY from fields that exist on the slim
 //     ArcadeGame list rows (result, date, myBuild, oppRace, myMmr,
 //     myToonHandle, oppMmr, duration, map, macro_score). There is no
-//     detailed macroBreakdown on the client-side list rows, so nothing
-//     here may assume one.
+//     detailed macroBreakdown on the client-side list rows. The practice
+//     quest instead uses a private aggregate from the practice log.
 //   - Null-safe by design: rows routinely miss myMmr, duration, map or
 //     macro_score (older agent versions, partial ingests). Every quest
 //     documents its data requirement and self-excludes from selection
@@ -91,7 +91,8 @@ export type QuestCategory =
   | "mmr"
   | "duration"
   | "mental"
-  | "climb";
+  | "climb"
+  | "practice";
 
 export interface QuestProgress {
   /** Bounded to [0, target]. */
@@ -153,7 +154,10 @@ export interface QuestStruggleMap {
  * is null / zero when the corpus can't support it — the matching quest
  * then self-excludes from selection.
  */
+export interface PracticeQuestProgress { eligible: boolean; done: boolean }
+
 export interface QuestContext {
+  practice?: PracticeQuestProgress;
   dateKey: string;
   totalGames: number;
   /** Lowest-winrate matchup with ≥ WORST_MATCHUP_MIN_DECIDED decided games. */
@@ -437,9 +441,7 @@ function median(sortedAsc: number[]): number {
 /* ──────────────── the quest pool ──────────────── */
 
 /**
- * 12 quest definitions across 11 categories. Every verifier reads ONLY
- * fields present on ArcadeGame list rows; every spec documents its data
- * requirement in `requires` and enforces it in `eligible`.
+ * Each spec documents its source in `requires` and enforces it in `eligible`.
  */
 export const QUEST_POOL: QuestSpec[] = [
   {
@@ -731,6 +733,21 @@ export const QUEST_POOL: QuestSpec[] = [
           : { progress: 0, done: false },
     }),
   },
+  {
+    id: "practice-grade-b",
+    category: "practice",
+    requires: "An armed practice target or a qualifying grade today.",
+    eligible: (ctx) => ctx.practice?.eligible === true,
+    build: () => ({
+      id: "practice-grade-b",
+      category: "practice",
+      title: "Grade B or better on your practice build",
+      description: "Earn a B, A or S when a replay you play today is automatically graded against your Ghost Build target.",
+      target: 1,
+      xp: 35,
+      verify: (_today, ctx) => capped(ctx.practice?.done ? 1 : 0, 1),
+    }),
+  },
 ];
 
 /* ──────────────── selection + evaluation ──────────────── */
@@ -750,8 +767,9 @@ export function selectDailyQuests(
   games: ReadonlyArray<ArcadeGame>,
   n: number = DAILY_QUEST_COUNT,
   userId: string = "anonymous",
+  practice?: PracticeQuestProgress,
 ): DailyQuestSelection {
-  const context = buildQuestContext(games, dateKey);
+  const context = { ...buildQuestContext(games, dateKey), ...(practice ? { practice } : {}) };
   const eligible = QUEST_POOL.filter((spec) => spec.eligible(context));
   const rng = mulberry32(dailySeed(userId, dateKey));
   const quests: QuestDef[] = [];

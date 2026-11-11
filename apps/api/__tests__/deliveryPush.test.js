@@ -91,10 +91,27 @@ test("bell writes fan out to devices for enabled groups only, never for muted ki
   expect(await h.db.pushSubscriptions.countDocuments({ userId: "u_ann" })).toBe(1);
   expect((await h.db.pushSubscriptions.findOne({ endpoint: live.endpoint })).lastOkAt).toBeInstanceOf(Date);
   sends = [];
-  await as("ann").put("/v1/me/push/preferences", { groups: ["coaching"] }).expect(200);
+  await as("ann").put("/v1/me/push/preferences", { groups: ["coaching-reminders"] }).expect(200);
   expect(await push.deliver("u_ann", row)).toEqual({ sent: 0, removed: 0 });
   expect(await push.deliver("u_ann", { _id: "n2", kind: "coaching.reminder", title: "Session soon" })).toEqual({ sent: 1, removed: 0 });
   expect((await as("ann").put("/v1/me/push/preferences", { groups: "coaching" })).status).toBe(400);
+});
+
+test("split push choices preserve legacy settings and allow separate goal and unlink controls", async () => {
+  await as("bob").post("/v1/me/push/subscriptions", device("split")).expect(200);
+  await h.db.users.updateOne({ userId: "u_bob" }, { $set: { "preferences.push": { groups: ["desktop", "other"] } } });
+  const status = await as("bob").get("/v1/me/push").expect(200);
+  expect(status.body.groups).toEqual(expect.arrayContaining(["desktop", "other", "goals", "agent-unlinked"]));
+  expect(status.body.available).toEqual(expect.arrayContaining([
+    { id: "goals", label: "Goal met" }, { id: "agent-unlinked", label: "Desktop app unlinked" },
+  ]));
+  const push = h.services.pushNotifications;
+  await as("bob").put("/v1/me/push/preferences", { groups: ["desktop", "goals"] }).expect(200);
+  expect(await push.deliver("u_bob", { kind: "agent.unlinked", title: "Desktop app unlinked" })).toMatchObject({ sent: 0 });
+  expect(await push.deliver("u_bob", { kind: "goal_met", title: "Goal met" })).toMatchObject({ sent: 1 });
+  await as("bob").put("/v1/me/push/preferences", { groups: ["agent-unlinked"] }).expect(200);
+  expect(await push.deliver("u_bob", { kind: "agent.unlinked", title: "Desktop app unlinked" })).toMatchObject({ sent: 1 });
+  expect(await push.deliver("u_bob", { kind: "goal_met", title: "Goal met" })).toMatchObject({ sent: 0 });
 });
 
 test("this browser can turn push off, remove a device, rotate its subscription and send a test", async () => {
@@ -141,6 +158,7 @@ test("calendar feed: secret link shown once, bookings only, no student names, re
   const feed = await request(h.app).get(created.body.path);
   expect(feed.status).toBe(200);
   expect(feed.headers["content-type"]).toMatch(/^text\/calendar/);
+  expect(feed.headers["cache-control"]).toBe("private, no-store");
   expect(feed.text).toContain("UID:b-own@sc2tools.com");
   expect(feed.text).toContain("SUMMARY:Coaching session with Coach Kim");
   expect(feed.text).not.toMatch(/b-other|Secret Student|Other Student/);

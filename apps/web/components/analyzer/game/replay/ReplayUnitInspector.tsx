@@ -1,5 +1,6 @@
 "use client";
 
+import { formatNumber } from "@/lib/i18n/format";
 import { Crosshair, SkipBack, SkipForward, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { formatClock } from "@/lib/replayHud";
@@ -79,7 +80,7 @@ export function ReplayUnitInspector({
         <div>
           <dt className="text-white/60">Attacks</dt>
           <dd title={info.attacks === null ? "This recording has no attack data. Regenerate accurate playback to record attacks." : undefined}>
-            {info.attacks === null ? "Not recorded" : info.attacks.toLocaleString()}
+            {info.attacks === null ? "Not recorded" : formatNumber(info.attacks)}
           </dd>
         </div>
       </dl>

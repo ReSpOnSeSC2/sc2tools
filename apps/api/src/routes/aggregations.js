@@ -2,6 +2,7 @@
 
 const express = require("express");
 const { parseFilters, parseFiniteInt } = require("../util/parseQuery");
+const { pickWeekStart } = require("../util/weekStart");
 const { asOppMmrBucketWidth, oppMmrTrustDayFloor } = require("../services/trendsOppMmr");
 const { parseExplorerOptions } = require("../services/trendsExplorer");
 
@@ -124,9 +125,13 @@ function buildAggregationsRouter(deps) {
           ? intervalRaw
           : "day";
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
-      await send(req, res, userId, "timeseries", filters, { interval, tz }, () => deps.aggregations.timeseries(
+      // The account's first day of the week (Settings → Appearance); weekly
+      // buckets otherwise start on Sunday, Mongo's default.
+      const weekStart = pickWeekStart(req.query.weekStart);
+      const options = weekStart === "sunday" ? { interval, tz } : { interval, tz, weekStart };
+      await send(req, res, userId, "timeseries", filters, options, () => deps.aggregations.timeseries(
           userId,
-          { interval, tz },
+          options,
           filters,
         ));
     } catch (err) {
@@ -390,6 +395,15 @@ function buildAggregationsRouter(deps) {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
       await send(req, res, userId, "macroSummary", filters, {}, () => deps.aggregations.macroSummary(userId, filters));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/macro/unit-trades", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      res.json(await deps.aggregations.unitTradePreview(userId, parseFilters(req.query)));
     } catch (err) {
       next(err);
     }

@@ -11,6 +11,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { ReportReplyControl } from "./ReportReplyControl";
+import { AdminEventReadToggle, useOptimisticRead } from "./AdminEventReadToggle";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -29,40 +30,50 @@ import type {
   AdminEventSignupPayload,
   AdminEventUserMessagePayload,
 } from "./adminTypes";
+import { formatDateTime } from "@/lib/i18n/format";
 
 /**
  * Single notification row. Used by both the dashboard's "Recent
  * activity" card and the full notifications feed. Renders an icon,
  * a primary line ("New signup", "Agent download · Windows"), a
  * secondary detail line, and a relative timestamp on the right.
+ * With ``onSetRead`` (the Notifications feed) the row also gets its
+ * own Mark as read / Mark as unread control.
  */
 export function AdminEventRow({
   event,
   unread,
   onReportUpdated,
+  onSetRead,
   compact = false,
 }: {
   event: AdminEvent;
   unread: boolean;
   compact?: boolean;
   onReportUpdated?: () => unknown;
+  /** Persist this row's read state; rejects when the save fails. */
+  onSetRead?: (read: boolean) => Promise<unknown>;
 }) {
   const meta = describe(event);
   const report = !event.anonymizedAt && event.type === "user_message" ? (event.payload as AdminEventUserMessagePayload) : null;
+  const accountId = linkedUserId(event);
   const [open, setOpen] = useState(false);
+  const read = useOptimisticRead(unread, onSetRead);
+  const shownUnread = onSetRead ? read.shownUnread : unread;
   return (
     <li
       className={[
-        "transition-colors",
-        unread ? "bg-accent-cyan/[0.06]" : "",
+        "group/event motion-safe:transition-colors",
+        shownUnread ? "bg-accent-cyan/[0.06]" : "",
       ].join(" ")}
     >
+      <div className="flex items-start">
       <button
         type="button"
         aria-label={`Open details: ${meta.title}`}
         aria-haspopup="dialog"
         onClick={(click) => { click.currentTarget.focus(); setOpen(true); }}
-        className="flex min-h-11 w-full items-start gap-3 px-4 py-3 text-left hover:bg-bg-elevated/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+        className="flex min-h-11 min-w-0 flex-1 items-start gap-3 px-4 py-3 text-left hover:bg-bg-elevated/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
       <span
         className={[
@@ -79,7 +90,7 @@ export function AdminEventRow({
             {meta.title}
           </span>
           {report?.type ? <ReportTypeBadge type={report.type} /> : null}
-          {unread ? (
+          {shownUnread ? (
             <span className="inline-flex h-1.5 w-1.5 flex-none rounded-full bg-accent-cyan" />
           ) : null}
         </div>
@@ -99,7 +110,10 @@ export function AdminEventRow({
         <ChevronRight className="h-4 w-4" aria-hidden />
       </span>
       </button>
-      {!compact && (meta.href || report) ? <div className="space-y-2 px-4 pb-3 pl-16">
+      {onSetRead && !compact ? <div className="flex-none py-1.5 pr-2"><AdminEventReadToggle unread={shownUnread} title={meta.title} pending={read.pending} failed={read.failed} onToggle={read.toggle} /></div> : null}
+      </div>
+      {!compact && (meta.href || report || accountId) ? <div className="space-y-2 px-4 pb-3 pl-16">
+        {accountId ? <a className="inline-flex min-h-11 items-center text-caption text-accent underline" href={`/admin/users/${encodeURIComponent(accountId)}`}>Open user</a> : null}
         {meta.href ? <a className="inline-flex min-h-11 items-center text-caption text-accent underline" href={meta.href}>Open Infrastructure →</a> : null}
         {report?.context ? <ReportContextLines payload={report} /> : null}
         {report ? <EmailSource payload={report} /> : null}
@@ -109,7 +123,7 @@ export function AdminEventRow({
         title={<span className="[overflow-wrap:anywhere]">{meta.title}</span>}>
         <div className="space-y-4">
           {meta.subtitle ? <p className="text-caption text-text-muted [overflow-wrap:anywhere]">{meta.subtitle}</p> : null}
-          <time className="block text-caption text-text-dim" dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString()}</time>
+          <time className="block text-caption text-text-dim" dateTime={event.createdAt}>{formatDateTime(new Date(event.createdAt))}</time>
           {report?.type ? <ReportTypeBadge type={report.type} /> : null}
           {meta.body ? <p className="whitespace-pre-wrap text-body [overflow-wrap:anywhere]">{meta.body}</p> : null}
           {report?.context ? <ReportContextLines payload={report} /> : null}
@@ -121,6 +135,15 @@ export function AdminEventRow({
       </Modal>
     </li>
   );
+}
+
+/** The linked account of a signup, message or confirmed install; never for a
+ * deleted account, whose payload must not be relinked. */
+function linkedUserId(event: AdminEvent): string | null {
+  if (event.anonymizedAt) return null;
+  if (event.type !== "user_message" && event.type !== "user_signup" && event.type !== "agent_connected") return null;
+  const userId = (event.payload as AdminEventUserMessagePayload | AdminEventSignupPayload | AdminEventAgentConnectedPayload).userId;
+  return typeof userId === "string" && userId ? userId : null;
 }
 
 /** Explicit fields keep future payload additions (especially credentials)

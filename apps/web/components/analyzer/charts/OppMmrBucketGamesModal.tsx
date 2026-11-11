@@ -11,6 +11,7 @@ import { AllGamesTable } from "../AllGamesTable";
 import type { ProfileGame } from "../Last5GamesTimeline";
 import { fmtDate, fmtMinutes } from "@/lib/format";
 import { GameSourceProvider } from "@/lib/useGameSource";
+import { formatNumber } from "@/lib/i18n/format";
 
 type Band = { lo: number; hi: number; wins: number; losses: number; total: number };
 
@@ -83,8 +84,8 @@ export function OppMmrBucketGamesModal({
           {isGlobal ? <GlobalBucketGames games={games} /> : <GameSourceProvider filters={filtersToQuery({ ...filters, mmr_min: band.lo, mmr_max: band.hi - 1 })} replace><PersonalBucketGames games={games} /></GameSourceProvider>}
           {data && data.total > games.length ? (
             <p className="mt-3 text-micro text-text-dim">
-              Showing the {games.length.toLocaleString()} most recent of{" "}
-              {data.total.toLocaleString()} games in this band.
+              Showing the {formatNumber(games.length)} most recent of{" "}
+              {formatNumber(data.total)} games in this band.
             </p>
           ) : null}
         </>
@@ -113,7 +114,7 @@ function GlobalBucketGames({ games }: { games: Response["games"] }) {
               <td className="whitespace-nowrap px-3 py-2 text-text-muted">{fmtDate(game.date)}</td>
               <td className={`px-3 py-2 font-medium ${/^(win|victory)$/i.test(game.result || "") ? "text-success" : /^(loss|defeat)$/i.test(game.result || "") ? "text-danger" : "text-text-muted"}`}>{game.result || "—"}</td>
               <td className="max-w-40 truncate px-3 py-2 text-text-muted" title={game.opponent || undefined}>{game.opponent || "Unknown"}{game.opp_race ? ` (${game.opp_race})` : ""}</td>
-              <td className="px-3 py-2 tabular-nums text-text-muted">{game.opp_mmr?.toLocaleString() ?? "—"}</td>
+              <td className="px-3 py-2 tabular-nums text-text-muted">{game.opp_mmr == null ? "—" : formatNumber(game.opp_mmr)}</td>
               <td className="max-w-44 truncate px-3 py-2 text-text-muted" title={game.map || undefined}>{game.map || "—"}</td>
               <td className="whitespace-nowrap px-3 py-2 tabular-nums text-text-muted">{game.game_length ? fmtMinutes(game.game_length) : "—"}</td>
             </tr>

@@ -376,7 +376,9 @@ def _is_explicit_hallucination(event) -> bool:
     return getattr(unit, "hallucinated", False) is True
 
 
-def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
+def extract_events(
+    replay, my_pid: int, *, own_supply_buildings: Optional[List[Dict]] = None, include_source_frames: bool = False,
+) -> Tuple[List[Dict], List[Dict], Dict]:
     """Walk a replay's tracker events and split them by player.
 
     Returns `(my_events, opp_events, stats)`. Each event is a dict with `type`
@@ -423,6 +425,9 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
     morphed_unit_ids: Set[Tuple[Any, str]] = set()
     event_source = getattr(replay, 'tracker_events', None) or replay.events
 
+    def source_frame(event):
+        return {"frame": event.frame} if include_source_frames and hasattr(event, "frame") else {}
+
     try:
         for event in event_source:
             stats['total'] += 1
@@ -443,9 +448,11 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 y = getattr(event, 'y', 0)
 
                 if clean in SKIP_BUILDINGS:
+                    if own_supply_buildings is not None and pid == my_pid and clean == "SupplyDepot":
+                        own_supply_buildings.append({"type": "building", "name": clean, "time": event_seconds(event, replay)})
                     continue
                 if clean in KNOWN_BUILDINGS:
-                    evt = {'type': 'building', 'subtype': 'init', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
+                    evt = {'type': 'building', 'subtype': 'init', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
 
@@ -468,11 +475,14 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 is_building = clean in KNOWN_BUILDINGS
                 if is_building:
                     if clean in SKIP_BUILDINGS:
+                        if (own_supply_buildings is not None and pid == my_pid
+                                and clean == "SupplyDepot" and event_seconds(event, replay) == 0):
+                            own_supply_buildings.append({"type": "building", "name": clean, "time": 0})
                         continue
-                    evt = {'type': 'building', 'subtype': 'born', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
+                    evt = {'type': 'building', 'subtype': 'born', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                 else:
                     if clean in WORKER_UNITS:
-                        evt = {'type': 'worker', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
+                        evt = {'type': 'worker', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                         (my_events if pid == my_pid else opp_events).append(evt)
                         stats['workers'] += 1
                         continue
@@ -488,7 +498,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     # mapping the cloud applies on display.
                     if clean in UNIT_MORPH_COMPLETIONS:
                         morphed_unit_ids.add((_resolve_unit_id(event), clean))
-                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
+                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                 (my_events if pid == my_pid else opp_events).append(evt)
                 stats['processed'] += 1
 
@@ -513,7 +523,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 if clean in KNOWN_BUILDINGS and clean in MORPH_BUILDINGS:
                     if clean in SKIP_BUILDINGS:
                         continue
-                    evt = {'type': 'building', 'subtype': 'morph', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
+                    evt = {'type': 'building', 'subtype': 'morph', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
                 elif clean in UNIT_MORPH_COMPLETIONS:
@@ -524,7 +534,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     # No position: the event has none and the shared
                     # Unit's location is wherever it was last seen, not
                     # where the morph finished.
-                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'x': 0, 'y': 0}
+                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': 0, 'y': 0}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
 
@@ -545,7 +555,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                         continue
                     if clean in UNIT_MORPH_COMPLETIONS:
                         morphed_unit_ids.add((_resolve_unit_id(event), clean))
-                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
+                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
 
@@ -555,7 +565,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 if pid is None or name is None:
                     stats['pid_failed'] += 1
                     continue
-                evt = {'type': 'upgrade', 'name': name, 'time': event_seconds(event, replay)}
+                evt = {'type': 'upgrade', 'name': name, 'time': event_seconds(event, replay), **source_frame(event)}
                 (my_events if pid == my_pid else opp_events).append(evt)
                 stats['processed'] += 1
     except Exception:
@@ -1312,14 +1322,27 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
         time = event_seconds_precise(event, replay)
         if not math.isfinite(time) or time < 0:
             return
-        casualty_events.append({
+        death = {
             "time": round(time, 3),
             "owner": "me" if owner_pid == my_pid else "opp",
             "killer": ("me" if killer_pid == my_pid else "opp")
             if killer_pid in counted_pids and killer_pid != owner_pid else None,
             "category": category,
             "name": name,
-        })
+        }
+        born_at = info.get("born_at")
+        if isinstance(born_at, (int, float)) and 0 <= born_at <= time:
+            death["bornAt"] = round(born_at, 3)
+        if death["killer"] is not None:
+            killer_id = getattr(event, "killing_unit_id", None)
+            if killer_id is None:
+                killer_id = getattr(getattr(event, "killing_unit", None), "id", None)
+            killer = casualty_identities.get(killer_id)
+            if killer and killer["pid"] == killer_pid:
+                killer_unit = _casualty_building_name(killer["name"]) or _canonical_unit_name(killer["name"])
+                if killer_unit:
+                    death["killerUnit"] = killer_unit
+        casualty_events.append(death)
     # Set of unit_ids whose first-completion event we've already
     # recorded. Needed because non-building units fire EITHER
     # UnitBornEvent (Gateway-trained, larva-morph) OR
@@ -1470,6 +1493,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                         casualty_identities[uid] = {
                             "pid": pid, "name": _event_name(clean),
                             "building_completed": completed,
+                            "born_at": previous.get("born_at", event_seconds_precise(event, replay)),
                         }
                     timeline_name = _unit_timeline_name(clean)
 
@@ -1651,6 +1675,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                             casualty_identities[uid] = {
                                 "pid": identity["pid"] if identity else pid,
                                 "name": _event_name(clean),
+                                "born_at": identity.get("born_at") if identity else None,
                                 # Drone -> building starts construction;
                                 # an existing structure's morph or movement
                                 # stance preserves its completion evidence.
@@ -2303,6 +2328,10 @@ def build_log_lines(
     my_events: List[Dict],
     cutoff_seconds: Optional[int] = None,
     dedupe_units: bool = False,
+    *,
+    include_workers: bool = False,
+    supply_by_frame: Optional[Dict[int, float]] = None,
+    supply_output: Optional[List[Optional[float]]] = None,
 ) -> List[str]:
     """Format a list of events as build-order log lines.
 
@@ -2317,8 +2346,8 @@ def build_log_lines(
     lines: List[str] = []
     seen_units: set = set()
     for e in sorted(my_events, key=lambda x: x.get("time", 0)):
-        if e.get("type") == "worker":
-            # Classifier-only events; never a build-order step.
+        if e.get("type") == "worker" and not include_workers:
+            # Workers appear only in the separate full build log.
             continue
         t = e.get("time", 0)
         if cutoff_seconds is not None and t > cutoff_seconds:
@@ -2331,4 +2360,8 @@ def build_log_lines(
         m = int(t // 60)
         s = int(t % 60)
         lines.append(f"[{m}:{s:02d}] {e.get('name', '?')}")
+        if supply_output is not None:
+            # PlayerStats is authoritative at its own frame. Used supply
+            # includes reserved production which births alone cannot recover.
+            supply_output.append((supply_by_frame or {}).get(e.get("frame")))
     return lines

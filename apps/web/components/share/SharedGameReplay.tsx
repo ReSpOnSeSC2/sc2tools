@@ -51,6 +51,7 @@ export function SharedGameReplay({ token, data, seekRequest, initialTimeSec, onT
     onPlaybackTimeChange: onTimeChange,
     mobileCompact: true,
     defaultShowProduction: false,
+    clip: "shared" as const,
   };
   if (manifest) {
     return <SegmentedReplayHost {...stageProps} manifest={manifest} anonymous segmentPath={segmentPath} segmentLinkPath={segmentLinkPath} />;

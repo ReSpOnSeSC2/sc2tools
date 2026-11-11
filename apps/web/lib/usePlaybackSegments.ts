@@ -1,11 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { API_BASE } from "./clientApi";
-import { decodePlaybackSegment, PlaybackSegmentCache, readBoundedSegment, segmentAt, type PlaybackManifest, type PlaybackSegmentEntry } from "./segmentedPlayback";
+import { decodePlaybackSegment, decodedPlaybackBytes, PLAYBACK_CACHE_BYTES, PlaybackSegmentCache, readBoundedSegment, segmentAt, type PlaybackManifest, type PlaybackSegmentEntry } from "./segmentedPlayback";
+import { CLIP_MAX_SECONDS, type ClipRange } from "./clip/clipPlan";
 import type { MapPlayback } from "./mapReplay";
 import { replayCastMarkers, mergeMarkers, type TimelineMarker } from "./replayHud";
+
+export type ClipPlaybackSection = { start: number; end: number; playback: MapPlayback };
+export type LoadClipSections = (range: ClipRange, signal: AbortSignal) => Promise<ClipPlaybackSection[]>;
 
 type Loaded = { scope: string; entry: PlaybackSegmentEntry; playback: MapPlayback };
 
@@ -38,28 +42,31 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
   const prefetchIndex = backwards && desired.index > 0 ? desired.index - 1
     : time > desired.end - Math.max(8, 3 * speed) ? desired.index + 1 : -1;
 
-  const load = useCallback(async (entry: PlaybackSegmentEntry, controller: AbortController) => {
+  const load = useCallback(async (entry: PlaybackSegmentEntry, signal: AbortSignal) => {
+    signal.throwIfAborted();
+    if (store.current.scope !== scope) throw new DOMException("Replay changed", "AbortError");
     const saved = store.current.cache.get(`${manifest.artifactId}:${entry.index}`);
     if (saved) return saved;
     let headers: Record<string, string> | undefined;
     if (!anonymous) {
       if (!userId) throw new Error("Sign in again to load this replay.");
-      const token = await tokenGetter.current(); controller.signal.throwIfAborted();
+      const token = await tokenGetter.current(); signal.throwIfAborted();
+      if (store.current.scope !== scope) throw new DOMException("Replay changed", "AbortError");
       if (!token) throw new Error("Sign in again to load this replay.");
       headers = { authorization: `Bearer ${token}` };
     }
     const path = segmentPath ? segmentPath(manifest.artifactId, entry.index)
       : `/v1/games/${encodeURIComponent(gameId)}/map-playback/artifacts/${manifest.artifactId}/segments/${entry.index}`;
     let bytes = segmentLinkPath && !directUnavailable.current
-      ? await readDirect(segmentLinkPath(manifest.artifactId, entry.index), entry.sizeBytes, controller.signal)
+      ? await readDirect(segmentLinkPath(manifest.artifactId, entry.index), entry.sizeBytes, signal)
       : null;
     if (!bytes) {
       if (segmentLinkPath) directUnavailable.current = true;
-      const response = await fetch(`${API_BASE}${path}`, { headers, cache: "default", signal: controller.signal });
+      const response = await fetch(`${API_BASE}${path}`, { headers, cache: "default", signal });
       bytes = await readBoundedSegment(response, entry.sizeBytes);
     }
     const playback = await decodePlaybackSegment(bytes, manifest, entry);
-    controller.signal.throwIfAborted();
+    signal.throwIfAborted();
     if (store.current.scope !== scope) throw new DOMException("Replay changed", "AbortError");
     store.current.cache.set(`${manifest.artifactId}:${entry.index}`, playback);
     // The existing marker merger caps each segment's presentation index. Keep
@@ -69,11 +76,37 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
     return playback;
   }, [manifest, anonymous, userId, segmentPath, segmentLinkPath, gameId, scope]);
 
+  const loadClipSections: LoadClipSections = useCallback(async ({ start, end }, signal) => {
+    if (!(start >= 0 && end <= manifest.gameLength && end > start && end - start <= CLIP_MAX_SECONDS)) {
+      throw new RangeError("Invalid clip range.");
+    }
+    const entries = manifest.segments.filter(entry => entry.start < end && entry.end > start);
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    signal.throwIfAborted();
+    signal.addEventListener("abort", cancel, { once: true });
+    const timer = window.setTimeout(cancel, 30_000);
+    try {
+      const sections: ClipPlaybackSection[] = [];
+      let decodedBytes = 0;
+      for (const entry of entries) {
+        const playback = await load(entry, controller.signal);
+        decodedBytes += decodedPlaybackBytes(playback);
+        if (decodedBytes > PLAYBACK_CACHE_BYTES) throw new Error("This clip needs too many replay details. Try a shorter range.");
+        sections.push({ start: entry.start, end: entry.end, playback });
+      }
+      return sections;
+    } finally {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", cancel);
+    }
+  }, [manifest, load]);
+
   useEffect(() => {
     const controller = new AbortController(); let cancelled = false;
     const timer = window.setTimeout(() => controller.abort(), 30_000);
     setFailure({ scope, index: desired.index, message: "" });
-    void load(desired, controller).then(playback => {
+    void load(desired, controller.signal).then(playback => {
       if (!cancelled) setLoaded({ scope, entry: desired, playback });
     }).catch(error => {
       if (!cancelled && store.current.scope === scope) setFailure({ scope, index: desired.index,
@@ -87,7 +120,7 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
     if (!entry || store.current.cache.get(`${manifest.artifactId}:${entry.index}`)) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 30_000);
-    void load(entry, controller).catch(() => undefined).finally(() => window.clearTimeout(timer));
+    void load(entry, controller.signal).catch(() => undefined).finally(() => window.clearTimeout(timer));
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [scope, manifest, prefetchIndex, load]);
 
@@ -95,7 +128,8 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
   if (casts.current.scope !== scope || casts.current.revision !== revision) {
     casts.current = { scope, revision, value: mergeMarkers([...store.current.casts.values()].flat().sort((a, b) => a.t - b.t)) };
   }
-  return { scope, current, buffering, castMarkers: casts.current.value,
+  const completeCasts = useMemo(() => manifest.timeline ? replayCastMarkers(manifest.timeline.casts) : null, [manifest.timeline]);
+  return { scope, current, buffering, loadClipSections, castMarkers: completeCasts ?? casts.current.value,
     error: failure.scope === scope && failure.index === desired.index ? failure.message : "",
     retry: () => setAttempt(value => value + 1) };
 }

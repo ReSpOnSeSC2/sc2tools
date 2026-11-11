@@ -76,7 +76,7 @@ assert win._updates_btn.parentWidget() is win._sidebar
 assert win._updates_btn.text()=="Updates" and win._updates_btn.accessibleName()=="Check for updates"
 win.resize(820,600);win._go_to_page("recent");app.processEvents()
 assert win._recent_table.columnWidth(3)>=140
-win._game_notifications_check.setChecked(True)
+win._notifications_combo.setCurrentIndex(win._notifications_combo.findData("all"))
 win._click_save_settings();wait_saved(win)
 assert saved[-1].notify_every_game is True
 win.hide()

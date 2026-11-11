@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDate } from "@/lib/i18n/format";
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { CalendarPlus } from "lucide-react";
@@ -52,7 +53,7 @@ export function CalendarFeedCard() {
           <a href={fresh.replace(/^https?:/, "webcal:")} className="inline-flex min-h-11 items-center rounded-md px-2 text-caption font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Open in calendar app</a>
         </div>
       </div> : null}
-      {data ? <p className="text-caption text-text-muted">{data.active ? `A calendar link is active (created ${data.createdAt ? new Date(data.createdAt).toLocaleDateString() : "earlier"}).` : "No calendar link yet."}</p> : null}
+      {data ? <p className="text-caption text-text-muted">{data.active ? `A calendar link is active (created ${data.createdAt ? formatDate(new Date(data.createdAt)) : "earlier"}).` : "No calendar link yet."}</p> : null}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" className="min-h-11" disabled={busy || !data} onClick={() => void change("POST")}>{data?.active ? "Regenerate link" : "Create calendar link"}</Button>
         {data?.active ? <Button variant="secondary" size="sm" className="min-h-11" disabled={busy} onClick={() => { setFresh(null); void change("DELETE"); }}>Turn off link</Button> : null}

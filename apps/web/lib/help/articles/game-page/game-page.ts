@@ -117,14 +117,14 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "Press **Clip** under the replay's game clock.",
+        "Press **Clip** under the replay's game clock on your game or a shared game with map playback.",
         "Check the range. It starts on the fight nearest the replay clock with 10 seconds either side, up to 60 seconds of game time. Edit the start and end as m:ss, or choose **Around** the current time.",
-        "Pick the format, speed (1×, 2× or 4×), size (1280×720 or 1080×1080), whether to show the scoreboard, and the watermark: sc2tools.com, or your public player page when you have turned it on.",
+        "Pick the format, speed (1×, 2× or 4×), size (1280×720 or 1080×1080), whether to show the scoreboard, and the watermark. Use sc2tools.com for any clip, or your public player page for a clip from your own game when your page is enabled.",
         "Press **Make clip**, then **Download** when it finishes. **Cancel clip** stops at any point.",
       ],
     },
     { type: "paragraph", text: "Clips are made entirely in your browser with the replay's own drawing, so nothing is uploaded and nothing costs anything. The scoreboard shows the clock, both races, supply, workers and army value, never player names. A clip uses the replay's current vision and camera: zoomed in, or following a unit, it frames the same view." },
-    { type: "paragraph", text: "Browser support: video uses the browser's built-in recorder. Chrome, Edge and Firefox save WebM, and a browser that only records MP4 saves MP4. Where video recording isn't available, as in Safari on many devices, clips are saved as a GIF instead: half size, 12 frames a second and up to 20 seconds long. Video records in real time, so a 30-second clip at 1× takes about 30 seconds; keep the tab open, because a hidden tab pauses the recording. A clip that would pass the size limit stops with a message: choose a shorter range, a higher speed or the smaller size. Recordings that load in sections keep the clip inside the loaded section." },
+    { type: "paragraph", text: "Browser support: video uses the browser's built-in recorder. Chrome, Edge and Firefox save WebM, and a browser that only records MP4 saves MP4. Where video recording isn't available, as in Safari on many devices, clips are saved as a GIF instead: half size, 12 frames a second and up to 20 seconds long. Video records in real time, so a 30-second clip at 1× takes about 30 seconds; keep the tab open, because a hidden tab pauses the recording. A clip that would pass the size limit stops with a message: choose a shorter range, a higher speed or the smaller size. When a clip crosses a replay section, the browser loads the sections in the selected range before recording." },
     { type: "heading", text: "Build orders", anchor: "build-orders" },
     { type: "paragraph", text: "Your private **Build execution** card shows saved rule counts, unknown evidence and timing ranges from the same bounded sample used by the timeline. It checks custom rules only; catalog builds show timings. Event/deadline chips seek the shared clock. See [Grading a game](/help/build-check-in#grading-a-game) for the three-observation private floor, exact windows and Practice action." },
     { type: "paragraph", text: "Both players' build steps show their replay time. Select a step to watch it; the current step follows the shared game clock. Save as new build keeps the opening for later, and a Ghost target can be armed for practice." },

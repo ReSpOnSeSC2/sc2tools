@@ -1,9 +1,11 @@
 "use strict";
 
+const { pickWeekStart } = require("../util/weekStart");
 const { LIMITS } = require("../config/constants");
 const { gamesMatchStage } = require("../util/parseQuery");
 const trendsAgg = require("./trendsAggregations");
 const trendsInsights = require("./trendsInsights");
+const { compactTradeReplay, tradeSample, hasTradeEngine, TRADE_PREVIEW_SIZE } = require("./unitTradePreview");
 const { TrendsRequests } = require("./trendsRequests");
 const { strengthPipeline, finishStrength } = require("./strengthAdjusted");
 const { OPPONENT_RACE_GROUP, OPPONENT_RACE_PROJECT } = require("../util/opponentRaceCounts");
@@ -37,12 +39,30 @@ const RESULT_BUCKET_BRANCHES = [
  */
 class AggregationsService {
   /** @param {{games: import('mongodb').Collection, gameDetails?: import('mongodb').Collection}} db
-   * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'> & Partial<Pick<import('./mmrExpectation').MmrExpectationService,'snapshot'>>}} [opts] */
+   * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'> & Partial<Pick<import('./mmrExpectation').MmrExpectationService,'snapshot'>>, details?: Pick<import('./gameDetails').GameDetailsService,'findMany'>}} [opts] */
   constructor(db, opts = {}) {
     this.db = db;
     this.mmrExpectation = opts.mmrExpectation;
+    this.details = opts.details;
     this.trendsRequests = new TrendsRequests();
     /** @type {import('./sessionPolicy').SessionPolicyService|null} */ this.sessionPolicy = null;
+  }
+
+  /** @param {string} userId @param {object} filters */
+  unitTradePreview(userId, filters) {
+    return this.trendsRequests.cached(["unitTradePreview", userId, filters, 1], async () => {
+      if (!this.details) return tradeSample([]);
+      const games = await this.db.games.find(gamesMatchStage(userId, filters), {
+        projection: { gameId: 1, date: 1, gameVersion: 1, gameBuild: 1, engineVersion: 1, myRace: 1, "opponent.race": 1 },
+      }).sort({ date: -1, gameId: 1 }).limit(TRADE_PREVIEW_SIZE).toArray();
+      const sample = [];
+      for (const game of games) {
+        if (!hasTradeEngine(game.engineVersion)) { sample.push({ tradeSample: null }); continue; }
+        const details = await this.details.findMany(userId, [game.gameId], { fields: ["macroBreakdown"], concurrency: 1 });
+        sample.push({ tradeSample: compactTradeReplay(game, details.get(game.gameId)?.macroBreakdown) });
+      }
+      return tradeSample(sample);
+    }, 15000);
   }
 
   /** Only the explicitly enabled direct routes request this optional proof. */
@@ -446,10 +466,11 @@ class AggregationsService {
   }
 
   /**
-   * Daily / weekly / monthly W-L timeseries for the trends chart.
+   * Daily / weekly / monthly W-L timeseries for the trends chart. Weeks
+   * start on `opts.weekStart` (default Sunday).
    *
    * @param {string} userId
-   * @param {{interval?: 'day'|'week'|'month', tz?: string}} opts
+   * @param {{interval?: 'day'|'week'|'month', tz?: string, weekStart?: string}} opts
    * @param {object} filters
    */
   async timeseries(userId, opts, filters) {
@@ -460,12 +481,13 @@ class AggregationsService {
   /**
    * @private
    * @param {string} userId
-   * @param {{interval?: 'day'|'week'|'month', tz?: string} | undefined} opts
+   * @param {{interval?: 'day'|'week'|'month', tz?: string, weekStart?: string} | undefined} opts
    * @param {object} filters
    */
   async _timeseriesOnce(userId, opts, filters) {
     const requestedInterval = pickInterval(opts && opts.interval);
     const timezone = pickTimezone(opts && opts.tz);
+    const startOfWeek = pickWeekStart(opts && opts.weekStart);
     const match = gamesMatchStage(userId, filters);
     // Pick a coarser bucket when the matched data would overflow the
     // bucket cap. Otherwise the "All time" KPI tile silently dropped
@@ -483,20 +505,13 @@ class AggregationsService {
                 date: "$date",
                 unit: interval,
                 timezone,
+                ...(interval === "week" ? { startOfWeek } : {}),
               },
             },
             wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
             losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
             total: { $sum: 1 },
-            // $avg skips nulls/missing, so buckets whose games predate
-            // macro scoring simply come back null instead of dragging
-            // the average toward zero.
-            avgMacroScore: { $avg: "$macroScore" },
-            avgApm: { $avg: "$apm" },
-            avgSpq: { $avg: "$spq" },
-            macroN: { $sum: { $cond: [{ $isNumber: "$macroScore" }, 1, 0] } },
-            apmN: { $sum: { $cond: [{ $isNumber: "$apm" }, 1, 0] } },
-            spqN: { $sum: { $cond: [{ $isNumber: "$spq" }, 1, 0] } },
+            ...MEASURED_TIMESERIES_AGGREGATES,
           },
         },
         // Keep the most recent N buckets (not the oldest). Users with
@@ -512,12 +527,7 @@ class AggregationsService {
             wins: 1,
             losses: 1,
             total: 1,
-            avgMacroScore: 1,
-            avgApm: 1,
-            avgSpq: 1,
-            macroN: 1,
-            apmN: 1,
-            spqN: 1,
+            ...MEASURED_TIMESERIES_PROJECTION,
           },
         },
       ])
@@ -1052,15 +1062,29 @@ async function applyRaceGrouping(filters, runOnce) {
   return out;
 }
 
+const MEASURED_TIMESERIES = [
+  ["macroScore", "avgMacroScore", "macroN"],
+  ["apm", "avgApm", "apmN"],
+  ["spq", "avgSpq", "spqN"],
+  ["groupsUsed", "avgGroupsUsed", "groupsUsedN"],
+  ["cameraReturnsPerMin", "avgCameraReturns", "cameraReturnsN"],
+];
+// $avg skips missing data. The separate sample count makes coverage visible.
+const MEASURED_TIMESERIES_AGGREGATES = Object.fromEntries(MEASURED_TIMESERIES.flatMap(([source, average, count]) => [
+  [average, { $avg: `$${source}` }],
+  [count, { $sum: { $cond: [{ $isNumber: `$${source}` }, 1, 0] } }],
+]));
+const MEASURED_TIMESERIES_PROJECTION = Object.fromEntries(MEASURED_TIMESERIES.flatMap(([, average, count]) => [[average, 1], [count, 1]]));
+
 /** Round measured means without converting missing data into zero.
  * @param {Record<string, any>} row */
 function shapeTimeseriesPoint(row) {
   /** @type {Record<string, any>} */
   const point = { ...row, winRate: row.total ? row.wins / row.total : 0 };
-  for (const key of ["avgMacroScore", "avgApm", "avgSpq"]) {
+  for (const key of MEASURED_TIMESERIES.map(([, average]) => average)) {
     point[key] = typeof row[key] === "number" && Number.isFinite(row[key]) ? Math.round(row[key] * 10) / 10 : null;
   }
-  for (const key of ["macroN", "apmN", "spqN"]) {
+  for (const key of MEASURED_TIMESERIES.map(([, , count]) => count)) {
     point[key] = Number.isInteger(row[key]) && row[key] >= 0 ? row[key] : 0;
   }
   return point;

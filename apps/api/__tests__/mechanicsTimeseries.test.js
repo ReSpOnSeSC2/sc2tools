@@ -19,8 +19,8 @@ describe("mechanics measurements in the existing timeseries", () => {
 
   test("each metric averages and counts only its measured games, preserving a real zero", async () => {
     await games.insertMany([
-      row("a", "01", { macroScore: 0, apm: 100, spq: 50 }),
-      row("b", "01", { macroScore: 80, apm: 200, spq: null }),
+      row("a", "01", { macroScore: 0, apm: 100, spq: 50, groupsUsed: 0, cameraReturnsPerMin: 4 }),
+      row("b", "01", { macroScore: 80, apm: 200, spq: null, groupsUsed: 4, cameraReturnsPerMin: 0 }),
       row("c", "01", { macroScore: null, apm: 0, spq: 70 }),
       row("legacy", "01", { apm: "300", spq: "90" }),
       row("other", "01", { userId: "other", macroScore: 100, apm: 900, spq: 100 }),
@@ -28,8 +28,8 @@ describe("mechanics measurements in the existing timeseries", () => {
     ]);
     const output = await service.timeseries("owner", { interval: "day", tz: "UTC" }, {});
     expect(output.points).toHaveLength(2);
-    expect(output.points[0]).toMatchObject({ total: 4, avgMacroScore: 40, macroN: 2, avgApm: 100, apmN: 3, avgSpq: 60, spqN: 2 });
-    expect(output.points[1]).toMatchObject({ total: 1, avgMacroScore: null, macroN: 0, avgApm: null, apmN: 0, avgSpq: null, spqN: 0 });
+    expect(output.points[0]).toMatchObject({ total: 4, avgMacroScore: 40, macroN: 2, avgApm: 100, apmN: 3, avgSpq: 60, spqN: 2, avgGroupsUsed: 2, groupsUsedN: 2, avgCameraReturns: 2, cameraReturnsN: 2 });
+    expect(output.points[1]).toMatchObject({ total: 1, avgMacroScore: null, macroN: 0, avgApm: null, apmN: 0, avgSpq: null, spqN: 0, avgGroupsUsed: null, groupsUsedN: 0, avgCameraReturns: null, cameraReturnsN: 0 });
   });
 
   test("calendar and race filters retain their existing cohort and all averages round to one decimal", async () => {

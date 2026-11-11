@@ -28,6 +28,7 @@ import { BuildMmrPanel } from "./mmr/BuildMmrPanel";
 import { BuildAgingCurve } from "./mmr/BuildAgingCurve";
 import { MmrProgressionByBuild } from "./mmr/MmrProgressionByBuild";
 import { measuredPlanHeldRate, PlanHeldBadge } from "@/components/builds/PlanHeldBadge";
+import { formatNumber } from "@/lib/i18n/format";
 
 type BuildRow = StrengthFields & {
   name: string;
@@ -376,7 +377,7 @@ function ReclassifyBanner({ rows }: { rows: BuildRow[] }) {
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-warning/40 bg-warning/5 px-4 py-3">
       <p className="text-caption text-text">
         <span className="font-semibold">
-          {staleCount.toLocaleString()} game{staleCount === 1 ? "" : "s"} have
+          {formatNumber(staleCount)} game{staleCount === 1 ? "" : "s"} have
           no build classification.
         </span>{" "}
         <span className="text-text-muted">

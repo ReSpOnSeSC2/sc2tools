@@ -65,6 +65,8 @@ describe("InstantReport", () => {
     expect(totals.getByText("2 games")).toBeTruthy();
     expect(totals.getByText("50% win rate")).toBeTruthy();
     expect(presentCards()).toEqual([...CARD_IDS]);
+    expect(screen.getByRole("region", { name: "Record by map" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "By game length" })).toBeTruthy();
     const matchups = within(screen.getByTestId("report-matchups"));
     expect(matchups.getByText("Zerg")).toBeTruthy();
     expect(within(screen.getByTestId("report-openers")).getByText("PvZ - Adept Glaives (Robo)")).toBeTruthy();
@@ -90,11 +92,22 @@ describe("InstantReport", () => {
       macro: null,
       mmr: null,
       lastLoss: null,
+      highlights: { longestWinStreak: null, biggestUpset: null, favoriteMap: null, nemesis: null, bestVictim: null },
+      recordByMap: null,
+      recordByLength: null,
       games: [],
     };
     render(<InstantReport report={report} />);
     expect(screen.getByRole("heading", { name: "Your instant report" })).toBeTruthy();
     expect(presentCards()).toEqual([]);
+  });
+
+  it("hides missing highlight tiles and leaves supported highlights", () => {
+    const single = buildInstantReport([realWin()], NOW);
+    render(<InstantReport report={{ ...single, highlights: { ...single.highlights, longestWinStreak: 3 } }} />);
+    const highlights = within(screen.getByRole("list", { name: "Highlights" }));
+    expect(highlights.getAllByRole("listitem")).toHaveLength(1);
+    expect(highlights.getByText("Longest win streak")).toBeTruthy();
   });
 
   it("renders nothing for an empty report", () => {

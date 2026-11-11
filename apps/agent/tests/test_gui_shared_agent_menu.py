@@ -97,11 +97,24 @@ win.show()
 app.processEvents()
 page = win._companion_page
 win._handle_input.setText("Unsaved player")
+draft_answers = []
+def answer_draft(text):
+    prompt = app.activeModalWidget()
+    assert prompt.windowTitle() == "Unsaved settings"
+    button = next(button for button in prompt.buttons() if button.text().replace("&", "") == text)
+    draft_answers.append(text)
+    button.click()
+
 for route in ("settings", "companion"):
     win._go_to_page(route)
     app.processEvents()
     button = page.agent_menu_button if route == "companion" else win._agent_menu_button
     actions = {action.text(): action for action in button.menu().actions() if not action.isSeparator()}
+    if route == "settings":
+        QtCore.QTimer.singleShot(0, lambda: answer_draft("Cancel"))
+        actions["Border and animations…"].trigger()
+        assert win._PAGE_KEYS[win._stack.currentIndex()] == "settings"
+        QtCore.QTimer.singleShot(0, lambda: answer_draft("Keep draft"))
     actions["Border and animations…"].trigger()
     app.processEvents()
     assert win._stack.currentWidget() is page
@@ -112,6 +125,8 @@ for route in ("settings", "companion"):
     app.processEvents()
     assert win._stack.currentWidget() is win._help_page
 assert opened == []
+assert draft_answers == ["Cancel", "Keep draft"]
+assert win._settings_draft.count() > 0
 actions["Quit SC2 Tools"].trigger()
 assert quit_requests == [True]
 assert saved == []

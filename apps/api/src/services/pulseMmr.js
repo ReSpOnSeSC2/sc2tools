@@ -1574,7 +1574,7 @@ function teamRaceAndGames(team) {
   else if (members && typeof members === "object") m = members;
   if (!m || typeof m !== "object") return { race: null, games: 0 };
   let bestRace = null;
-  let bestGames = -1;
+  let bestGames = 0;
   for (const [race, field] of RACE_COUNT_FIELDS) {
     const n = Number(m[field]);
     if (Number.isFinite(n) && n > bestGames) {

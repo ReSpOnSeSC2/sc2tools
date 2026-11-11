@@ -488,7 +488,8 @@ describe("replay library", () => {
     const app = makeApp(routerDeps(new ReplayLibraryService(db)));
 
     const list = await request(app).get("/v1/public/replays/owner").expect(200);
-    const rows = byId(list.body.items);
+    const ids = new Map((await db.games.find({ userId: USER }).toArray()).map((row) => ["r-" + row._id, row.gameId]));
+    const rows = byId(list.body.items.map((row) => ({ ...row, gameId: ids.get(row.gameId) })));
     expect(rows["opp-disagree"].opponent.strategy).toBe(ROACH);
     expect(rows["opp-custom"].opponent.strategy).toBe(POOL);
     expect(rows["opp-normal"].opponent.strategy).toBe(POOL);
@@ -498,7 +499,7 @@ describe("replay library", () => {
     const filtered = await request(app)
       .get(`/v1/public/replays/owner?opp_strategy=${encodeURIComponent(ROACH)}`)
       .expect(200);
-    expect(filtered.body.items.map((row) => row.gameId)).toEqual(["opp-disagree"]);
+    expect(filtered.body.items.map((row) => ids.get(row.gameId))).toEqual(["opp-disagree"]);
 
     const detail = await request(app).get("/v1/public/replays/owner/opp-disagree").expect(200);
     expect(detail.body.game.opponent.strategy).toBe(ROACH);
@@ -517,6 +518,7 @@ describe("replay library", () => {
           opponent: { strategy: POOL },
           oppStrategyPlanned: true,
           detectedOppStrategy: ROACH,
+          publicReference: "r-0123456789abcdef01234567",
         }],
         sourceGames: [],
         hasMore: false,

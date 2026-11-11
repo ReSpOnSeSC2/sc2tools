@@ -390,7 +390,7 @@ class _RecordingSio:
         return decorate
 
 
-def _client_with_build_intent_callback(callback):
+def _client_with_build_intent_callback(callback, event="build-intent:changed"):
     from sc2tools_agent.socket_client import SocketClient
 
     client = SocketClient(
@@ -401,7 +401,7 @@ def _client_with_build_intent_callback(callback):
     )
     client._sio = _RecordingSio()
     client._wire_handlers()
-    return client._sio.handlers["build-intent:changed"]
+    return client._sio.handlers[event]
 
 
 def test_obs_add_handler_carries_authenticated_socket_provenance_and_rebinds_it():
@@ -484,3 +484,14 @@ def test_build_intent_ping_survives_callback_errors_and_missing_wiring() -> None
 
     asyncio.run(_client_with_build_intent_callback(_boom)({"gameId": "g"}))
     asyncio.run(_client_with_build_intent_callback(None)({"gameId": "g"}))
+
+
+def test_ghost_preference_ping_forwards_only_the_advisory_boolean():
+    import asyncio
+
+    pings = []
+    handler = _client_with_build_intent_callback(pings.append, "ghost:changed")
+    asyncio.run(handler({"ghost": "ignore contents"}))
+    asyncio.run(handler(False))
+    asyncio.run(handler(True))
+    assert pings == [{"ghostPrefs": True}]

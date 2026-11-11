@@ -30,6 +30,7 @@ import { useMacroRecompute } from "@/components/analyzer/macro/useMacroRecompute
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { MapReplaySection } from "./MapReplaySection";
 import { MechanicsPanel } from "./MechanicsPanel";
+const UnitTradesCard = dynamic(() => import("./UnitTradesCard").then(module => module.UnitTradesCard));
 import { GameContextCard } from "./GameContextCard";
 import { useGameContext } from "@/lib/useBenchmarks";
 import { checkedMatchPercentage, type BuildExecution } from "@/lib/buildExecution";
@@ -312,8 +313,8 @@ function GameDetailContent({
           error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()}
           onSeek={setScrubTime}
           recomputeAction={recomputeAction} seekTarget="replay" currentTime={clock.t}
-          league={contextReq.data?.league?.table ?? null}
-        /><GameContextCard game={game} context={contextReq.data} error={contextReq.error} loading={contextReq.isLoading} onRetry={() => void contextReq.mutate()} /></div>} lossAutopsy={loss && autopsyGame ? (
+          league={contextReq.data?.league?.table ?? null} privateHotkeys
+        /><UnitTradesCard data={breakdown} orders={buildReq.data} era={patchEraForGame(game)} loading={macroStatus === "loading"} /><GameContextCard game={game} context={contextReq.data} error={contextReq.error} loading={contextReq.isLoading} onRetry={() => void contextReq.mutate()} /></div>} lossAutopsy={loss && autopsyGame ? (
           <LossAutopsyCard game={autopsyGame} personalMedians={contextReq.data?.personal} seekTarget="replay" recomputeAction={recomputeAction} onSeek={setScrubTime} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} />
         ) : undefined} /></SectionBoundary>
 

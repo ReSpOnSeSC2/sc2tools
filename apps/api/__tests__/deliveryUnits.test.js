@@ -42,6 +42,22 @@ test("VAPID authorization is an ES256 JWT for the push service origin, verifiabl
   expect(parseVapidKeys("not-a-key", pair.privateKey)).toBeNull();
 });
 
+test("generated VAPID keys preserve the fixed-width scalar when it starts with zero bytes", () => {
+  const ecdh = crypto.createECDH("prime256v1");
+  const scalar = Buffer.alloc(32);
+  scalar[31] = 1;
+  jest.spyOn(ecdh, "generateKeys").mockImplementationOnce(() => {
+    ecdh.setPrivateKey(scalar);
+    return ecdh.getPublicKey();
+  });
+  const create = jest.spyOn(crypto, "createECDH").mockReturnValueOnce(ecdh);
+  try {
+    const pair = generateVapidKeys();
+    expect(b64(pair.privateKey)).toEqual(scalar);
+    expect(parseVapidKeys(pair.publicKey, pair.privateKey)).not.toBeNull();
+  } finally { create.mockRestore(); }
+});
+
 test("push endpoints are limited to browser push services over https", () => {
   for (const ok of ["https://fcm.googleapis.com/fcm/send/abc", "https://updates.push.services.mozilla.com/wpush/v2/x", "https://web.push.apple.com/QGx", "https://wns2-par02p.notify.windows.com/w/?token=x"]) {
     expect(safePushEndpoint(ok)).toBe(ok);
@@ -51,7 +67,7 @@ test("push endpoints are limited to browser push services over https", () => {
     expect(safePushEndpoint(bad)).toBeNull();
   }
   expect(pushGroupFor("review.reply")).toBe("reviews");
-  expect(pushGroupFor("coaching.reminder")).toBe("coaching");
+  expect(pushGroupFor("coaching.reminder")).toBe("coaching-reminders");
   expect(pushGroupFor("report.weekly")).toBe("reports");
   expect(pushGroupFor("import.done")).toBe("other");
   expect(sanitizePushGroups(["reports", "nope", "reports"])).toEqual(["reports"]);
@@ -74,16 +90,16 @@ test("only Discord webhook URLs are accepted", () => {
 });
 
 test("Discord posts hide opponent names by default, never ping, and escape user text", () => {
-  const game = { gameId: "g1", result: "Defeat", myRace: "Protoss", map: "Alcyone LE", myBuild: "@everyone **2 base**", myMmr: 4100, durationSec: 754,
+  const game = { gameId: "g1", result: "Defeat", myRace: "Protoss", map: "Alcyone LE", myBuild: "@everyone **2 base**", myMmr: 4100, myMmrSource: "replay", durationSec: 754,
     date: "2026-11-10T12:00:00.000Z", opponent: { race: "Zerg", mmr: 4050, displayName: "SecretOppZed" } };
-  const hidden = templates.resultMessage(game, { options: undefined, mmrDelta: -14, replaySlug: "me" });
+  const hidden = templates.resultMessage(game, { options: undefined, replaySlug: "me" });
   const text = JSON.stringify(hidden);
   expect(hidden.allowed_mentions).toEqual({ parse: [] });
   expect(text).not.toContain("SecretOppZed");
-  expect(text).toContain("4,100 (−14)");
+  expect(hidden.embeds[0].fields).toContainEqual({ name: "MMR", value: "4,100", inline: true });
   expect(text).toContain("\\\\@everyone \\\\*\\\\*2 base\\\\*\\\\*");
   expect(hidden.embeds[0].url).toBeUndefined();
-  const shown = templates.resultMessage(game, { options: { opponentNames: true, mmr: false, replayLink: true }, mmrDelta: -14, replaySlug: "me" });
+  const shown = templates.resultMessage(game, { options: { opponentNames: true, mmr: false, replayLink: true }, replaySlug: "me" });
   expect(JSON.stringify(shown)).toContain("SecretOppZed");
   expect(JSON.stringify(shown)).not.toContain("4,100");
   expect(shown.embeds[0].url).toBe("https://sc2tools.com/p/me/replays/g1");
@@ -140,7 +156,8 @@ test("stream reports stay under 5 kB and keep viewer data aggregate", () => {
   expect(doc.mmr.points).toHaveLength(40);
   const ball = crystalBall([{ result: "win", picks: { "twitch:a": { pick: "win", user: "A" }, "twitch:b": { pick: "loss", user: "B" } } },
     { result: "loss", picks: { "twitch:a": { pick: "loss" }, "twitch:c": { pick: "loss" }, "twitch:d": { pick: "win" } } }]);
-  expect(ball).toEqual({ rounds: 2, picks: 5, correct: 3, viewers: 4, accuracy: 60 });
+  expect(ball).toEqual({ rounds: 2, picks: 5, correct: 3, viewers: 4, accuracy: 60,
+    top: [{ picks: 2, correct: 2 }, { picks: 1, correct: 1 }, { picks: 1, correct: 0 }, { picks: 1, correct: 0 }] });
   expect(JSON.stringify(ball)).not.toMatch(/"A"|"B"/);
 });
 

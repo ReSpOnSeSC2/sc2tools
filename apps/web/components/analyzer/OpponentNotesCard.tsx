@@ -13,6 +13,7 @@ import { TagEditor } from "@/components/notes/TagEditor";
 import { effectiveVisibility, hasPrivateTag, NOTE_TEXT_MAX, opponentNotePath, type NoteDto, type NoteScope, type NoteVisibility } from "@/lib/notes";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { useOpponentNoteDraft } from "./useOpponentNoteDraft";
+import { formatNumber } from "@/lib/i18n/format";
 
 export const OPPONENT_NOTES_MAX_LENGTH = NOTE_TEXT_MAX;
 
@@ -245,7 +246,7 @@ function OpponentNotesEditor({
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 text-xs text-text-dim">
           {remaining < 100 ? <span className={`tabular-nums ${remaining === 0 ? "text-danger" : ""}`}>
-            {remaining.toLocaleString()} characters left
+            {formatNumber(remaining)} characters left
           </span> : null}
           <span>{macShortcut ? "⌘+Enter" : "Ctrl+Enter"} to save</span>
           <span

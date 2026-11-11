@@ -146,6 +146,118 @@ assert "device_token" not in json.loads(pointer) and "obs_password" not in json.
 assert b'"device_token":"t"' not in pointer
 assert load_state(base).device_token=="t"
 assert win._settings_status.text().startswith("Saved.")
-assert win._save_settings_btn.isEnabled()
+assert win._settings_draft_footer.isHidden()
 win.hide()
 ''')
+
+
+def test_draft_prompts_on_navigation_and_restart_action_only_after_save(tmp_path):
+    run_gui_check(tmp_path, '''
+        ui, win = make_window()
+        win._go_to_page("settings")
+        assert win._settings_draft_footer.isHidden()
+        assert win._settings_restart_button.isHidden()
+        win._api_input.setText("https://example.test")
+        assert not win._settings_draft_footer.isHidden()
+        assert win._settings_draft_label.text() == "1 unsaved change"
+        win._minimized_check.setChecked(not win._minimized_check.isChecked())
+        assert win._settings_draft_label.text() == "2 unsaved changes"
+        QtWidgets.QMessageBox.question = lambda *args: QtWidgets.QMessageBox.Cancel
+        win._go_to_page("dashboard")
+        assert win._PAGE_KEYS[win._stack.currentIndex()] == "settings"
+        QtWidgets.QMessageBox.question = lambda *args: QtWidgets.QMessageBox.Discard
+        win._go_to_page("dashboard")
+        assert win._PAGE_KEYS[win._stack.currentIndex()] == "dashboard"
+        assert win._api_input.text() == ""
+        assert win._settings_draft_footer.isHidden()
+        win._go_to_page("settings")
+        win._api_input.setText("https://example.test")
+        win._save_settings_shortcut()
+        wait_saved(win)
+        assert win._settings_draft_footer.isHidden()
+        assert not win._settings_restart_button.isHidden()
+        win._go_to_page("dashboard")
+        win._refresh_open_page()
+    ''')
+
+
+def test_revert_discards_unsaved_secret_entry_without_retaining_text(tmp_path):
+    run_gui_check(tmp_path, '''
+        ui, win = make_window()
+        win._go_to_page("settings")
+        win._obs_password_input.setText("synthetic secret")
+        assert win._settings_draft.count() == 1
+        assert "synthetic secret" not in str(win._settings_draft._saved)
+        win._revert_settings_draft()
+        assert win._obs_password_input.text() == ""
+        assert win._settings_draft.count() == 0
+    ''')
+
+
+def test_grouped_settings_remain_reachable_at_compact_and_standard_sizes(tmp_path):
+    run_gui_check(tmp_path, '''
+        for name in ("segoeui.ttf", "seguisb.ttf", "segoeuib.ttf"):
+            font = Path("C:/Windows/Fonts") / name
+            if font.is_file():
+                QtGui.QFontDatabase.addApplicationFont(str(font))
+        app.setFont(QtGui.QFont("Segoe UI", 9))
+        app.setStyleSheet(gui._STYLE)
+        ui, win = make_window()
+        win._go_to_page("settings")
+        win.show()
+        for width, height in [(820, 540), (1280, 800)]:
+            win.resize(width, height)
+            app.processEvents()
+            assert win._settings_scroll.verticalScrollBar().maximum() > 0
+            section = next(item for item in win.findChildren(QtWidgets.QComboBox)
+                           if item.accessibleName() == "Settings section")
+            assert section.findData("Streaming & OBS") > 0
+            assert win.grab().save(str(base / f"settings-{width}x{height}.png"))
+        assert not win._api_input.isVisible()
+        advanced = section.findData("Advanced")
+        section.setCurrentIndex(advanced)
+        section.activated.emit(advanced)
+        app.processEvents()
+        assert win._api_input.isVisible()
+    ''')
+
+
+def test_notifications_and_close_behavior_apply_after_save(tmp_path):
+    run_gui_check(tmp_path, '''
+        quit_calls = []
+        ui, win = make_window(tray_available=True, on_quit=lambda: quit_calls.append("quit"))
+        win._go_to_page("settings")
+        assert win._notifications_combo.currentData() == "important"
+        win._notifications_combo.setCurrentIndex(win._notifications_combo.findData("off"))
+        win._close_behavior_combo.setCurrentIndex(win._close_behavior_combo.findData(False))
+        assert win._close_to_tray_last_saved
+        win._click_save_settings()
+        wait_saved(win)
+        assert saved[-1].notifications_muted is True and saved[-1].notify_every_game is False
+        assert saved[-1].close_to_tray is False and not win._close_to_tray_last_saved
+        event = QtGui.QCloseEvent()
+        win.closeEvent(event)
+        assert event.isAccepted() and quit_calls == ["quit"]
+    ''')
+
+
+def test_instant_settings_keep_their_confirmation_next_to_the_controls(tmp_path):
+    run_gui_check(tmp_path, '''
+        ui, win = make_window()
+        win._go_to_page("settings")
+        win._obs_enable_check.setChecked(True)
+        assert saved[-1].obs_scene_switch_enabled is True
+        assert saved[-1].show_summary is False
+        assert "scene switching on" in win._obs_toggle_feedback.text()
+        QtWidgets.QMessageBox.warning = lambda *args: QtWidgets.QMessageBox.Yes
+        win._replay_capture_check.setChecked(True)
+        assert saved[-1].replay_capture_enabled is True
+        assert saved[-1].show_summary is False
+        assert "capture on" in win._replay_capture_feedback.text()
+        button = next(item for item in win._upload_conc_group.buttons() if not item.isChecked())
+        button.click()
+        assert saved[-1].show_summary is False
+        assert "Applied instantly" in win._upload_concurrency_feedback.text()
+        assert win._settings_draft_footer.isHidden()
+        assert win._settings_status.text() == ""
+    ''')

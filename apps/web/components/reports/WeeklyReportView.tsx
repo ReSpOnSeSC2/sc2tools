@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
 import { useApi } from "@/lib/clientApi";
 import { analyzerViewHref } from "@/lib/analyzerViews";
 import type { AnalyzerFilters } from "@/lib/filterContext";
-import { browserTimeZone, plural, record, signed, weekLabel, winRate, type NamedRecord, type WeeklyReport } from "@/lib/reports";
+import { plural, record, signed, weekLabel, winRate, type NamedRecord, type WeeklyReport } from "@/lib/reports";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LinkButton } from "@/components/ui/Button";
+import { WeeklyReportShareButton } from "./WeeklyReportShareButton";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { RequestError } from "@/components/ui/RequestError";
@@ -15,8 +15,7 @@ import { WinRateComparison } from "@/components/analyzer/charts/WinRateCompariso
 
 /** /app/reports/weekly/[week]: one local ISO week next to the week before. Facts only. */
 export function WeeklyReportView({ week }: { week: string }) {
-  const tz = useMemo(() => browserTimeZone(), []);
-  const query = useApi<WeeklyReport>(`/v1/reports/weekly?week=${encodeURIComponent(week)}&tz=${encodeURIComponent(tz)}`);
+  const query = useApi<WeeklyReport>(`/v1/reports/weekly?week=${encodeURIComponent(week)}`);
   const report = query.data;
   return <div className="space-y-5">
     <PageHeader title="Weekly report" description={report ? `${weekLabel(report.week)} · Monday to Sunday in ${report.timeZone.replaceAll("_", " ")}` : "Your week in numbers, next to the week before."}
@@ -34,6 +33,7 @@ function WeekNav({ report }: { report: WeeklyReport }) {
     {report.navigation.previous ? <LinkButton href={`/app/reports/weekly/${report.navigation.previous}`} variant="secondary" size="sm" className="min-h-11">Previous week</LinkButton> : null}
     {report.navigation.next ? <LinkButton href={`/app/reports/weekly/${report.navigation.next}`} variant="secondary" size="sm" className="min-h-11">Next week</LinkButton> : null}
     <LinkButton href={trends} variant="secondary" size="sm" className="min-h-11">Open in Trends</LinkButton>
+    {report.totals.games > 0 ? <WeeklyReportShareButton report={report} /> : null}
   </nav>;
 }
 

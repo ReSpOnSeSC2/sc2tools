@@ -24,9 +24,10 @@ describe("admin navigation and page primitives", () => {
   it("has five labelled groups, unique routes, longest-prefix selection and mobile scrolling", () => {
     expect(NAV_GROUPS).toHaveLength(5);
     const items = NAV_GROUPS.flatMap((group) => [...group.items]);
-    expect(items).toHaveLength(17);
-    expect(new Set(items.map((item) => item.href)).size).toBe(17);
-    expect(new Set(items.map((item) => item.icon)).size).toBe(15);
+    expect(items).toHaveLength(18);
+    expect(new Set(items.map((item) => item.href)).size).toBe(18);
+    expect(new Set(items.map((item) => item.icon)).size).toBe(16);
+    expect(items.some(item => item.href === "/admin/classifier" && item.label === "Classifier")).toBe(true);
     expect(items.some(item => item.href === "/admin/design" && item.label === "Design gallery")).toBe(true);
     const { rerender } = render(<AdminShell>Page</AdminShell>);
     expect(screen.getByRole("list", { name: "Community" })).toBeTruthy();

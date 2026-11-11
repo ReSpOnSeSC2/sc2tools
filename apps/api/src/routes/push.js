@@ -61,7 +61,7 @@ function buildPushRouter(deps) {
     try {
       const match = /^([A-Za-z0-9_-]{43})\.ics$/.exec(String(req.params.file));
       const ics = match ? await deps.calendar.feed(match[1]) : null;
-      res.set({ "Cache-Control": "private, max-age=300", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex" });
+      res.set({ "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex" });
       if (!ics) { res.status(404).type("text/plain").send("Calendar not found. The link may have been regenerated or turned off."); return; }
       res.set("Content-Disposition", "inline; filename=\"sc2tools-coaching.ics\"");
       res.type("text/calendar; charset=utf-8").send(ics);

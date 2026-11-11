@@ -45,6 +45,8 @@ const ReplayStage = dynamic(() => import("./replay/ReplayStage").then(value => v
  * viewport like a video player. */
 const COMPACT_STAGE_MAX_H_PX = 420;
 
+const AttentionCard = dynamic(() => import("./replay/AttentionCard").then(module => module.AttentionCard));
+
 export function MapReplaySection({
   gameId,
   controller,
@@ -199,6 +201,7 @@ export function MapReplaySection({
       patchEra={patchEra}
       clip="owner"
     />
+    <AttentionCard playback={playback} />
     </div>
   );
 }
