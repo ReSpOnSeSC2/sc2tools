@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Admin analysis
+
+- Apply Global Trends game and player filters together, remove individual
+  filters from the chart header, and save private cohorts or copy a link
+  for another administrator.
+
 ### Practice targets and reports
 
 - Edit checkpoints for a private Ghost target and count a graded game toward

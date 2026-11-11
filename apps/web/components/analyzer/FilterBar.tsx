@@ -36,7 +36,7 @@ import { formatDate } from "@/lib/i18n/format";
 
 const SEASONS_TO_SHOW = 16;
 
-export function FilterBar() {
+export function FilterBar({ globalTrends = false }: { globalTrends?: boolean } = {}) {
   const { filters, seasons } = useFilters();
   const [desktop, setDesktop] = useState(false);
   useEffect(() => {
@@ -45,14 +45,14 @@ export function FilterBar() {
     update(); media?.addEventListener?.("change", update);
     return () => media?.removeEventListener?.("change", update);
   }, []);
-  const extra = <><AccountFilterPicker /><MapPoolToggle /><GameSizeToggle /><GameLengthFilter /><ExcludeTooShortToggle /><LazyHelpLink slug="analyzer-filters">How filters work</LazyHelpLink></>;
+  const extra = <>{globalTrends ? null : <AccountFilterPicker />}<MapPoolToggle /><GameSizeToggle /><GameLengthFilter /><ExcludeTooShortToggle /><LazyHelpLink slug="analyzer-filters">How filters work</LazyHelpLink></>;
   return <div className="space-y-3">
     <div className="flex items-center gap-3">
       <p className="min-w-0 flex-1 text-caption text-text-muted" role="note" aria-label="Current filters">{summarizeFilters(filters, seasons)}</p>
-      <AnalyzerViewsButton />
-      {desktop ? <MoreFiltersPopover count={describeActiveFilters(filters, { seasons }).length}>{extra}</MoreFiltersPopover> : <FilterSheet><DateFilter /><MatchupPicker /><RegionToggleRow />{extra}</FilterSheet>}
+      {globalTrends ? null : <AnalyzerViewsButton />}
+      {desktop ? <MoreFiltersPopover count={describeActiveFilters(filters, { seasons }).length}>{extra}</MoreFiltersPopover> : <FilterSheet><DateFilter stageCustom={globalTrends} /><MatchupPicker /><RegionToggleRow />{extra}</FilterSheet>}
     </div>
-    {desktop ? <div className="flex flex-wrap items-center gap-3"><DateFilter /><MatchupPicker /><RegionToggleRow /></div> : null}
+    {desktop ? <div className="flex flex-wrap items-center gap-3"><DateFilter stageCustom={globalTrends} /><MatchupPicker /><RegionToggleRow /></div> : null}
   </div>;
 }
 
@@ -79,7 +79,7 @@ export function FilterBar() {
  * region, ESC closes it, the backdrop dismisses on tap, and every tap
  * target is at least 44px tall.
  */
-function DateFilter() {
+function DateFilter({ stageCustom = false }: { stageCustom?: boolean } = {}) {
   const { filters, setFilters, seasons } = useFilters();
   const presetId: PresetId = filters.preset || "all";
   const [open, setOpen] = useState(false);
@@ -121,11 +121,12 @@ function DateFilter() {
     setOpen(false);
   };
 
-  const onApplyCustom = () => {
-    const since = fromDateInputValue(customStart);
-    const until = fromDateInputValue(customEnd);
+  const customRange = (start: string, end: string) => {
+    const since = fromDateInputValue(start);
+    const until = fromDateInputValue(end);
     if (until) until.setHours(23, 59, 59, 999);
-    apply("custom", { since, until });
+    if (stageCustom) setFilters({ ...filters, preset: "custom", since: since?.toISOString(), until: until?.toISOString() });
+    else apply("custom", { since, until });
   };
 
   const triggerLabel = useMemo(
@@ -210,7 +211,7 @@ function DateFilter() {
                   type="date"
                   value={customStart}
                   max={customEnd || undefined}
-                  onChange={(e) => setCustomStart(e.target.value)}
+                  onChange={(e) => { setCustomStart(e.target.value); if (stageCustom) customRange(e.target.value, customEnd); }}
                   className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent mt-0.5 min-h-[44px]"
                 />
               </label>
@@ -222,18 +223,18 @@ function DateFilter() {
                   type="date"
                   value={customEnd}
                   min={customStart || undefined}
-                  onChange={(e) => setCustomEnd(e.target.value)}
+                  onChange={(e) => { setCustomEnd(e.target.value); if (stageCustom) customRange(customStart, e.target.value); }}
                   className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent mt-0.5 min-h-[44px]"
                 />
               </label>
-              <button
+              {stageCustom ? null : <button
                 type="button"
-                onClick={onApplyCustom}
+                onClick={() => customRange(customStart, customEnd)}
                 disabled={!customStart && !customEnd}
                 className="mt-1 inline-flex min-h-[44px] w-full items-center justify-center rounded-md border border-border bg-accent/15 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-accent/15"
               >
                 Apply custom range
-              </button>
+              </button>}
             </div>
           </div>
         </Popover>

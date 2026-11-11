@@ -412,11 +412,12 @@ function buildProgressServices(deps, notifications, gameDetails) {
  * @param {import('./services/mmrExpectation').MmrExpectationService} mmrExpectation
  * @param {import('./services/gameDetails').GameDetailsService} gameDetails
  * @param {import('./services/presetPolicies').PresetPoliciesService} presetPolicies
+ * @param {Buffer} rosterPepper
  */
-function buildAdminInsightServices(db, pulseDirectory, mmrExpectation, gameDetails, presetPolicies) {
+function buildAdminInsightServices(db, pulseDirectory, mmrExpectation, gameDetails, presetPolicies, rosterPepper) {
   return {
     adminGlobal: new AdminGlobalService({ db, pulseDirectory }),
-    adminGlobalTrends: new AdminGlobalTrendsService({ db, mmrExpectation }),
+    adminGlobalTrends: new AdminGlobalTrendsService({ db, mmrExpectation, rosterPepper }),
     classifierQuality: new ClassifierQualityService({ db, gameDetails, presetPolicies }),
   };
 }
@@ -1034,7 +1035,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     gdpr,
     infrastructureUsage,
   });
-  const adminInsights = buildAdminInsightServices(deps.db, pulseDirectory, mmrExpectation, gameDetails, presetPolicies);
+  const adminInsights = buildAdminInsightServices(deps.db, pulseDirectory, mmrExpectation, gameDetails, presetPolicies, deps.config.serverPepper);
   const { adminGlobalTrends } = adminInsights;
   // Atlas Cloud Backup health + in-app snapshot counts for /admin/health;
   // server.js runs the hourly stale-backup alert against the same cache.

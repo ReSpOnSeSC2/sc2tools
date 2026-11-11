@@ -13,6 +13,7 @@ const {
 } = require("../middleware/replayIngestAdmission");
 const { browserUploadStatusOf } = require("../services/replayFilesCors");
 const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
+const { ADMIN_TREND_VIEWS, sanitizeAdminTrendViews } = require("../util/adminTrendViews");
 const { sanitizeRivals } = require("../util/rivalsPreferences");
 const { OPPONENT_SCOUTING_PREF_TYPE, sanitizeOpponentScouting } = require("../util/opponentScoutingPreferences");
 const { LEAGUE_TARGETS_PREF_TYPE, sanitizeLeagueTargets } = require("../util/leagueTargetsPreferences");
@@ -462,7 +463,7 @@ function buildMeRouter(deps) {
     "onboarding",
     "multichat",
     "chatCommands",
-    "analyzerViews",
+    "analyzerViews", ADMIN_TREND_VIEWS,
     "rivals",
     OPPONENT_SCOUTING_PREF_TYPE,
     TWITCH_PREF_TYPE,
@@ -484,6 +485,10 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
+      if (type === ADMIN_TREND_VIEWS) {
+        res.set("Cache-Control", "private, no-store");
+        if (auth.source !== "clerk" || !isAdmin(req)) { res.status(403).json({ error: { code: "admin_only" } }); return; }
+      }
       if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE || type === APPEARANCE_PREF_TYPE) res.set("Cache-Control", "private, no-store");
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
@@ -506,6 +511,10 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
+      if (type === ADMIN_TREND_VIEWS) {
+        res.set("Cache-Control", "private, no-store");
+        if (auth.source !== "clerk" || !isAdmin(req)) { res.status(403).json({ error: { code: "admin_only" } }); return; }
+      }
       if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE || type === APPEARANCE_PREF_TYPE) res.set("Cache-Control", "private, no-store");
       if (type === TWITCH_PREF_TYPE && auth.source !== "clerk") { res.status(403).json({ error: { code: "clerk_required" } }); return; }
       if (!PREF_TYPES.has(type)) {
@@ -1037,6 +1046,7 @@ function preferenceValue(type, value, strict) {
     case NOTIFICATIONS_PREF_TYPE: return sanitizeNotificationPrefs(value);
     case REPORTS_PREF_TYPE: return sanitizeReportPrefs(value);
     case "analyzerViews": return sanitizeAnalyzerViews(value, strict);
+    case ADMIN_TREND_VIEWS: return sanitizeAdminTrendViews(value, strict);
     case "rivals": return sanitizeRivals(value, strict);
     case TWITCH_PREF_TYPE: return sanitizeTwitchAutomation(value, strict);
     case "chatCommands": return sanitizeChatCommands(value, strict);
