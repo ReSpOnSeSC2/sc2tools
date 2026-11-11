@@ -4,7 +4,7 @@ import { useChromeBreadcrumb } from "@/components/chrome/ChromeContext";
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import type { TimingHistoryFilter } from "@/lib/dossierTypes";
+import type { ScoutingBriefProfile, TimingHistoryFilter } from "@/lib/dossierTypes";
 import type { OpponentProfileResp } from "./ProfileView.types";
 import { MergedToonsChip, MergedIdentitiesLine, ProfilePulseLine, PublicProfileLink } from "./DossierHeaderDetails";
 import { useSWRConfig } from "swr";
@@ -244,6 +244,17 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
           winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
         }))
         .sort((a, b) => b.total - a.total);
+  // The local dossier controls filter the loaded meetings, not the all-time
+  // series, forecast or separately calculated phase evidence.
+  const briefProfile: ScoutingBriefProfile = filterActive ? {
+    name: data.name,
+    pulseId: data.pulseId,
+    games: filteredGames,
+    totals: t,
+    byMap: Object.fromEntries(byMap.map(({ name, wins, losses }) => [name, { wins, losses }])),
+    lastSeen: filteredGames[0]?.date ?? null,
+    gamesTruncated: data.gamesTruncated,
+  } : data;
   const opponentName = data.name || data.pulseId || pulseId;
   const playerChannels = channelsFor(channelProfileIdentity);
   // Avoid the bounded matcher request for readable profiles. Pulse/MMR data
@@ -324,9 +335,9 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         ...(selectedStrategy ? [{ key: "strategy", label: "Their strategy", value: selectedStrategy, clear: () => setSelectedStrategy(null) }] : []),
         ...(selectedBuildMatchup ? [{ key: "build", label: "Build", value: `${selectedBuildMatchup.myBuild} vs ${selectedBuildMatchup.oppStrategy}`, clear: () => setSelectedBuildMatchup(null) }] : []),
       ]} onClear={() => { setSelectedMap(null); setSelectedStrategy(null); setSelectedBuildMatchup(null); setSelectedTiming(null); }} />
-      {filterActive && data.gamesTruncated ? <p className="text-caption text-text-muted">Filtered summary uses the latest analyzed games. Replay history below searches your full history.</p> : null}
+      {filterActive && data.gamesTruncated ? <p className="text-caption text-text-muted">Filtered summaries use the loaded meeting sample.{selectedTiming ? " Replay history shows the selected analyzed games." : " Replay history searches all matching games."}</p> : null}
       <SectionNav variant="bar" aria-label="Dossier sections" items={[{ id: "dossier-brief", label: "Brief" }, { id: "dossier-tendencies", label: "Tendencies" }, { id: "dossier-timings", label: "Timings" }, { id: "dossier-history", label: "History" }, { id: "dossier-ladder", label: "Ladder" }, { id: "dossier-identity", label: "Identity" }]} />
-      <section id="dossier-brief" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Brief</h2><ScoutingBriefCard profile={data} /></section>
+      <section id="dossier-brief" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Brief</h2><ScoutingBriefCard profile={briefProfile} /></section>
       <section id="dossier-tendencies" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-5"><h2 className="text-h3 font-semibold">Tendencies</h2>
       <H2HTrendsSection
         games={games}
@@ -533,7 +544,7 @@ export function buildOpponentReplayHistoryQuery(
   const query = buildProfileQuery(
     {
       ...filters,
-      ...(selectedMap ? { map: selectedMap } : {}),
+      ...(selectedMap ? { map: selectedMap, map_exact: JSON.stringify([selectedMap]), map_exact_label: selectedMap } : {}),
       ...(selectedStrategy ? { opp_strategy: selectedStrategy } : {}),
       ...(selectedBuildMatchup
         ? {

@@ -22,7 +22,9 @@ vi.mock("@/lib/clientApi", () => ({ useApi: (...args: unknown[]) => harness.api(
 import { ProfileView } from "../ProfileView";
 const profile = { name: "Rival", pulseCharacterId: "123", totals: { total: 2, wins: 1, losses: 1, winRate: .5 },
   byMap: { Alcyone: { wins: 1, losses: 0 }, River: { wins: 0, losses: 1 } }, byStrategy: { Macro: { wins: 1, losses: 0 }, Cheese: { wins: 0, losses: 1 } },
-  games: [{ id: "one", map: "Alcyone", my_build: "Blink", opp_strategy: "Macro", result: "Victory" }, { id: "two", map: "River", my_build: "Expand", opp_strategy: "Cheese", result: "Defeat" }],
+  games: [{ id: "one", date: "2026-10-22T12:00:00Z", map: "Alcyone", my_build: "Blink", opp_strategy: "Macro", result: "Victory" }, { id: "two", date: "2026-10-20T12:00:00Z", map: "River", my_build: "Expand", opp_strategy: "Cheese", result: "Defeat" }],
+  series: { games: [], lastSeen: "2026-10-24T12:00:00Z", sourceLimit: 1000, truncated: false },
+  predictedStrategies: [{ strategy: "Cheese", probability: 0.8 }],
   phases: { finalPhaseDistribution: { mid: 2 } } };
 beforeEach(() => { harness.ownerId = "owner-a"; window.history.replaceState(null, "", "/app/opponents/target"); harness.filters = {}; harness.rev = 7; harness.error = null; harness.refresh.mockClear(); harness.toast.mockClear(); harness.retry.mockClear(); harness.api.mockReset();
   harness.api.mockImplementation((path: string | null) => path?.startsWith("/v1/opponents/target?")
@@ -55,6 +57,32 @@ it("shows clearable map/strategy/build filters and keeps replay history immediat
   fireEvent.click(within(bar).getByRole("button", { name: "Clear all" }));
   expect(screen.queryByRole("region", { name: "Active dossier filters" })).toBeNull();
   expect(screen.getByLabelText("Replay history").nextElementSibling).toBe(screen.getByLabelText("Notes"));
+});
+it("keeps the brief's evidence inside the selected local cohort", async () => {
+  render(<ProfileView pulseId="target" onBack={() => undefined} />);
+  const brief = (await screen.findByRole("heading", { name: "10-second brief" })).closest("section")!;
+  expect(brief.textContent).toContain("Last met (all time) Oct 24, 2026");
+  expect(brief.textContent).toContain("This view: 1W–1L");
+  expect(brief.textContent).toContain("Likely opener from recent history: Cheese");
+  expect(brief.textContent).toContain("Usual recorded end phase");
+
+  fireEvent.click(screen.getByRole("button", { name: /River/ }));
+  expect(brief.textContent).toContain("Last met Oct 20, 2026");
+  expect(brief.textContent).toContain("This view: 0W–1L");
+  expect(brief.textContent).toContain("Map in this view: River");
+  expect(brief.textContent).not.toMatch(/Alcyone|Likely opener|recorded end phase/);
+
+  fireEvent.click(screen.getByRole("button", { name: "Select build pairing" }));
+  expect(brief.textContent).toContain("Last met — · This view: 0W–0L.");
+  expect(brief.textContent).not.toMatch(/River|Likely opener|recorded end phase/);
+
+  const bar = screen.getByRole("region", { name: "Active dossier filters" });
+  fireEvent.click(within(bar).getByRole("button", { name: "Clear all" }));
+  expect(brief.textContent).toContain("This view: 1W–1L");
+  expect(brief.textContent).toContain("Likely opener");
+  fireEvent.click(screen.getByRole("button", { name: "Select build pairing" }));
+  expect(brief.textContent).toContain("This view: 1W–0L");
+  expect(brief.textContent).not.toContain("River");
 });
 it("refreshes all of this opponent's resources and channels after Pulse retry", async () => {
   render(<ProfileView pulseId="target" onBack={() => undefined} />);

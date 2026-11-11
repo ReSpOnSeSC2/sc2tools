@@ -11,7 +11,7 @@ const profile: ScoutingBriefProfile = {
 describe("scouting brief", () => {
   it("uses at most six factual lines with the >=2-game matrix pairing and supplied cohort", () => {
     const lines = buildScoutingBrief({ ...profile, series: { games: [], sourceLimit: 1000, truncated: false, firstSeen: "2010-01-01", lastSeen: "2026-10-22" } });
-    expect(lines).toHaveLength(6); expect(lines[0]).toContain("Oct 22, 2026"); expect(lines[0]).not.toContain("Oct 20, 2026"); expect(lines[0]).toContain("This view: 2W–1L");
+    expect(lines).toHaveLength(6); expect(lines[0]).toContain("Last met (all time) Oct 22, 2026"); expect(lines[0]).not.toContain("Oct 20, 2026"); expect(lines[0]).toContain("This view: 2W–1L");
     expect(lines.join("\n")).toContain("Blink vs Roaches, 2–0 (100%, n=2)"); expect(lines.join("\n")).toContain("observed in 2 decided games in this view");
     expect(lines.join("\n")).toContain("best Alpha 100% (n=2); toughest Beta 0% (n=1)"); expect(lines.join("\n")).toContain("Usual recorded end phase: mid (n=2)");
     expect(lines.some(line => line.startsWith("In this view:"))).toBe(true);
@@ -24,6 +24,7 @@ describe("scouting brief", () => {
   it("is deterministic without consulting the clock and bounds a truncated current run", () => {
     const clock = vi.spyOn(Date, "now").mockImplementation(() => { throw new Error("Unexpected clock read"); });
     const first = buildScoutingBrief({ ...profile, games: profile.games!.slice(0, 2), gamesTruncated: true });
+    expect(first[0]).toContain("Loaded meeting sample:");
     expect(first[0]).toContain("W≥2"); expect(buildScoutingBrief({ ...profile, games: profile.games!.slice(0, 2), gamesTruncated: true })).toEqual(first); clock.mockRestore();
   });
 });
