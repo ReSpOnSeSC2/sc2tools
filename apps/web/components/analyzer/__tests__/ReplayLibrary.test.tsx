@@ -332,10 +332,12 @@ describe("ReplayLibrary", () => {
     expect(screen.getByRole("dialog", { name: "Share your replay archive" })).toBeTruthy();
     expect(screen.getByText(/Exactly what visitors can see/i)).toBeTruthy();
     expect(screen.getByText(/every synced replay in this archive/i)).toBeTruthy();
-    expect(screen.getByText(/download archived original replay files/i)).toBeTruthy();
-    expect(screen.getByText(/full Macro breakdown require.*sign in/i)).toBeTruthy();
-    expect(screen.getByText(/can contain player\/account identifiers, chat, team information/i)).toBeTruthy();
-    expect(screen.getByText(/temporary storage URL/i)).toBeTruthy();
+    expect(screen.getByText(/archive and analysis keep opponents anonymous/i)).toBeTruthy();
+    expect(screen.getByText(/download available originals without an account/i)).toBeTruthy();
+    expect(screen.getByText(/full analysis requires sign-in/i)).toBeTruthy();
+    expect(screen.getByText(/can contain player names, account identifiers, chat, team information/i)).toBeTruthy();
+    expect(screen.getByText(/disable the page, analysis access, and new downloads/i)).toBeTruthy();
+    expect(screen.getByText(/a download already in progress can finish/i)).toBeTruthy();
     expect(screen.getByText(/player replay address stays assigned to you/i)).toBeTruthy();
     expect(screen.getByText(/personal player replay address is created/i)).toBeTruthy();
 

@@ -28,8 +28,11 @@ const article: HelpArticle = {
     "availability",
     "schedule",
     "time zone",
+    "google calendar",
+    "past sessions",
+    "prep digest",
   ],
-  updated: "2026-10-25",
+  updated: "2026-11-10",
   order: 20,
   body: [
     {
@@ -112,12 +115,35 @@ const article: HelpArticle = {
       type: "steps",
       items: [
         "**Coach:** in **Sessions**, choose your **Coaching timezone**, the **Session lengths** you offer (30 minutes to 8 hours) and your **Weekly hours**, then press **Publish availability** in the bar at the bottom. Sessions already booked stay booked when you change your hours later.",
+        "**Coach:** each day's **⋯** menu copies its hours with **Copy to weekdays** or **Copy to all days**, or empties it with **Clear day**. When a copy will overwrite days that already have hours, the menu says how many. **Undo** appears beside the day for 10 seconds afterwards. An empty day offers **Evenings 18:00–22:00** and **Afternoons 13:00–17:00**, plus **All day 10:00–18:00** on Saturday and Sunday. **Add hours** adds two hours after the day's last window (up to midnight), and **Set hours** on an empty day starts at 18:00–20:00. A window that ends at midnight shows its end as 00:00.",
         "**Coach:** **Pause new bookings** stops new bookings without touching booked sessions. **Resume bookings** opens them again.",
         "**Student:** in **Sessions**, pick a **Session length** and an open time under **Available times**. Times are shown in your local time, with your coach's time alongside. Press **Confirm booking**, and the session appears under **Your upcoming sessions**.",
         "**Either side** can press **Cancel session** on an upcoming session. The other person sees the change, and the time opens up for booking again.",
       ],
     },
     { type: "paragraph", text: "Unpublished changes are kept while you switch tabs. **Publish availability** saves them; **Reset** restores the published hours. The warning dot on Sessions stays until you publish or reset. Booked sessions always show in your saved coaching time zone, so changing the draft zone does not move existing bookings." },
+    {
+      type: "list",
+      items: [
+        "**Add to your calendar:** every upcoming session has **Add to Google Calendar**, which opens a prefilled Google Calendar event in a new tab, and **Download .ics** for Apple Calendar, Outlook and other calendar apps. Both are built in your browser from the session's own time, so no calendar account is connected. The event is named after the other person on the session only.",
+        "Use **Add sessions to your calendar** in Sessions to create a private link that keeps your calendar up to date. Copy the link when it appears and keep it private. Regenerate the link to replace it, or turn it off to stop sharing.",
+        "A session that has started shows **In progress** until it ends, and can no longer be cancelled.",
+        "**Past sessions** under the upcoming list opens your complete history, newest first, with cancelled sessions marked and who cancelled them. Coaches also see how many sessions each student had. The list shows the latest 50.",
+      ],
+    },
+    { type: "heading", anchor: "session-prep-digest", text: "Session prep digest" },
+    {
+      type: "paragraph",
+      text: "**Since last session**, on each upcoming session, summarizes synced 1v1 replays since the student's previous session. Coaches see the ranked game count and wins and losses by matchup. Detected builds and recent replay details come from games the current practice-sharing approval lets the coach see in assignment evidence. Students see their own eligible games, including their checked-in builds, and can open their game pages. The next session opens the digest automatically.",
+    },
+    {
+      type: "list",
+      items: [
+        "It is facts from synced replays only, counted with fixed rules. It never grades or scores a game and leaves out ratings, notes and practice logs. A matchup's win percentage appears only from 5 decided games; below that you see the wins and losses alone.",
+        "Only the coach and the student on that session can open it, and only while the student allows practice sharing. It never reaches back before sharing started, or more than 90 days. Without sharing it says so and lists nothing.",
+        "Hidden games, team games and resumed replays are left out.",
+      ],
+    },
   ],
   related: ["install-app", "replay-reviews"],
 };

@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
-import { PublicPlayerPage } from "@/components/public-profile/PublicPlayerPage";
+import { lazy, Suspense } from "react";
+import PlayerProfileLoading from "@/components/public-profile/PlayerProfileLoading";
 import { publicPlayerPath, resolvePublicPlayer } from "@/lib/publicPlayer";
 import { siteTitle } from "@/lib/siteTitle";
+
+const PlayerView = lazy(() => import("@/components/public-profile/PublicPlayerPage")
+  .then(({ PublicPlayerPage }) => ({ default: PublicPlayerPage })));
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -27,5 +31,7 @@ export default async function PlayerPage({ params, searchParams }: Props) {
   if (data.handle !== player) permanentRedirect(publicPlayerPath(data.handle));
   const query = await searchParams;
   const tab = typeof query?.tab === "string" ? query.tab : undefined;
-  return <PublicPlayerPage profile={data.profile} requestedTab={tab} />;
+  return <Suspense fallback={<PlayerProfileLoading />}>
+    <PlayerView profile={data.profile} requestedTab={tab} />
+  </Suspense>;
 }

@@ -1,6 +1,6 @@
 "use strict";
 
-const { canonicalTimeZone } = require("./reportTime");
+const { canonicalTimeZone, localParts, isoWeekOf, shiftWeek } = require("./reportTime");
 
 /**
  * ``/v1/me/preferences/reports``: {weekly, stream, timezone}.
@@ -22,4 +22,16 @@ function sanitizeReportPrefs(input) {
   };
 }
 
-module.exports = { REPORTS_PREF_TYPE, sanitizeReportPrefs };
+/** The completed week linked on Today, Monday through Wednesday in the saved zone.
+ * @param {unknown} input
+ * @param {number} [now]
+ */
+function todayReportWeek(input, now = Date.now()) {
+  const prefs = sanitizeReportPrefs(input);
+  if (!prefs.weekly) return null;
+  const local = localParts(now, prefs.timezone || "UTC");
+  if (local.weekday > 2) return null;
+  return shiftWeek(isoWeekOf({ y: local.year, m: local.month, d: local.day }), -1);
+}
+
+module.exports = { REPORTS_PREF_TYPE, sanitizeReportPrefs, todayReportWeek };

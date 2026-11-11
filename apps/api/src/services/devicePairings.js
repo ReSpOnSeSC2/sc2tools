@@ -45,11 +45,13 @@ class DevicePairingsService {
    * }} db
    * @param {{ adminEvents?: import('./adminEvents').AdminEventsService,
    *   logger?: import('pino').Logger, ipSalt?: string, liveness?: DeviceLiveness,
+   *   notifications?: Pick<import('./notifications').NotificationsService, 'notify'>,
    *   credentialWrites?: import('./deviceCredentialWrites').DeviceCredentialWrites }} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
     this.adminEvents = opts.adminEvents || null;
+    this.notifications = opts.notifications || null;
     this.logger = opts.logger || null;
     /** @type {((userId: string, metadata: any) => Promise<void>)|null} */
     this.onHeartbeat = null;
@@ -377,7 +379,12 @@ class DevicePairingsService {
       { _id, userId, revokedAt: null },
       { $set: { revokedAt: new Date() } },
     )));
-    return res.matchedCount > 0;
+    if (!res.matchedCount) return false;
+    await this.notifications?.notify(userId, {
+      kind: "agent.unlinked", title: "Desktop app unlinked", body: "A desktop app was disconnected from this account.",
+      href: "/devices", eventKey: `agent-unlinked:${_id.toHexString()}`,
+    }).catch((err) => this.logger?.warn({ code: err?.code || "notification_failed" }, "device_unlink_notification_failed"));
+    return true;
   }
 
   /** @param {string} userId @param {string} deviceId @param {unknown} label */

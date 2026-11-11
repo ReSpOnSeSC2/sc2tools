@@ -28,6 +28,8 @@ export interface PracticeHistoryRow {
   via: "ingest" | "request";
 }
 export interface PracticeStepStat { i: number; name: string; t: number; games: number; hit: number; avgDrift: number | null }
+export interface PracticeCheckpoint { i: number; toleranceSec: number }
+export interface PracticeCheckpointStat extends PracticeCheckpoint { name: string; attempts: number; hits: number }
 export interface PracticeSummary {
   matchup: string;
   target: PracticeTarget | null;
@@ -38,6 +40,7 @@ export interface PracticeSummary {
   history: PracticeHistoryRow[];
   divergence: Array<{ i: number; name: string; games: number; cut: number }>;
   steps: PracticeStepStat[] | null;
+  checkpoints?: PracticeCheckpointStat[];
 }
 export interface PracticeDivergence { i: number; name: string; expectedT: number; actualT: number | null }
 export interface PracticeWorstStep { i: number; name?: string; d: number | null }

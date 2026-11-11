@@ -22,9 +22,6 @@ vi.mock("next/navigation", () => ({
   },
   permanentRedirect: mocks.permanentRedirect,
 }));
-vi.mock("@/components/guides/LazyCiBarChart", async () => ({
-  LazyCiBarChart: (await import("@/components/guides/CiBarChart")).CiBarChart,
-}));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false }) }));
 vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: undefined, error: undefined, isLoading: false }) }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
@@ -166,6 +163,8 @@ describe("/guides/[matchup]/[build] page", () => {
     expect(screen.getByRole("link", { name: "All PvZ openers" }).getAttribute("href")).toBe("/guides/pvz");
     expect(screen.getByRole("link", { name: "How to beat Zerg openers" }).getAttribute("href")).toBe("/guides/pvz/counter");
     expect(screen.getByTestId("guide-headline").parentElement?.textContent).not.toContain("n =");
+    const league = await screen.findByRole("table", { name: "Win rate by opponent league" });
+    expect(within(league).getByRole("rowheader", { name: "Diamond" })).toBeTruthy();
     for (const entry of [...buildIntro(FIXTURE_BUILD_PUBLISHED), ...buildTimingsBlurb(FIXTURE_BUILD_PUBLISHED)]) {
       expect(document.querySelector(`[data-copy-id="${entry.id}"]`)?.textContent).toContain(entry.text);
     }
@@ -225,7 +224,7 @@ describe("/guides/[matchup]/[build] page sections", () => {
     const { container } = await renderPage();
     const adeptIcon = container.querySelector('img[src="/icons/sc2/units/adept.png"]');
     expect(adeptIcon?.getAttribute("width")).toBe("28");
-    expect(screen.getByRole("link", { name: "17 Hatch 18 Gas 17 Pool" }).getAttribute("href")).toBe(
+    expect((await screen.findByRole("link", { name: "17 Hatch 18 Gas 17 Pool" })).getAttribute("href")).toBe(
       "/guides/pvz/counter/17-hatch-18-gas-17-pool",
     );
     expect(screen.queryByRole("link", { name: "Ling Bane Bust" })).toBeNull();
@@ -299,7 +298,7 @@ describe("/guides/[matchup]/[build] page numbers", () => {
     mocks.fetchGuideBuild.mockResolvedValue(ok({ ...FIXTURE_BUILD_PUBLISHED, vsStrategy: [thin, solid] }));
     await renderPage();
     const section = screen.getByRole("heading", { name: "What it beats and loses to" }).closest("section")!;
-    const names = within(section).getAllByRole("rowheader").map((cell) => cell.textContent);
+    const names = (await within(section).findAllByRole("rowheader")).map((cell) => cell.textContent);
     expect(names).toEqual(["Solid", "Thin"]);
   });
 

@@ -20,18 +20,18 @@ function armyWith(games: number): GuideArmy {
 }
 
 describe("BuildArmySection presence", () => {
-  it("never claims a unit was in 100% of games when one sample lacked it", () => {
+  it("never claims a unit was in 100% of games when one sample lacked it", async () => {
     render(<BuildArmySection army={armyWith(SAMPLES - 1)} />);
-    expect(screen.getByText("in >99% of games")).toBeTruthy();
+    expect(await screen.findByText("in >99% of games")).toBeTruthy();
     expect(screen.queryByText("in 100% of games")).toBeNull();
   });
 
-  it("prints 100% only when every sample fielded the unit", () => {
+  it("prints 100% only when every sample fielded the unit", async () => {
     render(<BuildArmySection army={armyWith(SAMPLES)} />);
-    expect(screen.getByText("in 100% of games")).toBeTruthy();
+    expect(await screen.findByText("in 100% of games")).toBeTruthy();
   });
 
-  it("unifies units in late-presence order, marks absent cells and omits empty columns", () => {
+  it("unifies units in late-presence order, marks absent cells and omits empty columns", async () => {
     const army: GuideArmy = {
       "360": { samples: 200, users: 31, units: [{ unit: "Oracle", presence: 0.8, median: 2, games: 160 }, { unit: "Adept", presence: 0.6, median: 4, games: 120 }] },
       "480": { samples: 200, users: 31, units: [{ unit: "Stalker", presence: 0.9, median: 8, games: 180 }, { unit: "Oracle", presence: 0.5, median: 1, games: 100 }] },
@@ -45,7 +45,7 @@ describe("BuildArmySection presence", () => {
     expect(first.textContent).toContain("—not built");
     expect(within(first).getByText("90%")).toBeTruthy();
     expect(screen.getByText("Not enough games reach 10:00")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "6:00" }).getAttribute("aria-selected")).toBe("true");
+    expect((await screen.findByRole("tab", { name: "6:00" })).getAttribute("aria-selected")).toBe("true");
     fireEvent.click(screen.getByRole("tab", { name: "8:00" }));
     expect(screen.getByRole("tab", { name: "8:00" }).getAttribute("aria-selected")).toBe("true");
     expect(within(screen.getByRole("tabpanel")).getByRole("heading", { name: "At 8:00" })).toBeTruthy();

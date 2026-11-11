@@ -5,6 +5,7 @@ import {
   validReferenceLine,
   validReferenceNumber,
 } from "./buildOrderReference";
+import { formatNumber } from "@/lib/i18n/format";
 
 const INVALID_PLAN = "The reference plan is invalid. Paste or fill it again.";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -26,7 +27,7 @@ function stepError(step: unknown): string | null {
   const checks = [
     [validReferenceNumber(step.t, limits.seconds, true), "use a valid m:ss time up to 1440:00, or leave it blank."],
     [validReferenceNumber(step.supply, limits.supply),
-      `use supply from 0 to ${limits.supply.toLocaleString("en-US")}, or leave it blank.`],
+      `use supply from 0 to ${formatNumber(limits.supply)}, or leave it blank.`],
     [validReferenceLine(step.action, limits.actionChars, true),
       `enter an action of at most ${limits.actionChars} characters on one line.`],
     [step.note === undefined || validReferenceLine(step.note, limits.noteChars),

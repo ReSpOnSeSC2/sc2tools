@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { formatNumber } from "@/lib/i18n/format";
 import { useApi } from "@/lib/clientApi";
 import { SYNC_HEALTH_SETTINGS_HREF, syncHealthItems, syncHealthStatus, type SyncHealthResponse } from "@/lib/syncHealth";
 
@@ -20,7 +21,7 @@ export function SyncHealthSummary({ onNavigate }: { onNavigate: () => void }) {
       <Button variant="ghost" size="sm" onClick={() => { void health.mutate(); }}>Retry</Button></p>;
   }
   if (!health.data) return <p role="status" className="text-text-muted">Checking sync health…</p>;
-  const items = syncHealthItems(health.data);
+  const items = syncHealthItems(health.data, formatNumber);
   const status = syncHealthStatus(health.data, items);
   return <div className="space-y-1">
     {health.error ? <p role="alert" className="text-text-muted">Couldn&apos;t refresh sync health. These are the last checked details.{" "}

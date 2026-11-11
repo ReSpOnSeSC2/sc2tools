@@ -4,7 +4,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { StoredTryGame, TryGameInput } from "@/lib/instant/localStore";
@@ -42,6 +42,7 @@ vi.mock("@/lib/instant/useInstantSession", () => ({
 }));
 
 import { INSTANT_ENGINE_VERSION } from "@/lib/instant/engineVersion";
+import { REPORT_FILTERS_STORAGE_KEY } from "@/lib/instant/reportFilters";
 import { PRIVACY_LINE, TRY_SESSION_OPTIONS, TryPage } from "../TryPage";
 
 const RAW = readFileSync(path.join(__dirname, "../../../lib/instant/__tests__/fixtures/warpgate_payload.json"), "utf8");
@@ -115,6 +116,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.sessionStorage.clear();
   vi.clearAllMocks();
 });
 
@@ -160,6 +162,34 @@ describe("TryPage intake and progress", () => {
 });
 
 describe("TryPage report", () => {
+  it("filters every report section and the game list, persists the filter, and restores the full report", async () => {
+    const other = JSON.parse(RAW);
+    other.gameId = "other-game";
+    other.map = "Other map";
+    other.result = "Defeat";
+    other.opponent.race = "Terran";
+    mocks.loadTryGames.mockResolvedValue([storedGame(), { ...storedGame(), gameId: other.gameId, json: JSON.stringify(other) }]);
+    const view = render(<TryPage mode="all" />);
+    await screen.findByText("Showing 2 of 2 games");
+    const list = await screen.findByRole("list", { name: "Your games" });
+    expect(within(list).getAllByRole("button")).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show only vs Zerg games" }));
+    expect(screen.getByText("Showing 1 of 2 games")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole("list", { name: "Your games" })).toBeNull());
+    expect(window.sessionStorage.getItem(REPORT_FILTERS_STORAGE_KEY)).toContain('"matchup":"Z"');
+
+    view.unmount();
+    render(<TryPage mode="all" />);
+    await screen.findByText("Showing 1 of 2 games");
+    fireEvent.click(screen.getByRole("button", { name: "Losses" }));
+    expect(screen.getByText("No games match these filters")).toBeTruthy();
+    expect(screen.queryByRole("list", { name: "Your games" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByText("Showing 2 of 2 games")).toBeTruthy();
+    expect(window.sessionStorage.getItem(REPORT_FILTERS_STORAGE_KEY)).toBeNull();
+  });
+
   it("stores finished games on the device and shows the report", async () => {
     const { rerender } = render(<TryPage mode="all" />);
     mocks.loadTryGames.mockResolvedValue([storedGame()]);

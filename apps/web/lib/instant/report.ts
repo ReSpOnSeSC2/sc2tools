@@ -13,6 +13,10 @@
  *   macro           — average macro score + most frequent top-3 leaks
  *   mmr             — pre-game MMR per account + queue (ladder only)
  *   lastLoss        — "why you lost" causes for your most recent loss
+ *   highlights      — longest win streak, biggest upset, favorite map,
+ *                     nemesis / best victim (recap minimums + floors)
+ *   recordByMap     — W-L per map, "Unknown map" last
+ *   recordByLength  — W-L under 8 / 8–15 / 15+ minutes
  *   games           — every game, newest first, for the game-by-game view
  *
  * Example:
@@ -28,6 +32,14 @@ import { lossAutopsy, type AutopsyCause, type AutopsyGame } from "@/lib/lossAuto
 import { computeSeasonRecap, type RecapMatchupSplit } from "@/lib/seasonRecap";
 import { toArcadeGame } from "./reportArcade";
 import { buildReportGames, type ReportGame } from "./reportGames";
+import {
+  computeRecordByLength,
+  computeRecordByMap,
+  highlightsFromRecap,
+  type LengthRecord,
+  type MapRecordRow,
+  type ReportHighlights,
+} from "./reportHighlights";
 import { computeMmrByQueue, type MmrQueueRow } from "./reportMmr";
 import type { InstantOpponent, InstantPayload } from "./reportPayload";
 
@@ -36,6 +48,7 @@ export { parseInstantPayload } from "./reportPayload";
 export type { InstantMacroBreakdown, InstantOpponent, InstantPayload } from "./reportPayload";
 export type { ReportGame } from "./reportGames";
 export type { MmrQueueRow } from "./reportMmr";
+export type { LengthBucketRow, LengthRecord, MapRecordRow, ReportHighlights } from "./reportHighlights";
 
 /** "Most faced" only means something once you met someone twice. */
 export const MOST_FACED_MIN_GAMES = 2;
@@ -104,6 +117,9 @@ export interface InstantReport {
   macro: MacroSummary | null;
   mmr: MmrQueueRow[] | null;
   lastLoss: LastLoss | null;
+  highlights: ReportHighlights;
+  recordByMap: MapRecordRow[] | null;
+  recordByLength: LengthRecord | null;
   /** Newest first; empty for an empty report. */
   games: ReportGame[];
 }
@@ -147,6 +163,9 @@ export function buildInstantReport(
     macro: computeMacro(games),
     mmr: computeMmrByQueue(games),
     lastLoss: computeLastLoss(games),
+    highlights: highlightsFromRecap(recap),
+    recordByMap: computeRecordByMap(games),
+    recordByLength: computeRecordByLength(games),
     games: buildReportGames(games),
   };
 }

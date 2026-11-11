@@ -6,6 +6,7 @@ import { fmtMmr } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import type { GlobalPlayerIdentity } from "@/lib/opponentGroups";
+import { formatDate, formatNumber } from "@/lib/i18n/format";
 
 export type PulseRaceRow = {
   race: string;
@@ -108,7 +109,7 @@ export function HeadlineMmrChip({
   if (latest && Number.isFinite(latest.rating) && latest.rating > 0) {
     const lastPlayed = latest.lastPlayed ? new Date(latest.lastPlayed) : null;
     const dateLabel = lastPlayed && Number.isFinite(lastPlayed.getTime())
-      ? ` · last played ${lastPlayed.toLocaleDateString()}` : "";
+      ? ` · last played ${formatDate(lastPlayed)}` : "";
     return (
       <span
         role="note"
@@ -212,7 +213,7 @@ export function RaceMmrPanel({
                     {fmtMmr(r.mmr)}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums text-text-muted">
-                    {r.games.toLocaleString()}
+                    {formatNumber(r.games)}
                   </td>
                   <td className="py-2 text-right text-text-muted">
                     {r.league || "—"}

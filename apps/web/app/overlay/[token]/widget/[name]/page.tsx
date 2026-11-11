@@ -1,5 +1,5 @@
 import { localOverlaySample } from "@/lib/overlayDemo.server";
-import { OverlayWidgetClient } from "@/components/OverlayWidgetClient";
+import { OverlayWidgetSource } from "@/components/overlay/OverlayWidgetSource";
 import { overlayThemeParamFromSearch } from "@/lib/overlayTheme";
 import { GHOST_BUILD_PARAM } from "@/lib/ghostBuild";
 import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
@@ -87,7 +87,7 @@ export default async function OverlayWidgetPage({
     );
   }
   return (
-    <OverlayWidgetClient
+    <OverlayWidgetSource
       demo={sp.demo === "1" ? localOverlaySample(widget) : undefined}
       token={token}
       widget={widget}

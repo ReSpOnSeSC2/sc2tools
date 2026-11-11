@@ -1,8 +1,14 @@
 import { CARD_W, CARD_H, CARD_PAD, FONT_STACK, drawCardBackground, wrapText } from "@/components/analyzer/arcade/ShareCard";
 import type { ReportCardModel } from "./reportSharing";
 
-/** Fixed 1200×630 local canvas. Input is the identity-free aggregate projection. */
-export function drawReportCard(canvas: HTMLCanvasElement, model: ReportCardModel): void {
+/**
+ * Fixed 1200×630 local canvas. Input is the identity-free aggregate
+ * projection; `subtitle` names active report filters ("Filtered: vs Z ·
+ * last 25 games") so a filtered card never reads as the whole history.
+ * Highlights that name opponents (upset, nemesis, best victim) are never
+ * part of the projection, so they can never be drawn.
+ */
+export function drawReportCard(canvas: HTMLCanvasElement, model: ReportCardModel, subtitle?: string | null): void {
   canvas.width = CARD_W;
   canvas.height = CARD_H;
   const ctx = canvas.getContext("2d");
@@ -15,6 +21,11 @@ export function drawReportCard(canvas: HTMLCanvasElement, model: ReportCardModel
   ctx.font = `500 30px ${FONT_STACK}`;
   ctx.fillStyle = "#e6edf3";
   if (model.totals) ctx.fillText(`${model.totals.games} games · ${model.totals.wins}W ${model.totals.losses}L`, CARD_PAD, 104);
+  if (subtitle) {
+    ctx.fillStyle = "#a9d6ff";
+    ctx.font = `600 20px ${FONT_STACK}`;
+    ctx.fillText(subtitle.slice(0, 80), CARD_PAD, 141);
+  }
   model.matchups.forEach((row, index) => drawMatchup(ctx, row, 170 + index * 74));
   if (model.opener) {
     ctx.fillStyle = "#b7c6d8";

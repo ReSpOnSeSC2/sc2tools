@@ -6,6 +6,7 @@ import type {
   DailyMmrSwing,
   DailyMmrSwings,
 } from "@/lib/netMmrOpponents";
+import { formatNumber } from "@/lib/i18n/format";
 
 type Props = {
   dailySwings?: DailyMmrSwings;
@@ -83,10 +84,10 @@ export function MmrDailySwings({
         {summary && summary.measuredGames > 0 ? (
           <p className="text-micro tabular-nums text-text-dim">
             {primaryRegion ? `${primaryRegion} · ` : ""}
-            {summary.measuredGames.toLocaleString()} measured{" "}
+            {formatNumber(summary.measuredGames)} measured{" "}
             {summary.measuredGames === 1 ? "game" : "games"}
             {summary.measuredDays > 0
-              ? ` across ${summary.measuredDays.toLocaleString()} ${summary.measuredDays === 1 ? "day" : "days"}`
+              ? ` across ${formatNumber(summary.measuredDays)} ${summary.measuredDays === 1 ? "day" : "days"}`
               : ""}
           </p>
         ) : null}
@@ -157,10 +158,10 @@ function RegionDailySwings({
           <span className="text-micro text-text-dim">Battle.net region</span>
         </div>
         <span className="text-micro tabular-nums text-text-dim">
-          {region.measuredGames.toLocaleString()} measured{" "}
+          {formatNumber(region.measuredGames)} measured{" "}
           {region.measuredGames === 1 ? "game" : "games"}
           {region.measuredDays > 0
-            ? ` · ${region.measuredDays.toLocaleString()} ${region.measuredDays === 1 ? "day" : "days"}`
+            ? ` · ${formatNumber(region.measuredDays)} ${region.measuredDays === 1 ? "day" : "days"}`
             : ""}
         </span>
       </header>
@@ -249,17 +250,17 @@ function SwingContext({
       <span>{formatDailySwingDate(swing.day, timeZone)}</span>
       <span aria-hidden> · </span>
       <span>
-        {swing.measuredGames.toLocaleString()} measured{" "}
+        {formatNumber(swing.measuredGames)} measured{" "}
         {swing.measuredGames === 1 ? "game" : "games"}
       </span>
       <span aria-hidden> · </span>
       <span>
         <span aria-hidden>
-          {swing.wins.toLocaleString()}–{swing.losses.toLocaleString()}
+          {formatNumber(swing.wins)}–{formatNumber(swing.losses)}
         </span>
         <span className="sr-only">
-          {swing.wins.toLocaleString()} {swing.wins === 1 ? "win" : "wins"},{" "}
-          {swing.losses.toLocaleString()} {swing.losses === 1 ? "loss" : "losses"}
+          {formatNumber(swing.wins)} {swing.wins === 1 ? "win" : "wins"},{" "}
+          {formatNumber(swing.losses)} {swing.losses === 1 ? "loss" : "losses"}
         </span>
       </span>
     </p>
@@ -335,7 +336,7 @@ function DailySwingSkeleton() {
 }
 
 function formatSignedMmr(value: number): string {
-  if (value > 0) return `+${value.toLocaleString()}`;
-  if (value < 0) return `−${Math.abs(value).toLocaleString()}`;
+  if (value > 0) return `+${formatNumber(value)}`;
+  if (value < 0) return `−${formatNumber(Math.abs(value))}`;
   return "0";
 }

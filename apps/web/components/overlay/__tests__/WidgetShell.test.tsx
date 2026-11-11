@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { RaceIcon, WidgetHeader, WidgetShell } from "../WidgetShell";
+import { RaceIcon, WidgetHeader, WidgetShell, raceToAccent } from "../WidgetShell";
+import { OVERLAY_RACE_COLORS } from "@/lib/overlayRaceColors";
+import { OverlayPanel } from "../OverlayPanel";
 
 afterEach(cleanup);
 
@@ -30,6 +32,29 @@ describe("RaceIcon accessible graphic", () => {
 });
 
 describe("WidgetShell structural theming", () => {
+  it.each(Object.entries(OVERLAY_RACE_COLORS))("uses the dark overlay colour for %s", (race, colour) => {
+    const { container } = render(<WidgetShell race={race}><RaceIcon race={race} /></WidgetShell>);
+    const accent = container.querySelector<HTMLElement>(".widget-shell__accent");
+    expect(raceToAccent(race)).toBe(colour);
+    expect(accent?.style.background).toContain(colour);
+  });
+
+  it("applies scale and frame separately", () => {
+    const { container, rerender } = render(<OverlayPanel>Preview</OverlayPanel>);
+    const panel = () => container.firstElementChild as HTMLElement;
+    expect(panel().style.zoom).toContain("--ov-scale");
+    expect(panel().style.clipPath).toContain("--ov-clip");
+    expect(panel().querySelector<HTMLElement>(".widget-shell__texture")?.style.background).toContain("--ov-texture");
+    expect(panel().querySelector<HTMLElement>(".widget-shell__ornament")?.style.background).toContain("--ov-ornament");
+    rerender(<OverlayPanel frame={false}>Preview</OverlayPanel>);
+    expect(panel().style.zoom).toContain("--ov-scale");
+    expect(panel().style.clipPath).toBe("");
+    expect(panel().querySelector(".widget-shell__texture")).toBeNull();
+    rerender(<OverlayPanel scale={false} frame={false}>Preview</OverlayPanel>);
+    expect(panel().style.zoom).toBe("");
+    expect(panel().style.fontFamily).toContain("--ov-font");
+  });
+
   it("keeps shell chrome in named layers for fixed creative styles", () => {
     const { container } = render(
       <WidgetShell accent="cyan">

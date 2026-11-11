@@ -37,6 +37,7 @@ import {
   useSettingsContext,
 } from "./SettingsContext";
 import { revealSectionAnchor } from "./revealSectionAnchor";
+import { SettingsSaveBar } from "./SettingsSaveBar";
 import { settingsSectionsForTab } from "@/lib/settingsIndex";
 import { SettingsSectionNav } from "./SettingsSectionNav";
 import { OverlayManagerNav } from "./OverlayManagerNav";
@@ -284,7 +285,9 @@ function SettingsShellInner({
   return (
     <>
       <SettingsSearch key={owner.key ?? "signed-out"} ownerKey={owner.key ?? null} onNavigate={requestSection} />
+      {/* A new owner gets new drafts while the shell keeps the admitted destination. */}
       <Tabs
+        key={`panels:${ownerKey ?? "anonymous"}`}
         value={active}
         onValueChange={(next) => requestSwitch(next)}
         orientation="vertical"
@@ -381,6 +384,11 @@ function SettingsShellInner({
         })()}
         </div>
       </Tabs>
+
+      {/* The tab's one SaveBar: forms register with useSaveSource and never
+          render their own, so bars can't stack. Keyed so a result from one
+          tab never shows on another. */}
+      <SettingsSaveBar key={`save:${ownerKey ?? "anonymous"}:${active}`} tabId={active} />
 
       <ConfirmDialog
         open={pending !== null}

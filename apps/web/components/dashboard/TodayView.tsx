@@ -11,6 +11,8 @@ import { AgentUpgradeNotice } from "@/components/dashboard/AgentUpgradeNotice";
 import { LiveScoutingBrief } from "@/components/scouting/LiveScoutingBrief";
 import { onboardingView, useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
 import { SectionBoundary } from "@/components/ui/SectionBoundary";
+import { Card } from "@/components/ui/Card";
+import { LinkButton } from "@/components/ui/Button";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
 import { GuidedTours } from "@/components/onboarding/GuidedTours";
 
@@ -63,6 +65,11 @@ export function TodayView() {
 
       <SectionBoundary label="your goals"><GoalsTodayCard /></SectionBoundary>
       <SectionBoundary label="your league targets"><TargetsStrip /></SectionBoundary>
+
+      {me.weeklyReportWeek ? <Card className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-body font-semibold text-text">Last week</h2>
+        <LinkButton href={`/app/reports/weekly/${encodeURIComponent(me.weeklyReportWeek)}`} variant="secondary" size="sm" className="min-h-11">Open weekly report</LinkButton>
+      </Card> : null}
 
       <div data-tour="today-daily-pulse"><SectionBoundary label="the Daily Pulse strip">
         <DailyPulse

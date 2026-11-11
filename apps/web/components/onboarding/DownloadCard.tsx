@@ -24,6 +24,7 @@ import type { DetectedOS } from "./types";
 import { Button } from "@/components/ui/Button";
 import { CODE_LOCATION, smartScreenNote, sourceInstallSnippet } from "@/lib/agentInstallerCopy";
 import { MiniMarkdown } from "@/components/ui/MiniMarkdown";
+import { formatDate } from "@/lib/i18n/format";
 
 const OS_LABEL: Record<Exclude<DetectedOS, "unknown">, string> = {
   windows: "Windows",
@@ -79,7 +80,7 @@ export function DownloadCard({
           </h3>
           {publishedAt || size !== "unknown" ? (
             <p className="text-caption text-text-dim">
-              {publishedAt ? <>Released <time dateTime={publishedAt}>{formatDate(publishedAt)}</time></> : null}
+              {publishedAt ? <>Released <time dateTime={publishedAt}>{formatReleaseDate(publishedAt)}</time></> : null}
               {size !== "unknown" ? <>{publishedAt ? " · " : ""}{size}</> : null}
             </p>
           ) : null}
@@ -352,11 +353,11 @@ function PlatformIcon({ os }: { os: DetectedOS }) {
   );
 }
 
-function formatDate(iso: string): string {
+function formatReleaseDate(iso: string): string {
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString(undefined, {
+    return formatDate(d, {
       year: "numeric",
       month: "short",
       day: "numeric",

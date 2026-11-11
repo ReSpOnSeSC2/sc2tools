@@ -7,6 +7,7 @@ import { formatGameClock } from "@/lib/macro";
 import type { PatchEra } from "@/lib/meta";
 import type { CasualtyCategory, CasualtyEvent } from "./MacroBreakdownPanel.types";
 import { buildCasualtyTimeline, CASUALTY_CATEGORIES, casualtiesAt } from "./casualtiesAt";
+import { formatNumber } from "@/lib/i18n/format";
 
 const CATEGORY = {
   units: { label: "Units", icon: Swords },
@@ -178,7 +179,7 @@ export function CasualtySnapshot({
                   {players.map((player) => (
                     (["killed", "lost"] as const).map((kind, index) => (
                       <td key={`${player.key}-${kind}`} className={`px-2 py-2.5 text-right font-semibold tabular-nums text-text sm:px-3 ${index === 0 ? "border-l border-border" : ""}`}>
-                        {counts[player.key][category][kind].toLocaleString()}
+                        {formatNumber(counts[player.key][category][kind])}
                       </td>
                     ))
                   ))}
@@ -206,7 +207,7 @@ export function CasualtySnapshot({
                   </th>
                   {totals.map((cost, columnIndex) => {
                     const value = resource.key === "total" ? cost.minerals + cost.gas : cost[resource.key];
-                    const formatted = value.toLocaleString();
+                    const formatted = formatNumber(value);
                     return (
                       <td
                         key={`${cost.player}-${cost.kind}-${columnIndex}`}

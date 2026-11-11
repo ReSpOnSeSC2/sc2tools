@@ -27,8 +27,10 @@ const article: HelpArticle = {
     "report comment",
     "my reviews",
     "unverified",
+    "copy link",
+    "keyboard shortcuts",
   ],
-  updated: "2026-10-27",
+  updated: "2026-11-10",
   order: 10,
   body: [
     {
@@ -173,6 +175,34 @@ const article: HelpArticle = {
         "To stop sharing the replay file without closing, turn off **Let reviewers download my replay file** in **Asker tools**. The file contains both players' in-game names and in-game chat, even when the request is anonymous. New downloads stop right away; files people already downloaded stay with them.",
         "**Share** offers a Reddit post, a Discord message or a link. Phones with system sharing can open their share sheet directly. If copying is blocked, select and copy the text shown inside the menu.",
       ],
+    },
+    { type: "heading", anchor: "sharing-a-moment", text: "Share a comment or a moment" },
+    {
+      type: "list",
+      items: [
+        "**Copy link to comment**, in a comment's **⋯** menu (**More actions**), copies a link that opens this request with that comment highlighted, the replay at its time and the comment scrolled into view. Anyone can copy it, signed in or not.",
+        "**Copy link at 5:12**, beside the time in the comment box, and **Copy link at current time**, in **Share**, copy a link ending in **?t=5:12**. It opens the replay at 5:12 and starts a comment there for anyone who can comment. You can type **?t=** yourself as 5:12 or in seconds (312); a time past the end of the game opens at the end.",
+        "Moving through the replay never changes the address in your browser: only these copy actions make links. A link to a comment that was deleted or removed opens the request where it is and says that the comment is no longer available.",
+        "**Prev** and **Next** above the thread step through the comments that have a time, replies included, in replay order, starting from the selected comment or from the replay time. The filters **In focus range** (when the asker chose one), **Map pins** and **Has replies** show how many comments each matches, combine when you pick more than one, and apply to Prev and Next too. **Top** or **Timeline** order is remembered on this device.",
+      ],
+    },
+    { type: "heading", anchor: "keyboard-shortcuts", text: "Keyboard shortcuts" },
+    {
+      type: "paragraph",
+      text: "Outside text fields, with no other key held, a request page has its own keys. Press **?** to list them with the rest of the site's shortcuts.",
+    },
+    {
+      type: "table",
+      head: ["Key", "What it does"],
+      rows: [
+        ["**N** / **P**", "Next or previous timed comment: the replay seeks there and the comment scrolls into view"],
+        ["**C**", "Start a comment at the current replay time, when you can comment"],
+        ["**?**", "Show keyboard shortcuts"],
+      ],
+    },
+    {
+      type: "paragraph",
+      text: "While the replay itself has focus, its own keys apply instead: **Space** or **K** plays and pauses, **J** and **L** jump 10 seconds, the arrow keys move 1 second, and **P** and **N** jump between notable events. Press **?** inside the replay for its full list.",
     },
     { type: "heading", anchor: "blocking-and-reporting", text: "Block or report" },
     {

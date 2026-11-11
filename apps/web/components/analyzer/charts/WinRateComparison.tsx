@@ -1,5 +1,7 @@
 "use client";
 
+import { formatNumber } from "@/lib/i18n/format";
+
 export type WinRateComparisonRow = {
   key: string;
   label: string;
@@ -77,7 +79,7 @@ export function WinRateComparison({
           const small = row.games > 0 && sample < smallSampleThreshold;
           const other = row.other ?? Math.max(0, row.games - row.wins - row.losses);
           const label = row.games === 1 ? recordLabel.replace(/s$/, "") : recordLabel;
-          const record = `${row.games.toLocaleString()} ${label} · ${row.wins.toLocaleString()}W · ${row.losses.toLocaleString()}L${other > 0 ? ` · ${other.toLocaleString()} other` : ""}`;
+          const record = `${formatNumber(row.games)} ${label} · ${formatNumber(row.wins)}W · ${formatNumber(row.losses)}L${other > 0 ? ` · ${formatNumber(other)} other` : ""}`;
           const content = (
             <>
               <div className={columns}>
@@ -91,11 +93,11 @@ export function WinRateComparison({
                   {baselinePct != null && <span className="absolute -bottom-1 -top-1 border-l-2 border-dashed border-text-dim/70" style={{ left: `${baselinePct}%` }} />}
                 </div>
                 <span className="text-right text-sm font-semibold tabular-nums text-text">{rate == null ? "—" : `${rate.toFixed(precision)}%`}</span>
-                {separateCount ? <span className="text-right text-caption tabular-nums text-text-muted">{row.games.toLocaleString()}</span> : null}
+                {separateCount ? <span className="text-right text-caption tabular-nums text-text-muted">{formatNumber(row.games)}</span> : null}
               </div>
               <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-micro text-text-muted">
                 <span className="tabular-nums">{row.games === 0 ? "No games" : record}</span>
-                {small && <span className="rounded bg-bg-elevated px-1.5 py-0.5 text-text-dim">Small sample{sample !== row.games ? ` · n=${sample.toLocaleString()}` : ""}</span>}
+                {small && <span className="rounded bg-bg-elevated px-1.5 py-0.5 text-text-dim">Small sample{sample !== row.games ? ` · n=${formatNumber(sample)}` : ""}</span>}
                 {row.onSelect && <span className="font-medium text-accent">View games <span aria-hidden="true">↗</span></span>}
               </div>
               {row.detail && <p className="mt-1 text-micro leading-relaxed text-text-dim">{row.detail}</p>}

@@ -13,6 +13,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { DestructiveConfirmDialog } from "@/components/ui/DestructiveConfirmDialog";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { useApi, apiCall } from "@/lib/clientApi";
+import { formatNumber } from "@/lib/i18n/format";
 import { fmtAgo } from "@/lib/format";
 import { deviceSyncSummary, SYNC_HEALTH_SETTINGS_HREF, type DeviceSyncSummary } from "@/lib/syncHealth";
 import { AGENT_ONLINE_WINDOW_MS, isAgentVersionAtLeast } from "@/components/dashboard/AgentUpgradeNotice";
@@ -79,7 +80,7 @@ function DeviceCard({ device, now, latest, onUnpair, onSaved }: { device: Paired
   const age = Math.max(now, Date.now()) - seen;
   const online = Number.isFinite(seen) && age >= 0 && age < AGENT_ONLINE_WINDOW_MS;
   const update = Boolean(latest && device.agentVersion && !isAgentVersionAtLeast(device.agentVersion, latest));
-  const sync = deviceSyncSummary(device, Math.max(now, Date.now()));
+  const sync = deviceSyncSummary(device, Math.max(now, Date.now()), formatNumber);
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (busy) return;
     setBusy(true); setError(""); setNotice("");

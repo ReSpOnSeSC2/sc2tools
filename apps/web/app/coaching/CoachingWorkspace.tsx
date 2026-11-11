@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarClock, LockKeyhole, PanelsTopLeft, Target } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
@@ -13,6 +15,10 @@ import LockerHost from "./LockerHost";
 import CoachingPractice from "./CoachingPractice";
 import CoachingSchedule from "./CoachingSchedule";
 import { useCoachingBadges } from "./useCoachingBadges";
+
+const LockerRoster = dynamic(() => import("./LockerRoster"), {
+  loading: () => <p role="status" className="text-caption text-text-muted">Loading the Locker roster…</p>,
+});
 
 type CoachingMe = {
   role: "admin" | "coach" | "student" | "none";
@@ -34,17 +40,24 @@ export default function CoachingWorkspace() {
     searchParams.has("booking")
       ? "sessions"
       : "locker";
+  const workspaceRole = data?.role;
+  const manageLocker = workspaceRole === "admin" || workspaceRole === "coach";
+  const rosterOpen = manageLocker && routeView === "locker" && searchParams.get("locker") === "roster";
   const [view, setView] = useState<WorkspaceView>(routeView);
   const [lockerActivated, setLockerActivated] = useState(routeView === "locker");
+  const [classicActivated, setClassicActivated] = useState(false);
   const [sessionsActivated, setSessionsActivated] = useState(routeView === "sessions");
   const [scheduleDirty, setScheduleDirty] = useState(false);
   const badges = useCoachingBadges(data?.role);
 
   useEffect(() => {
     setView(routeView);
-    if (routeView === "locker") setLockerActivated(true);
+    if (routeView === "locker") {
+      setLockerActivated(true);
+      if (workspaceRole && !rosterOpen) setClassicActivated(true);
+    }
     if (routeView === "sessions") setSessionsActivated(true);
-  }, [routeView]);
+  }, [workspaceRole, rosterOpen, routeView]);
 
   if (isLoading || (!data && !error)) {
     return <CoachingShellSkeleton />;
@@ -125,8 +138,18 @@ export default function CoachingWorkspace() {
           host mounted while switching sections so returning to Locker never
           re-executes/redeclares that bundle. */}
       {lockerActivated ? (
-        <Tabs.Content value="locker" keepMounted>
-          <LockerHost />
+        <Tabs.Content value="locker" keepMounted className="space-y-3">
+          {rosterOpen && manageLocker ? (
+            <>
+              <a href="/coaching" className="inline-flex min-h-11 items-center font-semibold text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Classic Locker</a>
+              {view === "locker" ? <LockerRoster viewerRole={workspaceRole} coachId={data.coachId} /> : null}
+            </>
+          ) : (
+            <>
+              {manageLocker ? <Link href="/coaching?locker=roster" prefetch={false} className="inline-flex min-h-11 items-center font-semibold text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Open Locker roster</Link> : null}
+              {classicActivated ? <LockerHost /> : null}
+            </>
+          )}
         </Tabs.Content>
       ) : null}
       <Tabs.Content value="practice"><CoachingPractice role={data.role} /></Tabs.Content>

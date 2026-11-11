@@ -30,7 +30,7 @@ export function PracticeLogPage() {
   const [target, setTarget] = useState<{ matchup: GhostMatchupKey; hash: string } | null>(null);
   const matchup = chosen && armed.includes(chosen) ? chosen : armed[0] ?? null;
   const targetHash = target && target.matchup === matchup ? target.hash : null;
-  const summary = useApi<PracticeSummary>(matchup ? practiceSummaryPath(matchup, targetHash) : null, { keepPreviousData: true });
+  const summary = useApi<PracticeSummary>(matchup ? practiceSummaryPath(matchup, targetHash) : null);
 
   return (
     <div className="space-y-6">

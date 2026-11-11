@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { LiveGameEnvelope, LiveGamePayload } from "@/components/overlay/types";
 import type { StudioState } from "@/lib/multichat/useStudioState";
 import type { DockGameStatus } from "@/lib/multichat/useStudioUpdates";
@@ -20,9 +20,9 @@ const CONFIRM = {
   streamEnd: { title: "End this stream?", label: "End stream", text: "Save a stream report from this session's games. It appears in your notifications and under Stream reports." },
   predictionCancel: { title: "Cancel this round?", label: "Cancel round", text: "No points or oracle accuracy will be recorded." },
 };
-export function DockGame({ token, live, lastLiveAt, gameStatus, session, studio, engagement, ready, busy, onPost }: {
+export function DockGame({ token, live, lastLiveAt, gameStatus, session, studio, engagement, ready, busy, onPost, markUndo }: {
   token: string; live: LiveGameEnvelope | null; lastLiveAt: number | null; gameStatus: DockGameStatus | null;
-  session: LiveGamePayload["session"] | null; studio: StudioState; engagement: EngagementSummary; ready: boolean; busy: boolean; onPost: DockPost;
+  session: LiveGamePayload["session"] | null; studio: StudioState; engagement: EngagementSummary; ready: boolean; busy: boolean; onPost: DockPost; markUndo?: ReactNode;
 }) {
   const round = engagement.prediction;
   const sourceKey = JSON.stringify([token, live?.gameKey ?? gameStatus?.gameKey ?? gameStatus?.endedGameKey, live?.opponent?.name, live?.opponent?.toonHandle, live?.opponent?.profile?.pulse_character_id, round?.gameKey]);
@@ -73,6 +73,7 @@ export function DockGame({ token, live, lastLiveAt, gameStatus, session, studio,
       <p className="text-text-muted">After the game ends, manual resolve stays available for 30 minutes until your next match or a verified result. Manual and cancelled rounds earn no points or oracle accuracy.</p>
     </> : <p className="text-text-muted">No open round. Crystal Ball opens automatically when a match starts.</p>}</div>
     <div className="flex flex-wrap gap-2"><DockButton disabled={!ready || busy} onClick={() => setConfirm({ identity, action: { action: "sessionReset" } })}>Start new session</DockButton><DockButton disabled={!ready || busy} onClick={() => { setStreamNote(""); setConfirm({ identity, action: { action: "streamEnd" } }); }}>End stream</DockButton><DockButton disabled={!ready || busy} onClick={() => void onPost({ action: "gamePause", paused: studio.gameWidgetsPaused !== true })}>{studio.gameWidgetsPaused ? "Show game widgets" : "Hide game widgets"}</DockButton></div>
+    {markUndo}
     {streamNote ? <p role="status">{streamNote}</p> : null}
     <p className="text-text-muted">Game overlays and scouting voice hide together. Chat, polls, scenes and timers keep running.</p>
     <ConfirmDialog open={!!activeConfirm} focusCancel loading={busy} onClose={() => { if (!busy) setConfirm(null); }} onConfirm={() => void confirmAction()} title={confirmCopy(activeConfirm).title} confirmLabel={confirmCopy(activeConfirm).label} description={confirmCopy(activeConfirm).text}>

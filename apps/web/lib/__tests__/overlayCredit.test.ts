@@ -3,9 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   appendOverlayCreditToUrl,
   isOverlayCreditHidden,
-  readOverlayCreditPreference,
-  setOverlayCreditPreference,
-  subscribeOverlayCreditPreference,
 } from "@/lib/overlayCredit";
 
 afterEach(() => {
@@ -40,25 +37,5 @@ describe("appendOverlayCreditToUrl", () => {
     expect(appendOverlayCreditToUrl("/overlay/tok/widget/ghost-build?voice=1#ghost=xyz", false)).toBe(
       "/overlay/tok/widget/ghost-build?voice=1&credit=0#ghost=xyz",
     );
-  });
-});
-
-describe("credit preference", () => {
-  it("defaults to shown and remembers a hidden choice", () => {
-    expect(readOverlayCreditPreference()).toBe(true);
-    setOverlayCreditPreference(false);
-    expect(readOverlayCreditPreference()).toBe(false);
-    setOverlayCreditPreference(true);
-    expect(readOverlayCreditPreference()).toBe(true);
-  });
-
-  it("notifies subscribers on change", () => {
-    const callback = vi.fn();
-    const unsubscribe = subscribeOverlayCreditPreference(callback);
-    setOverlayCreditPreference(false);
-    expect(callback).toHaveBeenCalledTimes(1);
-    unsubscribe();
-    setOverlayCreditPreference(true);
-    expect(callback).toHaveBeenCalledTimes(1);
   });
 });

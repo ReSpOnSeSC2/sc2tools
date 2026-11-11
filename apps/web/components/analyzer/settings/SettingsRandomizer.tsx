@@ -17,7 +17,6 @@ import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Toggle } from "@/components/ui/Toggle";
-import { SaveBar } from "@/components/ui/SaveBar";
 import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { useCustomBuildPage } from "@/components/builds/useCustomBuildPage";
@@ -40,7 +39,7 @@ import {
 import { MatchupSelector } from "./randomizer/MatchupSelector";
 import { MatchupBuildPicker } from "./randomizer/MatchupBuildPicker";
 import { RandomizerPreview } from "./randomizer/RandomizerPreview";
-import { usePublishDirty } from "./SettingsContext";
+import { useSaveSource } from "./SettingsContext";
 import { SettingsLoadError } from "./SettingsLoadError";
 import { SettingsSectionsReady } from "./SettingsSectionNav";
 
@@ -69,7 +68,7 @@ export function SettingsRandomizer() {
   const { draft, setDraft, dirty, reset, markSaved } =
     useDirtyForm<RandomizerConfig>(serverConfig, defaultRandomizerConfig());
 
-  usePublishDirty("randomizer", dirty);
+  useSaveSource("randomizer", { label: "randomizer", dirty, save, reset }, "build-randomizer");
 
   // Keep the audio engine in sync with the draft so the live preview
   // reflects the sound toggle / volume immediately.
@@ -78,8 +77,9 @@ export function SettingsRandomizer() {
     setRevealSoundVolume(draft.sound.volume);
   }, [draft.sound.enabled, draft.sound.volume]);
 
-  async function save() {
-    if (saving) return;
+  async function save(): Promise<boolean> {
+    if (!dirty) return true;
+    if (saving) return false;
     setSaving(true);
     const previous = data;
     try {
@@ -91,11 +91,13 @@ export function SettingsRandomizer() {
       await mutate();
       markSaved();
       toast.success("Randomizer saved");
+      return true;
     } catch (err) {
       await mutate(previous, { revalidate: false });
       const message =
         (err as ClientApiError | undefined)?.message ?? "Please try again.";
       toast.error("Couldn't save randomizer", { description: message });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -147,13 +149,6 @@ export function SettingsRandomizer() {
       />
 
       <RandomizerPreview matchup={active} config={matchupConfig} />
-
-      <SaveBar
-        visible={dirty}
-        saving={saving}
-        onSave={save}
-        onReset={reset}
-      />
     </>
   );
 }

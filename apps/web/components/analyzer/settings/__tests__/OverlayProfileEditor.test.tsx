@@ -4,6 +4,7 @@ import { OverlayProfileEditor } from "../OverlayProfileEditor";
 import { OverlayThemeSection } from "../OverlayThemeSection";
 import { OverlayWidgetDisplay } from "../OverlayWidgetDisplay";
 import { SettingsContextProvider } from "../SettingsContext";
+import { SettingsSaveBar } from "../SettingsSaveBar";
 import type { OverlayToken } from "../OverlayTokenHeader";
 
 const auth = vi.hoisted(() => ({ userId: "owner-a", isLoaded: true, isSignedIn: true, getToken: vi.fn(async () => "synthetic-jwt") }));
@@ -16,7 +17,7 @@ function Fixture({ value = token() }: { value?: OverlayToken }) {
     <OverlayWidgetDisplay id="scouting" name="Scouting" durationSec={profile.widgetOptions.scouting?.durationSec} onChange={seconds => setDuration("scouting", seconds)} disabled={saving} />
     <OverlayWidgetDisplay id="session" name="Session" onChange={seconds => setDuration("session", seconds)} disabled={saving} />
     <output data-testid="draft">{JSON.stringify(profile)}</output>
-  </>}</OverlayProfileEditor></SettingsContextProvider>;
+  </>}</OverlayProfileEditor><SettingsSaveBar tabId="overlay" /></SettingsContextProvider>;
 }
 function changeDuration(value: string) {
   if (!screen.queryByLabelText("Display time for Scouting")) fireEvent.click(screen.getByRole("button", { name: "Display for Scouting" }));
@@ -57,6 +58,18 @@ describe("saved overlay display draft", () => {
     expect((screen.getByLabelText("Accent hex value") as HTMLInputElement).value).toBe(""); view.unmount();
     render(<Fixture />); expect(screen.queryByRole("heading", { name: "Move your theme to your overlay" })).toBeNull(); expect(fetchMock).not.toHaveBeenCalled();
   });
+  it("moves legacy flags into an unset profile once and preserves a server choice", async () => {
+    localStorage.setItem("sc2tools.overlayCredit.v1", "0");
+    const value = token({ profile: { v: 1, theme: {}, widgetOptions: {}, ghostVoice: true }, profileRevision: 2 });
+    const view = render(<Fixture value={value} />);
+    await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+      expectedRevision: 2, profile: { v: 1, theme: {}, widgetOptions: {}, credit: false, ghostVoice: true },
+    });
+    view.unmount();
+    render(<Fixture value={value} />);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
   it("keeps a stale draft on CAS conflict without overwriting a different tab's profile", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: { code: "overlay_profile_changed", message: "Changed" } }), { status: 409 }));
     const view = render(<Fixture value={token({ profileRevision: 2 })} />);
@@ -90,7 +103,7 @@ describe("saved overlay display draft", () => {
     await act(async () => vi.advanceTimersByTimeAsync(20_001));
     expect(screen.getByText(/Saving the overlay took too long/)).toBeTruthy(); expect(fetchMock).not.toHaveBeenCalled();
     expect((screen.getByLabelText("Display time for Scouting") as HTMLSelectElement).value).toBe("60");
-    expect((screen.getByRole("button", { name: "Save overlay display" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Retry" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
 });

@@ -18,6 +18,7 @@ import type {
   ScoreResult,
   ShareSummary,
 } from "../../types";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * Loss-Pattern Sleuth — three angles on what your history looks like in
@@ -318,7 +319,7 @@ function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
     answer.push(`After losing to ${raceName}: ${q.truth} (${q.countsByOption[q.truth] || 0}×).`);
     for (const o of q.options) {
       const star = o === q.truth ? " ★" : "";
-      answer.push(`${o} · ${(q.countsByOption[o] || 0).toLocaleString()}×${star}`);
+      answer.push(`${o} · ${formatNumber(q.countsByOption[o] || 0)}×${star}`);
     }
   } else if (q.variant === "bounce-back") {
     const pct = (q.truthValue * 100).toFixed(1);
@@ -328,7 +329,7 @@ function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
     answer.push(`Tilt-build vs ${raceName}: ${q.truth} — ${q.lossesByOption[q.truth] || 0} losses.`);
     for (const o of q.options) {
       const star = o === q.truth ? " ★" : "";
-      answer.push(`${o} · ${(q.lossesByOption[o] || 0).toLocaleString()}L${star}`);
+      answer.push(`${o} · ${formatNumber(q.lossesByOption[o] || 0)}L${star}`);
     }
   }
   return {
@@ -484,7 +485,7 @@ function NextBuildDetail({ q }: { q: NextBuildQ }) {
             {o}
           </span>
           <span className="font-mono tabular-nums text-text-dim">
-            {(q.countsByOption[o] || 0).toLocaleString()}×
+            {formatNumber(q.countsByOption[o] || 0)}×
             {o === q.truth ? (
               <span className="ml-1 rounded bg-success/15 px-1.5 text-success">★</span>
             ) : null}
@@ -521,7 +522,7 @@ function WorstVsRaceDetail({ q }: { q: WorstVsRaceQ }) {
             {o}
           </span>
           <span className="font-mono tabular-nums text-text-dim">
-            {(q.lossesByOption[o] || 0).toLocaleString()} L
+            {formatNumber(q.lossesByOption[o] || 0)} L
             {o === q.truth ? (
               <span className="ml-1 rounded bg-warning/15 px-1.5 text-warning">⚠</span>
             ) : null}

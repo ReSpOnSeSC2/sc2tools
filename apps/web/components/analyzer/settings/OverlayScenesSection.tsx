@@ -22,7 +22,7 @@ import {
   type StreamBackgroundId,
 } from "@/lib/streamBackgrounds";
 import { UrlRow } from "./OverlayUrlRow";
-import { useOverlayCreditPreference } from "./useOverlayCreditPreference";
+import { useOverlayFlags } from "./overlayFlags";
 
 type LegacySceneId =
   | "between-games"
@@ -93,8 +93,8 @@ export function OverlayScenesSection({
   void theme;
   void theme;
   const [preview, setPreview] = useState<string>("between-games");
-  // Same choice as the All-in-one row's credit toggle (lib/overlayCredit).
-  const [showCredit] = useOverlayCreditPreference();
+  // Same choice as the All-in-one row's credit toggle (the overlay profile).
+  const { credit: showCredit } = useOverlayFlags();
   const base = origin ?? "";
   const selectedScene = SCENES.find((scene) => scene.id === preview);
   const previewUrl =

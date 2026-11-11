@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import type { ReactNode } from "react";
@@ -8,12 +8,13 @@ import type { PushStatus } from "../PushPreferences";
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "ann", isLoaded: true, isSignedIn: true, getToken: async () => "fixture-token" }) }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ slug, children }: { slug: string; children?: ReactNode }) => <a href={`/help/${slug}`}>{children ?? "Help"}</a> }));
 import { PushPreferences } from "../PushPreferences";
+import { SettingsSaveScope } from "@/components/analyzer/settings/SettingsSaveBar";
 
 const ENDPOINT = "https://fcm.googleapis.com/fcm/send/this-device";
 let status: PushStatus;
 let requests: Array<{ path: string; method: string; body: unknown }>;
 const json = (value: unknown) => new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
-const mount = () => render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, shouldRetryOnError: false }}><PushPreferences /></SWRConfig>);
+const mount = () => render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, shouldRetryOnError: false }}><SettingsSaveScope tabId="preferences"><PushPreferences /></SettingsSaveScope></SWRConfig>);
 
 function installBrowser(permission: NotificationPermission) {
   let current: { endpoint: string; toJSON: () => unknown; unsubscribe: () => Promise<boolean> } | null = null;
@@ -54,17 +55,17 @@ it("explains push is off when the server has no keys", async () => {
 it("turns this device on and off, tells the worker the API origin, and saves push choices", async () => {
   const browser = installBrowser("default");
   mount();
-  await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Turn on for this device" })));
+  fireEvent.click(await screen.findByRole("button", { name: "Turn on for this device" }));
   await waitFor(() => expect(screen.getByText("On for this device.", { selector: "p.text-body" })).toBeTruthy());
   expect(browser.pushManager.subscribe).toHaveBeenCalledWith(expect.objectContaining({ userVisibleOnly: true }));
   expect(browser.postMessage).toHaveBeenCalledWith({ type: "PUSH_CONFIG", api: expect.stringMatching(/^https?:\/\/[^/]+$/) });
   expect(requests.find((r) => r.path.endsWith("/push/subscriptions"))?.body).toMatchObject({ endpoint: ENDPOINT, keys: { p256dh: "p", auth: "a" } });
   expect(await screen.findByText("This device")).toBeTruthy();
   fireEvent.click(screen.getByRole("checkbox", { name: "Everything else" }));
-  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save push choices" })));
-  expect(requests.find((r) => r.path.endsWith("/push/preferences"))?.body).toEqual({ groups: ["reviews", "coaching", "other"] });
-  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Turn off for this device" })));
-  expect(requests.find((r) => r.path.endsWith("/push/unsubscribe"))?.body).toEqual({ endpoint: ENDPOINT });
+  fireEvent.click(screen.getByRole("button", { name: "Save push choices" }));
+  await waitFor(() => expect(requests.find((r) => r.path.endsWith("/push/preferences"))?.body).toEqual({ groups: ["reviews", "coaching", "other"] }));
+  fireEvent.click(screen.getByRole("button", { name: "Turn off for this device" }));
+  await waitFor(() => expect(requests.find((r) => r.path.endsWith("/push/unsubscribe"))?.body).toEqual({ endpoint: ENDPOINT }));
 });
 
 it("helpers label devices without the full user agent and decode VAPID keys", async () => {

@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 /**
  * LowerThirdWidget — an esports-broadcast lower third that slides in
  * after each game: result chip, map + matchup, MMR delta, opponent
@@ -33,7 +35,7 @@ export function LowerThirdWidget({ live }: { live: LiveGamePayload | null }) {
         @keyframes ltSpine { to { transform: none; } }
         @media (prefers-reduced-motion: reduce) { .lt-stage, .lt-spine { animation: none; opacity: 1; transform: none; } }
       `}</style>
-      <div style={barStyle}>
+      <OverlayPanel style={barStyle} contentStyle={{ display: "flex", alignItems: "stretch", gap: 14, padding: "var(--ov-padding, 12px 20px 12px 14px)" }}>
         <div className="lt-spine" style={{ ...spineStyle, background: win ? "#3ec07a" : "#e05656" }} />
         <div
           className="lt-stage"
@@ -81,7 +83,7 @@ export function LowerThirdWidget({ live }: { live: LiveGamePayload | null }) {
             </div>
           </div>
         ) : null}
-      </div>
+      </OverlayPanel>
     </div>
   );
 }
@@ -95,17 +97,11 @@ const frameStyle: CSSProperties = {
 };
 
 const barStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "stretch",
-  gap: 14,
+  borderRadius: "10px",
+  background: "linear-gradient(100deg, rgba(9,11,16,0.96) 0%, rgba(20,24,33,0.94) 70%, rgba(20,24,33,0.72) 100%)",
   maxWidth: "100%",
   minWidth: 320,
-  background:
-    "var(--ov-panel-bg, linear-gradient(100deg, rgba(9,11,16,0.96) 0%, rgba(20,24,33,0.94) 70%, rgba(20,24,33,0.72) 100%))",
-  border: "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))",
-  borderRadius: "var(--ov-radius, 10px)",
   boxShadow: "0 8px 26px rgba(0,0,0,0.5)",
-  padding: "12px 20px 12px 14px",
   color: "#e6e8ee",
   overflow: "hidden",
 };

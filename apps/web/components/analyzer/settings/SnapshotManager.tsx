@@ -18,6 +18,7 @@ import { fmtAgo } from "@/lib/format";
 import { SettingsLoadError } from "./SettingsLoadError";
 import { backupErrorMessage } from "./backupErrors";
 import { toClientApiError } from "@/lib/requestErrors";
+import { formatNumber } from "@/lib/i18n/format";
 
 type Backup = { id: string; label?: string; createdAt: string; sizeBytes: number; type: "manual" | "auto" | "pre_action"; counts?: Record<string, number> };
 type Preview = { games: { kept: number; removed: number; added: number }; customBuilds: number; opponentNotes: number; notes?: number; overlayTokens: number; currentRevision: string };
@@ -50,7 +51,7 @@ export function SnapshotManager({ onRestored, onRestoreFailed }: { onRestored: (
       try { result = await apiCall(getToken, `/v1/me/backups/${encodeURIComponent(target.id)}/restore`, { method: "POST", body: JSON.stringify({ currentRevision: preview.currentRevision }) }); }
       catch (error) { onRestoreFailed?.(error); if (toClientApiError(error).code === "backup_preview_changed") { setPreview(null); setAttempt((value) => value + 1); } throw error; }
       await Promise.allSettled([backups.mutate(), onRestored()]); setTarget(null);
-      toast.success(`Restored ${result.counts.games.toLocaleString()} games`, { description: "Existing build orders and replay files for games in both lists were kept." });
+      toast.success(`Restored ${formatNumber(result.counts.games)} games`, { description: "Existing build orders and replay files for games in both lists were kept." });
     });
   }
   const items = backups.data?.items || [];
@@ -74,8 +75,8 @@ export function SnapshotManager({ onRestored, onRestoreFailed }: { onRestored: (
       <Button variant="secondary" disabled={Boolean(busy)} onClick={() => setTarget(null)}>Cancel</Button>
       <Button variant="danger" disabled={!preview || Boolean(busy)} loading={busy === "restore"} onClick={() => void restore()}>Restore</Button></>}>
       {!preview ? previewError ? <div role="alert" className="space-y-3"><p>Couldn&apos;t preview this snapshot. Your saved data hasn&apos;t changed.</p><Button onClick={() => setAttempt((value) => value + 1)}>Try again</Button></div> : <p role="status">Checking snapshot changes…</p> : <div className="space-y-3 text-body-sm">
-        <p>Build orders and replay files for {preview.games.kept.toLocaleString()} games are kept.</p>
-        <ul className="list-inside list-disc"><li>{preview.games.removed.toLocaleString()} current games removed</li><li>{preview.games.added.toLocaleString()} saved games added</li><li>{preview.customBuilds.toLocaleString()} custom builds, {noteCount(preview).toLocaleString()} notes and {preview.overlayTokens.toLocaleString()} overlay tokens restored</li></ul>
+        <p>Build orders and replay files for {formatNumber(preview.games.kept)} games are kept.</p>
+        <ul className="list-inside list-disc"><li>{formatNumber(preview.games.removed)} current games removed</li><li>{formatNumber(preview.games.added)} saved games added</li><li>{formatNumber(preview.customBuilds)} custom builds, {formatNumber(preview.opponentNotes)} opponent notes and {formatNumber(preview.overlayTokens)} overlay tokens restored</li></ul>
         <p>Games added since then are removed when absent from this snapshot. A fresh snapshot is saved before restore. Re-sync from the desktop app to recover files for games that are no longer in your current data.</p>
       </div>}
     </Modal>
@@ -89,7 +90,7 @@ function SnapshotRow({ backup, busy, onLabel, onDownload, onRestore, onDelete }:
   return <li className="space-y-3 px-4 py-3">
     <div className="flex flex-wrap items-center gap-2"><Badge variant={backup.type === "manual" ? "cyan" : "neutral"} size="sm">{backup.type === "pre_action" ? "Before action" : backup.type === "auto" ? "Weekly" : "Manual"}</Badge><span className="text-caption text-text-muted">{fmtAgo(backup.createdAt)} · {(backup.sizeBytes / 1024 / 1024).toFixed(1)} MB</span></div>
     <div className="flex gap-2"><Input className="min-w-0" aria-label={`Snapshot label ${backup.id}`} value={label} maxLength={80} placeholder="Add a label" disabled={busy} onChange={(event) => setLabel(event.target.value)} /><Button className="shrink-0 whitespace-nowrap" size="sm" disabled={busy || label === (backup.label || "")} onClick={() => onLabel(label)}>Save label</Button></div>
-    <div className="flex flex-wrap gap-2 text-caption text-text-muted">{["games", "customBuilds", "opponentNotes", "overlayTokens"].filter((key) => typeof backup.counts?.[key] === "number").map((key) => <span className="rounded bg-bg-elevated px-2 py-1" key={key}>{(key === "opponentNotes" ? noteCount(backup.counts!) : backup.counts![key]).toLocaleString()} {({ games: "games", customBuilds: "builds", opponentNotes: "notes", overlayTokens: "tokens" } as Record<string, string>)[key]}</span>)}</div>
+    <div className="flex flex-wrap gap-2 text-caption text-text-muted">{["games", "customBuilds", "opponentNotes", "overlayTokens"].filter((key) => typeof backup.counts?.[key] === "number").map((key) => <span className="rounded bg-bg-elevated px-2 py-1" key={key}>{formatNumber(backup.counts![key])} {({ games: "games", customBuilds: "builds", opponentNotes: "notes", overlayTokens: "tokens" } as Record<string, string>)[key]}</span>)}</div>
     <div className="flex flex-wrap gap-2"><Button variant="secondary" size="sm" disabled={busy} iconLeft={<Download className="h-4 w-4" aria-hidden />} onClick={onDownload}>Download</Button><Button variant="secondary" size="sm" disabled={busy} iconLeft={<History className="h-4 w-4" aria-hidden />} onClick={onRestore}>Restore</Button><Button variant="ghost" size="sm" disabled={busy} iconLeft={<Trash2 className="h-4 w-4" aria-hidden />} onClick={onDelete}>Delete snapshot</Button></div>
   </li>;
 }

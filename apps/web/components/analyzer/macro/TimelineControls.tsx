@@ -30,6 +30,7 @@ import {
   type TimelineMetric,
   type TimelineMetricDef,
 } from "./timelineMetrics";
+import { formatNumber } from "@/lib/i18n/format";
 
 /** Beyond this many segments ("All" included), phones show labels only. */
 const PHONE_ICON_SEGMENTS = 4;
@@ -340,7 +341,7 @@ function PlayerCell({
         {lead > 0 ? (
           <span
             className="text-micro font-semibold"
-            title={`${name} leads by ${lead.toLocaleString()}`}
+            title={`${name} leads by ${formatNumber(lead)}`}
           >
             {formatSigned(lead)}
           </span>

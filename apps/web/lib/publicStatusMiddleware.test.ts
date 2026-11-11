@@ -4,6 +4,7 @@ import { NextRequest, type NextFetchEvent } from "next/server";
 
 const authBoundary = vi.hoisted(() => ({
   wrapped: vi.fn(),
+  session: vi.fn<() => Promise<{ userId: string | null }>>(),
   protect: vi.fn<() => Promise<void>>(),
   unavailable: false,
 }));
@@ -11,13 +12,14 @@ const authBoundary = vi.hoisted(() => ({
 // Preserve Clerk's actual route-pattern matcher. Only its authenticated
 // request boundary is synthetic, so no key, account or service is contacted.
 vi.mock("@clerk/nextjs/server", async () => {
+  const auth = Object.assign(authBoundary.session, { protect: authBoundary.protect });
   const actual = await vi.importActual<typeof import("@clerk/nextjs/server")>("@clerk/nextjs/server");
   return {
     ...actual,
-    clerkMiddleware: (handler: (auth: { protect: () => Promise<void> }, request: NextRequest) => unknown) => async (request: NextRequest) => {
+    clerkMiddleware: (handler: (session: typeof auth, request: NextRequest) => unknown) => async (request: NextRequest) => {
       authBoundary.wrapped(request);
       if (authBoundary.unavailable) throw new Error("synthetic_auth_unavailable");
-      const result = await handler({ protect: authBoundary.protect }, request);
+      const result = await handler(auth, request);
       return result ?? new Response(null, { headers: { "x-fixture-auth-wrapper": "visited" } });
     },
   };
@@ -27,6 +29,7 @@ import middleware from "../middleware";
 
 beforeEach(() => {
   authBoundary.wrapped.mockClear();
+  authBoundary.session.mockReset().mockResolvedValue({ userId: null });
   authBoundary.protect.mockReset().mockResolvedValue(undefined);
   authBoundary.unavailable = false;
 });
@@ -59,7 +62,7 @@ describe("existing private request protection", () => {
   it.each([
     "/app", "/app/opponents", "/app/game/private-game", "/admin", "/admin/users", "/settings", "/settings/overlay",
     "/notifications", "/devices", "/streaming", "/welcome", "/builds/new", "/builds/private-build/edit", "/practice",
-    "/players/person/replays/game.one", "/p/person/replays/game.one/",
+    "/app/compare", "/app/compare?a=r-111111111111111111111111&b=r-222222222222222222222222",
   ])("retains auth.protect for %s", async pathname => {
     const response = await request(pathname);
     expect(response.headers.get("x-fixture-auth-wrapper")).toBe("visited");
@@ -72,7 +75,42 @@ describe("existing private request protection", () => {
     await expect(request("/settings")).rejects.toThrow("synthetic_sign_in_required");
   });
 
-  it.each(["/players/person/replays", "/players/person/replays/", "/p/person/replays", "/players/person/replays/opengraph-image.png", "/p/person/replays/twitter-image"])("preserves public replay listing/asset %s without granting an auth bypass", async pathname => {
+  it.each([
+    ["/players/person/replays/game.one?from=private-context", "/players/person/replays"],
+    ["/p/person/replays/game.one/", "/p/person/replays"],
+    ["/app/compare/?a=game.one&b=r-222222222222222222222222&next=private-context", "/app/compare"],
+  ])("redirects signed-out legacy URL %s with a clean return path", async (pathname, returnPath) => {
+    const response = await request(pathname);
+    expect(response.status).toBe(307);
+    const location = new URL(response.headers.get("location")!);
+    expect(location.pathname).toMatch(/^\/sign-in\/?$/);
+    expect([...location.searchParams]).toEqual([["redirect_url", returnPath]]);
+    expect(authBoundary.session).toHaveBeenCalledOnce();
+    expect(authBoundary.protect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "/players/person/replays/game.one", "/p/person/replays/game.one/",
+  ])("requires a session to pass legacy replay URL %s through to resolution", async pathname => {
+    authBoundary.session.mockResolvedValue({ userId: "synthetic-viewer" });
+    const response = await request(pathname);
+    expect(response.headers.get("x-fixture-auth-wrapper")).toBe("visited");
+    expect(response.headers.get("location")).toBeNull();
+    expect(authBoundary.session).toHaveBeenCalledOnce();
+  });
+
+  it("keeps signed-in legacy comparisons behind the protected app boundary", async () => {
+    authBoundary.session.mockResolvedValue({ userId: "synthetic-owner" });
+    await request("/app/compare?a=game.one&b=game.two");
+    expect(authBoundary.session).toHaveBeenCalledOnce();
+    expect(authBoundary.protect).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    "/players/person/replays", "/players/person/replays/", "/p/person/replays",
+    "/players/person/replays/opengraph-image.png", "/p/person/replays/twitter-image",
+    "/players/person/replays/r-111111111111111111111111", "/p/person/replays/r-111111111111111111111111/",
+  ])("keeps replay archive, card or asset %s public inside Clerk", async pathname => {
     await request(pathname);
     expect(authBoundary.wrapped).toHaveBeenCalledTimes(1);
     expect(authBoundary.protect).not.toHaveBeenCalled();

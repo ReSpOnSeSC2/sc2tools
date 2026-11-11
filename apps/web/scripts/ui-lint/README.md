@@ -5,7 +5,10 @@ under `app`, `components` and `lib`. It does not load application modules, conta
 services, or modify files. Tests, fixtures, generated declarations/data, and mocks
 are excluded. Existing TypeScript supplies the parser; no dependency is added.
 
-The rules reject new native confirm/prompt uses; dialog/alertdialog roles outside
+The rules reject new bare `toLocaleString` / `toLocaleDateString` /
+`toLocaleTimeString` calls outside `lib/i18n` (use `formatNumber`,
+`formatDate`, `formatTime` or `useFormat()` from `lib/i18n`, which follow the
+account's language and region, clock and week start); new native confirm/prompt uses; dialog/alertdialog roles outside
 `components/ui`; outline removal without a width ring in the same static class
 string; arbitrary text sizes below 12px (including rem at the 16px base); literal
 hex colors outside the explicit chart/overlay list in `rules.mjs`; manually

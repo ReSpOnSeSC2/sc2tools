@@ -19,11 +19,11 @@ const search = (page: Page) => page.getByRole("combobox", { name: "Find a settin
 const results = (page: Page) => page.getByRole("listbox", { name: "Find a setting options", exact: true }).getByRole("option");
 const nav = (page: Page) => page.getByRole("navigation", { name: "On this page", exact: true });
 const confirm = (page: Page) => page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true });
-const profileIds = ["profile-details", "pulse-ids", "player-channels", "public-profile"];
+const profileIds = ["profile-details", "pulse-ids", "player-channels", "public-profile", "supporter-wall"];
 const backupsIds = ["replay-archive", "snapshots", "repair-data", "reanalyze", "hidden-games", "device-history", "export", "delete-history", "gdpr"];
 // Client-only (ssr: false) Backups modules wait for the synthetic client boundary.
 const backupsClientIds = ["reanalyze", "hidden-games"];
-const preferencesIds = ["app-preferences", "setup-privacy", "reports", "notifications", "push"];
+const preferencesIds = ["app-preferences", "appearance", "setup-privacy", "reports", "notifications", "push"];
 const randomizerIds = ["build-randomizer", "catalog-builds", "custom-builds", "gateway-draw", "sound-effects", "randomizer-preview"];
 
 async function choose(page: Page, query: string) {
@@ -125,7 +125,7 @@ for (const theme of ["light", "dark"] as const) {
       await search(page).press("Escape"); await expect(search(page)).toHaveAttribute("aria-expanded", "false");
       await choose(page, "Pulse ID"); await expect(page).toHaveURL(/\?tab=profile#pulse-ids$/);
       await targets(page, profileIds); await choices(page, profileIds);
-      const name = page.getByRole("textbox", { name: "Display name", exact: true }); await name.fill("Unsaved synthetic draft");
+      const name = page.locator("#profile-details").getByRole("textbox", { name: "Display name", exact: true }); await name.fill("Unsaved synthetic draft");
       await name.evaluate(element => { (window as SearchWindow).searchDraft = element; });
       const profileHref = page.url(); await choose(page, "Pulse ID"); await expect(confirm(page)).toHaveCount(0);
       await expect(name).toHaveValue("Unsaved synthetic draft");

@@ -1,5 +1,7 @@
 import { LinkButton } from "@/components/ui/Button";
 import { ArrowRight, Heart } from "lucide-react";
+import { CoverageMeter } from "@/components/donate/CoverageMeter";
+import type { Coverage } from "@/lib/donationCoverage";
 import {
   FIXED_MONTHLY_FALLBACK_USD,
   formatAtlasDiskBytes,
@@ -12,7 +14,7 @@ import {
   type InfrastructureCosts,
 } from "@/lib/infrastructureCosts";
 
-export function DonateBanner({ costs }: { costs: InfrastructureCosts | null }) {
+export function DonateBanner({ costs, coverage }: { costs: InfrastructureCosts | null; coverage?: Coverage | null }) {
   const summary = costs ? monthlyCostSummary(costs) : null;
   const cluster = costs?.mongo.atlas.cluster;
   const billing = costs?.mongo.atlas.billing;
@@ -39,6 +41,7 @@ export function DonateBanner({ costs }: { costs: InfrastructureCosts | null }) {
                 : `Free for players — about ${formatUsd(summary.totalUsd)} a month at today’s projected run rate.`
               : `Free for players — ${formatUsd(FIXED_MONTHLY_FALLBACK_USD)} monthly planning baseline.`}
           </h2>
+          {coverage && !coverage.covered ? <CoverageMeter coverage={coverage} compact /> : null}
           {costs ? (
             <p className="text-body text-text-muted">
               SC2 Tools has verified{" "}

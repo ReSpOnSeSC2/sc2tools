@@ -30,6 +30,7 @@ export const guidePaths = {
   videos: (): string => "/guides/videos",
   maps: (): string => "/guides/maps",
   matchup: (matchupSlug: string): string => `/guides/${matchupSlug}`,
+  compare: (matchupSlug: string): string => "/guides/" + matchupSlug + "/compare",
   counters: (matchupSlug: string): string => `/guides/${matchupSlug}/counter`,
   build: (matchupSlug: string, buildSlug: string): string => `/guides/${matchupSlug}/${buildSlug}`,
   counter: (matchupSlug: string, strategySlug: string): string =>
@@ -47,6 +48,15 @@ export const guidePaths = {
  */
 export function canLinkGuidePath(published: ReadonlySet<string> | null, path: string): boolean {
   return published === null || published.has(path);
+}
+
+export function compareMetadata(matchupSlug: string): Metadata {
+  return guideMetadata({
+    title: "Compare " + matchupSlug.toUpperCase() + " openers" + SUFFIX,
+    description: "Compare published opener timings, ladder results, maps and army composition side by side.",
+    canonical: guidePaths.matchup(matchupSlug),
+    noindex: true,
+  });
 }
 
 function updated(computedAt: string | null): string {

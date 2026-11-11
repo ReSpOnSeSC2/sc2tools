@@ -191,13 +191,16 @@ for (const theme of ["light", "dark"] as const) {
       await expect(manager(page).getByRole("combobox", { name: "URLs shown for", exact: true })).toBeEnabled();
 
       await tabs(page).getByRole("tab", { name: "Chat & alerts", exact: true }).click();
-      await expect(page.getByRole("button", { name: "Save chat settings", exact: true })).toBeVisible();
+      const saveBar = page.getByRole("region", { name: "Unsaved changes", exact: true });
+      await expect(page.getByLabel(/Loyalty rank theme/)).toBeVisible();
+      await expect(saveBar).toHaveCount(0);
       await uniqueTargets(page, chatSections);
       expect(await page.evaluate(() => (window as SectionWindow).sectionManager === document.querySelector("#tokens select"))).toBe(true);
       await expect(manager(page).getByRole("combobox", { name: "URLs shown for", exact: true })).toHaveValue("owner-a-two");
       expect(evidence.reads.filter(row => row.path === "/v1/overlay-tokens")).toHaveLength(1);
       await page.getByLabel(/Loyalty rank theme/).selectOption("zerg");
       await page.getByLabel("Bot username", { exact: true }).fill("retained-two-form-draft");
+      await expect(saveBar.getByRole("button", { name: "Save all", exact: true })).toBeVisible();
       await selectSection(page, width, "dock", "Stream Dock");
       await expect(page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true })).toHaveCount(0);
       await expect(page.getByLabel("Bot username", { exact: true })).toHaveValue("retained-two-form-draft");

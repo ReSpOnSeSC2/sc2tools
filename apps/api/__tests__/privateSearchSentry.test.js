@@ -82,6 +82,35 @@ test.each(["/v1/me/sync-health/identity", "/V1/ME/SYNC-HEALTH/IDENTITY/?ignored=
   }
 });
 
+test("opaque replay link resolution strips the private input from both Sentry pipelines", () => {
+  process.env.SENTRY_DSN = "https://example.invalid/fixture";
+  const sentry = load(); expect(sentry.init()).toBe(true);
+  const options = mockSdk.init.mock.calls.at(-1)[0]; options.integrations([]);
+  const http = mockSdk.httpIntegration.mock.calls.at(-1)[0];
+  const url = "https://api.example/v1/me/replay-sharing/reference";
+  expect(http.ignoreIncomingRequestBody(url)).toBe(true);
+  expect(http.ignoreIncomingRequestBody("/v1/me/replay-sharing/reference/history")).toBe(false);
+  for (const hook of [options.beforeSend, options.beforeSendTransaction]) {
+    const data = { gameId: "2026-11-11T12:00:00|PrivateRival#123|Map|400" };
+    const event = { request: { data }, sdkProcessingMetadata: { normalizedRequest: { url, data } } };
+    expect(hook(event)).toEqual({ request: {}, sdkProcessingMetadata: { normalizedRequest: { url } } });
+  }
+});
+
+test("shared replay tokens stay out of Sentry traces and exception events", () => {
+  process.env.SENTRY_DSN = "https://example.invalid/fixture";
+  const sentry = load(); expect(sentry.init()).toBe(true);
+  const options = mockSdk.init.mock.calls.at(-1)[0]; options.integrations([]);
+  const http = mockSdk.httpIntegration.mock.calls.at(-1)[0];
+  const path = `/v1/shares/${"A".repeat(43)}/map-playback/manifest`;
+  expect(http.ignoreIncomingRequests(path)).toBe(true);
+  expect(http.ignoreIncomingRequestBody(path)).toBe(true);
+  expect(http.ignoreIncomingRequests("/v1/shares-extra/fixture")).toBe(false);
+  expect(options.beforeSend({ request: { url: `https://api.example${path}?ignored=1` } })).toBeNull();
+  expect(options.beforeSendTransaction({ transaction: `GET ${path}` })).toBeNull();
+  expect(options.beforeSend({ sdkProcessingMetadata: { normalizedRequest: { url: path } } })).toBeNull();
+});
+
 test("disabled SDK remains a no-op and still continues private requests", () => {
   delete process.env.SENTRY_DSN;
   const sentry = load(), next = jest.fn();

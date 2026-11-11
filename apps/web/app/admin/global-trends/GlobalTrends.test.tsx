@@ -20,6 +20,11 @@ const PLAYERS = [
   { playerId: "user:legacy", displayName: "Legacy", race: "U", currentMmr: null, mmrSource: null, mmrUpdatedAt: null, gameCount: 5, lastSeen: null, included: true },
 ];
 
+async function renderWithPlayers() {
+  render(<AdminGlobalTrendsPage />);
+  await screen.findByRole("region", { name: "Player population" });
+}
+
 function scope() { return JSON.parse(screen.getByTestId("chart-scope").textContent!); }
 
 beforeEach(() => {
@@ -34,8 +39,8 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("Global Trends", () => {
-  it("starts with all histories and displays source-aware player ratings", () => {
-    render(<AdminGlobalTrendsPage />);
+  it("starts with all histories and displays source-aware player ratings", async () => {
+    await renderWithPlayers();
     expect(screen.getByRole("heading", { name: "Global trends" })).toBeTruthy();
     expect(screen.getByText("5,210")).toBeTruthy();
     expect(screen.getByText("Unavailable")).toBeTruthy();
@@ -45,8 +50,8 @@ describe("Global Trends", () => {
     expect(scope().filters).toEqual({ preset: "all", map_pool: "all", game_size: "all", exclude_too_short: false });
   });
 
-  it("stages exclusions and applies race, player, and MMR filters together", () => {
-    render(<AdminGlobalTrendsPage />);
+  it("stages exclusions and applies race, player, and MMR filters together", async () => {
+    await renderWithPlayers();
     fireEvent.click(screen.getByRole("checkbox", { name: "Include Alpha (1-S2-1-111)" }));
     fireEvent.click(screen.getByRole("button", { name: "Zerg" }));
     fireEvent.change(screen.getByLabelText("Current player MMR · minimum"), { target: { value: "4500" } });
@@ -56,8 +61,8 @@ describe("Global Trends", () => {
     expect(scope().cohort).toMatchObject({ excluded_players: "1-S2-1-111", excluded_races: "Z", player_mmr_min: 4500, include_unrated: false });
   });
 
-  it("keeps a cleared selection empty and supports focusing one player", () => {
-    render(<AdminGlobalTrendsPage />);
+  it("keeps a cleared selection empty and supports focusing one player", async () => {
+    await renderWithPlayers();
     fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply player filters" }));
     expect(scope().cohort.player_selection).toBe("include");
@@ -67,8 +72,8 @@ describe("Global Trends", () => {
     expect(scope().cohort.included_players).toBe("2-S2-1-222");
   });
 
-  it("blocks inverted ranges and resets all population constraints", () => {
-    render(<AdminGlobalTrendsPage />);
+  it("blocks inverted ranges and resets all population constraints", async () => {
+    await renderWithPlayers();
     fireEvent.change(screen.getByLabelText("Current player MMR · minimum"), { target: { value: "5000" } });
     fireEvent.change(screen.getByLabelText("Current player MMR · maximum"), { target: { value: "3000" } });
     expect(screen.getByRole("alert").textContent).toContain("Minimum MMR");
@@ -78,7 +83,7 @@ describe("Global Trends", () => {
   });
 
   it("searches and pages the full roster without changing the chart cohort", async () => {
-    render(<AdminGlobalTrendsPage />);
+    await renderWithPlayers();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(api.useApi.mock.calls.some(([path]) => String(path).includes("page=1"))).toBe(true);
     fireEvent.change(screen.getByLabelText("Search players"), { target: { value: "Alpha" } });
@@ -86,8 +91,8 @@ describe("Global Trends", () => {
     expect(scope().cohort).toEqual({ player_selection: "all", include_unrated: true });
   });
 
-  it("applies detailed game filters without dropping the population", () => {
-    render(<AdminGlobalTrendsPage />);
+  it("applies detailed game filters without dropping the population", async () => {
+    await renderWithPlayers();
     fireEvent.click(screen.getByRole("button", { name: "Only include Alpha" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply player filters" }));
     fireEvent.change(screen.getByLabelText("Map", { exact: true }), { target: { value: "Ancient Cistern" } });
@@ -119,12 +124,12 @@ describe("Global Trends", () => {
     expect(api.mutate).toHaveBeenCalledOnce();
   });
 
-  it.each(["loading", "error"])("loads players and charts independently while filter suggestions are %s", (state) => {
+  it.each(["loading", "error"])("loads players and charts independently while filter suggestions are %s", async (state) => {
     const roster = { items: PLAYERS, total: 3, selectedTotal: 3, hasMore: false };
     api.useApi.mockImplementation((path: string) => path.includes("filter-options")
       ? { data: undefined, isLoading: state === "loading", error: state === "error" ? { status: 0, message: "The API is unavailable." } : undefined, mutate: api.mutate }
       : { data: roster, isLoading: false, mutate: api.mutate });
-    render(<AdminGlobalTrendsPage />);
+    await renderWithPlayers();
     expect(screen.getByText("5,210")).toBeTruthy();
     expect(screen.getByRole("region", { name: "All-player trend charts" })).toBeTruthy();
     expect(scope().mode).toBe("global");
@@ -134,13 +139,13 @@ describe("Global Trends", () => {
     }
   });
 
-  it("retains unfinished player and game filters while refreshing suggestions", () => {
+  it("retains unfinished player and game filters while refreshing suggestions", async () => {
     let refreshing = false;
     const roster = { items: PLAYERS, total: 3, selectedTotal: 3, hasMore: false };
     api.useApi.mockImplementation((path: string) => path.includes("filter-options")
       ? { data: refreshing ? undefined : { maps: ["Ancient Cistern"], builds: [], strategies: [] }, isLoading: refreshing, mutate: api.mutate }
       : { data: roster, isLoading: false, mutate: api.mutate });
-    render(<AdminGlobalTrendsPage />);
+    await renderWithPlayers();
     fireEvent.click(screen.getByRole("checkbox", { name: "Include Alpha (1-S2-1-111)" }));
     fireEvent.change(screen.getByLabelText("Current player MMR · minimum"), { target: { value: "4500" } });
     fireEvent.change(screen.getByLabelText("Map", { exact: true }), { target: { value: "Ancient Cistern" } });
@@ -152,29 +157,29 @@ describe("Global Trends", () => {
     expect(scope().mode).toBe("global");
   });
 
-  it("shows applied population membership independently of manual selection", () => {
+  it("shows applied population membership independently of manual selection", async () => {
     const roster = { items: PLAYERS.map((p) => ({ ...p, included: p.playerId === PLAYERS[0].playerId })), total: 3, rosterTotal: 3, selectedTotal: 1, hasMore: false };
     const options = { maps: [], builds: [], strategies: [] };
     api.useApi.mockImplementation((path: string) => ({ data: path.includes("filter-options") ? options : roster, isLoading: false, mutate: api.mutate }));
-    render(<AdminGlobalTrendsPage />);
+    await renderWithPlayers();
     expect(screen.getByText("1 of 3 players included")).toBeTruthy();
     expect(screen.getAllByText("Filtered out")).toHaveLength(2);
     expect((screen.getByRole("checkbox", { name: "Include Beta (2-S2-1-222)" }) as HTMLInputElement).checked).toBe(true);
   });
 
-  it("shows a retry action instead of treating a failed directory as empty", () => {
+  it("shows a retry action instead of treating a failed directory as empty", async () => {
     const options = { maps: [], builds: [], strategies: [] };
     api.useApi.mockImplementation((path: string) => path.includes("filter-options")
       ? { data: options, isLoading: false, mutate: api.mutate }
       : { error: { status: 500, message: "Try later." }, isLoading: false, mutate: api.mutate });
-    render(<AdminGlobalTrendsPage />);
+    await renderWithPlayers();
     expect(screen.getByRole("alert").textContent).toContain("Could not load players");
     fireEvent.click(screen.getByRole("button", { name: "Retry player directory" }));
     expect(api.mutate).toHaveBeenCalledOnce();
   });
 
-  it("refreshes server caches as well as chart and roster request identities", () => {
-    render(<AdminGlobalTrendsPage />);
+  it("refreshes server caches as well as chart and roster request identities", async () => {
+    await renderWithPlayers();
     fireEvent.click(screen.getByRole("button", { name: "Refresh data" }));
     const token = scope().cohort.refresh_after;
     expect(token).toBeGreaterThan(0);

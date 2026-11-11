@@ -10,6 +10,10 @@ import { Card, Skeleton } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { Section } from "@/components/ui/Section";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+import { InstantBadge } from "@/components/ui/InstantBadge";
+import { useDirtyForm } from "@/components/ui/useDirtyForm";
+import { useSaveSource } from "@/components/analyzer/settings/SettingsContext";
+import { formatDate, formatDateTime } from "@/lib/i18n/format";
 
 type Device = { id: string; label: string; key: string; createdAt: string; lastOkAt: string | null };
 export type PushStatus = { enabled: boolean; publicKey: string | null; groups: string[]; available: Array<{ id: string; label: string }>; devices: Device[] };
@@ -52,10 +56,10 @@ function PushPreferencesPanel() {
     return () => { live = false; };
   }, [data]);
 
-  async function run(work: () => Promise<string | void>) {
-    if (busy) return; setBusy(true); setError(null); setMessage("");
-    try { const note = await work(); if (note) setMessage(note); await status.mutate(); }
-    catch (cause) { setError(cause as Error); }
+  async function run(work: () => Promise<string | void>): Promise<boolean> {
+    if (busy) return false; setBusy(true); setError(null); setMessage("");
+    try { const note = await work(); if (note) setMessage(note); await status.mutate(); return true; }
+    catch (cause) { setError(cause as Error); return false; }
     finally { setBusy(false); }
   }
   const turnOn = () => run(async () => {
@@ -96,23 +100,27 @@ function ThisDevice({ state, busy, onOn, onOff }: { state: DeviceState; busy: bo
     unsupported: "This browser can't receive push notifications.", "ios-install": "Add SC2 Tools to your Home Screen to get notifications on this device.",
   };
   return <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-    <p className="text-body text-text">{text[state]}</p>
+    <p className="text-body text-text">{text[state]} {state === "on" || state === "off" ? <InstantBadge /> : null}</p>
     {state === "off" ? <Button className="min-h-11" disabled={busy} onClick={onOn}>Turn on for this device</Button> : null}
     {state === "on" ? <Button variant="secondary" className="min-h-11" disabled={busy} onClick={onOff}>Turn off for this device</Button> : null}
   </div>;
 }
 
-function PushGroups({ status, disabled, onSave }: { status: PushStatus; disabled: boolean; onSave: (groups: string[]) => void }) {
-  const [draft, setDraft] = useState(status.groups);
-  const saved = status.groups.slice().sort().join();
-  useEffect(() => { setDraft((prev) => (prev.slice().sort().join() === saved ? prev : saved ? saved.split(",") : [])); }, [saved]);
-  const dirty = draft.slice().sort().join() !== saved;
+function PushGroups({ status, disabled, onSave }: { status: PushStatus; disabled: boolean; onSave: (groups: string[]) => Promise<boolean> }) {
+  const form = useDirtyForm(status.groups, []);
+  useSaveSource("preferences", {
+    label: "push choices", dirty: form.dirty, order: 4, reset: form.reset,
+    save: async () => {
+      const saved = await onSave(form.draft);
+      if (saved) form.markSaved();
+      return saved;
+    },
+  }, "push-choices");
   return <fieldset className="mt-4 border-t border-border pt-4" disabled={disabled}>
     <legend className="text-body font-semibold text-text">What to push</legend>
     <div className="mt-2 grid gap-2 sm:grid-cols-2">{status.available.map((group) => <label key={group.id} className="flex min-h-11 items-center gap-2 text-caption">
-      <input type="checkbox" checked={draft.includes(group.id)} onChange={(e) => setDraft((list) => e.target.checked ? [...list, group.id] : list.filter((id) => id !== group.id))} />{group.label}
+      <input type="checkbox" checked={form.draft.includes(group.id)} onChange={(e) => form.setDraft((list) => e.target.checked ? [...list, group.id] : list.filter((id) => id !== group.id))} />{group.label}
     </label>)}</div>
-    <Button className="mt-3" size="sm" disabled={disabled || !dirty} onClick={() => onSave(draft)}>Save push choices</Button>
   </fieldset>;
 }
 
@@ -124,7 +132,7 @@ function DeviceList({ devices, currentKey, disabled, onRemove, onTest }: { devic
     </div>
     {devices.length === 0 ? <p className="mt-2 text-caption text-text-muted">No devices yet.</p> : <ul className="mt-2 divide-y divide-border">{devices.map((row) => <li key={row.id} className="flex items-center justify-between gap-3 py-2">
       <div className="min-w-0"><p className="text-caption font-semibold text-text">{row.label} {row.key === currentKey ? <Badge variant="success">This device</Badge> : null}</p>
-        <p className="text-caption text-text-muted">{row.lastOkAt ? `Last delivered ${new Date(row.lastOkAt).toLocaleString()}` : `Added ${new Date(row.createdAt).toLocaleDateString()}`}</p></div>
+        <p className="text-caption text-text-muted">{row.lastOkAt ? `Last delivered ${formatDateTime(new Date(row.lastOkAt))}` : `Added ${formatDate(new Date(row.createdAt))}`}</p></div>
       <Button variant="secondary" size="sm" className="min-h-11" disabled={disabled} onClick={() => onRemove(row.id)} aria-label={`Remove ${row.label}`}>Remove</Button>
     </li>)}</ul>}
   </div>;

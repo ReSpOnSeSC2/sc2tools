@@ -1,11 +1,11 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const api = vi.hoisted(() => ({ replies: new Map<string, unknown>(), paths: [] as string[] }));
+const api = vi.hoisted(() => ({ replies: new Map<string, unknown>(), paths: [] as string[], request: vi.fn() }));
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string | null) => {
     if (path) api.paths.push(path);
-    return { data: path ? api.replies.get(path.split("#")[0]) : undefined, error: undefined, isLoading: false, mutate: vi.fn() };
+    return { data: path ? api.replies.get(path.split("#")[0]) : undefined, error: undefined, isLoading: false, mutate: vi.fn(), request: api.request };
   },
 }));
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }));
@@ -16,7 +16,12 @@ const { CompareGamesButton, COMPARE_HINT_KEY } = await import("../CompareGamesBu
 const { CompareSelectionButton } = await import("../CompareSelectionButton");
 beforeAll(async () => { await import("../CompareGamePicker"); });
 
-beforeEach(() => { window.localStorage.clear(); api.replies.clear(); api.paths.length = 0; router.push.mockReset(); });
+const FIRST = "r-" + "1".repeat(24);
+const SECOND = "r-" + "2".repeat(24);
+beforeEach(() => {
+  window.localStorage.clear(); api.replies.clear(); api.paths.length = 0; router.push.mockReset();
+  api.request.mockReset().mockResolvedValue({ references: [FIRST, SECOND] });
+});
 afterEach(() => cleanup());
 
 const game = { gameId: "g1", result: "Defeat", myBuild: "Chargelot", myRace: "Protoss", opponent: { pulseId: "p1", race: "Zerg", displayName: "Rival" } };
@@ -51,7 +56,8 @@ describe("Compare… on the game page", () => {
     expect(screen.getByRole("button", { name: /Previous game vs this opponent/ }).textContent).toContain("Pylon LE");
     expect(screen.getByRole("button", { name: /Last game in this matchup/ }).textContent).toContain("Oceanborn");
     fireEvent.click(best);
-    expect(router.push).toHaveBeenCalledWith("/app/compare?a=g1&b=w2");
+    expect(api.request).toHaveBeenCalledWith({ method: "POST", body: JSON.stringify({ gameIds: ["g1", "w2"] }) });
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith(`/app/compare?a=${FIRST}&b=${SECOND}`));
   });
 
   it("disables a chip with nothing to offer", async () => {
@@ -67,12 +73,23 @@ describe("Compare… on the game page", () => {
 });
 
 describe("Compare in Replays", () => {
-  it("links exactly two selected replays, first selected as game A", () => {
-    const view = render(<CompareSelectionButton ids={["x1", "x2"]} />);
-    expect(screen.getByRole("link", { name: /Compare 2 games/ }).getAttribute("href")).toBe("/app/compare?a=x1&b=x2");
+  it("resolves exactly two selected replays, first selected as game A", async () => {
+    const legacy = "date|Rival Name|Map";
+    const view = render(<CompareSelectionButton ids={[legacy, "x2"]} />);
+    fireEvent.click(screen.getByRole("button", { name: /Compare 2 games/ }));
+    expect(api.request).toHaveBeenCalledWith({ method: "POST", body: JSON.stringify({ gameIds: [legacy, "x2"] }) });
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith(`/app/compare?a=${FIRST}&b=${SECOND}`));
     view.rerender(<CompareSelectionButton ids={["x1"]} />);
     expect(screen.getByRole("button", { name: /Compare/ }).hasAttribute("disabled")).toBe(true);
     view.rerender(<CompareSelectionButton ids={["x1", "x2", "x3"]} />);
-    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByRole("button", { name: /Compare/ }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("reports a replay that disappeared before navigation", async () => {
+    api.request.mockResolvedValue({ references: [FIRST, null] });
+    render(<CompareSelectionButton ids={["x1", "x2"]} />);
+    fireEvent.click(screen.getByRole("button", { name: /Compare 2 games/ }));
+    expect((await screen.findByRole("alert")).textContent).toContain("no longer in your synced history");
+    expect(router.push).not.toHaveBeenCalled();
   });
 });

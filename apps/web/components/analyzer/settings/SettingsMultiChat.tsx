@@ -24,9 +24,8 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useAuth } from "@clerk/nextjs";
-import { ExternalLink, Languages, MessageSquare, Wand2 } from "lucide-react";
+import { ExternalLink, Languages, Wand2 } from "lucide-react";
 import { apiCall, useApi, API_BASE } from "@/lib/clientApi";
 import {
   RANK_RACES,
@@ -74,7 +73,7 @@ import { SettingsMultiChatTts } from "./SettingsMultiChatTts";
 import { ChatCommandsCard } from "./ChatCommandsCard";
 
 import { OfficialPlatformConnections } from "./OfficialPlatformConnections";
-import { usePublishDirty } from "./SettingsContext";
+import { useSaveSource } from "./SettingsContext";
 
 /**
  * Inline chat-translation settings — stored under `translate` in the
@@ -249,8 +248,6 @@ function OwnerSettingsMultiChat({ token, getToken, isCurrent }: { token: string 
 
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [dirty, setDirty] = useState(false);
-  // Switching Settings tabs unmounts this form: ask before dropping edits.
-  usePublishDirty("chat", dirty);
   const [saving, setSaving] = useState(false);
   const saveRequest = useRef<AbortController | null>(null);
   const detectRequest = useRef<AbortController | null>(null);
@@ -268,23 +265,6 @@ function OwnerSettingsMultiChat({ token, getToken, isCurrent }: { token: string 
   useEffect(() => {
     if (!dirty && data) setDraft(draftFromConfig(data));
   }, [data, dirty]);
-
-  // Portals need a DOM; render nothing on the server pass.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  // Warn before a reload or tab close while edits are pending. Next's client
-  // router can't be intercepted from here, so in-app navigation is covered by
-  // the sticky bar staying visible rather than by a prompt.
-  useEffect(() => {
-    if (!dirty) return undefined;
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [dirty]);
 
   const set = (patch: Partial<Draft>) => {
     revision.current += 1;
@@ -323,8 +303,15 @@ function OwnerSettingsMultiChat({ token, getToken, isCurrent }: { token: string 
     return out;
   }, [draft]);
 
-  const save = async () => {
-    if (!live.current || !isCurrent() || saveRequest.current) return;
+  const discard = () => {
+    revision.current += 1;
+    setDirty(false);
+    if (data) setDraft(draftFromConfig(data));
+  };
+
+  const save = async (): Promise<boolean> => {
+    if (!dirty) return true;
+    if (!live.current || !isCurrent() || saveRequest.current) return false;
     const request = new AbortController(); saveRequest.current = request;
     const sentRevision = revision.current;
     const admitted = () => live.current && isCurrent() && saveRequest.current === request && !request.signal.aborted;
@@ -343,27 +330,41 @@ function OwnerSettingsMultiChat({ token, getToken, isCurrent }: { token: string 
         body: JSON.stringify(body),
         signal: request.signal,
       });
-      if (!admitted()) return;
+      if (!admitted()) return false;
       // Refetch BEFORE clearing dirty: the hydrate effect re-fills the
       // draft from SWR `data` the moment dirty flips false, and until
       // the refetch resolves that cache still holds the PRE-save blob —
       // clearing first briefly reverted the form and could silently
       // undo the save if the user kept editing in that window.
       const confirmed = await apiCall<MultichatConfig>(getToken, "/v1/me/preferences/multichat", { signal: request.signal });
-      if (!admitted()) return;
+      if (!admitted()) return false;
       await mutate(previous => admitted() ? confirmed : previous, { revalidate: false });
-      if (!admitted() || revision.current !== sentRevision) return;
+      if (!admitted()) return false;
+      // Edits made while saving stay as the next draft; what was sent is saved.
+      if (revision.current !== sentRevision) return true;
       setDraft(clean); setDirty(false);
       toast.success("Chat settings saved", {
         description: "The overlay picks changes up within a minute.",
       });
+      return true;
     } catch {
       if (admitted()) toast.error("Could not save chat settings");
+      return false;
     } finally {
       if (admitted()) setSaving(false);
       if (saveRequest.current === request) saveRequest.current = null;
     }
   };
+
+  // The Chat tab's one SaveBar saves these settings and the chat bot together.
+  useSaveSource("chat", {
+    label: "chat settings",
+    dirty,
+    save,
+    reset: discard,
+    blocked: problems.length === 0 ? null : problems.length === 1 ? "Fix the chat settings issue to save" : `Fix ${problems.length} chat settings issues to save`,
+    order: 0,
+  }, "multichat");
 
   const detectKick = async () => {
     const slug = normalizeKickChannelInput(draft.kickChannel);
@@ -768,71 +769,18 @@ function OwnerSettingsMultiChat({ token, getToken, isCurrent }: { token: string 
               </ul>
             ) : null}
 
-            {/*
-              The canonical save control. A floating duplicate is portalled to
-              the body while the form is dirty -- see below. position:sticky is
-              not an option here: Card sets overflow-hidden, and any ancestor
-              with overflow disables sticky on its descendants.
-            */}
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                onClick={() => void save()}
-                disabled={saving || !dirty || problems.length > 0}
-              >
-                <MessageSquare className="mr-1.5 h-4 w-4" aria-hidden />
-                {saving ? "Saving…" : "Save chat settings"}
-              </Button>
-              {dirty ? (
-                <span className="text-caption font-medium text-accent">
-                  Unsaved changes
-                </span>
-              ) : null}
-              {dirty && problems.length > 0 ? (
-                <span className="text-caption text-warning">
-                  {problems.length === 1
-                    ? "Fix the issue above to save"
-                    : `Fix ${problems.length} issues above to save`}
-                </span>
-              ) : null}
-            </div>
+            {/* Save lives in the tab's one SaveBar (bottom of the page). */}
+            {dirty ? (
+              <p className="text-caption text-text-muted">
+                <span className="font-medium text-accent">Unsaved changes.</span>{" "}
+                {problems.length > 0
+                  ? problems.length === 1 ? "Fix the issue above, then press Save." : `Fix the ${problems.length} issues above, then press Save.`
+                  : "Press Save at the bottom of the page to apply them."}
+              </p>
+            ) : null}
           </div>
         )}
       </Card>
-      {/*
-        Floating save bar. The alert picker and the other sub-panels sit far
-        above the inline button in a long card, so edits could be made, never
-        scrolled past, and lost on navigation. Portalled to document.body
-        because Card's overflow-hidden would clip a sticky element and a
-        transformed ancestor would capture a fixed one. Floats above the
-        mobile tab bar like the shared SaveBar.
-      */}
-      {mounted && dirty
-        ? createPortal(
-            <div className="pointer-events-none fixed inset-x-0 bottom-above-chrome z-banner flex justify-center px-4">
-              <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-3 rounded-full border border-accent/50 bg-bg-surface/95 px-4 py-2.5 shadow-xl backdrop-blur">
-                <span className="text-caption font-medium text-accent">
-                  Unsaved chat settings
-                </span>
-                {problems.length > 0 ? (
-                  <span className="text-caption text-warning">
-                    {problems.length === 1
-                      ? "Fix the issue in the card to save"
-                      : `Fix ${problems.length} issues in the card to save`}
-                  </span>
-                ) : null}
-                <Button
-                  size="sm"
-                  onClick={() => void save()}
-                  disabled={saving || problems.length > 0}
-                >
-                  <MessageSquare className="mr-1.5 h-4 w-4" aria-hidden />
-                  {saving ? "Saving…" : "Save"}
-                </Button>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
     </Section>
   );
 }

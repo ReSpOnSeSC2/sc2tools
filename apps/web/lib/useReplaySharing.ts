@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import type { ReplaySharingResponse } from "@/components/analyzer/replays/types";
 import { sharedAnalysisHref } from "@/components/public-profile/archiveQuery";
 import { apiCall, useApi } from "./clientApi";
+import { isPublicReplayReference } from "./replayRouteAccess";
 
 /**
  * Public replay sharing (the account-wide archive at /players/<handle>/replays),
@@ -37,14 +37,23 @@ export async function putReplaySharing(
   return result;
 }
 
-/**
- * A game's address on the owner's public replay page.
- *
- * Example: `publicGameHref("bob", "g|1", "https://sc2tools.com")`
- * → "https://sc2tools.com/players/bob/replays/g%7C1".
- */
-export function publicGameHref(handle: string, gameId: string, origin: string): string {
-  return `${origin}${sharedAnalysisHref(`/players/${encodeURIComponent(handle)}/replays`, gameId)}`;
+/** Resolve the archive's opaque reference without putting a legacy ID in a URL. */
+export async function getPublicReplayReference(
+  getToken: () => Promise<string | null>,
+  gameId: string,
+  signal: AbortSignal,
+): Promise<string> {
+  const result = await apiCall<{ reference?: unknown }>(getToken, REPLAY_SHARING_PATH + "/reference", {
+    method: "POST", body: JSON.stringify({ gameId }), signal,
+  });
+  if (!isPublicReplayReference(result?.reference)) throw new Error("This game's public link could not be confirmed.");
+  return result.reference;
+}
+
+/** A public replay URL may only contain the archive's opaque reference. */
+export function publicGameHref(handle: string, reference: string, origin: string): string | null {
+  if (!isPublicReplayReference(reference)) return null;
+  return `${origin}${sharedAnalysisHref(`/players/${encodeURIComponent(handle)}/replays`, reference)}`;
 }
 
 /**
@@ -56,25 +65,16 @@ export function useReplaySharing(active: boolean) {
   const { getToken } = useAuth();
   const request = useApi<ReplaySharingResponse>(active ? REPLAY_SHARING_PATH : null,
     { revalidateOnFocus: false, shouldRetryOnError: false });
-  const [saving, setSaving] = useState(false);
   const sharing = validReplaySharing(request.data) ? request.data : null;
-  const handle = sharing?.enabled && sharing.handle ? sharing.handle : null;
   return {
     sharing,
     unavailable: Boolean(request.error) || (request.data !== undefined && !sharing),
-    saving,
     /** Write ``enabled`` and adopt the confirmed answer. */
-    setEnabled: async (enabled: boolean): Promise<ReplaySharingResponse> => {
-      setSaving(true);
-      try {
-        const next = await putReplaySharing(getToken, enabled);
-        await request.mutate(next, { revalidate: false });
-        return next;
-      } finally {
-        setSaving(false);
-      }
+    setEnabled: async (enabled: boolean, signal?: AbortSignal): Promise<ReplaySharingResponse> => {
+      const next = await putReplaySharing(getToken, enabled, signal);
+      signal?.throwIfAborted();
+      await request.mutate(next, { revalidate: false });
+      return next;
     },
-    /** The game's public address while sharing is on, else null. */
-    publicGameHref: (gameId: string) => (handle ? publicGameHref(handle, gameId, window.location.origin) : null),
   };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
+import { formatNumber } from "@/lib/i18n/format";
 
 interface BuildPaginationProps {
   pageNumber: number;
@@ -21,7 +22,7 @@ export function BuildPagination({ pageNumber, pageSize = 50, pageStart, count, t
     <nav aria-label="Custom build pages" className="mt-4 flex flex-wrap items-center justify-between gap-3">
       <p className="text-caption text-text-muted" aria-live="polite">
         {count > 0
-          ? `Page ${pageNumber}${total != null ? ` of ${Math.ceil(total / pageSize)}` : ""} · builds ${(pageStart + 1).toLocaleString()}–${(pageStart + count).toLocaleString()}${total != null ? ` of ${total.toLocaleString()}` : ""}`
+          ? `Page ${pageNumber}${total != null ? ` of ${Math.ceil(total / pageSize)}` : ""} · builds ${formatNumber(pageStart + 1)}–${formatNumber(pageStart + count)}${total != null ? ` of ${formatNumber(total)}` : ""}`
           : `Page ${pageNumber}`}
       </p>
       <div className="flex gap-2">

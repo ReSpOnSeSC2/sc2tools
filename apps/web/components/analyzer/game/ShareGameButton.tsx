@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@clerk/nextjs";
 import { CircleHelp, Clock3, Globe, Image as ImageIcon, Link2, ListChecks, LockKeyhole } from "lucide-react";
@@ -15,7 +15,7 @@ import { activeShare, gameSharesPath, shareLinkUrl, type GameShare, type GameSha
 import { formatGameClock } from "@/lib/macro";
 import { gameAnalysisHref } from "@/lib/opponentNavigation";
 import { gameReplayHref } from "@/lib/replayLink";
-import { publicGameHref, useReplaySharing } from "@/lib/useReplaySharing";
+import { getPublicReplayReference, publicGameHref, useReplaySharing } from "@/lib/useReplaySharing";
 import { ShareMenu, type ShareMenuHandle, type ShareMenuItem } from "./ShareMenu";
 import type { GameSummary } from "./types";
 
@@ -59,7 +59,7 @@ export function ShareGameButton({
   currentTimeSec?: number | null;
 }) {
   const toast = useToastOptional()?.toast;
-  const { getToken } = useAuth();
+  const { getToken, userId } = useAuth();
   const menu = useRef<ShareMenuHandle>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const copiedMessage = useRef(COPIED);
@@ -67,12 +67,20 @@ export function ShareGameButton({
   const [creating, setCreating] = useState(false);
   const [rendering, setRendering] = useState(false);
   const [managing, setManaging] = useState(false);
-  const [confirmPublic, setConfirmPublic] = useState(false);
+  const scope = useMemo(() => ({ gameId: game.gameId, userId }), [game.gameId, userId]);
+  const [confirmPublicScope, setConfirmPublicScope] = useState<typeof scope | null>(null);
+  const confirmPublic = confirmPublicScope === scope;
+  const publicAction = useRef<AbortController | null>(null);
+  const [publicActionScope, setPublicActionScope] = useState<typeof scope | null>(null);
+  const publicBusy = publicActionScope === scope;
+  useEffect(() => () => {
+    publicAction.current?.abort();
+    publicAction.current = null;
+  }, [scope]);
   // Read the game's links and the sharing status once the menu has opened.
   const sharesReq = useApi<GameShareList>(opened ? gameSharesPath(game.gameId) : null,
     { revalidateOnFocus: false, shouldRetryOnError: false });
   const replaySharing = useReplaySharing(opened);
-  const [scope] = useState(() => ({ gameId: game.gameId }));
   const copier = useCopy({ scopeKey: scope, onCopied: () => {
     toast?.success(copiedMessage.current);
     copiedMessage.current = COPIED;
@@ -99,14 +107,33 @@ export function ShareGameButton({
     }
   };
 
-  const turnOnPublicReplays = async () => {
+  const copyPublicReplay = async (enable: boolean) => {
+    if (publicAction.current) return false;
+    const controller = new AbortController();
+    const { signal } = controller;
+    publicAction.current = controller;
+    setPublicActionScope(scope);
     try {
-      const next = await replaySharing.setEnabled(true);
-      setConfirmPublic(false);
-      if (next.handle) await copy(publicGameHref(next.handle, game.gameId, window.location.origin), "Public replay page is live. Link copied.");
+      const reference = await getPublicReplayReference(getToken, game.gameId, signal);
+      signal.throwIfAborted();
+      const sharing = enable ? await replaySharing.setEnabled(true, signal) : replaySharing.sharing;
+      signal.throwIfAborted();
+      const href = sharing?.enabled && sharing.handle
+        ? publicGameHref(sharing.handle, reference, window.location.origin) : null;
+      if (!href) throw new Error("This game's public link could not be confirmed.");
+      if (enable) setConfirmPublicScope(null);
+      return await copy(href, enable ? "Public replay page is live. Link copied." : COPIED);
     } catch (error) {
-      setConfirmPublic(false);
-      toast?.error("Couldn't turn on public replays", { description: (error as ClientApiError)?.message || "Please try again." });
+      if (!signal.aborted) {
+        if (enable) setConfirmPublicScope(null);
+        toast?.error("Couldn't copy a public replay link", { description: (error as ClientApiError)?.message || "Please try again." });
+      }
+      return false;
+    } finally {
+      if (publicAction.current === controller) {
+        publicAction.current = null;
+        setPublicActionScope(null);
+      }
     }
   };
 
@@ -193,18 +220,17 @@ export function ShareGameButton({
   ];
 
   function publicRows(): ShareMenuItem[] {
-    // Resumed games never reach the public replay page; an unreadable
-    // status (failed or signed out) hides the public rows silently.
-    if (game.isResumedFromReplay === true || replaySharing.unavailable || !replaySharing.sharing) return [];
-    const href = replaySharing.publicGameHref(game.gameId);
-    if (href) {
+    // Hidden and resumed games never reach the public replay page.
+    if (game.excluded === true || game.isResumedFromReplay === true || replaySharing.unavailable || !replaySharing.sharing) return [];
+    if (replaySharing.sharing.enabled) {
       return [{
         id: "public",
         label: "Copy public link",
         sublabel: "Opens this game on your public replay page. Viewers sign in to see the analysis; your notes stay private.",
         icon: <Globe className="h-4 w-4" />,
         keepOpen: true,
-        onSelect: () => copy(href),
+        busy: publicBusy,
+        onSelect: () => copyPublicReplay(false),
       }];
     }
     return [{
@@ -212,8 +238,8 @@ export function ShareGameButton({
       label: "Turn on public replays…",
       sublabel: "Puts your whole replay archive on your public player page",
       icon: <Globe className="h-4 w-4" />,
-      busy: replaySharing.saving,
-      onSelect: () => setConfirmPublic(true),
+      busy: publicBusy,
+      onSelect: () => setConfirmPublicScope(scope),
     }];
   }
 
@@ -222,8 +248,8 @@ export function ShareGameButton({
       onOpen={() => setOpened(true)} />
     <CopyRecoveryDialog text={copier.fallbackText} inputRef={copier.inputRef} triggerRef={triggerRef} scopeKey={scope}
       onDismiss={copier.clear} title="Copy link manually" label="Link to copy" />
-    <ConfirmDialog open={confirmPublic} onClose={() => { if (!replaySharing.saving) setConfirmPublic(false); }}
-      onConfirm={() => void turnOnPublicReplays()} loading={replaySharing.saving}
+    <ConfirmDialog open={confirmPublic} onClose={() => { if (!publicBusy) setConfirmPublicScope(null); }}
+      onConfirm={() => void copyPublicReplay(true)} loading={publicBusy}
       title="Turn on public replays?" confirmLabel="Turn on and copy link" focusCancel>
       <ReplaySharingDisclosure />
     </ConfirmDialog>

@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 /* eslint-disable @next/next/no-img-element */
 
 import {
@@ -100,9 +102,12 @@ export function ChatAlertCard({
   ].filter(Boolean).join(" ");
 
   return (
-    <div
+    <OverlayPanel
       className={classes}
-      style={variables}
+      style={{ ...variables, color: "#f8fafc", background: "var(--ca-bg, var(--ca-panel))", border: "var(--ca-border)", borderRadius: "var(--ca-radius, 14px)" }}
+      clipFallback="var(--ca-clip, none)"
+      accent={preset.accent}
+      accentSize="var(--ca-edge, 5px)"
       data-alert-preset={preset.id}
       data-alert-layout={preset.layout}
       data-alert-motion={motion}
@@ -133,7 +138,7 @@ export function ChatAlertCard({
         </div>
       </div>
       <PresetExtra preset={preset} />
-    </div>
+    </OverlayPanel>
   );
 }
 
@@ -156,7 +161,7 @@ function panelGradient(preset: AlertVisualPreset): string {
   if (preset.category === "StarCraft") {
     return "linear-gradient(135deg, rgba(7,20,38,.98), rgba(10,12,19,.97))";
   }
-  return "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,.96), rgba(22,26,35,.95)))";
+  return "linear-gradient(135deg, rgba(11,13,18,.96), rgba(22,26,35,.95))";
 }
 
 function DecorationField({
@@ -531,13 +536,8 @@ export const CHAT_ALERT_CARD_CSS = `
     min-width: min(240px, 100%);
     min-height: 112px;
     overflow: hidden;
-    color: #f8fafc;
-    background: var(--ca-panel);
-    border: 1px solid color-mix(in srgb, var(--ca-accent) 56%, transparent);
-    border-left: 5px solid var(--ca-accent);
-    border-radius: var(--ov-radius, 14px);
+    --ca-border: 1px solid color-mix(in srgb, var(--ca-accent) 56%, transparent);
     box-shadow: 0 14px 38px rgba(0,0,0,.5), 0 0 26px color-mix(in srgb, var(--ca-accent) 18%, transparent);
-    font-family: var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif);
     transform-origin: 35% 50%;
   }
   .chat-alert-visual::before {
@@ -637,17 +637,17 @@ export const CHAT_ALERT_CARD_CSS = `
   @keyframes caTumble { from { transform: translateX(0) rotate(0); } to { transform: translateX(150px) rotate(540deg); } }
   @keyframes caApplauseGlow { from { box-shadow: 0 0 9px rgba(251,191,36,.34); } to { box-shadow: 0 0 22px rgba(251,191,36,.78); } }
   .ca-deco-scanlines { inset: calc(var(--ca-i) * 33%) 0 auto; left: 0; width: 100%; height: 1px; color: transparent; background: rgba(255,255,255,.07); animation: caScan 2s linear infinite; }
-  .ca-layout-lower-third { min-height: 88px; border-radius: 8px; }
+  .ca-layout-lower-third { min-height: 88px; --ca-radius: 8px; }
   .ca-layout-lower-third .ca-main { grid-template-columns: 62px minmax(0,1fr); padding-block: 10px; }
   .ca-layout-lower-third .ca-art { width: 56px; height: 56px; }
-  .ca-layout-pill { min-height: 76px; border-left-width: 1px; border-radius: 999px; }
+  .ca-layout-pill { min-height: 76px; --ca-edge: 1px; --ca-radius: 999px; }
   .ca-layout-pill .ca-main { grid-template-columns: 56px minmax(0,1fr); gap: 9px; padding: 9px 18px 9px 10px; }
   .ca-layout-pill .ca-art { width: 52px; height: 52px; }
   .ca-layout-pill .ca-user { margin-top: 4px; font-size: 18px; }
   .ca-layout-pill .ca-detail { display: none; }
-  .ca-layout-burst { border: 3px solid var(--ca-accent); border-left-width: 7px; clip-path: polygon(0 4%, 95% 0, 100% 16%, 97% 100%, 4% 96%); }
-  .ca-layout-spotlight { background: radial-gradient(circle at 18% 25%, color-mix(in srgb, var(--ca-accent) 33%, transparent), transparent 35%), var(--ca-panel); }
-  .ca-layout-stage { min-height: 142px; border: 2px solid var(--ca-accent); border-left-width: 6px; }
+  .ca-layout-burst { --ca-border: 3px solid var(--ca-accent); --ca-edge: 7px; --ca-clip: polygon(0 4%, 95% 0, 100% 16%, 97% 100%, 4% 96%); }
+  .ca-layout-spotlight { --ca-bg: radial-gradient(circle at 18% 25%, color-mix(in srgb, var(--ca-accent) 33%, transparent), transparent 35%), var(--ca-panel); }
+  .ca-layout-stage { min-height: 142px; --ca-border: 2px solid var(--ca-accent); --ca-edge: 6px; }
   .ca-layout-stage .ca-main { grid-template-columns: 100px minmax(0,1fr); }
   .ca-layout-stage .ca-art { width: 94px; height: 94px; }
   .ca-emoji, .ca-mind-blown, .ca-chicken, .ca-gremlin, .ca-trophy { font-size: 58px; line-height: 1; }

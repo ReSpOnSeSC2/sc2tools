@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Save } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { BUILD_INTENT_NOTES_MAX_LENGTH } from "@/lib/buildIntent";
+import { formatNumber } from "@/lib/i18n/format";
 
 export interface CheckInNotesDraft {
   draft: string;
@@ -93,7 +94,7 @@ export function CheckInNotesEditor({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-3 text-micro text-text-dim">
           <span id={counterId} className="tabular-nums">
-            {remaining.toLocaleString("en-US")} characters left
+            {formatNumber(remaining)} characters left
           </span>
           <span
             role={statusIsError ? "alert" : "status"}

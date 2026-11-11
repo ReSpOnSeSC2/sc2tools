@@ -15,6 +15,7 @@ import type {
   BackupRetentionItem,
   InAppSnapshotCounts,
 } from "./adminTypes";
+import { formatDateTime, formatNumber } from "@/lib/i18n/format";
 
 /** Where the restore steps live (repo doc; admins read it on GitHub). */
 const RUNBOOK_PATH = "docs/runbooks/restore-database.md";
@@ -160,7 +161,7 @@ function AtlasDetails({ atlas }: { atlas: AtlasBackupStatus }) {
       <DetailRow label="Point-in-time restore" value={pointInTimeLabel(atlas.pointInTime)} />
       <DetailRow
         label="Snapshots on hand"
-        value={atlas.completedSnapshotCount.toLocaleString()}
+        value={formatNumber(atlas.completedSnapshotCount)}
       />
     </dl>
   );
@@ -174,7 +175,7 @@ function InAppPanel({ inApp }: { inApp: InAppSnapshotCounts | null }) {
           Snapshots users take in Settings
         </div>
         <div className="mt-1 text-2xl font-semibold tabular-nums text-text">
-          {inApp ? inApp.snapshotCount.toLocaleString() : "Unavailable"}
+          {inApp ? formatNumber(inApp.snapshotCount) : "Unavailable"}
         </div>
         <p className="mt-0.5 text-caption text-text-muted">
           {inApp
@@ -437,11 +438,11 @@ export function timeUntil(iso: string, nowMs = Date.now()): string {
 
 function formatWhen(iso: string): string {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "at an unknown time" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "at an unknown time" : formatDateTime(date);
 }
 
 function plural(count: number, noun: string): string {
-  return `${count.toLocaleString()} ${noun}${count === 1 ? "" : "s"}`;
+  return `${formatNumber(count)} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 const FRESHNESS: ReadonlyArray<BackupFreshness> = ["fresh", "aging", "stale", "missing", "unknown"];

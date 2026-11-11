@@ -6,7 +6,7 @@ import { OverlayPreviewContext } from "@/lib/overlayPreviewContext";
 import { localPreviewRandomizer } from "@/components/overlay/OverlayLocalPreviewFrame";
 import { ALL_WIDGETS, type WidgetId } from "@/components/overlay/widgetLifecycle";
 import { WIDGET_GUIDES, WIDGET_GROUPS } from "@/lib/streamStudioLearn";
-import { OVERLAY_THEME_PRESETS, themeToCssVars, type OverlayTheme } from "@/lib/overlayTheme";
+import { OVERLAY_THEME_PRESETS, themeToCssVars, type OverlayTheme, type OverlayThemeScale } from "@/lib/overlayTheme";
 import { OVERLAY_SAMPLE_SCENARIOS, overlaySample, sampleLiveGame, sampleStudio } from "@/lib/overlaySamples";
 import { encodeGhostBuildConfig, GHOST_BUILD_CONFIG_VERSION, GHOST_BUILD_VERSION } from "@/lib/ghostBuild";
 import { CHECKERBOARD, PREVIEW_CSS } from "@/lib/overlayPreviewStyles";
@@ -72,12 +72,16 @@ function SampleStage({ widget, scenario, theme, revision, actual = false, small 
 export function WidgetPlayground({ initialWidget = "opponent", compact = false }: { initialWidget?: string; compact?: boolean }) {
   const [widget, setWidget] = useState<WidgetId | "all">(ALL_WIDGETS.includes(initialWidget as WidgetId) ? initialWidget as WidgetId : "opponent");
   const [scenario, setScenario] = useState("victory"), [preset, setPreset] = useState("default"), [revision, replay] = useState(0), [actual, setActual] = useState(false);
-  const theme = OVERLAY_THEME_PRESETS.find(item => item.id === preset)?.theme ?? {};
+  const [scale, setScale] = useState<OverlayThemeScale | undefined>();
+  const theme = useMemo(() => ({ ...OVERLAY_THEME_PRESETS.find(item => item.id === preset)?.theme,
+    ...(scale === undefined ? {} : { scale }),
+  }), [preset, scale]);
   return <section aria-label="Widget playground" className="min-w-0 space-y-4"><style>{PREVIEW_CSS}</style>
     <div role="status" className="rounded-lg border border-accent/40 bg-accent/5 p-3 text-caption text-text">Local preview · sample data. Nothing is sent to OBS. No account or overlay token is used.</div>
     <div className={`grid min-w-0 gap-4 ${compact ? "" : "lg:grid-cols-[15rem_minmax(0,1fr)]"}`}>
       <div className="min-w-0 space-y-3"><label className="block text-caption font-semibold">Widget<select value={widget} onChange={event => { setWidget(event.target.value as WidgetId | "all"); setActual(false); }} className="mt-1 min-h-11 w-full rounded border border-border bg-bg-surface px-2 text-text"><option value="all">Show all together</option>{WIDGET_GROUPS.map(group => <optgroup key={group.id} label={group.name}>{WIDGET_GUIDES.filter(item => item.group === group.id).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</optgroup>)}</select></label>
         <label className="block text-caption font-semibold">Theme preset<select value={preset} onChange={event => setPreset(event.target.value)} className="mt-1 min-h-11 w-full rounded border border-border bg-bg-surface px-2 text-text">{OVERLAY_THEME_PRESETS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label className="block text-caption font-semibold">Scale<select value={scale ?? "preset"} onChange={event => setScale(event.target.value === "preset" ? undefined : Number(event.target.value) as OverlayThemeScale)} className="mt-1 min-h-11 w-full rounded border border-border bg-bg-surface px-2 text-text"><option value="preset">Use preset</option><option value={1}>Normal</option><option value={1.25}>Large</option></select></label>
         <div role="group" aria-label="Sample scenario" className="flex flex-wrap gap-1">{OVERLAY_SAMPLE_SCENARIOS.map(item => <button key={item.id} type="button" aria-pressed={scenario === item.id} onClick={() => setScenario(item.id)} className={`min-h-11 rounded border px-2 text-caption ${scenario === item.id ? "border-accent text-accent" : "border-border text-text-muted"}`}>{item.label}</button>)}</div>
         <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => replay(value => value + 1)}>Replay sample</Button>{widget !== "all" ? <Button variant="ghost" aria-pressed={actual} onClick={() => setActual(value => !value)}>{actual ? "Fit preview" : "Actual size"}</Button> : null}</div>
         <p className="text-caption text-text-muted">Timed samples can finish; Replay sample starts them again. Actual size lets you scroll within the stage. Preview is silent; Test in OBS checks the real source.</p>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { useDropTarget } from "@/components/instant/useDropTarget";
 import { useReplayAccept } from "@/components/instant/useReplayAccept";
 import { isReplayFileName, MAX_REPLAY_BYTES } from "@/lib/instant/fileIntake";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -18,14 +19,13 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { getInstantImportMode } from "@/lib/instant/flag";
-import { LazyBuildEditorModal as BuildEditorModal } from "@/components/builds/editor/LazyBuildEditorModal";
-import { buildLogToEvents } from "@/lib/build-events";
-import type { RaceLite, VsRaceLite } from "@/lib/build-rules";
 import { SampleReportButton } from "@/components/instant/SampleReportButton";
 import { ReplayDemoBrowserIsland } from "./ReplayDemoBrowserIsland";
 import type { DemoRequest } from "./ReplayDemoBrowserSession";
-import type { PreviewDossier, PreviewPlayer } from "./replayDemoPreview";
+import type { PreviewDossier } from "./replayDemoPreview";
 import { replayDemoFileSize } from "./replayDemoFileSize";
+
+const ReplayDemoEditor = dynamic(() => import("./ReplayDemoEditor").then(module => module.ReplayDemoEditor), { ssr: false });
 
 /**
  * ReplayDemo — landing-page "drop a replay, see the real dossier" CTA.
@@ -145,15 +145,6 @@ function BrowserReplayDemo() {
     const timer = setTimeout(() => playerChoices.current?.querySelector<HTMLButtonElement>(`[data-player-index="${perspective}"]`)?.focus(), 0);
     return () => clearTimeout(timer);
   }, [dossier, editorOpen, perspective]);
-
-  const me = dossier?.players[perspective] ?? null;
-  const opp = dossier?.players[perspective === 0 ? 1 : 0] ?? null;
-  const editorEvents = useMemo(
-    () => (me ? buildLogToEvents(me.build_log, me.race) : []),
-    [me],
-  );
-  const editorRace: RaceLite = coerceRace(me?.race);
-  const editorVsRace: VsRaceLite = coerceVsRace(opp?.race);
 
   function onPick(file: File | null) {
     if (!file || inFlight.current) return;
@@ -277,53 +268,11 @@ function BrowserReplayDemo() {
 
       {browserIntent ? <ReplayDemoBrowserIsland request={browserRequest} onSuccess={browserSuccess} onBusy={browserBusy} onClose={closeStatus} onChooseAnother={chooseAnother} /> : null}
 
-      <BuildEditorModal
-        key={`${dossier?.game_id ?? "empty"}:${perspective}`}
-        open={editorOpen && !!dossier}
-        onClose={() => setEditorOpen(false)}
-        events={editorEvents}
-        gameId={dossier?.game_id}
-        race={editorRace}
-        vsRace={editorVsRace}
-        perspective="you"
-        defaultName={defaultBuildName(me, opp)}
-        demoMode
-      />
+      {editorOpen && dossier ? <ReplayDemoEditor key={`${dossier.game_id}:${perspective}`}
+        dossier={dossier} playerIndex={perspective} onClose={() => setEditorOpen(false)} /> : null}
 
     </section>
   );
-}
-
-/* ---------------- Demo helpers ---------------- */
-
-function coerceRace(r: string | undefined): RaceLite {
-  if (r === "Protoss" || r === "Terran" || r === "Zerg" || r === "Random") {
-    return r;
-  }
-  return "Random";
-}
-
-function coerceVsRace(r: string | undefined): VsRaceLite {
-  if (
-    r === "Protoss" ||
-    r === "Terran" ||
-    r === "Zerg" ||
-    r === "Random" ||
-    r === "Any"
-  ) {
-    return r;
-  }
-  return "Any";
-}
-
-function defaultBuildName(
-  me: PreviewPlayer | null,
-  opp: PreviewPlayer | null,
-): string | undefined {
-  if (!me || !opp) return undefined;
-  const a = me.race?.charAt(0).toUpperCase() || "?";
-  const b = opp.race?.charAt(0).toUpperCase() || "?";
-  return `${a}v${b} — Custom`;
 }
 
 function DossierLoading() {

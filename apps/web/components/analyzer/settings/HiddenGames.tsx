@@ -12,6 +12,7 @@ import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { REPLAY_HIDE_REASONS, type ReplayControlTarget } from "@/lib/replayGameControls";
 import { GameControlActions } from "../replays/GameControlActions";
 import { SettingsSectionsReady } from "./SettingsSectionNav";
+import { formatDate } from "@/lib/i18n/format";
 
 type HiddenGame = ReplayControlTarget & { opponent: string; reason: string | null };
 type HiddenPage = { items: HiddenGame[]; nextCursor: string | null };
@@ -49,7 +50,7 @@ function HiddenGamesList() {
           <div className="min-w-0 space-y-1">
             <p className="break-words font-semibold">{game.pendingDeletion ? "Pending deletion" : game.map || "Replay"}{game.opponent ? ` · ${game.opponent}` : ""}</p>
             <p className="break-all font-mono text-micro text-text-muted">{game.gameId}</p>
-            <p className="text-caption text-text-muted">{game.pendingDeletion ? "Cloud cleanup is incomplete. Retry deletion to finish; this game cannot be unhidden." : REPLAY_HIDE_REASONS.find(reason => reason.value === game.reason)?.label || "Hidden from stats"}{game.date ? ` · ${new Date(game.date).toLocaleDateString()}` : ""}</p>
+            <p className="text-caption text-text-muted">{game.pendingDeletion ? "Cloud cleanup is incomplete. Retry deletion to finish; this game cannot be unhidden." : REPLAY_HIDE_REASONS.find(reason => reason.value === game.reason)?.label || "Hidden from stats"}{game.date ? ` · ${formatDate(new Date(game.date))}` : ""}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {!game.pendingDeletion ? <Link className="inline-flex min-h-11 items-center rounded-lg px-3 text-caption font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" href={`/app/game/${encodeURIComponent(game.gameId)}`}>View game</Link> : null}

@@ -241,6 +241,38 @@ body {
 }
 
 /* ============================================================
+ * Appearance (Settings → Preferences → Appearance & region). The head
+ * script sets these attributes before paint from this browser's copy of
+ * the account's choice, and never on OBS sources (/overlay, /dock).
+ *
+ * Text size scales the root, so every rem size (text and the spacing
+ * around it) grows together; viewport breakpoints are unchanged, unlike
+ * browser zoom. 100% keeps the browser's own default.
+ * ============================================================ */
+html[data-text-size="112.5"] {
+  font-size: 112.5%;
+}
+html[data-text-size="125"] {
+  font-size: 125%;
+}
+
+/* Compact density: tighter table rows and card padding. */
+html[data-density="compact"] :is(td, th):is(.py-3, .py-2\.5) {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+html[data-density="compact"] :is(td, th):is(.py-2, .py-1\.5, .p-2) {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+html[data-density="compact"] [data-density-pad="card"] {
+  padding: 0.75rem;
+}
+html[data-density="compact"] [data-density-pad="card-header"] {
+  padding: 0.5rem 0.75rem;
+}
+
+/* ============================================================
  * Ambient "Courtside" backdrop — a faint ink dot-grid fixed behind
  * all content, framing the app like a playbook sitting on paper
  * (lifted from RallyReady's desktop dot-grid). Decorative + inert.
@@ -327,14 +359,27 @@ h4 {
   color: rgb(var(--bg));
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+@layer base {
+  html[data-motion="reduce"],
+  html[data-motion="reduce"] *,
+  html[data-motion="reduce"] *::before,
+  html[data-motion="reduce"] *::after {
     animation-duration: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0ms !important;
     scroll-behavior: auto !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html:not([data-motion="full"]),
+    html:not([data-motion="full"]) *,
+    html:not([data-motion="full"]) *::before,
+    html:not([data-motion="full"]) *::after {
+      animation-duration: 0ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -424,71 +469,72 @@ h4 {
 }
 
 /* ============================================================
- * Typography utilities (mirror tailwind.config fontSize scale)
+ * Typography utilities (mirror tailwind.config fontSize scale). rem,
+ * so the Appearance text size scales them from <html>.
  * ============================================================ */
 .t-display-xl {
   font-family: theme("fontFamily.display");
-  font-size: 64px;
-  line-height: 68px;
+  font-size: 4rem;
+  line-height: 4.25rem;
   font-weight: 800;
   letter-spacing: -0.03em;
 }
 .t-display-lg {
   font-family: theme("fontFamily.display");
-  font-size: 48px;
-  line-height: 52px;
+  font-size: 3rem;
+  line-height: 3.25rem;
   font-weight: 800;
   letter-spacing: -0.03em;
 }
 .t-h1 {
   font-family: theme("fontFamily.display");
-  font-size: 36px;
-  line-height: 42px;
+  font-size: 2.25rem;
+  line-height: 2.625rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 .t-h2 {
   font-family: theme("fontFamily.display");
-  font-size: 28px;
-  line-height: 34px;
+  font-size: 1.75rem;
+  line-height: 2.125rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 .t-h3 {
   font-family: theme("fontFamily.display");
-  font-size: 22px;
-  line-height: 28px;
+  font-size: 1.375rem;
+  line-height: 1.75rem;
   font-weight: 700;
   letter-spacing: -0.015em;
 }
 .t-h4 {
   font-family: theme("fontFamily.display");
-  font-size: 18px;
-  line-height: 24px;
+  font-size: 1.125rem;
+  line-height: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 .t-body-lg {
-  font-size: 17px;
-  line-height: 26px;
+  font-size: 1.0625rem;
+  line-height: 1.625rem;
 }
 .t-body {
-  font-size: 15px;
-  line-height: 24px;
+  font-size: 0.9375rem;
+  line-height: 1.5rem;
 }
 .t-caption {
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
 }
 .t-micro {
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 0.75rem;
+  line-height: 1rem;
   letter-spacing: 0.02em;
 }
 .t-mono {
   font-family: theme("fontFamily.mono");
-  font-size: 14px;
-  line-height: 22px;
+  font-size: 0.875rem;
+  line-height: 1.375rem;
 }
 
 /* ============================================================
@@ -504,8 +550,8 @@ h4 {
 /* Bold uppercase label in the body face — the editorial eyebrow. */
 .overline {
   font-family: theme("fontFamily.sans");
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 0.75rem;
+  line-height: 1rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -546,8 +592,8 @@ h4 {
  * ============================================================ */
 .kicker {
   font-family: theme("fontFamily.sans");
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 0.75rem;
+  line-height: 1rem;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;

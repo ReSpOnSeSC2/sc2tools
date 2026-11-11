@@ -52,11 +52,14 @@ const article: HelpArticle = {
       items: [
         "**Last grades**: your latest 30 grades, oldest to newest, with how many games reached each grade.",
         "**This week**: games at B or better since Monday against a weekly goal you set. The goal is saved on this device.",
+        "**Checkpoints** let you save up to three build steps with a tolerance in seconds. A checkpoint counts as on time when you match the step within that tolerance. Changes apply to future grades.",
         "**Per-step timing**: each step's average drift in the games where you built it, and how often you built it.",
         "**Where you fall off**: the steps where games most often first left the build.",
         "**Graded games**: every graded game with its steps hit, average drift and the step where it diverged. Open a game to see the full breakdown.",
       ],
     },
+    { type: "heading", text: "Daily practice quest", anchor: "daily-quest" },
+    { type: "paragraph", text: "With an armed target, the Arcade's Daily Quests can ask you to earn a B or better. Play the game that day and let it upload normally. Games graded on request do not count towards the daily quest." },
     {
       type: "paragraph",
       text: "Clearing a matchup's target hides that matchup here until you arm a build for it again; the grades stay on your games. Grades come from your replays with fixed rules, never AI.",

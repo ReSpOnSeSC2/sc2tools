@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 /**
  * ChatPollWidget — live chat poll with viewer voting via chat.
  *
@@ -17,11 +19,13 @@
  * animated bars demo themselves (see lib/multichat/testStudio).
  */
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
 import { blockedUserSet, excludeBlockedUsers } from "@/lib/multichat/appearance";
-import { tallyPollVotes } from "@/lib/multichat/poll";
+import { POLL_VOTE_HINT, formatPollRemaining, pollIsClosed, pollRemainingMs, pollResultSettling } from "@/lib/multichat/poll";
+import { usePollClock } from "@/lib/multichat/usePollClock";
+import { usePollTally } from "@/lib/multichat/usePollTally";
 import { useStudioState } from "@/lib/multichat/useStudioState";
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
 import {
@@ -46,13 +50,15 @@ export function ChatPollWidget({
   const { platforms, appearance } = useMultichatConfig(token);
   const state = useStudioState(token, studioEvent ?? null);
   const studioPoll = state.poll;
+  const now = usePollClock(studioPoll);
+  const acceptingFeed = studioPoll && (!pollIsClosed(studioPoll, now) || pollResultSettling(studioPoll, now));
   const { messages } = useMultiChat({
     apiBase: API_BASE,
     token,
     // The transparent poll source used to run a complete four-platform feed
     // all stream, even when no vote was open. That duplicate YouTube loop
     // spent the same token budget as the visible chat and Stream Dock.
-    config: studioPoll?.status === "open" ? platforms : null,
+    config: acceptingFeed ? platforms : null,
   });
 
   // Test-fire demo poll: swap in the sample question and walk the
@@ -80,46 +86,25 @@ export function ChatPollWidget({
 
   const poll = testActive ? demoPoll : studioPoll;
 
-  const liveTally = useMemo(
-    () => (studioPoll ? tallyPollVotes(excludeBlockedUsers(messages, blockedUserSet(appearance, state.blockedUsers)), studioPoll) : null),
-    [messages, studioPoll, appearance, state.blockedUsers],
-  );
-
-  // Freeze the tally when the poll closes: keep updating a ref while
-  // open, stop the moment status flips to "closed". A NEW poll (fresh
-  // startedAtMs) resets the freeze.
-  const frozenRef = useRef<{
-    key: number;
-    tally: { counts: number[]; total: number };
-  } | null>(null);
-  if (studioPoll && liveTally) {
-    if (
-      studioPoll.status === "open"
-      || frozenRef.current?.key !== studioPoll.startedAtMs
-    ) {
-      frozenRef.current = { key: studioPoll.startedAtMs, tally: liveTally };
-    }
-  }
-  const tally = testActive
-    ? TEST_POLL_TALLY_STEPS[Math.min(testStep, TEST_POLL_TALLY_STEPS.length - 1)]
-    : studioPoll
-      ? frozenRef.current?.tally ?? liveTally
-      : null;
+  const moderated = useMemo(() => excludeBlockedUsers(messages, blockedUserSet(appearance, state.blockedUsers)), [messages, appearance, state.blockedUsers]);
+  const liveTally = usePollTally(moderated, studioPoll, now);
+  const tally = testActive ? TEST_POLL_TALLY_STEPS[Math.min(testStep, TEST_POLL_TALLY_STEPS.length - 1)] : liveTally;
 
   if (!poll || !tally) return <div style={{ background: "transparent" }} />;
 
-  const closed = poll.status === "closed";
+  const closed = pollIsClosed(poll, now);
+  const remaining = pollRemainingMs(poll, now);
   const leader = closed ? Math.max(...tally.counts) : -1;
 
   return (
     <div style={frameStyle}>
-      <div style={cardStyle}>
+      <OverlayPanel style={cardStyle} contentStyle={{ padding: "var(--ov-padding, 14px 16px)" }}>
         <div style={headerRowStyle}>
           <span style={titleStyle}>
             CHAT POLL
             {testActive ? <span style={testTagStyle}>TEST</span> : null}
           </span>
-          {closed ? <span style={finalTagStyle}>FINAL</span> : null}
+          {closed ? <span style={finalTagStyle}>FINAL</span> : remaining !== null ? <span style={countStyle}>{formatPollRemaining(remaining)} left</span> : null}
         </div>
         <div style={questionStyle}>{poll.question}</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
@@ -158,7 +143,7 @@ export function ChatPollWidget({
           </span>
           {closed ? null : (
             <span style={{ opacity: 0.65 }}>
-              vote with !1 / !2 in chat
+              {POLL_VOTE_HINT}
             </span>
           )}
         </div>
@@ -178,7 +163,7 @@ export function ChatPollWidget({
               ) : null;
             })()
           : null}
-      </div>
+      </OverlayPanel>
     </div>
   );
 }
@@ -204,14 +189,8 @@ const cardStyle: CSSProperties = {
   width: "100%",
   minWidth: 260,
   maxWidth: 420,
-  background:
-    "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
-  border: "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))",
-  borderRadius: "var(--ov-radius, 12px)",
   boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
-  padding: "14px 16px",
   color: "#e6e8ee",
-  fontFamily: "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
 };
 
 const headerRowStyle: CSSProperties = {

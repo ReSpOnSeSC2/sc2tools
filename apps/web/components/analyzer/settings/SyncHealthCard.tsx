@@ -25,6 +25,7 @@ import {
 import { SyncHealthSkeleton } from "./SyncHealthSection";
 import { SyncHealthActionButton, SyncHealthActionsProvider } from "./SyncHealthActions";
 import { canRetrySyncReason } from "@/lib/syncHealthActions";
+import { formatNumber } from "@/lib/i18n/format";
 
 const TONE_TEXT = { error: "text-danger", warn: "text-warning", info: "text-text-muted", ok: "text-success" } as const;
 
@@ -40,7 +41,7 @@ export function SyncHealthCard() {
   const [reporting, setReporting] = useState(false);
   if (!hasQueryData(health)) return <QueryState q={health} skeleton={<SyncHealthSkeleton />} errorTitle="Sync health" />;
   const data = health.data;
-  const items = syncHealthItems(data);
+  const items = syncHealthItems(data, formatNumber);
   const status = syncHealthStatus(data, items);
   return <SyncHealthActionsProvider><Card title={status.title} headingLevel={2}>
     <p className="mb-3 text-caption text-text-muted">Sync health · <LazyHelpLink slug={SYNC_HEALTH_HELP.helpSlug} anchor={SYNC_HEALTH_HELP.anchor}>What these rows mean</LazyHelpLink></p>
@@ -98,7 +99,7 @@ function UnresolvedNames({ names }: { names: NonNullable<SyncReport["unresolvedN
   return <div className="rounded-lg border border-border bg-bg-elevated px-3 py-2">
     <p className="text-caption text-text-muted">Players in these replays. Only you see this list. If one of them is you, add that account to your profile.</p>
     <ul className="mt-1 space-y-2">{names.map((entry) => <li key={entry.toonHandle} className="break-all text-caption text-text">
-      <span className="font-semibold">{entry.name}</span> · <span className="font-mono">{entry.toonHandle}</span> · {entry.count.toLocaleString("en-US")} {entry.count === 1 ? "replay" : "replays"}
+      <span className="font-semibold">{entry.name}</span> · <span className="font-mono">{entry.toonHandle}</span> · {formatNumber(entry.count)} {entry.count === 1 ? "replay" : "replays"}
       <SyncHealthActionButton action={{ kind: "identity", toonHandle: entry.toonHandle }} contextLabel={entry.name} />
     </li>)}</ul>
   </div>;
@@ -114,7 +115,7 @@ function OtherSkippedReplays({ data }: { data: SyncHealthResponse }) {
     {groups.map(({ deviceId, pc, skips }) => <div key={deviceId} className="mt-2">
       <p className="break-all font-semibold">{pc}</p>
       <ul className="mt-1 space-y-1">{skips.map((skip) => <li key={skip.code} className="break-words">
-        <span className="font-medium">{skip.count.toLocaleString("en-US")}</span> · {skip.text}
+        <span className="font-medium">{formatNumber(skip.count)}</span> · {skip.text}
         {canRetrySyncReason(skip.code) ? <SyncHealthActionButton action={{ kind: "retry", deviceId, reason: skip.code }} contextLabel={`${skip.text} on ${pc}`} /> : null}
       </li>)}</ul>
     </div>)}

@@ -23,6 +23,7 @@ import type {
   TimeseriesPoint,
   TopPage,
 } from "./analyticsTypes";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * Presentational sections for the admin Analytics tab — KPI cards, the
@@ -292,7 +293,7 @@ export function BarBreakdown({
                   {row.label}
                 </span>
                 <span className="tabular-nums text-caption text-text-muted">
-                  {row.value.toLocaleString()} · {shareLabel(row.value, total)}
+                  {formatNumber(row.value)} · {shareLabel(row.value, total)}
                 </span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg-elevated">

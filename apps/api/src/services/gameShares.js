@@ -46,10 +46,6 @@ const GAME_SHARES = Object.freeze({
   MAX_ACTIVE: 200,
   /** Links listed per game in the owner's manager. */
   MAX_LISTED: 20,
-  /** Lifetime of a presigned segment URL, as for replay downloads. */
-  SEGMENT_LINK_EXPIRES_SEC: 60,
-  /** Segments whose bytes passed the identity scan, remembered per process. */
-  CLEAN_SEGMENT_CACHE: 4096,
 });
 
 const GAME_PROJECTION = Object.freeze({
@@ -88,8 +84,6 @@ class GameSharesService {
     this.leaguePercentiles = deps.leaguePercentiles || null;
     this.logger = deps.logger || null;
     this.now = deps.now || Date.now;
-    /** @type {Set<string>} */
-    this.cleanSegments = new Set();
   }
 
   // ── Owner ───────────────────────────────────────────────────────
@@ -295,26 +289,13 @@ class GameSharesService {
   }
 
   /**
-   * A presigned storage URL for one segment, valid for a minute, so the
-   * bytes go from storage to the browser without passing through the API.
-   *
-   * The bytes cannot be rewritten (the browser checks them against the
-   * manifest's SHA-256), so the fail-closed identity scan the proxied path
-   * runs happens before the first link for each segment is issued. The
-   * verdict is kept per process: content-addressed bytes never change.
-   *
+   * Existing segment object keys carry private identifiers. Keep the
+   * lookup revocation-aware and let the browser use the verified proxy.
    * @param {string} token
-   * @param {string} artifactId
-   * @param {number} index
    */
-  async segmentLink(token, artifactId, index) {
-    const { ownerId, gameId } = await this.resolve(token);
-    const store = this.playbackArtifacts;
-    if (!store) throw noPlayback();
-    if (!this.cleanSegments.has(`${artifactId}:${index}`)) {
-      this._assertClean(await store.getSegment(ownerId, gameId, artifactId, index), artifactId, index);
-    }
-    return store.signSegment(ownerId, gameId, artifactId, index, GAME_SHARES.SEGMENT_LINK_EXPIRES_SEC);
+  async segmentLink(token) {
+    await this.resolve(token);
+    throw shareError(404, "playback_direct_unavailable", "Use the replay playback endpoint.");
   }
 
   /**
@@ -330,22 +311,24 @@ class GameSharesService {
     const { ownerId, gameId } = await this.resolve(token);
     if (!this.playbackArtifacts) throw noPlayback();
     const bytes = await this.playbackArtifacts.getSegment(ownerId, gameId, artifactId, index);
-    this._assertClean(bytes, artifactId, index);
+    this._assertClean(bytes, index);
+    await this.assertStillShared(token, ownerId, gameId);
     return bytes;
   }
 
-  /** @param {Buffer} bytes @param {string} artifactId @param {number} index */
-  _assertClean(bytes, artifactId, index) {
+  /** @param {string} token @param {string} ownerId @param {string} gameId */
+  async assertStillShared(token, ownerId, gameId) {
+    const current = await this.resolve(token);
+    if (current.ownerId !== ownerId || current.gameId !== gameId) throw notFound();
+  }
+
+  /** @param {Buffer} bytes @param {number} index */
+  _assertClean(bytes, index) {
     if (segmentCarriesIdentity(bytes)) {
       // Never log the token: it is the page's credential.
       if (this.logger) this.logger.warn({ index }, "game_share_segment_identity_blocked");
       throw noPlayback();
     }
-    if (this.cleanSegments.size >= GAME_SHARES.CLEAN_SEGMENT_CACHE) {
-      const oldest = this.cleanSegments.values().next().value;
-      if (oldest !== undefined) this.cleanSegments.delete(oldest);
-    }
-    this.cleanSegments.add(`${artifactId}:${index}`);
   }
 }
 
