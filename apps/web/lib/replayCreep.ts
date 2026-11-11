@@ -6,6 +6,7 @@
  * overlord drops, growth ticks and exact decay require SC2 engine observations.
  * Never use this layer for path finding or label it as observed coverage.
  */
+import type { ReplayCanvasContext } from "./replayCanvas";
 import type { MapPlayback, PlaybackBounds } from "./mapReplay";
 import { projectX, projectY } from "./mapReplay";
 
@@ -92,7 +93,7 @@ export function creepPatchesAt(sources: readonly CreepSource[], t: number): Cree
 
 /** Stable organic contour. It never changes a source's recorded location. */
 function appendPatch(
-  ctx: CanvasRenderingContext2D,
+  ctx: ReplayCanvasContext,
   x: number,
   y: number,
   radius: number,
@@ -112,7 +113,7 @@ function appendPatch(
 
 /** Draw under furniture/entities, within the caller's world/view transform. */
 export function drawEstimatedCreep(
-  ctx: CanvasRenderingContext2D,
+  ctx: ReplayCanvasContext,
   bounds: PlaybackBounds,
   projection: { k: number; ox: number; oy: number },
   sources: readonly CreepSource[],

@@ -1,3 +1,4 @@
+import type { ReplayCanvasContext } from "./replayCanvas";
 import {
   buildingAliveAt, buildingPositionAt, projectX, projectY, unitNameAt,
   unitPositionAt, unitVisibleAt, type MapPlayback,
@@ -88,7 +89,7 @@ const ACID = /^(Roach|Ravager|Hydralisk|Mutalisk|Corruptor|Queen|SporeCrawler)/;
  * observed targets; when an enemy isn't visible, only the attacker flashes.
  * These are visual cues, not a simulation of projectile trajectories. */
 export function drawWeaponEffects(
-  ctx: CanvasRenderingContext2D, playback: MapPlayback, t: number,
+  ctx: ReplayCanvasContext, playback: MapPlayback, t: number,
   proj: { k: number; ox: number; oy: number }, view: { z: number },
   /** Single-side replay vision: shots fired from outside the viewer's
    *  sight are not drawn. */
