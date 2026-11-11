@@ -7,6 +7,9 @@ const { sanitizeChatTts } = require("./multichatAppearance");
 const { overlayDescriptor, readOverlayPresence } = require("./overlayPresence");
 const { rewardError, safeText, targetId } = require("./twitchRewardPolicy");
 
+// A cached overlay returning true only acknowledges that it can enqueue.
+const REWARD_SPEECH_READY_ACK = "start-ack-v1";
+
 /** @param {string} code */
 const unavailable = code => rewardError(`reward_${code}`, 409);
 /** @param {unknown} value */
@@ -76,16 +79,26 @@ class TwitchRewardActions {
       if (!cover && (!widget || !owner.enabledWidgets.includes(widget) || !presence?.widgets[widget]?.count)) {
         throw unavailable("overlay_source_unavailable");
       }
-      if (row.action === "recap") return this.deps.studio.applyReward(token, { recap: true }, "recap");
-      if (row.action === "broll") return this.deps.studio.applyReward(token, {}, "broll");
+      if (row.action === "recap") {
+        row.assertDispatch?.();
+        return this.deps.studio.applyReward(token, { recap: true }, "recap");
+      }
+      if (row.action === "broll") {
+        row.assertDispatch?.();
+        return this.deps.studio.applyReward(token, {}, "broll");
+      }
       if (row.action === "buildVote") {
         const poll = await this.buildVote(userId, mapping.buildIds);
         if (!poll) throw unavailable("builds_unavailable");
+        row.assertDispatch?.();
         return this.deps.studio.applyReward(token, { poll }, "buildVote");
       }
       if (!["pin", "tts"].includes(row.action)) throw unavailable("action_invalid");
       await this.requireViewerInput(userId, token, row);
-      if (row.action === "pin") return this.deps.studio.applyReward(token, { highlight: { platform: "twitch", user: row.name, text: row.input } }, "pin");
+      if (row.action === "pin") {
+        row.assertDispatch?.();
+        return this.deps.studio.applyReward(token, { highlight: { platform: "twitch", user: row.name, text: row.input } }, "pin");
+      }
       return this.speak(userId, token, row);
     });
   }
@@ -95,6 +108,7 @@ class TwitchRewardActions {
     if (!owner.enabledWidgets.includes("randomizer") || !envelope || !this.isDeviceMatch(userId, envelope)) throw unavailable("next_game_unavailable");
     const matchup = matchupFromRaces(normalizeRace(envelope.user?.race), normalizeRace(envelope.opponent?.race));
     if (!matchup) throw unavailable("next_game_unavailable");
+    row.assertDispatch?.();
     try { await this.deps.buildIntents.live.rewardReroll(userId, envelope.gameKey, matchup, row.redemptionId); }
     catch (error) {
       const code = /** @type {any} */ (error)?.code;
@@ -126,13 +140,15 @@ class TwitchRewardActions {
       && socket.data.overlayUserId === userId && socket.data.overlayControlOnly !== true
       && overlayDescriptor(socket.data.overlayPresence).widget === "multichat").slice(0, 4);
     for (const socket of candidates) {
-      const ready = await socket.timeout(800).emitWithAck("overlay:rewardSpeechReady").catch(() => false);
-      if (ready !== true) continue;
+      const ready = await socket.timeout(800).emitWithAck("overlay:rewardSpeechReady", row.redemptionId).catch(() => false);
+      if (ready !== REWARD_SPEECH_READY_ACK) continue;
+      row.assertDispatch?.();
       const outcome = await socket.timeout(1500).emitWithAck("overlay:rewardSpeech", {
         id: row.redemptionId, name: row.name, text: row.input,
       }).catch(() => null);
       if (outcome === true) return;
-      if (outcome === null) throw unavailable("action_unconfirmed");
+      // A dispatched cue belongs to this source. Never replay it elsewhere.
+      throw unavailable(outcome === null ? "action_unconfirmed" : "audio_unavailable");
     }
     throw unavailable("audio_unavailable");
   }

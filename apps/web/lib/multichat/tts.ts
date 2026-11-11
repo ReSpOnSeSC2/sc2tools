@@ -64,6 +64,8 @@ export const TTS_MAX_CHARS_MIN = 50;
 export const TTS_MAX_CHARS_MAX = 500;
 /** Unspoken-message queue cap — beyond this the oldest lines drop. */
 export const TTS_QUEUE_CAP = 3;
+// Leave time to send the start result before the server's socket deadline.
+export const REWARD_SPEECH_START_TIMEOUT_MS = 750;
 
 export function sanitizeTtsConfig(raw: unknown): ChatTtsConfig {
   const t = (raw && typeof raw === "object" ? raw : {}) as Record<
@@ -138,6 +140,9 @@ export function speakableText(
 export interface ChatSpeaker {
   /** Queue a message; drops oldest when the queue is full. */
   speak(message: ChatMessage): void;
+  /** A reward must be able to start without joining either speech queue. */
+  readonly rewardReady: boolean;
+  speakReward(message: ChatMessage, signal: AbortSignal, startBy?: number): Promise<boolean>;
   /** True when the browser refused speech pending a user gesture. */
   readonly blocked: boolean;
   /** Call from a click/key handler to retry after a gesture. */
@@ -160,6 +165,7 @@ export function createChatSpeaker(
   let speaking = false;
   let blocked = false;
   let closed = false;
+  let stopReward: (() => void) | undefined;
 
   const setBlocked = (next: boolean) => {
     if (blocked === next) return;
@@ -185,15 +191,20 @@ export function createChatSpeaker(
     return resolveVoice(synth.getVoices(), { name: config.voiceName }).voice;
   };
 
-  const pump = () => {
-    if (!synth || closed || speaking) return;
-    const next = queue.shift();
-    if (next === undefined) return;
-    const utterance = new SpeechSynthesisUtterance(next);
+  const makeUtterance = (text: string) => {
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = config.rate;
     utterance.volume = config.volume / 100;
     const voice = pickVoice();
     if (voice) utterance.voice = voice;
+    return utterance;
+  };
+
+  const pump = () => {
+    if (!synth || closed || speaking) return;
+    const next = queue.shift();
+    if (next === undefined) return;
+    const utterance = makeUtterance(next);
     speaking = true;
     utterance.onend = () => {
       speaking = false;
@@ -222,6 +233,11 @@ export function createChatSpeaker(
     }
   };
 
+  const rewardReady = () => config.enabled && !!synth && !closed && !blocked && !speaking && !queue.length
+    && !synth.speaking && !synth.pending && !synth.paused && config.volume > 0
+    && typeof synth.speak === "function" && typeof synth.cancel === "function"
+    && typeof SpeechSynthesisUtterance === "function";
+
   return {
     speak(message: ChatMessage) {
       if (!synth || closed) return;
@@ -230,6 +246,71 @@ export function createChatSpeaker(
       queue.push(text);
       while (queue.length > TTS_QUEUE_CAP) queue.shift();
       pump();
+    },
+    get rewardReady() {
+      return rewardReady();
+    },
+    async speakReward(message: ChatMessage, signal: AbortSignal, startBy = Infinity) {
+      if (!synth || !rewardReady() || signal.aborted) return false;
+      const text = speakableText(message, config);
+      if (!text) return false;
+      let utterance: SpeechSynthesisUtterance;
+      try {
+        utterance = makeUtterance(text);
+      } catch {
+        return false;
+      }
+      const now = performance.now();
+      const deadline = Math.min(now + REWARD_SPEECH_START_TIMEOUT_MS, startBy);
+      if (now >= deadline) return false;
+
+      return new Promise<boolean>((resolve) => {
+        let active = true;
+        let started = false;
+        const cancelStart = () => finish(true);
+        const timer = setTimeout(cancelStart, deadline - now);
+        const stopWaiting = () => {
+          clearTimeout(timer);
+          signal.removeEventListener("abort", cancelStart);
+        };
+        function finish(cancel: boolean) {
+          if (!active) return;
+          active = false;
+          stopWaiting();
+          stopReward = undefined;
+          if (cancel) {
+            try { synth?.cancel(); } catch { /* browser engine is down */ }
+          }
+          speaking = false;
+          if (!started) resolve(false);
+          if (!blocked) pump();
+        }
+
+        stopReward = cancelStart;
+        speaking = true;
+        signal.addEventListener("abort", cancelStart, { once: true });
+        utterance.onstart = () => {
+          if (!active || started) return;
+          if (signal.aborted || performance.now() >= deadline) { cancelStart(); return; }
+          started = true;
+          stopWaiting();
+          resolve(true);
+        };
+        utterance.onend = () => finish(false);
+        utterance.onerror = (event) => {
+          if (!active) return;
+          if (event.error === "not-allowed") {
+            clearPersistedUnlock();
+            setBlocked(true);
+          }
+          finish(false);
+        };
+        try {
+          synth.speak(utterance);
+        } catch {
+          cancelStart();
+        }
+      });
     },
     get blocked() {
       return blocked;
@@ -249,6 +330,10 @@ export function createChatSpeaker(
     close() {
       closed = true;
       queue = [];
+      if (stopReward) {
+        stopReward();
+        return;
+      }
       try {
         synth?.cancel();
       } catch {

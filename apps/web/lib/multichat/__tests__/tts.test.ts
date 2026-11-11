@@ -1,9 +1,11 @@
 // Multichat TTS — sanitizer + speech-text scrubbing.
 
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SOUND, sanitizeSoundConfig } from "@/lib/multichat/sound";
 import {
   DEFAULT_TTS,
+  REWARD_SPEECH_START_TIMEOUT_MS,
+  createChatSpeaker,
   sanitizeTtsConfig,
   speakableText,
 } from "@/lib/multichat/tts";
@@ -42,6 +44,109 @@ describe("sanitizeTtsConfig", () => {
     expect(out.maxChars).toBe(50);
     expect(out.platforms).toEqual(["twitch", "tiktok"]);
     expect(out.voiceName.length).toBe(120);
+  });
+});
+
+class Utterance {
+  onstart?: () => void;
+  onend?: () => void;
+  onerror?: (event: { error: string }) => void;
+  constructor(public text: string) {}
+}
+
+function speechFixture() {
+  const utterances: Utterance[] = [];
+  const synth = { speaking: false, pending: false, paused: false, cancel: vi.fn(),
+    speak: vi.fn((utterance: Utterance) => { utterances.push(utterance); }) };
+  vi.stubGlobal("speechSynthesis", synth);
+  vi.stubGlobal("SpeechSynthesisUtterance", Utterance);
+  const config = { ...DEFAULT_TTS, enabled: true, readNames: false };
+  return { synth, utterances, config };
+}
+
+describe("reward speech start acknowledgement", () => {
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  test("waits for onstart while preserving the ordinary queue's newest three lines", async () => {
+    const { synth, utterances, config } = speechFixture();
+    const speaker = createChatSpeaker(config);
+    const result = speaker.speakReward(msg({ text: "Reward" }), new AbortController().signal);
+    const ack = vi.fn();
+    void result.then(ack);
+    await Promise.resolve();
+    expect(ack).not.toHaveBeenCalled();
+    expect(utterances.map(utterance => utterance.text)).toEqual(["Reward"]);
+    for (const text of ["First", "Second", "Third", "Fourth"]) speaker.speak(msg({ text }));
+    expect(speaker.rewardReady).toBe(false);
+    await expect(speaker.speakReward(msg({ text: "Busy reward" }), new AbortController().signal)).resolves.toBe(false);
+    utterances[0].onstart?.();
+    await expect(result).resolves.toBe(true);
+    for (let index = 0; index < 4; index++) utterances[index].onend?.();
+    expect(utterances.map(utterance => utterance.text)).toEqual(["Reward", "Second", "Third", "Fourth"]);
+    expect(synth.cancel).not.toHaveBeenCalled();
+  });
+
+  test("cancels a start timeout before rejecting and ignores late browser events", async () => {
+    vi.useFakeTimers();
+    const { synth, utterances, config } = speechFixture();
+    const speaker = createChatSpeaker(config);
+    const result = speaker.speakReward(msg({ text: "Timed out reward" }), new AbortController().signal);
+    speaker.speak(msg({ text: "Ordinary chat" }));
+    const ack = vi.fn((started: boolean) => {
+      expect(synth.cancel).toHaveBeenCalledOnce();
+      return started;
+    });
+    const observed = result.then(ack);
+    await vi.advanceTimersByTimeAsync(REWARD_SPEECH_START_TIMEOUT_MS);
+    await expect(observed).resolves.toBe(false);
+    utterances[0].onstart?.();
+    utterances[0].onend?.();
+    expect(ack.mock.calls).toEqual([[false]]);
+    expect(utterances.map(utterance => utterance.text)).toEqual(["Timed out reward", "Ordinary chat"]);
+  });
+
+  test("reports synchronous speak failure and rejects autoplay errors without gesture retry", async () => {
+    const { synth, utterances, config } = speechFixture();
+    const blocked = vi.fn();
+    const speaker = createChatSpeaker(config, blocked);
+    synth.speak.mockImplementationOnce(() => { throw new Error("speech engine failed"); });
+    await expect(speaker.speakReward(msg(), new AbortController().signal)).resolves.toBe(false);
+    expect(synth.cancel).toHaveBeenCalledOnce();
+    const result = speaker.speakReward(msg(), new AbortController().signal);
+    utterances[0].onerror?.({ error: "not-allowed" });
+    await expect(result).resolves.toBe(false);
+    expect(blocked).toHaveBeenCalledWith(true);
+    expect(speaker.rewardReady).toBe(false);
+    speaker.unlock();
+    expect(utterances.map(utterance => utterance.text)).toEqual(["hello there", ""]);
+  });
+
+  test("rejects a start after the readiness deadline even before the timeout callback runs", async () => {
+    const clock = vi.spyOn(performance, "now").mockReturnValue(200);
+    const { synth, utterances, config } = speechFixture();
+    const speaker = createChatSpeaker(config);
+    const result = speaker.speakReward(msg(), new AbortController().signal, 300);
+    clock.mockReturnValue(301);
+    utterances[0].onstart?.();
+    await expect(result).resolves.toBe(false);
+    expect(synth.cancel).toHaveBeenCalledOnce();
+  });
+
+  test("leaves busy browser speech alone and cancels an unstarted reward on disconnect", async () => {
+    const { synth, utterances, config } = speechFixture();
+    const speaker = createChatSpeaker(config);
+    synth.pending = true;
+    await expect(speaker.speakReward(msg(), new AbortController().signal)).resolves.toBe(false);
+    expect(synth.speak).not.toHaveBeenCalled();
+    expect(synth.cancel).not.toHaveBeenCalled();
+    synth.pending = false;
+    const owner = new AbortController();
+    const result = speaker.speakReward(msg(), owner.signal);
+    owner.abort();
+    await expect(result).resolves.toBe(false);
+    expect(synth.cancel).toHaveBeenCalledOnce();
+    utterances[0].onstart?.();
+    expect(speaker.rewardReady).toBe(true);
   });
 });
 

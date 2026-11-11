@@ -45,7 +45,7 @@ beforeEach(async () => {
   await Promise.all(Object.values(db).map(collection => collection.deleteMany({})));
   await db.users.insertMany([{ userId: OWNER, preferences: { multichat: { tts: { enabled: true } } } }, { userId: OTHER }]);
   now = NOW; live = true; manageable = true; confirmedStatus = "UNFULFILLED"; current = null;
-  speech = jest.fn(async event => ["overlay:rewardSpeechReady", "overlay:rewardSpeech"].includes(event));
+  speech = jest.fn(async event => event === "overlay:rewardSpeechReady" ? "start-ack-v1" : event === "overlay:rewardSpeech");
   roll = jest.fn(async () => {});
   fetchMock = jest.fn(mockTwitch);
   tokens = new OverlayTokensService(db);
@@ -238,10 +238,19 @@ test("b-roll advances only an active configured cover and speech uses one curren
   await studio.update(token, { scene: { mode: "brb" }, broll: { clips } });
   await webhook("delivery-1").expect(204); await service.sweep();
   expect((await studio.get(token)).broll.skipNonce).toBe(1);
-  await save("tts"); now += 61_000;
+  await save("tts", "fulfill"); now += 61_000;
   await webhook("delivery-2", payload("redeem-2")).expect(204); await service.sweep();
   expect(speech.mock.calls.map(([event]) => event)).toEqual(["overlay:rewardSpeechReady", "overlay:rewardSpeech"]);
   expect(speech).toHaveBeenLastCalledWith("overlay:rewardSpeech", { id: "redeem-2", name: "Fixture viewer", text: "My private test line" });
+  expect((await recent())[0]).toMatchObject({ state: "applied", settlement: "fulfilled" });
+});
+
+test("a negative speech start ACK leaves a redemption awaiting manual settlement", async () => {
+  await save("tts", "fulfill");
+  speech.mockImplementation(async event => event === "overlay:rewardSpeechReady" ? "start-ack-v1" : false);
+  await webhook("delivery-1").expect(204); await service.sweep();
+  expect((await recent())[0]).toMatchObject({ state: "skipped", reason: "audio_unavailable" });
+  expect(patchCalls()).toHaveLength(0);
 });
 
 test("randomizer waits for a different eligible desktop game and settles after the actual reroll", async () => {

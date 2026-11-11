@@ -14,7 +14,6 @@ import {
 import {
   createChatSpeaker,
   sanitizeTtsConfig,
-  speakableText,
   type ChatSpeaker,
   type ChatTtsConfig,
 } from "./tts";
@@ -26,7 +25,7 @@ const SPOKEN_IDS_CAP = 2000;
 export function useChatTts(
   messages: ReadonlyArray<ChatMessage>,
   rawConfig: unknown,
-): { needsGesture: boolean; onUserGesture: () => void; rewardReady: () => boolean; speakReward: (message: ChatMessage) => boolean } {
+) {
   const config: ChatTtsConfig = useMemo(
     () => sanitizeTtsConfig(rawConfig),
     [rawConfig],
@@ -82,20 +81,11 @@ export function useChatTts(
     }
   }, [messages, config.enabled]);
 
-  const rewardReady = () => config.enabled && speakerRef.current !== null && !speakerRef.current.blocked
-    && typeof window !== "undefined" && typeof window.speechSynthesis?.speak === "function"
-    && typeof SpeechSynthesisUtterance === "function" && document.visibilityState !== "hidden";
+  const rewardReady = () => config.enabled && !!speakerRef.current?.rewardReady && document.visibilityState !== "hidden";
   return {
     rewardReady,
-    speakReward: message => {
-      if (!rewardReady() || !speakableText(message, config)) return false;
-      const key = `${message.platform}:${message.id}`;
-      if (!spokenRef.current.has(key)) {
-        spokenRef.current.add(key);
-        speakerRef.current?.speak(message);
-      }
-      return true;
-    },
+    speakReward: (message: ChatMessage, signal: AbortSignal, startBy: number) =>
+      speakerRef.current?.speakReward(message, signal, startBy) ?? Promise.resolve(false),
     needsGesture: config.enabled && needsGesture,
     onUserGesture: () => {
       persistUnlock();
