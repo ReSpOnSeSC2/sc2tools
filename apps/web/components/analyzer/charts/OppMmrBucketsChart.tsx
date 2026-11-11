@@ -7,6 +7,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { OppMmrBucketGamesModal } from "./OppMmrBucketGamesModal";
 import { WinRateComparison } from "./WinRateComparison";
+import { formatNumber } from "@/lib/i18n/format";
 
 type SelectedBand = {
   lo: number;
@@ -81,14 +82,14 @@ export function OppMmrBucketsChart() {
           games: b.total,
           wins: b.wins,
           losses: b.losses,
-          detail: b.avgMmr != null && b.total > 0 ? `Average opponent ${Math.round(b.avgMmr).toLocaleString()} MMR` : undefined,
+          detail: b.avgMmr != null && b.total > 0 ? `Average opponent ${formatNumber(Math.round(b.avgMmr))} MMR` : undefined,
           ariaLabel: `List the ${b.total} ${isGlobal ? "player game record" : "game"}${b.total === 1 ? "" : "s"} against ${b.lo}–${b.hi - 1} MMR opponents`,
           onSelect: b.total > 0 ? () => setSelectedBand({ lo: b.lo, hi: b.hi, wins: b.wins, losses: b.losses, total: b.total }) : undefined,
         }))}
       />
       <p className="mt-3 text-micro text-text-dim">
-        {totalKnown.toLocaleString()} {isGlobal ? "player game record" : "game"}{totalKnown === 1 ? "" : "s"} with opponent MMR
-        {data.unknown.total > 0 ? ` · ${data.unknown.total.toLocaleString()} with missing opponent MMR excluded` : ""}.
+        {formatNumber(totalKnown)} {isGlobal ? "player game record" : "game"}{totalKnown === 1 ? "" : "s"} with opponent MMR
+        {data.unknown.total > 0 ? ` · ${formatNumber(data.unknown.total)} with missing opponent MMR excluded` : ""}.
       </p>
       <details className="mt-2 text-micro text-text-dim">
         <summary className="cursor-pointer py-1 font-medium text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Which games are included?</summary>

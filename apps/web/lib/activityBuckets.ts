@@ -10,9 +10,31 @@ function nextPeriod(date: string, interval: Interval): string {
   return value.toISOString().slice(0, 10);
 }
 
-/** Keep inactive periods visible and combine adjacent periods without losing counts. */
-export function buildActivityBuckets(periods: readonly WinRatePeriod[], interval: Interval, maxBars = 32) {
-  const normalized = buildWinRateTrend(periods, 1).points;
+/**
+ * The week start (0 = Sunday … 6 = Saturday) nearest to a weekly period's
+ * date. The API buckets weeks on the account's week start, so this is a
+ * no-op for its answers; a period from another alignment (an older server
+ * or cache) moves to the week it overlaps most, never a whole week.
+ *
+ * Example: alignWeekStart("2026-11-08", 1) // "2026-11-09" (Sunday week → Monday week)
+ */
+export function alignWeekStart(date: string, weekStartDay: number): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  if (!Number.isFinite(value.getTime())) return date;
+  const forward = (weekStartDay - value.getUTCDay() + 7) % 7;
+  value.setUTCDate(value.getUTCDate() + (forward <= 3 ? forward : forward - 7));
+  return value.toISOString().slice(0, 10);
+}
+
+/**
+ * Keep inactive periods visible and combine adjacent periods without losing
+ * counts. Weekly periods start on `weekStartDay` when it is given.
+ */
+export function buildActivityBuckets(periods: readonly WinRatePeriod[], interval: Interval, maxBars = 32, weekStartDay?: number) {
+  const aligned = interval === "week" && weekStartDay !== undefined
+    ? periods.map((period) => ({ ...period, date: alignWeekStart(period.date, weekStartDay) }))
+    : periods;
+  const normalized = buildWinRateTrend(aligned, 1).points;
   if (!normalized.length) return { rows: [] as ActivityBucket[], periodsPerBar: 1 };
   const first = normalized[0].date;
   const last = normalized[normalized.length - 1].date;

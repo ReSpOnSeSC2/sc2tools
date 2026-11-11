@@ -51,6 +51,8 @@ const REGISTRY = Object.freeze({
   [COLLECTIONS.GHOST_EXAMPLES]: { collection: COLLECTIONS.GHOST_EXAMPLES, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.JOB_RUNS]: { collection: COLLECTIONS.JOB_RUNS, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.ADMIN_AUDIT]: { collection: COLLECTIONS.ADMIN_AUDIT, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.SUPPORTERS]: { collection: COLLECTIONS.SUPPORTERS, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.DONATION_MONTHS]: { collection: COLLECTIONS.DONATION_MONTHS, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.SITE_CONFIG]: { collection: COLLECTIONS.SITE_CONFIG, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.PENDING_IDENTITY_DELETIONS]: { collection: COLLECTIONS.PENDING_IDENTITY_DELETIONS, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.BACKUP_RESTORE_STAGING]: { collection: COLLECTIONS.BACKUP_RESTORE_STAGING, currentVersion: 1, versionKey: VERSION_KEY },

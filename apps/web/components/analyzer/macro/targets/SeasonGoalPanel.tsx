@@ -1,5 +1,6 @@
 "use client";
 
+import { formatNumber } from "@/lib/i18n/format";
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Field } from "@/components/ui/Field";
@@ -50,7 +51,7 @@ export function SeasonGoalPanel({ prefs, currentMmr, netMmr, onSave, saving }: {
         <Field label="Target" className="min-w-0">
           <Select value={mode} onChange={(event) => chooseMode(event.target.value)} disabled={saving} className="min-h-11">
             <option value="">No target</option>
-            {LEAGUES.map((name, id) => <option key={name} value={id}>{name} ({LEAGUE_MIN_MMR[id].toLocaleString()}+ MMR)</option>)}
+            {LEAGUES.map((name, id) => <option key={name} value={id}>{name} ({formatNumber(LEAGUE_MIN_MMR[id])}+ MMR)</option>)}
             <option value="mmr">An MMR…</option>
           </Select>
         </Field>
@@ -80,14 +81,14 @@ function SeasonEstimateText({ estimate, netMmr, currentMmr, seasonKnown }: {
     : "Not enough consecutive rated games to measure your net MMR per game yet.";
   return (
     <dl className="grid gap-2 text-caption sm:grid-cols-2">
-      <div><dt className="text-text-dim">Now → target</dt><dd className="tabular-nums text-text">{currentMmr?.toLocaleString() ?? "—"} → {estimate.target.toLocaleString()} MMR</dd></div>
-      <div><dt className="text-text-dim">MMR to go</dt><dd className="tabular-nums text-text">{estimate.state === "reached" ? "Reached" : estimate.mmrToGo.toLocaleString()}</dd></div>
+      <div><dt className="text-text-dim">Now → target</dt><dd className="tabular-nums text-text">{currentMmr == null ? "—" : formatNumber(currentMmr)} → {formatNumber(estimate.target)} MMR</dd></div>
+      <div><dt className="text-text-dim">MMR to go</dt><dd className="tabular-nums text-text">{estimate.state === "reached" ? "Reached" : formatNumber(estimate.mmrToGo)}</dd></div>
       <div className="sm:col-span-2"><dt className="sr-only">Recent pace</dt><dd className="text-text-muted">{trend}</dd></div>
       {estimate.state === "estimate" ? (
         <div className="sm:col-span-2"><dt className="sr-only">Estimated games</dt><dd className="text-text">
-          About {estimate.games.toLocaleString()} games at that pace
+          About {formatNumber(estimate.games)} games at that pace
           {estimate.perWeek !== null && estimate.weeksLeft !== null
-            ? `: roughly ${estimate.perWeek.toLocaleString()} a week for the ${estimate.weeksLeft} weeks left this season.`
+            ? `: roughly ${formatNumber(estimate.perWeek)} a week for the ${estimate.weeksLeft} weeks left this season.`
             : seasonKnown ? "; the season ends before then." : ". The season's end date isn't known yet."}
         </dd></div>
       ) : estimate.state === "no_trend" ? (

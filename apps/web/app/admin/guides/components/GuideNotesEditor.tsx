@@ -33,6 +33,7 @@ import {
   type AdminResource,
   type GuideSelection,
 } from "./guidesAdminShared";
+import { formatNumber } from "@/lib/i18n/format";
 
 const HEADING_ID = "guide-notes-heading";
 const PREVIEW_HEADING_ID = "guide-notes-preview-heading";
@@ -130,7 +131,7 @@ export function GuideNotesEditor({ notes, selection, onSelect }: GuideNotesEdito
           />
           {notes.error ? <p role="alert" className="text-body text-danger">Couldn&apos;t load saved notes. {notes.error.message}</p> : null}
           <div className="grid gap-4 lg:grid-cols-2">
-            <Field label={`Notes for ${name || "this build"} (markdown)`} hint={`${draft.length.toLocaleString()} / ${GUIDE_MARKDOWN_MAX_CHARS.toLocaleString()} characters`}>
+            <Field label={`Notes for ${name || "this build"} (markdown)`} hint={`${formatNumber(draft.length)} / ${formatNumber(GUIDE_MARKDOWN_MAX_CHARS)} characters`}>
               <textarea
                 rows={TEXTAREA_ROWS}
                 className={ADMIN_TEXTAREA_CLASS}

@@ -18,6 +18,7 @@ import { BuildStartCards, type BuildStartChoice } from "./BuildStartCards";
 import type { CustomBuild } from "./types";
 import type { ReferenceBuildOrder } from "@/lib/buildOrderReference";
 import { BuildOrderPaste } from "./editor/BuildOrderPaste";
+import { formatDateTime } from "@/lib/i18n/format";
 
 type Seed = { gameId?: string; events: GameBuildOrderResponse["events"]; race: RaceLite; vsRace: VsRaceLite; name?: string; buildOrder?: ReferenceBuildOrder };
 type Props = { onClose: () => void; onSaved: (build: CustomBuild, result: BuildEditorSaveResult) => void; initialChoice?: BuildStartChoice; definitionId?: string };
@@ -97,7 +98,7 @@ function BuildStartBody({ onClose, onSaved, initialChoice, definitionId }: Props
       {error ? <div role="alert" className="space-y-2 text-danger"><p>{error}</p>{!page ? <Button variant="secondary" onClick={() => setRetry(value => value + 1)}>Retry</Button> : null}</div> : null}
       {!loading && page?.items.length === 0 ? <p role="status">No replays match this selection. Try another matchup or <button className="min-h-11 underline" onClick={() => setStep("blank")}>start a blank build</button>.</p> : null}
       {page ? <ul className="space-y-2">{page.items.slice(0, 20).map(game => <li key={game.gameId}><button type="button" disabled={!!selected} className="flex min-h-11 w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-line p-3 text-left hover:border-accent disabled:opacity-60" onClick={() => void chooseGame(game.gameId)}>
-        <span className="min-w-0 break-words"><span className="block font-semibold">{game.map || "Unknown map"} · {game.opponent?.displayName || "Unknown opponent"}</span><span className="text-caption text-text-muted">{game.date ? new Date(game.date).toLocaleString() : "Date unavailable"} · {game.result || "Result unavailable"}{game.myBuild ? ` · ${game.myBuild}` : ""}</span></span><span className="shrink-0 text-caption">{selected === game.gameId ? "Loading…" : "Use build order"}</span>
+        <span className="min-w-0 break-words"><span className="block font-semibold">{game.map || "Unknown map"} · {game.opponent?.displayName || "Unknown opponent"}</span><span className="text-caption text-text-muted">{game.date ? formatDateTime(new Date(game.date)) : "Date unavailable"} · {game.result || "Result unavailable"}{game.myBuild ? ` · ${game.myBuild}` : ""}</span></span><span className="shrink-0 text-caption">{selected === game.gameId ? "Loading…" : "Use build order"}</span>
       </button></li>)}</ul> : null}
       {page ? <div className="flex flex-wrap justify-between gap-2"><Button variant="secondary" disabled={!previous.length || !!selected} onClick={() => { setCursor(previous.at(-1) ?? null); setPrevious(items => items.slice(0, -1)); }}>Previous replays</Button><Button variant="secondary" disabled={!page.page.hasMore || !page.page.nextCursor || !!selected} onClick={() => { setPrevious(items => [...items, cursor]); setCursor(page.page.nextCursor); }}>Next replays</Button></div> : null}
       </>}

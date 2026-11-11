@@ -39,7 +39,7 @@ import { LinkButton } from "@/components/ui/Button";
 // A long landing label may grow past one line on a phone.
 const WRAPPING_CTA = "h-auto min-h-12 py-2 text-center";
 
-export function LandingPageContent() {
+export function LandingPageContent({ donationCoverage }: { donationCoverage?: ReactNode } = {}) {
   return (
     <>
       <LandingHero />
@@ -54,6 +54,7 @@ export function LandingPageContent() {
       <LandingHowItWorks />
       <MobileInstallSection />
       <SupportTeaser />
+      {donationCoverage}
       <LandingFinalCta />
     </>
   );

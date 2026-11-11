@@ -31,6 +31,7 @@ import {
 import { SettingsLoadError } from "./SettingsLoadError";
 import { setupAgentOnline, type SetupMe } from "./setupHealth";
 import { SettingsSectionsReady } from "./SettingsSectionNav";
+import { formatNumber } from "@/lib/i18n/format";
 
 // NOTE: this panel previously parsed a `{current: {...}}` envelope and
 // `id`/`totalReplays`/`scanned` fields that the API never returned —
@@ -268,8 +269,8 @@ function JobRow({ job }: { job: ImportJob }) {
       <div className="flex min-w-0 items-center gap-2">
         <StatusBadge status={String(job.status)} />
         <span className="tabular-nums text-text-muted">
-          {(job.completed || 0).toLocaleString()}/
-          {(job.total || 0).toLocaleString()}
+          {formatNumber(job.completed || 0)}/
+          {formatNumber(job.total || 0)}
           {job.errors ? (
             <span className="text-danger"> · {job.errors} failed</span>
           ) : null}
@@ -283,7 +284,7 @@ function JobRow({ job }: { job: ImportJob }) {
       <span className="text-text-dim">
         {job.startedAt ? `started ${fmtAgo(job.startedAt)}` : "Start time not reported"}{duration ? ` · took ${duration}` : ""}
       </span>
-      {reasons.length ? <details className="basis-full"><summary className="cursor-pointer text-text-muted">Files that couldn&apos;t be imported</summary><ul className="mt-2 space-y-1">{reasons.map(([code, count]) => <li key={code}><span className="font-medium">{count.toLocaleString()}</span> · {ERROR_CODE_COPY[code] || code.replaceAll("_", " ")}</li>)}</ul></details> : null}
+      {reasons.length ? <details className="basis-full"><summary className="cursor-pointer text-text-muted">Files that couldn&apos;t be imported</summary><ul className="mt-2 space-y-1">{reasons.map(([code, count]) => <li key={code}><span className="font-medium">{formatNumber(count)}</span> · {ERROR_CODE_COPY[code] || code.replaceAll("_", " ")}</li>)}</ul></details> : null}
     </li>
   );
 }

@@ -16,6 +16,7 @@ import { AdminUserActivity } from "../../components/AdminUserActivity";
 import { ForbiddenCard, LoadingRows, MetricStat } from "../../components/AdminFragments";
 import { compactNumber } from "../../components/format";
 import type { AdminUserDetail } from "../../components/adminTypes";
+import { formatDateTime } from "@/lib/i18n/format";
 
 export default function AdminUserDetailPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = use(params);
@@ -51,7 +52,7 @@ function UserDetail({ userId }: { userId: string }) {
       <MetricStat label="Last activity" value={<AdminDate value={data.games.lastActivity} />} />
       <MetricStat label="Last sign-in" value={<AdminDate value={data.lastSeenAt} />} />
       <MetricStat label="First replay" value={<AdminDate value={data.games.firstActivity} />} />
-      <MetricStat label="Signed up" value={<AdminDate value={data.createdAt} />} caption={data.createdAt ? new Date(data.createdAt).toLocaleString() : undefined} />
+      <MetricStat label="Signed up" value={<AdminDate value={data.createdAt} />} caption={data.createdAt ? formatDateTime(new Date(data.createdAt)) : undefined} />
     </div>
     <div className="grid gap-4 lg:grid-cols-2"><AdminRoleCard userId={data.userId} isAdmin={data.isAdmin} grantable={Boolean(data.clerkUserId)} onDone={() => request.mutate()} /><AdminActionCard action="rebuild-opponents" user={{ userId: data.userId, email: data.email, gameCount: data.games.total }} onDone={() => void request.mutate()} /><div className="space-y-2">{wipeGameCount > data.games.total ? <p className="text-caption text-text-muted">The wipe also includes {wipeGameCount - data.games.total} {wipeGameCount - data.games.total === 1 ? "record" : "records"} already pending deletion.</p> : null}<AdminActionCard action="wipe-games" user={{ userId: data.userId, email: data.email, gameCount: wipeGameCount }} onDone={() => void request.mutate()} /></div></div>
     <SupportSnapshot userId={data.userId} />

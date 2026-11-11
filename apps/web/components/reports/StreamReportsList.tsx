@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTime } from "@/lib/i18n/format";
 import { useState } from "react";
 import Link from "next/link";
 import { useApi } from "@/lib/clientApi";
@@ -26,7 +27,7 @@ export function StreamReportsList() {
       : <>
         <ul className="space-y-3">{page.items.map((row) => <li key={row.id}><Card>
           <Link href={`/app/streams/${row.id}`} className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-            <p className="text-body font-semibold text-text">{new Date(row.startAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</p>
+            <p className="text-body font-semibold text-text">{formatDateTime(new Date(row.startAt), { dateStyle: "medium", timeStyle: "short" })}</p>
             <p className="text-caption text-text-muted">{plural(row.games, "game")} · {record(row)} · {row.hours} h{row.mmrDelta !== null ? ` · ${signed(row.mmrDelta)} MMR` : ""}</p>
           </Link>
         </Card></li>)}</ul>

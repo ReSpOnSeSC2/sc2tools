@@ -13,6 +13,7 @@
  * is unavailable. Nothing is uploaded and nothing runs on a server.
  */
 
+import { formatNumber } from "@/lib/i18n/format";
 import { useEffect, useId, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { Download } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -326,7 +327,7 @@ export default function ClipDialog({
         </fieldset>
 
         <p className="text-text-muted" data-testid="clip-summary">
-          {range ? `${Math.round(range.end - range.start)} s of game time at ${speed}× → ${videoSeconds.toFixed(videoSeconds < 10 ? 1 : 0)} s of ${format === "gif" ? "GIF" : "video"}, ${frames.toLocaleString()} frames.` : ""}
+          {range ? `${Math.round(range.end - range.start)} s of game time at ${speed}× → ${videoSeconds.toFixed(videoSeconds < 10 ? 1 : 0)} s of ${format === "gif" ? "GIF" : "video"}, ${formatNumber(frames)} frames.` : ""}
           {gifTooLong ? ` A GIF can be up to ${GIF_MAX_VIDEO_SECONDS} seconds: shorten the range or raise the speed.` : ""}
           {format === "video" && range ? " Video records in real time, so this takes about as long as the clip." : ""}
         </p>
@@ -335,7 +336,7 @@ export default function ClipDialog({
           {status.kind === "preparing" ? <p role="status">Preparing the map…</p> : null}
           {status.kind === "recording" ? (
             <div className="space-y-1">
-              <p role="status">{format === "gif" ? "Encoding" : "Recording"} frame {status.done.toLocaleString()} of {status.total.toLocaleString()}…</p>
+              <p role="status">{format === "gif" ? "Encoding" : "Recording"} frame {formatNumber(status.done)} of {formatNumber(status.total)}…</p>
               <div role="progressbar" aria-label="Clip progress" aria-valuemin={0} aria-valuemax={status.total} aria-valuenow={status.done} className="h-2 overflow-hidden rounded-full bg-bg-subtle">
                 <div className="h-full bg-accent motion-safe:transition-[width]" style={{ width: `${status.total ? (status.done / status.total) * 100 : 0}%` }} />
               </div>

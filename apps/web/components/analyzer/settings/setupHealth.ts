@@ -2,6 +2,7 @@ import { AGENT_ONLINE_WINDOW_MS, isAgentVersionAtLeast } from "@/components/dash
 import { fmtAgo } from "@/lib/format";
 import { doctorHelp, isSyncHealthCode, SYNC_REASONS } from "@/lib/syncHealth";
 import type { DoctorResp } from "../DoctorBanner";
+import { formatNumber } from "@/lib/i18n/format";
 
 export type SetupMe = {
   userId: string;
@@ -57,7 +58,7 @@ function gamesRow(me: Sources["me"], doctor: Sources["doctor"]): SetupRow {
   const games = me.data?.games;
   const warning = doctor.data?.warnings?.find((item) => item.id === "no_games");
   const total = games?.total ?? 0;
-  return { id: "games", title: "Games synced", message: `${total.toLocaleString()} games${games?.latest ? ` · latest game ${fmtAgo(games.latest)}` : ""}`, tone: total > 0 && !warning ? "pass" : "warn", cta: total > 0 && !warning ? undefined : warning?.cta || { label: "Import games", href: "/settings?tab=import" } };
+  return { id: "games", title: "Games synced", message: `${formatNumber(total)} games${games?.latest ? ` · latest game ${fmtAgo(games.latest)}` : ""}`, tone: total > 0 && !warning ? "pass" : "warn", cta: total > 0 && !warning ? undefined : warning?.cta || { label: "Import games", href: "/settings?tab=import" } };
 }
 
 function overlayRow(overlays: Sources["overlays"]): SetupRow {

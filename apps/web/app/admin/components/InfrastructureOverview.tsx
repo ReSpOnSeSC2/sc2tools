@@ -17,6 +17,7 @@ import type {
   InfrastructureLevel,
   InfrastructurePercentStats,
 } from "./adminTypes";
+import { formatNumber } from "@/lib/i18n/format";
 
 type Props = {
   data: AdminInfrastructureResp | null;
@@ -484,7 +485,7 @@ function formatAdvisoryValue(metric: string, value: number): string {
   if (metric === "credential_days_remaining") {
     return `${value} ${Math.abs(value) === 1 ? "day" : "days"}`;
   }
-  return value.toLocaleString();
+  return formatNumber(value);
 }
 
 function nullableBytes(value: number | null | undefined, binary: boolean): string {
@@ -504,7 +505,7 @@ function moneyPerMonth(value: number | null | undefined): string {
 function formatCount(value: number | null | undefined): string {
   return value === null || value === undefined
     ? "Unavailable"
-    : value.toLocaleString();
+    : formatNumber(value);
 }
 
 function nodeCoverage(

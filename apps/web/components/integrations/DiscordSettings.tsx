@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTime } from "@/lib/i18n/format";
 import { useState, type FormEvent } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
@@ -98,7 +99,7 @@ function HookCard({ hook, busy, run, call }: { hook: DiscordHook; busy: boolean;
   const status = hook.status === "disabled" ? <Badge variant="danger">Turned off: Discord rejected the webhook</Badge> : hook.enabled ? <Badge variant="success">On</Badge> : <Badge variant="neutral">Off</Badge>;
   return <Card>
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0"><h3 className="break-words text-body font-semibold text-text">{hook.label}</h3><p className="text-caption text-text-muted">Webhook ending in …{hook.last4}{hook.lastPostAt ? ` · last post ${new Date(hook.lastPostAt).toLocaleString()}` : ""}</p></div>
+      <div className="min-w-0"><h3 className="break-words text-body font-semibold text-text">{hook.label}</h3><p className="text-caption text-text-muted">Webhook ending in …{hook.last4}{hook.lastPostAt ? ` · last post ${formatDateTime(new Date(hook.lastPostAt))}` : ""}</p></div>
       <div className="flex items-center gap-3">{status}<Toggle checked={hook.enabled} disabled={busy || (!hook.previewed && !hook.enabled)} onChange={(enabled) => void patch({ enabled })} label={`Post to ${hook.label}`} /></div>
     </div>
     {!hook.previewed ? <p className="mt-2 text-caption text-text-muted">Preview the posts below before turning this channel on.</p> : null}

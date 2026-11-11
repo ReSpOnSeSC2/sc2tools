@@ -10,10 +10,9 @@ import { Field } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
 import { Toggle } from "@/components/ui/Toggle";
 import { Button } from "@/components/ui/Button";
-import { SaveBar } from "@/components/ui/SaveBar";
 import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
-import { usePublishDirty } from "./SettingsContext";
+import { useSaveSource } from "./SettingsContext";
 import { SettingsLoadError } from "./SettingsLoadError";
 import {
   classifyAvailability,
@@ -112,7 +111,7 @@ export function SettingsVoice() {
     DEFAULT_PREFS,
   );
 
-  usePublishDirty("voice", dirty);
+  useSaveSource("voice", { label: "voice preferences", dirty, save, reset }, "voice");
 
   // Populate browser voice list. Chromium loads voices async — we have
   // to listen for ``voiceschanged`` and re-read, otherwise the dropdown
@@ -199,8 +198,9 @@ export function SettingsVoice() {
     toast.success(`Switched to ${target.name}`);
   }
 
-  async function save() {
-    if (saving) return;
+  async function save(): Promise<boolean> {
+    if (!dirty) return true;
+    if (saving) return false;
     setSaving(true);
     const previous = data;
     try {
@@ -212,11 +212,13 @@ export function SettingsVoice() {
       await mutate();
       markSaved();
       toast.success("Voice preferences saved");
+      return true;
     } catch (err) {
       await mutate(previous, { revalidate: false });
       const message =
         (err as ClientApiError | undefined)?.message ?? "Please try again.";
       toast.error("Couldn't save voice prefs", { description: message });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -511,12 +513,6 @@ export function SettingsVoice() {
         </Card>
       </Section>
 
-      <SaveBar
-        visible={dirty}
-        saving={saving}
-        onSave={save}
-        onReset={reset}
-      />
     </>
   );
 }

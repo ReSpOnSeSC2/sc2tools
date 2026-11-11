@@ -28,6 +28,7 @@ import {
   type BuildingSource,
   type CompositionSource,
 } from "./compositionAt";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * Build-order shape — matches the GET /v1/games/:id/build-order
@@ -447,7 +448,7 @@ function PlayerStrip({
               army
             </span>
             <span className="font-semibold text-text">
-              {Math.round(armyValue).toLocaleString()}
+              {formatNumber(Math.round(armyValue))}
             </span>
           </span>
         </span>
@@ -900,7 +901,7 @@ function chipCountLabel(name: string, kind: ChipKind, count: number): string {
     const tier = upgradeDisplayTier(name);
     return tier ? `Level ${tier}` : "Researched";
   }
-  return `${count.toLocaleString()} on the field`;
+  return `${formatNumber(count)} on the field`;
 }
 
 /** Chip tooltip / accessible name: "Roach — 23 on the field". */
@@ -911,8 +912,8 @@ function chipLabel(name: string, kind: ChipKind, count: number): string {
 /** "75 minerals · 25 gas · 2 supply", dropping whatever is zero. */
 function costLine(minerals: number, gas: number, supply: number): string {
   const parts: string[] = [];
-  if (minerals > 0) parts.push(`${Math.round(minerals).toLocaleString()} minerals`);
-  if (gas > 0) parts.push(`${Math.round(gas).toLocaleString()} gas`);
+  if (minerals > 0) parts.push(`${formatNumber(Math.round(minerals))} minerals`);
+  if (gas > 0) parts.push(`${formatNumber(Math.round(gas))} gas`);
   // Zerglings and Banelings cost half supply, so a count multiple can
   // land on a half — round to one decimal rather than lying with an int.
   if (supply > 0) parts.push(`${Math.round(supply * 10) / 10} supply`);

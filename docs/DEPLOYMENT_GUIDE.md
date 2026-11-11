@@ -431,3 +431,18 @@ Validate configuration only against disposable local fixtures first: signed
 scope/body rejection, publish and removal invalidation, configured failed-purge
 opponent requests, public/private response headers and an upstream outage.
 Never use a real account mutation merely to smoke-test purge delivery.
+
+
+## Updating monthly donations
+
+In **Admin → Infrastructure → Monthly donations**, choose the UTC month.
+Enter the combined USD total and supporter count from the records you
+have verified, then choose **Save totals**. The public meter compares the
+latest totals with the current run rate and hides totals older than 45 days.
+Public totals can take up to ten minutes to refresh.
+
+Review only supporter wall entries that opted in and match your records.
+Edit or revoke a personal entry through **Settings → Profile → Supporter
+wall**. Set `DONATIONS_RECURRING_URL` in the web environment to display a
+recurring support link after the provider setup is confirmed. The app reads
+monthly totals from the ledger and sends visitors to the configured checkout.

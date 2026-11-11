@@ -28,6 +28,7 @@ import { formatOffset, vodLinkAt } from "@/lib/vodLinks";
 
 import type { DockPost } from "./dockActions";
 import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
+import { formatTime } from "@/lib/i18n/format";
 
 export { formatOffset, vodLinkAt } from "@/lib/vodLinks";
 
@@ -61,7 +62,7 @@ export function DockClips({
         const stamp =
           streamStartMs && m.atMs >= streamStartMs
             ? formatOffset(m.atMs - streamStartMs)
-            : new Date(m.atMs).toLocaleTimeString([], {
+            : formatTime(new Date(m.atMs), {
                 hour: "2-digit",
                 minute: "2-digit",
                 second: "2-digit",
@@ -80,7 +81,7 @@ export function DockClips({
             <span className="text-micro text-text-muted">
               Stream start marked{" "}
               <b className="tabular-nums text-text">
-                {new Date(streamStartMs).toLocaleTimeString([], {
+                {formatTime(new Date(streamStartMs), {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
@@ -184,7 +185,7 @@ function MomentRow({
     <li className="rounded-md border border-border bg-bg-elevated px-2.5 py-1.5">
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-micro tabular-nums text-text-muted">
-          {new Date(m.atMs).toLocaleTimeString([], {
+          {formatTime(new Date(m.atMs), {
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",

@@ -2,6 +2,7 @@
 
 import type { LossSummary } from "@/lib/mapReplayLosses";
 import { getIconPath } from "@/lib/sc2-icons";
+import { formatNumber } from "@/lib/i18n/format";
 
 /** How many lost-unit rows a panel lists before folding into "+N". */
 const LOSS_ROWS_MAX = 8;
@@ -42,8 +43,8 @@ export function LossPanel({
         </span>
       </div>
       <div className="mt-1 text-caption tabular-nums text-text">
-        {losses.count} units · {losses.minerals.toLocaleString()} minerals ·{" "}
-        {losses.gas.toLocaleString()} gas
+        {losses.count} units · {formatNumber(losses.minerals)} minerals ·{" "}
+        {formatNumber(losses.gas)} gas
       </div>
       {shown.length > 0 && (
         <ul className="mt-1.5 flex flex-wrap gap-1.5">
@@ -53,7 +54,7 @@ export function LossPanel({
               <li
                 key={g.name}
                 className="inline-flex items-center gap-1 rounded border border-border bg-bg-elevated px-1.5 py-0.5 text-micro tabular-nums text-text-muted"
-                title={`${g.count}× ${g.name} — ${g.minerals.toLocaleString()} minerals, ${g.gas.toLocaleString()} gas`}
+                title={`${g.count}× ${g.name} — ${formatNumber(g.minerals)} minerals, ${formatNumber(g.gas)} gas`}
               >
                 {icon ? (
                   // eslint-disable-next-line @next/next/no-img-element

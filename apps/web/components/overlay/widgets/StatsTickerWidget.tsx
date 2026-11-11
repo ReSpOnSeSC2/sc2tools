@@ -38,6 +38,7 @@ import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
 import { resolveLiveOpponentMmr } from "../liveGameOpponentMmr";
 import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 import type { SessionSummary } from "./SessionWidget";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * Constant scroll speed in CSS px per second. The animation duration
@@ -293,7 +294,7 @@ function opponentSegments(
       `NOW PLAYING: vs ${name}` +
         (intel.matchup ? ` (${intel.matchup})` : "") +
         (oppMmr !== null
-          ? ` · ${oppMmr.toLocaleString("en-US")} MMR`
+          ? ` · ${formatNumber(oppMmr)} MMR`
           : ""),
     );
   }

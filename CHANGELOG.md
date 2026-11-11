@@ -11,6 +11,15 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Settings and donations
+
+- Set motion, text size, density, number and date formats, and the first day
+  of the week in Settings. Appearance follows your account across browsers.
+- Use one Save bar for each Settings tab. Retry failed settings and keep
+  successfully saved changes. Instant controls apply when you change them.
+- Compare recent donation totals with the site's monthly running costs.
+  Supporters can choose to appear publicly after review.
+
 ### Trends and arcade fixes
 
 - Put performance ratings on the matchup chart's vertical scale, label game order horizontally, and inspect rolling windows by mouse, touch or keyboard.

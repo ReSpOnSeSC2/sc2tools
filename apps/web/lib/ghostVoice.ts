@@ -18,7 +18,10 @@ import type { GhostStep } from "@/lib/ghostBuild";
 
 export const GHOST_VOICE_PARAM = "voice";
 
-/** localStorage key for the Settings toggle (client-only preference). */
+/**
+ * localStorage key of the older per-browser toggle. Settings now keeps the
+ * choice in the overlay profile and reads this once to move it there.
+ */
 export const GHOST_VOICE_STORAGE_KEY = "sc2tools:ghost-voice";
 
 /** Speak each step this many seconds before its target time. */

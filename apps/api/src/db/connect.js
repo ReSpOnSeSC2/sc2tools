@@ -66,6 +66,8 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   pulseAccounts: import('mongodb').Collection,
  *   pulseCharacterLinks: import('mongodb').Collection,
  *   playerChannels: import('mongodb').Collection,
+ *   supporters: import('mongodb').Collection,
+ *   donationMonths: import('mongodb').Collection<any>,
  *   playerIdentities: import('mongodb').Collection,
  *   playerIdentitySubmissions: import('mongodb').Collection,
  *   playerIdentityDirectory: import('mongodb').Collection,
@@ -184,6 +186,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
     pulseCharacterLinks: db.collection(COLLECTIONS.PULSE_CHARACTER_LINKS),
     playerChannels: db.collection(COLLECTIONS.PLAYER_CHANNELS),
+    ...donationCollections(db),
     playerIdentities: db.collection(COLLECTIONS.PLAYER_IDENTITIES),
     playerIdentitySubmissions: db.collection(COLLECTIONS.PLAYER_IDENTITY_SUBMISSIONS),
     playerIdentityDirectory: db.collection(COLLECTIONS.PLAYER_IDENTITY_DIRECTORY),
@@ -414,12 +417,8 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.playerIdentityDirectory.createIndex({ identityKeys: 1 });
   await ctx.opponents.createIndex({ lastSeen: 1 });
   await ctx.pulseAccounts.createIndex({ updatedAt: 1 });
-  await ctx.playerChannels.createIndex({ id: 1 }, { unique: true });
+  await ensureDirectoryIndexes(ctx);
   await ctx.publicYoutubeArchives.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-  // Tombstones retain their identities; a refresh can never resurrect removed channels.
-  await ctx.playerChannels.createIndex({ identityKeys: 1 }, { unique: true });
-  await ctx.playerChannels.createIndex({ ownerUserId: 1 }, { sparse: true });
-  await ctx.playerChannels.createIndex({ removed: 1, displayName: 1, id: 1 });
   await ctx.users.createIndex({ clerkUserId: 1 }, { unique: true });
   // Internal UUIDs remain unique account keys, but public replay links use a
   // separate readable slug so URLs do not disclose those keys. The partial
@@ -947,3 +946,22 @@ async function ensureDeliveryIndexes(ctx) {
 }
 
 module.exports = { connect, ensureIndexes, attachSlowQueryLogging };
+
+/** @param {import("mongodb").Db} db */
+function donationCollections(db) {
+  return {
+    supporters: db.collection(COLLECTIONS.SUPPORTERS),
+    donationMonths: db.collection(COLLECTIONS.DONATION_MONTHS),
+  };
+}
+
+/** @param {Pick<ReturnType<typeof donationCollections>, "supporters"> & {playerChannels: import("mongodb").Collection}} ctx */
+async function ensureDirectoryIndexes(ctx) {
+  await ctx.playerChannels.createIndex({ id: 1 }, { unique: true });
+  // Tombstones retain their identities so a refresh cannot resurrect removed channels.
+  await ctx.playerChannels.createIndex({ identityKeys: 1 }, { unique: true });
+  await ctx.playerChannels.createIndex({ ownerUserId: 1 }, { sparse: true });
+  await ctx.playerChannels.createIndex({ removed: 1, displayName: 1, id: 1 });
+  await ctx.supporters.createIndex({ userId: 1 }, { unique: true });
+  await ctx.supporters.createIndex({ status: 1, month: -1, reviewedAt: -1 });
+}

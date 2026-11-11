@@ -10,7 +10,7 @@ import type { OverlayProfile } from "@/lib/overlayProfile";
 import { AgentStatusIndicator } from "./AgentStatusIndicator";
 import { OverlayCreditToggle } from "./OverlayCreditToggle";
 import { UrlRow } from "./OverlayUrlRow";
-import { useOverlayCreditPreference } from "./useOverlayCreditPreference";
+import { useOverlayFlags } from "./overlayFlags";
 
 /*
  * Settings · Overlay: the active token's header row (label, last seen,
@@ -109,7 +109,7 @@ export function AllInOneRow({
 }) {
   // New copies follow the saved profile; old explicit theme URLs still work.
   void theme;
-  const [showCredit, setShowCredit] = useOverlayCreditPreference();
+  const { credit: showCredit, setCredit, busy } = useOverlayFlags();
   const url = appendOverlayCreditToUrl(
     `${origin ?? ""}/overlay/${token.token}`,
     showCredit,
@@ -125,7 +125,7 @@ export function AllInOneRow({
         </span>
       </div>
       <UrlRow url={url} compact={false} />
-      <OverlayCreditToggle checked={showCredit} onChange={setShowCredit} />
+      <OverlayCreditToggle checked={showCredit} onChange={setCredit} disabled={busy} />
     </div>
   );
 }

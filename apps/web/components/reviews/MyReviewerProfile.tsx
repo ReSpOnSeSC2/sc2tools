@@ -7,6 +7,7 @@ import { RequestError } from "@/components/ui/RequestError";
 import { Toggle } from "@/components/ui/Toggle";
 import { ReviewerBadges } from "./ReviewerBadges";
 import { useReviewerPrefs } from "./useReviewerPrefs";
+import { formatNumber } from "@/lib/i18n/format";
 
 export function MyReviewerProfile() {
   const { me, busy, saveError, toggle } = useReviewerPrefs();
@@ -37,7 +38,7 @@ export function MyReviewerProfile() {
           Sync your own ladder games to verify your league.</p> : null}
         <dl className="grid grid-cols-2 gap-2">
           {([['karma', 'Karma'], ['reviews', 'Reviews'], ['helpful', 'Helpful'], ['best', 'Best'], ['upvotes', 'Upvotes']] as const).map(([key, label]) => <div key={key} className="min-w-0 rounded-lg border border-border p-2">
-            <dt className="text-caption text-text-muted">{label}</dt><dd className="break-words font-mono text-h4 font-bold tabular-nums text-text">{profile.stats[key].toLocaleString()}</dd>
+            <dt className="text-caption text-text-muted">{label}</dt><dd className="break-words font-mono text-h4 font-bold tabular-nums text-text">{formatNumber(profile.stats[key])}</dd>
           </div>)}
         </dl>
         <div className="space-y-2">

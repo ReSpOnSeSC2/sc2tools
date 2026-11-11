@@ -865,7 +865,7 @@ export interface OverlayTokensService {
       rotationPending?: boolean;
       replacedBy?: string;
       enabledWidgets: string[];
-      profile?: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }> };
+      profile?: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }>; credit?: boolean; ghostVoice?: boolean };
       profileRevision?: number;
     }>
   >;
@@ -874,7 +874,7 @@ export interface OverlayTokensService {
         userId: string;
         label: string;
         enabledWidgets: string[];
-        profile?: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }> };
+        profile?: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }>; credit?: boolean; ghostVoice?: boolean };
         profileRevision?: number;
       }
     | null
@@ -887,7 +887,7 @@ export interface OverlayTokensService {
     enabled: boolean,
   ): Promise<{ enabledWidgets: string[] }>;
   setEnabledWidgets(userId: string, token: string, enabled: unknown, expectedEnabled?: unknown): Promise<{ enabledWidgets: string[] }>;
-  setProfile(userId: string, token: string, profile: unknown, expectedRevision: unknown): Promise<{ profile: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }> }; profileRevision: number }>;
+  setProfile(userId: string, token: string, profile: unknown, expectedRevision: unknown): Promise<{ profile: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }>; credit?: boolean; ghostVoice?: boolean }; profileRevision: number }>;
   tokenBelongsToUser(userId: string, token: string): Promise<boolean>;
 }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { age } from "@/lib/reviews";
+import { formatDateTime } from "@/lib/i18n/format";
 
 export function CommentTime({ createdAt, editedAt }: { createdAt: string; editedAt: string | null }) {
   const [now, setNow] = useState<number | null>(null);
@@ -13,5 +14,5 @@ export function CommentTime({ createdAt, editedAt }: { createdAt: string; edited
   const created = new Date(createdAt);
   const edited = editedAt ? new Date(editedAt) : null;
   if (!Number.isFinite(created.getTime())) return null;
-  return <span className="text-micro text-text-dim"><time dateTime={createdAt} title={now !== null ? created.toLocaleString() : undefined}>{now !== null ? age(createdAt, now) : ""}</time>{edited && edited.getTime() - created.getTime() > 60_000 ? <span title={now !== null ? `Edited ${edited.toLocaleString()}` : undefined}> · edited</span> : null}</span>;
+  return <span className="text-micro text-text-dim"><time dateTime={createdAt} title={now !== null ? formatDateTime(created) : undefined}>{now !== null ? age(createdAt, now) : ""}</time>{edited && edited.getTime() - created.getTime() > 60_000 ? <span title={now !== null ? `Edited ${formatDateTime(edited)}` : undefined}> · edited</span> : null}</span>;
 }

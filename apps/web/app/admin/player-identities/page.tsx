@@ -14,6 +14,7 @@ import { Select } from "@/components/ui/Select";
 import { IdentityPlayerLabel, PlayerIdentityPicker, type IdentityPlayer } from "@/components/analyzer/PlayerIdentityPicker";
 import { IDENTITY_REASON_MAX, IDENTITY_REASON_MIN, IDENTITY_TEXTAREA_CLASS, IdentityStatus, identityError, type IdentityProposal } from "@/components/analyzer/OpponentIdentitySubmission";
 import { ForbiddenCard } from "../components/AdminFragments";
+import { formatDateTime, formatNumber } from "@/lib/i18n/format";
 
 type ReviewList = { items: IdentityProposal[]; nextCursor: string | null };
 type EvidenceGame = { gameId: string; date: string | null; map: string | null; result: string | null; durationSec: number | null; opponentName: string | null; hasReplay: boolean };
@@ -21,7 +22,7 @@ type ReviewDetail = { submission: IdentityProposal; evidence: EvidenceGame[]; ne
 
 function formatDate(date: string | null) {
   const value = date ? new Date(date) : null;
-  return value && !Number.isNaN(value.getTime()) ? value.toLocaleString() : "Date unavailable";
+  return value && !Number.isNaN(value.getTime()) ? formatDateTime(value) : "Date unavailable";
 }
 
 export default function AdminPlayerIdentitiesPage() {
@@ -50,7 +51,7 @@ export default function AdminPlayerIdentitiesPage() {
           <div className="min-w-0 flex-1 space-y-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center"><IdentityPlayerLabel player={submission.source} /><ArrowRight className="hidden h-4 w-4 shrink-0 text-text-dim sm:block" aria-hidden /><div className="min-w-0"><p className="mb-1 text-micro text-text-dim">{submission.target ? "Suggested identity" : "Confirmed identity removed"}</p>{submission.target ? <IdentityPlayerLabel player={submission.target} /> : null}</div></div>
             <p className="line-clamp-3 whitespace-pre-wrap break-words text-body text-text-muted">{submission.reason}</p>
-            <p className="text-caption text-text-dim">Submitted {formatDate(submission.createdAt)} · {(submission.evidenceCount ?? 0).toLocaleString()} replay{(submission.evidenceCount ?? 0) === 1 ? "" : "s"}</p>
+            <p className="text-caption text-text-dim">Submitted {formatDate(submission.createdAt)} · {formatNumber(submission.evidenceCount ?? 0)} replay{(submission.evidenceCount ?? 0) === 1 ? "" : "s"}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:items-end"><IdentityStatus status={submission.status} /><Button variant={submission.status === "pending" ? "primary" : "secondary"} onClick={() => setSelected(submission.id)} aria-label={`${submission.status === "pending" ? "Review" : "View"} submission for ${submission.source.displayName}`}>{submission.status === "pending" ? "Review evidence" : "View review"}</Button></div>
         </div>

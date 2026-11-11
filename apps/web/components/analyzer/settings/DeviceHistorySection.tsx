@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { useToast } from "@/components/ui/Toast";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+import { formatNumber } from "@/lib/i18n/format";
 
 type Row = { kind: "checking" } | { kind: "none" } | { kind: "blocked" } | Exclude<DeviceSummary, { kind: "absent" }>;
 
@@ -118,7 +119,7 @@ function rowText(row: Row): string {
     case "checking":
       return "Checking this device…";
     case "stored":
-      return `Games stored on this device: ${row.count.toLocaleString()} (${sizeText(row.bytes)})`;
+      return `Games stored on this device: ${formatNumber(row.count)} (${sizeText(row.bytes)})`;
     case "kept":
       return "Your history is set to be kept here, but no games are stored. That happens for accounts with more than 20,000 games, or when this browser is short of space.";
     case "none":

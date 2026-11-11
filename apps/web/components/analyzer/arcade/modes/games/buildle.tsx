@@ -23,6 +23,7 @@ import type {
   ScoreResult,
   ShareSummary,
 } from "../../types";
+import { formatDate } from "@/lib/i18n/format";
 
 const ID = "buildle";
 registerMode(ID, "generative");
@@ -313,7 +314,7 @@ function formatDuration(seconds: number | undefined): string {
 function formatDateLong(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, {
+  return formatDate(d, {
     year: "numeric",
     month: "short",
     day: "numeric",

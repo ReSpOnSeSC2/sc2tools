@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import AdminPlayerChannelsPage from "@/app/admin/player-channels/page";
 import { SettingsPlayerChannels } from "@/components/analyzer/settings/SettingsPlayerChannels";
+import { SettingsSaveScope } from "@/components/analyzer/settings/SettingsSaveBar";
 import type { MyPlayerChannelsResponse, PlayerChannelDirectoryResponse, PlayerChannelEntry } from "@/lib/playerChannelDirectory";
 
 const apiCallMock = vi.fn();
@@ -29,7 +30,7 @@ function setupAdmin(data: Partial<PlayerChannelDirectoryResponse> = {}) {
   useApiMock.mockReturnValue({ data: { entries: [ENTRY], total: 1, page: 0, limit: 25, ...data }, isLoading: false, mutate: mutateMock });
 }
 function renderMy() {
-  return render(<SettingsPlayerChannels savedPulseIds={["1-S2-1-267727"]} profileDirty={false} onDirtyChange={vi.fn()} />);
+  return render(<SettingsSaveScope tabId="profile"><SettingsPlayerChannels savedPulseIds={["1-S2-1-267727"]} profileDirty={false} /></SettingsSaveScope>);
 }
 
 beforeEach(() => { apiCallMock.mockReset(); useApiMock.mockReset(); mutateMock.mockReset(); });
@@ -59,7 +60,7 @@ describe("player channel settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save channels" }));
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "This player is managed by an administrator.");
     expect(screen.getByLabelText("YouTube channel URL")).toHaveProperty("value", "https://youtube.com/@newchannel");
-    expect(screen.queryByRole("status")).toBeNull(); expect(mutateMock).not.toHaveBeenCalled();
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy(); expect(mutateMock).not.toHaveBeenCalled();
   });
 
   it("shows imported entries as read-only and does not permit impersonating an existing player", () => {

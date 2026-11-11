@@ -30,6 +30,7 @@ import {
   shortLabelFor,
   type PresetId,
 } from "@/lib/datePresets";
+import { formatNumber } from "@/lib/i18n/format";
 
 // Keep the live session in its first-render slot while its real request/UI module loads.
 const CurrentSessionCard = dynamic(
@@ -276,7 +277,7 @@ export function DashboardKpiStrip() {
         value={
           rangeStatus === "ready" ? (
             <span className="tabular-nums">
-              {selectedRangeTotal.toLocaleString()}
+              {formatNumber(selectedRangeTotal)}
             </span>
           ) : (
             "—"

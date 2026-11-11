@@ -48,6 +48,7 @@ import {
   SIDE_COLOR,
   sideLabel,
 } from "./replayTheme";
+import { formatNumber } from "@/lib/i18n/format";
 
 export type ProductionTab = "queue" | "field";
 
@@ -308,7 +309,7 @@ function ProductionRailImpl({
             <p className="px-3 pb-1 text-caption font-semibold tabular-nums text-text">
               {lost.count} units
               <span className="font-normal text-text-muted">
-                {` · ${lost.minerals.toLocaleString()} minerals · ${lost.gas.toLocaleString()} gas`}
+                {` · ${formatNumber(lost.minerals)} minerals · ${formatNumber(lost.gas)} gas`}
               </span>
             </p>
           </div>
