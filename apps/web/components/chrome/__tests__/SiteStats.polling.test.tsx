@@ -89,7 +89,7 @@ describe("visible community statistics polling", () => {
     }
   });
 
-  it("keeps marketing counts fresh every 30 seconds on a narrow viewport without a website request", async () => {
+  it("keeps eligible marketing counts fresh every 30 seconds on a narrow viewport", async () => {
     await mount("marketing");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await elapse(30_000);
@@ -97,6 +97,9 @@ describe("visible community statistics polling", () => {
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "https://api.sc2tools.test/v1/site/stats", "https://api.sc2tools.test/v1/site/stats",
     ]);
+    expect(screen.getByText("7")).toBeTruthy();
+    expect(screen.queryByText("42")).toBeNull();
+    expect(screen.queryByText("3")).toBeNull();
     expect(screen.getByRole("status").textContent).toBe("Updates every 30 seconds");
   });
 

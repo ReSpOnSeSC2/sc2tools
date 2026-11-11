@@ -140,7 +140,12 @@ test("public profiles keep missing and temporary server statuses distinct", asyn
 
 });
 
-test("phone landing headline holds its position while the carousel waits", async ({ page }) => {
+test("phone landing headline holds its position without anonymous activity requests", async ({ page }) => {
+  const activityRequests: string[] = [];
+  await page.route(/\/(?:api|v1)\/site\/(?:presence|stats)(?:\?|$)/, async route => {
+    activityRequests.push(new URL(route.request().url()).pathname);
+    await route.abort();
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   const heading = page.getByRole("heading", { level: 1 }).first();
@@ -150,6 +155,7 @@ test("phone landing headline holds its position while the carousel waits", async
   expect(Math.abs((after?.y ?? 0) - (before?.y ?? 0))).toBeLessThanOrEqual(1);
   const overflow = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth, wide: Array.from(document.querySelectorAll("body *")).filter((node) => node.getBoundingClientRect().right > document.documentElement.clientWidth + 1).slice(0, 8).map((node) => ({ tag: node.tagName, className: node.className, width: node.getBoundingClientRect().width })) }));
   expect(overflow.width, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport + 1);
+  expect(activityRequests).toEqual([]);
 });
 
 test("phone privacy contents links reach the Cookies section", async ({ page }) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { ClerkProvider } from "@clerk/nextjs";
+import { ClerkProvider, SignedIn } from "@clerk/nextjs";
 import { usePathname } from "next/navigation";
 import { CookieBanner } from "@/components/CookieBanner";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
@@ -126,10 +126,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           Skip to content
         </a>
         <Header />
-        <SitePresence />
+        <SignedIn>
+          <SitePresence />
+          <SiteStats sameOrigin={sameOriginStats} />
+        </SignedIn>
         <AppearanceAccountSync />
         <DeviceHistoryGuard />
-        <SiteStats sameOrigin={sameOriginStats} />
         <main id="main-content" tabIndex={-1} className={MAIN_CLASS}>
           {children}
         </main>

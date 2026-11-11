@@ -4,6 +4,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 
 const route = vi.hoisted(() => ({
   pathname: "/app" as string | null,
+  signedIn: false,
+  getToken: async () => null,
   clerkRenders: vi.fn(),
   router: { push: vi.fn() },
   syncAnalyticsPage: vi.fn(),
@@ -16,7 +18,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ isLoaded: true, isSignedIn: false, userId: null }),
+  useAuth: () => ({ isLoaded: true, isSignedIn: route.signedIn, userId: route.signedIn ? "test-user" : null, getToken: route.getToken }),
+  SignedIn: ({ children }: { children: ReactNode }) => route.signedIn ? children : null,
   ClerkProvider: ({ children }: { children: ReactNode }) => {
     route.clerkRenders();
     return <div data-testid="clerk-provider">{children}</div>;
@@ -93,6 +96,7 @@ function renderAt(pathname: string | null) {
 afterEach(() => {
   cleanup();
   route.pathname = "/app";
+  route.signedIn = false;
   route.clerkRenders.mockClear();
   route.syncAnalyticsPage.mockClear();
   window.history.pushState({}, "", "/");
@@ -209,7 +213,7 @@ describe("normal and protected routes", () => {
     "/guides/pvz/stargate-into-glaives",
     "/guides/maps/old-sun-temple",
   ])(
-    "keeps Clerk and the complete site shell on %s",
+    "keeps signed-out site chrome on %s without starting activity requests",
     (pathname) => {
       renderAt(pathname);
 
@@ -218,8 +222,8 @@ describe("normal and protected routes", () => {
       expect(route.clerkRenders).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId("site-header")).toBeTruthy();
       expect(screen.getByTestId("site-footer")).toBeTruthy();
-      expect(screen.getByTestId("site-stats")).toBeTruthy();
-      expect(screen.getByTestId("site-presence")).toBeTruthy();
+      expect(screen.queryByTestId("site-stats")).toBeNull();
+      expect(screen.queryByTestId("site-presence")).toBeNull();
       expect(screen.getByTestId("device-history-guard")).toBeTruthy();
       expect(screen.getByTestId("cookie-banner")).toBeTruthy();
       expect(screen.getByTestId("google-analytics")).toBeTruthy();
@@ -227,6 +231,25 @@ describe("normal and protected routes", () => {
       expect(screen.getByTestId("route-content")).toBeTruthy();
     },
   );
+
+  it("starts marketing activity on sign-in and removes it on sign-out", () => {
+    const page = <AppShell><div data-testid="route-content" /></AppShell>;
+    route.pathname = "/";
+    const view = render(page);
+    expect(screen.queryByTestId("site-stats")).toBeNull();
+    expect(screen.queryByTestId("site-presence")).toBeNull();
+
+    route.signedIn = true;
+    view.rerender(<AppShell><div data-testid="route-content" /></AppShell>);
+    expect(screen.getByTestId("site-stats")).toBeTruthy();
+    expect(screen.getByTestId("site-presence")).toBeTruthy();
+
+    route.signedIn = false;
+    view.rerender(<AppShell><div data-testid="route-content" /></AppShell>);
+    expect(screen.queryByTestId("site-stats")).toBeNull();
+    expect(screen.queryByTestId("site-presence")).toBeNull();
+    expect(screen.getByTestId("route-content")).toBeTruthy();
+  });
 
   it("fails closed to Clerk when the pathname is temporarily unavailable", () => {
     renderAt(null);
@@ -239,11 +262,13 @@ describe("normal and protected routes", () => {
 
 describe("local replay demo statistics traffic", () => {
   it.each([null, "/", "/try", "/try/", "/try/resume"])("keeps statistics same-origin on %s", pathname => {
+    route.signedIn = true;
     renderAt(pathname);
     expect(screen.getByTestId("site-stats").getAttribute("data-same-origin")).toBe("true");
   });
 
   it.each(["/download", "/guides", "/try-other", "/trying", "/definitions"])("uses direct public API statistics on %s", pathname => {
+    route.signedIn = true;
     renderAt(pathname);
     expect(screen.getByTestId("site-stats").getAttribute("data-same-origin")).toBe("false");
   });

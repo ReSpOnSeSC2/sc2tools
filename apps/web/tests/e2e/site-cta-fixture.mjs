@@ -12,7 +12,7 @@ createRoot(document.getElementById('root')).render(<Fixture/>);`;
 const adapters = {
   "next/link": `import React from'react';export default React.forwardRef(function Link({prefetch,replace,scroll,onNavigate,...props},ref){return <a {...props} ref={ref}/>})`,
   "next/image": `import React from'react';export default function Image({priority,unoptimized,fill,...props}){return <img {...props}/>}`,
-  "@clerk/nextjs": `import{useSyncExternalStore}from'react';let signedIn=false;const listeners=new Set();export function setFixtureAudience(value){signedIn=value;listeners.forEach(listener=>listener())}const subscribe=listener=>{listeners.add(listener);return()=>listeners.delete(listener)};export const SignedIn=({children})=>useSyncExternalStore(subscribe,()=>signedIn)?children:null;export const SignedOut=({children})=>useSyncExternalStore(subscribe,()=>signedIn)?null:children`,
+  "@clerk/nextjs": `import{useSyncExternalStore}from'react';let signedIn=false;const listeners=new Set();export function setFixtureAudience(value){signedIn=value;listeners.forEach(listener=>listener())}const subscribe=listener=>{listeners.add(listener);return()=>listeners.delete(listener)};export const useAuth=()=>({isSignedIn:useSyncExternalStore(subscribe,()=>signedIn)});`,
   "@/lib/instant/flag": `let mode='all';export const getInstantImportMode=()=>mode;export const setFixtureMode=value=>{mode=value}`,
   "@/components/landing/HeroCarousel": "export const HeroCarousel=()=>null;",
   "@/components/landing/RealGameShowcase": "export const RealGameShowcase=()=>null;",

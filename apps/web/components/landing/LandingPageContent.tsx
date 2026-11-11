@@ -1,4 +1,3 @@
-import { SignedIn, SignedOut } from "@clerk/nextjs";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -20,6 +19,7 @@ import {
   HeroCarousel,
   type HeroCarouselSlide,
 } from "@/components/landing/HeroCarousel";
+import { HeroAuthCtas } from "@/components/landing/HeroAuthCtas";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { RealGameShowcase } from "@/components/landing/RealGameShowcase";
 import { GuidesStrip } from "@/components/landing/GuidesStrip";
@@ -106,51 +106,44 @@ function LandingHero() {
   );
 }
 
-/**
- * Hero CTA row. With Instant Analysis rolled out to everyone
- * (`NEXT_PUBLIC_INSTANT_IMPORT=all`, inlined at build time) the in-browser
- * /try flow is the secondary CTA and the server-side replay demo drops
- * to a text link; otherwise the row is unchanged.
- */
 function HeroCtas() {
-  const instant = getInstantImportMode() === "all";
+  const browserPublic = getInstantImportMode() === "all";
+  const download = (
+    <LinkButton
+      href="/download"
+      variant={browserPublic ? "secondary" : "primary"}
+      size="lg"
+      className={WRAPPING_CTA}
+      iconLeft={<Download className="h-5 w-5" aria-hidden />}
+      iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}
+    >
+      Download the free agent
+    </LinkButton>
+  );
   return (
-    <div className="mt-7 flex min-h-[44px] flex-wrap items-center gap-3">
-      <SignedIn><SignedInCtas /></SignedIn>
-      <SignedOut>
-      <LinkButton
-        href="/download"
-        size="lg"
-        className={WRAPPING_CTA}
-        iconLeft={<Download className="h-5 w-5" aria-hidden />}
-        iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}
-      >
-        Download the free agent
-      </LinkButton>
-      {instant ? (
+    <HeroAuthCtas>
+      {browserPublic ? (
         <>
           <LinkButton
             href="/try"
-            variant="secondary"
-            size="md"
+            size="lg"
             iconLeft={<MonitorSmartphone className="h-5 w-5" aria-hidden />}
-            className="h-auto min-h-11 max-w-full py-2 text-center text-balance"
+            className={`${WRAPPING_CTA} max-w-full text-balance`}
           >
             No download — analyze your replays in your browser
           </LinkButton>
+          {download}
         </>
       ) : (
-        <LinkButton href="#replay-demo" variant="secondary" size="lg" className={WRAPPING_CTA}>
-          Try a replay
-        </LinkButton>
+        <>
+          {download}
+          <LinkButton href="#replay-demo" variant="secondary" size="lg" className={WRAPPING_CTA}>
+            Try a replay
+          </LinkButton>
+        </>
       )}
-      </SignedOut>
-    </div>
+    </HeroAuthCtas>
   );
-}
-
-function SignedInCtas() {
-  return <><LinkButton href="/app" size="lg" className={WRAPPING_CTA} iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Open your dashboard</LinkButton><LinkButton href="/changelog" variant="secondary" size="lg" className={WRAPPING_CTA}>What's new</LinkButton></>;
 }
 
 function LandingCarousel() {
@@ -556,11 +549,10 @@ function LandingFinalCta() {
           <em className="font-serif italic text-editorial">Put them to work.</em>
         </h2>
         <p className="mt-5 max-w-2xl text-body-lg text-text-muted">Free to start, no card needed. Sync privately across devices and add OBS whenever you are ready.</p>
-        <div className="mt-7 flex min-h-[44px] flex-wrap items-center gap-3">
-          <SignedIn><SignedInCtas /></SignedIn>
-          <SignedOut><LinkButton href="/download" size="lg" className={WRAPPING_CTA} iconLeft={<Download className="h-5 w-5" aria-hidden />} iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Download the agent</LinkButton>
-          <LinkButton href="/community" variant="secondary" size="lg" className={WRAPPING_CTA} iconLeft={<Users className="h-5 w-5" aria-hidden />}>Browse community builds</LinkButton></SignedOut>
-        </div>
+        <HeroAuthCtas>
+          <LinkButton href="/download" size="lg" className={WRAPPING_CTA} iconLeft={<Download className="h-5 w-5" aria-hidden />} iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Download the agent</LinkButton>
+          <LinkButton href="/community" variant="secondary" size="lg" className={WRAPPING_CTA} iconLeft={<Users className="h-5 w-5" aria-hidden />}>Browse community builds</LinkButton>
+        </HeroAuthCtas>
       </div>
     </section>
   );
