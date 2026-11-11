@@ -1,6 +1,29 @@
 from tests._gui_offscreen import run_gui_check
 
 
+DRAFT_DIALOG_DRIVER = '''
+        def answer_draft_prompt(expected_title, answer, navigate):
+            responses = []
+            def click_answer():
+                prompt = app.activeModalWidget()
+                if not isinstance(prompt, QtWidgets.QMessageBox):
+                    return
+                button = next((item for item in prompt.buttons() if item.text().replace("&", "") == answer), None)
+                responses.append((prompt.windowTitle(), button is not None))
+                if button is None:
+                    prompt.reject()
+                else:
+                    button.click()
+            timer = QtCore.QTimer()
+            timer.setSingleShot(True)
+            timer.timeout.connect(click_answer)
+            timer.start(0)
+            navigate()
+            timer.stop()
+            assert responses == [(expected_title, True)], responses
+'''
+
+
 def test_all_agent_pages_share_console_bezel_and_keep_existing_page_ownership(tmp_path):
     run_gui_check(tmp_path, '''
         app.setStyleSheet(gui._STYLE)
@@ -57,8 +80,8 @@ def test_all_agent_pages_share_console_bezel_and_keep_existing_page_ownership(tm
     ''')
 
 
-def test_agent_menu_and_companion_button_keep_geometry_density_and_unsaved_settings(tmp_path):
-    run_gui_check(tmp_path, '''
+def test_agent_menu_and_companion_button_keep_geometry_and_guard_unsaved_settings(tmp_path):
+    run_gui_check(tmp_path, DRAFT_DIALOG_DRIVER + '''
         app.setStyleSheet(gui._STYLE)
         layouts = []
         ui, win = make_window(window_page="settings", on_window_information_layout=layouts.append)
@@ -67,18 +90,25 @@ def test_agent_menu_and_companion_button_keep_geometry_density_and_unsaved_setti
         app.processEvents()
         page = win._companion_page
         density = page.current_density()
+        saved_values = (win._api_input.text(), win._handle_input.text())
         win._api_input.setText("https://draft.example.test")
         win._handle_input.setText("Unsaved player handle")
         geometry = win.geometry()
         menu = {action.text(): action for action in win._agent_menu_button.menu().actions() if not action.isSeparator()}
         assert "Companion" in menu
-        for title, key in [("Dashboard", "dashboard"), ("Recent games", "recent"),
-                           ("Streams", "streams"), ("Settings", "settings")]:
+        answer_draft_prompt("Discard unsaved settings?", "Cancel", menu["Dashboard"].trigger)
+        assert win._PAGE_KEYS[win._stack.currentIndex()] == "settings"
+        assert win._api_input.text() == "https://draft.example.test"
+        assert win._handle_input.text() == "Unsaved player handle"
+        assert win._settings_draft.count() > 0
+        answer_draft_prompt("Discard unsaved settings?", "Discard", menu["Dashboard"].trigger)
+        assert win._PAGE_KEYS[win._stack.currentIndex()] == "dashboard"
+        assert (win._api_input.text(), win._handle_input.text()) == saved_values
+        assert win._settings_draft.count() == 0
+        for title, key in [("Recent games", "recent"), ("Streams", "streams"), ("Settings", "settings")]:
             menu[title].trigger()
             app.processEvents()
             assert win._PAGE_KEYS[win._stack.currentIndex()] == key
-            assert win._api_input.text() == "https://draft.example.test"
-            assert win._handle_input.text() == "Unsaved player handle"
             assert win.geometry() == geometry
             assert page.current_density() == density
         log_title = "Logs" if "Logs" in menu else "Activity log"
@@ -101,8 +131,7 @@ def test_agent_menu_and_companion_button_keep_geometry_density_and_unsaved_setti
         assert win._stack.currentWidget() is page
         assert win.geometry() == geometry
         assert page.current_density() == density
-        assert win._api_input.text() == "https://draft.example.test"
-        assert win._handle_input.text() == "Unsaved player handle"
+        assert (win._api_input.text(), win._handle_input.text()) == saved_values
         assert layouts == []
         assert saved == []
         assert page.scouting_speech.available() is None
@@ -112,14 +141,17 @@ def test_agent_menu_and_companion_button_keep_geometry_density_and_unsaved_setti
 
 
 def test_compact_hides_both_agent_chrome_surfaces_and_expand_restores_same_settings_draft(tmp_path):
-    run_gui_check(tmp_path, '''
+    run_gui_check(tmp_path, DRAFT_DIALOG_DRIVER + '''
         app.setStyleSheet(gui._STYLE)
         ui, win = make_window(window_page="settings")
         win.show()
         app.processEvents()
         win._handle_input.setText("Draft kept through Compact")
         page = win._companion_page
-        win._agent_companion_button.click()
+        appearance = next(action for action in win._agent_menu_button.menu().actions()
+                          if action.text() == "Border and animations…")
+        answer_draft_prompt("Unsaved settings", "Keep draft", appearance.trigger)
+        assert win._stack.currentWidget() is page
         assert win._set_window_size("Compact")
         app.processEvents()
         assert (win.width(), win.height()) == (420, 44)
@@ -150,7 +182,7 @@ def test_compact_hides_both_agent_chrome_surfaces_and_expand_restores_same_setti
 
 
 def test_settings_form_wraps_without_horizontal_clipping_at_minimum_size_and_keeps_drafts(tmp_path):
-    run_gui_check(tmp_path, '''
+    run_gui_check(tmp_path, DRAFT_DIALOG_DRIVER + '''
         from sc2tools_agent.ui import theme
         font = Path("C:/Windows/Fonts/segoeui.ttf")
         if font.is_file():
@@ -172,6 +204,16 @@ def test_settings_form_wraps_without_horizontal_clipping_at_minimum_size_and_kee
         assert scroller.widget() is body
         assert body.width() <= scroller.viewport().width(), (body.size(), scroller.viewport().size(), body.minimumSizeHint())
         assert scroller.horizontalScrollBar().maximum() == 0
+        assert not win._api_input.isVisibleTo(body)
+        sections = next(combo for combo in body.findChildren(QtWidgets.QComboBox)
+                        if combo.accessibleName() == "Settings section")
+        advanced = sections.findData("Advanced")
+        assert advanced > 0
+        sections.setCurrentIndex(advanced)
+        sections.activated.emit(advanced)
+        app.processEvents()
+        assert win._api_input.isVisibleTo(body)
+        assert scroller.horizontalScrollBar().maximum() == 0
         forms = [form for form in body.findChildren(QtWidgets.QFormLayout)
                  if form.parentWidget().isAncestorOf(win._api_input)]
         assert len(forms) == 1
@@ -191,7 +233,11 @@ def test_settings_form_wraps_without_horizontal_clipping_at_minimum_size_and_kee
             position = control.mapTo(scroller.viewport(), QtCore.QPoint(0, 0))
             visible = QtCore.QRect(position, control.size())
             assert scroller.viewport().rect().contains(visible), (control.objectName(), control.metaObject().className(), visible, scroller.viewport().rect())
-        win._agent_companion_button.click()
+        answer_draft_prompt("Discard unsaved settings?", "Cancel", win._agent_companion_button.click)
+        assert win._stack.currentWidget() is scroller
+        appearance = next(action for action in win._agent_menu_button.menu().actions()
+                          if action.text() == "Border and animations…")
+        answer_draft_prompt("Unsaved settings", "Keep draft", appearance.trigger)
         app.processEvents()
         actions = {action.text(): action for action in win._companion_page.agent_menu_button.menu().actions()}
         actions["Settings"].trigger()
