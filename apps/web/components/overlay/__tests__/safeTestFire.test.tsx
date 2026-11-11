@@ -85,9 +85,8 @@ describe("local sample pages", () => {
     const fetch = vi.fn(() => { throw new Error("Preview attempted live network"); }); vi.stubGlobal("fetch", fetch);
     render(<OverlayWidgetClient token="never-used" widget={widget} demo={localOverlaySample(widget)} />);
     expect(screen.getByText("Local preview · sample data")).toBeTruthy();
-    await act(async () => { await vi.dynamicImportSettled(); });
     expect(screen.getByText(text)).toBeTruthy();
-    advance(TEST_DURATION_MS);
+    await act(async () => { await Promise.resolve(); }); advance(TEST_DURATION_MS);
     expect(screen.getByText("Preview finished.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Replay sample" }));
     expect(screen.queryByText("Preview finished.")).toBeNull();

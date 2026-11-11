@@ -27,11 +27,10 @@ const cardWidgets: WidgetId[] = ["chat-poll", "chat-highlight", "stream-goals", 
   "supporter-wall", "chat-oracle", "session-recap", "build-profile", "clip-flag", "chat-alerts"];
 
 describe("real local widget previews", () => {
-  it.each(cardWidgets)("renders the Large creative frame for %s", async (widget) => {
+  it.each(cardWidgets)("renders the Large creative frame for %s", (widget) => {
     const { container } = render(<div style={themeToCssVars({ style: "arena-broadcast", scale: 1.25 }) as CSSProperties}>
       <PlaygroundWidget widget={widget} scenario="victory" />
     </div>);
-    await act(async () => { await vi.dynamicImportSettled(); });
     const panel = container.querySelector<HTMLElement>('[data-overlay-panel="framed"]');
     expect(panel).not.toBeNull();
     expect(panel?.style.zoom).toContain("--ov-scale");
