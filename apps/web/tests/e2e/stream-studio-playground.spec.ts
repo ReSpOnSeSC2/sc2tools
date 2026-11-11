@@ -18,3 +18,12 @@ test("Large themed playground frames cards without cropping full-canvas sources 
   await expect(strip).toHaveCSS("clip-path", "none");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
+
+test("a dedicated overlay source loads its local sample after route hydration", async ({ page }) => {
+  let connections = 0;
+  page.on("websocket", () => { connections += 1; });
+  await page.goto("/overlay/local-sample/widget/opponent?demo=1");
+  await expect(page.getByRole("status").filter({ hasText: "Local preview · sample data" })).toBeVisible();
+  await expect(page.getByText("TestOpponent", { exact: true })).toBeVisible();
+  expect(connections).toBe(0);
+});
