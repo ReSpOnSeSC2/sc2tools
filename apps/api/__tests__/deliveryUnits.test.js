@@ -74,7 +74,7 @@ test("only Discord webhook URLs are accepted", () => {
 });
 
 test("Discord posts hide opponent names by default, never ping, and escape user text", () => {
-  const game = { gameId: "g1", result: "Defeat", myRace: "Protoss", map: "Alcyone LE", myBuild: "@everyone **2 base**", myMmr: 4100, durationSec: 754,
+  const game = { gameId: "g1", result: "Defeat", myRace: "Protoss", map: "Alcyone LE", myBuild: "@everyone **2 base**", myMmr: 4100, myMmrSource: "replay", durationSec: 754,
     date: "2026-11-10T12:00:00.000Z", opponent: { race: "Zerg", mmr: 4050, displayName: "SecretOppZed" } };
   const hidden = templates.resultMessage(game, { options: undefined, mmrDelta: -14, replaySlug: "me" });
   const text = JSON.stringify(hidden);
