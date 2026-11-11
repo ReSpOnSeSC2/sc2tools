@@ -191,6 +191,15 @@ test("account export recovers only the caller's active encrypted calendar secret
   expect(user.row.calendarFeed).toEqual(legacy.body.user.calendarFeed);
   expect((await as("bob").get("/v1/me/export").expect(200)).text).not.toContain(secret);
 
+  const deviceToken = `sc2d_${"r".repeat(43)}`;
+  await h.db.deviceTokens.insertOne({ userId: "u_ann", tokenHash: crypto.createHash("sha256").update(deviceToken).digest("hex"), revokedAt: null });
+  const deviceExport = (path) => request(h.app).get(path).set("authorization", `Bearer ${deviceToken}`).expect(200);
+  const deviceJson = await deviceExport("/v1/me/export");
+  expect(deviceJson.body.user.calendarFeed).toEqual({ hash: stored.hash, createdAt: stored.createdAt.toISOString() });
+  const deviceNdjson = await deviceExport("/v1/me/export?format=ndjson");
+  const deviceUser = deviceNdjson.text.trim().split("\n").map(JSON.parse).find((record) => record.type === "user");
+  expect(deviceUser.row.calendarFeed).toEqual(deviceJson.body.user.calendarFeed);
+
   const { calendarFeed } = h.services;
   expect(calendarFeed.exportRecord("u_bob", stored)).toEqual({ hash: stored.hash, createdAt: stored.createdAt });
   expect(calendarFeed.exportRecord("u_ann", { ...stored, hash: "bad" })).toEqual({ hash: "bad", createdAt: stored.createdAt });

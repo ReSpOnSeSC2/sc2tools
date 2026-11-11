@@ -27,6 +27,8 @@ corresponding GitHub Release.
   the daily practice quest.
 - Use a saved timezone for the weekly report and share an aggregate image.
   Notification settings let you choose which events reach each channel.
+- Account exports can include the active coaching calendar secret after you
+  sign in and create a link with encrypted recovery available.
 - View finished streams and open game moments in the VOD when timestamps are
   available. Public stream pages require a separate sharing choice.
 

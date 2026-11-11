@@ -234,19 +234,23 @@ class GdprService {
    * keyed by collection — caller serializes / streams as needed.
    *
    * @param {string} userId
-   * @param {{includeSharedCoaching?: boolean}} [options]
+   * @param {{includeSharedCoaching?: boolean, includeCalendarSecret?: boolean}} [options]
    * @returns {Promise<{userId: string, exportedAt: string, data: Record<string, object[]>, user: object|null}>}
    */
   async export(userId, options = {}) {
-    return collectAccountExport(this.db, userId, { ...options, reviews: Boolean(this.reviews), calendarFeed: this.calendarFeed });
+    const { includeCalendarSecret, ...readOptions } = options;
+    return collectAccountExport(this.db, userId, { ...readOptions, reviews: Boolean(this.reviews),
+      calendarFeed: includeCalendarSecret ? this.calendarFeed : null });
   }
 
   /** Full account transport; deliberately distinct from restorable snapshots.
    * @param {string} userId
-   * @param {{details?:boolean, signal?:AbortSignal}} [options]
+   * @param {{details?:boolean, signal?:AbortSignal, includeCalendarSecret?:boolean}} [options]
    */
   exportStream(userId, options = {}) {
-    return accountExportStream(this.db, this.gameDetails, userId, { ...options, reviews: Boolean(this.reviews), calendarFeed: this.calendarFeed });
+    const { includeCalendarSecret, ...readOptions } = options;
+    return accountExportStream(this.db, this.gameDetails, userId, { ...readOptions, reviews: Boolean(this.reviews),
+      calendarFeed: includeCalendarSecret ? this.calendarFeed : null });
   }
 
   /** @param {string} userId */
