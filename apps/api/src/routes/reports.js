@@ -12,6 +12,7 @@ const rateLimit = /** @type {any} */ (rateLimitModule).default || rateLimitModul
  *   GET /reports/streams?before=&limit=         — the newest stream reports first
  *   GET /reports/streams/:id                    — one stream report
  *   PATCH /reports/streams/:id/sharing          — publish or revoke a report
+ *   PUT /reports/streams/:id/vod                — attach or remove a recording
  *   GET /public/players/:slug/streams/:id       — published aggregate report
  *
  * @param {{
@@ -41,6 +42,13 @@ function buildReportsRouter(deps) {
       if (!report) { res.status(404).json({ error: { code: "stream_report_not_found", message: "That stream report doesn't exist or was replaced by newer ones." } }); return; }
       res.json(report);
     } catch (err) { next(err); }
+  });
+  router.put("/reports/streams/:id/vod", deps.auth, async (req, res, next) => {
+    try {
+      res.set("Cache-Control", "private, no-store");
+      if (req.auth?.source !== "clerk") throw Object.assign(new Error("Sign in on the website to edit the recording."), { status: 403, code: "browser_session_required" });
+      res.json(await deps.streams.setVod(owner(req), req.params.id, req.body?.url));
+    } catch (error) { next(error); }
   });
   mountStreamPublication(router, deps);
   return router;

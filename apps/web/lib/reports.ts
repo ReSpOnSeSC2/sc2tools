@@ -28,14 +28,15 @@ export type PublicStreamReport = WinLoss & { player: string; slug: string; date:
 export type StreamSummary = { id: string; startAt: string; endAt: string; games: number; wins: number; losses: number; hours: number; mmrDelta: number | null; endedBy: string };
 export type StreamReport = WinLoss & {
   publication?: StreamPublication;
+  vodUrl?: string | null;
   streamId: string; startAt: string; endAt: string; endedBy: "manual" | "idle" | "restart"; hours: number;
   matchups: NamedRecord[]; maps: NamedRecord[]; builds: NamedRecord[];
   mmr: (MmrRow & { points: number[] }) | null;
   bestWin: { gameId: string; map: string | null; matchup: string; opponentMmr: number; durationSec: number | null } | null;
   randomizer: WinLoss | null;
-  crystalBall: { rounds: number; picks: number; correct: number; viewers: number; accuracy: number | null } | null;
-  supporters: { events: number; viewers: number } | null;
-  clips: Array<{ minute: number; kind: "chat-spike" | "game-event"; reason: string }>;
+  crystalBall: { rounds: number; picks: number; correct: number; viewers: number; accuracy: number | null; top?: Array<{ picks: number; correct: number }> } | null;
+  supporters: { events: number; viewers: number; top?: number[] } | null;
+  clips: Array<{ minute: number; offsetSec?: number; kind: "chat-spike" | "game-event"; reason: string }>;
 };
 
 const WEEK_RE = /^(\d{4})-W(\d{2})$/;

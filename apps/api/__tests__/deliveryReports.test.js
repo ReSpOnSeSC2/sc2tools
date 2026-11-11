@@ -121,7 +121,8 @@ test("stream report: computed once per stream, stored without opponent names, li
   expect(summary).toMatchObject({ games: 2, wins: 1, losses: 1, endedBy: "manual" });
   const doc = await h.db.streamSessions.findOne({ userId: "u_eve", streamId: summary.id });
   expect(doc).toMatchObject({ randomizer: { games: 1, wins: 0, losses: 1 }, crystalBall: { rounds: 1, picks: 2, correct: 1, viewers: 2, accuracy: null },
-    supporters: { events: 1, viewers: 1 }, bestWin: { opponentMmr: 4300, matchup: "PvT" } });
+    supporters: { events: 1, viewers: 1, top: [1] }, bestWin: { opponentMmr: 4300, matchup: "PvT" } });
+  expect(doc.crystalBall.top).toEqual([{ picks: 1, correct: 1 }, { picks: 1, correct: 0 }]);
   expect(JSON.stringify(doc)).not.toMatch(/SecretOppZed|ViewerOne|ViewerTwo/);
   expect(Buffer.byteLength(JSON.stringify(doc))).toBeLessThanOrEqual(5120);
   expect(await h.db.notifications.countDocuments({ userId: "u_eve", kind: "report.stream" })).toBe(1);
@@ -129,6 +130,15 @@ test("stream report: computed once per stream, stored without opponent names, li
   expect((await get("eve", `/v1/reports/streams/${summary.id}`)).body).toMatchObject({ streamId: summary.id, games: 2 });
   expect((await get("bob", `/v1/reports/streams/${summary.id}`)).status).toBe(404);
   expect(await streams.end("u_eve")).toBeNull();
+  const vodPath = `/v1/reports/streams/${summary.id}/vod`;
+  const attach = (name, url) => request(h.app).put(vodPath).set("authorization", h.bearer(name)).send({ url });
+  await attach("bob", "https://www.twitch.tv/videos/42").expect(404);
+  await attach("eve", "https://wrong.example/video/42").expect(400);
+  expect((await attach("eve", "https://www.twitch.tv/videos/42?t=10m&tracking=private").expect(200)).body).toEqual({ vodUrl: "https://www.twitch.tv/videos/42" });
+  expect((await get("eve", `/v1/reports/streams/${summary.id}`)).body.vodUrl).toBe("https://www.twitch.tv/videos/42");
+  expect((await attach("eve", null).expect(200)).body).toEqual({ vodUrl: null });
+  const { privateSearchHttpOptions } = require("../src/middleware/privateSearchTelemetry");
+  expect(privateSearchHttpOptions().ignoreIncomingRequestBody(vodPath)).toBe(true);
 });
 
 test("stream reports: four quiet hours close a stream, the newest 100 are kept, and opting out stores nothing", async () => {

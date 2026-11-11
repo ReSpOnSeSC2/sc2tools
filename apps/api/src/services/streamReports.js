@@ -7,6 +7,7 @@ const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
 const { sanitizeReportPrefs } = require("./reportPreferences");
 const { StreamReportPublication } = require("./streamReportPublication");
+const { streamVodUrl } = require("./streamReportVod");
 const facts = require("./reportFacts");
 
 /**
@@ -240,10 +241,23 @@ class StreamReportsService {
     ]);
     return {
       crystalBall: crystalBall(rounds),
-      supporters: events.length ? { events: events.length, viewers: new Set(events.map((row) => row.userKey)).size } : null,
-      clips: clips.map((row) => ({ minute: Math.max(0, Math.round((row.atMs - startAt.getTime()) / 60_000)),
-        kind: row.kind === "game-event" ? "game-event" : "chat-spike", reason: facts.cleanName(row.reason, 100) || "" })),
+      supporters: supporterActivity(events),
+      clips: clips.map((row) => {
+        const offsetSec = Math.max(0, Math.floor((row.atMs - startAt.getTime()) / 1000));
+        return { minute: Math.round(offsetSec / 60), offsetSec,
+          kind: row.kind === "game-event" ? "game-event" : "chat-spike", reason: facts.cleanName(row.reason, 100) || "" };
+      }),
     };
+  }
+
+  /** @param {string} userId @param {unknown} streamId @param {unknown} raw */
+  async setVod(userId, streamId, raw) {
+    if (typeof streamId !== "string" || !/^[0-9a-z]{6,12}$/.test(streamId)) throw Object.assign(new Error("This stream report is unavailable."), { status: 404, code: "stream_report_not_found" });
+    const vodUrl = streamVodUrl(raw);
+    if (raw !== null && !vodUrl) throw Object.assign(new Error("Use a Twitch or YouTube video link."), { status: 400, code: "invalid_stream_vod" });
+    const saved = await this.db.streamSessions.updateOne({ userId, streamId, ...VISIBLE_REPORT }, vodUrl ? { $set: { vodUrl } } : { $unset: { vodUrl: "" } });
+    if (!saved.matchedCount) throw Object.assign(new Error("This stream report is unavailable."), { status: 404, code: "stream_report_not_found" });
+    return { vodUrl };
   }
 
   /** @param {string} userId @param {{before?: unknown, limit?: unknown}} [query] */
@@ -280,28 +294,44 @@ function randomizerRecord(rows) {
   return rolled.length ? facts.record(rolled) : null;
 }
 
+/** @param {any[]} events */
+function supporterActivity(events) {
+  if (!events.length) return null;
+  /** @type {Map<string, number>} */
+  const activity = new Map();
+  for (const row of events) {
+    if (typeof row.userKey !== "string" || !row.userKey) continue;
+    activity.set(row.userKey, (activity.get(row.userKey) || 0) + 1);
+  }
+  return { events: events.length, viewers: activity.size, top: [...activity.values()].sort((a, b) => b - a).slice(0, 5) };
+}
+
 /** @param {any[]} rounds */
 function crystalBall(rounds) {
   let picks = 0; let correct = 0;
-  /** @type {Set<string>} */
-  const viewers = new Set();
+  /** @type {Map<string, {picks: number, correct: number}>} */
+  const viewers = new Map();
   for (const round of rounds) {
     if (round.result !== "win" && round.result !== "loss") continue;
     for (const [key, value] of Object.entries(round.picks && typeof round.picks === "object" ? round.picks : {})) {
       const pick = /** @type {any} */ (value)?.pick;
       if (pick !== "win" && pick !== "loss") continue;
-      picks += 1; viewers.add(key);
-      if (pick === round.result) correct += 1;
+      const tally = viewers.get(key) || { picks: 0, correct: 0 };
+      picks += 1;
+      tally.picks += 1;
+      if (pick === round.result) { correct += 1; tally.correct += 1; }
+      viewers.set(key, tally);
     }
   }
   if (!rounds.length) return null;
-  return { rounds: rounds.length, picks, correct, viewers: viewers.size, accuracy: picks >= 5 ? Math.round(correct / picks * 100) : null };
+  const top = [...viewers.values()].sort((a, b) => b.correct - a.correct || b.picks - a.picks).slice(0, 5);
+  return { rounds: rounds.length, picks, correct, viewers: viewers.size, accuracy: picks >= 5 ? Math.round(correct / picks * 100) : null, top };
 }
 
 /** Trim the longest lists until the document fits MAX_BYTES. @param {any} doc */
 function fitSize(doc) {
   const order = ["clips", "maps", "builds", "matchups"];
-  for (let i = 0; Buffer.byteLength(JSON.stringify(doc)) > MAX_BYTES - 128 && i < 40; i += 1) {
+  for (let i = 0; Buffer.byteLength(JSON.stringify(doc)) > MAX_BYTES - 256 && i < 40; i += 1) {
     const key = order.find((name) => Array.isArray(doc[name]) && doc[name].length > 0);
     if (!key) break;
     doc[key] = doc[key].slice(0, -1);

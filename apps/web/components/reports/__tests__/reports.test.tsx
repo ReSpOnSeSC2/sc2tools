@@ -35,11 +35,13 @@ const stream: StreamReport = {
 let prefs = { weekly: true, stream: true, timezone: null as string | null };
 let fetcher: ReturnType<typeof vi.fn>;
 let streamPublication: StreamPublication | undefined;
+let streamVod: string | null;
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 const mount = (node: ReactNode) => render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, shouldRetryOnError: false }}>{node}</SWRConfig>);
 beforeEach(() => {
   prefs = { weekly: true, stream: true, timezone: null };
   streamPublication = undefined;
+  streamVod = null;
   fetcher = vi.fn(async (raw: string, init?: RequestInit) => {
     const url = new URL(raw, "http://localhost");
     if (url.pathname.endsWith("/reports/weekly")) return json(week);
@@ -48,7 +50,11 @@ beforeEach(() => {
       streamPublication = { eligible: true, enabled, href: enabled ? "/players/stream-player-0123456789/streams/AbCdEfGhIjKlMnOp" : null };
       return json(streamPublication);
     }
-    if (url.pathname.endsWith("/reports/streams/abc123")) return json({ ...stream, publication: streamPublication });
+    if (url.pathname.endsWith("/reports/streams/abc123/vod") && init?.method === "PUT") {
+      streamVod = JSON.parse(String(init.body)).url;
+      return json({ vodUrl: streamVod });
+    }
+    if (url.pathname.endsWith("/reports/streams/abc123")) return json({ ...stream, publication: streamPublication, vodUrl: streamVod });
     if (url.pathname.endsWith("/preferences/reports")) { if (init?.method === "PUT") prefs = JSON.parse(String(init.body)); return json(prefs); }
     return json({});
   });
@@ -96,6 +102,18 @@ it("stream report renders aggregates and copies a Discord summary without names 
   expect(text).toContain("@\u200beveryone");
   expect(text).not.toContain("Chat spiked");
   expect(screen.getByRole("button", { name: "Copy Discord summary" })).toBeTruthy();
+});
+
+it("links clip offsets to a recording only after its owner saves the URL", async () => {
+  mount(<StreamReportView id="abc123" />);
+  const field = await screen.findByRole("textbox", { name: "Twitch or YouTube recording" });
+  expect(screen.queryByRole("link", { name: "42:00 · Chat spiked" })).toBeNull();
+  fireEvent.change(field, { target: { value: "https://www.twitch.tv/videos/42" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save recording link" }));
+  const clip = await screen.findByRole("link", { name: "42:00 · Chat spiked" });
+  expect(clip.getAttribute("href")).toBe("https://www.twitch.tv/videos/42?t=0h42m0s");
+  fireEvent.click(screen.getByRole("button", { name: "Remove recording link" }));
+  await waitFor(() => expect(screen.queryByRole("link", { name: "42:00 · Chat spiked" })).toBeNull());
 });
 
 it("only publishes a stream report after an explicit owner action and can revoke it", async () => {
