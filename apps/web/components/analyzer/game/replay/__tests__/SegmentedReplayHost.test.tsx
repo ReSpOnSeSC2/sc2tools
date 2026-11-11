@@ -2,17 +2,24 @@ import { createHash, webcrypto } from "node:crypto";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeSegmentFixture } from "@/lib/__tests__/segmentedPlayback.fixture";
+import type { LoadClipSections } from "@/lib/usePlaybackSegments";
+
+const clip = vi.hoisted(() => ({ load: undefined as LoadClipSections | undefined }));
 
 const auth = vi.hoisted(() => ({ userId: "admin", getToken: vi.fn(async () => "test-token") }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
 vi.mock("@/lib/clientApi", () => ({ API_BASE: "http://local-api" }));
-vi.mock("../ReplayStage", () => ({ ReplayStage: ({ playbackWindow, onPlaybackTimeChange, buffering, castMarkers }: {
+vi.mock("../ReplayStage", () => ({ ReplayStage: ({ playbackWindow, onPlaybackTimeChange, buffering, castMarkers, loadClipSections }: {
   playbackWindow: { start: number; end: number }; onPlaybackTimeChange: (n: number) => void; buffering: boolean;
   castMarkers?: { t: number }[];
-}) => <div data-testid="host" data-start={playbackWindow.start} data-buffering={buffering}>
+  loadClipSections?: LoadClipSections;
+}) => {
+  clip.load = loadClipSections;
+  return <div data-testid="host" data-start={playbackWindow.start} data-buffering={buffering}>
   {[0, 40, 60, 120, 180].map(time => <button key={time} onClick={() => onPlaybackTimeChange(time)}>Seek {time}</button>)}
   <span data-testid="casts">{castMarkers?.map(marker => marker.t).join(",")}</span>
-</div> }));
+</div>;
+} }));
 vi.mock("../CompactReplayHost", () => ({ CompactReplayHost: () => <div data-testid="compact-host" /> }));
 import { SegmentedReplayHost } from "../SegmentedReplayHost";
 
@@ -70,6 +77,25 @@ describe("lazy playback segment host", () => {
     expect(signals.every(signal => signal.aborted)).toBe(true);
     expect(screen.queryByRole("alert")).toBeNull();
   });
+  it("loads only authenticated, verified sections that intersect the clip range without changing the replay clock", async () => {
+    const { manifest, bytes } = makeSegmentFixture();
+    const fetcher = vi.fn(async (url: string, _options: RequestInit) => new Response(bytes[Number(url.split("/").pop())]));
+    vi.stubGlobal("fetch", fetcher);
+    render(<SegmentedReplayHost gameId="clip" manifest={manifest} clip="owner" />);
+    const stage = await screen.findByTestId("host");
+    const signal = new AbortController().signal;
+    await act(async () => {
+      const sections = await clip.load!({ start: 59, end: 120 }, signal).catch(() => null);
+      expect(sections).toBeNull(); // Longer than 60 seconds.
+      const withinCap = await clip.load!({ start: 59, end: 119 }, signal);
+      expect(withinCap.map(({ start, end }) => [start, end])).toEqual([[0, 60], [60, 120]]);
+      expect(withinCap.every(section => section.playback.fidelity?.complete)).toBe(true);
+    });
+    expect(fetcher.mock.calls.map(([url]) => url.split("/").pop())).toEqual(["0", "1"]);
+    expect(fetcher.mock.calls[1][1].headers).toEqual({ authorization: "Bearer test-token" });
+    expect(stage.getAttribute("data-start")).toBe("0");
+  });
+
   it("retains small decoded windows within the byte budget, including older visited windows", async () => {
     const { manifest, bytes } = makeSegmentFixture();
     const fetcher = vi.fn(async (url: string) => new Response(bytes[Number(url.split("/").pop())]));

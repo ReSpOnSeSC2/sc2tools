@@ -22,7 +22,8 @@ import { useApi } from "@/lib/clientApi";
 import type { PublicPlayerSettings } from "@/components/public-profile/types";
 import { getMapLayoutUrl } from "@/lib/map-images";
 import type { MapPlayback } from "@/lib/mapReplay";
-import type { ReplayCanvas, ReplayCanvasContext } from "@/lib/replayCanvas";
+import { resolveEntity, type ReplayView } from "@/lib/replayInspect";
+import type { LoadClipSections } from "@/lib/usePlaybackSegments";
 import { formatClock } from "@/lib/replayHud";
 import type { ReplayVision } from "@/lib/replayVision";
 import { spriteAssetsVersion } from "@/lib/spriteSheets";
@@ -114,12 +115,11 @@ const pause = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, r
 
 /** Ask for every sprite the range needs, then wait (≤ 2 s) until the
  *  atlases stop arriving, so early frames don't show placeholder dots. */
-async function warmUp(ctx: ReplayCanvasContext, canvas: ReplayCanvas, options: ClipFrameOptions, range: ClipRange, signal: AbortSignal) {
+async function warmUp(draw: (time: number) => void, resetView: () => void, range: ClipRange, signal: AbortSignal) {
   if (signal.aborted) throw new ClipError("cancelled");
-  const view = options.view;
   const sample = () => {
-    for (let k = 0; k <= 5; k += 1) renderClipFrame(ctx, canvas, range.start + ((range.end - range.start) * k) / 6, options);
-    options.view = view;
+    for (let k = 0; k <= 5; k += 1) draw(range.start + ((range.end - range.start) * k) / 6);
+    resetView();
   };
   sample();
   const deadline = performance.now() + 2000;
@@ -157,6 +157,7 @@ export default function ClipDialog({
   time,
   vision,
   playbackWindow,
+  loadClipSections,
   races,
   owner,
   replayer,
@@ -168,9 +169,8 @@ export default function ClipDialog({
   playback: MapPlayback;
   time: number;
   vision: ReplayVision;
-  /** The renderer gets one decoded segment. Spanning sections needs a
-   * range loader and stable follow/vision identities across segment seams. */
   playbackWindow?: PlaybackWindow | null;
+  loadClipSections?: LoadClipSections;
   races: { me?: string | null; opp?: string | null };
   /** The owner may brand with their public player page. */
   owner: boolean;
@@ -181,7 +181,8 @@ export default function ClipDialog({
 }) {
   const id = useId();
   const support = useMemo(clipSupport, []);
-  const initial = useMemo(() => defaultClipRange(playback.stats, time, playback.gameLength, playbackWindow),
+  const rangeWindow = loadClipSections ? null : playbackWindow;
+  const initial = useMemo(() => defaultClipRange(playback.stats, time, playback.gameLength, rangeWindow),
     // Only the moment the dialog opened decides the default.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [playback]);
@@ -207,11 +208,11 @@ export default function ClipDialog({
   const start = parseClipClock(startText);
   const end = parseClipClock(endText);
   const range: ClipRange | null = start !== null && end !== null && end > start ? { start, end } : null;
-  const fitted = range ? clampClipRange(range, playback.gameLength, playbackWindow) : null;
+  const fitted = range ? clampClipRange(range, playback.gameLength, rangeWindow) : null;
   const rangeError = !range
     ? "Enter a start and an end as m:ss, with the end after the start."
     : fitted && (fitted.start !== range.start || fitted.end !== range.end)
-      ? `Clips run up to ${CLIP_MAX_SECONDS} seconds inside ${playbackWindow ? `the loaded section (${formatClock(playbackWindow.start)}–${formatClock(playbackWindow.end)})` : `the game (0:00–${formatClock(playback.gameLength)})`}.`
+      ? `Clips run up to ${CLIP_MAX_SECONDS} seconds inside ${rangeWindow ? `the loaded section (${formatClock(rangeWindow.start)}–${formatClock(rangeWindow.end)})` : `the game (0:00–${formatClock(playback.gameLength)})`}.`
       : null;
   const gifTooLong = format === "gif" && range !== null && !gifFits(range, speed);
   const fps = format === "gif" ? GIF_FPS : VIDEO_FPS;
@@ -233,18 +234,30 @@ export default function ClipDialog({
     const height = Math.round(CLIP_SIZES[size].height * (gif ? GIF_SCALE : 1));
     let surface: ClipSurface | undefined;
     try {
+      const screen = replayer.current?.snapshot();
+      const needsSections = loadClipSections && playbackWindow && (range.start < playbackWindow.start || range.end > playbackWindow.end);
+      const sections = needsSections ? await loadClipSections(range, controller.signal)
+        : [{ start: range.start, end: range.end, playback }];
+      controller.signal.throwIfAborted();
       surface = createClipSurface(width, height, format);
       const { canvas, ctx, captureCanvas, present } = surface;
       const layout = await loadLayout(playback.mapName, controller.signal);
-      const screen = replayer.current?.snapshot();
-      const options: ClipFrameOptions = {
-        playback, layout, vision, hud, watermark: watermarkText, races,
-        view: screen ? clipCamera(playback, screen, width, height) : { z: 1, ox: 0, oy: 0 },
-        follow: screen?.follow ?? null,
+      const initialView = screen ? clipCamera(playback, screen, width, height) : { z: 1, ox: 0, oy: 0 };
+      let view: ReplayView = initialView;
+      const renderSections = sections.map(section => ({ ...section, follow: screen?.follow
+        ? resolveEntity(playback, section.playback, screen.follow) : null }));
+      const draw = (frameTime: number) => {
+        const section = renderSections.find(value => frameTime >= value.start && frameTime < value.end);
+        if (!section) throw new ClipError("failed");
+        const options: ClipFrameOptions = {
+          playback: section.playback, layout, vision, hud, watermark: watermarkText, races, view, follow: section.follow,
+        };
+        renderClipFrame(ctx, canvas, frameTime, options);
+        view = options.view;
       };
-      await warmUp(ctx, canvas, options, range, controller.signal);
+      await warmUp(draw, () => { view = initialView; }, range, controller.signal);
       const count = clipFrameCount(range, speed, fps);
-      const render = (index: number) => renderClipFrame(ctx, canvas, clipFrameTime(range, speed, fps, index), options);
+      const render = (index: number) => draw(clipFrameTime(range, speed, fps, index));
       const onProgress = (done: number, total: number) => setStatus({ kind: "recording", done, total });
       setStatus({ kind: "recording", done: 0, total: count });
       const blob = captureCanvas
@@ -257,7 +270,7 @@ export default function ClipDialog({
       urlRef.current = url;
       setStatus({ kind: "done", url, name: clipFileName(range, format, support.video), bytes: blob.size });
     } catch (error) {
-      const reason: ClipFailure = error instanceof ClipError ? error.reason : "failed";
+      const reason: ClipFailure = controller.signal.aborted ? "cancelled" : error instanceof ClipError ? error.reason : "failed";
       if (abortRef.current === controller) setStatus(reason === "cancelled" ? { kind: "idle", note: "Clip cancelled." } : { kind: "error", message: FAILURES[reason] });
     } finally {
       surface?.dispose();
@@ -297,8 +310,8 @@ export default function ClipDialog({
               <input value={endText} onChange={(event) => setEndText(event.target.value)} inputMode="text" autoComplete="off"
                 aria-describedby={`${id}-range`} className="min-h-11 w-24 rounded-md border border-border bg-bg-surface px-3 tabular-nums text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
             </label>
-            <Button variant="secondary" size="sm" className="min-h-11" onClick={() => setRange(defaultClipRange(playback.stats, time, playback.gameLength, playbackWindow))}>Nearest fight</Button>
-            <Button variant="secondary" size="sm" className="min-h-11" onClick={() => setRange(clampClipRange({ start: time - 10, end: time + 10 }, playback.gameLength, playbackWindow))}>Around {formatClock(time)}</Button>
+            <Button variant="secondary" size="sm" className="min-h-11" onClick={() => setRange(defaultClipRange(playback.stats, time, playback.gameLength, rangeWindow))}>Nearest fight</Button>
+            <Button variant="secondary" size="sm" className="min-h-11" onClick={() => setRange(clampClipRange({ start: time - 10, end: time + 10 }, playback.gameLength, rangeWindow))}>Around {formatClock(time)}</Button>
           </div>
           <p id={`${id}-range`} className={rangeError ? "text-danger" : "text-text-dim"} role={rangeError ? "alert" : undefined}>
             {rangeError ?? `Up to ${CLIP_MAX_SECONDS} seconds of game time.${initial.source === "fight" ? " It starts on the fight nearest the replay clock." : ""}`}

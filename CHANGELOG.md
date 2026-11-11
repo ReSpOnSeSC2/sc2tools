@@ -112,7 +112,8 @@ corresponding GitHub Release.
 - Make a clip of up to 60 seconds, starting on the nearest fight: WebM (MP4
   where that is what the browser records) or a GIF where video recording is
   unavailable, with speed, size, scoreboard and watermark options. Clips are
-  made in your browser and never uploaded.
+  made in your browser and never uploaded. Clips can cross replay section
+  boundaries without jumping the live replay clock.
 
 ### Compare two games
 

@@ -58,6 +58,7 @@ import { ChevronDown, ChevronUp, Film, Keyboard } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MapPlayback } from "@/lib/mapReplay";
+import type { LoadClipSections } from "@/lib/usePlaybackSegments";
 import type { PatchEra } from "@/lib/meta";
 import {
   deriveReplayHud,
@@ -104,6 +105,7 @@ export function ReplayStage({
   clockLink,
   upgrades,
   playbackWindow,
+  loadClipSections,
   buffering = false,
   seekRequest,
   mapMarkers,
@@ -155,6 +157,7 @@ export function ReplayStage({
   clockLink?: import("react").ReactNode;
   upgrades?: Record<ReplaySide, readonly { time: number; name: string }[]>;
   playbackWindow?: { start: number; end: number };
+  loadClipSections?: LoadClipSections;
   buffering?: boolean;
   /* ── Review-page hooks (all optional; the game page passes none) ──
    * ``seekRequest`` is an external jump after mount: each new ``seq``
@@ -323,7 +326,7 @@ export function ReplayStage({
       <span role="status" aria-live="polite" className="sr-only">{seekAnnouncement}</span>
       <ReplayShortcutSheet container={stageRef.current} open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       {clip && clipOpen ? (
-        <ClipDialog open onClose={() => setClipOpen(false)} playback={playback} time={time} vision={vision} playbackWindow={playbackWindow}
+        <ClipDialog open onClose={() => setClipOpen(false)} playback={playback} time={time} vision={vision} playbackWindow={playbackWindow} loadClipSections={loadClipSections}
           races={{ me: myRace, opp: oppRace }} owner={clip === "owner"} replayer={replayerRef} container={stageRef.current}
           onStart={() => onPlayingChange(false)} />
       ) : null}

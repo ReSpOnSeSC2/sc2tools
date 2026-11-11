@@ -609,7 +609,7 @@ function vignetteFor(
 
 
 function drawOtherCamera(
-  ctx: CanvasRenderingContext2D, playback: MapPlayback, time: number,
+  ctx: ReplayCanvasContext, playback: MapPlayback, time: number,
   camera: ReplayCameraMode | undefined, proj: ReturnType<typeof worldProjection>, zoom: number,
 ) {
   if (!camera || camera === "free") return;

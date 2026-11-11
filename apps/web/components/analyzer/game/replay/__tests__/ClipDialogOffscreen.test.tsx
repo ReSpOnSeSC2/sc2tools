@@ -82,6 +82,35 @@ it("renders every video frame offscreen before it reaches the HTML capture canva
   expect(capture.current?.width).toBe(0);
 });
 
+it("renders across the section boundary and follows the same stable unit id in both sections", async () => {
+  const first = { ...playback, units: [{ id: "12" }] } as MapPlayback;
+  const second = { ...playback, units: [{ id: "99" }, { id: "12" }] } as MapPlayback;
+  const loadClipSections = vi.fn(async () => [
+    { start: 0, end: 91, playback: first }, { start: 91, end: 200, playback: second },
+  ]);
+  const snapshot = () => ({ view: { z: 2, ox: 0, oy: 0 }, width: 640, height: 360, follow: { kind: "unit" as const, index: 0 } });
+  mocks.recordVideo.mockImplementation(async ({ render }) => {
+    mocks.renderFrame.mockClear();
+    render(0); render(VIDEO_FPS);
+    const [, , start, firstFrame] = mocks.renderFrame.mock.calls[0];
+    const [, , seam, secondFrame] = mocks.renderFrame.mock.calls[1];
+    expect(start).toBe(90);
+    expect(seam).toBe(91);
+    expect(firstFrame.playback).toBe(first);
+    expect(firstFrame.follow).toEqual({ kind: "unit", index: 0 });
+    expect(secondFrame.playback).toBe(second);
+    expect(secondFrame.follow).toEqual({ kind: "unit", index: 1 });
+    return new Blob(["clip"], { type: "video/webm" });
+  });
+  render(<ClipDialog open onClose={vi.fn()} playback={first} time={90} vision="me" races={{}}
+    playbackWindow={{ start: 0, end: 91 }} loadClipSections={loadClipSections}
+    owner={false} replayer={{ current: { snapshot, inspectNext: vi.fn() } }} onStart={vi.fn()} />);
+  recordTwoSeconds();
+  await act(async () => vi.advanceTimersByTimeAsync(500));
+  expect(loadClipSections).toHaveBeenCalledWith(range, expect.any(AbortSignal));
+  expect(screen.getByRole("link", { name: /Download/ })).toBeTruthy();
+});
+
 it("reads each GIF frame from OffscreenCanvas without attaching an HTML canvas", async () => {
   mocks.recordGif.mockImplementation(async ({ count, frame }) => {
     expect(document.querySelector("canvas")).toBeNull();
