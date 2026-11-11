@@ -99,7 +99,7 @@ export function SettingsShell({
   renderStreaming,
 }: SettingsShellProps) {
   return (
-    <SettingsContextProvider key={ownerKey ?? "anonymous"}>
+    <SettingsContextProvider>
       <SettingsShellInner
         initialTab={initialTab}
         renderTab={renderTab}
@@ -285,7 +285,9 @@ function SettingsShellInner({
   return (
     <>
       <SettingsSearch key={owner.key ?? "signed-out"} ownerKey={owner.key ?? null} onNavigate={requestSection} />
+      {/* A new owner gets new drafts while the shell keeps the admitted destination. */}
       <Tabs
+        key={`panels:${ownerKey ?? "anonymous"}`}
         value={active}
         onValueChange={(next) => requestSwitch(next)}
         orientation="vertical"
@@ -386,7 +388,7 @@ function SettingsShellInner({
       {/* The tab's one SaveBar: forms register with useSaveSource and never
           render their own, so bars can't stack. Keyed so a result from one
           tab never shows on another. */}
-      <SettingsSaveBar key={active} tabId={active} />
+      <SettingsSaveBar key={`save:${ownerKey ?? "anonymous"}:${active}`} tabId={active} />
 
       <ConfirmDialog
         open={pending !== null}

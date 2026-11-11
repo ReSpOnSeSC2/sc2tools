@@ -128,19 +128,27 @@ describe("SettingsShell ?tab= sync", () => {
   });
   it("a retained discard callback cannot admit an older destination or cross owner A→B→A", () => {
     window.history.replaceState(null, "", "/settings?tab=preferences&ref=kept#notifications");
-    const renderOwner = (ownerKey: string, requestedSearch: string) => <SettingsShell ownerKey={ownerKey} initialTab="preferences" requestedSearch={requestedSearch} renderTab={id => id === "preferences" ? <DirtyPanel id={id} /> : <p>panel {id}</p>} />;
+    function Draft() {
+      const [value, setValue] = useState("saved");
+      usePublishDirty("preferences", value !== "saved");
+      return <><p>draft preferences</p><input aria-label="Preferences draft" value={value} onChange={event => setValue(event.target.value)} /></>;
+    }
+    const renderOwner = (ownerKey: string, requestedSearch: string) => <SettingsShell ownerKey={ownerKey} initialTab="preferences" requestedSearch={requestedSearch} renderTab={id => id === "preferences" ? <Draft /> : <p>panel {id}</p>} />;
     const view = render(renderOwner("a", "tab=preferences&ref=kept"));
+    fireEvent.change(screen.getByRole("textbox", { name: "Preferences draft" }), { target: { value: "owner-a draft" } });
     window.history.replaceState(null, "", "/settings?tab=overlay&section=dock");
     view.rerender(renderOwner("a", "tab=overlay&section=dock")); const oldDiscard = callbacks.confirm!;
     window.history.replaceState(null, "", "/settings?tab=help#help-section");
     view.rerender(renderOwner("a", "tab=help"));
     act(oldDiscard);
-    expect(activePanel()).toBe("dirty preferences");
+    expect(activePanel()).toBe("draft preferences");
+    expect(screen.getByRole("textbox", { name: "Preferences draft" })).toHaveProperty("value", "owner-a draft");
     expect(screen.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeTruthy();
     const beforeOwner = callbacks.confirm!;
     view.rerender(renderOwner("b", "tab=help")); view.rerender(renderOwner("a", "tab=help"));
     act(beforeOwner);
-    expect(activePanel()).toBe("dirty preferences");
+    expect(activePanel()).toBe("draft preferences");
+    expect(screen.getByRole("textbox", { name: "Preferences draft" })).toHaveProperty("value", "saved");
     expect(screen.queryByRole("dialog", { name: "Discard unsaved changes?" })).toBeNull();
     expect(window.location.search).toBe("?tab=help");
   });

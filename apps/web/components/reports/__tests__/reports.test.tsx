@@ -2,13 +2,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import type { ReactNode } from "react";
+import { SettingsSaveScope } from "@/components/analyzer/settings/SettingsSaveBar";
 import type { StreamPublication, StreamReport, WeeklyReport } from "@/lib/reports";
 import { streamDiscordSummary } from "@/lib/reports";
 import { weeklyReportShareCopy } from "@/lib/weeklyReportImage";
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "ann", isLoaded: true, isSignedIn: true, getToken: async () => "fixture-token" }) }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ slug, children }: { slug: string; children?: ReactNode }) => <a href={`/help/${slug}`}>{children ?? "Help"}</a> }));
-vi.mock("@/components/analyzer/settings/SettingsContext", () => ({ usePublishDirty: () => undefined }));
 import { WeeklyReportView } from "../WeeklyReportView";
 import { StreamReportView } from "../StreamReportView";
 import { ReportPreferences } from "../ReportPreferences";
@@ -129,7 +129,7 @@ it("only publishes a stream report after an explicit owner action and can revoke
 });
 
 it("report settings save the switches and this device's time zone", async () => {
-  mount(<ReportPreferences />);
+  mount(<SettingsSaveScope tabId="preferences"><ReportPreferences /></SettingsSaveScope>);
   const weekly = await screen.findByRole("switch", { name: "Weekly report" });
   fireEvent.click(weekly);
   fireEvent.click(screen.getByRole("button", { name: /Use this device's time zone/ }));

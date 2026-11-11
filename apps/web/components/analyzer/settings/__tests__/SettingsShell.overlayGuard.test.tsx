@@ -1,10 +1,7 @@
 /**
- * The Chat & alerts tab holds two forms with their own Save buttons —
- * Multi-platform chat and the chat bot. Both publish
- * their unsaved state, so switching tabs asks before dropping either
- * one's edits, the tab shows the unsaved dot for either, and saving one
- * never clears the other's. The real forms render; the API and Clerk
- * are MOCKS.
+ * Multi-platform chat and the chat bot share a save bar. Either dirty
+ * source guards navigation, and a failed source keeps the tab dirty
+ * when the other saves. The real forms render with mocked API and auth.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -149,23 +146,24 @@ describe("Chat tab unsaved-changes guard", () => {
     renderChat();
     editMultiChat();
     editChatBot();
+    api.apiCall.mockRejectedValueOnce(new Error("synthetic chat save failure"));
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Save bot settings" }));
-    });
-    expect(api.apiCall).toHaveBeenCalledWith(expect.anything(), "/v1/me/chatbot", expect.anything());
-    await waitFor(() =>
-      expect((screen.getByRole("button", { name: "Save bot settings" }) as HTMLButtonElement).disabled).toBe(true),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Save all" }));
+    await screen.findByRole("button", { name: "Retry" });
+    expect(api.apiCall.mock.calls.map(([, path]) => path)).toEqual(["/v1/me/preferences/multichat", "/v1/me/chatbot"]);
+    expect(screen.getByText("Saved bot settings. Couldn't save chat settings.")).toBeTruthy();
     expect(chatIsDirty()).toBe(true);
     clickVoice();
     expect(dialog()).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Save chat settings" }));
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     });
     await waitFor(() => expect(chatIsDirty()).toBe(false));
+    expect(api.apiCall.mock.calls.filter(([, , init]) => init.method === "PUT").map(([, path]) => path)).toEqual([
+      "/v1/me/preferences/multichat", "/v1/me/chatbot", "/v1/me/preferences/multichat",
+    ]);
     clickVoice();
     expect(dialog()).toBeNull();
     expect(screen.getByText("panel voice")).toBeTruthy();

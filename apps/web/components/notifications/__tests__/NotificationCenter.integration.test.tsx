@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import type { ReactNode } from "react";
+import { SettingsSaveScope } from "@/components/analyzer/settings/SettingsSaveBar";
 import type { NotificationRow } from "../notificationModel";
 import type { MyReport } from "../MyReports";
 
@@ -74,11 +75,11 @@ describe("notification center consumers", () => {
   });
 
   it("retains a muted-kind draft on failed save and persists only notification preferences after retry", async () => {
-    mount(<NotificationPreferences />);
+    mount(<SettingsSaveScope tabId="preferences"><NotificationPreferences /></SettingsSaveScope>);
     const input = await screen.findByRole("checkbox", { name: "Import finished" }); fireEvent.click(input);
-    failSave = true; fireEvent.click(screen.getByRole("button", { name: "Save notification preferences" }));
+    failSave = true; fireEvent.click(screen.getByRole("button", { name: "Save notifications" }));
     await screen.findByRole("alert"); expect((input as HTMLInputElement).checked).toBe(false);
-    failSave = false; fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    failSave = false; fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
     await screen.findByText("Notification preferences saved"); expect(prefs).toEqual({ muted: ["import.done"] });
     expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT").every(([url]) => String(url).endsWith("/preferences/notifications"))).toBe(true);
   });
