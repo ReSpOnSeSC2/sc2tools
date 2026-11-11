@@ -134,7 +134,7 @@ const article: HelpArticle = {
     { type: "heading", anchor: "session-prep-digest", text: "Session prep digest" },
     {
       type: "paragraph",
-      text: "**Since last session**, on each upcoming session, summarizes synced 1v1 replays since the student's previous session. Coaches see the ranked game count and wins and losses by matchup. Detected builds and recent replay details come from games the current practice-sharing approval lets the coach see in assignment evidence. Students see their own eligible games, including their checked-in builds, and can open their game pages. The next session opens the digest automatically.",
+      text: "**Since last session**, on each upcoming session, summarizes synced 1v1 replays since the student's previous session. Coaches see the ranked game count and wins and losses by matchup. Detected builds and recent replay details come from games the current practice-sharing approval lets the coach see in assignment evidence. Coaches can download an archived assigned replay directly from its digest row while sharing is active. On **Practice**, a student can separately share confirmed built-in check-in labels for assigned 1v1 games played after they opt in. They can stop sharing labels without revoking replay access. Custom check-in names and notes stay private. Students see their own eligible games, including their checked-in builds, and can open their game pages. The next session opens the digest automatically.",
     },
     {
       type: "list",

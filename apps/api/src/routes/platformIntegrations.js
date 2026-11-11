@@ -15,6 +15,7 @@ const { WebhookVerificationError } = require("../services/platformWebhooks");
  * @param {{
  *   auth: import('express').RequestHandler,
  *   integrations: import('../services/platformIntegrations').PlatformIntegrationsService,
+ *   rewards?: import('../services/twitchRewards').TwitchRewardsService|null,
  *   logger?: import('pino').Logger,
  *   returnUrl?: string,
  * }} deps
@@ -38,7 +39,7 @@ function buildPlatformIntegrationsRouter(deps) {
       const platform = parsePlatform(req.params.platform);
       res.set("Cache-Control", "no-store");
       const purpose = req.body?.purpose === undefined ? "alerts" : req.body.purpose;
-      if (!["alerts", "streaming", "predictions", "chat"].includes(purpose) || purpose === "predictions" && platform !== "twitch") {
+      if (!["alerts", "streaming", "predictions", "chat", "rewards"].includes(purpose) || (purpose === "predictions" || purpose === "rewards") && platform !== "twitch") {
         throw new PlatformIntegrationError(400, "oauth_purpose_invalid", "Unsupported account connection purpose.");
       }
       res.json(await deps.integrations.begin(session.userId, platform, { purpose }));
@@ -106,7 +107,9 @@ function buildPlatformIntegrationsRouter(deps) {
       const result = await deps.integrations.handleTwitchWebhook(
         req.headers,
         /** @type {any} */ (req).rawBody,
+        deps.rewards,
       );
+      if (result.rewardAdmitted) res.once("finish", () => deps.rewards?.wake());
       sendWebhookResult(res, result);
     } catch (err) {
       if (err instanceof WebhookVerificationError) {

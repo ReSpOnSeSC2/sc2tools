@@ -1,7 +1,7 @@
 "use client";
 import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { ArrowRight, ExternalLink, Fingerprint, RefreshCw } from "lucide-react";
@@ -13,10 +13,11 @@ import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { IdentityPlayerLabel, PlayerIdentityPicker, type IdentityPlayer } from "@/components/analyzer/PlayerIdentityPicker";
 import { IDENTITY_REASON_MAX, IDENTITY_REASON_MIN, IDENTITY_TEXTAREA_CLASS, IdentityStatus, identityError, type IdentityProposal } from "@/components/analyzer/OpponentIdentitySubmission";
-import { ForbiddenCard } from "../components/AdminFragments";
+import { useAdminQueryState } from "../components/useAdminQueryState";
+import { ForbiddenCard, LoadingRows } from "../components/AdminFragments";
 import { formatDateTime, formatNumber } from "@/lib/i18n/format";
 
-type ReviewList = { items: IdentityProposal[]; nextCursor: string | null };
+type ReviewList = { items: IdentityProposal[]; nextCursor: string | null; total?: number };
 type EvidenceGame = { gameId: string; date: string | null; map: string | null; result: string | null; durationSec: number | null; opponentName: string | null; hasReplay: boolean };
 type ReviewDetail = { submission: IdentityProposal; evidence: EvidenceGame[]; nextCursor: string | null };
 
@@ -25,8 +26,22 @@ function formatDate(date: string | null) {
   return value && !Number.isNaN(value.getTime()) ? formatDateTime(value) : "Date unavailable";
 }
 
+const IDENTITY_STATUSES = ["pending", "approved", "rejected", "removed"] as const;
+
 export default function AdminPlayerIdentitiesPage() {
-  const [status, setStatus] = useState<IdentityProposal["status"]>("pending");
+  return <Suspense fallback={<LoadingRows rows={4} />}><AdminPlayerIdentitiesBody /></Suspense>;
+}
+
+function AdminPlayerIdentitiesBody() {
+  const [view, setView] = useAdminQueryState({ status: "pending" }, { allowed: { status: IDENTITY_STATUSES } });
+  const status = view.status as IdentityProposal["status"];
+  return <IdentityQueue key={status} status={status} onStatus={(status) => setView({ status }, { history: "push" })} />;
+}
+
+function IdentityQueue({ status, onStatus }: {
+  status: IdentityProposal["status"];
+  onStatus: (status: IdentityProposal["status"]) => void;
+}) {
   const [cursors, setCursors] = useState<Array<string | null>>([null]);
   const [selected, setSelected] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -39,9 +54,10 @@ export default function AdminPlayerIdentitiesPage() {
   return <div className="space-y-6">
     <AdminPageHeader anchor="identity-and-channel-review" title="Player identities" description="Review the submitted evidence before confirming shared identities." />
     <Card><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <Field label="Submission status" className="sm:min-w-60"><Select value={status} onChange={(event) => { setStatus(event.target.value as IdentityProposal["status"]); setCursors([null]); }}><option value="pending">Awaiting review</option><option value="approved">Approved</option><option value="rejected">Not approved</option><option value="removed">Identity removed</option></Select></Field>
+      <Field label="Submission status" className="sm:min-w-60"><Select value={status} onChange={(event) => onStatus(event.target.value as IdentityProposal["status"])}><option value="pending">Awaiting review</option><option value="approved">Approved</option><option value="rejected">Not approved</option><option value="removed">Identity removed</option></Select></Field>
       <Button variant="secondary" iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={() => void mutate()}>Refresh submissions</Button>
     </div></Card>
+    {!error && !isLoading && data?.total !== undefined ? <p role="status" className="text-caption text-text-muted">{formatNumber(data.total)} submission{data.total === 1 ? "" : "s"}</p> : null}
     {notice ? <p role="status" className="rounded-lg border border-success/30 bg-success/5 p-3 text-body text-success">{notice}</p> : null}
     {error ? <Card><p role="alert" className="text-body text-danger">Couldn&apos;t load submissions. {error.message}</p><Button variant="secondary" className="mt-3" onClick={() => void mutate()}>Retry submissions</Button></Card>
       : isLoading ? <div role="status" aria-label="Loading identity submissions"><Skeleton rows={4} /></div>

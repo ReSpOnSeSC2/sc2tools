@@ -1,3 +1,23 @@
+export type AdminAttentionResp = {
+  openReports: number;
+  pendingIdentities: number;
+  pendingChannels: number;
+  unreadMessages: number;
+  alerts: number;
+  advisories: { level: "watch" | "upgrade" | null };
+  generatedAt: string;
+};
+
+export type AdminDailyEvent = {
+  date: string;
+  user_signup: number;
+  agent_download: number;
+  agent_connected: number;
+};
+
+export type AdminDailyEventsResp = { days: AdminDailyEvent[] };
+export type AdminStorageSummary = { dataBytes: number; indexBytes: number; collectionCount: number };
+
 /**
  * Wire-shape types for the admin endpoints. Mirrors the response
  * payloads served by ``services/admin.js`` + ``routes/admin.js``.

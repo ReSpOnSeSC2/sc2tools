@@ -122,6 +122,7 @@ export interface RandomizerSound {
 
 /** Full randomizer config — one entry per matchup. */
 export interface RandomizerConfig {
+  rollOnDesktop?: boolean;
   version: 2;
   matchups: Record<MatchupKey, MatchupConfig>;
   sound: RandomizerSound;

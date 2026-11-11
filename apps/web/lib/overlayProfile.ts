@@ -1,4 +1,5 @@
 import rules from "./overlayProfileRules.json";
+import { normalizeOverlayLayout, type OverlayLayout } from "./overlayLayout";
 import { normalizeOverlayTheme, type OverlayTheme } from "./overlayTheme";
 /**
  * Account-wide overlay choices Settings bakes into the URLs it hands out
@@ -6,7 +7,7 @@ import { normalizeOverlayTheme, type OverlayTheme } from "./overlayTheme";
  * and Ghost voice is off.
  */
 export type OverlayProfileFlags = { credit?: boolean; ghostVoice?: boolean };
-export type OverlayProfile = { v: 1; theme: OverlayTheme; widgetOptions: Record<string, { durationSec: number | null }> } & OverlayProfileFlags;
+export type OverlayProfile = { v: 1; theme: OverlayTheme; widgetOptions: Record<string, { durationSec: number | null }>; layout?: OverlayLayout; layoutVertical?: OverlayLayout } & OverlayProfileFlags;
 export const defaultOverlayProfile = (): OverlayProfile => ({ v: 1, theme: {}, widgetOptions: {} });
 
 /** Socket and storage inputs remain bounded even when a token row is old. */
@@ -20,7 +21,10 @@ export function normalizeOverlayProfile(raw: unknown): OverlayProfile {
     const seconds = (option as { durationSec?: unknown }).durationSec;
     if (typeof seconds === "number" && rules.durationSeconds.includes(seconds)) widgetOptions[id] = { durationSec: seconds };
   }
-  return { v: 1, theme: normalizeOverlayTheme(value.theme), widgetOptions, ...overlayProfileFlags(value) };
+  const layout = normalizeOverlayLayout(value.layout);
+  const layoutVertical = normalizeOverlayLayout(value.layoutVertical);
+  return { v: 1, theme: normalizeOverlayTheme(value.theme), widgetOptions,
+    ...(layout ? { layout } : {}), ...(layoutVertical ? { layoutVertical } : {}), ...overlayProfileFlags(value) };
 }
 
 /** The chosen flags only; non-booleans are treated as not chosen. */
@@ -32,7 +36,8 @@ export function overlayProfileFlags(raw: Readonly<Record<string, unknown>> | Ove
   return flags;
 }
 
-/** The part of a profile edited as a draft (theme and display times). */
+/** The saved appearance, display times and canvas layouts edited in one draft. */
 export function withoutOverlayFlags(profile: OverlayProfile): OverlayProfile {
-  return { v: profile.v, theme: profile.theme, widgetOptions: profile.widgetOptions };
+  const { v, theme, widgetOptions, layout, layoutVertical } = profile;
+  return { v, theme, widgetOptions, ...(layout ? { layout } : {}), ...(layoutVertical ? { layoutVertical } : {}) };
 }

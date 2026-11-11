@@ -69,4 +69,15 @@ async function readOverlayPresence(io, token, userId, broker) {
     return summarizeOverlayPresence(overlaySockets, userSockets, token, userId, broker?.latestOverlayLiveAt?.(userId) ?? null);
   } finally { clearTimeout(timer); }
 }
-module.exports = { overlayDescriptor, overlayHandshakeDescriptor, summarizeOverlayPresence, readOverlayPresence };
+/** Legacy browser sources may render a full composite. Treat their
+ * presence as uncertain until they reconnect with an identified surface.
+ * @param {Record<string,any>|undefined} data @param {string} userId */
+function randomizerSourceToken(data, userId) {
+  if (data?.kind !== "overlay" || data.overlayUserId !== userId || data.overlayControlOnly === true
+      || typeof data.overlayToken !== "string" || !data.overlayToken) return null;
+  const { surface, widget } = overlayDescriptor(data.overlayPresence);
+  return surface === "all-in-one" || surface === "unknown" || surface === "widget" && widget === "randomizer"
+    ? data.overlayToken : null;
+}
+
+module.exports = { overlayDescriptor, overlayHandshakeDescriptor, summarizeOverlayPresence, readOverlayPresence, randomizerSourceToken };

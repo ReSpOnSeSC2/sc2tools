@@ -389,6 +389,7 @@ function ConnectedOverlayWidgetClient({
         randomizerIntent={randomizerCheckin.intent}
         onRandomizerSpin={randomizerCheckin.onSpin}
         visible={visible && !pausedHere}
+        rewardSocket={showingTest ? undefined : socketRef}
         ghostParam={effectiveGhostParam}
         ghostConfig={ghostConfig}
         studioEvent={studioEvent}
@@ -466,6 +467,7 @@ export function WidgetRenderer({
   engagementEvent,
   momentEvent,
   voicePrefs,
+  rewardSocket,
   series,
 }: {
   widget: WidgetId;
@@ -482,6 +484,7 @@ export function WidgetRenderer({
   studioEvent: unknown;
   engagementEvent: unknown;
   momentEvent?: unknown;
+  rewardSocket?: RefObject<Socket | null>;
   /** Socket-delivered voice prefs, so spoken widgets use the streamer's
    *  chosen voice instead of the engine default (Microsoft David on
    *  Windows). */
@@ -560,6 +563,7 @@ export function WidgetRenderer({
           live={live}
           session={session}
           studioEvent={studioEvent}
+          rewardSocket={rewardSocket}
         />
       );
     case "chat-highlight":

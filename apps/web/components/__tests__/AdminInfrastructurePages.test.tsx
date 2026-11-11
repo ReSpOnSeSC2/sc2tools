@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
-import AdminDashboardPage from "@/app/admin/page";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { AdminDatabaseStorage } from "@/app/admin/components/AdminDatabaseStorage";
 import AdminHealthPage from "@/app/admin/health/page";
 
 const useApiMock = vi.fn();
@@ -523,36 +523,11 @@ describe("admin database backups card", () => {
   });
 });
 
-describe("admin dashboard storage", () => {
+describe("admin database storage", () => {
   it("separates whole app dbStats and the planning estimate from collections", () => {
-    useApiMock.mockImplementation((path: string) => {
-      if (path === "/v1/admin/events/counts") {
-        return {
-          data: {
-            totalUsers: 2,
-            signupsToday: 0,
-            signupsThisWeek: 1,
-            totalSignupsTracked: 2,
-            totalDownloads: 3,
-            downloadsToday: 0,
-            downloadsThisWeek: 1,
-            downloadsByPlatform: { windows: 3, macos: 0, linux: 0 },
-            unreadCount: 0,
-            agents: { total: 1, active24h: 1, active7d: 1 },
-            generatedAt: "2026-08-11T17:00:00.000Z",
-          },
-          error: null,
-          isLoading: false,
-          mutate: vi.fn(),
-        };
-      }
-      if (path.startsWith("/v1/admin/events?")) {
-        return {
-          data: { items: [], nextBefore: null },
-          error: null,
-          isLoading: false,
-        };
-      }
+    useApiMock.mockImplementation((path: string | null) => {
+      if (path === "/v1/admin/storage-summary") return { data: { dataBytes: 5_500_000, indexBytes: 500_000, collectionCount: 1 } };
+      if (path !== "/v1/admin/storage-stats") return { data: undefined };
       return {
         data: {
           totalDocs: 10,
@@ -592,7 +567,10 @@ describe("admin dashboard storage", () => {
       };
     });
 
-    render(<AdminDashboardPage />);
+    render(<AdminDatabaseStorage />);
+    const details = screen.getByText("Database storage").closest("details")!;
+    details.open = true;
+    fireEvent(details, new Event("toggle"));
 
     expect(screen.getByText("Application database footprint")).toBeTruthy();
     expect(screen.getByText("5.50 MB")).toBeTruthy();

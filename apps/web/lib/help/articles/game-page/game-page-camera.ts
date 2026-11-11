@@ -16,7 +16,7 @@ const article: HelpArticle = {
       "Under Camera, choose Follow you or Follow opponent. The other player's recorded camera appears as a faint rectangle. Drag the map to return to Free camera.",
       "Open Camera attention beneath the replay. Pick a player to see camera density, time near the army and town halls, and the five-second lookback before each fight.",
     ] },
-    { type: "paragraph", text: "The attention card uses the loaded replay section on recorded replays. It leaves a fight unclassified when its five-second lookback crosses the section boundary. The two percentages can overlap." },
+    { type: "paragraph", text: "On sectioned recordings, the attention card starts with the loaded section. Choose **Analyze full replay** when available to include every section and the five seconds across section boundaries. Very large recordings show section results. The two percentages can overlap." },
     { type: "paragraph", text: "If camera data is unavailable, update the desktop app and open Settings → Backups & data. Choose the latest engine cohort in Re-analysis." },
   ],
   related: ["game-page", "game-page-replay", "game-page-accurate-playback"],

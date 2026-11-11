@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { adminBrowserLocation } from "./useAdminQueryState";
 
-export function AdminSearchField({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder?: string }) {
+export function AdminSearchField({ value, onChange, placeholder, label = "Search", queryKey = "q", hint, className }: {
+  value: string; onChange: (value: string) => void; placeholder?: string; label?: string; queryKey?: string; hint?: string; className?: string;
+}) {
   const [draft, setDraft] = useState(value), input = useRef<HTMLInputElement>(null), id = useId();
   const pathname = usePathname(), search = useSearchParams().toString(), key = `${pathname}?${search}`;
   const observed = useRef({ key, value }), submitted = useRef<string | null>(null), change = useRef(onChange); change.current = onChange;
@@ -17,18 +19,18 @@ export function AdminSearchField({ value, onChange, placeholder }: { value: stri
     observed.current = { key, value };
   }
   useEffect(() => {
-    const history = () => { submitted.current = null; observed.current.key = "history-navigation"; setDraft(new URLSearchParams(window.location.search).get("q") || ""); };
+    const history = () => { submitted.current = null; observed.current.key = "history-navigation"; setDraft(new URLSearchParams(window.location.search).get(queryKey) || ""); };
     window.addEventListener("popstate", history); return () => window.removeEventListener("popstate", history);
-  }, []);
+  }, [queryKey]);
   useEffect(() => {
     if (draft === value) return;
     const origin = adminBrowserLocation(), timer = setTimeout(() => {
       const live = adminBrowserLocation();
-      if (observed.current.key !== key || live?.key !== origin?.key && !(live?.path === pathname && submitted.current !== null && new URLSearchParams(live.search).get("q") === submitted.current)) return;
+      if (observed.current.key !== key || live?.key !== origin?.key && !(live?.path === pathname && submitted.current !== null && new URLSearchParams(live.search).get(queryKey) === submitted.current)) return;
       submitted.current = draft; change.current(draft);
     }, 300);
     return () => clearTimeout(timer);
-  }, [draft, value, key, pathname]);
-  return <Field label="Search" htmlFor={id}><div id={`${id}-group`} className="flex gap-2"><Input id={id} ref={input} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); setDraft(""); input.current?.focus(); } }} placeholder={placeholder} spellCheck={false} autoCapitalize="none" autoCorrect="off" />
+  }, [draft, value, key, pathname, queryKey]);
+  return <Field label={label} hint={hint} className={className} htmlFor={id}><div id={`${id}-group`} className="flex gap-2"><Input id={id} ref={input} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); setDraft(""); input.current?.focus(); } }} placeholder={placeholder} spellCheck={false} autoCapitalize="none" autoCorrect="off" />
     {draft ? <Button variant="ghost" size="sm" aria-label="Clear search" onClick={() => { setDraft(""); input.current?.focus(); }}>×</Button> : null}</div></Field>;
 }

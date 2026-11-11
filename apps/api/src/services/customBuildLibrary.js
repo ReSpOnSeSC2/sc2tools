@@ -245,25 +245,36 @@ class CustomBuildLibraryService {
     return res.matchedCount > 0;
   }
 
-  /** Every live build as validated JSON (newest first). @param {string} userId */
-  async exportAll(userId) {
-    const rows = await this.db.customBuilds
-      .find({ userId, deletedAt: { $exists: false } }, { projection: inclusion(["slug", ...EXPORT_FIELDS]) })
-      .sort({ updatedAt: -1, slug: 1 }).limit(CUSTOM_BUILD_LIBRARY.LIBRARY_MAX).toArray();
-    const builds = [];
+  /** Every live build as validated JSON (newest first). The import cap
+   * does not limit exports of existing libraries.
+   * @param {string} userId @param {AbortSignal} signal */
+  async *exportAll(userId, signal) {
+    const cursor = this.db.customBuilds
+      .find({ userId, deletedAt: { $exists: false } }, {
+        projection: inclusion(["slug", ...EXPORT_FIELDS]), maxTimeMS: 10_000,
+      }).sort({ updatedAt: -1, slug: 1 }).batchSize(50);
+    const header = JSON.stringify({ format: "sc2tools-custom-builds", version: 1, exportedAt: new Date(this.now()).toISOString() });
+    let first = true;
     let skipped = 0;
-    for (const row of rows) {
-      const checked = validateCustomBuild({ slug: row.slug, ...pick(row, EXPORT_FIELDS) });
-      if (checked.valid) builds.push(checked.value);
-      else skipped += 1;
+    try {
+      signal.throwIfAborted();
+      await cursor.hasNext();
+      signal.throwIfAborted();
+      yield header.slice(0, -1) + ',"builds":[';
+      for await (const row of cursor) {
+        signal.throwIfAborted();
+        const checked = validateCustomBuild({ slug: row.slug, ...pick(row, EXPORT_FIELDS) });
+        if (!checked.valid) {
+          skipped += 1;
+          continue;
+        }
+        yield (first ? "" : ",") + JSON.stringify(checked.value);
+        first = false;
+      }
+      yield skipped ? `],"skipped":${skipped}}` : "]}";
+    } finally {
+      await cursor.close();
     }
-    return {
-      format: "sc2tools-custom-builds",
-      version: 1,
-      exportedAt: new Date(this.now()).toISOString(),
-      builds,
-      ...(skipped ? { skipped } : {}),
-    };
   }
 
   /**

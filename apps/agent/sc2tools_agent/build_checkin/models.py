@@ -215,6 +215,7 @@ class CheckinPrefs:
     enabled: bool = False
     ask_at_loading: bool = False
     ask_after_game: bool = False
+    roll_on_desktop: bool = False
 
     @property
     def loading_cards(self) -> bool:
@@ -240,6 +241,7 @@ def parse_prefs(raw: Any) -> Optional[CheckinPrefs]:
         enabled=raw.get("enabled") is True,
         ask_at_loading=raw.get("askAtLoading") is True,
         ask_after_game=raw.get("askAfterGame") is True,
+        roll_on_desktop=raw.get("rollOnDesktop") is True,
     )
 
 
@@ -386,6 +388,8 @@ class LiveState:
     declared_via: Optional[str] = None
     randomizer: Optional[BuildRef] = None
     randomizer_enabled: bool = False
+    desktop_randomizer: bool = False
+    randomizer_can_reroll: bool = False
     hold_remaining_ms: int = 0
     game_id: Optional[str] = None
     prefs: Optional[CheckinPrefs] = None
@@ -405,6 +409,8 @@ def parse_live_state(raw: Any, game_key: str) -> Optional[LiveState]:
         declared_via=via if via in ("agent", "web") else None,
         randomizer=parse_build_ref(raw.get("randomizer")),
         randomizer_enabled=raw.get("randomizerEnabled") is True,
+        desktop_randomizer=raw.get("desktopRandomizer") is True,
+        randomizer_can_reroll=raw.get("randomizerCanReroll") is True,
         hold_remaining_ms=_int(raw, "holdRemainingMs"),
         game_id=_str(raw, "gameId"),
         prefs=parse_prefs(raw.get("prefs")),
@@ -615,6 +621,8 @@ class RandomizerStripModel:
     rolled_name: Optional[str] = None
     can_roll_now: bool = False
     """Show **Randomize** to select and save the shared build choice."""
+    can_play: bool = False
+    can_reroll: bool = False
 
 
 @dataclass(frozen=True)
@@ -660,6 +668,7 @@ class LoadingCardModel:
     saving: bool = False
     scouting: Optional[ScoutingStripModel] = None
     scouting_only: bool = False
+    randomizer_only: bool = False
     opponent_revealed_name: Optional[str] = None
 
 

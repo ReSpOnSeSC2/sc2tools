@@ -71,6 +71,7 @@ def loading_model(
     options_failed: bool,
     declared_elsewhere: Optional[BuildRef],
     show_intro: bool,
+    randomizer_only: bool = False,
 ) -> LoadingCardModel:
     """The loading card for ``game``. Merges ``options`` into the card's
     frozen rows (first paint fixes the order)."""
@@ -91,6 +92,9 @@ def loading_model(
                 label=RANDOMIZER_ROLLED.format(name=roll.name),
                 rolled_key=roll.key,
                 rolled_name=roll.name,
+                can_play=not game.randomizer_request_inflight,
+                can_reroll=bool(game.live and game.live.randomizer_can_reroll
+                                and not game.randomizer_request_inflight),
             )
         elif game.randomizer_request_inflight:
             strip = RandomizerStripModel(label=RANDOMIZER_ROLLING)
@@ -134,10 +138,11 @@ def loading_model(
         locked_label=locked_label,
         locked_key=locked.key if locked is not None else None,
         declared_elsewhere=game.declared is None and declared_elsewhere is not None,
-        can_change=locked is not None and not changing,
+        can_change=locked is not None and not changing and not randomizer_only,
         changing=changing,
         not_now_tip=NOT_NOW_CLEARS_TIP if changing else NOT_NOW_TIP,
-        show_intro=show_intro,
+        show_intro=show_intro and not randomizer_only,
+        randomizer_only=randomizer_only,
         status=status,
         saving=game.declared is not None and game.writing,
     )

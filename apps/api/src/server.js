@@ -244,6 +244,7 @@ async function main() {
     /** @type {any} */ (services).platformIntegrations.start();
     // start() is inert unless the independent server owner gate is true.
     /** @type {import('./services/twitchAutomation').TwitchAutomationService|null} */ (services.twitchAutomation)?.start();
+    /** @type {import('./services/twitchRewards').TwitchRewardsService|null} */ (services.twitchRewards)?.start();
     // Browser replay backups PUT straight to the private R2 bucket: add and
     // verify its CORS rule in the background (never blocks or fails boot).
     void startBrowserUploadCorsCheck(
@@ -450,6 +451,7 @@ async function main() {
     await trendsExplorerBackfill.stop();
     await /** @type {any} */ (services).platformIntegrations.stop();
     await /** @type {import('./services/twitchAutomation').TwitchAutomationService|null} */ (services.twitchAutomation)?.stop();
+    await /** @type {import('./services/twitchRewards').TwitchRewardsService|null} */ (services.twitchRewards)?.stop();
     // True drain, in order: stop accepting connections, let in-flight
     // requests finish, THEN close Mongo — the old fire-and-forget
     // close() left handlers mid-query when the client shut down. Long-

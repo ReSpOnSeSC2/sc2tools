@@ -5,9 +5,10 @@ import { Search, Users, X } from "lucide-react";
 import { useGlobalTrendsApi as useApi } from "@/lib/globalTrendsApi";
 import { filtersToQuery } from "@/lib/filterContext";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { INPUT } from "./GlobalGameFilters";
-import { ALL_PLAYERS, RACES, isPlayerSelected, mmrRangeError, populationQuery, selectionLabel, selectPlayers,
+import { RACES, isPlayerSelected, mmrRangeError, populationQuery, selectionLabel, selectPlayers,
   type Population, type TrendPlayer, type TrendPlayersResponse } from "./globalTrendsState";
 import { formatDate, formatNumber } from "@/lib/i18n/format";
 
@@ -20,10 +21,13 @@ function dateLabel(value: string | null) {
   return Number.isFinite(date.getTime()) ? formatDate(date) : "Date unavailable";
 }
 
-export function GlobalPlayerPicker({ population, onApply, revision }: {
-  population: Population; onApply: (next: Population) => void; revision: number;
+export function GlobalPlayerPicker({ population, draft, setDraft, revision, onForbidden }: {
+  population: Population;
+  draft: Population;
+  setDraft: (edit: (previous: Population) => Population) => void;
+  revision: number;
+  onForbidden: () => void;
 }) {
-  const [draft, setDraft] = useState(population);
   const [searchText, setSearchText] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -31,30 +35,33 @@ export function GlobalPlayerPicker({ population, onApply, revision }: {
   const [order, setOrder] = useState("desc");
   const [names, setNames] = useState<Record<string, string>>({});
   const id = useId();
-  useEffect(() => setDraft(population), [population]);
   useEffect(() => {
     const timer = setTimeout(() => { setSearch(searchText.trim()); setPage(0); }, 250);
     return () => clearTimeout(timer);
   }, [searchText]);
-  const params = useMemo(() => ({ ...populationQuery(population), refresh_after: revision || undefined, page, limit: PAGE_SIZE, search, sort, order }), [population, revision, page, search, sort, order]);
+  const params = useMemo(() => ({ ...populationQuery(population), cohort_refs: 1, refresh_after: revision || undefined, page, limit: PAGE_SIZE, search, sort, order }), [population, revision, page, search, sort, order]);
   const players = useApi<TrendPlayersResponse>(`/v1/admin/global-trends/players${filtersToQuery(params)}#${revision}`, { revalidateOnFocus: false });
   useEffect(() => {
     if (!players.data) return;
-    setNames((old) => ({ ...old, ...Object.fromEntries(players.data!.items.map((p) => [p.playerId, p.displayName])) }));
+    const entries = players.data.items;
+    setNames(old => {
+      const changed = entries.filter(player => old[player.playerId] !== player.displayName);
+      return changed.length ? { ...old, ...Object.fromEntries(changed.map(player => [player.playerId, player.displayName])) } : old;
+    });
   }, [players.data]);
-  const changed = JSON.stringify(populationQuery(draft)) !== JSON.stringify(populationQuery(population));
+  useEffect(() => { if (players.error?.status === 403) onForbidden(); }, [players.error?.status, onForbidden]);
   const rangeError = mmrRangeError(draft.mmrMin, draft.mmrMax);
   const items = players.error ? [] : players.data?.items || [];
   const set = (patch: Partial<Population>) => setDraft((old) => ({ ...old, ...patch }));
   const editPlayers = (ids: string[], selected: boolean) => setDraft((old) => selectPlayers(old, ids, selected));
 
   return (
-    <section aria-label="Player population" className="overflow-hidden rounded-xl border-2 border-line bg-bg-surface">
+    <Card aria-label="Player population" padded={false}>
       <div className="space-y-4 p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-semibold"><Users className="h-5 w-5 text-accent" aria-hidden />Player population</h2>
-            <p className="mt-1 text-caption text-text-muted">Choose whose games contribute, then apply your selection.</p>
+            <p className="mt-1 text-caption text-text-muted">Choose whose games contribute to the charts.</p>
           </div>
           <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-caption font-medium text-accent" aria-live="polite">
             {players.data && !players.error ? `${formatNumber(players.data.selectedTotal)} of ${formatNumber(players.data.rosterTotal ?? players.data.total)} players included` : selectionLabel(population)}
@@ -89,7 +96,7 @@ export function GlobalPlayerPicker({ population, onApply, revision }: {
         <div className="space-y-3 px-4 pb-4 sm:px-5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_9rem]">
             <label className="relative"><span className="sr-only">Search players</span><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-text-dim" aria-hidden />
-              <input className={`${INPUT} pl-9`} value={searchText} placeholder="Search name or account ID…" onChange={(e) => setSearchText(e.target.value)} />
+              <input type="search" className={`${INPUT} pl-9`} value={searchText} placeholder="Search players…" onChange={(e) => setSearchText(e.target.value)} />
             </label>
             <Select className="min-h-11" aria-label="Sort players by" value={sort} onChange={(e) => { setSort(e.target.value); setPage(0); }}>
               <option value="mmr">Current MMR</option><option value="name">Player name</option><option value="gameCount">Games</option><option value="lastSeen">Last played</option>
@@ -117,7 +124,7 @@ export function GlobalPlayerPicker({ population, onApply, revision }: {
                 <tbody className="divide-y divide-border">{items.map((player) => <PlayerRow key={player.playerId} player={player} selected={isPlayerSelected(draft, player.playerId)} onSelect={(selected) => editPlayers([player.playerId], selected)} onOnly={() => set({ selection: "include", playerIds: [player.playerId] })} />)}</tbody>
               </table>
             </div>
-          ) : <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-text-muted">{search ? "No players match this search. Try a name or account ID." : "No player histories have been uploaded yet."}</p>}
+          ) : <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-text-muted">{search ? "No players match this search." : "No player histories have been uploaded yet."}</p>}
           {players.data && !players.error && <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-caption text-text-muted">{players.data.total ? `${formatNumber(page * PAGE_SIZE + 1)}–${formatNumber(Math.min((page + 1) * PAGE_SIZE, players.data.total))} of ${formatNumber(players.data.total)}` : "0 players"}</span>
             <div className="flex gap-2"><Button variant="secondary" size="sm" disabled={page === 0 || players.isLoading} onClick={() => setPage((p) => p - 1)}>Previous</Button><Button variant="secondary" size="sm" disabled={!players.data.hasMore || players.isLoading} onClick={() => setPage((p) => p + 1)}>Next</Button></div>
@@ -125,18 +132,11 @@ export function GlobalPlayerPicker({ population, onApply, revision }: {
           <p className="text-caption text-text-dim">MMR shows the latest available ladder rating, with its source and date. Each account is listed separately; older unidentified histories are grouped by uploader.</p>
           {draft.playerIds.length > 0 && <details className="rounded-lg border border-border p-3">
             <summary className="cursor-pointer text-caption font-medium">Review {selectionLabel(draft).toLowerCase()}</summary>
-            <div className="mt-3 flex max-h-40 flex-wrap gap-2 overflow-auto">{draft.playerIds.map((playerId) => <button key={playerId} type="button" className="inline-flex min-h-9 max-w-full items-center gap-2 rounded-full border border-border bg-bg-elevated px-3 text-caption focus-visible:ring-2 focus-visible:ring-accent" onClick={() => set({ playerIds: draft.playerIds.filter((p) => p !== playerId) })} aria-label={`Remove ${names[playerId] || playerId} from ${draft.selection === "include" ? "selection" : "exclusions"}`}><span className="truncate">{names[playerId] || playerId}</span><X className="h-3 w-3 shrink-0" aria-hidden /></button>)}</div>
+            <div className="mt-3 flex max-h-40 flex-wrap gap-2 overflow-auto">{draft.playerIds.map((playerId) => <button key={playerId} type="button" className="inline-flex min-h-9 max-w-full items-center gap-2 rounded-full border border-border bg-bg-elevated px-3 text-caption focus-visible:ring-2 focus-visible:ring-accent" onClick={() => set({ playerIds: draft.playerIds.filter((p) => p !== playerId) })} aria-label={`Remove ${names[playerId] || "Player"} from ${draft.selection === "include" ? "selection" : "exclusions"}`}><span className="truncate">{names[playerId] || "Player"}</span><X className="h-3 w-3 shrink-0" aria-hidden /></button>)}</div>
           </details>}
         </div>
       </details>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-bg-elevated/50 px-4 py-3 sm:px-5">
-        <p className="text-caption text-text-muted" aria-live="polite">{changed ? `Unapplied changes · ${selectionLabel(draft)}` : `Player filters applied · ${selectionLabel(population)}`}</p>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" size="sm" onClick={() => { setDraft({ ...ALL_PLAYERS }); onApply({ ...ALL_PLAYERS }); }}>Reset player filters</Button>
-          <Button size="sm" disabled={!changed || !!rangeError} onClick={() => onApply(draft)}>Apply player filters</Button>
-        </div>
-      </div>
-    </section>
+    </Card>
   );
 }
 
@@ -146,10 +146,9 @@ function PlayerRow({ player, selected, onSelect, onOnly }: {
   const race = RACES.find((r) => r.value === player.race || r.label === player.race)?.label || "Unknown";
   const source = player.mmrSource === "pulse" ? "SC2Pulse" : player.mmrSource === "replay" ? "Latest replay" : "Latest known";
   return <tr className={`transition-colors hover:bg-bg-elevated/60 ${selected ? "" : "bg-bg/40 text-text-muted"}`}>
-    <td className="p-3"><label className="flex min-h-8 min-w-6 cursor-pointer items-center justify-center"><input className={CHECKBOX} type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} aria-label={`Include ${player.displayName} (${player.playerId})`} /></label></td>
+    <td className="p-3"><label className="flex min-h-8 min-w-6 cursor-pointer items-center justify-center"><input className={CHECKBOX} type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} aria-label={`Include ${player.displayName}`} /></label></td>
     <td className="p-3">
       <span className="block max-w-[220px] truncate font-medium" title={player.displayName}>{player.displayName}</span>
-      <span className="block max-w-[220px] truncate text-xs text-text-dim" title={player.playerId}>{player.playerId}</span>
       <span className={`mt-1 block text-xs ${player.included ? "text-success" : "text-text-dim"}`}>{player.included ? "Included" : "Filtered out"}</span>
     </td>
     <td className="p-3 text-caption text-text-muted">{race}</td>

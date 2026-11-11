@@ -133,6 +133,24 @@ afterEach(() => {
 });
 
 describe("CoachingPractice", () => {
+  it("offers a separate default-off student grant and a separate stop control", async () => {
+    harness.sharingData = sharingPayload("accepted");
+    const { rerender } = render(<CoachingPractice role="student" />);
+    fireEvent.click(screen.getByRole("button", { name: "Share check-in labels" }));
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/coaching/practice-sharing/digest-labels", {
+      method: "POST", body: JSON.stringify({ expectedRev: 1, coachId: "coach-1", policyVersion: "practice-digest-catalog-labels-v1", enabled: true }),
+    }));
+    const accepted = sharingRelationship("accepted");
+    harness.sharingData = sharingPayload("accepted", { scope: { ...accepted.scope, digestCatalogCheckIns: true } });
+    rerender(<CoachingPractice role="student" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Stop sharing check-in labels" })).toHaveProperty("disabled", false));
+    fireEvent.click(screen.getByRole("button", { name: "Stop sharing check-in labels" }));
+    await waitFor(() => expect(harness.apiCall).toHaveBeenLastCalledWith(expect.any(Function), "/v1/coaching/practice-sharing/digest-labels", {
+      method: "POST", body: JSON.stringify({ expectedRev: 1, coachId: "coach-1", policyVersion: "practice-digest-catalog-labels-v1", enabled: false }),
+    }));
+    expect(screen.getByRole("button", { name: "Revoke access" })).toBeTruthy();
+  });
+
   it("defaults coaches to a bounded all-player roster, sorts behind students first and selects a player", () => {
     harness.rosterData = { state: { students: [{ id: "student-1", name: "Aster", userId: "user-1" }, { id: "student-2", name: "Blair", userId: "user-2" }] } };
     harness.sharingData = { rev: 1, relationships: [sharingRelationship("accepted"), sharingRelationship("accepted", { student: { id: "student-2", name: "Blair" } })] };

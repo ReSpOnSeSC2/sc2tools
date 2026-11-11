@@ -109,6 +109,7 @@ class LiveGame:
     gen: int = 0
     live_applied_gen: int = 0
     live_read_inflight: bool = False
+    desktop_roll_read_at: Optional[float] = None
     live_refetch: bool = False
 
     declared: Optional[BuildRef] = None

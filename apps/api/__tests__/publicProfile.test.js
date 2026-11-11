@@ -214,6 +214,22 @@ describe("GET /v1/public/profile/:handle", () => {
     expect(p.publishedBuildCount).toBeGreaterThanOrEqual(1);
   });
 
+  test("featured build reports each vote total without any voter identity", async () => {
+    const before = await request(app).get("/v1/public/profile/u_a").expect(200);
+    const slug = before.body.profile.featuredBuild.slug;
+    expect(before.body.profile.featuredBuild.voteCounts).toBeUndefined();
+    await services.community.vote("private-upvoter-a", slug, 1);
+    await services.community.vote("private-upvoter-b", slug, 1);
+    await services.community.vote("private-downvoter", slug, -1);
+    const response = await request(app).get("/v1/public/profile/u_a").expect(200);
+    expect(response.body.profile.featuredBuild).toEqual({
+      slug, title: "Glaive Adept Timing", matchup: "PvT",
+      votes: 1, voteCounts: { upvotes: 2, downvotes: 1 },
+    });
+    expect(response.text).not.toContain("private-upvoter");
+    expect(response.text).not.toContain("private-downvoter");
+  });
+
   test("response contains NO opponent identities or raw rows (no-PII)", async () => {
     const res = await request(app).get("/v1/public/profile/u_a");
     expect(res.status).toBe(200);

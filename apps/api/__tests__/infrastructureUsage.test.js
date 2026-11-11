@@ -413,7 +413,12 @@ describe("InfrastructureUsageService", () => {
         cost: { monthlyPlanningUsd: 7 },
       })),
     };
-    const result = await service({ renderClient }).adminSnapshot();
+    const usage = service({ renderClient });
+    expect(usage.cachedAdvisoryLevel()).toBeNull();
+    expect(renderClient.snapshot).not.toHaveBeenCalled();
+    const result = await usage.adminSnapshot();
+    expect(usage.cachedAdvisoryLevel()).toBe("watch");
+    expect(renderClient.snapshot).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({
       overallStatus: "watch",
       providers: {

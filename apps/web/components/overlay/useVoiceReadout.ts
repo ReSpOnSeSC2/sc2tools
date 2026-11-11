@@ -232,7 +232,7 @@ function cancelPendingLiveGameTimers(states: LiveGameStates): void {
  *     (default-on for legacy parity).
  *   - matchStart: short "Match starting" cue when ``events.matchStart``
  *     is on. Wired off the SAME pre-game payload as scouting.
- *   - matchEnd: result + MMR delta when ``events.matchEnd`` is on
+ *   - matchEnd: result and MMR change between recorded game starts when ``events.matchEnd`` is on
  *     and the payload carries a ``result``.
  *   - cheese: "Cheese warning" when ``events.cheese`` is on AND
  *     ``cheeseProbability >= 0.4`` (matches the cheese widget's

@@ -1,8 +1,14 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({ paths: [] as Array<string | null>, data: undefined as unknown, error: undefined as unknown, mutate: vi.fn() }));
-vi.mock("@/lib/clientApi", () => ({
+const socket = vi.hoisted(() => ({ useUserSocket: vi.fn() }));
+vi.mock("@/lib/useUserSocket", () => socket);
+vi.mock("@clerk/nextjs", () => ({
+  useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "coach-user", getToken: async () => "synthetic" }),
+}));
+vi.mock("@/lib/clientApi", async (original) => ({
+  ...await original<typeof import("@/lib/clientApi")>(),
   useApi: (path: string | null) => { api.paths.push(path); return { data: path ? api.data : undefined, error: path ? api.error : undefined, mutate: api.mutate }; },
 }));
 
@@ -52,6 +58,44 @@ describe("session prep digest", () => {
     expect(within(details).getByRole("link", { name: "Find assigned replays in Practice" }).getAttribute("href")).toBe("/coaching?view=practice");
   });
 
+  it("opens the exact coach evidence using an opaque body reference and no owner link", async () => {
+    const source = ready("coach");
+    const reference = "A".repeat(43);
+    api.data = { ...source, replays: [{ ...source.replays[0], evidenceRef: reference, gameId: "private-game" }] };
+    const blob = new Blob(["MPQ!"]);
+    const fetch = vi.fn().mockResolvedValueOnce({ ok: true, headers: new Headers({ "content-length": "4" }), blob: async () => blob })
+      .mockResolvedValue({ ok: false, headers: new Headers() });
+    const makeUrl = vi.fn(() => "blob:synthetic-replay");
+    const revokeUrl = vi.fn();
+    vi.stubGlobal("URL", Object.assign(class extends URL {}, { createObjectURL: makeUrl, revokeObjectURL: revokeUrl }));
+    vi.stubGlobal("fetch", fetch);
+    const saved: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { saved.push(this.download); });
+    try {
+      render(<SessionPrepDigest bookingId="next" viewerRole="coach" timeZone="UTC" defaultOpen />);
+      const action = screen.getByRole("button", { name: "Download assigned replay: Ghost River LE · PvT · Blink Stalkers" });
+      fireEvent.click(action);
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/\/v1\/coaching\/calendar\/bookings\/next\/digest\/replay$/), expect.objectContaining({
+        method: "POST", cache: "no-store", redirect: "error", body: JSON.stringify({ reference }),
+        headers: { authorization: "Bearer synthetic", "Content-Type": "application/json" },
+      })));
+      await waitFor(() => expect(saved).toEqual(["sc2tools-replay.SC2Replay"]));
+      expect(makeUrl).toHaveBeenCalledWith(blob);
+      fireEvent.click(action);
+      expect((await screen.findByRole("alert")).textContent).toContain("This assigned replay could not be downloaded");
+      expect(saved).toHaveLength(1);
+      expect(screen.queryByRole("link", { name: /Open game/ })).toBeNull();
+      expect(document.body.innerHTML).not.toContain("private-game");
+    } finally { click.mockRestore(); vi.unstubAllGlobals(); }
+  });
+
+  it("clears cached coach labels before refreshing on a practice-sharing update", () => {
+    api.data = ready("coach");
+    render(<SessionPrepDigest bookingId="next" viewerRole="coach" timeZone="UTC" defaultOpen />);
+    socket.useUserSocket.mock.calls.at(-1)?.[0]["coaching:assignment"]();
+    expect(api.mutate).toHaveBeenCalledWith(undefined, { revalidate: true });
+  });
+
   it("pauses the default-open digest while Sessions is hidden", () => {
     api.data = ready("coach");
     const view = render(<SessionPrepDigest bookingId="next" viewerRole="coach" timeZone="UTC" defaultOpen active={false} />);
@@ -96,6 +140,12 @@ describe("session prep digest", () => {
 
   it("treats anything but the digest's own shape as unavailable", () => {
     expect(parsePrepDigest({ role: "coach", bookings: [] })).toBeNull();
+    const coach = ready("coach");
+    const student = ready("student");
+    const bad = parsePrepDigest({ ...coach, replays: [{ ...coach.replays[0], evidenceRef: "/app/game/private", gameId: "private" }] });
+    const own = parsePrepDigest({ ...student, replays: [{ ...student.replays[0], evidenceRef: "A".repeat(43) }] });
+    expect(JSON.stringify(bad)).not.toMatch(/private|evidenceRef|gameId/);
+    expect(JSON.stringify(own)).not.toContain("evidenceRef");
     expect(parsePrepDigest({ ...ready("coach"), state: "graded" })).toBeNull();
     expect(parsePrepDigest({ ...ready("coach"), window: { since: "x", basis: "whenever" } })).toBeNull();
   });

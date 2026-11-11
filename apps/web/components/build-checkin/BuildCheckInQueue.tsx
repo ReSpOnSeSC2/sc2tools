@@ -145,6 +145,12 @@ export function BuildCheckInQueue({
       : [],
   );
 
+  // Retry only the originally confirmed suggestions that are still
+  // pending with the same build key. Fresh arrivals need their own confirmation.
+  const retryTargets = confirmAll.progress.remaining.filter((remaining) =>
+    targets.some((target) => target.gameId === remaining.gameId && target.key === remaining.key),
+  );
+
   // One editor for the whole queue: an item can leave the list while its
   // new build is being checked in, which must not take the editor with it.
   const [newBuild, setNewBuild] = useState<{
@@ -239,10 +245,12 @@ export function BuildCheckInQueue({
             count={total}
             disabled={!data || data.disabled === true}
             suggestedCount={targets.length}
+            retryCount={retryTargets.length}
             progress={confirmAll.progress}
             onClose={onClose}
             onDismissed={bump}
             onConfirmAll={() => void confirmAll.start(targets)}
+            onRetry={() => void confirmAll.start(retryTargets)}
           />
         }
       >

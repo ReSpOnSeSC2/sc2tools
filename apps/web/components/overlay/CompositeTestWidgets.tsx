@@ -3,6 +3,8 @@ import dynamic from "next/dynamic";
 const LazySeriesWidget = dynamic(() => import("./widgets/SeriesWidget").then(module => module.SeriesWidget), { ssr: false });
 
 import { OverlayPreviewContext } from "@/lib/overlayPreviewContext";
+import type { OverlayLayout } from "@/lib/overlayLayout";
+import { OverlayPlacement } from "./OverlayPlacement";
 import type { LiveGamePayload } from "./types";
 import type { WidgetId } from "./widgetLifecycle";
 import type { RandomizerConfig } from "@/lib/randomizer/types";
@@ -25,8 +27,8 @@ import { RandomizerWidget } from "./widgets/RandomizerWidget";
 
 /** A separate tree keeps practice/randomizer/animation state in the real
  * widgets mounted while sample content temporarily covers their slots. */
-export function CompositeTestWidgets({ live, session, randomizer, targets }: {
-  live: LiveGamePayload | null; session: SessionSummary | null; randomizer: RandomizerConfig | null; targets: (id: WidgetId) => boolean;
+export function CompositeTestWidgets({ live, session, randomizer, targets, layout }: {
+  live: LiveGamePayload | null; session: SessionSummary | null; randomizer: RandomizerConfig | null; targets: (id: WidgetId) => boolean; layout?: OverlayLayout;
 }) {
   const cards = [
     ["opponent", <OpponentWidget key="opponent" live={live} liveGame={null} />],
@@ -49,5 +51,9 @@ export function CompositeTestWidgets({ live, session, randomizer, targets }: {
   ] as const;
   const visible = cards.filter(([id]) => targets(id));
   if (!visible.length) return null;
-  return <OverlayPreviewContext.Provider value={true}><div data-overlay-layer="test" className="absolute inset-0 z-10">{visible.map(([, card]) => card)}</div></OverlayPreviewContext.Provider>;
+  return <OverlayPreviewContext.Provider value={true}><div data-overlay-layer="test" className="absolute inset-0 z-40">
+    {visible.map(([id, card]) => <div key={id} data-layout-widget={id} className="contents">
+      <OverlayPlacement placement={layout?.[id]}>{card}</OverlayPlacement>
+    </div>)}
+  </div></OverlayPreviewContext.Provider>;
 }

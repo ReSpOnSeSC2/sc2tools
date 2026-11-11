@@ -39,6 +39,7 @@ export interface PublicProfileFeaturedBuild {
   title: string;
   matchup: string | null;
   votes: number;
+  voteCounts?: { upvotes: number; downvotes: number };
 }
 
 /** Named, currently published browser rows; never private build snapshots. */

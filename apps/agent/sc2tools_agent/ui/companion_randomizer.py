@@ -117,6 +117,11 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.enabled_check.setEnabled(False)
             self.enabled_check.toggled.connect(self._enabled_changed)
             row.addWidget(self.enabled_check)
+            self.desktop_roll = QtWidgets.QCheckBox("Roll on the desktop card when I'm not streaming")
+            self.desktop_roll.setEnabled(False)
+            self.desktop_roll.setToolTip("Use the loading card in eligible one-on-one games when no enabled randomizer source is connected.")
+            self.desktop_roll.toggled.connect(self._desktop_roll_changed)
+            row.addWidget(self.desktop_roll)
             self.refresh_button = QtWidgets.QPushButton("Refresh pool")
             self.refresh_button.clicked.connect(self.refresh)
             row.addWidget(self.refresh_button)
@@ -322,7 +327,15 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             blocked = QtCore.QSignalBlocker(self.enabled_check)
             self.enabled_check.setChecked(enabled)
             del blocked
-            self.enabled_check.setEnabled(self._loaded and self._snapshot.get("paired") is True)
+            can_edit = self._loaded and self._snapshot.get("paired") is True
+            self.enabled_check.setEnabled(can_edit)
+            desktop = self._inflight_settings.get("rollOnDesktop", self._config.get("rollOnDesktop") is True)
+            for updates in self._pending_settings.values():
+                desktop = updates.get("rollOnDesktop", desktop)
+            blocked = QtCore.QSignalBlocker(self.desktop_roll)
+            self.desktop_roll.setChecked(desktop)
+            del blocked
+            self.desktop_roll.setEnabled(can_edit)
 
         def _render_pool(self, options):
             if self._pool_dirty:
@@ -360,6 +373,17 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._pending_settings.setdefault(matchup, {})["enabled"] = enabled
             self.status.setText("Saving randomizer setting…")
             self._render_result()
+            self._drain()
+
+        def _desktop_roll_changed(self, enabled):
+            # This is one account switch, even when the matchup changes
+            # while another settings request is in flight.
+            for updates in self._pending_settings.values():
+                updates.pop("rollOnDesktop", None)
+            self._pending_settings = {matchup: updates for matchup, updates in self._pending_settings.items() if updates}
+            matchup = self.matchup_select.currentText()
+            self._pending_settings.setdefault(matchup, {})["rollOnDesktop"] = enabled
+            self.status.setText("Saving desktop randomizer setting…")
             self._drain()
 
         def _save_pool(self):

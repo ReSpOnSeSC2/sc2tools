@@ -150,6 +150,22 @@ describe("public player consent and response boundary", () => {
     expect(JSON.stringify(result)).not.toContain("PRIVATE_REVIEW_TOKEN"); expect(JSON.stringify(result)).not.toContain(ID); expect(JSON.stringify(result)).not.toContain(OPPONENT);
   });
 
+  test("reads current featured vote counts even when balanced votes leave the aggregate cache warm", async () => {
+    const h = harness();
+    const topBuild = { ...author.topBuild, votes: 5 };
+    h.community.getAuthor.mockResolvedValue({ ...author, topBuild });
+    expect((await h.players.get(SLUG)).profile.featuredBuild).toEqual({
+      slug: topBuild.slug, title: topBuild.title, matchup: null, votes: 5,
+    });
+    h.community.getAuthor.mockResolvedValue({ ...author, topBuild: {
+      ...topBuild, voteCounts: { upvotes: 7, downvotes: 2, voters: ["private-voter"] },
+    } });
+    const result = await h.players.get(SLUG);
+    expect(result.profile.featuredBuild.voteCounts).toEqual({ upvotes: 7, downvotes: 2 });
+    expect(JSON.stringify(result)).not.toContain("private-voter");
+    expect(h.opts.aggregations.summary).toHaveBeenCalledTimes(1);
+  });
+
   test("archive OFF removes the profile crosslink capability on the next read", async () => {
     const h = harness({ config: { enabled: true, revision: 0, ...flags, showReplays: true }, sharing: true });
     expect((await h.players.get(SLUG)).profile.replayArchive).toBeTruthy();

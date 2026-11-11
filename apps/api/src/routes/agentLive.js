@@ -71,7 +71,8 @@ function normalizeName(value) {
  *   auth: import('express').RequestHandler,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   overlayTokens?: import('../services/types').OverlayTokensService,
- *   buildIntents?: { registerFromEnvelope: (userId: string, envelope: unknown) => Promise<unknown> },
+ *   buildIntents?: { registerFromEnvelope: (userId: string, envelope: unknown, fromDevice?: boolean) => Promise<unknown> },
+ *   twitchRewards?: import('../services/twitchRewards').TwitchRewardsService,
  *   twitchAutomation?: import('../services/twitchAutomation').TwitchAutomationService,
  *   logger?: import('pino').Logger,
  * }} deps
@@ -102,7 +103,8 @@ function buildAgentLiveRouter(deps) {
         ...env,
         receivedAt: Date.now(),
       };
-      const accepted = deps.broker.publish(auth.userId, enriched);
+      const fromDevice = auth.source === "device";
+      const accepted = deps.broker.publish(auth.userId, enriched, fromDevice);
       if (accepted && auth.source === "device" && deps.twitchAutomation?.deps.enabled === true && ["match_loading", "match_started"].includes(enriched.phase)) {
         // Default-off server gate plus explicit opt-ins are both required.
         // Current native telemetry cannot supply trusted ranked queue evidence;
@@ -151,7 +153,10 @@ function buildAgentLiveRouter(deps) {
       if (accepted && deps.buildIntents) {
         const buildIntents = deps.buildIntents;
         void Promise.resolve()
-          .then(() => buildIntents.registerFromEnvelope(auth.userId, enriched))
+          .then(() => buildIntents.registerFromEnvelope(auth.userId, enriched, fromDevice))
+          .then(() => {
+            if (fromDevice && ["match_started", "match_in_progress"].includes(enriched.phase)) return deps.twitchRewards?.onDeviceGame(auth.userId, enriched);
+          })
           .catch((err) => {
             if (log && typeof log.warn === "function") {
               log.warn(

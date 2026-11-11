@@ -123,8 +123,8 @@ export function importBuildBatch(
   return apiCall<ImportResponse>(getToken, "/v1/custom-builds/import", json({ items, ...opts }));
 }
 
-export function applyAuthorUpdate(getToken: TokenGetter, slug: string) {
-  return apiCall<{ saved: boolean; version: number }>(getToken, buildPath(slug, "/apply-update"), json({}));
+export function applyAuthorUpdate(getToken: TokenGetter, slug: string, communitySlug: string, version: number) {
+  return apiCall<{ saved: boolean; version: number }>(getToken, buildPath(slug, "/apply-update"), json({ communitySlug, version }));
 }
 
 export function dismissAuthorUpdate(getToken: TokenGetter, slug: string, version: number) {

@@ -280,6 +280,23 @@ describe("custom build library and community trust", () => {
     });
   });
 
+  describe("large export", () => {
+    test("streams all valid owner rows beyond the 500-build import cap", async () => {
+      const date = new Date();
+      await db.customBuilds.insertMany([
+        ...Array.from({ length: 501 }, (_, n) => ({ userId: ids.saver, slug: `export-${n}`, name: `Export ${n}`, race: "Zerg", updatedAt: date })),
+        { userId: ids.saver, slug: "invalid", race: "Zerg", updatedAt: date },
+        { userId: ids.saver, slug: "trashed", name: "Trashed", race: "Zerg", deletedAt: date, updatedAt: date },
+        { userId: ids.author, slug: "different-owner", name: "Private", race: "Zerg", updatedAt: date },
+      ]);
+      const res = await get("saver", "/custom-builds/export").expect(200);
+      expect(res.headers["cache-control"]).toBe("private, no-store");
+      expect(res.body.skipped).toBe(1);
+      expect(res.body.builds).toHaveLength(501);
+      expect(res.body.builds.map(build => build.slug)).toEqual(Array.from({ length: 501 }, (_, n) => `export-${n}`).sort());
+    });
+  });
+
   describe("community trust", () => {
     async function publishAuthorBuild(extra = {}) {
       await put("author", "author-build", build({ skillLevel: "gold", ...extra })).expect(200);
@@ -336,7 +353,14 @@ describe("custom build library and community trust", () => {
         await get("saver", `/community/builds/versions?slugs=${encodeURIComponent(slugs)}`).expect(400);
       }
 
-      const applied = await post("saver", "/custom-builds/my-copy/apply-update").expect(200);
+      await post("saver", "/custom-builds/my-copy/apply-update", { communitySlug: publicSlug }).expect(400);
+      const stale = await post("saver", "/custom-builds/my-copy/apply-update", { communitySlug: publicSlug, version: 1 }).expect(409);
+      expect(stale.body.error.code).toBe("community_update_changed");
+      await post("saver", "/custom-builds/my-copy/apply-update", { communitySlug: "different-fork", version: 2 }).expect(409);
+      expect((await get("saver", "/custom-builds/my-copy").expect(200)).body.forkedFrom.version).toBe("1");
+      expect((await get("saver", "/custom-builds/my-copy/revisions").expect(200)).body.items).toHaveLength(0);
+
+      const applied = await post("saver", "/custom-builds/my-copy/apply-update", { communitySlug: publicSlug, version: 2 }).expect(200);
       expect(applied.body).toEqual(expect.objectContaining({ saved: true, version: 2 }));
       const copy = await get("saver", "/custom-builds/my-copy").expect(200);
       expect(copy.body.rules).toEqual([expect.objectContaining({ type: "before", name: "BuildStargate", time_lt: 200 })]);

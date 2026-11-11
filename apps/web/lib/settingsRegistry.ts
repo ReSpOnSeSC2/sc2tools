@@ -78,12 +78,12 @@ const CHAT_ANCHORS: ReadonlyMap<string, string> = new Map([
 ]);
 const OVERLAY_ANCHORS: ReadonlyMap<string, SettingsOverlayPane> = new Map([
   ["ghost", "look"], ["ghost-build", "look"], ["ghost-coach", "look"], ["theme", "look"],
-  ["look", "look"], ["build-profile", "look"], ["scenes", "scenes"],
+  ["look", "look"], ["layout", "look"], ["build-profile", "look"], ["scenes", "scenes"],
   ["setup", "setup"], ["widgets", "widgets"], ["tokens", "tokens"],
 ]);
 const OVERLAY_SECTION_IDS: ReadonlyMap<string, string> = new Map([
   ["setup", "setup"], ["widgets", "widgets"], ["look", "theme"],
-  ["theme", "theme"], ["scenes", "scenes"], ["build-profile", "build-profile"],
+  ["theme", "theme"], ["layout", "layout"], ["scenes", "scenes"], ["build-profile", "build-profile"],
   ["ghost", "ghost-coach"], ["ghost-build", "ghost-coach"], ["ghost-coach", "ghost-coach"], ["tokens", "tokens"],
 ]);
 

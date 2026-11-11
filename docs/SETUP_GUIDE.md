@@ -20,6 +20,23 @@ For app-specific commands see the [API README](../apps/api/README.md), the
 [web README](../apps/web/README.md), and the
 [Windows packaging guide](../apps/agent/packaging/README.md).
 
+## All-in-one OBS layouts
+
+Open [Settings → Overlay → Theme → Layout](https://sc2tools.com/settings?tab=overlay#layout).
+Arrange widgets around the marked HUD areas and save the overlay display. The
+All-in-one source uses your landscape layout at 1920 × 1080. For a vertical
+scene, copy the separate private vertical URL from Layout and set the OBS
+Browser Source to 1080 × 1920. Verify both scenes off-air. Use **Reset layout to
+default** and save to restore the stock widget positions for that orientation.
+
+## Twitch Channel Points rewards
+
+In Chat & alerts, open Twitch automation and connect Channel Points reward actions separately. Grant the incremental reward scope in the broadcaster’s account, choose the OBS source and save an enabled mapping. Verify one controlled redemption for each action you use, plus cooldown, unavailable-action handling and manual or automatic settlement. Automatic settlement requires an app-managed Twitch reward. Disable the mappings or disconnect reward permission to stop actions.
+
+## Desktop Randomizer
+
+Pair a released Windows agent, enable the desktop roll in Settings → Randomizer and load an eligible human 1v1. Verify Play it, one Reroll, Not now and the private Challenge totals. Repeat with an active Randomizer source to confirm the browser handles the roll. Check that resetting the Challenge keeps the replay and build library.
+
 ## Environment variables
 
 Keep secrets in the relevant platform's environment store or a gitignored local
@@ -53,6 +70,23 @@ recurring support URL only after checking that it is the intended HTTPS
 destination. Use the admin Supporters page to review entries and confirm the
 amount and currency before verification. See the
 [deployment guide](DEPLOYMENT_GUIDE.md).
+
+## Shared replay playback storage
+
+New playback uploads use opaque version 2 object paths derived from the
+existing `SERVER_PEPPER_HEX`. Keep that value consistent across API instances
+and deployments so reads and account deletion can find these objects. Pending
+legacy uploads and completed legacy playback keep their original storage
+paths. Shared links play those recordings through the API.
+
+For direct browser playback of new recordings, the existing replay bucket can
+allow GET from the deployed web origins. The verified API stream also works
+with the original CORS rules. Turning a share off blocks new requests. A direct
+segment URL already issued may work for the remainder of its 60-second life.
+
+Once version 2 uploads exist, roll back only to an API build that can read and
+delete both layouts. Older API builds only know the legacy layout. Restore
+the compatible API to recover access to version 2 recordings.
 
 ## Rollout and rollback
 
@@ -121,7 +155,7 @@ See the [database restore runbook](runbooks/restore-database.md),
 | 78, 84 | If enabling direct browser reads, add a GET rule to the existing replay bucket for the deployed web origins. Preserve the upload rules. Test an owned original download and replay-pack ZIP in a real browser. Then verify a revocable share's playback segments signed out through the API. Direct storage reads for shared playback require opaque object keys. |
 | 79 | After the native release, pair the updated desktop agent and try a small re-analysis cohort. Check a replay on disk and one fetched from the archive, pause/resume, and verify the new engine stamp. |
 | 85 | Record, cancel and download a short clip in a supported desktop browser. Check the final file duration, replay frames, scoreboard and watermark. Repeat across a recorded replay section boundary and with GIF where available. |
-| 93–95 | Supply the matching VAPID key pair and subject on Render to enable push. Subscribe on a test device and verify opt-in categories, notification delivery and unsubscribe. Use a disposable Discord channel to verify opt-in delivery and revocation. Test promotion posts with two observed league values for the same ranked account and race on the updated agent. Keep private calendar subscription links out of logs and shared screenshots. |
+| 93–95 | Supply the matching VAPID key pair and subject on Render to enable push. Subscribe on a test device and verify opt-in categories, notification delivery and unsubscribe. Use a disposable Discord channel to verify opt-in delivery and revocation. Test promotion posts with two observed league values for the same ranked account and race on the updated agent. Keep private calendar links and account exports out of logs and shared screenshots. Verify an export after direct sign-in contains the active secret for a link created with `PLATFORM_TOKEN_ENCRYPTION_KEY` configured. Older links keep working until rotated or revoked. |
 | 90, 96, 184–187 | On the released agent, try a fresh link and an existing link, replay folder and history choices, Save and Revert, shortcuts, restart-required changes, tray status and Practice HUD placement. Check voice, countdown and capture exclusion off-air. |
 | 157–159 | On an off-air OBS scene, verify the timed poll, clip log, Large overlay scale and starter widget connections. Source presence is checked by connection; confirm visibility and audio directly in OBS. |
 | 87, 193, 194 | After updating and re-analyzing a replay, follow both cameras, check the attention heatmap, compare recorded control-group and camera phases, and verify unit trades, lifespans and build-supply labels. |
