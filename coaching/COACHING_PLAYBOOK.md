@@ -107,6 +107,16 @@ Near term (manual, zero build cost): run the pipeline by hand, deliver cards as 
 Mid term: a `coaching/` watch-folder so submitted replays auto-grade; student packet page hosted on sc2tools.com behind their login; adherence trend chart from the accumulated `.grade.json` files.
 Long term: "Coach mode" as a product feature — coaches upload reference builds, students link accounts, grading + longitudinal analytics in-app. Your coaching practice becomes the design lab for a SaaS feature no competitor (human or AI-analyzer) currently ships.
 
+### Session prep digest (shipped in the Sessions tab)
+
+Before each lesson, open **Since last session** on the booking (the next one opens by itself). It is the watch-list from the site plan, built from facts only:
+
+- Coaches see ranked 1v1 counts and W–L by matchup since the student's previous held session. Detected builds and recent replay details come from current practice-sharing assignment evidence. A matchup win percentage appears from five decided games.
+- No grades, scores, MMR, notes or practice-log data. The judgement stays yours: use it to pick the two or three replays worth opening together.
+- Only you and that student see it, and only while their practice sharing is accepted. It never reaches back before sharing started, or more than 90 days; with sharing off it says so and lists nothing.
+- The student sees their own eligible games and checked-in builds, with links to their own game pages.
+- Alongside it: copy a day's hours to the week, presets for empty days, **Add to Google Calendar** / **Download .ics** on every booking, and **Past sessions** with a per-student count. The Locker stays as it is; its React port will reuse the same digest.
+
 ---
 
 ## 7. Marketing that fits a 4–6 student practice
