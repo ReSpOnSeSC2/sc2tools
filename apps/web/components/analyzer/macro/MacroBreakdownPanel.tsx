@@ -12,6 +12,8 @@ import { createPortal } from "react-dom";
 import { AlertCircle, ExternalLink, RefreshCcw, X } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useMapReplay } from "@/lib/useMapReplay";
+import { useBenchmarks } from "@/lib/useBenchmarks";
+import type { GameSummary } from "@/components/analyzer/game/types";
 import { fmtDate } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
@@ -63,6 +65,11 @@ export function MacroBreakdownPanel({
   onCloseRef.current = onClose;
 
   const { data, error, isLoading, mutate, recompute, recomputing, recomputeMsg } = useMacroRecompute(open ? gameId : null);
+  const summary = useApi<GameSummary>(open && data ? `/v1/games/${encodeURIComponent(gameId)}` : null, {
+    revalidateOnFocus: false, shouldRetryOnError: false,
+  });
+  const matchup = matchupFromRaces(summary.data?.myRace, summary.data?.opponent?.race);
+  const league = useBenchmarks(summary.data?.opponent?.leagueId, matchup).data?.table ?? null;
   // Recording stays a separate consented action from routine replay analysis.
   const replayController = useMapReplay(open ? gameId : null);
   const completedRequest = useRef<string | null>(null);
@@ -195,6 +202,7 @@ export function MacroBreakdownPanel({
               highlightedKey={highlightedKey}
               onHighlight={setHighlightedKey}
               headerMeta={headerMeta}
+              league={league}
               replayController={replayController}
               onRecompute={recompute}
               recomputing={recomputing}

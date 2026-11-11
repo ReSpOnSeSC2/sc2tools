@@ -12,6 +12,7 @@ const express = require("express");
  *   PATCH  /me/integrations/discord/hooks/:id          — {label?, events?, options?, enabled?}
  *   DELETE /me/integrations/discord/hooks/:id
  *   POST   /me/integrations/discord/hooks/:id/test     — post a connection test now
+ *   POST   /me/integrations/discord/hooks/:id/battle-report — queue a reviewed, shared report
  *   POST   /me/integrations/discord/hooks/:id/preview  — {kind?}: render posts; required before enabling
  *
  * @param {{discord: import('../services/discordWebhooks').DiscordWebhooksService, auth: import('express').RequestHandler}} deps
@@ -36,6 +37,10 @@ function buildDiscordRouter(deps) {
   router.delete(`${base}/hooks/:id`, deps.auth, owned((req, owner) => deps.discord.remove(owner, String(req.params.id))));
   router.post(`${base}/hooks/:id/test`, deps.auth, owned((req, owner) => deps.discord.test(owner, String(req.params.id))));
   router.post(`${base}/hooks/:id/preview`, deps.auth, owned((req, owner) => deps.discord.preview(owner, String(req.params.id), body(req).kind)));
+  router.post(`${base}/hooks/:id/battle-report`, deps.auth, owned((req, owner) => {
+    if (req.auth?.source !== "clerk") throw Object.assign(new Error("Sign in on the website to post a report."), { status: 403, code: "browser_session_required" });
+    return deps.discord.queueBattleReport(owner, String(req.params.id), body(req));
+  }));
   return router;
 }
 

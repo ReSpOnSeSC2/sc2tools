@@ -1029,11 +1029,10 @@ function buildCustomBuildsRouter(deps) {
         reclassifyExplicit,
         wantPublic: desiredShareState(req.body),
       });
-      // A first copy of a community build counts once toward its saves.
-      const forkedFrom = value.forkedFrom && typeof value.forkedFrom.communitySlug === "string"
-        ? value.forkedFrom.communitySlug
-        : null;
-      if (!previousBuild && forkedFrom && deps.community && typeof deps.community.recordSave === "function") {
+      // Record a new fork or retry the existing fork's idempotent receipt.
+      const forkedFrom = typeof value.forkedFrom?.communitySlug === "string" ? value.forkedFrom.communitySlug : null;
+      const sameFork = !previousBuild || previousBuild.forkedFrom?.communitySlug === forkedFrom;
+      if (forkedFrom && sameFork && deps.community && typeof deps.community.recordSave === "function") {
         try {
           await deps.community.recordSave(auth.userId, forkedFrom);
         } catch (e) {

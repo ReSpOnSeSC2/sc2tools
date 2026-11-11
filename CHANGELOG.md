@@ -11,6 +11,22 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Replay and account fixes
+
+- Include personal goals in account exports and measure edited goals against
+  the latest criteria before announcing completion.
+- Keep re-analysis progress tied to the desktop and batch that received
+  the work. Reject late outcomes once a batch is sent again.
+- Record map replay clips on more browsers and keep Cancel available while
+  a video finishes encoding.
+- Find the most recent game in the selected matchup when comparing games.
+- Accept either opponent identity used in Map Intel and keep opponent IDs
+  out of the heatmap request logs.
+- Keep game-note counts, public build save totals and library import limits
+  accurate when requests overlap.
+- Post a reviewed battle-report excerpt and link to a configured Discord
+  channel. Pending posts respect updated sharing and channel settings.
+
 ### Trends and arcade fixes
 
 - Put performance ratings on the matchup chart's vertical scale, label game order horizontally, and inspect rolling windows by mouse, touch or keyboard.

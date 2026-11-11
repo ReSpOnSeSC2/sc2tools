@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("crypto");
+const { isDeepStrictEqual } = require("node:util");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { STATS_GAME_MATCH, OwnerRevisions } = require("../util/gameVisibility");
@@ -25,7 +26,7 @@ const { deliverNotification } = require("./notificationDelivery");
  *
  * Storage: one ``player_goals`` row per goal, ``{userId, id, type, params,
  * filters, window, status, slot?, pinned, completedAt, outcome, result,
- * metNotifiedKey, metNotifiedAt}``. At most MAX_ACTIVE goals are active:
+ * criteriaRevision?, metNotifiedKey, metNotifiedAt}``. At most MAX_ACTIVE goals are active:
  * each active goal holds one of the slots 0..7 under a unique partial index
  * on ``{userId, slot}``, so two concurrent creates can never pass the cap.
  * A goal leaves its slot when it completes.
@@ -686,12 +687,22 @@ class PlayerGoalsService {
         window: input.window !== undefined ? input.window : { ...goal.window },
         title: null,
       });
-      Object.assign(set, { filters: merged.filters, params: merged.params, window: merged.window,
-        metNotifiedKey: null, metNotifiedAt: null });
-      measured = true;
+      measured = !isDeepStrictEqual(merged.filters, goal.filters)
+        || !isDeepStrictEqual(merged.params, goal.params)
+        || !isDeepStrictEqual(merged.window, goal.window);
+      if (measured) {
+        Object.assign(set, { filters: merged.filters, params: merged.params, window: merged.window,
+          metNotifiedKey: null, metNotifiedAt: null });
+      }
     }
-    const updated = await this.coll.updateOne({ userId, id: goal.id, status: "active" }, { $set: set });
-    if (!updated.matchedCount) throw goalError(409, "goal_completed", "A completed goal can only be deleted.");
+    const active = { userId, id: goal.id, status: "active" };
+    const updated = measured
+      ? await this.coll.updateOne({ ...active, criteriaRevision: goal.criteriaRevision ?? null },
+        { $set: set, $inc: { criteriaRevision: 1 } })
+      : await this.coll.updateOne(active, { $set: set });
+    if (!updated.matchedCount) {
+      throw goalError(409, "goal_changed", "This goal changed. Reload before editing it again.");
+    }
     this.invalidateForUser(userId);
     if (measured) this.logger?.debug?.({ goal: goal.id }, "player_goal_remeasured");
     return this.list(userId);
@@ -783,6 +794,8 @@ class PlayerGoalsService {
    * @returns {Promise<boolean>} true when the goal left the active list
    */
   async _settle(userId, goal, progress, now) {
+    // Match legacy goals without a revision as well as goals edited since rollout.
+    const active = { userId, id: goal.id, status: "active", criteriaRevision: goal.criteriaRevision ?? null };
     const single = goal.window.recurrence === "once" || goal.window.recurrence === "season";
     if (progress.state === "met" && progress.current && goal.metNotifiedKey !== progress.current.key) {
       const at = new Date(now);
@@ -793,7 +806,7 @@ class PlayerGoalsService {
         update.$unset = { slot: "" };
       }
       const claimed = await this.coll.updateOne(
-        { userId, id: goal.id, status: "active", metNotifiedKey: { $ne: progress.current.key } },
+        { ...active, metNotifiedKey: { $ne: progress.current.key } },
         update,
       );
       if (claimed.modifiedCount === 1) {
@@ -804,16 +817,18 @@ class PlayerGoalsService {
           title: `Goal reached: ${goalLabel(goal)}`.slice(0, 140),
           body: goalMetBody(goal, progress),
           href: "/app/goals",
-          eventKey: `goal:${goal.id}:${progress.current.key}`,
+          eventKey: goal.criteriaRevision
+            ? `goal:${goal.id}:${goal.criteriaRevision}:${progress.current.key}`
+            : `goal:${goal.id}:${progress.current.key}`,
         }, this.logger);
         return single;
       }
-      // Another evaluation claimed it first; a single goal is now completed.
+      // Another evaluation claimed this bucket or the goal changed while measuring it.
       return single;
     }
     if (progress.state === "ended") {
       const outcome = endedOutcome(goal, progress);
-      const done = await this.coll.updateOne({ userId, id: goal.id, status: "active" }, {
+      const done = await this.coll.updateOne(active, {
         $set: { status: "completed", outcome, completedAt: goal.window.endsAt, result: resultSnapshot(progress),
           updatedAt: new Date(now) },
         $unset: { slot: "" },
