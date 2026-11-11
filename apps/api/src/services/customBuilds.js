@@ -12,6 +12,7 @@ const { createHash, randomUUID } = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { evaluateRules } = require("./buildRulesEvaluator");
+const { tradeSample } = require("./unitTradePreview");
 const { computeDossierExtras } = require("./buildDossier");
 const {
   computeCompositions,
@@ -1383,6 +1384,7 @@ class CustomBuildsService {
       slug: build.slug,
       name: build.name || build.slug,
       naturalTimings: ownBuild ? naturalTimingBaselines(timingGames) : {},
+      ...(ownBuild ? { unitTrades: tradeSample(timingGames) } : {}),
       plan: ownBuild ? finishPlan(doc) : null,
       communityTimings: ownBuild ? await readCommunityTimings(/** @type {any} */ (this.db).guideStats, build.name || build.slug, timingGames, opts.signal) : {},
       totals: {
@@ -3091,6 +3093,7 @@ function classifiedDossierProjection(opts = {}) {
     gameId: 1,
     date: 1,
     result: 1,
+    engineVersion: 1,
     map: 1,
     myRace: 1,
     myBuild: 1,

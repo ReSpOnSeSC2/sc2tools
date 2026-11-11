@@ -219,7 +219,7 @@ test("admits bounded camera tracks and chronological cast indexes", () => {
   const { segment, manifest } = fixture();
   const indexed = { ...manifest, timeline: { casts: [{ t: 10, o: 0, a: "PsiStorm" }, { t: 15, o: 1, a: "EMP" }] } };
   expect(validateManifest(indexed)).toBe(indexed);
-  expect(() => validateManifest({ ...indexed, timeline: { casts: indexed.timeline.casts.toReversed() } })).toThrow();
+  expect(() => validateManifest({ ...indexed, timeline: { casts: [...indexed.timeline.casts].reverse() } })).toThrow();
   const camera = { ...segment, playback: { ...segment.playback, camera: { me: [0, 50, 50, 12, 60, 60] } } };
   expect(() => validateSegment(camera, manifest, manifest.segments[0])).not.toThrow();
   camera.playback.camera.me = [12, 50, 50, 0, 60, 60];

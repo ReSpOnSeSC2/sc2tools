@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { formatGameClock } from "@/lib/macro";
 import type { ReplayMechanics } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
@@ -8,7 +9,7 @@ const rate = (value: number) => new Intl.NumberFormat(undefined, { maximumFracti
 
 export function HotkeyHabits({ data }: { data?: ReplayMechanics }) {
   const [phase, setPhase] = useState(-1);
-  if (!data) return <p className="text-caption text-text-muted">Update the desktop app and re-analyze this game to see its control-group and camera habits.</p>;
+  if (!data) return <p className="text-caption text-text-muted">Update the desktop app and <Link href="/settings?tab=backups" className="text-accent underline">re-analyze this game</Link> to see its control-group and camera habits.</p>;
   const view = data.phases[phase] ?? data;
   const groups = new Map(view.groups?.map(row => [row.slot, row]));
   const camera = new Map(view.camera?.map(row => [row.slot, row]));
@@ -16,7 +17,7 @@ export function HotkeyHabits({ data }: { data?: ReplayMechanics }) {
     ? data.groups?.find(row => row.recalls >= 3 && !data.phases[2].groups?.some(group => group.slot === row.slot && group.recalls))
     : undefined;
   return <div className="space-y-3">
-    <p className="text-caption text-text-muted">Logical actions recorded in the replay. Camera returns are inferred from moves to a uniquely saved location.</p>
+    <p className="text-caption text-text-muted">Logical actions recorded in the replay. Camera returns are inferred from moves to a uniquely saved location. Screen changes count jumps of at least 20 map units.</p>
     <label className="flex flex-wrap items-center gap-2 text-caption">Game phase
       <select value={phase} onChange={event => setPhase(Number(event.target.value))} className="min-h-11 rounded-md border border-border bg-bg-surface px-2">
         <option value={-1}>Whole game</option>

@@ -930,6 +930,7 @@ export interface AggregationsService {
     }>
   >;
   mapMatchups(userId: string, filters: object, snapshot?: import('./strengthCurveSnapshots').CurveSnapshot): Promise<object>;
+  unitTradePreview(userId: string, filters: object): Promise<object>;
   macroSummary(userId: string, filters: object): Promise<object>;
   matchupTimeseries(
     userId: string,

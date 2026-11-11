@@ -312,7 +312,7 @@ def extract_behavior_signature(
     groups_fit = total_group_events <= 99999 and all(
         row[name] <= 9999 for row in groups.values() for name in _GROUP_ACTIONS
     )
-    if total_group_events and groups_fit:
+    if groups_fit and (total_group_events or (whole_game and actions["events"])):
         for row in groups.values():
             if not any(row["recallIntervals"]):
                 del row["recallIntervals"]

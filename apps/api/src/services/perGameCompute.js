@@ -306,9 +306,9 @@ class PerGameComputeService {
     const rawEvents = parseBuildLogLines(
       merged.buildLog || [], this.catalog, myProxy.rows, myProxy.known, merged.buildLogSupply,
     );
-    const rawEarly = parseBuildLogLines(
-      readEarlyBuildLog(merged), this.catalog, myProxy.rows, myProxy.known,
-    );
+    const rawEarly = Array.isArray(merged.buildLogSupply) && !merged.earlyBuildLog?.length
+      ? rawEvents.filter(event => event.time <= EARLY_BUILD_LOG_CUTOFF_SEC)
+      : parseBuildLogLines(readEarlyBuildLog(merged), this.catalog, myProxy.rows, myProxy.known);
     const rawOpp = parseBuildLogLines(
       merged.oppBuildLog || [], this.catalog, oppProxy.rows, oppProxy.known,
     );

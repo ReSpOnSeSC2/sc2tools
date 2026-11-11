@@ -508,7 +508,9 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
         return ctx  # caller already gets enough metadata to skip cleanly
 
     own_supply_buildings: List[Dict] = []
-    my_events, opp_events, ext_stats = extract_events(replay, me.pid, own_supply_buildings=own_supply_buildings)
+    my_events, opp_events, ext_stats = extract_events(
+        replay, me.pid, own_supply_buildings=own_supply_buildings, include_source_frames=True,
+    )
     ctx.my_events = my_events
     ctx.opp_events = opp_events
     ctx.extract_stats = ext_stats
@@ -559,6 +561,9 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     ctx.build_log = build_log_lines(my_events, cutoff_seconds=None,
                                     supply_by_frame=supply, supply_output=ctx.build_log_supply)
     ctx.early_build_log = build_log_lines(my_events, cutoff_seconds=300)
+    for events in (my_events, opp_events):
+        for event in events:
+            event.pop("frame", None)
     if depth == "deep":
         ctx.build_log_full = build_log_lines([*my_events, *own_supply_buildings], include_workers=True)[:5000]
 

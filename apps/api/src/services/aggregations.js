@@ -4,6 +4,7 @@ const { LIMITS } = require("../config/constants");
 const { gamesMatchStage } = require("../util/parseQuery");
 const trendsAgg = require("./trendsAggregations");
 const trendsInsights = require("./trendsInsights");
+const { compactTradeReplay, tradeSample, hasTradeEngine, TRADE_PREVIEW_SIZE } = require("./unitTradePreview");
 const { TrendsRequests } = require("./trendsRequests");
 const { strengthPipeline, finishStrength } = require("./strengthAdjusted");
 const { OPPONENT_RACE_GROUP, OPPONENT_RACE_PROJECT } = require("../util/opponentRaceCounts");
@@ -37,12 +38,30 @@ const RESULT_BUCKET_BRANCHES = [
  */
 class AggregationsService {
   /** @param {{games: import('mongodb').Collection, gameDetails?: import('mongodb').Collection}} db
-   * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'> & Partial<Pick<import('./mmrExpectation').MmrExpectationService,'snapshot'>>}} [opts] */
+   * @param {{mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'> & Partial<Pick<import('./mmrExpectation').MmrExpectationService,'snapshot'>>, details?: Pick<import('./gameDetails').GameDetailsService,'findMany'>}} [opts] */
   constructor(db, opts = {}) {
     this.db = db;
     this.mmrExpectation = opts.mmrExpectation;
+    this.details = opts.details;
     this.trendsRequests = new TrendsRequests();
     /** @type {import('./sessionPolicy').SessionPolicyService|null} */ this.sessionPolicy = null;
+  }
+
+  /** @param {string} userId @param {object} filters */
+  unitTradePreview(userId, filters) {
+    return this.trendsRequests.cached(["unitTradePreview", userId, filters, 1], async () => {
+      if (!this.details) return tradeSample([]);
+      const games = await this.db.games.find(gamesMatchStage(userId, filters), {
+        projection: { gameId: 1, date: 1, gameVersion: 1, gameBuild: 1, engineVersion: 1, myRace: 1, "opponent.race": 1 },
+      }).sort({ date: -1, gameId: 1 }).limit(TRADE_PREVIEW_SIZE).toArray();
+      const sample = [];
+      for (const game of games) {
+        if (!hasTradeEngine(game.engineVersion)) { sample.push({ tradeSample: null }); continue; }
+        const details = await this.details.findMany(userId, [game.gameId], { fields: ["macroBreakdown"], concurrency: 1 });
+        sample.push({ tradeSample: compactTradeReplay(game, details.get(game.gameId)?.macroBreakdown) });
+      }
+      return tradeSample(sample);
+    }, 15000);
   }
 
   /** Only the explicitly enabled direct routes request this optional proof. */

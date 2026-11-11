@@ -395,6 +395,15 @@ function buildAggregationsRouter(deps) {
     }
   });
 
+  router.get("/macro/unit-trades", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      res.json(await deps.aggregations.unitTradePreview(userId, parseFilters(req.query)));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Macro Report — the Macro tab's aggregate body: win rate by score
   // bucket, the leak ledger (cost, with/without win rates, trend
   // halves), and avg-score segments by matchup / game length / build.

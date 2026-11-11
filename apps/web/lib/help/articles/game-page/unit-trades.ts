@@ -16,6 +16,7 @@ const article: HelpArticle = {
       "Expand a unit row to see what it killed and which units it died to. The Unattributed row collects credited kills without a known killing unit.",
       "Compare trade ratios only where both resource values are available. Median lifespan uses deaths with a recorded birth time.",
     ] },
+    { type: "paragraph", text: "The build dossier and Macro show recent trade samples by matchup. Each card shows how many of the sampled replays contained measured details." },
     { type: "paragraph", text: "Build-order supply is shown as measured when a replay supply sample matches the step. An approximation uses the nearest earlier sample." },
     { type: "paragraph", text: "Update the desktop app and use Re-analysis in Settings → Backups & data to backfill eligible older games." },
   ],

@@ -62,8 +62,11 @@ def _decode_camera_records(replay: Any, fps: float, *, max_seconds: int = WINDOW
         return None
     max_frame = math.floor(max_seconds * fps)
     cached = getattr(replay, _CACHE_ATTRIBUTE, None)
-    if isinstance(cached, tuple) and len(cached) == 2 and cached[0] == max_frame:
-        return cached[1]
+    if isinstance(cached, tuple) and len(cached) == 2:
+        # Owner analysis may already have decoded a wider window. A valid
+        # wider result can feed the opponent window's own time filter.
+        if cached[0] == max_frame or cached[0] >= max_frame and cached[1] is not None:
+            return cached[1]
     if getattr(replay, "archive", None) is None or not callable(getattr(replay, "_get_reader", None)):
         return None
     records: list[_CameraRecord] = []
@@ -164,7 +167,9 @@ def _summarize_camera_records(
         if record.target == last_position:
             continue
         if whole_game and last_position is not None:
-            phase["screenChanges"] += 1
+            jump = math.hypot(record.target[0] - last_position[0], record.target[1] - last_position[1])
+            if jump >= 20 * 256:
+                phase["screenChanges"] += 1
         last_position = record.target
         matched = [slot for slot, point in positions.items() if point == record.target]
         if len(matched) != 1:

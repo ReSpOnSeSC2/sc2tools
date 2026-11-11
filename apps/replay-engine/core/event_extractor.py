@@ -377,7 +377,7 @@ def _is_explicit_hallucination(event) -> bool:
 
 
 def extract_events(
-    replay, my_pid: int, *, own_supply_buildings: Optional[List[Dict]] = None,
+    replay, my_pid: int, *, own_supply_buildings: Optional[List[Dict]] = None, include_source_frames: bool = False,
 ) -> Tuple[List[Dict], List[Dict], Dict]:
     """Walk a replay's tracker events and split them by player.
 
@@ -425,6 +425,9 @@ def extract_events(
     morphed_unit_ids: Set[Tuple[Any, str]] = set()
     event_source = getattr(replay, 'tracker_events', None) or replay.events
 
+    def source_frame(event):
+        return {"frame": event.frame} if include_source_frames and hasattr(event, "frame") else {}
+
     try:
         for event in event_source:
             stats['total'] += 1
@@ -449,7 +452,7 @@ def extract_events(
                         own_supply_buildings.append({"type": "building", "name": clean, "time": event_seconds(event, replay)})
                     continue
                 if clean in KNOWN_BUILDINGS:
-                    evt = {'type': 'building', 'subtype': 'init', 'name': clean, 'time': event_seconds(event, replay), 'frame': getattr(event, 'frame', None), 'x': x, 'y': y}
+                    evt = {'type': 'building', 'subtype': 'init', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
 
@@ -476,10 +479,10 @@ def extract_events(
                                 and clean == "SupplyDepot" and event_seconds(event, replay) == 0):
                             own_supply_buildings.append({"type": "building", "name": clean, "time": 0})
                         continue
-                    evt = {'type': 'building', 'subtype': 'born', 'name': clean, 'time': event_seconds(event, replay), 'frame': getattr(event, 'frame', None), 'x': x, 'y': y}
+                    evt = {'type': 'building', 'subtype': 'born', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                 else:
                     if clean in WORKER_UNITS:
-                        evt = {'type': 'worker', 'name': clean, 'time': event_seconds(event, replay), 'frame': getattr(event, 'frame', None), 'x': x, 'y': y}
+                        evt = {'type': 'worker', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                         (my_events if pid == my_pid else opp_events).append(evt)
                         stats['workers'] += 1
                         continue
@@ -495,7 +498,7 @@ def extract_events(
                     # mapping the cloud applies on display.
                     if clean in UNIT_MORPH_COMPLETIONS:
                         morphed_unit_ids.add((_resolve_unit_id(event), clean))
-                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'frame': getattr(event, 'frame', None), 'x': x, 'y': y}
+                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                 (my_events if pid == my_pid else opp_events).append(evt)
                 stats['processed'] += 1
 
@@ -520,7 +523,7 @@ def extract_events(
                 if clean in KNOWN_BUILDINGS and clean in MORPH_BUILDINGS:
                     if clean in SKIP_BUILDINGS:
                         continue
-                    evt = {'type': 'building', 'subtype': 'morph', 'name': clean, 'time': event_seconds(event, replay), 'frame': getattr(event, 'frame', None), 'x': x, 'y': y}
+                    evt = {'type': 'building', 'subtype': 'morph', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
                 elif clean in UNIT_MORPH_COMPLETIONS:
@@ -531,7 +534,7 @@ def extract_events(
                     # No position: the event has none and the shared
                     # Unit's location is wherever it was last seen, not
                     # where the morph finished.
-                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'frame': getattr(event, 'frame', None), 'x': 0, 'y': 0}
+                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': 0, 'y': 0}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
 
@@ -552,7 +555,7 @@ def extract_events(
                         continue
                     if clean in UNIT_MORPH_COMPLETIONS:
                         morphed_unit_ids.add((_resolve_unit_id(event), clean))
-                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'frame': getattr(event, 'frame', None), 'x': x, 'y': y}
+                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), **source_frame(event), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
 
@@ -562,7 +565,7 @@ def extract_events(
                 if pid is None or name is None:
                     stats['pid_failed'] += 1
                     continue
-                evt = {'type': 'upgrade', 'name': name, 'time': event_seconds(event, replay), 'frame': getattr(event, 'frame', None)}
+                evt = {'type': 'upgrade', 'name': name, 'time': event_seconds(event, replay), **source_frame(event)}
                 (my_events if pid == my_pid else opp_events).append(evt)
                 stats['processed'] += 1
     except Exception:

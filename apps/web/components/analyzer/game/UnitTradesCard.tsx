@@ -16,7 +16,8 @@ export function UnitTradesCard({ data, orders, era, loading }: Props) {
   const deaths = data?.casualty_events;
   const detailed = deaths?.some(death => death.bornAt !== undefined || !!death.killerUnit) ?? false;
   const ordersForSide = side === "me" ? orders?.events : orders?.opp_events;
-  const fullCounts = side === "me" ? orders?.recorded_units_built : undefined;
+  const fullCounts = side === "me" && orders?.recorded_units_built && Object.keys(orders.recorded_units_built).length
+    ? orders.recorded_units_built : undefined;
   const rows = useMemo(() => detailed ? unitTrades(deaths ?? [], ordersForSide ?? [], side, era, fullCounts) : [],
     [deaths, detailed, ordersForSide, side, era, fullCounts]);
   const candidates = rows.filter(row => row.ratio !== null && row.name !== "Unattributed").sort((a, b) => b.ratio! - a.ratio!);
