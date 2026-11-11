@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Coaching Locker shelf
+
+- Open the React Locker Shelf to review student feedback, manage reusable
+  resources and restore the previous Shelf version. Classic remains
+  available during the staged rollout.
+
 ### Replay camera and mechanics
 
 - Follow either player's recorded camera and open Camera attention to see
@@ -262,6 +268,12 @@ corresponding GitHub Release.
 - Coaches and admins can open the Locker roster to manage linked accounts,
   display names and focus notes. Roster saves create a local JSON backup
   with a revision-checked restore action.
+
+### Coaching Locker Worksheets
+
+- Open Worksheets from the Locker to create and send drafts, reuse templates,
+  annotate screenshots, or submit answers and replay files. Worksheets keeps a
+  local backup for revision-checked restore. Classic Locker remains available.
 
 ### Coaching sessions and prep digest
 

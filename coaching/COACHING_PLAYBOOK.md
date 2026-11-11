@@ -138,3 +138,34 @@ You don't need funnels; you need proof. Post one anonymized before/after report 
 - Medians come from *your* MMR context; a 4.2k student hitting +15s across the board is fine early — grade the *trend*, and consider a per-student grace multiplier at intake.
 - "Game Too Short" and cheese losses shouldn't tank a week's average — exclude sub-4-minute games from trend stats.
 - Blizzard IP: keep branding "independent, not affiliated" (already on the site).
+
+
+## React Shelf preview
+
+Open **Locker → Open Locker shelf** to review a student’s feedback or manage
+the shared library. Students see their own shelves. Coaches can switch among
+their assigned students, save reusable feedback to the shared library, and
+copy library resources to a student. Keep individual replay feedback on the
+student’s shelf. Use **Classic Locker** for recording a new voice memo or
+annotating a screenshot during the preview.
+
+Before each React Shelf write, the browser backs up the current Locker
+revision. **Restore previous version** is available on the same browser while
+that write is still the latest change. **Download backup** exports the
+existing Locker JSON format for that role. Keep Classic available until the
+owner has completed one week of real Shelf use and checked old media, sharing,
+backup and restore.
+
+## React Worksheets preview
+
+Open **Locker → Open Worksheets** and choose the student. Start blank, copy
+a worksheet template, or plan around evidence, a decision, practice and proof.
+The guided plan stays in memory for the current visit. Review the actual
+questions before sending. Students only receive sent worksheets and can attach
+replays when they answer. Keep private coaching thoughts in the guided plan.
+
+The view takes a local backup before every write. Confirm that a student can
+submit a disposable worksheet with a replay and restore that submission while
+its revision is current. Repeat with a staff draft. Use **Classic Locker** if
+you need the previous workflow. Keep it available through one week of real
+Worksheets use and owner review.

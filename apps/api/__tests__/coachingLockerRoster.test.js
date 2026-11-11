@@ -109,3 +109,116 @@ test("fences the React roster to Clerk staff and rejects another roster's accoun
   expect(response.body).toMatchObject({ error: "account_unavailable" });
   expect((await coaching.getDoc()).rev).toBe(1);
 });
+
+
+test("Shelf CAS writes only visible shelves and the shared library, retaining every other field", async () => {
+  const path = "/v1/coaching/state?shelf=1";
+  const api = request(app("coach-1"));
+  const snapshot = (await api.get(path).expect(200)).body;
+  const edited = structuredClone(snapshot);
+  edited.state.students[0].name = "Unauthorized Roster edit";
+  edited.state.students[0].shelf.unshift({ id: "new", t: "Lesson", ty: "notes", future: [1, 2] });
+  edited.state.students.push({ id: "s2", shelf: [{ id: "foreign" }] }, { id: "s4", shelf: [] });
+  edited.state.shelfLibrary.unshift({ id: "shared", t: "Macro resource", ty: "notes" });
+  edited.state.customBuilds = []; edited.state.wsTemplates = []; edited.state.futureField = null;
+  await api.put(path).send(edited).expect(200, { ok: true, rev: 2 });
+  const expected = fixture();
+  expected.students[0].shelf = edited.state.students[0].shelf;
+  expected.shelfLibrary = edited.state.shelfLibrary;
+  expect((await coaching.getDoc()).state).toEqual(expected);
+  await api.put(path).send(snapshot).expect(409);
+  await api.put(path).send({ ...snapshot, rev: "2" }).expect(400);
+  await api.put(path).send({ ...snapshot, rev: 2 }).expect(200, { ok: true, rev: 3 });
+  expect((await coaching.getDoc()).state).toEqual(fixture());
+});
+
+test("student Shelf reads are private and a foreign attachment ID in notes or a new card grants no access", async () => {
+  const path = "/v1/coaching/state?shelf=1";
+  const seed = fixture();
+  seed.students[0].note = "Asset key f2 in a note is ordinary text.";
+  seed.students[1].shelf = [{ id: "foreign", ty: "replay", asset: "f2" }];
+  seed.assets.f2 = { n: "Private.SC2Replay", mime: "application/octet-stream", b64: "YWJj", size: 3 };
+  await db.coaching.updateOne({ _id: "locker" }, { $set: { state: seed } });
+  const student = request(app("student-1"));
+  const view = await student.get(path).expect(200);
+  expect(view.headers["cache-control"]).toContain("no-store");
+  expect(view.body.state.students.map(row => row.id)).toEqual(["s1"]);
+  expect(view.body.state).not.toHaveProperty("shelfLibrary");
+  expect(view.body.state.assets).toEqual({ f1: seed.assets.f1 });
+  await student.put(path).send(view.body).expect(404);
+  await request(app("coach-1", "device")).get(path).expect(404);
+  const api = request(app("coach-1"));
+  const edited = (await api.get(path).expect(200)).body;
+  expect(edited.state.assets).toEqual({ f1: seed.assets.f1 });
+  edited.state.students[0].shelf.unshift({ id: "new", asset: "f2" });
+  await api.put(path).send(edited).expect(400);
+  const upload = "5106f8f2-0fbb-4c3f-924f-42697fb6502f";
+  edited.state.students[0].shelf[0].asset = upload;
+  edited.state.assets[upload] = { n: "Drill.pdf", mime: "application/pdf", b64: "YWJj", size: 4 };
+  await api.put(path).send(edited).expect(400);
+  edited.state.assets[upload].size = 3;
+  await api.put(path).send(edited).expect(200);
+  const updated = (await student.get(path).expect(200)).body;
+  expect(updated.state.assets[upload]).toEqual(edited.state.assets[upload]);
+  expect(updated.state.assets).not.toHaveProperty("f2");
+});
+
+
+test("the Shelf preimage can restore records that predate both Shelf fields", async () => {
+  const seed = fixture();
+  delete seed.shelfLibrary;
+  delete seed.students[0].shelf;
+  await db.coaching.updateOne({ _id: "locker" }, { $set: { state: seed } });
+  const path = "/v1/coaching/state?shelf=1";
+  const api = request(app("coach-1"));
+  const original = (await api.get(path).expect(200)).body;
+  const update = structuredClone(original);
+  update.state.shelfLibrary = [{ id: "l2", ty: "notes", t: "First library card" }];
+  update.state.students[0].shelf = [{ id: "n2", ty: "notes", t: "First shelf card" }];
+  await api.put(path).send(update).expect(200);
+  await api.put(path).send({ ...original, rev: 2 }).expect(200);
+  expect((await coaching.getDoc()).state).toEqual(seed);
+});
+
+test.each(["get", "put"])("Shelf %s suppresses the newer state after the coach's role snapshot becomes stale", async method => {
+  const path = "/v1/coaching/state?shelf=1";
+  const api = request(app("coach-1"));
+  const before = (await api.get(path).expect(200)).body;
+  const resolveRole = coaching.roleFor.bind(coaching);
+  const stale = jest.spyOn(coaching, "roleFor").mockImplementationOnce(async (...args) => {
+    const role = await resolveRole(...args);
+    await db.coaching.updateOne({ _id: "locker" }, {
+      $inc: { rev: 1 },
+      $set: { "state.coaches.1.userId": "replacement-coach", "state.students.0.note": "Replacement coach private note" },
+    });
+    return role;
+  });
+  try {
+    const pending = api[method](path);
+    const conflict = await (method === "put" ? pending.send(before) : pending).expect(409);
+    expect(conflict.headers["cache-control"]).toContain("no-store");
+    expect(conflict.body).toEqual({ error: { code: "conflict", message: "The Locker changed. Reload before editing." } });
+    await api.get(path).expect(404);
+  } finally { stale.mockRestore(); }
+});
+
+test("Shelf suppresses the post-CAS conflict state when the original coach loses access", async () => {
+  const path = "/v1/coaching/state?shelf=1";
+  const api = request(app("coach-1"));
+  const before = (await api.get(path).expect(200)).body;
+  const commit = coaching.putStateWithRosterGuard.bind(coaching);
+  const raced = jest.spyOn(coaching, "putStateWithRosterGuard").mockImplementationOnce(async (...args) => {
+    await db.coaching.updateOne({ _id: "locker" }, {
+      $inc: { rev: 1 },
+      $set: { "state.coaches.1.userId": "replacement-coach", "state.students.0.note": "Replacement coach private note" },
+    });
+    return commit(...args);
+  });
+  try {
+    before.state.students[0].shelf.push({ id: "added", ty: "notes", t: "Before access changed" });
+    const conflict = await api.put(path).send(before).expect(409);
+    expect(conflict.body).toEqual({ error: { code: "conflict", message: "The Locker changed. Reload before editing." } });
+    expect((await coaching.getDoc()).state.students[0].shelf).toEqual(fixture().students[0].shelf);
+    await api.get(path).expect(404);
+  } finally { raced.mockRestore(); }
+});

@@ -1,15 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useApi, type ClientApiError } from "@/lib/clientApi";
+import { retryableLockerRead } from "./lockerRosterModel";
 import { useToast } from "@/components/ui/Toast";
 import { confirmLockerBackup, loadLockerBackup, stageLockerBackup } from "./lockerBackup";
 import type { LockerDocument, LockerState } from "./lockerRosterModel";
 
-export function useLockerRoster(accountId: string, role: "admin" | "coach", coachId: string | null) {
-  const document = useApi<LockerDocument>("/v1/coaching/state?roster=1", { revalidateOnFocus: true });
-  const current = !document.error && document.data?.scoped === (role === "coach") ? document.data : undefined;
-  const scope = useMemo(() => [accountId, "roster:" + role + ":" + (coachId ?? "")] as const, [accountId, role, coachId]);
+export function useLockerView(accountId: string, view: "roster" | "shelf" | "worksheets", role: "admin" | "coach" | "student", memberId: string | null) {
+  const scope = useMemo(() => [accountId, view + ":" + role + ":" + (memberId ?? "")] as const, [accountId, view, role, memberId]);
+  const document = useApi<LockerDocument>(`/v1/coaching/state?${view}=1`, {
+    revalidateOnFocus: true,
+    keepPreviousData: false,
+  });
+  const previous = useRef<{ scope: typeof scope; document: LockerDocument } | null>(null);
+  const admitted = useRef<LockerDocument | undefined>(undefined);
+  const candidate = document.data?.scoped === (role !== "admin") ? document.data : undefined;
+  const fresh = document.error ? undefined : candidate;
+  const retryable = view !== "roster" && retryableLockerRead(document.error);
+  const current = fresh ?? (retryable && previous.current?.scope === scope ? previous.current.document : undefined);
+  const refreshRequired = !!current && !fresh;
+
+  useLayoutEffect(() => {
+    if (fresh) previous.current = { scope, document: fresh };
+    else if (!retryable) previous.current = null;
+    admitted.current = fresh;
+    return () => { admitted.current = undefined; };
+  }, [fresh, retryable, scope]);
   const rev = current?.rev;
   const [backup, setBackup] = useState<Awaited<ReturnType<typeof loadLockerBackup>>>(null);
   const [busy, setBusy] = useState(false);
@@ -29,8 +46,9 @@ export function useLockerRoster(accountId: string, role: "admin" | "coach", coac
   }, [scope, rev]);
 
   async function save(state: LockerState, fromRev: number, message: string): Promise<boolean> {
-    if (saving.current) return false;
-    if (!current || current.rev !== fromRev) {
+    if (saving.current || (role === "student" && view !== "worksheets")) return false;
+    const authorized = admitted.current;
+    if (!authorized || authorized.rev !== fromRev) {
       toast.warning("The Locker changed", { description: "Open the editor again to review the latest version." });
       return false;
     }
@@ -38,16 +56,17 @@ export function useLockerRoster(accountId: string, role: "admin" | "coach", coac
     setBusy(true);
     try {
       try {
-        await stageLockerBackup(scope, current);
+        await stageLockerBackup(scope, authorized);
       } catch {
         toast.error("Backup could not be saved", { description: "Allow site storage or use the classic Locker after exporting a backup." });
         return false;
       }
+      if (admitted.current !== authorized) return false;
       const result = await document.request<{ ok: true; rev: number }>({
-        method: "PUT", body: JSON.stringify({ state, rev: current.rev }),
+        method: "PUT", body: JSON.stringify({ state, rev: authorized.rev }),
       });
       try {
-        await confirmLockerBackup(scope, current.rev, result.rev);
+        await confirmLockerBackup(scope, authorized.rev, result.rev);
       } catch {
         toast.warning("The change was saved", { description: "The automatic backup could not be marked ready to restore." });
       }
@@ -73,6 +92,8 @@ export function useLockerRoster(accountId: string, role: "admin" | "coach", coac
     document: current,
     loading: document.isLoading,
     retry: document.mutate,
+    retrying: document.isValidating,
+    refreshRequired,
     backup: backup?.writtenRev === rev ? backup : null,
     busy,
     save,
