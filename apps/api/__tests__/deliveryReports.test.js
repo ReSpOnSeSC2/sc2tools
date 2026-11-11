@@ -85,8 +85,47 @@ test("weekly delivery: Monday 09:00 in the user's zone, claimed once, quiet unde
   await h.db.games.insertMany(Array.from({ length: 5 }, (_, i) => game("u_dan", w46 + i * HOUR, { createdAt: new Date(w46 + i * HOUR), date: new Date(Date.parse("2026-10-01T00:00:00Z") + i * HOUR) })));
   weekly.candidateCache.clear();
   await weekly.sweep();
-  expect((await h.db.users.findOne({ userId: "u_dan" })).reports.weeklyWeek).toBe("2026-W46");
+  expect((await h.db.users.findOne({ userId: "u_dan" })).reports?.weeklyWeek).toBeUndefined();
   expect(await h.db.notifications.countDocuments({ userId: "u_dan", kind: "report.weekly" })).toBe(0);
+});
+
+test("a late upload advances a quiet owner past the played-date floor within the cached delivery window", async () => {
+  const weekly = h.services.weeklyReports;
+  const userId = "u_weeklylate", newcomer = "u_weeklynew", outside = "u_weeklyoutside";
+  await h.seedUser("weeklylate"); await h.seedUser("weeklynew"); await h.seedUser("weeklyoutside");
+  await h.db.users.updateOne({ userId }, { $set: { "preferences.reports.timezone": "Europe/Berlin" } });
+  const played = Date.parse("2026-11-11T10:00:00Z");
+  // This game is inside the padded UTC candidate range but Monday in Berlin.
+  const padding = game(userId, "2026-11-15T23:30:00Z");
+  await h.db.games.insertMany([
+    ...Array.from({ length: 4 }, (_, i) => game(userId, played + i * HOUR)), padding,
+    ...Array.from({ length: 4 }, (_, i) => game(newcomer, played + i * HOUR)),
+  ]);
+  const now = MONDAY_W47_BERLIN_10 + 24 * HOUR;
+  weekly.now = () => now;
+  weekly.candidateCache.clear();
+  const initial = await weekly.candidates(now);
+  expect(initial).toContain(userId);
+  expect(initial).not.toContain(newcomer);
+  expect(await weekly.deliverIfDue(userId, now)).toBe("quiet");
+  expect(await weekly.deliverIfDue(userId, now)).toBe("skipped");
+  expect((await h.db.users.findOne({ userId })).reports?.weeklyWeek).toBeUndefined();
+  expect(await h.db.notifications.countDocuments({ userId, kind: "report.weekly" })).toBe(0);
+
+  const uploaded = new Date(now + HOUR / 2);
+  await h.db.games.insertMany([
+    game(userId, played + 4 * HOUR, { createdAt: uploaded }), game(newcomer, played + 4 * HOUR, { createdAt: uploaded }),
+    ...Array.from({ length: 5 }, () => game(outside, "2026-10-01T10:00:00Z", { createdAt: uploaded })),
+  ]);
+  weekly.now = () => now + HOUR;
+  const refreshed = await weekly.candidates(weekly.now());
+  expect(refreshed).toContain(newcomer);
+  expect(refreshed).not.toContain(outside);
+  await weekly.sweep();
+  expect(await h.db.notifications.countDocuments({ userId, kind: "report.weekly" })).toBe(1);
+  expect((await h.db.users.findOne({ userId })).reports).toEqual({ weeklyWeek: "2026-W46" });
+  expect(await h.db.notifications.countDocuments({ userId: newcomer, kind: "report.weekly" })).toBe(1);
+  expect(await h.db.notifications.countDocuments({ userId: outside, kind: "report.weekly" })).toBe(0);
 });
 
 test("a failed weekly build gives the week back for the next tick", async () => {
@@ -112,6 +151,41 @@ async function weeklyRecipient(name) {
   await h.db.games.insertMany(Array.from({ length: 5 }, (_, i) => game(userId, reportDate + i * HOUR)));
   return userId;
 }
+
+test.each([
+  ["opt-out", "weeklyoff", { weekly: false, timezone: "Europe/Berlin" }],
+  ["time zone change", "weeklyzone", { timezone: "Europe/London" }],
+])("a weekly %s committed during the build stops both bell and Discord", async (_label, name, changedPrefs) => {
+  const weekly = h.services.weeklyReports;
+  const userId = await weeklyRecipient(name);
+  const now = MONDAY_W47_BERLIN_10;
+  weekly.now = () => now;
+  await h.db.users.updateOne({ userId }, { $set: { "preferences.reports": { timezone: "Europe/Berlin" } } });
+  const actual = weekly.build.bind(weekly);
+  const build = jest.spyOn(weekly, "build").mockImplementationOnce(async (...args) => {
+    const report = await actual(...args);
+    await h.db.users.updateOne({ userId }, { $set: { "preferences.reports": changedPrefs } });
+    return report;
+  });
+  const original = weekly.onWeekly;
+  const onWeekly = jest.fn(async () => {});
+  weekly.onWeekly = onWeekly;
+  try {
+    expect(await weekly.deliverIfDue(userId, now)).toBe("skipped");
+    expect(build).toHaveBeenCalledWith(userId, "2026-W46", "Europe/Berlin");
+    expect(await h.db.notifications.countDocuments({ userId, kind: "report.weekly" })).toBe(0);
+    expect(onWeekly).not.toHaveBeenCalled();
+    expect((await h.db.users.findOne({ userId })).reports).toEqual({});
+
+    await h.db.users.updateOne({ userId }, { $set: { "preferences.reports.weekly": true } });
+    expect(await weekly.deliverIfDue(userId, now)).toBe("sent");
+    expect(onWeekly).toHaveBeenCalledWith(userId, expect.objectContaining({ timeZone: changedPrefs.timezone }));
+    expect(await h.db.notifications.countDocuments({ userId, kind: "report.weekly" })).toBe(1);
+  } finally {
+    weekly.onWeekly = original;
+    build.mockRestore();
+  }
+});
 
 test("an expired weekly claim is recovered by only one worker", async () => {
   const weekly = h.services.weeklyReports;
