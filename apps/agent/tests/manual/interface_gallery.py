@@ -238,6 +238,10 @@ def capture(folder):
             render_pages(window, folder, skin, QtWidgets=QtWidgets)
             render_checkin_cards(window, folder, skin, QtWidgets=QtWidgets)
             render_scouting_report(window, folder, skin, QtWidgets=QtWidgets)
+        # Rendering detail fixtures initializes Streams. Capture each skin's
+        # unopened page before applying any of those fixtures.
+        for skin in skins:
+            choose_skin(window, skin, QtWidgets=QtWidgets)
             render_details(window, folder, skin, WINDOW_SIZES, save=save, QtCore=QtCore, QtWidgets=QtWidgets)
         render_dashboard_states(window, ui, folder, skins, QtCore=QtCore, QtWidgets=QtWidgets)
         window._companion_page.shutdown()

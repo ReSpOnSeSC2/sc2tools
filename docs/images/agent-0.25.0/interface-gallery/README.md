@@ -5,7 +5,7 @@ surface resizes. Floating cards show their natural and expanded states where ava
 
 The pictures use offline sample data. For states added to the fixture during the refresh,
 the before image comes from the base of that surface's slice. The tray comparison projects
-the native menu's item order into Qt for offline viewing. Windows draws the tray itself.
+the native menu's item order into Qt for offline viewing. The file chooser also uses Qt.
 
 ## Main window
 
@@ -43,9 +43,15 @@ the native menu's item order into Qt for offline viewing. Windows draws the tray
 
 - [Streams](streams.webp)
 - [Streams destinations](streams-destinations.webp)
+- [Vertical destination](vertical-destination.webp)
 - [YouTube setup](youtube-setup.webp)
+- [YouTube automatic rearm](youtube-automatic-rearm.webp)
 - [OBS connection details](obs-connection-details.webp)
+- [OBS fetch and copy controls](obs-fetch-and-copy-controls.webp)
+- [OBS key reveal control](obs-key-reveal-control.webp)
 - [Agent menu](agent-menu.webp)
 - [Tray menu layout](tray-menu-layout.webp)
 - [Account connection dialog](account-connection-dialog.webp)
 - [OBS confirmation dialog](obs-confirmation-dialog.webp)
+- [Replay identity dialog](replay-identity-dialog.webp)
+- [Replay file dialog](replay-file-dialog.webp)
