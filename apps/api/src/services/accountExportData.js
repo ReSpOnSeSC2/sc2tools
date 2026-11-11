@@ -1,5 +1,7 @@
 "use strict";
 
+const { calendarExportRecord } = require("./calendarFeed");
+
 const { USER_SCOPED_COLLECTIONS, publicCoachingParty, publicCoachedStudent,
   exportedCoachingAssignment, exportedCoachingCalendar } = require("./accountExportPolicy");
 
@@ -106,7 +108,7 @@ async function* coachingRecords(db, userId, signal) {
 
 /** Shared source for legacy JSON and NDJSON: one privacy policy, no archive-sized arrays.
  * @param {any} db @param {string} userId
- * @param {{includeSharedCoaching?:boolean,reviews?:boolean,signal?:AbortSignal}} [options]
+ * @param {{includeSharedCoaching?:boolean,reviews?:boolean,signal?:AbortSignal,calendarFeed?:import("./calendarFeed").CalendarFeedService|null}} [options]
  * @returns {AsyncGenerator<ExportRecord>}
  */
 async function* accountExportRecords(db, userId, options = {}) {
@@ -132,6 +134,11 @@ async function* accountExportRecords(db, userId, options = {}) {
   const userProjection = { _id: 0, gameStats: 0, gameStatsRevision: 0, gameStatsProtocolVersion: 0,
     gameStatsWriterStatus: 0, gameStatsMutationEpoch: 0, gameStatsMaintenance: 0 };
   for await (const row of exportRows(db.users, { userId }, userProjection, signal)) { user = row; break; }
+  if (user?.calendarFeed) {
+    user = { ...user, calendarFeed: options.calendarFeed && !user._gdprMutation
+      ? options.calendarFeed.exportRecord(userId, user.calendarFeed)
+      : calendarExportRecord(user.calendarFeed, userId) };
+  }
   yield { type: "user", row: user };
   yield* collectionRecords(db, "playerChannels", { ownerUserId: userId }, { _id: 0, updatedBy: 0 }, signal);
   if (options.reviews) yield* reviewExportRecords(db, userId, signal);

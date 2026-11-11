@@ -147,6 +147,7 @@ class GdprService {
    *   replayFiles?: import('./replayFiles').ReplayFilesService|null,
    *   playbackArtifacts?: import('./playbackArtifacts').PlaybackArtifactsService|null,
    *   customBuilds?: import('./types').CustomBuildsService,
+   *   calendarFeed?: import('./calendarFeed').CalendarFeedService,
    *   reviews?: import('./reviews').ReviewsService | null,
    *   guideSamples?: import('./guideSamples').GuideSamplesService|null,
    *   identityDeletions?: import('./identityDeletions').IdentityDeletionsService|null,
@@ -171,6 +172,7 @@ class GdprService {
     this.beginDeviceMutation = opts.beginDeviceMutation || null;
     this.credentialWrites = opts.credentialWrites || (db.deviceTokens ? deviceCredentialWritesFor(db, opts.logger) : null);
     this.db = db;
+    this.calendarFeed = opts.calendarFeed || null;
     /** @type {import("./userBackups").UserBackupsService|null} */
     this.backups = null;
     this.identityDeletions = opts.identityDeletions || null;
@@ -236,7 +238,7 @@ class GdprService {
    * @returns {Promise<{userId: string, exportedAt: string, data: Record<string, object[]>, user: object|null}>}
    */
   async export(userId, options = {}) {
-    return collectAccountExport(this.db, userId, { ...options, reviews: Boolean(this.reviews) });
+    return collectAccountExport(this.db, userId, { ...options, reviews: Boolean(this.reviews), calendarFeed: this.calendarFeed });
   }
 
   /** Full account transport; deliberately distinct from restorable snapshots.
@@ -244,7 +246,7 @@ class GdprService {
    * @param {{details?:boolean, signal?:AbortSignal}} [options]
    */
   exportStream(userId, options = {}) {
-    return accountExportStream(this.db, this.gameDetails, userId, { ...options, reviews: Boolean(this.reviews) });
+    return accountExportStream(this.db, this.gameDetails, userId, { ...options, reviews: Boolean(this.reviews), calendarFeed: this.calendarFeed });
   }
 
   /** @param {string} userId */

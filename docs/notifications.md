@@ -56,7 +56,7 @@ The owner can publish each report at `/players/<slug>/streams/<public-id>` while
 
 ### Calendar feed
 
-`GET /v1/calendar/<secret>.ics` serves booked and cancelled sessions from 30 days back to a year ahead: a coach sees "Coaching session" without student names, a student their own sessions with the coach's name. Only the SHA-256 of the 256-bit secret is stored (`users.calendarFeed.hash`); the link is shown once, **Regenerate** replaces it and **Turn off** removes it. Request logs redact the path segment. Each booking card also offers a client-side one-event `.ics` file.
+`GET /v1/calendar/<secret>.ics` serves booked and cancelled sessions from 30 days back to a year ahead: a coach sees "Coaching session" without student names, a student their own sessions with the coach's name. Feed requests look up the SHA-256 of the 256-bit secret (`users.calendarFeed.hash`). With `PLATFORM_TOKEN_ENCRYPTION_KEY` configured, newly created links also store an owner-bound AES-GCM copy for authenticated account export. Settings shows the new link once. **Regenerate** replaces the link and **Turn off** removes it. Request logs redact the path segment. Each booking card also offers a client-side one-event `.ics` file.
 
 ### Discord
 
@@ -66,5 +66,5 @@ The battle report Discord post (headline and paragraph) has a template (`battleR
 
 ### Privacy and erasure
 
-`stream_sessions`, `discord_hooks`, `discord_outbox` and `push_subscriptions` are purged with the account and never restored from snapshots. The account export includes stream reports, push devices (endpoint and keys) and Discord hooks without their ciphertext.
+`stream_sessions`, `discord_hooks`, `discord_outbox` and `push_subscriptions` are purged with the account and never restored from snapshots. The account export includes stream reports, push devices (endpoint and keys), Discord hook metadata and the current calendar secret when its encrypted copy is available. Older hash-only links keep working and can be regenerated to include the active secret in a future export. Calendar credentials are never restored from a backup.
 
