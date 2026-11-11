@@ -134,6 +134,23 @@ describe("New goal modal", () => {
     expect(onCreated).toHaveBeenCalledWith(created);
   });
 
+  it("adds and clears an optional build filter on an ordinary goal", async () => {
+    harness.apiCall.mockResolvedValue({ limits: LIMITS, completed: [], goals: [] });
+    render(<NewGoalModal open onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Matchup"), { target: { value: "PvZ" } });
+    const pick = () => fireEvent.click(screen.getByRole("option", { name: /PvZ - 2 Gate Expand/ }));
+    pick();
+    expect(screen.getByText(/with PvZ - 2 Gate Expand each week/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear build filter" }));
+    expect(screen.queryByText(/with PvZ - 2 Gate Expand each week/)).toBeNull();
+    pick();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Create goal" })); });
+    const body = JSON.parse(harness.apiCall.mock.calls[0][2].body);
+    expect(body.type).toBe("games_played");
+    expect(body.params.build).toBeUndefined();
+    expect(body.filters.build).toMatchObject({ key: "pvz-2-gate-expand", name: "PvZ - 2 Gate Expand" });
+  });
+
   it("needs a matchup and a build for build practice, and uses the picked season's dates", async () => {
     harness.apiCall.mockResolvedValue({ limits: LIMITS, completed: [], goals: [] });
     render(<NewGoalModal open onClose={vi.fn()} onCreated={vi.fn()} />);
