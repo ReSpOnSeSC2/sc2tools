@@ -15,7 +15,7 @@ const LINK_CLASS = "rounded-sm text-accent underline-offset-2 hover:underline fo
  */
 export function TargetsStrip() {
   const { filters } = useFilters();
-  const data = useTargetsData(matchupFromFilters(filters));
+  const data = useTargetsData(matchupFromFilters(filters), false);
   const t = data.targets.data;
   if (!t || !data.matchup || t.sample.n === 0) return null;
   if (!data.bands) {

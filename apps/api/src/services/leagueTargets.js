@@ -3,6 +3,9 @@
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 const { isPlausibleMmr } = require("../util/leagueBands");
+const { eraForGame } = require("../util/patchEra");
+const { extractMilestones } = require("./guideSamples");
+const { personalTimingSummary, PERSONAL_LIMIT } = require("./leagueTimingPercentiles");
 
 /**
  * The personal half of the Macro tab's Targets card (GET
@@ -19,25 +22,23 @@ const { isPlausibleMmr } = require("../util/leagueBands");
  *     account and ladder race, by trendsNetMmr.js's pairing rules (adjacent
  *     replay-recorded ratings, a swing of at most NET_MMR_MAX_DELTA, and a
  *     change whose sign agrees with the result);
- *   - own timing medians from the player's own guide samples, which is the
- *     same extraction as the league timing tables.
- *
- * Three bounded indexed reads; nothing is cached or written.
+ *   - timing medians from the same recent ranked games' own build logs,
+ *     restricted to the newest game's era. They use the guide milestone
+ *     definitions whether or not those games qualify for guide sampling.
  */
 
 const RECENT_LIMIT = 100;
-const PERSONAL_LIMIT = 20;
 const NET_MMR_GAMES = 30;
 const NET_MMR_MAX_DELTA = 150;
 const QUERY_MAX_TIME_MS = 3000;
 const METRICS = Object.freeze(["spq", "macroScore", "apm", "durationSec"]);
-const RACE_LETTERS = Object.freeze(["P", "T", "Z"]);
+const RACE_MATCH = Object.freeze({ P: /^(P|Protoss)$/i, T: /^(T|Terran)$/i, Z: /^(Z|Zerg)$/i });
 const ONE_V_ONE = Object.freeze({ $or: [{ matchFormat: "1v1" }, { matchFormat: { $exists: false }, playerCount: 2 }] });
 
 /** @param {unknown} raw @returns {"P"|"T"|"Z"|null} */
 function raceLetter(raw) {
-  const letter = typeof raw === "string" ? raw.trim().slice(0, 1).toUpperCase() : "";
-  return RACE_LETTERS.includes(letter) ? /** @type {"P"|"T"|"Z"} */ (letter) : null;
+  const race = typeof raw === "string" ? raw.trim() : "";
+  return /** @type {"P"|"T"|"Z"|undefined} */ (Object.keys(RACE_MATCH).find((key) => RACE_MATCH[/** @type {"P"|"T"|"Z"} */ (key)].test(race))) ?? null;
 }
 
 /** @param {unknown} raw @returns {string | null} */
@@ -117,25 +118,37 @@ function netMmrPerGame(rows) {
   };
 }
 
+/** @param {Record<string,any>[]} rows @param {string} matchup
+ * @param {string} userId @param {Pick<import('./gameDetails').GameDetailsService,'findMany'>} details */
+async function personalTimings(rows, matchup, userId, details) {
+  const era = eraForGame(rows[0] || {});
+  const selected = era ? rows.filter((row) => eraForGame(row) === era) : [];
+  const ids = selected.filter((row) => !Array.isArray(row.buildLog)).map((row) => row.gameId);
+  const logs = ids.length ? await details.findMany(userId, ids, { fields: ["buildLog"], concurrency: 2 }) : new Map();
+  const milestones = selected.flatMap((row) => {
+    const ownLog = row.buildLog ?? logs.get(row.gameId)?.buildLog;
+    const extracted = extractMilestones(ownLog, /** @type {"P"|"T"|"Z"} */ (matchup[0]));
+    return extracted ? [extracted] : [];
+  });
+  return personalTimingSummary(matchup, era, milestones);
+}
+
 class LeagueTargetsService {
   /**
    * @param {{ games: import('mongodb').Collection }} db
-   * @param {{
-   *   timings: Pick<import('./leagueTimingPercentiles').LeagueTimingPercentilesService, "personal">,
-   *   userHash: (userId: string) => string,
-   * }} deps
+   * @param {Pick<import('./gameDetails').GameDetailsService,'findMany'>} gameDetails
    */
-  constructor(db, deps) {
+  constructor(db, gameDetails) {
     this.games = db.games;
-    this.timings = deps.timings;
-    this.userHash = deps.userHash;
+    this.gameDetails = gameDetails;
   }
 
   /**
    * @param {string} userId
    * @param {unknown} requestedMatchup
+   * @param {boolean} [includeTimings]
    */
-  async personal(userId, requestedMatchup) {
+  async personal(userId, requestedMatchup, includeTimings = true) {
     const base = { userId, ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true }, isLadderGame: true, $and: [ONE_V_ONE] };
     const recent = await this.games.find(base, {
       projection: { _id: 0, date: 1, result: 1, myRace: 1, myLadderRace: 1, "opponent.race": 1, myMmr: 1,
@@ -156,14 +169,13 @@ class LeagueTargetsService {
       ? { current: trustedMmr(latest), at: latest.date instanceof Date ? latest.date.toISOString() : null,
         region: regionFromToonHandle(latest.myToonHandle) }
       : { current: null, at: null, region: null };
-    const [rows, timings] = matchup
-      ? await Promise.all([
-        this.games.find({ ...base, myRace: new RegExp(`^${matchup[0]}`, "i"), "opponent.race": new RegExp(`^${matchup[2]}`, "i") }, {
-          projection: { _id: 0, spq: 1, macroScore: 1, apm: 1, durationSec: 1 }, maxTimeMS: QUERY_MAX_TIME_MS,
-        }).sort({ date: -1, _id: -1 }).limit(PERSONAL_LIMIT).toArray(),
-        this.timings.personal(this.userHash(userId), matchup),
-      ])
-      : [[], null];
+    const mine = /** @type {"P"|"T"|"Z"} */ (matchup?.[0]);
+    const theirs = /** @type {"P"|"T"|"Z"} */ (matchup?.[2]);
+    const timingFields = includeTimings ? { gameId: 1, date: 1, gameBuild: 1, gameVersion: 1, buildLog: 1 } : {};
+    const rows = matchup ? await this.games.find({ ...base, myRace: RACE_MATCH[mine], "opponent.race": RACE_MATCH[theirs] }, {
+      projection: { _id: 0, spq: 1, macroScore: 1, apm: 1, durationSec: 1, ...timingFields }, maxTimeMS: QUERY_MAX_TIME_MS,
+    }).sort({ date: -1, _id: -1 }).limit(PERSONAL_LIMIT).toArray() : [];
+    const timings = matchup && includeTimings ? await personalTimings(rows, matchup, userId, this.gameDetails) : null;
     /** @type {Record<string, {n: number, median: number | null}>} */
     const medians = {};
     for (const metric of METRICS) {
