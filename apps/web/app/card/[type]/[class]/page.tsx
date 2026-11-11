@@ -17,6 +17,7 @@ export function generateStaticParams() {
 
 export const metadata: Metadata = {
   ...pageMetadata({ title: TITLE, description: DESCRIPTION, canonical: REPORT_CARD_PATH }),
+  title: TITLE,
   robots: { index: false, follow: true },
 };
 
