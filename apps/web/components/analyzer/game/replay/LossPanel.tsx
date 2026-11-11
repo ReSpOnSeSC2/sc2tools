@@ -20,7 +20,7 @@ export function LossPanel({
   showIcons = true,
 }: {
   label: string;
-  color: string;
+  color?: string;
   losses: LossSummary;
   efficiency: number | null;
   showIcons?: boolean;
@@ -34,7 +34,7 @@ export function LossPanel({
     >
       <div className="flex items-baseline justify-between gap-2 text-caption">
         <span className="whitespace-nowrap">
-          <b style={{ color }}>{label}</b>{" "}
+          <b className={color ? undefined : "text-text"} style={color ? { color } : undefined}>{label}</b>{" "}
           <span className="text-text-muted">units lost</span>
         </span>
         <span

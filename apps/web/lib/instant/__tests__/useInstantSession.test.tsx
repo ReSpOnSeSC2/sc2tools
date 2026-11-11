@@ -67,6 +67,7 @@ function replay(name: string, lastModified = RECENT_MS): File {
 class MockEngine implements EngineClient {
   readonly scans = new Map<string, PlayersResult>();
   readonly parseDates = new Map<string, string>();
+  readonly resumedFiles = new Set<string>();
   readonly zips = new Map<string, IntakeFile[]>();
   bootError: EngineError | null = null;
   holdParse = false;
@@ -125,7 +126,7 @@ class MockEngine implements EngineClient {
       date: this.parseDates.get(name) ?? RECENT_ISO,
       myToonHandle: request.player.toon,
       matchFormat: "1v1",
-      isResumedFromReplay: false,
+      isResumedFromReplay: this.resumedFiles.has(name),
       ms: 100 * (index + 1),
     };
   }
@@ -422,6 +423,26 @@ describe("useInstantSession: intake", () => {
     await act(async () => { await result.current.choose(ME); });
     expect(engine.parseRequests.map(({ file }) => file.name)).toEqual(["mine.SC2Replay"]);
     expect(result.current.truncatedCount).toBe(0);
+  });
+
+  it("keeps the deep parse cap when a replay is only recognized as resumed during parsing", async () => {
+    const engine = new MockEngine();
+    const files = Array.from({ length: 26 }, (_, index) => {
+      const name = `game-${index}.SC2Replay`;
+      engine.scans.set(name, scan(`2-S2-1-${index}`, {
+        toonFromPath: ME,
+        date: new Date(RECENT_MS + index * 1000).toISOString(),
+      }));
+      return replay(name);
+    });
+    engine.resumedFiles.add(files[25].name);
+    const { result } = mount(engine, { maxParsedFiles: 25, onlyOneVsOne: true });
+    await add(result, files);
+    await start(result);
+    expect(engine.parseRequests.map(({ file }) => file.name)).toEqual(files.slice(1).reverse().map(({ name }) => name));
+    expect(result.current.failed.map(({ errorKind }) => errorKind)).toEqual(["resumed_replay"]);
+    expect(result.current.parsed).toHaveLength(24);
+    expect(result.current.truncatedCount).toBe(1);
   });
 
   it("ignores non-replays, dedupes, and keeps the newest maxFiles", async () => {

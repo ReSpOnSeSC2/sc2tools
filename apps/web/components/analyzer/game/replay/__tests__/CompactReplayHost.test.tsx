@@ -84,6 +84,14 @@ describe("the compact drilldown host", () => {
     expect(music.calls).toEqual([]);
     expect(getMapLayoutUrl).not.toHaveBeenCalled();
     expect(screen.queryByTestId("replay-music")).toBeNull();
+    for (const label of ["You", "Opponent"]) {
+      const headings = screen.getAllByText(label, { selector: "b" });
+      expect(headings).toHaveLength(2);
+      for (const heading of headings) {
+        expect(heading.classList.contains("text-text")).toBe(true);
+        expect(heading.style.color).toBe("");
+      }
+    }
   });
 
   it("renders the music control alongside the bare replayer", () => {

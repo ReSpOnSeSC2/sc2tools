@@ -42,9 +42,10 @@ retry, alongside the runtime pointer guard that retires the previous sample.
 
 Anonymous analysis scans the selection with the existing browser header entry
 before spending deep parses. It filters team and A.I. games, resolves the
-selected player, and then keeps the newest 25 eligible replays by recorded
-end time, falling back to modification time when unavailable. Account import
-keeps its existing queue policy.
+selected player, and then deep-parses up to 25 replays by recorded end time,
+falling back to modification time when unavailable. Resume detection happens
+during the deep parse, so a resumed game can consume a slot and yield no
+report row. Account import keeps its existing queue policy.
 
 Game detail reads playback from the local payload only after **Watch this
 game**. The compact player draws geometric unit and building markers using

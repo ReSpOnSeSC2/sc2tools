@@ -83,7 +83,7 @@ function TryHero() {
         </span>
       </h1>
       <p className="max-w-prose text-body-lg text-text-muted">
-        Drop StarCraft II replays or a folder. Get a report on your newest {MAX_TRY_FILES} eligible 1v1 games,
+        Drop StarCraft II replays or a folder. Get a report on up to {MAX_TRY_FILES} of your newest 1v1 games,
         including your record by matchup, openers, macro and why you lost your last game.
       </p>
       <p className="flex max-w-prose items-start gap-2 rounded-xl border-2 border-line bg-bg-elevated/60 p-3 text-body font-semibold text-text">

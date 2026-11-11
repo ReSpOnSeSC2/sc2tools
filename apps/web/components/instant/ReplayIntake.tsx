@@ -86,7 +86,9 @@ function IntakeStatus({ fileCount, estimate, maxFiles, maxParsedFiles }: Pick<Re
         {fileCount === 0 ? "No replays selected yet." : `${fileCount} ${noun} ready${timing}`}
       </p>
       {maxFiles !== undefined ? <p>Up to {maxFiles} replays per run — we keep the most recent ones.</p> : null}
-      {maxParsedFiles !== undefined ? <p>We scan the selection and analyze up to {maxParsedFiles} eligible 1v1 games, newest first.</p> : null}
+      {maxParsedFiles !== undefined ? (
+        <p>We scan your selection and analyze up to {maxParsedFiles} 1v1 games, newest first. Games resumed from replays may be skipped during analysis, leaving fewer results.</p>
+      ) : null}
     </div>
   );
 }

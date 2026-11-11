@@ -81,6 +81,11 @@ export function LocalReplayPanel({ data, patchEra }: { data: unknown; patchEra?:
   }, []);
 
   const expanded = current.kind !== "closed";
+  function retry() {
+    trigger.current?.focus();
+    void open();
+  }
+
   useEffect(() => {
     const element = panel.current;
     if (!expanded || !element) return;
@@ -99,7 +104,7 @@ export function LocalReplayPanel({ data, patchEra }: { data: unknown; patchEra?:
         {expanded ? "Close replay" : "Watch this game"}
       </Button>
       <div id={id} hidden={!expanded}>
-        <ReplayContents view={current} retry={() => void open()} patchEra={patchEra} />
+        <ReplayContents view={current} retry={retry} patchEra={patchEra} />
       </div>
     </section>
   );

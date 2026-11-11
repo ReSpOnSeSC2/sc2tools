@@ -65,10 +65,11 @@ screenshots: [`screenshots/instant-analysis/`](screenshots/instant-analysis/).
    (`ai_game`, `not_1v1`), before anyone is asked
    which player they are. [Which player is me](#which-player-is-me) then
    picks the visitor, asking for a one-tap confirmation when it is guessing.
-4. `/try` deep-parses the newest 25 eligible games for that player, ordered
+4. `/try` deep-parses up to 25 games for that player, ordered
    by recorded end time (or file modification time when the date is missing).
    Team and A.I. games do not use a slot. The parse also skips "resume from
-   replay" sessions (`resumed_replay`).
+   replay" sessions (`resumed_replay`). The header does not identify these
+   reliably. A resumed game can use a parse slot and leave fewer report rows.
 5. The report shows only cards the payloads support: record, record by
    matchup, your openers and your opponents' openers (with your W-L against
    each), most-faced opponent, macro score and top leaks, an MMR card, and

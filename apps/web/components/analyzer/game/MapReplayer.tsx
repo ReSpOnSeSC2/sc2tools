@@ -1024,14 +1024,14 @@ export function MapReplayer({
 
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-caption tabular-nums">
         <span className="whitespace-nowrap">
-          <b style={{ color: ME_ARMY }}>You</b>{" "}
+          <b className={frameStyle ? "text-text" : undefined} style={frameStyle ? undefined : { color: ME_ARMY }}>You</b>{" "}
           <span className="text-text-muted">
             army {Math.round(me.army)} · {Math.round(meWorkers)} workers ·{" "}
             {Math.round(me.supply)} supply
           </span>
         </span>
         <span className="whitespace-nowrap">
-          <b style={{ color: OPP_ARMY }}>Opponent</b>{" "}
+          <b className={frameStyle ? "text-text" : undefined} style={frameStyle ? undefined : { color: OPP_ARMY }}>Opponent</b>{" "}
           <span className="text-text-muted">
             army {Math.round(opp.army)} · {Math.round(oppWorkers)} workers ·{" "}
             {Math.round(opp.supply)} supply
@@ -1045,13 +1045,13 @@ export function MapReplayer({
       <div className="grid gap-2 sm:grid-cols-2">
         <LossPanel
           label="You" showIcons={!frameStyle}
-          color={ME_ARMY}
+          color={frameStyle ? undefined : ME_ARMY}
           losses={meLosses}
           efficiency={tradeEfficiency(meLosses, oppLosses)}
         />
         <LossPanel
           label="Opponent" showIcons={!frameStyle}
-          color={OPP_ARMY}
+          color={frameStyle ? undefined : OPP_ARMY}
           losses={oppLosses}
           efficiency={tradeEfficiency(oppLosses, meLosses)}
         />
