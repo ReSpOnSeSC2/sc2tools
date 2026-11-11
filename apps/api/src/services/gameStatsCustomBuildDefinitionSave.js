@@ -3,9 +3,10 @@
 const { ObjectId } = require("mongodb");
 const { checkinRenameTarget, readDefinition, definitionWriteCommand } = require("./customBuildDefinitionCommands");
 const { renameCustomOverrides, renameCustomOpponentOverrides } = require("./buildIntentAttribution");
+const { CustomBuildLibraryService, LIBRARY_REVISION_PROJECTION } = require("./customBuildLibrary");
 
 /** @typedef {{kind:"customBuildDefinitionSave",definition:{slug:string}&Record<string,unknown>,
- * expectedRevision?:number,expectedId?:string,recordHistory?:boolean}} DefinitionSaveMutation */
+ * expectedRevision?:number,expectedId?:string,recordHistory?:boolean,recordLibraryHistory?:boolean}} DefinitionSaveMutation */
 
 /** Descriptors issued below, with their private data deep-frozen. The
  * in-transaction re-check returns them as-is: structuredClone may build the
@@ -36,16 +37,18 @@ function definitionOptions(input, definition) {
   if (input.expectedRevision !== undefined && typeof input.expectedRevision !== "number") throw definitionInvalid();
   if (input.expectedId && typeof input.expectedId !== "string") throw definitionInvalid();
   if (input.expectedId) new ObjectId(input.expectedId);
+  if (input.recordLibraryHistory !== undefined && typeof input.recordLibraryHistory !== "boolean") throw definitionInvalid();
   return { kind: "customBuildDefinitionSave", definition: Object.freeze(definition),
     ...(input.expectedRevision === undefined ? {} : { expectedRevision: structuredClone(input.expectedRevision) }),
-    ...(input.expectedId === undefined ? {} : { expectedId: input.expectedId }), recordHistory: !!input.recordHistory };
+    ...(input.expectedId === undefined ? {} : { expectedId: input.expectedId }), recordHistory: !!input.recordHistory,
+    ...(input.recordLibraryHistory ? { recordLibraryHistory: true } : {}) };
 }
 
 /** @param {DefinitionSaveMutation} input */
 function definitionFields(input) {
   return plainDataObject(input) && Object.hasOwn(input, "kind") && Object.hasOwn(input, "definition")
     && input.kind === "customBuildDefinitionSave"
-    && Reflect.ownKeys(input).every(key => typeof key === "string" && ["kind", "definition", "expectedRevision", "expectedId", "recordHistory"].includes(key))
+    && Reflect.ownKeys(input).every(key => typeof key === "string" && ["kind", "definition", "expectedRevision", "expectedId", "recordHistory", "recordLibraryHistory"].includes(key))
     && plainDataObject(input.definition);
 }
 
@@ -97,23 +100,52 @@ function frozenDefinitionData(value) {
  * @param {Readonly<DefinitionSaveMutation>} mutation @param {import('mongodb').ClientSession|undefined} session
  * @param {any} [logger] @returns {Promise<number>} */
 function applyCustomBuildDefinitionSave(db, owner, mutation, session, logger) {
-  return session ? saveDefinition(db, owner.userId, mutation, session)
+  return session ? saveDefinition(db, owner.userId, mutation, session, logger)
     : legacyDefinitionSave(db, owner.userId, mutation, logger);
 }
 
 /** @param {import('../db/connect').DbContext} db @param {string} userId
  * @param {Readonly<DefinitionSaveMutation>} mutation @param {import('mongodb').ClientSession|undefined} session
- * @param {()=>void} [onInitialRead] @returns {Promise<number>} */
-async function saveDefinition(db, userId, mutation, session, onInitialRead) {
+ * @param {any} [logger] @param {()=>void} [onInitialRead] @returns {Promise<number>} */
+async function saveDefinition(db, userId, mutation, session, logger, onInitialRead) {
   const previous = await readDefinition(db, userId, mutation, session);
   onInitialRead?.();
   if (mutation.expectedRevision !== undefined && (!previous || (previous.definitionRevision || 0) !== mutation.expectedRevision)) throw definitionChanged();
   const renamed = await renameDefinitionGames(db, userId, mutation.definition, previous, session);
   const command = definitionWriteCommand(userId, mutation, previous, new Date());
-  const saved = await db.customBuilds.updateOne(command.filter, /** @type {import('mongodb').Document} */ (command.update),
-    { upsert: command.upsert, ...(session ? { session } : {}) });
-  if (mutation.expectedRevision !== undefined && !saved.matchedCount) throw definitionChanged();
+  if (mutation.recordLibraryHistory && db.customBuildRevisions) {
+    await writeWithLibraryHistory(db, userId, mutation, command, session, logger);
+  } else {
+    const saved = await db.customBuilds.updateOne(command.filter, /** @type {import('mongodb').Document} */ (command.update),
+      { upsert: command.upsert, ...(session ? { session } : {}) });
+    if (mutation.expectedRevision !== undefined && !saved.matchedCount) throw definitionChanged();
+  }
   return renamed;
+}
+
+/**
+ * Archive the row this write actually replaced. On a replica set the
+ * history, definition, game renames and owner fence commit together.
+ * @param {import('../db/connect').DbContext} db @param {string} userId
+ * @param {Readonly<DefinitionSaveMutation>} mutation @param {ReturnType<typeof definitionWriteCommand>} command
+ * @param {import('mongodb').ClientSession|undefined} session @param {any} logger
+ */
+async function writeWithLibraryHistory(db, userId, mutation, command, session, logger) {
+  const previous = await db.customBuilds.findOneAndUpdate(
+    command.filter,
+    /** @type {import('mongodb').Document} */ (command.update),
+    { upsert: command.upsert, returnDocument: "before", projection: LIBRARY_REVISION_PROJECTION, ...(session ? { session } : {}) },
+  );
+  if (mutation.expectedRevision !== undefined && !previous) throw definitionChanged();
+  const library = new CustomBuildLibraryService(db);
+  try {
+    await library.recordRevision(userId, mutation.definition.slug, previous, mutation.definition, session);
+  } catch (error) {
+    // Standalone compatibility keeps the established best-effort history
+    // contract. The write preimage still comes from one atomic command.
+    if (session) throw error;
+    logger?.warn({ err: error }, "custom_build_revision_record_failed");
+  }
 }
 
 /** @param {import('../db/connect').DbContext} db @param {string} userId
@@ -136,12 +168,12 @@ async function legacyDefinitionSave(db, userId, mutation, logger) {
   const session = db.client.startSession();
   let initialReadCompleted = false;
   try {
-    return await session.withTransaction(() => saveDefinition(db, userId, mutation, session, () => { initialReadCompleted = true; }));
+    return await session.withTransaction(() => saveDefinition(db, userId, mutation, session, logger, () => { initialReadCompleted = true; }));
   } catch (error) {
     const failure = /** @type {any} */ (error);
     if (!initialReadCompleted && failure?.code === 20 && /Transaction numbers are only allowed/.test(String(failure.message))) {
       if (mutation.expectedRevision !== undefined) throw definitionTransactionsRequired();
-      return await saveDefinition(db, userId, mutation, undefined);
+      return await saveDefinition(db, userId, mutation, undefined, logger);
     }
     throw error;
   } finally {

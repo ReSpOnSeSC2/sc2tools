@@ -36,6 +36,8 @@ function inclusion(fields) {
   return projection;
 }
 
+const LIBRARY_REVISION_PROJECTION = Object.freeze({ ...inclusion(VERSIONED_FIELDS), deletedAt: 1 });
+
 /** @param {Record<string, any>} source @param {readonly string[]} fields */
 function pick(source, fields) {
   /** @type {Record<string, any>} */
@@ -114,52 +116,43 @@ class CustomBuildLibraryService {
   }
 
   /**
-   * The live build's definition as stored (the history's unit), or null.
-   * @param {string} userId @param {string} slug
-   */
-  async readDefinition(userId, slug) {
-    const row = await this.db.customBuilds.findOne(
-      { userId, slug, deletedAt: { $exists: false } },
-      { projection: inclusion(VERSIONED_FIELDS) },
-    );
-    return row ? pick(row, VERSIONED_FIELDS) : null;
-  }
-
-  /**
    * Keep ``previous`` (the definition a save is about to replace) as the
    * build's newest revision, unless the save changes nothing; at most
    * REVISIONS_PER_BUILD stay.
    *
    * @param {string} userId @param {string} slug
-   * @param {Record<string, any>|null} previous from ``readDefinition``
+   * @param {Record<string, any>|null} previous the database write preimage
    * @param {Record<string, any>} [next] the definition being saved
+   * @param {import("mongodb").ClientSession} [session]
    * @returns {Promise<number|null>} the new revision number
    */
-  async recordRevision(userId, slug, previous, next) {
-    if (!previous) return null;
-    if (next && canonicalJson(pick(next, VERSIONED_FIELDS)) === canonicalJson(previous)) return null;
+  async recordRevision(userId, slug, previous, next, session) {
+    if (!previous || Object.hasOwn(previous, "deletedAt")) return null;
+    const doc = pick(previous, VERSIONED_FIELDS);
+    if (next && canonicalJson(pick(next, VERSIONED_FIELDS)) === canonicalJson(doc)) return null;
+    const options = session ? { session } : {};
     const [latest] = await this.db.customBuildRevisions
-      .find({ userId, slug }, { projection: { _id: 0, rev: 1 } })
+      .find({ userId, slug }, { ...options, projection: { _id: 0, rev: 1 } })
       .sort({ rev: -1 }).limit(1).toArray();
     let rev = (Number(latest?.rev) || 0) + 1;
     for (let attempt = 0; ; attempt += 1) {
       try {
         await this.db.customBuildRevisions.insertOne(stampVersion(
-          { userId, slug, rev, savedAt: new Date(this.now()), doc: previous },
+          { userId, slug, rev, savedAt: new Date(this.now()), doc },
           COLLECTIONS.CUSTOM_BUILD_REVISIONS,
-        ));
+        ), options);
         break;
       } catch (err) {
         // Two saves of one build at once: take the next number.
-        if (!isDuplicateKey(err) || attempt >= 2) throw err;
+        if (session || !isDuplicateKey(err) || attempt >= 2) throw err;
         rev += 1;
       }
     }
     const [oldestKept] = await this.db.customBuildRevisions
-      .find({ userId, slug }, { projection: { _id: 0, rev: 1 } })
+      .find({ userId, slug }, { ...options, projection: { _id: 0, rev: 1 } })
       .sort({ rev: -1 }).skip(CUSTOM_BUILD_LIBRARY.REVISIONS_PER_BUILD - 1).limit(1).toArray();
     if (oldestKept) {
-      await this.db.customBuildRevisions.deleteMany({ userId, slug, rev: { $lt: oldestKept.rev } });
+      await this.db.customBuildRevisions.deleteMany({ userId, slug, rev: { $lt: oldestKept.rev } }, options);
     }
     return rev;
   }
@@ -285,7 +278,7 @@ class CustomBuildLibraryService {
    * @param {Array<{build?: unknown, onConflict?: unknown}>} items at most IMPORT_BATCH_MAX
    * @param {{
    *   dryRun?: boolean,
-   *   save?: (slug: string, value: Record<string, any>, previous: Record<string, any>|null) => Promise<void>,
+   *   save?: (slug: string, value: Record<string, any>, overwriting: boolean) => Promise<void>,
    * }} opts
    */
   async importBatch(userId, items, opts = {}) {
@@ -342,8 +335,7 @@ class CustomBuildLibraryService {
     for (const entry of results) {
       if (!opts.save || !("value" in entry) || entry.status === "skipped" || entry.status === "invalid") continue;
       try {
-        const previous = entry.status === "overwritten" ? await this.readDefinition(userId, entry.slug) : null;
-        await opts.save(entry.slug, entry.value, previous);
+        await opts.save(entry.slug, entry.value, entry.status === "overwritten");
       } catch (err) {
         Object.assign(entry, { status: "failed", errors: [err instanceof Error ? err.message.slice(0, 120) : "save_failed"] });
       }
@@ -407,6 +399,7 @@ module.exports = {
   CustomBuildLibraryService,
   VERSIONED_FIELDS,
   EXPORT_FIELDS,
+  LIBRARY_REVISION_PROJECTION,
   canonicalJson,
   slugify,
 };
