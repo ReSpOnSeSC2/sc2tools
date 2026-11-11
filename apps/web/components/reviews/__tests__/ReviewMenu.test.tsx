@@ -85,7 +85,11 @@ it("shows and selects copyable text on a clipboard failure without opening windo
   fireEvent.click(await screen.findByRole("menuitem", { name: "Copy for Discord" }));
   const fallback = await screen.findByRole("textbox", { name: "Copy this text" }) as HTMLInputElement;
   expect(fallback.readOnly).toBe(true); expect(fallback.value).toContain(`${window.location.origin}/reviews/request`);
-  expect(document.activeElement).toBe(fallback); expect(fallback.selectionStart).toBe(0); expect(fallback.selectionEnd).toBe(fallback.value.length);
+  await waitFor(() => {
+    expect(document.activeElement).toBe(fallback);
+    expect(fallback.selectionStart).toBe(0);
+    expect(fallback.selectionEnd).toBe(fallback.value.length);
+  });
   expect(prompt).not.toHaveBeenCalled(); expect(screen.getByRole("menu").contains(fallback)).toBe(true);
 });
 
