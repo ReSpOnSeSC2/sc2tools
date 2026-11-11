@@ -112,9 +112,10 @@ test("renders neutral missing, forged and oversized states", async ({ page }, in
 
 async function buildComparison(page: Page, info: TestInfo, own: string, theme: "light" | "dark") {
   const field = page.getByRole("textbox", { name: "Your replay report link" });
+  const form = page.locator("form").filter({ has: field });
   await field.fill("PrivateFixture");
   await field.press("Enter");
-  await expect(page.getByRole("alert")).toHaveText("Paste a replay report card link that includes game totals.");
+  await expect(form.getByRole("alert")).toHaveText("Paste a replay report card link that includes game totals.");
   await expect(field).toBeFocused();
   await captureAccessibility(page, info, `report-comparison-invalid-${theme}`, true);
   await field.fill(own);
