@@ -253,26 +253,10 @@ class MultichatStudioService {
     /** @type {Record<string, any>} */
     const updateDoc = { $set: set, $setOnInsert: { token } };
     if (Object.keys(inc).length > 0) updateDoc.$inc = inc;
-    if ("broll" in patch || "buildProfile" in patch || "poll" in patch) {
-      const revisions = [];
-      if ("broll" in patch) {
-        revisions.push({ field: "brollWriteRevision", previous: previousWriteRevision });
-      }
-      if ("buildProfile" in patch) {
-        revisions.push({
-          field: "buildProfileWriteRevision",
-          previous: sanitizeBrollWriteRevision(previousDocument?.buildProfileWriteRevision),
-        });
-      }
-      // A poll patch is merged with the stored poll (its server-owned
-      // timing, a final close). Two Docks closing or starting at once must
-      // not let the later write restore a poll the earlier one replaced.
-      if ("poll" in patch) {
-        revisions.push({
-          field: "pollWriteRevision",
-          previous: sanitizeBrollWriteRevision(previousDocument?.pollWriteRevision),
-        });
-      }
+    const revisions = ["brollWriteRevision", "buildProfileWriteRevision", "pollWriteRevision"]
+      .filter((field) => Object.hasOwn(set, field))
+      .map((field) => ({ field, previous: sanitizeBrollWriteRevision(previousDocument?.[field]) }));
+    if (revisions.length) {
       const written = await this._writeStudioCompareAndSwap(
         token,
         updateDoc,

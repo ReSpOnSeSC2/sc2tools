@@ -396,7 +396,7 @@ class MultichatEngagementService {
       ...(m.gameKey ? { gameKey: String(m.gameKey).slice(0, 120) } : {}),
     };
     await this.clips.insertOne(doc);
-    const { token: _token, atDate: _atDate, _id, ...moment } = /** @type {Record<string, any>} */ (doc);
+    const moment = { atMs: doc.atMs, kind: doc.kind, reason: doc.reason, sampleLines: doc.sampleLines, ...(doc.gameKey ? { gameKey: doc.gameKey } : {}) };
     this._emit(token, { type: "clip-moment", moment });
     return moment;
   }

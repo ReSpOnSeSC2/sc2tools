@@ -247,7 +247,7 @@ describe("ChatPollWidget", () => {
     expect(screen.getByText("0 · 0%")).toBeTruthy();
     expect(screen.getByText("3 · 100%")).toBeTruthy();
     expect(screen.getByText("3 votes")).toBeTruthy();
-    expect(screen.getByText(/vote with !1 \/ !2 in chat/)).toBeTruthy();
+    expect(screen.getByText("Vote by typing the number (2) or !vote 2")).toBeTruthy();
   });
 
   it("shows the FINAL tag when closed and renders nothing without a poll", () => {
@@ -262,7 +262,7 @@ describe("ChatPollWidget", () => {
     };
     render(<ChatPollWidget token="tok" />);
     expect(screen.getByText("FINAL")).toBeTruthy();
-    expect(screen.queryByText(/vote with/)).toBeNull();
+    expect(screen.queryByText(/Vote by typing/)).toBeNull();
     cleanup();
 
     mockStudio = { ...EMPTY_STUDIO };

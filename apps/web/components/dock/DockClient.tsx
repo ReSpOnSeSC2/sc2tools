@@ -67,7 +67,7 @@ import { SectionCard } from "./SectionCard";
 import { useDockLayout } from "./useDockLayout";
 import { useDockScrollSpy } from "./useDockScrollSpy";
 import { useDockSummaries } from "./useDockSummaries";
-import { usePollTally } from "./usePollTally";
+import { usePollTally } from "@/lib/multichat/usePollTally";
 export { DockButton } from "./DockControls";
 import { DockStatusHeader } from "./DockStatusHeader";
 import { loadGameDesk } from "./dockLazyLoaders";

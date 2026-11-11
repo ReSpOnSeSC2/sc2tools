@@ -60,7 +60,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Choose **Custom poll** for your own question or **Build vote** to select two or three saved builds. Matchup chips filter the build list. The running poll locks its mode until you clear it. Close the build vote to see the winner and **Open build** in a new tab. An empty list links to Builds; failed loads offer Retry.",
+      text: "Choose **Custom poll** for your own question or **Build vote** to select two or three saved builds. Matchup chips filter the build list. The running poll locks its mode until you clear it. Close the build vote to see the winner and **Open build** in a new tab. An empty list links to Builds; failed loads offer Retry. Use an optional 30-second, 1-minute, 2-minute or 5-minute timer. Voting ends at the deadline, even if the Dock is closed. Presets fill the form, and **Run again** restores the last custom poll without starting it.",
     },
     {
       type: "paragraph",
