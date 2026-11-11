@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from . import theme
+from .brand_mark import create_brand_mark
 from .opponent_card import opponent_identity, opponent_record
 
 
@@ -14,41 +15,6 @@ _DESTINATIONS = (
     ("randomizer", "Randomizer"),
     ("ghost", "Build Order Ghost"),
 )
-_STYLE = f"""
-QFrame#companionConsole {{
-    background: {theme.CONSOLE_GRADIENT};
-    border: 2px solid {theme.ACCENT}; border-radius: 18px; color: {theme.TEXT};
-}}
-QFrame#consoleProfile, QFrame#consoleDisplay {{
-    background: {theme.SURFACE}; border: 2px solid {theme.BORDER}; border-radius: 10px;
-}}
-QWidget#consoleHome, QScrollArea#consoleHomeScroll, QStackedWidget#consolePages, QScrollArea#consoleProfileScroll,
-QScrollArea#consoleHomeScroll > QWidget > QWidget,
-QScrollArea#consoleProfileScroll > QWidget > QWidget {{ background: transparent; border: none; }}
-QFrame#companionConsole QLabel {{ color: {theme.TEXT}; background: transparent; border: none; }}
-QLabel#consoleBrand {{ font-size: 18px; font-weight: 800; letter-spacing: 2px; }}
-QLabel#consoleEdition {{ color: {theme.TEXT_MUTED}; font-size: 10px; letter-spacing: 2px; }}
-QLabel#consoleBreadcrumb {{ color: {theme.TEXT_MUTED}; font-size: 12px; }}
-QLabel#consoleGameTitle {{ color: {theme.ACCENT_CYAN}; font-size: 12px; font-weight: 600; }}
-QLabel#consolePageHeading {{ font-size: 23px; font-weight: 700; color: {theme.TEXT}; }}
-QLabel#consolePageDescription {{ color: {theme.TEXT_MUTED}; font-size: 13px; }}
-QLabel#consoleOpponentIdentity {{ color: {theme.TEXT}; font-size: 11px; font-weight: 600; }}
-QLabel#consoleOpponentRecord {{ color: {theme.TEXT_MUTED}; font-size: 10px; }}
-QFrame#companionConsole QPushButton, QFrame#companionConsole QToolButton {{
-    background: {theme.BUTTON}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG};
-    border-radius: 6px; padding: 7px 10px; font-weight: 600;
-}}
-QFrame#companionConsole QPushButton:hover, QFrame#companionConsole QToolButton:hover {{
-    background: {theme.BUTTON_HOVER}; border-color: {theme.ACCENT_HOVER};
-}}
-QFrame#companionConsole QPushButton:focus, QFrame#companionConsole QToolButton:focus {{ border-color: {theme.FOCUS}; }}
-QFrame#companionConsole QPushButton:checked {{ background: {theme.BUTTON_CHECKED}; border-color: {theme.ACCENT_HOVER}; }}
-QFrame#companionConsole QPushButton:disabled, QFrame#companionConsole QToolButton:disabled {{
-    background: {theme.ELEVATED}; color: {theme.TEXT_DIM}; border-color: {theme.BORDER};
-}}
-QPushButton#consoleHomeAction {{ text-align: left; padding: 12px 16px; }}
-QFrame#consoleDivider {{ background: {theme.BORDER}; border: none; max-height: 1px; }}
-"""
 
 
 def _identifier(value):
@@ -114,7 +80,7 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             super().__init__(parent)
             self.items = []
             self.setContentsMargins(0, 0, 0, 0)
-            self.setSpacing(6)
+            self.setSpacing(theme.SPACE_XS)
 
         def addItem(self, item):
             self.items.append(item)
@@ -199,7 +165,7 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
         def __init__(self):
             super().__init__(parent)
             self.setObjectName("companionConsole")
-            self.setStyleSheet(_STYLE)
+            self.setStyleSheet(theme.COMPANION_CONSOLE_STYLE)
             self._navigation = ConsoleNavigation()
             self._pages = {}
             self._titles = {}
@@ -241,19 +207,16 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
         def _build_ui(self):
             layout = QtWidgets.QVBoxLayout(self)
             layout.setSizeConstraint(QtWidgets.QLayout.SetNoConstraint)
-            layout.setContentsMargins(14, 12, 14, 14)
-            layout.setSpacing(10)
+            layout.setContentsMargins(*(theme.SPACE_M,) * 4)
+            layout.setSpacing(theme.SPACE_S)
             self.brand_widget = QtWidgets.QWidget()
             self.brand_grid = QtWidgets.QGridLayout(self.brand_widget)
             self.brand_grid.setContentsMargins(0, 0, 0, 0)
-            self.brand_grid.setSpacing(6)
+            self.brand_grid.setSpacing(theme.SPACE_XS)
             self.brand_identity = QtWidgets.QWidget()
             brand_row = QtWidgets.QHBoxLayout(self.brand_identity)
             brand_row.setContentsMargins(0, 0, 0, 0)
-            emblem = QtWidgets.QLabel()
-            emblem.setFixedSize(23, 23)
-            emblem.setStyleSheet(f"background: {theme.ACCENT_CYAN}; border: 2px solid {theme.FOCUS}; border-radius: 11px;")
-            brand_row.addWidget(emblem)
+            brand_row.addWidget(create_brand_mark(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets))
             brand = QtWidgets.QLabel("SC2 TOOLS")
             brand.setObjectName("consoleBrand")
             brand_row.addWidget(brand)
@@ -282,14 +245,14 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             self.brand_grid.setColumnStretch(1, 1)
             layout.addWidget(self.brand_widget)
             self.body_layout = QtWidgets.QHBoxLayout()
-            self.body_layout.setSpacing(12)
+            self.body_layout.setSpacing(theme.SPACE_M)
             self.profile_panel = QtWidgets.QFrame()
             self.profile_panel.setObjectName("consoleProfile")
             self.profile_panel.setFixedWidth(240)
             self.profile_panel.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Expanding)
             profile_layout = QtWidgets.QVBoxLayout(self.profile_panel)
-            profile_layout.setContentsMargins(10, 10, 10, 10)
-            profile_layout.setSpacing(8)
+            profile_layout.setContentsMargins(*(theme.SPACE_S,) * 4)
+            profile_layout.setSpacing(theme.SPACE_S)
             self.profile_scroll = QtWidgets.QScrollArea()
             self.profile_scroll.setObjectName("consoleProfileScroll")
             self.profile_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
@@ -316,7 +279,7 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             profile_layout.addWidget(divider)
             self.destination_buttons = {}
             self.destination_layout = QtWidgets.QGridLayout()
-            self.destination_layout.setSpacing(8)
+            self.destination_layout.setSpacing(theme.SPACE_S)
             for index, (route, title) in enumerate(_DESTINATIONS):
                 button = self._button(title)
                 button.setCheckable(True)
@@ -342,8 +305,8 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             self.display_panel = QtWidgets.QFrame()
             self.display_panel.setObjectName("consoleDisplay")
             display_layout = QtWidgets.QVBoxLayout(self.display_panel)
-            display_layout.setContentsMargins(12, 10, 12, 12)
-            display_layout.setSpacing(10)
+            display_layout.setContentsMargins(*(theme.SPACE_S,) * 4)
+            display_layout.setSpacing(theme.SPACE_S)
             navigation_row = QtWidgets.QHBoxLayout()
             self.browse_button = QtWidgets.QToolButton()
             self.browse_button.setText("Browse")
@@ -398,8 +361,8 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             page.setObjectName("consoleHome")
             layout = QtWidgets.QVBoxLayout(page)
             layout.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
-            layout.setContentsMargins(16, 16, 16, 16)
-            layout.setSpacing(12)
+            layout.setContentsMargins(*(theme.SPACE_L,) * 4)
+            layout.setSpacing(theme.SPACE_M)
             heading = QtWidgets.QLabel("MATCH DOSSIER")
             heading.setObjectName("consolePageHeading")
             layout.addWidget(heading)
@@ -512,7 +475,7 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             self._density = level
             if not self._narrow:
                 self.profile_panel.setFixedWidth(252 if level in {"compact", "standard"} else 280)
-            self.layout().setSpacing(8 if level == "standard" else 10)
+            self.layout().setSpacing(theme.SPACE_S if level == "standard" else theme.SPACE_M)
 
         def resizeEvent(self, event):
             super().resizeEvent(event)

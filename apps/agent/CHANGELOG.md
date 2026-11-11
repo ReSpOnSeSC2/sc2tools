@@ -31,6 +31,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   your own five games and **First meeting** on the opponent's side, never a guess.
 
 ### Changed
+- Refresh the Companion console, build selectors and Build Order Ghost with
+  flat surfaces, shared type and controls, and a mark and accent for each skin.
 - Give the main window and its Dashboard a flat, modern look: quiet dark
   surfaces told apart by tone and space instead of a gradient bezel and a
   border around every panel, and one type scale in the system font (Segoe UI

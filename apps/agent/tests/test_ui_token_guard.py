@@ -17,6 +17,10 @@ CONVERTED = {
     "activity_log.py": None,
     "brand_mark.py": None,
     "build_checkin_settings.py": None,
+    "companion_builds.py": None,
+    "companion_console.py": None,
+    "companion_ghost.py": None,
+    "companion_page.py": None,
     "folder_rows.py": None,
     "game_dashboard.py": None,
     "gui.py": None,
@@ -30,7 +34,7 @@ CONVERTED = {
     "system_motion.py": None,
     "update_card.py": None,
     "window_chrome.py": None,
-    "race_visuals.py": ("css_for_skin", "_companion_layer"),
+    "race_visuals.py": ("css_for_skin",),
 }
 HEX_COLOUR = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b")
 STYLE_LITERAL = re.compile(r"\b(?:rgba?|hsla?)\s*\(|font-size|\bfont\s*:", re.IGNORECASE)
