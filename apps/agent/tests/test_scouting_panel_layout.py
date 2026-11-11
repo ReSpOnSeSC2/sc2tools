@@ -40,9 +40,15 @@ def test_scouting_pin_keeps_controls_and_timings_accessible_inside_themed_frame(
                     QtTest.QTest.qWait(10)
                     assert panel.size().toTuple() == (width, height)
                     assert panel.games.currentData() == selected
-                    safe = QtCore.QRect(32, 30, width - 64, height - 58)
+                    inset = theme.SPACE_L
+                    safe = QtCore.QRect(inset, inset, width - 2 * inset, height - 2 * inset)
+                    margins = panel.layout().contentsMargins()
+                    assert (margins.left(), margins.top(), margins.right(), margins.bottom()) == (inset,) * 4
                     assert safe.contains(panel.header.geometry())
                     assert safe.contains(panel.scouting_scroll.geometry())
+                    assert panel.scouting_mark.skin == skin and panel.scouting_mark.isVisible()
+                    mark = panel.scouting_mark
+                    assert panel.header.rect().contains(QtCore.QRect(mark.mapTo(panel.header, QtCore.QPoint()), mark.size()))
                     assert panel.scouting_scroll.horizontalScrollBar().maximum() == 0
                     for widget in (panel.subtitle, panel.detail, panel.games, panel.build_time_range,
                                    panel.comparison_title, panel.observation_note):

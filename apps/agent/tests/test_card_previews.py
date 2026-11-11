@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 from dataclasses import replace
+from textwrap import dedent
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -10,7 +11,7 @@ from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
 from sc2tools_agent.build_checkin.models import CheckinPrefs
 from sc2tools_agent.build_checkin.preview import sample_loading_model, sample_postgame_model
-from sc2tools_agent.ui import win32_window
+from sc2tools_agent.ui import theme, win32_window
 from sc2tools_agent.ui.build_checkin_window import BuildCheckinHost, LOADING, POSTGAME, default_card_position, rect_of
 from sc2tools_agent.ui.build_checkin_settings import (
     PREVIEW_ASSISTANCE_OFF, PREVIEW_CARD_OPEN, PREVIEW_CONNECTING, PREVIEW_UNAVAILABLE, PREVIEW_UNPAIRED,
@@ -18,6 +19,7 @@ from sc2tools_agent.ui.build_checkin_settings import (
 )
 from tests._gui_offscreen import run_gui_check
 from tests.test_build_checkin_ui_cards import Recorder, loading_model, postgame_model, FEATURED, MORE
+from tests.test_companion_resize_shell import THEMED_SETUP
 
 
 @pytest.fixture
@@ -59,6 +61,80 @@ def test_fixed_sample_models_reuse_scouting_and_last_known_race():
     assert sample_loading_model("Terran").matchup == "TvP"
     assert sample_loading_model("Random").matchup == "ZvP"
     assert sample_postgame_model().matchup == "ZvP"
+
+
+def test_preview_skin_updates_open_and_lazy_cards_without_changing_flags_or_selection(native, app):
+    host, *_ = native
+    host.set_skin("terran")
+    assert host.show_preview(POSTGAME) is None
+    card = host.window(POSTGAME)
+    selected = card.selection()
+    position, flags = card.pos(), card.windowFlags()
+    assert host.existing_window(LOADING) is None
+    for name in ("terran", "zerg", "protoss", "default"):
+        host.set_skin(name)
+        app.processEvents()
+        skin = theme.SKINS[name]
+        assert card.styleSheet() == theme.card_stylesheet(skin)
+        assert card.findChild(QtWidgets.QWidget, "agentBrandMark").skin == name
+        row = card.builds.row(selected)
+        painted = row.grab().toImage()
+        assert painted.pixelColor(painted.width() // 2, 3).name() == skin.selected
+        assert card.selection() == selected and card.pos() == position and card.windowFlags() == flags
+        assert card.testAttribute(QtCore.Qt.WA_TranslucentBackground)
+        assert card.testAttribute(QtCore.Qt.WA_ShowWithoutActivating)
+    host.set_skin("protoss")
+    assert host.show_preview(LOADING) is None
+    loading = host.window(LOADING)
+    assert loading.styleSheet() == theme.card_stylesheet(theme.SKINS["protoss"])
+    assert loading.findChild(QtWidgets.QWidget, "agentBrandMark").skin == "protoss"
+    assert loading.windowFlags() & QtCore.Qt.WindowDoesNotAcceptFocus
+
+
+@pytest.mark.parametrize("scale", ["1.25", "1.5"])
+def test_floating_preview_controls_are_reachable_at_display_scale(tmp_path, monkeypatch, scale):
+    monkeypatch.setenv("QT_SCALE_FACTOR", scale)
+    run_gui_check(tmp_path, THEMED_SETUP.replace("FONT_SIZE", "9") + dedent("""
+        from sc2tools_agent.ui.build_checkin_window import BuildCheckinHost, LOADING, POSTGAME
+
+        def assert_reachable(card, controls):
+            for control in controls:
+                assert control.isVisible(), control.objectName()
+                card.content_scroll.ensureWidgetVisible(control)
+                app.processEvents()
+                viewport = card.content_scroll.viewport()
+                bounds = QtCore.QRect(control.mapTo(viewport, QtCore.QPoint()), control.size())
+                assert viewport.rect().contains(bounds), (control.objectName(), bounds, viewport.rect())
+
+        host = BuildCheckinHost(controller=lambda: None)
+        for name in ("default", "protoss", "terran", "zerg"):
+            host.set_skin(name)
+            for kind in (LOADING, POSTGAME):
+                assert host.show_preview(kind) is None
+                card = host.window(kind)
+                mark = card.findChild(QtWidgets.QWidget, "agentBrandMark")
+                controls = [mark, card.builds.names_toggle]
+                if kind == LOADING:
+                    controls += [card.not_now, card.dont_ask, card.scouting.dossier]
+                else:
+                    controls += [card.builds.search, card.notes, card.primary, card.secondary, card.later]
+                compact_width = card.width()
+                for expanded in (False, True):
+                    card.builds.names_toggle.setChecked(expanded)
+                    QtTest.QTest.qWait(5)
+                    assert card.content_scroll.horizontalScrollBar().maximum() == 0, (
+                        name, kind, expanded, card.width(), card.content.minimumSizeHint().width(),
+                        card.content_scroll.viewport().width(),
+                    )
+                    if expanded:
+                        assert card.width() > compact_width
+                    else:
+                        assert card.width() == compact_width
+                    assert_reachable(card, controls)
+                card.builds.names_toggle.setChecked(False)
+                card.dismiss()
+        host.close()
+    """))
 
 
 @pytest.mark.parametrize("kind,action", [
@@ -180,7 +256,7 @@ def test_main_window_preview_explains_the_companion_assistance_state(tmp_path):
             while not done() and not deadline.hasExpired():
                 QtTest.QTest.qWait(10)
             assert done()
-        ui, win = make_window(on_companion_action=handler)
+        ui, win = make_window(on_companion_action=handler, window_skin="protoss", window_animations=False)
         companion, settings, host = win._companion_page, win._checkin_settings, win._checkin_host
         companion.timer.stop()
         settings.preview_loading.click()
@@ -198,7 +274,11 @@ def test_main_window_preview_explains_the_companion_assistance_state(tmp_path):
         companion.refresh(); settle(lambda: companion._paired)
         companion.set_preference("overlaysEnabled", True)
         settings.preview_loading.click()
-        assert host.window("loading").is_preview and settings.preview_hint.text() == settings._preview_note()
+        loading = host.window("loading")
+        assert loading.is_preview and settings.preview_hint.text() == settings._preview_note()
+        assert loading.property("checkinSkin") == "protoss"
+        companion.appearance_skin.setCurrentIndex(companion.appearance_skin.findData("zerg"))
+        assert loading.property("checkinSkin") == "zerg"
         host.close(); companion.shutdown()
     ''')
 

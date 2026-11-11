@@ -11,38 +11,13 @@ from . import theme
 from .build_checkin_widgets import set_tone
 from .private_scouting import ElidedText
 
-# Two readable columns need about 220 px each. Narrower than that they stack,
+# Two readable columns need about 230 px each. Narrower than that they stack,
 # the opponent's games first: at the smallest window they are what a player
 # opens the report for, and their own games are one scroll further down.
-STACK_BELOW_WIDTH = 440
+STACK_BELOW_WIDTH = 472
 SIDE_BY_SIDE = ("my", "opp")
 STACKED = ("opp", "my")
 RESULT_COLUMN_WIDTH = 30
-# The chosen row keeps a dark fill, so its red, green and muted text stay as
-# readable as on the other rows; the cyan border, bar and name mark it.
-CHOSEN_ROW_BACKGROUND = theme.SUBTLE
-CHOSEN_ROW_BORDER = theme.ACCENT_CYAN
-
-# Type selectors on purpose. A race skin appends its button colours to this
-# sheet and must win over these: an id selector here would leave the chosen
-# row in the default purple inside a skinned window.
-_STYLE = f"""
-QPushButton {{
-    background: {theme.ELEVATED}; border: 1px solid {theme.BORDER}; border-radius: 6px;
-    padding: 0; text-align: left;
-}}
-QPushButton:hover {{ background: {theme.SUBTLE}; border-color: {theme.BORDER_STRONG}; }}
-QPushButton:checked {{ background: {CHOSEN_ROW_BACKGROUND}; border-color: {CHOSEN_ROW_BORDER}; }}
-QPushButton:focus {{ border-color: {theme.FOCUS}; }}
-QFrame#recentBuildMarker {{ background: transparent; border: none; border-radius: 1px; }}
-QFrame#recentBuildMarker[selected="true"] {{ background: {theme.ACCENT_CYAN}; }}
-QLabel#recentBuildResult {{ color: {theme.TEXT_MUTED}; font-size: 11px; font-weight: 700; }}
-QLabel#recentBuildResult[result="Win"] {{ color: {theme.SUCCESS}; }}
-QLabel#recentBuildResult[result="Loss"] {{ color: {theme.DANGER}; }}
-QLabel#recentBuildName {{ color: {theme.TEXT}; font-size: 12px; font-weight: 600; }}
-QLabel#recentBuildName[selected="true"] {{ color: {theme.ACCENT_CYAN}; }}
-QLabel#recentBuildDetails {{ color: {theme.TEXT_MUTED}; font-size: 11px; }}
-"""
 
 
 def _plain_label(name: str, text: str = "") -> QtWidgets.QLabel:
@@ -67,6 +42,7 @@ class GameRow(QtWidgets.QPushButton):
     def __init__(self, model) -> None:
         super().__init__()
         self.model = model
+        self.setObjectName("recentBuildRow")
         self.setCheckable(True)
         self.setCursor(QtCore.Qt.PointingHandCursor)
         self.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed)
@@ -80,7 +56,7 @@ class GameRow(QtWidgets.QPushButton):
         self.build = _elided_label("recentBuildName", model.build)
         self.details = _elided_label("recentBuildDetails", model.details)
         grid = QtWidgets.QGridLayout(self)
-        grid.setContentsMargins(4, 4, 8, 4)
+        grid.setContentsMargins(theme.SPACE_XS, theme.SPACE_XS, theme.SPACE_S, theme.SPACE_XS)
         grid.setHorizontalSpacing(6)
         grid.setVerticalSpacing(0)
         grid.setColumnMinimumWidth(1, RESULT_COLUMN_WIDTH)
@@ -95,8 +71,7 @@ class GameRow(QtWidgets.QPushButton):
         self.toggled.connect(self._mark_chosen)
 
     def _mark_chosen(self, chosen: bool) -> None:
-        # A skin paints the chosen row like the others, so the choice is
-        # also marked on parts of the row that no skin restyles.
+        # A marker and the build name reinforce the selected row.
         for part in (self.marker, self.build):
             set_tone(part, "selected", "true" if chosen else "false")
 
@@ -124,7 +99,7 @@ class GameColumn(QtWidgets.QWidget):
         layout.addWidget(self.heading)
         layout.addWidget(self.empty)
         self.rows_layout = QtWidgets.QVBoxLayout()
-        self.rows_layout.setSpacing(2)
+        self.rows_layout.setSpacing(theme.SPACE_2XS)
         layout.addLayout(self.rows_layout)
         layout.addStretch(1)
         self.group = QtWidgets.QButtonGroup(self)
@@ -172,12 +147,12 @@ class RecentBuilds(QtWidgets.QWidget):
         super().__init__(parent)
         self.setObjectName("companionRecentBuilds")
         self.setAccessibleName("Each player's last five games")
-        self.setStyleSheet(_STYLE)
+        self.setStyleSheet(theme.RECENT_BUILDS_STYLE)
         self.setMinimumWidth(0)
         self._stacked = None
         self.grid = QtWidgets.QGridLayout(self)
         self.grid.setContentsMargins(0, 0, 0, 0)
-        self.grid.setSpacing(10)
+        self.grid.setSpacing(theme.SPACE_S)
         self.grid.setColumnStretch(0, 1)
         self.columns = {side: GameColumn() for side in SIDE_BY_SIDE}
         for side, column in self.columns.items():

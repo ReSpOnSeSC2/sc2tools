@@ -306,6 +306,8 @@ corresponding GitHub Release.
 
 ### Agent 0.25.0
 
+- Apply the shared Agent theme to floating build check-ins and the Scouting
+  report, including a race mark, clearer selected builds and a slimmer frame.
 - List the builds from each player's last five games in the floating Scouting
   report and, in short form, on the loading-screen strip: your last five games
   in this matchup and the last five games in your library against the opponent,
