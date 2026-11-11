@@ -42,6 +42,22 @@ test("VAPID authorization is an ES256 JWT for the push service origin, verifiabl
   expect(parseVapidKeys("not-a-key", pair.privateKey)).toBeNull();
 });
 
+test("generated VAPID keys preserve the fixed-width scalar when it starts with zero bytes", () => {
+  const ecdh = crypto.createECDH("prime256v1");
+  const scalar = Buffer.alloc(32);
+  scalar[31] = 1;
+  jest.spyOn(ecdh, "generateKeys").mockImplementationOnce(() => {
+    ecdh.setPrivateKey(scalar);
+    return ecdh.getPublicKey();
+  });
+  const create = jest.spyOn(crypto, "createECDH").mockReturnValueOnce(ecdh);
+  try {
+    const pair = generateVapidKeys();
+    expect(b64(pair.privateKey)).toEqual(scalar);
+    expect(parseVapidKeys(pair.publicKey, pair.privateKey)).not.toBeNull();
+  } finally { create.mockRestore(); }
+});
+
 test("push endpoints are limited to browser push services over https", () => {
   for (const ok of ["https://fcm.googleapis.com/fcm/send/abc", "https://updates.push.services.mozilla.com/wpush/v2/x", "https://web.push.apple.com/QGx", "https://wns2-par02p.notify.windows.com/w/?token=x"]) {
     expect(safePushEndpoint(ok)).toBe(ok);
