@@ -84,6 +84,17 @@ describe("OpponentsService.identityClause", () => {
     expect(db.opponents.findOne.mock.calls[0][0]).toEqual({ userId: "u1", pulseId: "p1" });
   });
 
+  test("a character id resolves the owned identity when there is no dossier id match", async () => {
+    const { svc, db } = service({ pulseId: "p1", pulseCharacterId: "c1" });
+    db.opponents.findOne.mockResolvedValueOnce(null);
+    expect(await svc.identityClause("u1", "c1")).toEqual({
+      $or: [{ "opponent.pulseId": "p1" }, { "opponent.pulseCharacterId": "c1" }],
+    });
+    expect(db.opponents.findOne.mock.calls.map(([filter]) => filter)).toEqual([
+      { userId: "u1", pulseId: "c1" }, { userId: "u1", pulseCharacterId: "c1" },
+    ]);
+  });
+
   test("merged identities match every linked pulse id and character id", async () => {
     const { svc } = service({ pulseId: "p1", pulseCharacterId: "c1" });
     svc._resolveLinkedIdentities = jest.fn().mockResolvedValue({ pulseIds: ["p1", "p2"], characterIds: ["c1", "c2"] });

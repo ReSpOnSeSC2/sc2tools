@@ -2,7 +2,7 @@
 
 /**
  * The second-game picker behind the game page's "Compare…". Three smart
- * chips answer the usual questions in one tap — the best win with this
+ * chips answer the usual questions in one tap — the best recent win with this
  * build, the previous game against this opponent, the last game in this
  * matchup — and a search over your recent games covers everything else.
  * Every list comes from the replay library and game-navigation reads
@@ -57,7 +57,9 @@ export default function CompareGamePicker({ open, onClose, game, buildLabel, ret
   const winsReq = useApi<ReplayLibraryResponse>(build
     ? `/v1/replays?${new URLSearchParams({ build, result: "win", limit: "25", sort: "date_desc", enrich: "none" })}` : null, OPTIONS);
   const opponentReq = useApi<Neighbors>(game.opponent?.pulseId ? ownerNeighborPath(game.gameId, "opponent") : null, OPTIONS);
-  const matchupReq = useApi<Neighbors>(ownerNeighborPath(game.gameId, "matchup"), OPTIONS);
+  const matchup = game.myRace && game.opponent?.race ? `${game.myRace.charAt(0)}v${game.opponent.race.charAt(0)}` : null;
+  const matchupReq = useApi<ReplayLibraryResponse>(matchup
+    ? `/v1/replays?${new URLSearchParams({ matchup, limit: "2", sort: "date_desc", enrich: "none" })}` : null, OPTIONS);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   useEffect(() => {
@@ -73,11 +75,11 @@ export default function CompareGamePicker({ open, onClose, game, buildLabel, ret
     <Modal open={open} onClose={onClose} title="Compare with…" description="This game is A. Choose game B." size="md" returnFocusRef={returnFocusRef}>
       <div className="space-y-4" data-testid="compare-picker">
         <div className="grid gap-2">
-          <SmartChip title="Best win with this build" choice={best} loading={!!build && winsReq.isLoading}
+          <SmartChip title="Best recent win with this build" choice={best} loading={!!build && winsReq.isLoading}
             empty={build ? "No other win with this build yet" : "This game has no build label"} onPick={pick} />
           <SmartChip title="Previous game vs this opponent" choice={opponentReq.data?.prev} loading={!!game.opponent?.pulseId && opponentReq.isLoading}
             empty="No earlier game against this opponent" onPick={pick} />
-          <SmartChip title="Last game in this matchup" choice={matchupReq.data?.prev ?? matchupReq.data?.next} loading={matchupReq.isLoading}
+          <SmartChip title="Last game in this matchup" choice={matchupReq.data?.items.find((item) => item.gameId !== game.gameId)} loading={!!matchup && matchupReq.isLoading}
             empty="No other game in this matchup" onPick={pick} />
         </div>
         <div className="space-y-2">

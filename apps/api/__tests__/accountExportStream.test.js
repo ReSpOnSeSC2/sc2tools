@@ -39,7 +39,7 @@ describe("full account export projections against disposable Mongo", () => {
   beforeAll(async () => { mongo = await MongoMemoryServer.create(); client = await MongoClient.connect(mongo.getUri()); db = client.db("account-export"); });
   afterAll(async () => { await client?.close(); await mongo?.stop(); });
   test("actual NDJSON matches legacy JSON and preserves every shared privacy projection", async () => {
-    const names = [...USER_SCOPED_COLLECTIONS.map(([name]) => name), "users", "playerIdentitySubmissions", "multichatSounds", "coaching", "playerChannels",
+    const names = [...USER_SCOPED_COLLECTIONS.map(([name]) => name), "users", "playerIdentitySubmissions", "multichatSounds", "playerGoals", "coaching", "playerChannels",
       "reviewRequests", "reviewComments", "reviewKarmaEvents", "reviewBlocks", "notifications", "adminAudit"];
     const ctx = Object.fromEntries(names.map(name => [name, db.collection(name)]));
     for (const [name] of USER_SCOPED_COLLECTIONS) {
@@ -53,6 +53,10 @@ describe("full account export projections against disposable Mongo", () => {
     await ctx.playerIdentitySubmissions.insertOne({ userId: "A", label: "mine", reviewedBy: "reviewer-private", evidenceMaxId: "evidence-private" });
     await ctx.multichatSounds.insertOne({ userId: "A", label: "sound", data: Buffer.from("sound-private") });
     await ctx.playerChannels.insertOne({ ownerUserId: "A", label: "channel", updatedBy: "editor-private" });
+    await ctx.playerGoals.insertMany([
+      { userId: "A", id: "my-goal", params: { target: 3 }, slot: 1, criteriaRevision: 2 },
+      { userId: "B", id: "foreign-private" },
+    ]);
     await seedShared(ctx);
     const service = new GdprService(ctx, { reviews: {} });
     const legacy = await service.export("A");
@@ -79,6 +83,7 @@ describe("full account export projections against disposable Mongo", () => {
     expect(legacy.data.reviewRequests[0]).toHaveProperty("_id");
     expect(legacy.data.notifications[0]).toHaveProperty("_id");
     expect(legacy.data.customBuilds[0].loops).toEqual([{ name: "my loop", events: [1, 2] }]);
+    expect(legacy.data.playerGoals).toEqual([{ userId: "A", id: "my-goal", params: { target: 3 } }]);
     expect(bytes).toContain("owned-live-overlay-token");
     expect(bytes).toContain("owned-device-hash");
     expect((await service.export("A", { includeSharedCoaching: false })).data).not.toHaveProperty("coachingAssignments");

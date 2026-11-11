@@ -173,7 +173,7 @@ function TimingGaps({ data, league, nextLeague, matchup }: {
     <section aria-labelledby="timing-gaps-heading" className="space-y-2">
       <h3 id="timing-gaps-heading" className="text-body font-semibold text-text">Timing gaps</h3>
       {!mine || mine.n === 0 ? (
-        <p className="text-caption text-text-muted">No timing samples yet: timings come from your guide-build games in {matchup}.</p>
+        <p className="text-caption text-text-muted">No build-order timings in your recent ranked {matchup} games.</p>
       ) : (
         <dl className="grid gap-2 sm:grid-cols-2">
           {TIMING_ROWS.map((spec) => {

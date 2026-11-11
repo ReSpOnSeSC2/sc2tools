@@ -116,6 +116,7 @@ async function* accountExportRecords(db, userId, options = {}) {
   }
   yield* collectionRecords(db, "playerIdentitySubmissions", { userId }, { _id: 0, reviewedBy: 0, evidenceMaxId: 0 }, signal);
   yield* collectionRecords(db, "multichatSounds", { userId }, { _id: 0, data: 0 }, signal);
+  yield* collectionRecords(db, "playerGoals", { userId }, { _id: 0, slot: 0, criteriaRevision: 0 }, signal);
   // Delivery channels: a Discord webhook URL is a credential for someone
   // else's server, so only its last four characters leave; push endpoints
   // and their keys are the caller's own device registrations.

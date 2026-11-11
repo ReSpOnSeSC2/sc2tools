@@ -295,6 +295,45 @@ describe("unified notes", () => {
       expect(await notes.deleteGameNote(OWNER, "g2", late.id)).toBeNull();
     });
 
+    test("listing during an in-flight insert preserves the reserved note count", async () => {
+      let releaseInsert;
+      let insertStarted;
+      let notesRead;
+      const reserved = new Promise((resolve) => { insertStarted = resolve; });
+      const release = new Promise((resolve) => { releaseInsert = resolve; });
+      const read = new Promise((resolve) => { notesRead = resolve; });
+      const insertOne = db.notes.insertOne.bind(db.notes);
+      const find = db.notes.find.bind(db.notes);
+      const insertSpy = jest.spyOn(db.notes, "insertOne").mockImplementationOnce(async (...args) => {
+        insertStarted();
+        await release;
+        return insertOne(...args);
+      });
+      const readSpy = jest.spyOn(db.notes, "find").mockImplementationOnce((...args) => {
+        const cursor = find(...args);
+        const toArray = cursor.toArray.bind(cursor);
+        cursor.toArray = async () => {
+          const rows = await toArray();
+          notesRead();
+          return rows;
+        };
+        return cursor;
+      });
+      try {
+        const create = notes.createGameNote(OWNER, "g1", { text: "Save in flight" });
+        await reserved;
+        const list = notes.listGameNotes(OWNER, "g1");
+        await read;
+        releaseInsert();
+        await Promise.all([create, list]);
+        expect((await db.games.findOne({ userId: OWNER, gameId: "g1" })).noteCount).toBe(1);
+      } finally {
+        releaseInsert();
+        insertSpy.mockRestore();
+        readSpy.mockRestore();
+      }
+    });
+
     test("validation: time inside the game, map point pairs, text and the 200-note cap", async () => {
       await expect(notes.createGameNote(OWNER, "g1", { text: "late", gameTimeSec: 900 })).rejects.toMatchObject({ status: 400 });
       await expect(notes.createGameNote(OWNER, "g1", { text: "half point", x: 10 })).rejects.toMatchObject({ status: 400 });
