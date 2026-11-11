@@ -27,7 +27,8 @@ export default async function ReplayCardImage({ params }: { params: Promise<{ pl
     .filter(Boolean).join(" · ");
   return new ImageResponse(
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between",
-      padding: "64px 76px", color: shareReportPalette.replayText, background: shareReportPalette.replayBackground,
+      padding: "64px 76px", color: shareReportPalette.replayText, backgroundColor: shareReportPalette.replayBackgroundColor,
+      backgroundImage: shareReportPalette.replayBackgroundImage,
       fontFamily: "sans-serif" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
         <div style={{ width: 14, height: 42, borderRadius: 7, background: tone }} />

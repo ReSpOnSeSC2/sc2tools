@@ -20,5 +20,6 @@ export const shareReportPalette = {
   replayAccent: "#3ce0d6",
   replayMuted: "#9aa3b2",
   replayBorder: "2px solid #157d8c",
-  replayBackground: "radial-gradient(900px 520px at 100% 0%, #157d8c55 0%, #06090e 58%), #06090e",
+  replayBackgroundColor: "#06090e",
+  replayBackgroundImage: "radial-gradient(ellipse 900px 520px at 100% 0%, #157d8c55 0%, #06090e 58%)",
 } as const;
