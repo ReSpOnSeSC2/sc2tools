@@ -144,6 +144,7 @@ export async function openSettingsSectionsFixture(page, theme, options = {}) {
       const fixed = new Map([
         ["/v1/me", { isAdmin: false, agentPaired: true, agentLastSeenAt: null }],
         ["/v1/me/preferences/ghost", { v: 2, slots: {}, revision: 0 }],
+        ["/v1/devices", { items: [] }],
         ["/v1/devices/obs", { devices: [] }],
         ["/v1/me/preferences/multichat", {}],
         ["/v1/me/preferences/chatCommands", { v: 1, builtins: {}, custom: [] }],

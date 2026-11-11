@@ -62,7 +62,9 @@ describe("services/perGameCompute", () => {
       });
       expect(await service.macroBreakdown("owner", "g")).toMatchObject({ ok: true, macro_score: 74, ...stored.macroBreakdown });
       expect(await service.apmCurve("owner", "g")).toMatchObject({ ok: true, ...stored.apmCurve });
-      expect(detailRead).toHaveBeenCalledWith("owner", "g", expect.objectContaining({ fields: ["buildLog", "oppBuildLog", "macroBreakdown"] }));
+      expect(detailRead).toHaveBeenCalledWith("owner", "g", expect.objectContaining({
+        fields: ["buildLog", "buildLogFull", "buildLogSupply", "oppBuildLog", "macroBreakdown"],
+      }));
       detailRead.mockClear();
       expect(await service.buildOrder("other", "g")).toBeNull();
       expect(await service.macroBreakdown("other", "g")).toBeNull();

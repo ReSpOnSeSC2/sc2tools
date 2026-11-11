@@ -15,33 +15,6 @@ from .companion_speech import build_scouting_speech
 from .sc2_icons import load_icon
 
 
-_STYLE = f"""
-QWidget#ghostDesk, QWidget#ghostPanel {{ background: {theme.SURFACE}; color: {theme.TEXT}; }}
-QWidget#ghostDesk QLabel, QWidget#ghostDesk QCheckBox,
-QWidget#ghostPanel QLabel {{ color: {theme.TEXT}; background: transparent; }}
-QWidget#ghostDesk QLineEdit, QWidget#ghostDesk QComboBox,
-QWidget#ghostDesk QTreeWidget, QWidget#ghostPanel QTreeWidget {{
-    background: {theme.ELEVATED}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG};
-    border-radius: 5px; padding: 5px; selection-background-color: {theme.BUTTON_CHECKED};
-}}
-QWidget#ghostDesk QLineEdit, QWidget#ghostDesk QComboBox {{ border-color: {theme.BORDER_CONTROL}; }}
-QWidget#ghostDesk QPushButton {{
-    background: {theme.BUTTON}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG};
-    border-radius: 5px; padding: 7px 10px;
-}}
-QWidget#ghostDesk QPushButton:hover {{ background: {theme.BUTTON_HOVER}; border-color: {theme.ACCENT_HOVER}; }}
-QWidget#ghostDesk QPushButton:focus, QWidget#ghostDesk QLineEdit:focus,
-QWidget#ghostDesk QComboBox:focus {{ border-color: {theme.FOCUS}; }}
-QWidget#ghostDesk QPushButton:disabled {{ color: {theme.TEXT_DIM}; background: {theme.ELEVATED}; border-color: {theme.BORDER}; }}
-QWidget#ghostDesk QHeaderView::section, QWidget#ghostPanel QHeaderView::section {{
-    background: {theme.SUBTLE}; color: {theme.TEXT_MUTED}; padding: 6px;
-}}
-QWidget#ghostDesk QTabWidget::pane {{ border: 1px solid {theme.BORDER_STRONG}; }}
-QWidget#ghostDesk QTabBar::tab {{ color: {theme.TEXT_MUTED}; background: {theme.SURFACE}; padding: 8px 12px; }}
-QWidget#ghostDesk QTabBar::tab:selected {{ color: {theme.TEXT}; background: {theme.BUTTON_CHECKED}; }}
-"""
-
-
 def _clock(value):
     seconds = max(0, int(value))
     return f"{seconds // 60}:{seconds % 60:02d}"
@@ -90,7 +63,6 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
 
     def source_page(content):
         content.setObjectName("ghostSource")
-        content.setStyleSheet(f"QWidget#ghostSource {{ background: {theme.SURFACE}; }}")
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
@@ -106,20 +78,21 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
             super().__init__(None, QtCore.Qt.Tool | QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.FramelessWindowHint)
             self.owner = owner
             self.setObjectName("ghostPanel")
-            self.setWindowTitle("SC2 Tools · Practice HUD")
+            self.setWindowTitle("SC2TOOLS · Practice HUD")
             self._move_mode = False
             self._capture = None
             self._scale = 100
             self._last_paint = None
             self.setWindowFlag(QtCore.Qt.WindowTransparentForInput, True)
             self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
-            self.setFont(QtGui.QFont("Segoe UI", 10))
             self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
             self.setAttribute(QtCore.Qt.WA_QuitOnClose, False)
-            self.setStyleSheet(_STYLE)
+            self.setStyleSheet(theme.COMPANION_GHOST_STYLE)
             layout = QtWidgets.QVBoxLayout(self)
-            layout.setContentsMargins(32, 30, 32, 28)
+            layout.setContentsMargins(*(theme.SPACE_XL,) * 4)
+            layout.setSpacing(theme.SPACE_S)
             self.title = label("Build Order Ghost")
+            self.title.setObjectName("ghostHeading")
             self.header = QtWidgets.QFrame(self)
             header_layout = QtWidgets.QHBoxLayout(self.header)
             header_layout.setContentsMargins(0, 0, 0, 0)
@@ -161,8 +134,9 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
                 return
             self._move_mode = enabled
             position = self.pos()
-            self.setWindowFlag(QtCore.Qt.WindowTransparentForInput, not enabled)
+            # Qt derives window flags from the mouse transparency attribute.
             self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, not enabled)
+            self.setWindowFlag(QtCore.Qt.WindowTransparentForInput, not enabled)
             self.window_controls.setVisible(enabled)
             self.move(position)
             self._capture = None
@@ -218,10 +192,9 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
                     status = "Earlier target"
                 row = add_step(self.steps, step, status)
                 if index == current:
-                    row.setForeground(0, QtGui.QBrush(QtGui.QColor(theme.ACCENT_CYAN)))
-                elif index < current:
-                    for column in range(self.steps.columnCount()):
-                        row.setForeground(column, QtGui.QBrush(QtGui.QColor(theme.TEXT_MUTED)))
+                    font = self.steps.font()
+                    font.setBold(True)
+                    row.setFont(0, font)
             self.note.setText("Target timeline finished · completion is not verified." if view["complete"] else
                               "Target schedule only · elapsed time does not confirm a built step.")
 
@@ -278,8 +251,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
             self._signals.result.connect(self._reply)
             self.panel = GhostPanel(self)
             self.setObjectName("ghostDesk")
-            self.setFont(QtGui.QFont("Segoe UI", 10))
-            self.setStyleSheet(_STYLE)
+            self.setStyleSheet(theme.COMPANION_GHOST_STYLE)
             self.setAcceptDrops(True)
             outer = QtWidgets.QVBoxLayout(self)
             outer.setContentsMargins(0, 0, 0, 0)
@@ -289,12 +261,15 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
             scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             content = QtWidgets.QWidget()
             content.setObjectName("ghostContent")
-            content.setStyleSheet(f"QWidget#ghostContent {{ background: {theme.SURFACE}; }}")
             layout = QtWidgets.QVBoxLayout(content)
+            layout.setContentsMargins(*(theme.SPACE_M,) * 4)
+            layout.setSpacing(theme.SPACE_S)
             scroll.setWidget(content)
             outer.addWidget(scroll)
             self.scroll = scroll
-            layout.addWidget(label("BUILD ORDER GHOST"))
+            heading = label("BUILD ORDER GHOST")
+            heading.setObjectName("ghostHeading")
+            layout.addWidget(heading)
             layout.addWidget(label("Assign replay builds for 1v1 matchups, or explicitly follow a same-race target in your current confirmed team game. Ghost follows SC2's game clock in its own always-on-top panel."))
             self.enabled_toggle = QtWidgets.QCheckBox("Show Build Order Ghost during matching games")
             self.enabled_toggle.toggled.connect(self._set_enabled)
@@ -327,12 +302,11 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
             self.sources.addTab(source_page(local), "Local replays")
             library = QtWidgets.QWidget()
             library_layout = QtWidgets.QVBoxLayout(library)
-            library_layout.setAlignment(QtCore.Qt.AlignTop)
             self.search = QtWidgets.QLineEdit()
             self.search.setPlaceholderText("Filter your replays by build, map or opponent")
             self.search.textChanged.connect(self._fill_games)
             library_layout.addWidget(self.search)
-            filters = QtWidgets.QGridLayout()
+            filters = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets, spacing=theme.SPACE_S)
             self.matchup_filter = QtWidgets.QComboBox()
             self.matchup_filter.addItem("All matchups", None)
             for matchup in MATCHUPS:
@@ -344,17 +318,17 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
             self.result_filter = QtWidgets.QComboBox()
             for title, value in [("All results", None), ("Wins", "win"), ("Losses", "loss"), ("Ties", "tie")]:
                 self.result_filter.addItem(title, value)
-            for position, widget in enumerate((self.matchup_filter, self.build_filter, self.map_filter, self.result_filter)):
+            for widget in (self.matchup_filter, self.build_filter, self.map_filter, self.result_filter):
                 widget.setMinimumContentsLength(12)
                 widget.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
                 widget.currentIndexChanged.connect(self._fill_games)
-                filters.addWidget(widget, position // 2, position % 2)
+                filters.addWidget(widget)
             self.starred_filter = QtWidgets.QCheckBox("Reference replays only")
             self.starred_filter.toggled.connect(self._fill_games)
-            filters.addWidget(self.starred_filter, 2, 0)
+            filters.addWidget(self.starred_filter)
             self.clear_filters_button = QtWidgets.QPushButton("Clear filters")
             self.clear_filters_button.clicked.connect(self._clear_filters)
-            filters.addWidget(self.clear_filters_button, 2, 1)
+            filters.addWidget(self.clear_filters_button)
             self.filters_widget = QtWidgets.QWidget()
             self.filters_widget.setLayout(filters)
             library_layout.addWidget(self.filters_widget)
@@ -368,7 +342,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
             self.reference_button = QtWidgets.QPushButton("☆ Use as this build's reference replay")
             self.reference_button.clicked.connect(self._save_reference)
             library_layout.addWidget(self.reference_button)
-            reference_actions = QtWidgets.QHBoxLayout()
+            reference_actions = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets, spacing=theme.SPACE_S)
             self.reference_side = QtWidgets.QComboBox()
             self.reference_side.addItem("My build", "you")
             self.reference_side.addItem("Opponent's build", "opponent")
@@ -391,6 +365,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
             for widget in (self.refresh_button, self.more_button, self.load_button):
                 actions.addWidget(widget)
             library_layout.addLayout(actions)
+            library_layout.addStretch()
             self.sources.addTab(source_page(library), "Replay library")
             examples = QtWidgets.QWidget()
             examples_layout = QtWidgets.QVBoxLayout(examples)
@@ -457,7 +432,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
             self.history_toggle.setCheckable(True)
             self.history_toggle.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
             self.history_toggle.setArrowType(QtCore.Qt.RightArrow)
-            self.history_toggle.setStyleSheet(f"QToolButton {{ background: {theme.BUTTON}; color: {theme.TEXT_MUTED}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 4px; padding: 6px 10px; }} QToolButton:hover {{ background: {theme.BUTTON_HOVER}; color: {theme.TEXT}; }} QToolButton:focus {{ border-color: {theme.FOCUS}; }}")
+            self.history_toggle.setObjectName("ghostHistory")
             self.history_toggle.toggled.connect(self._toggle_history)
             layout.addWidget(self.history_toggle)
             history_group = QtWidgets.QGroupBox()
@@ -532,7 +507,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
                 install_wheel_guard(field, QtCore)
                 self._practice_fields[key] = field
                 form.addRow(caption, field)
-            actions = QtWidgets.QHBoxLayout()
+            actions = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets, spacing=theme.SPACE_S)
             self._hud_preview_button = QtWidgets.QPushButton("Preview Practice HUD")
             self._hud_preview_button.clicked.connect(self._toggle_hud_preview)
             self._hud_move_button = QtWidgets.QPushButton("Move Practice HUD")
@@ -545,7 +520,9 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
                 help_button.setAccessibleName("Help: Practice HUD")
                 help_button.clicked.connect(lambda: open_help("practice-hud"))
                 actions.addWidget(help_button)
-            form.addRow(actions)
+            action_row = QtWidgets.QWidget()
+            action_row.setLayout(actions)
+            form.addRow(action_row)
             self._hud_notice = label("The HUD follows planned timings. It cannot see which steps you built live.")
             form.addRow(self._hud_notice)
             self._sync_practice_controls()
@@ -594,13 +571,15 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
             self._hud_move_button.toggle()
 
         def _move_hud(self, moving):
-            if moving and not self.panel.isVisible() and self._session.game_key:
+            # Changing native window flags can temporarily hide a visible HUD.
+            needs_preview = moving and not self.panel.isVisible()
+            if needs_preview and self._session.game_key:
                 self._hud_move_button.setChecked(False)
                 self._hud_notice.setText("A Practice HUD target is needed to move it during a game.")
                 return
             self.panel.set_move_mode(moving)
             self._hud_move_button.setText("Finish moving" if moving else "Move Practice HUD")
-            if moving and not self.panel.isVisible() and not self._hud_preview:
+            if needs_preview and not self._hud_preview:
                 self._toggle_hud_preview()
             else:
                 self._render()

@@ -11,6 +11,35 @@ import textwrap
 import pytest
 
 
+DRAFT_DIALOG_DRIVER = '''
+def answer_draft_prompt(expected_title, answer, navigate):
+    responses = []
+    def click_answer():
+        prompt = app.activeModalWidget()
+        if not isinstance(prompt, QtWidgets.QMessageBox):
+            return
+        button = next((item for item in prompt.buttons() if item.text().replace("&", "") == answer), None)
+        responses.append((prompt.windowTitle(), button is not None))
+        if button is None:
+            prompt.reject()
+        else:
+            button.click()
+    timer = QtCore.QTimer()
+    timer.setSingleShot(True)
+    timer.timeout.connect(click_answer)
+    timer.start(0)
+    navigate()
+    timer.stop()
+    assert responses == [(expected_title, True)], responses
+
+def keep_settings_draft_via_help(win):
+    menu = win._agent_menu_button.menu()
+    help_action = next(action for action in menu.actions() if action.text() == "Help and troubleshooting")
+    answer_draft_prompt("Unsaved settings", "Keep draft", help_action.trigger)
+    assert win._stack.currentWidget() is win._help_page
+'''
+
+
 def run_gui_check(tmp_path, body, *, timeout=30):
     if importlib.util.find_spec("PySide6") is None:
         pytest.skip("Qt is not installed")
@@ -32,6 +61,7 @@ def wait_saved(win):
     while win._settings_save_pending and not deadline.hasExpired():
         QtTest.QTest.qWait(10)
     assert not win._settings_save_pending, "Settings worker did not deliver completion"
+
 def make_window(**overrides):
     args = dict(
         version="test", dashboard_url="https://example.test/app",
@@ -57,7 +87,7 @@ def make_window(**overrides):
         part for part in (str(Path(__file__).resolve().parents[1]), environment.get("PYTHONPATH")) if part
     )
     result = subprocess.run(
-        [sys.executable, "-c", textwrap.dedent(setup) + "\n" + textwrap.dedent(body), str(tmp_path)],
+        [sys.executable, "-c", textwrap.dedent(setup) + DRAFT_DIALOG_DRIVER + textwrap.dedent(body), str(tmp_path)],
         capture_output=True, text=True, timeout=timeout, env=environment,
     )
     assert result.returncode == 0, result.stdout + result.stderr

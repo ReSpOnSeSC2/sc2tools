@@ -56,4 +56,8 @@ test("an opaque replay link opens a signed-out teaser and a private-data-free im
   const image = await request.get(path + "/opengraph-image");
   expect(image.status()).toBe(200);
   expect(image.headers()["content-type"]).toContain("image/png");
+  expect(image.headers()["cache-control"]).toContain("no-store");
+  const png = await image.body();
+  expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+  expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1200, 630]);
 });

@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { shareReportPalette } from "@/lib/shareReportPalette";
 import type { ReplayLibraryResponse } from "@/components/analyzer/replays/types";
 import { readPublicReplayIdentity } from "@/lib/publicReplayIdentity";
 
@@ -28,7 +29,8 @@ export default async function ReplayOpenGraphImage({
         justifyContent: "space-between",
         padding: "68px 76px",
         color: "#e7edf0",
-        background: "radial-gradient(900px 520px at 100% 0%, #157d8c55 0%, #06090e 58%), #06090e",
+        backgroundColor: shareReportPalette.replayBackgroundColor,
+        backgroundImage: shareReportPalette.replayBackgroundImage,
         fontFamily: "sans-serif",
       }}
     >
