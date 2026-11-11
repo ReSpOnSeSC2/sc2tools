@@ -127,18 +127,18 @@ describe("league timing percentiles", () => {
 
 });
 
-describe("personal targets", () => {
-  const OWNER = "targets-owner";
-  let seq = 0;
-  function game(overrides = {}) {
-    seq += 1;
-    return {
-      userId: OWNER, gameId: `t-${seq}`, date: new Date(Date.UTC(2026, 10, 1, 0, seq)), result: "Victory",
-      myRace: "Protoss", opponent: { race: "Zerg" }, isLadderGame: true, matchFormat: "1v1", playerCount: 2,
-      spq: 70, macroScore: 60, apm: 150, durationSec: 600, myToonHandle: "1-S2-1-111", ...overrides,
-    };
-  }
+const OWNER = "targets-owner";
+let seq = 0;
+function game(overrides = {}) {
+  seq += 1;
+  return {
+    userId: OWNER, gameId: `t-${seq}`, date: new Date(Date.UTC(2026, 10, 1, 0, seq)), result: "Victory",
+    myRace: "Protoss", opponent: { race: "Zerg" }, isLadderGame: true, matchFormat: "1v1", playerCount: 2,
+    spq: 70, macroScore: 60, apm: 150, durationSec: 600, myToonHandle: "1-S2-1-111", ...overrides,
+  };
+}
 
+describe("personal targets", () => {
   test("picks the most played matchup, medians the last 20 games and reads replay MMR", async () => {
     await db.games.insertMany([
       ...Array.from({ length: 25 }, (_, i) => game({ spq: 50 + i })),
@@ -183,6 +183,39 @@ describe("personal targets", () => {
     expect(findMany).not.toHaveBeenCalled();
   });
 
+});
+
+describe("Targets rating ladder", () => {
+  test("uses the selected own ladder's trusted rating and pace across opponents", async () => {
+    await db.games.insertMany([
+      game({ myMmr: 4100, myMmrSource: "replay" }),
+      game({ myMmr: 4120, myMmrSource: "replay", opponent: { race: "Terran" } }),
+      game({ myMmr: 4800, myMmrSource: "pulse" }),
+      game({ myRace: "Terran", myLadderRace: "T", myMmr: 6100, myMmrSource: "replay" }),
+      game({ myRace: "Zerg", myLadderRace: "Z" }),
+      game({ userId: "someone-else", myMmr: 7000, myMmrSource: "replay" }),
+    ]);
+    const svc = new LeagueTargetsService(db, { findMany: async () => new Map() });
+    const protoss = await svc.personal(OWNER, "PvZ", false);
+    expect(protoss.mmr).toMatchObject({ current: 4120, ladderRace: "P" });
+    expect(protoss.netMmr).toMatchObject({ pairs: 1, perGame: 20 });
+    expect((await svc.personal(OWNER, "TvZ", false)).mmr).toMatchObject({ current: 6100, ladderRace: "T" });
+    expect((await svc.personal(OWNER, "ZvZ", false)).mmr).toMatchObject({ current: null, ladderRace: "Z" });
+  });
+
+  test("uses the Random ladder for a Random matchup replay without mixing fixed-race ratings", async () => {
+    await db.games.insertMany([
+      game({ myLadderRace: "Random", myMmr: 3900, myMmrSource: "replay" }),
+      game({ myRace: "Zerg", opponent: { race: "Terran" }, myLadderRace: "R", myMmr: 3920, myMmrSource: "replay" }),
+      game({ opponent: { race: "Terran" }, myLadderRace: "P", myMmr: 5000, myMmrSource: "replay" }),
+    ]);
+    const svc = new LeagueTargetsService(db, { findMany: async () => new Map() });
+    const random = await svc.personal(OWNER, "PvZ", false);
+    expect(random.sample.n).toBe(1);
+    expect(random.mmr).toMatchObject({ current: 3920, ladderRace: "R" });
+    expect(random.netMmr).toMatchObject({ pairs: 1, perGame: 20 });
+    expect((await svc.personal(OWNER, "PvT", false)).mmr).toMatchObject({ current: 5000, ladderRace: "P" });
+  });
 });
 
 describe("season estimate", () => {
