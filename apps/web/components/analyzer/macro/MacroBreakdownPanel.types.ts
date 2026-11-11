@@ -116,6 +116,8 @@ export interface CasualtyEvent {
   killer: CasualtySide | null;
   category: CasualtyCategory;
   name: string;
+  killerUnit?: string;
+  bornAt?: number;
 }
 
 /**
@@ -176,7 +178,23 @@ export interface PlayerStats {
   opponent?: PlayerStatsRecord | null;
 }
 
+export interface MechanicsGroupSlot { slot: number; sets: number; recalls: number; recallsPerMin: number }
+export interface MechanicsCameraSlot { slot: number; saves: number; returns: number; returnsPerMin: number }
+export interface ReplayMechanicsMetrics {
+  groups?: MechanicsGroupSlot[];
+  camera?: MechanicsCameraSlot[];
+  selectionChangesPerMin?: number;
+  queuedCommandShare?: number;
+  cameraReturnsPerMin?: number;
+  screenChangesPerMin?: number;
+}
+export interface ReplayMechanics extends ReplayMechanicsMetrics {
+  activeSeconds: number;
+  phases: (ReplayMechanicsMetrics & { startSec: number; endSec: number })[];
+}
+
 export interface MacroBreakdownData {
+  myMechanics?: ReplayMechanics;
   ok: boolean;
   macro_score?: number | null;
   race?: string | null;

@@ -7,6 +7,7 @@ import {
   DEFAULT_LEAGUE_PREFS,
   isLeagueId,
   selectBands,
+  type LadderRace,
   type LeagueTargetsPrefs,
   type TargetsResponse,
   type TimingTable,
@@ -20,7 +21,7 @@ const TABLE_SWR = {
   shouldRetryOnError: false,
 } as const;
 
-type MmrResponse = { entries: Array<{ mmr: number }> };
+type MmrResponse = { race: LadderRace; mmr: number | null };
 
 function useLeagueTable(leagueId: number | null, matchup: string | null) {
   const valid = isLeagueId(leagueId) && !!matchup && /^[PTZ]v[PTZ]$/.test(matchup);
@@ -50,11 +51,12 @@ export function useTargetsData(requestedMatchup: string | null, includeTimings =
   );
   const prefsReq = useApi<LeagueTargetsPrefs>("/v1/me/preferences/leagueTargets", { revalidateOnFocus: false });
   const prefs = prefsReq.data ?? DEFAULT_LEAGUE_PREFS;
-  const needPulse = !!targets.data && targets.data.mmr.current === null && !isLeagueId(prefs.leagueOverride);
-  const pulse = useApi<MmrResponse>(needPulse ? "/v1/me/mmr" : null, { revalidateOnFocus: false, shouldRetryOnError: false });
-  const pulseMmr = pulse.data?.entries?.reduce<number | null>((best, entry) =>
-    typeof entry.mmr === "number" && (best === null || entry.mmr > best) ? entry.mmr : best, null) ?? null;
-  const bands = selectBands({ override: prefs.leagueOverride, replayMmr: targets.data?.mmr.current, pulseMmr });
+  const rating = targets.data?.mmr;
+  const pulseRace = rating?.current === null && !isLeagueId(prefs.leagueOverride) ? rating.ladderRace : null;
+  const pulse = useApi<MmrResponse>(pulseRace ? `/v1/me/mmr?race=${pulseRace}` : null,
+    { revalidateOnFocus: false, shouldRetryOnError: false });
+  const pulseMmr = pulse.data && pulse.data.race === pulseRace ? pulse.data.mmr : null;
+  const bands = selectBands({ override: prefs.leagueOverride, replayMmr: rating?.current, pulseMmr });
   const matchup = targets.data?.matchup ?? null;
   const era = targets.data?.timings?.era ?? "after";
   const current = useLeagueTable(bands?.current ?? null, matchup);
@@ -73,6 +75,6 @@ export function useTargetsData(requestedMatchup: string | null, includeTimings =
     tablesLoading: current.isLoading || next.isLoading,
     currentTimings: currentTimings.data?.table ?? null,
     nextTimings: nextTimings.data?.table ?? null,
-    currentMmr: targets.data?.mmr.current ?? pulseMmr,
+    currentMmr: bands?.mmr ?? null,
   };
 }

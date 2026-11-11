@@ -453,6 +453,7 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
             ),
             on_check_updates=lambda: _check_updates_with_notice(recovery_cell),
             on_install_update=lambda: recovery_cell.update_scheduler.tick(explicit=True) if recovery_cell.update_scheduler else None,
+            notifications_enabled=lambda: not state.notifications_muted,
             # No GUI in this mode — the tray omits its window item.
             synced_count_provider=lambda: count_synced(state),
         )
@@ -776,6 +777,8 @@ def _run_with_gui(
         autostart_enabled=autostart.is_enabled(),
         start_minimized=state.start_minimized,
         notify_every_game=state.notify_every_game,
+        notifications_muted=state.notifications_muted,
+        close_to_tray=state.close_to_tray,
         # Only an explicit override attributed to this account is prefilled.
         # Legacy/cloud flat cache contents never become Settings provenance.
         player_handle=read_settings_hint(cfg.state_dir, state.user_id) or "",
@@ -874,7 +877,11 @@ def _run_with_gui(
                 return load_local_ghost_replay(request.get("path"))
             result = ghost.action(request)
             if request.get("action") == "ghost_state":
+                from .practice_hud import read_display_mode
+                from .replay_finder import candidate_documents_dirs
+
                 result["replayFolders"] = [str(folder) for folder in _discover_replay_folders(cfg, state)]
+                result["displayMode"] = read_display_mode(folder / "StarCraft II" / "Variables.txt" for folder in candidate_documents_dirs())
             return result
         return companion.action(request)
 
@@ -977,6 +984,8 @@ def _run_with_gui(
             # Route back to the Qt window after a hide-to-tray close —
             # first menu item and the icon's double-click default.
             on_show_window=lambda: cell.gui.show_window() if cell.gui else None,
+            on_move_practice_hud=gui.toggle_practice_hud_move,
+            notifications_enabled=lambda: not state.notifications_muted,
             on_build_checkin=lambda: _open_build_checkin(
                 cell, _dashboard_url_from_api(cfg.api_base),
             ),
@@ -1072,6 +1081,43 @@ def _run_with_gui(
     return rc
 
 
+def _save_first_run(cfg, state, choices, initial_folders, ui):
+    from .first_run import setup_range
+
+    replay_range = setup_range(choices.preset)
+    folder_keys = {path_key(Path(path)) for path in choices.folders}
+    removed = [str(path) for path in initial_folders if path_key(path) not in folder_keys]
+    fields = ("replay_folders_override", "replay_folders_excluded", "replay_folder_override", "sync_filter_preset",
+              "sync_filter_since", "sync_filter_until", "autostart_enabled", "setup_pending", "setup_completed_at")
+    with _STATE_SAVE_LOCK:
+        previous = {name: getattr(state, name) for name in fields}
+        original_startup = autostart.is_enabled() if choices.start_with_windows is not None else None
+        changed_startup = original_startup is not None and original_startup != choices.start_with_windows
+        try:
+            _apply_saved_replay_folders(cfg, state, list(choices.folders), removed)
+            if changed_startup and not autostart.set_enabled(choices.start_with_windows):
+                raise OSError("Windows did not accept the start-up setting.")
+            if choices.start_with_windows is not None:
+                state.autostart_enabled = choices.start_with_windows
+            state.sync_filter_preset = replay_range.preset
+            state.sync_filter_since = replay_range.since_iso
+            state.sync_filter_until = replay_range.until_iso
+            state.setup_pending = False
+            state.setup_completed_at = time.time()
+            save_state(cfg.state_dir, state)
+        except Exception:
+            for name, value in previous.items():
+                setattr(state, name, value)
+            if changed_startup:
+                autostart.set_enabled(original_startup)
+            raise
+    try:
+        ui.on_filter_label(replay_range.short_label() if replay_range.is_active() else "")
+    except Exception:
+        pass  # The saved choice remains authoritative when a window closes.
+    return replay_range
+
+
 def _gui_boot_worker(
     *,
     cfg: AgentConfig,
@@ -1085,6 +1131,10 @@ def _gui_boot_worker(
 ) -> None:
     """Run the agent's startup sequence outside the Qt thread."""
     try:
+        from .first_run import FirstRunSetup, prepare_first_run
+
+        gui = getattr(cell, "gui", None)
+        setup_pending = bool(gui and prepare_first_run(state, lambda: save_state(cfg.state_dir, state)))
         api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
 
         ui.on_status("connecting...")
@@ -1109,6 +1159,17 @@ def _gui_boot_worker(
                 base_url=cfg.api_base, device_token=state.device_token,
             )
             ui.on_paired_current(state.user_id or "", getattr(state, "_owner_epoch", None))
+
+        if setup_pending:
+            discovered = _discover_replay_folders(cfg, state)
+            setup = FirstRunSetup(
+                folders=discovered,
+                start_with_windows=autostart.is_enabled() if autostart.is_supported() else None,
+                save=lambda choices: _save_first_run(cfg, state, choices, discovered, ui),
+            )
+            gui._dispatch("setupRequested", setup)
+            if not setup.wait(stop_event):
+                return
 
         probe_ok, probe_diag = probe_analyzer()
         ui.on_analyzer_probe(probe_ok, probe_diag)
@@ -1219,6 +1280,13 @@ def _gui_boot_worker(
                     cfg, state, upload,
                 ),
             )
+            def intent_changed(ping):
+                controller = getattr(cell, "build_checkin", None)
+                if controller and not ping.get("ghostPrefs"):
+                    controller.on_intent_changed(ping)
+                if ping.get("ghostPrefs") or ping.get("gameKey"):
+                    cell.gui._dispatch("practiceChanged", ping.get("gameKey"))
+
             socket_client = SocketClient(
                 base_url=cfg.api_base,
                 device_token=state.device_token,
@@ -1238,10 +1306,7 @@ def _gui_boot_worker(
                 overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
                 session_enabled=state.companion_session_enabled,
                 on_connection=ui.health.set_socket,
-                on_build_intent_changed=lambda ping: (
-                    cell.build_checkin.on_intent_changed(ping)
-                    if getattr(cell, "build_checkin", None) else None
-                ),
+                on_build_intent_changed=intent_changed,
                 on_scouting_brief=lambda brief: (
                     cell.build_checkin.on_scouting_brief(brief)
                     if getattr(cell, "build_checkin", None) else None
@@ -1455,7 +1520,7 @@ def _start_desktop_history(cfg, state, ui):
         on_snapshot=ui.on_recent_snapshot,
     )
     ui._recent_history = history
-    ui._game_notifications = lambda: state.notify_every_game
+    ui._game_notifications = lambda: state.notify_every_game and not state.notifications_muted
     history.start()
     return history
 
@@ -2063,6 +2128,10 @@ def _handle_save_settings(
         state.start_minimized = bool(payload.start_minimized)
     if payload.notify_every_game is not None:
         state.notify_every_game = payload.notify_every_game is True
+    if payload.notifications_muted is not None:
+        state.notifications_muted = payload.notifications_muted is True
+    if payload.close_to_tray is not None:
+        state.close_to_tray = payload.close_to_tray is True
     if payload.auto_update_enabled is not None:
         # Hot-applies: the updater reads this flag from state on every
         # poll (``_handle_update_available``'s consent gate), so no
@@ -2199,7 +2268,7 @@ def _handle_save_settings(
         status_msg = "Saved. " + "; ".join(bits) + "."
         if not obs_activated:
             status_msg += " OBS could not reconnect. Use Test connection and retry."
-    if cell.gui is not None and hasattr(cell.gui, "show_settings_status"):
+    if payload.show_summary and cell.gui is not None and hasattr(cell.gui, "show_settings_status"):
         try:
             cell.gui.show_settings_status(status_msg)
         except Exception:  # noqa: BLE001

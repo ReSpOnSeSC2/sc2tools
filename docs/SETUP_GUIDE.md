@@ -34,7 +34,7 @@ the browser bundle. Redeploy the web app when they change.
 | Web deployment | `NEXT_PUBLIC_SITE_URL`, `SC2TOOLS_API_BASE`, `NEXT_PUBLIC_BUILD_SHA`, `VERCEL_GIT_COMMIT_SHA` |
 | R2 storage | `GAME_DETAILS_STORE`, `REPLAY_FILES_STORE`, `R2_ENDPOINT`, `R2_REGION`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PREFIX`, `R2_REPLAY_PREFIX`, `R2_BROWSER_CORS_AUTO` |
 | Atlas backup status | `ATLAS_SERVICE_ACCOUNT_ID`, `ATLAS_SERVICE_ACCOUNT_SECRET`, `ATLAS_SERVICE_ACCOUNT_SECRET_EXPIRES_AT`, `ATLAS_ORG_ID`, `ATLAS_PROJECT_ID`, `ATLAS_CLUSTER_NAME` |
-| Optional recurring support link on API | `DONATIONS_RECURRING_URL` |
+| Optional recurring support link on Vercel web | `DONATIONS_RECURRING_URL` |
 | Web push on API | `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_VAPID_SUBJECT` |
 | Guides and Community revalidation | `GUIDES_REVALIDATE_URL`, `GUIDES_REVALIDATE_SECRET`, `COMMUNITY_REVALIDATE_URL`, `COMMUNITY_REVALIDATE_SECRET` |
 | Reviews, guides and browser import rollout | `REVIEWS_ENABLED`, `NEXT_PUBLIC_REVIEWS_ENABLED`, `GUIDES_ENABLED`, `NEXT_PUBLIC_GUIDES_ENABLED`, `NEXT_PUBLIC_INSTANT_IMPORT` |
@@ -73,6 +73,11 @@ amount and currency before verification. See the
    Publish the draft after review and verify the release feed. Check the
    [latest published agent](https://github.com/ReSpOnSeSC2/sc2tools/releases)
    against the release under test before starting installed acceptance.
+
+Agent 0.25.0 belongs to the growth release. Check the latest published release
+and available tag before building a roadmap installer. If 0.25.0 ships before
+these native changes reach main, use the next unused agent version after that
+release. Installed acceptance and signed delivery are owner steps.
 
 For a source regression, revert the affected change through a checked PR.
 Roll the web back before removing an API contract it uses. Follow the
@@ -115,8 +120,12 @@ See the [database restore runbook](runbooks/restore-database.md),
 | 74 | Keep the cache gate off and verify the deployment and revocation contract before any activation review. |
 | 78, 84 | If enabling direct browser reads, add a GET rule to the existing replay bucket for the deployed web origins. Preserve the upload rules. Test an owned original download and replay-pack ZIP in a real browser. Then verify a revocable share's playback segments signed out through the API. Direct storage reads for shared playback require opaque object keys. |
 | 79 | After the native release, pair the updated desktop agent and try a small re-analysis cohort. Check a replay on disk and one fetched from the archive, pause/resume, and verify the new engine stamp. |
-| 85 | Record, cancel and download a short clip in a supported desktop browser. Check the final file duration, replay frames, scoreboard and watermark. Repeat with GIF where available. |
-| 93–95 | Supply the matching VAPID key pair and subject on Render to enable push. Subscribe on a test device and verify opt-in categories, notification delivery and unsubscribe. Use a disposable Discord channel to verify opt-in delivery and revocation. Keep private calendar subscription links out of logs and shared screenshots. |
+| 85 | Record, cancel and download a short clip in a supported desktop browser. Check the final file duration, replay frames, scoreboard and watermark. Repeat across a recorded replay section boundary and with GIF where available. |
+| 93–95 | Supply the matching VAPID key pair and subject on Render to enable push. Subscribe on a test device and verify opt-in categories, notification delivery and unsubscribe. Use a disposable Discord channel to verify opt-in delivery and revocation. Test promotion posts with two observed league values for the same ranked account and race on the updated agent. Keep private calendar subscription links out of logs and shared screenshots. |
+| 90, 96, 184–187 | On the released agent, try a fresh link and an existing link, replay folder and history choices, Save and Revert, shortcuts, restart-required changes, tray status and Practice HUD placement. Check voice, countdown and capture exclusion off-air. |
+| 157–159 | On an off-air OBS scene, verify the timed poll, clip log, Large overlay scale and starter widget connections. Source presence is checked by connection; confirm visibility and audio directly in OBS. |
+| 87, 193, 194 | After updating and re-analyzing a replay, follow both cameras, check the attention heatmap, compare recorded control-group and camera phases, and verify unit trades, lifespans and build-supply labels. |
+| 195 | Test the React Locker roster with a disposable linked account, including local backup and revision-checked restore. Keep Classic available and record one week of use before retiring the roster’s HTML view. |
 
 Use the [roadmap ledger](handoff/roadmap-progress-2026-10-28.json) for
 requirement-level status and the [Windows release runbook](runbooks/agent-wave2-release.md)

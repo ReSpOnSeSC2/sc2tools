@@ -47,7 +47,8 @@ import { LossPanel } from "./replay/LossPanel";
 import { ReplayUnitInspector } from "./replay/ReplayUnitInspector";
 import { useReplayInspector } from "./replay/useReplayInspector";
 import { visionIsObserved, visionLabel, visionViewer, type ReplayVision } from "@/lib/replayVision";
-import { followView, inspectEntity, type ReplayEntityRef } from "@/lib/replayInspect";
+import { replayCameraAt, type ReplayCameraMode } from "@/lib/replayCamera";
+import { centeredReplayView, followView, inspectEntity, type ReplayEntityRef } from "@/lib/replayInspect";
 import { PlaybackAccuracyBadge } from "./PlaybackAccuracyBadge";
 import { markerAt, type ReplayMapMarker } from "@/lib/replayMarkers";
 
@@ -128,6 +129,8 @@ export function MapReplayer({
   patchEra,
   /** Whose sight reveals the map (lib/replayVision). Default: both. */
   vision = "both",
+  cameraMode = "free",
+  onReleaseCamera,
   /** Tap a unit to inspect it. Hosts that use taps for their own
    *  ``onWorldClick`` still get those first. */
   inspect = true,
@@ -154,6 +157,8 @@ export function MapReplayer({
   onMarkerClick?: (id: string) => void;
   patchEra?: PatchEra | null;
   vision?: ReplayVision;
+  cameraMode?: ReplayCameraMode;
+  onReleaseCamera?: () => void;
   inspect?: boolean;
   sideLabels?: { me?: string | null; opp?: string | null };
   handleRef?: MutableRefObject<MapReplayerHandle | null>;
@@ -190,6 +195,8 @@ export function MapReplayer({
   playbackRef.current = playback;
   const visionRef = useRef(vision);
   visionRef.current = vision;
+  const cameraRef = useRef({ mode: cameraMode, release: onReleaseCamera });
+  cameraRef.current = { mode: cameraMode, release: onReleaseCamera };
   const inspector = useReplayInspector(playback, inspect);
   const { hitsRef, selectedRef, followingRef, setFollowing } = inspector;
   // Last value we published, so the sync effect can tell the host
@@ -434,11 +441,26 @@ export function MapReplayer({
       lastTs = ts;
       // Follow: the camera tracks the selected unit; it lets go when the
       // unit dies or boards a transport.
-      const follow = followingRef.current ? selectedRef.current : null;
+      const camera = cameraRef.current.mode;
+      const follow = camera === "free" && followingRef.current ? selectedRef.current : null;
       if (follow) {
         const dpr = window.devicePixelRatio || 1;
         const next = followView(playback, follow, timeRef.current, viewRef.current, canvas.width / dpr, canvas.height / dpr, STAGE_PAD_PX);
         if (next) { viewRef.current = next; canvas.style.touchAction = "none"; } else setFollowing(false);
+      } else if (camera !== "free") {
+        const point = replayCameraAt(playback.camera?.[camera], timeRef.current);
+        const dpr = window.devicePixelRatio || 1;
+        const view = viewRef.current;
+        const next = point && centeredReplayView(playback, point, { z: 1, ox: 0, oy: 0 },
+          canvas.width / dpr, canvas.height / dpr, STAGE_PAD_PX, 3);
+        if (next) {
+          const reduceMotion = document.documentElement.dataset.motion === "reduce"
+            || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+          const ease = (from: number, to: number) => Math.abs(from - to) <= 0.5 || !playingRef.current || reduceMotion
+            ? to : from + (to - from) * 0.25;
+          viewRef.current = { z: next.z, ox: ease(view.ox, next.ox), oy: ease(view.oy, next.oy) };
+          canvas.style.touchAction = "none";
+        }
       }
       // Dirty-check: a paused replay re-renders only when the scrub
       // time, canvas size, or asset readiness actually changed —
@@ -459,10 +481,10 @@ export function MapReplayer({
         view.oy !== drawn.oy ||
         markersRef.current !== drawn.mk ||
         visionRef.current !== drawn.vi ||
-        selectedRef.current !== drawn.se;
+        selectedRef.current !== drawn.se || camera !== drawn.camera;
       if (dirty) {
         renderFrame(ctx, canvas, playback, timeRef.current, layoutImageRef.current, view, markersRef.current, undefined,
-          { vision: visionRef.current, hits: hitsRef.current, selected: selectedRef.current });
+          { vision: visionRef.current, hits: hitsRef.current, selected: selectedRef.current, camera });
         drawn = {
           t: timeRef.current,
           v: assetsVersion,
@@ -478,15 +500,15 @@ export function MapReplayer({
           oy: view.oy,
           mk: markersRef.current,
           vi: visionRef.current,
-          se: selectedRef.current,
+          se: selectedRef.current, camera,
         };
       }
     };
     let lastReactSync = -1;
     let drawn: {
       t: number; v: number; sv: number; cw: number; ch: number; z: number; ox: number; oy: number;
-      mk: readonly ReplayMapMarker[] | undefined; vi: ReplayVision; se: ReplayEntityRef | null;
-    } = { t: -1, v: -1, sv: -1, cw: 0, ch: 0, z: 1, ox: 0, oy: 0, mk: undefined, vi: "both", se: null };
+      mk: readonly ReplayMapMarker[] | undefined; vi: ReplayVision; se: ReplayEntityRef | null; camera: ReplayCameraMode;
+    } = { t: -1, v: -1, sv: -1, cw: 0, ch: 0, z: 1, ox: 0, oy: 0, mk: undefined, vi: "both", se: null, camera: "free" };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, [playback, gameLength, emitTime, emitPlaying, hitsRef, selectedRef, followingRef, setFollowing]);
@@ -652,6 +674,7 @@ export function MapReplayer({
       }
       const v = viewRef.current;
       if (v.z <= 1) return;
+      if (tapMoved && cameraRef.current.mode !== "free") cameraRef.current.release?.();
       if (tapMoved && followingRef.current) setFollowing(false); // a deliberate pan takes the camera back
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
@@ -665,7 +688,7 @@ export function MapReplayer({
       pointers.delete(e.pointerId);
       pinchDist = 0;
     };
-    const onDblClick = () => resetView();
+    const onDblClick = () => { cameraRef.current.release?.(); resetView(); };
     const onClick = (e: MouseEvent) => {
       canvas.focus({ preventScroll: true });
       const moved = tapMoved;
@@ -889,6 +912,7 @@ export function MapReplayer({
                 following={inspector.following}
                 onJump={seekTo}
                 onFollow={(next) => {
+                  if (next) cameraRef.current.release?.();
                   setFollowing(next);
                   if (!next) canvasRef.current?.focus({ preventScroll: true });
                 }}

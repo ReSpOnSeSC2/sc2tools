@@ -11,6 +11,16 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Replay camera and mechanics
+
+- Follow either player's recorded camera and open Camera attention to see
+  where that player looked in the loaded replay section.
+- Open Units for recorded losses, credited kills, trades and lifespans. The
+  Mechanics card shows control-group and camera habits, with trends in Macro.
+- Build orders show measured supply where the replay captured it at the step.
+  Re-analyze older games from Settings → Backups & data after updating the
+  desktop app.
+
 ### Practice targets and reports
 
 - Edit checkpoints for a private Ghost target and count a graded game toward
@@ -102,7 +112,8 @@ corresponding GitHub Release.
 - Make a clip of up to 60 seconds, starting on the nearest fight: WebM (MP4
   where that is what the browser records) or a GIF where video recording is
   unavailable, with speed, size, scoreboard and watermark options. Clips are
-  made in your browser and never uploaded.
+  made in your browser and never uploaded. Clips can cross replay section
+  boundaries without jumping the live replay clock.
 
 ### Compare two games
 
@@ -162,6 +173,10 @@ corresponding GitHub Release.
 - Add coaching session reminders 24 hours and 1 hour before a session, an
   **Add to calendar** button on each booking and a private calendar link you
   can subscribe to, regenerate or turn off.
+- Weekly delivery retries interrupted reports without duplicating the bell
+  entry or an already delivered Discord recap.
+- Discord milestones include a promotion when two consecutive ranked
+  replays record a higher league on the same ladder account and race.
 - Add **Post to Discord** in Settings → Integrations: ranked results, session
   summaries, the weekly recap and new MMR peaks in your own server's channel.
   Off until you preview the posts and turn a channel on; opponent names stay

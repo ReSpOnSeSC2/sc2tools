@@ -14,6 +14,9 @@ vi.mock("@/lib/segmentedPlayback", () => ({ sanitizePlaybackManifest: (raw: unkn
 vi.mock("@/components/analyzer/game/replay/SegmentedReplayHost", () => ({
   SegmentedReplayHost: (props: Record<string, unknown>) => { h.host(props); return <div data-testid="segmented-host" />; },
 }));
+vi.mock("@/components/analyzer/game/replay/ReplayStage", () => ({
+  ReplayStage: (props: Record<string, unknown>) => { h.host(props); return <div data-testid="inline-host" />; },
+}));
 vi.mock("@/components/analyzer/game/InteractiveTimeline", () => ({ InteractiveTimeline: () => <div data-testid="timeline" /> }));
 vi.mock("@/components/analyzer/game/MechanicsPanel", () => ({ MechanicsPanel: () => <p>Mechanics</p> }));
 vi.mock("@/components/analyzer/game/BuildOrderColumns", () => ({ BuildOrderColumns: () => <p>Build orders</p> }));
@@ -71,12 +74,28 @@ describe("SharedGameView", () => {
     expect(report).not.toMatch(/\byou(r)?\b/i);
   });
 
+  it("offers anonymous clips only when a shared map can be loaded", async () => {
+    h.publicApi.mockImplementation((path: string | null) => ({ data: path?.endsWith("/map-playback") ? {
+      v: 1, gameLength: 640, mapName: "Alcyone LE", bounds: { minX: 0, minY: 0, maxX: 60, maxY: 40 },
+      buildings: [{ owner: "me", name: "Pylon", t: 0, x: 4, y: 4, died: null }],
+    } : undefined, isLoading: false }));
+    const view = render(<SharedGameView token={TOKEN} data={{ ...DATA, playback: { mode: "inline" } }} />);
+    await screen.findByTestId("inline-host");
+    expect(h.host.mock.calls.at(-1)?.[0]).toMatchObject({ clip: "shared" });
+    h.host.mockClear();
+    view.rerender(<SharedGameView token={TOKEN} data={{ ...DATA, playback: { mode: "none" } }} />);
+    expect(screen.queryByTestId("inline-host")).toBeNull();
+    expect(screen.queryByTestId("segmented-host")).toBeNull();
+    expect(h.host).not.toHaveBeenCalled();
+  });
+
   it("plays the recorded replay through the share's own grant, storage links first", async () => {
     render(<SharedGameView token={TOKEN} data={DATA} initialTimeSec={312} />);
     await screen.findByTestId("segmented-host");
     expect(h.publicApi).toHaveBeenCalledWith(`/v1/shares/${TOKEN}/map-playback/manifest`);
     const props = h.host.mock.calls.at(-1)![0] as Record<string, any>;
     expect(props.anonymous).toBe(true);
+    expect(props.clip).toBe("shared");
     expect(props.initialTimeSec).toBe(312);
     expect(props.myName).toBe("Protoss player");
     expect(props.oppName).toBe("Opponent (Zerg, ~4,100 MMR)");

@@ -16,6 +16,7 @@ const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
 const { sanitizeRivals } = require("../util/rivalsPreferences");
 const { OPPONENT_SCOUTING_PREF_TYPE, sanitizeOpponentScouting } = require("../util/opponentScoutingPreferences");
 const { LEAGUE_TARGETS_PREF_TYPE, sanitizeLeagueTargets } = require("../util/leagueTargetsPreferences");
+const { isPlausibleMmr } = require("../util/leagueBands");
 const { APPEARANCE_PREF_TYPE, sanitizeAppearance } = require("../util/appearancePreferences");
 const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("../services/twitchAutomationPolicy");
 const { sanitizeChatCommands } = require("../services/chatCommands");
@@ -34,6 +35,7 @@ const {
 const ME_MMR_MAX_TOONS = 8;
 // PulseMmrService admits two distinct upstream requests at once.
 const ME_MMR_LOOKUP_CONCURRENCY = 2;
+const MMR_LADDER_RACES = new Map([["P", "Protoss"], ["T", "Terran"], ["Z", "Zerg"], ["R", "Random"]]);
 
 /**
  * /v1/me — sanity endpoint for the web app. Returns the user record
@@ -81,6 +83,7 @@ const ME_MMR_LOOKUP_CONCURRENCY = 2;
  *       characterId?: string | null,
  *     } | null>,
  *     getBattleTags?(ids: string[]): Promise<string[]>,
+ *     getRaceBreakdown?: import('../services/pulseMmr').PulseMmrService['getRaceBreakdown'],
  *   },
  *   auth: import('express').RequestHandler,
  *   isAdmin?: (req: import('express').Request) => boolean,
@@ -906,7 +909,7 @@ function buildMeRouter(deps) {
    * /  miss for a single pulseId just drops that row, never blocks
    * the others.
    */
-  router.get("/me/mmr", deps.auth, async (req, res, next) => {
+  router.get("/me/mmr", deps.auth, scopedMmrByRace(deps), async (req, res, next) => {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
@@ -978,6 +981,34 @@ function buildMeRouter(deps) {
   });
 
   return router;
+}
+
+/** Targets requests one ladder race; the dashboard's unscoped read uses
+ * the per-toon contract below the middleware in the route chain.
+ * @param {Pick<Parameters<typeof buildMeRouter>[0], "users"|"pulseMmr">} deps
+ * @returns {import('express').RequestHandler}
+ */
+function scopedMmrByRace(deps) {
+  return async (req, res, next) => {
+    const requested = req.query.race;
+    if (requested === undefined) { next(); return; }
+    res.set("Cache-Control", "private, no-store");
+    const race = typeof requested === "string" ? MMR_LADDER_RACES.get(requested) : undefined;
+    if (!race) {
+      res.status(400).json({ error: { code: "invalid_ladder_race" } });
+      return;
+    }
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      const profile = await deps.users.getProfile(req.auth.userId);
+      const ids = Array.isArray(profile?.pulseIds) ? profile.pulseIds.slice(0, ME_MMR_MAX_TOONS) : [];
+      const races = ids.length ? await deps.pulseMmr?.getRaceBreakdown?.(ids).catch(() => []) ?? [] : [];
+      const rating = races.find((row) => row.race === race && row.games > 0 && isPlausibleMmr(row.mmr));
+      res.json({ race: requested, mmr: rating?.mmr ?? null });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 /**

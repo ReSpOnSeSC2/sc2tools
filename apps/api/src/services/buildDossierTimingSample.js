@@ -1,5 +1,6 @@
 "use strict";
 
+const { compactTradeReplay, hasTradeEngine } = require("./unitTradePreview");
 const TimingCatalog = require("./timingCatalog");
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 const { toStartSeconds } = require("./buildDurations");
@@ -15,13 +16,15 @@ async function hydrateDossierTimings({ games, details }, userId, sample, signal)
     /** @type {Record<string,any>} */
     let blob = {};
     if (details && gameId) {
-      const one = await details.findMany(userId, [gameId], { fields: ["buildLog", "oppBuildLog"], concurrency: 1, signal });
+      const fields = ["buildLog", "oppBuildLog"];
+      if (hasTradeEngine(game.engineVersion)) fields.push("macroBreakdown");
+      const one = await details.findMany(userId, [gameId], { fields, concurrency: 1, signal });
       blob = one.get(gameId) || {};
     }
     checkAbort(signal);
     const legacy = await legacyFields(games, userId, gameId, blob, game, signal);
     checkAbort(signal);
-    compact.push({ ...game,
+    compact.push({ ...game, tradeSample: compactTradeReplay(game, blob.macroBreakdown),
       buildLog: compactDossierTimingLog(Array.isArray(blob.buildLog) ? blob.buildLog : legacy.buildLog, game),
       oppBuildLog: compactDossierTimingLog(Array.isArray(blob.oppBuildLog) ? blob.oppBuildLog : legacy.oppBuildLog, game),
     });

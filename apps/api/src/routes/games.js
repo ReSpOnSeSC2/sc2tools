@@ -1375,7 +1375,11 @@ function compactGameForRealtime(game) {
     myRace: game.myRace,
     myLadderRace: game.myLadderRace,
     myMmr: game.myMmr,
+    myLeagueId: game.myLeagueId,
     myToonHandle: game.myToonHandle,
+    isLadderGame: game.isLadderGame,
+    matchFormat: game.matchFormat,
+    playerCount: game.playerCount,
     map: game.map,
     durationSec: game.durationSec,
     opponent: opponent && typeof opponent === "object"
@@ -1398,7 +1402,9 @@ function compactGameForRealtime(game) {
  */
 function queueDiscordPosts(discord, userId, game, log) {
   if (!discord || !game) return;
-  void discord.onFreshGame(userId, game).catch((err) => log?.warn({ code: err?.code || "discord_enqueue_failed" }, "discord_enqueue_failed"));
+  const { gameId, isLadderGame } = game;
+  void discord.onFreshGame(userId, { gameId, isLadderGame })
+    .catch((err) => log?.warn({ code: err?.code || "discord_enqueue_failed" }, "discord_enqueue_failed"));
 }
 
 /**

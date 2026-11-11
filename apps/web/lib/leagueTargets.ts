@@ -23,12 +23,14 @@ export type TimingTable = {
   era: string; leagueId: number; league: string; matchup: string; n: number;
   timings: Record<TimingKey, MetricBenchmark>;
 };
+export type LadderRace = "P" | "T" | "Z" | "R";
+
 export type TargetsResponse = {
   matchup: string | null;
   matchups: Array<{ matchup: string; games: number }>;
   sample: { n: number; limit: number };
   medians: Record<TargetMetric, { n: number; median: number | null }>;
-  mmr: { current: number | null; at: string | null; region: string | null };
+  mmr: { current: number | null; at: string | null; region: string | null; ladderRace: LadderRace | null };
   netMmr: { pairs: number; games: number; perGame: number | null; window: number };
   timings: { era: string | null; n: number; limit: number; timings: Record<TimingKey, { n: number; median: number | null }> } | null;
 };

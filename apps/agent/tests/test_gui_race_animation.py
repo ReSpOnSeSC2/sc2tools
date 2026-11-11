@@ -114,9 +114,13 @@ win._set_window_size("Standard")
 settle(effects)
 win._handle_input.setText("Unsaved settings draft")
 page.notes.setPlainText("Unsaved opponent note")
-for route in ("settings", "dashboard", "recent", "log", "streams", "companion"):
-    win._go_to_page(route)
+for route in ("settings", "help", "dashboard", "recent", "log", "streams", "companion"):
+    if route == "help":
+        keep_settings_draft_via_help(win)
+    else:
+        win._go_to_page(route)
     app.processEvents()
+    assert win._PAGE_KEYS[win._stack.currentIndex()] == route
     assert not effects.timer.isActive(), route
 for route in ("opponents", "scouting", "builds", "randomizer", "ghost", "scouting"):
     page.console.navigate(route)

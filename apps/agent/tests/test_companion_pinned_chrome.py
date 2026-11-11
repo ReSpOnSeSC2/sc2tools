@@ -93,6 +93,15 @@ def test_each_pin_has_themed_controls_native_drag_resize_and_no_windows_titlebar
         assert panel.testAttribute(QtCore.Qt.WA_ShowWithoutActivating)
         assert not panel.testAttribute(QtCore.Qt.WA_QuitOnClose)
         controls = panel.identity_card if {kind!r} == "opponent" else panel.window_controls
+        if {kind!r} == "ghost":
+            assert panel.isVisible() and controls.isHidden()
+            assert panel.windowFlags() & QtCore.Qt.WindowTransparentForInput
+            assert panel.testAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+            ghost._hud_move_button.click()
+            app.processEvents()
+            assert ghost._hud_move_button.text() == "Finish moving"
+            assert not (panel.windowFlags() & QtCore.Qt.WindowTransparentForInput)
+            assert not panel.testAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
         assert controls.minimize_button.isVisible() == ({kind!r} != "opponent")
         assert controls.close_button.isVisible() == ({kind!r} != "opponent")
         if {kind!r} == "opponent":
@@ -122,6 +131,11 @@ def test_each_pin_has_themed_controls_native_drag_resize_and_no_windows_titlebar
         controls.minimize_button.click()
         app.processEvents()
         assert panel.isMinimized()
+        if {kind!r} == "ghost":
+            ghost._hud_move_button.click()
+            assert controls.isHidden()
+            assert panel.windowFlags() & QtCore.Qt.WindowTransparentForInput
+            assert panel.testAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
     ''')
 
 

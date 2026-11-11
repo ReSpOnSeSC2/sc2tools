@@ -762,7 +762,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   chatbot.series = streamSeries;
   // Reconnect every enabled bot on boot — best-effort, non-blocking.
   void twitchChatBot.restoreAll();
-  const aggregations = new AggregationsService(deps.db, { mmrExpectation });
+  const aggregations = new AggregationsService(deps.db, { mmrExpectation, details: gameDetails });
   const sessionPolicy = new SessionPolicyService(deps.db, { revisions: aggregations.trendsRequests.revisions });
   aggregations.sessionPolicy = sessionPolicy;
   games.sessionPolicy = sessionPolicy; useSessionPolicy(sessionPolicy);

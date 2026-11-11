@@ -5,13 +5,15 @@
  * owner-scoped data plus the hook's options:
  *
  *   opponentNames  false by default: no opponent name unless turned on
- *   mmr            true by default: MMR and its change
+ *   mmr            true by default: observed MMR and historical changes
  *   replayLink     false by default, and only with public replay sharing
  *
  * ``allowed_mentions: {parse: []}`` stops any text (custom build names,
  * labels) from pinging a server. User text is markdown-escaped and cut to
  * Discord's field limits.
  */
+
+const { recordedRating } = require("./gameMomentRules");
 
 const SITE = "https://sc2tools.com";
 const COLORS = { win: 0x2fbf71, loss: 0xe5484d, neutral: 0x7c8a9a, brand: 0x3aa7ff };
@@ -62,7 +64,7 @@ function hookOptions(options) {
 /**
  * One ranked result.
  * @param {any} game slim games row
- * @param {{options?: unknown, mmrDelta?: number|null, replaySlug?: string|null}} ctx
+ * @param {{options?: unknown, replaySlug?: string|null}} ctx
  */
 function resultMessage(game, ctx) {
   const options = hookOptions(ctx.options);
@@ -70,13 +72,12 @@ function resultMessage(game, ctx) {
   const matchup = `${letter(game.myRace)}v${letter(game.opponent?.race)}`;
   const fields = [];
   if (game.myBuild) fields.push({ name: "Build", value: md(game.myBuild, 80) || "—", inline: true });
+  const ownMmr = recordedRating(game);
+  const opponentMmr = game.opponent?.mmrSource === "replay" && Number.isFinite(game.opponent.mmr) && game.opponent.mmr > 0 ? game.opponent.mmr : null;
   const opponent = [options.opponentNames && game.opponent?.displayName ? md(game.opponent.displayName, 40) : null,
-    md(game.opponent?.race, 12) || null, typeof game.opponent?.mmr === "number" && options.mmr ? `${num(game.opponent.mmr)} MMR` : null].filter(Boolean);
+    md(game.opponent?.race, 12) || null, opponentMmr !== null && options.mmr ? `${num(opponentMmr)} MMR` : null].filter(Boolean);
   if (opponent.length) fields.push({ name: "Opponent", value: opponent.join(" · "), inline: true });
-  if (options.mmr && typeof game.myMmr === "number") {
-    const delta = typeof ctx.mmrDelta === "number" && ctx.mmrDelta !== 0 ? ` (${signed(ctx.mmrDelta)})` : "";
-    fields.push({ name: "MMR", value: `${num(game.myMmr)}${delta}`, inline: true });
-  }
+  if (options.mmr && ownMmr !== null) fields.push({ name: "MMR", value: num(ownMmr), inline: true });
   const length = clock(game.durationSec);
   if (length) fields.push({ name: "Length", value: length, inline: true });
   const url = options.replayLink && ctx.replaySlug && typeof game.gameId === "string"
@@ -84,6 +85,26 @@ function resultMessage(game, ctx) {
   const label = outcome === "win" ? "Victory" : outcome === "loss" ? "Defeat" : "Tie";
   return message([{ title: `${label} · ${matchup} on ${md(game.map, 60) || "Unknown map"}`, color: COLORS[outcome], fields,
     ...(url ? { url } : {}), ...(game.date ? { timestamp: new Date(game.date).toISOString() } : {}), footer: { text: "SC2 Tools" } }]);
+}
+
+/** Older result embeds included ratings without provenance or attributed a
+ * change between two pregame readings to the current result.
+ * @param {any} payload @param {boolean} verified */
+function sanitizeQueuedResultRatings(payload, verified) {
+  if (!Array.isArray(payload?.embeds)) return payload;
+  return { ...payload, embeds: payload.embeds.map((/** @type {any} */ embed) => {
+    if (!Array.isArray(embed?.fields)) return embed;
+    const fields = embed.fields.flatMap((/** @type {any} */ field) => {
+      if (field?.name === "MMR") {
+        if (!verified || typeof field.value !== "string") return [];
+        return [{ ...field, value: field.value.replace(/ \([+−-][0-9,]+\)$/, "") }];
+      }
+      if (verified || field?.name !== "Opponent" || typeof field.value !== "string") return [field];
+      const value = field.value.replace(/(?:^| · )[-−]?(?:[0-9,]+|NaN|∞) MMR$/, "");
+      return value ? [{ ...field, value }] : [];
+    });
+    return { ...embed, fields };
+  }) };
 }
 
 /**
@@ -124,6 +145,15 @@ function milestoneMessage(milestone, ctx) {
   return message([{ title: `New ${md(milestone.race, 12) || ""} MMR peak`.replace(/\s+/g, " "), color: COLORS.win, description: value, footer: { text: "SC2 Tools" } }]);
 }
 
+/** @param {{previous:string,current:string,race:string,mmr?:number}} milestone @param {{options?:unknown}} ctx */
+function promotionMessage(milestone, ctx) {
+  const options = hookOptions(ctx.options);
+  const fields = options.mmr && Number.isFinite(milestone.mmr) && Number(milestone.mmr) > 0
+    ? [{ name: "MMR", value: num(Number(milestone.mmr)), inline: true }] : [];
+  return message([{ title: `Promotion · ${md(milestone.current, 24)}`, color: COLORS.win,
+    description: `${md(milestone.previous, 24)} → ${md(milestone.current, 24)} · ${md(milestone.race, 12)}`, fields, footer: { text: "SC2 Tools" } }]);
+}
+
 function testMessage() {
   return message([{ title: "SC2 Tools is connected", color: COLORS.brand,
     description: "This channel will receive the posts you turned on in SC2 Tools. Opponent names stay hidden unless you allow them.", footer: { text: "SC2 Tools" } }]);
@@ -139,4 +169,4 @@ function battleReportMessage(report) {
     url: `${SITE}/g/${encodeURIComponent(report.token)}#battle-report`, footer: { text: "SC2 Tools · Battle report" } }]);
 }
 
-module.exports = { resultMessage, sessionMessage, weeklyMessage, milestoneMessage, testMessage, battleReportMessage, hookOptions, md, DEFAULT_OPTIONS };
+module.exports = { resultMessage, sanitizeQueuedResultRatings, sessionMessage, weeklyMessage, milestoneMessage, promotionMessage, testMessage, battleReportMessage, hookOptions, md, DEFAULT_OPTIONS };

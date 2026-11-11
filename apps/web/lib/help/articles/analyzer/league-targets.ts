@@ -22,7 +22,7 @@ const article: HelpArticle = {
       "**Games below target** lists your ranked games in the matchup under that median, within your current filters.",
     ] },
     { type: "heading", text: "Which league and matchup", anchor: "league" },
-    { type: "paragraph", text: "Your league comes from your latest replay-recorded MMR, or from SC2Pulse when your replays carry none. Choose a league under **Compare with** to override it. The matchup follows the filter bar when it names your race and your opponent's race; otherwise the card uses the matchup you played most in your last 100 ranked games, with a picker for the others." },
+    { type: "paragraph", text: "Your league uses the latest replay-recorded MMR for the ladder you played this matchup on, including Random. If that ladder has no replay rating, the card checks SC2Pulse for the same ladder. Choose a league under **Compare with** to override it. The matchup follows the filter bar when it names your race and your opponent's race; otherwise the card uses the matchup you played most in your last 100 ranked games, with a picker for the others." },
     { type: "heading", text: "The opponent-league proxy", anchor: "proxy" },
     { type: "paragraph", text: "Replays record your opponent's league, not yours, so the tables group games by the opponent's league. Ladder matchmaking pairs players of similar rating, so the opponent's league is a close stand-in for the bracket a game was played in." },
     { type: "heading", text: "The 50-game floor", anchor: "floor" },

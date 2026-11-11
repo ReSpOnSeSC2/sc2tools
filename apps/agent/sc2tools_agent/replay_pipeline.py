@@ -463,6 +463,7 @@ class CloudGame:
     # to ``None`` so the dataclass stays backwards-compatible with test
     # fixtures that pre-date the field.
     my_mmr: Optional[int] = None
+    my_league_id: Optional[int] = None
     # The signed-in player's raw sc2reader toon_handle (e.g.
     # ``"2-S2-1-267727"``). Surfaced so the cloud's session-widget MMR
     # fallback can resolve the streamer's CURRENT 1v1 ladder rating via
@@ -496,6 +497,8 @@ class CloudGame:
     # these requires a deep parse + extra event walks; we attach them
     # whenever they're available so the SPA never falls back to its
     # "macro breakdown not available" empty state for new uploads.
+    build_log_full: Optional[list] = None
+    build_log_supply: Optional[list] = None
     macro_breakdown: Optional[Dict[str, Any]] = None
     apm_curve: Optional[Dict[str, Any]] = None
     # Per-replay spatial extracts for the Map Intel heatmaps.
@@ -575,6 +578,12 @@ class CloudGame:
             # Explicit absence lets a resync repair legacy cloud rows
             # that were incorrectly filled with SC2Pulse's current MMR.
             out["myMmrSource"] = "unavailable"
+        if (
+            self.is_ladder_game is True and self.match_format == "1v1"
+            and not self.is_resumed_from_replay
+            and type(self.my_league_id) is int and 0 <= self.my_league_id <= 6
+        ):
+            out["myLeagueId"] = self.my_league_id
         if self.my_toon_handle:
             out["myToonHandle"] = str(self.my_toon_handle)
         if self.player_count is not None:
@@ -589,8 +598,17 @@ class CloudGame:
             out["gameBuild"] = int(self.game_build)
         if self.opponent:
             out["opponent"] = self.opponent
+        if self.build_log_supply and any(value is not None for value in self.build_log_supply):
+            out["buildLogSupply"] = self.build_log_supply
+        if self.build_log_full:
+            out["buildLogFull"] = self.build_log_full
         if self.macro_breakdown is not None:
             out["macroBreakdown"] = self.macro_breakdown
+            mechanics = self.macro_breakdown.get("myMechanics", {})
+            if "groups" in mechanics:
+                out["groupsUsed"] = sum(row["sets"] > 0 or row["recalls"] > 0 for row in mechanics["groups"])
+            if "cameraReturnsPerMin" in mechanics:
+                out["cameraReturnsPerMin"] = mechanics["cameraReturnsPerMin"]
         if self.apm_curve is not None:
             out["apmCurve"] = self.apm_curve
         if self.spatial is not None:
@@ -997,6 +1015,11 @@ def parse_replay_for_cloud_ex(
         return None, SKIP_NO_RESULT
 
     macro_breakdown, derived_macro_score = _compute_macro_breakdown(ctx)
+    from .camera_signature import extract_my_mechanics
+    mechanics = extract_my_mechanics(getattr(ctx, "raw", None), getattr(me, "pid", None),
+                                     getattr(ctx, "length_seconds", None))
+    if mechanics:
+        macro_breakdown = {**(macro_breakdown or {}), "myMechanics": mechanics}
     apm_curve = _compute_apm_curve(ctx)
     # Backfill per-player APM/SPM averages on the macro_breakdown's
     # player_stats so the SPA's Replay Player Unit Statistics table
@@ -1204,6 +1227,7 @@ def parse_replay_for_cloud_ex(
         apm=_my_average_apm(apm_curve, getattr(me, "pid", None)),
         spq=_my_spending_quotient(macro_breakdown),
         my_mmr=my_mmr,
+        my_league_id=getattr(me, "league_id", None),
         my_toon_handle=my_toon_handle,
         player_count=_player_count(ctx),
         match_format=_match_format(ctx),
@@ -1212,6 +1236,8 @@ def parse_replay_for_cloud_ex(
         game_build=getattr(ctx, "game_build", None),
         opponent=opponent,
         build_log=my_build_log,
+        build_log_full=(getattr(ctx, "build_log_full", None) or [])[:_BUILD_LOG_CAP],
+        build_log_supply=(getattr(ctx, "build_log_supply", None) or [])[:_BUILD_LOG_CAP],
         early_build_log=early_build_log,
         opp_early_build_log=opp_early_build_log,
         opp_build_log=opp_build_log,
@@ -2321,6 +2347,30 @@ def _compress_engine_track(
     return [points[i] for i in compact]
 
 
+def _compact_camera_tracks(value, game_length):
+    if not isinstance(value, Mapping):
+        return {}
+    tracks = {}
+    for side in ("me", "opp"):
+        raw = value.get(side)
+        if not isinstance(raw, (list, tuple)) or not raw or len(raw) % 3 or len(raw) > 43_200:
+            continue
+        track = []
+        last = -1.0
+        for i in range(0, len(raw), 3):
+            t, x, y = raw[i:i + 3]
+            if any(isinstance(v, bool) or not isinstance(v, (int, float))
+                   or not math.isfinite(v) for v in (t, x, y)):
+                break
+            if not last < t <= game_length or t < 0 or abs(x) > 4096 or abs(y) > 4096:
+                break
+            track.extend((t, x, y))
+            last = t
+        else:
+            tracks[side] = track
+    return tracks
+
+
 def _compact_map_playback(
     playback: Mapping[str, Any],
     battle_markers: Optional[list] = None,
@@ -2403,6 +2453,9 @@ def _compact_map_playback(
         "gameLength": float(playback.get("game_length") or 0.0),
         "bounds": bounds,
     }
+    camera = _compact_camera_tracks(playback.get("camera"), out["gameLength"])
+    if camera:
+        out["camera"] = camera
     fidelity = playback.get("fidelity")
     replay_sha256 = playback.get("replaySha256")
     if isinstance(replay_sha256, str) and re.fullmatch(r"[a-f0-9]{64}", replay_sha256):

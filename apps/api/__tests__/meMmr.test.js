@@ -55,6 +55,13 @@ const TEAMS = new Map([
   ["8970877", [{ region: "EU", rating: 5233 }]],
   ["1004", [{ region: "US", rating: 5433 }]],
   ["1005", [{ region: "EU", rating: 5233 }]],
+  ["2001", [
+    { region: "US", rating: 5800, members: [{ terranGamesPlayed: 30 }] },
+    { region: "US", rating: 4200, members: [{ protossGamesPlayed: 30 }] },
+    { region: "US", rating: 4000, members: [{ randomGamesPlayed: 30 }] },
+    { region: "US", rating: 6200, members: [{ protossGamesPlayed: 0 }] },
+  ]],
+  ["2002", [{ region: "EU", rating: 3900, members: [{ protossGamesPlayed: 30 }] }]],
 ]);
 
 async function fetchPulseFixture(url) {
@@ -66,32 +73,32 @@ async function fetchPulseFixture(url) {
   } else if (pathname.endsWith("/season/list/all")) {
     data = [{ battlenetId: 68, region: "US" }, { battlenetId: 68, region: "EU" }];
   } else if (pathname.endsWith("/group/team")) {
-    data = TEAMS.get(searchParams.get("characterId")) || [];
+    data = searchParams.getAll("characterId").flatMap((id) => TEAMS.get(id) || []);
   }
   return { ok: true, json: async () => data };
 }
 
+let mongo;
+let db;
+let app;
+
+beforeAll(async () => {
+  mongo = await MongoMemoryServer.create();
+  db = await connect({ uri: mongo.getUri(), dbName: "sc2tools_test_me_mmr" });
+  const pulseMmr = new PulseMmrService({ fetchImpl: fetchPulseFixture });
+  app = buildApp({ db, logger: pino({ level: "silent" }), config, pulseMmr }).app;
+});
+
+afterAll(async () => {
+  if (db) await db.close();
+  if (mongo) await mongo.stop();
+});
+
+function withAuth(req) {
+  return req.set("authorization", "Bearer user-a");
+}
+
 describe("GET /v1/me/mmr", () => {
-  let mongo;
-  let db;
-  let app;
-
-  beforeAll(async () => {
-    mongo = await MongoMemoryServer.create();
-    db = await connect({ uri: mongo.getUri(), dbName: "sc2tools_test_me_mmr" });
-    const pulseMmr = new PulseMmrService({ fetchImpl: fetchPulseFixture });
-    app = buildApp({ db, logger: pino({ level: "silent" }), config, pulseMmr }).app;
-  });
-
-  afterAll(async () => {
-    if (db) await db.close();
-    if (mongo) await mongo.stop();
-  });
-
-  function withAuth(req) {
-    return req.set("authorization", "Bearer user-a");
-  }
-
   test("dedupes the toon-handle + character-id forms of one account", async () => {
     await withAuth(request(app).get("/v1/me"));
     // Store all four identifiers — two per real account.
@@ -125,6 +132,19 @@ describe("GET /v1/me/mmr", () => {
       hasSavedIds: true,
       truncated: false,
     });
+  });
+
+  test("returns a private, race-scoped MMR from the owner's saved ladders", async () => {
+    await request(app).get("/v1/me/mmr?race=R").expect(401);
+    await withAuth(request(app).get("/v1/me"));
+    await withAuth(request(app).put("/v1/me/profile")).send({ pulseIds: ["2001", "2002"] }).expect(200);
+    const protoss = await withAuth(request(app).get("/v1/me/mmr?race=P")).expect(200);
+    expect(protoss.headers["cache-control"]).toBe("private, no-store");
+    expect(protoss.body).toEqual({ race: "P", mmr: 4200 });
+    expect((await withAuth(request(app).get("/v1/me/mmr?race=R")).expect(200)).body).toEqual({ race: "R", mmr: 4000 });
+    expect((await withAuth(request(app).get("/v1/me/mmr?race=Z")).expect(200)).body).toEqual({ race: "Z", mmr: null });
+    await withAuth(request(app).get("/v1/me/mmr?race=P&race=T")).expect(400);
+    await withAuth(request(app).get("/v1/me/mmr?race=unknown")).expect(400);
   });
 
   test("distinguishes saved identities with no rating from missing setup", async () => {

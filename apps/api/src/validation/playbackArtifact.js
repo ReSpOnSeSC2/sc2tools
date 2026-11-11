@@ -27,6 +27,15 @@ function validateManifest(m) {
     end = s.end;
   });
   if (end !== m.gameLength) fail();
+  if (m.timeline !== undefined) {
+    if (!object(m.timeline) || Object.keys(m.timeline).some(key => key !== "casts") || !Array.isArray(m.timeline.casts) || m.timeline.casts.length > 2000) fail();
+    let previous = -1;
+    for (const cast of m.timeline.casts) {
+      if (!object(cast) || Object.keys(cast).some(key => !["t", "o", "a"].includes(key)) || !finite(cast.t) || cast.t < 0 || cast.t < previous || cast.t > m.gameLength
+          || (cast.o !== 0 && cast.o !== 1) || typeof cast.a !== "string" || !cast.a || cast.a.length > 120) fail();
+      previous = cast.t;
+    }
+  }
   return m;
 }
 
@@ -89,24 +98,38 @@ function validateSegment(s, m, descriptor) {
   for (const [key, max] of /** @type {[string, number][]} */ ([["casts", 2000], ["effects", 10000], ["resources", 600], ["battles", 200], ["spawns", 16]])) {
     if (p[key] != null && (!Array.isArray(p[key]) || p[key].length > max)) fail();
   }
-  if (p.creep) {
-    const c = p.creep;
-    if (!Number.isInteger(c.width) || !Number.isInteger(c.height) || c.width < 1 || c.height < 1
-        || c.width > 512 || c.height > 512 || !Array.isArray(c.frames) || c.frames.length > 12000) fail();
-    let previous = -1;
-    for (const frame of c.frames) {
-      if (!finite(frame.t) || frame.t <= previous || !Array.isArray(frame.runs) || frame.runs.length % 2) fail();
-      previous = frame.t;
-      let end = 0;
-      for (let i = 0; i < frame.runs.length; i += 2) {
-        const [start, size] = frame.runs.slice(i, i + 2);
-        if (!Number.isInteger(start) || !Number.isInteger(size) || start < end || size < 1 || start + size > c.width * c.height) fail();
-        end = start + size;
-      }
-    }
-  }
+  if (p.camera != null) validateCamera(p.camera, m.gameLength);
+  if (p.creep) validateCreep(p.creep);
   if (p.stats && Object.values(p.stats).some((rows) => !Array.isArray(rows) || rows.length > 800)) fail();
   return s;
+}
+
+/** @param {any} c */
+function validateCreep(c) {
+  if (!Number.isInteger(c.width) || !Number.isInteger(c.height) || c.width < 1 || c.height < 1
+      || c.width > 512 || c.height > 512 || !Array.isArray(c.frames) || c.frames.length > 12000) fail();
+  let previous = -1;
+  for (const frame of c.frames) {
+    if (!object(frame) || !finite(frame.t) || frame.t <= previous || !Array.isArray(frame.runs) || frame.runs.length % 2) fail();
+    previous = frame.t;
+    let end = 0;
+    for (let i = 0; i < frame.runs.length; i += 2) {
+      const [start, size] = frame.runs.slice(i, i + 2);
+      if (!Number.isInteger(start) || !Number.isInteger(size) || start < end || size < 1 || start + size > c.width * c.height) fail();
+      end = start + size;
+    }
+  }
+}
+
+/** @param {any} camera @param {number} gameLength */
+function validateCamera(camera, gameLength) {
+  if (!object(camera) || Object.keys(camera).some(side => side !== "me" && side !== "opp")) fail();
+  for (const values of Object.values(camera)) {
+    const count = triples(values, 14400);
+    for (let i = 0; i < count * 3; i += 3) {
+      if (values[i] > gameLength || Math.abs(values[i + 1]) > 4096 || Math.abs(values[i + 2]) > 4096) fail();
+    }
+  }
 }
 
 module.exports = { validateManifest, validateSegment, MAX_SEGMENT_BYTES, MAX_MANIFEST_BYTES, SHA };

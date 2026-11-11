@@ -102,7 +102,9 @@ class PracticeLogService {
         gameId,
         $or: [
           { practice: { $exists: false } },
-          { "practice.status": NO_BUILD_LOG, "practice.targetHash": record.targetHash },
+          ...(record.status === NO_BUILD_LOG ? [] : [
+            { "practice.status": NO_BUILD_LOG, "practice.targetHash": record.targetHash },
+          ]),
         ],
       },
       { $set: { practice: record } },

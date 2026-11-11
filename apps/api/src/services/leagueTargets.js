@@ -17,7 +17,8 @@ const { personalTimingSummary, PERSONAL_LIMIT } = require("./leagueTimingPercent
  *     RECENT_LIMIT ranked 1v1 games (with the counts, for a switcher);
  *   - medians of SQ, macro score, APM and game length over the last
  *     PERSONAL_LIMIT ranked 1v1 games in that matchup (slim rows);
- *   - current MMR: the latest replay-recorded rating, with its region;
+ *   - current MMR: the latest replay-recorded rating for the matchup's
+ *     ladder race, with its region;
  *   - average net MMR per game over the last NET_MMR_GAMES games of that
  *     account and ladder race, by trendsNetMmr.js's pairing rules (adjacent
  *     replay-recorded ratings, a swing of at most NET_MMR_MAX_DELTA, and a
@@ -33,6 +34,7 @@ const NET_MMR_MAX_DELTA = 150;
 const QUERY_MAX_TIME_MS = 3000;
 const METRICS = Object.freeze(["spq", "macroScore", "apm", "durationSec"]);
 const RACE_MATCH = Object.freeze({ P: /^(P|Protoss)$/i, T: /^(T|Terran)$/i, Z: /^(Z|Zerg)$/i });
+const RANDOM_RACE = /^(R|Random)$/i;
 const ONE_V_ONE = Object.freeze({ $or: [{ matchFormat: "1v1" }, { matchFormat: { $exists: false }, playerCount: 2 }] });
 
 /** @param {unknown} raw @returns {"P"|"T"|"Z"|null} */
@@ -78,8 +80,29 @@ function trustedMmr(row) {
 }
 
 /** @param {Record<string, any>} row */
+function ladderRaceOf(row) {
+  const race = row.myLadderRace ?? row.myRace;
+  return typeof race === "string" && RANDOM_RACE.test(race.trim()) ? "R" : raceLetter(race);
+}
+
+/** The newest matching replay determines whether the concrete matchup was
+ * played on its fixed-race ladder or on Random. Older rows may lack the
+ * selected race, so ladderRaceOf uses the existing played-race fallback.
+ * @param {Record<string, any>[]} rows @param {string|null} matchup */
+function ratingRaceForMatchup(rows, matchup) {
+  if (!matchup) return null;
+  const mine = matchup[0];
+  for (const row of rows) {
+    if (matchupOf(row) !== matchup) continue;
+    const race = ladderRaceOf(row);
+    if (race === mine || race === "R") return race;
+  }
+  return mine;
+}
+
+/** @param {Record<string, any>} row */
 function partitionKey(row) {
-  const race = raceLetter(row.myLadderRace ?? row.myRace);
+  const race = ladderRaceOf(row);
   return typeof row.myToonHandle === "string" && row.myToonHandle && race ? `${row.myToonHandle}|${race}` : null;
 }
 
@@ -92,9 +115,9 @@ function partitionKey(row) {
  * @param {Record<string, any>[]} rows
  */
 function netMmrPerGame(rows) {
-  const anchor = rows.find((row) => trustedMmr(row) !== null && partitionKey(row));
-  if (!anchor) return { pairs: 0, games: 0, perGame: null, window: NET_MMR_GAMES };
-  const key = partitionKey(anchor);
+  const anchor = rows.find((row) => trustedMmr(row) !== null);
+  const key = anchor && partitionKey(anchor);
+  if (!key) return { pairs: 0, games: 0, perGame: null, window: NET_MMR_GAMES };
   const chain = rows.filter((row) => partitionKey(row) === key).slice(0, NET_MMR_GAMES + 1).reverse();
   let pairs = 0;
   let total = 0;
@@ -164,11 +187,15 @@ class LeagueTargetsService {
     const matchups = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([matchup, games]) => ({ matchup, games }));
     const matchup = normalizeMatchup(requestedMatchup) || matchups[0]?.matchup || null;
-    const latest = recent.find((row) => trustedMmr(row) !== null) || null;
-    const mmr = latest
-      ? { current: trustedMmr(latest), at: latest.date instanceof Date ? latest.date.toISOString() : null,
-        region: regionFromToonHandle(latest.myToonHandle) }
-      : { current: null, at: null, region: null };
+    const ladderRace = ratingRaceForMatchup(recent, matchup);
+    const ratingRows = ladderRace ? recent.filter((row) => ladderRaceOf(row) === ladderRace) : [];
+    const latest = ratingRows.find((row) => trustedMmr(row) !== null);
+    const mmr = {
+      current: latest ? trustedMmr(latest) : null,
+      at: latest?.date instanceof Date ? latest.date.toISOString() : null,
+      region: latest ? regionFromToonHandle(latest.myToonHandle) : null,
+      ladderRace,
+    };
     const mine = /** @type {"P"|"T"|"Z"} */ (matchup?.[0]);
     const theirs = /** @type {"P"|"T"|"Z"} */ (matchup?.[2]);
     const timingFields = includeTimings ? { gameId: 1, date: 1, gameBuild: 1, gameVersion: 1, buildLog: 1 } : {};
@@ -188,7 +215,7 @@ class LeagueTargetsService {
       sample: { n: rows.length, limit: PERSONAL_LIMIT },
       medians,
       mmr,
-      netMmr: netMmrPerGame(recent),
+      netMmr: netMmrPerGame(ratingRows),
       timings,
     };
   }

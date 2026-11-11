@@ -36,9 +36,13 @@ def test_race_choices_persist_without_changing_geometry_drafts_or_selected_oppon
         page.appearance_animations.setChecked(False)
         assert changes[-1] == ("default", False)
         assert not ui._window_animations
-        for route in ("settings", "streams", "dashboard", "companion"):
-            win._go_to_page(route)
+        for route in ("settings", "help", "streams", "dashboard", "companion"):
+            if route == "help":
+                keep_settings_draft_via_help(win)
+            else:
+                win._go_to_page(route)
             app.processEvents()
+            assert win._PAGE_KEYS[win._stack.currentIndex()] == route
             assert win.geometry() == initial_geometry
             assert win._handle_input.text() == "Unsaved player"
             assert page.current_appearance() == {"skin": "default", "animations": False}

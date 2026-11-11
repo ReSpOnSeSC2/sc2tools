@@ -1,5 +1,7 @@
 "use strict";
 
+const { MY_MECHANICS_SCHEMA } = require("./myMechanics");
+
 const AjvModule = require("ajv");
 const addFormatsModule = require("ajv-formats");
 
@@ -160,6 +162,8 @@ const GAME_SCHEMA = {
     // surfaces this for ranked replays where sc2reader exposes it. The
     // overlay's session widget reads this to derive an MMR delta.
     myMmr: { type: "integer", minimum: 0, maximum: 9999 },
+    // Replay-observed ladder enum. No league is inferred from an MMR.
+    myLeagueId: { type: "integer", minimum: 0, maximum: 6 },
     // Agent-authored provenance for ``myMmr``. ``replay`` means the
     // rating came from this replay's player record; ``unavailable`` is
     // an explicit instruction that no game-time rating exists. The
@@ -251,6 +255,17 @@ const GAME_SCHEMA = {
       maxItems: 5000,
       items: { type: "string", maxLength: BUILD_LOG_LINE_MAX_LENGTH },
     },
+    groupsUsed: { type: "integer", minimum: 0, maximum: 10 },
+    cameraReturnsPerMin: { type: "number", minimum: 0, maximum: 599940 },
+    buildLogSupply: {
+      type: "array", maxItems: 5000,
+      items: { anyOf: [{ type: "number", minimum: 0, maximum: 2000 }, { type: "null" }] },
+    },
+    buildLogFull: {
+      type: "array",
+      maxItems: 5000,
+      items: { type: "string", maxLength: BUILD_LOG_LINE_MAX_LENGTH },
+    },
     earlyBuildLog: {
       type: "array",
       maxItems: 1000,
@@ -279,6 +294,7 @@ const GAME_SCHEMA = {
         stats_events: { type: "array", maxItems: 5000 },
         opp_stats_events: { type: "array", maxItems: 5000 },
         casualty_events: CASUALTY_EVENTS_SCHEMA,
+        myMechanics: MY_MECHANICS_SCHEMA,
         // unit_timeline arrives at the same cadence as stats_events
         // (one entry per 10 s game-time bucket post-downsample, matching
         // sc2reader's native PlayerStatsEvent cadence). Each entry
@@ -348,6 +364,13 @@ const GAME_SCHEMA = {
         buildings: { type: "array", maxItems: 1000, items: PLAYBACK_ATTACK_ENTITY_SCHEMA },
         units: { type: "array", maxItems: 4000, items: PLAYBACK_ATTACK_ENTITY_SCHEMA },
         resources: { type: "array", maxItems: 600 },
+        camera: {
+          type: "object", additionalProperties: false,
+          properties: {
+            me: { type: "array", maxItems: 43200, items: { type: "number" } },
+            opp: { type: "array", maxItems: 43200, items: { type: "number" } },
+          },
+        },
         // Ability / spell casts (v5 payloads; absent on v4 and older).
         // o = 0 me / 1 opponent, a = stable ability slug, t = game
         // seconds, x/y = world cells and are OMITTED when the engine
@@ -395,6 +418,9 @@ function validateGameRecord(raw) {
       (e) => `${e.instancePath || "/"} ${e.message}`,
     );
     return { valid: false, errors: errs };
+  }
+  if (value.buildLogSupply && value.buildLogSupply.length !== value.buildLog?.length) {
+    return { valid: false, errors: ["/buildLogSupply must align with buildLog"] };
   }
   if (value.opponent?.playSignature && !validPlaySignatureSemantics(value.opponent.playSignature)) {
     return { valid: false, errors: ["/opponent/playSignature contains duplicate or inconsistent replay evidence"] };
