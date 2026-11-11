@@ -299,7 +299,7 @@ class CustomBuildLibraryService {
   /**
    * @param {string} userId
    * @param {Array<{build?: unknown, onConflict?: unknown}>} items
-   * @param {{dryRun?: boolean, save?: (slug: string, value: Record<string, any>, previous: Record<string, any>|null) => Promise<void>}} opts
+   * @param {{dryRun?: boolean, save?: (slug: string, value: Record<string, any>, overwriting: boolean) => Promise<void>}} opts
    */
   async _importBatch(userId, items, opts) {
     const planned = items.map((item, index) => this._candidate(item, index));
