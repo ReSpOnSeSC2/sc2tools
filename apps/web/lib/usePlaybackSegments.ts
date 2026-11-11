@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { API_BASE } from "./clientApi";
 import { decodePlaybackSegment, PlaybackSegmentCache, readBoundedSegment, segmentAt, type PlaybackManifest, type PlaybackSegmentEntry } from "./segmentedPlayback";
@@ -95,7 +95,8 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
   if (casts.current.scope !== scope || casts.current.revision !== revision) {
     casts.current = { scope, revision, value: mergeMarkers([...store.current.casts.values()].flat().sort((a, b) => a.t - b.t)) };
   }
-  return { scope, current, buffering, castMarkers: casts.current.value,
+  const completeCasts = useMemo(() => manifest.timeline ? replayCastMarkers(manifest.timeline.casts) : null, [manifest.timeline]);
+  return { scope, current, buffering, castMarkers: completeCasts ?? casts.current.value,
     error: failure.scope === scope && failure.index === desired.index ? failure.message : "",
     retry: () => setAttempt(value => value + 1) };
 }

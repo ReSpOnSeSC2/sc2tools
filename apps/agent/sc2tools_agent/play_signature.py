@@ -13,7 +13,14 @@ from collections.abc import Mapping
 from typing import Any
 
 WINDOW_SEC = 600
-PHASES = ((0, 120), (120, 300), (300, 600))
+PHASES = ((0, 120), (120, 300), (300, WINDOW_SEC))
+MAX_REPLAY_SECONDS = 86400
+
+
+def replay_phases(active_seconds: int):
+    return [(start, min(end, active_seconds))
+            for start, end in (*PHASES[:2], (PHASES[-1][0], active_seconds))
+            if start < active_seconds]
 # Upper-inclusive real-second bins, followed by the overflow bin. Zero-frame
 # intervals are observations too; they must not disappear from the cadence.
 INTERVAL_BOUNDS = (0.15, 0.35, 0.65, 1.5, 4.0)
@@ -88,7 +95,7 @@ def _slot(event: Any) -> int | None:
     return slot if 0 <= slot <= 9 else None
 
 
-def _clock(replay: Any, game_length_sec: Any) -> tuple[float, int]:
+def _clock(replay: Any, game_length_sec: Any, *, whole_game: bool = False) -> tuple[float, int]:
     fps, length = 22.4, None
     try:
         from core.timebase import infer_fps, real_game_length
@@ -120,7 +127,7 @@ def _clock(replay: Any, game_length_sec: Any) -> tuple[float, int]:
             length = WINDOW_SEC
     if not math.isfinite(length) or length <= 0:
         length = WINDOW_SEC
-    return fps, min(WINDOW_SEC, max(1, math.ceil(length)))
+    return fps, min(MAX_REPLAY_SECONDS if whole_game else WINDOW_SEC, max(1, math.ceil(length)))
 
 
 def _histogram_add(histogram: list[int], interval: float) -> None:
@@ -153,7 +160,9 @@ def _top_counts(counts: Counter, limit: int) -> list[dict]:
     return [{"name": name, "count": min(99999, count)} for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]]
 
 
-def extract_behavior_signature(replay: Any, *, opponent_pid: Any, game_length_sec: Any) -> dict:
+def extract_behavior_signature(
+    replay: Any, *, opponent_pid: Any, game_length_sec: Any, whole_game: bool = False,
+) -> dict:
     """One pass over decoded events; fixed-size timing and group aggregates.
 
     Only the first full command within two seconds after a recall is associated
@@ -173,10 +182,13 @@ def extract_behavior_signature(replay: Any, *, opponent_pid: Any, game_length_se
         return {}
     from .group_signature import steal_housekeeping_event_ids
     housekeeping = steal_housekeeping_event_ids(events, opponent_pid=target_pid)
-    fps, active_seconds = _clock(replay, game_length_sec)
+    fps, active_seconds = _clock(replay, game_length_sec, whole_game=whole_game)
     groups: dict[int, dict] = {}
-    group_phases = [{"startSec": start, "endSec": min(end, active_seconds), "events": 0, "slots": {}} for start, end in PHASES if start < active_seconds]
+    group_phases = [{"startSec": start, "endSec": min(end, active_seconds), "events": 0, "slots": {}} for start, end in replay_phases(active_seconds)]
     action_phases = [{"startSec": phase["startSec"], "endSec": phase["endSec"], "commands": 0, "selectionChanges": 0, "cameraMoves": 0, "controlGroups": 0} for phase in group_phases]
+    if whole_game:
+        for phase in action_phases:
+            phase["queuedCommands"] = 0
     actions = {"activeSeconds": active_seconds, "events": 0, "commands": 0, "selectionChanges": 0, "cameraMoves": 0, "queuedCommands": 0, "repeatCommands": 0,
                "targetCommands": {"none": 0, "point": 0, "unit": 0, "data": 0}}
     intervals, camera_intervals, recall_intervals = [0] * 6, [0] * 6, [0] * 6
@@ -205,7 +217,7 @@ def extract_behavior_signature(replay: Any, *, opponent_pid: Any, game_length_se
             if slot is None:
                 pending_recall = None
                 continue
-            row = groups.setdefault(slot, {**_new_group(slot), "doubleTap": 0, "firstUseSec": min(WINDOW_SEC, round(sec)), "recallIntervals": [0] * 6})
+            row = groups.setdefault(slot, {**_new_group(slot), "doubleTap": 0, "firstUseSec": min(active_seconds, round(sec)), "recallIntervals": [0] * 6})
             _increment_group(row, action)
             _increment_group(group_phase["slots"].setdefault(slot, _new_group(slot)), action)
             group_phase["events"] += 1
@@ -264,6 +276,8 @@ def extract_behavior_signature(replay: Any, *, opponent_pid: Any, game_length_se
             queued = isinstance(flags, Mapping) and flags.get("queued") is True
             if queued:
                 actions["queuedCommands"] += 1
+                if whole_game:
+                    action_phase["queuedCommands"] += 1
             target = {"None": "none", "TargetPoint": "point", "TargetUnit": "unit", "Data": "data"}.get(getattr(event, "ability_type", None))
             if target is not None:
                 actions["targetCommands"][target] += 1

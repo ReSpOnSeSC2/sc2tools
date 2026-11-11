@@ -81,10 +81,13 @@ import gamePage_battleReports from "./game-page/battle-reports";
 import gamePage_benchmarks from "./game-page/benchmarks";
 import gamePage_compareGames from "./game-page/compare-games";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
+import gamePage_gamePageCamera from "./game-page/game-page-camera";
 import gamePage_gamePageNotes from "./game-page/game-page-notes";
 import gamePage_gamePageReplay from "./game-page/game-page-replay";
 import gamePage_gamePageSharing from "./game-page/game-page-sharing";
 import gamePage_gamePage from "./game-page/game-page";
+import gamePage_hotkeyHabits from "./game-page/hotkey-habits";
+import gamePage_unitTrades from "./game-page/unit-trades";
 import gamePage_yourFirstGame from "./game-page/your-first-game";
 import gettingStarted_aPageAskedMeToSignIn from "./getting-started/a-page-asked-me-to-sign-in";
 import gettingStarted_browserImport from "./getting-started/browser-import";
@@ -199,10 +202,13 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gamePage_benchmarks,
   gamePage_compareGames,
   gamePage_gamePageAccuratePlayback,
+  gamePage_gamePageCamera,
   gamePage_gamePageNotes,
   gamePage_gamePageReplay,
   gamePage_gamePageSharing,
   gamePage_gamePage,
+  gamePage_hotkeyHabits,
+  gamePage_unitTrades,
   gamePage_yourFirstGame,
   gettingStarted_aPageAskedMeToSignIn,
   gettingStarted_browserImport,

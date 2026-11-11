@@ -1,11 +1,13 @@
 import type { Period } from "./timeseries";
 
-export type MechanicsMetric = "macro" | "apm" | "sq";
+export type MechanicsMetric = "macro" | "apm" | "sq" | "groups" | "camera";
 export type MechanicsBucket = "day" | "week" | "month";
 export const MECHANICS_METRICS = {
   macro: { label: "Macro score", value: "avgMacroScore", count: "macroN", description: "A fixed score from 0 to 100 for recorded macro habits. Higher is cleaner macro." },
   apm: { label: "APM", value: "avgApm", count: "apmN", description: "Recorded actions per minute. More actions alone do not establish better play." },
   sq: { label: "SQ", value: "avgSpq", count: "spqN", description: "Spending quotient relates resource spending to income. It is separate from the macro score." },
+  groups: { label: "Groups used", value: "avgGroupsUsed", count: "groupsUsedN", description: "Average number of control-group slots used per game." },
+  camera: { label: "Camera returns", value: "avgCameraReturns", count: "cameraReturnsN", description: "Recorded returns to a saved camera position per minute." },
 } as const;
 export const isMechanicsBucket = (value: unknown): value is MechanicsBucket => value === "day" || value === "week" || value === "month";
 export type MechanicsPoint = { date: string; time: number; value: number | null; n: number | null; hollow: boolean; breakBefore: boolean };

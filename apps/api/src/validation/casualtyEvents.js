@@ -18,6 +18,8 @@ const CASUALTY_EVENTS_SCHEMA = {
       killer: { enum: ["me", "opp", null] },
       category: { enum: ["units", "buildings", "workers"] },
       name: { type: "string", minLength: 1, maxLength: 64 },
+      killerUnit: { type: "string", minLength: 1, maxLength: 64 },
+      bornAt: { type: "number", minimum: 0, maximum: 24 * 60 * 60 },
     },
   },
 };

@@ -136,7 +136,7 @@ export function BuildOrderColumns({
         <label className="inline-flex min-h-11 items-center gap-2 text-caption"><input type="checkbox" checked={workers} onChange={event => setWorkers(event.target.checked)} />Show workers</label>
         <label className="inline-flex min-h-11 items-center gap-2 text-caption"><input type="checkbox" checked={supplyBuildings} onChange={event => setSupplyBuildings(event.target.checked)} />Supply buildings</label>
         <Input aria-label="Filter steps" placeholder="Filter steps…" value={filter} onChange={event => setFilter(event.target.value)} className="w-full sm:w-56" />
-        <p className="w-full text-micro text-text-muted">Supply ≈ uses the last recorded sample before the step. Missing supply stays —.</p>
+        <p className="w-full text-micro text-text-muted">Measured supply comes from the replay at the step. Supply ≈ uses the last recorded sample before it.</p>
       </div> : null}
       {timingDeltas.size ? <p className="mb-3 text-micro text-text-muted">Your median compares the recorded construction start with the {myExecutionTimings?.matchup || myTimingBaseline?.matchup} dossier sample. A natural skips the starting base. It is an observation, not an execution grade.</p> : null}
       <div className="grid gap-4 md:grid-cols-2">

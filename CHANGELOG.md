@@ -11,6 +11,16 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Replay camera and mechanics
+
+- Follow either player's recorded camera and open Camera attention to see
+  where that player looked in the loaded replay section.
+- Open Units for recorded losses, credited kills, trades and lifespans. The
+  Mechanics card shows control-group and camera habits, with trends in Macro.
+- Build orders show measured supply where the replay captured it at the step.
+  Re-analyze older games from Settings → Backups & data after updating the
+  desktop app.
+
 ### Trends and arcade fixes
 
 - Put performance ratings on the matchup chart's vertical scale, label game order horizontally, and inspect rolling windows by mouse, touch or keyboard.

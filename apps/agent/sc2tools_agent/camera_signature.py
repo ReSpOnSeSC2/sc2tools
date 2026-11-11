@@ -19,7 +19,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from .play_signature import PHASES, WINDOW_SEC, _histogram_add
+from .play_signature import MAX_REPLAY_SECONDS, WINDOW_SEC, _clock, _histogram_add, extract_behavior_signature, replay_phases
 
 log = logging.getLogger(__name__)
 _CACHE_ATTRIBUTE = "_sc2tools_camera_signature_events"
@@ -49,7 +49,7 @@ def _target(data: Any) -> tuple[int, int] | None:
     return (x, y) if x is not None and y is not None else None
 
 
-def _decode_camera_records(replay: Any, fps: float) -> tuple[_CameraRecord, ...] | None:
+def _decode_camera_records(replay: Any, fps: float, *, max_seconds: int = WINDOW_SEC) -> tuple[_CameraRecord, ...] | None:
     """Decode once per replay object; None means unavailable, () means empty.
 
     The game parser still consumes preceding non-camera event payloads to
@@ -60,7 +60,7 @@ def _decode_camera_records(replay: Any, fps: float) -> tuple[_CameraRecord, ...]
     """
     if not math.isfinite(fps) or fps <= 0:
         return None
-    max_frame = math.floor(WINDOW_SEC * fps)
+    max_frame = math.floor(max_seconds * fps)
     cached = getattr(replay, _CACHE_ATTRIBUTE, None)
     if isinstance(cached, tuple) and len(cached) == 2 and cached[0] == max_frame:
         return cached[1]
@@ -112,12 +112,16 @@ def _decode_camera_records(replay: Any, fps: float) -> tuple[_CameraRecord, ...]
 
 
 def _summarize_camera_records(
-    records: tuple[_CameraRecord, ...], *, user_id: int, fps: float, active_seconds: int
+    records: tuple[_CameraRecord, ...], *, user_id: int, fps: float, active_seconds: int, whole_game: bool = False
 ) -> dict | None:
     slots: dict[int, dict] = {}
     positions: dict[int, tuple[int, int]] = {}
     phases = [{"startSec": start, "endSec": min(end, active_seconds), "saves": 0, "returns": 0}
-              for start, end in PHASES if start < active_seconds]
+              for start, end in replay_phases(active_seconds)]
+    if whole_game:
+        for phase in phases:
+            phase["slots"] = {}
+            phase["screenChanges"] = 0
     result: dict = {"activeSeconds": active_seconds, "events": 0, "saves": 0, "positionUpdates": 0,
                    "returns": 0, "slots": [], "saveOrder": [], "phases": phases}
     last_position = None
@@ -146,6 +150,8 @@ def _summarize_camera_records(
             slots[record.slot]["saves"] += 1
             positions[record.slot] = record.target
             phase["saves"] += 1
+            if whole_game:
+                phase["slots"].setdefault(record.slot, {"slot": record.slot, "saves": 0, "returns": 0})["saves"] += 1
             result["saves"] += 1
             # Saving captures the current camera. Do not count the next equal
             # update (even within the same frame) as a recall of the new save.
@@ -157,6 +163,8 @@ def _summarize_camera_records(
         result["positionUpdates"] += 1
         if record.target == last_position:
             continue
+        if whole_game and last_position is not None:
+            phase["screenChanges"] += 1
         last_position = record.target
         matched = [slot for slot, point in positions.items() if point == record.target]
         if len(matched) != 1:
@@ -168,6 +176,8 @@ def _summarize_camera_records(
         row["returns"] += 1
         result["returns"] += 1
         phase["returns"] += 1
+        if whole_game:
+            phase["slots"].setdefault(slot, {"slot": slot, "saves": 0, "returns": 0})["returns"] += 1
         if slot in last_slot_return:
             _histogram_add(row["returnIntervals"], seconds - last_slot_return[slot])
         if last_return is not None:
@@ -182,6 +192,9 @@ def _summarize_camera_records(
         if not any(row["returnIntervals"]):
             del row["returnIntervals"]
     result["slots"] = [slots[slot] for slot in sorted(slots)]
+    if whole_game:
+        for phase in phases:
+            phase["slots"] = sorted(phase["slots"].values(), key=lambda slot: slot["slot"])
     if any(return_intervals):
         result["returnIntervals"] = return_intervals
     if transitions:
@@ -190,9 +203,11 @@ def _summarize_camera_records(
     return result
 
 
-def extract_camera_signature(replay: Any, *, opponent_pid: int, fps: float, active_seconds: int) -> dict | None:
+def extract_camera_signature(
+    replay: Any, *, opponent_pid: int, fps: float, active_seconds: int, whole_game: bool = False,
+) -> dict | None:
     """Return bounded camera evidence with canonical-player attribution."""
-    if _integer(opponent_pid, 1, 16) is None or _integer(active_seconds, 1, WINDOW_SEC) is None:
+    if _integer(opponent_pid, 1, 16) is None or _integer(active_seconds, 1, MAX_REPLAY_SECONDS if whole_game else WINDOW_SEC) is None:
         return None
     players = [player for player in getattr(replay, "players", ()) if getattr(player, "pid", None) == opponent_pid]
     if len(players) != 1:
@@ -200,7 +215,81 @@ def extract_camera_signature(replay: Any, *, opponent_pid: int, fps: float, acti
     user_id = _integer(getattr(players[0], "uid", None), 0, 15)
     if user_id is None or sum(getattr(player, "uid", None) == user_id for player in getattr(replay, "players", ())) != 1:
         return None
-    records = _decode_camera_records(replay, fps)
+    records = (_decode_camera_records(replay, fps, max_seconds=active_seconds)
+               if whole_game else _decode_camera_records(replay, fps))
     if records is None:
         return None
-    return _summarize_camera_records(records, user_id=user_id, fps=fps, active_seconds=active_seconds)
+    return _summarize_camera_records(records, user_id=user_id, fps=fps, active_seconds=active_seconds, whole_game=whole_game)
+
+
+def _per_minute(count, seconds):
+    return round(60 * count / max(seconds, 1), 2)
+
+
+def _slots(rows, seconds, *, camera=False):
+    count = "returns" if camera else "recalls"
+    primary = "saves" if camera else "sets"
+    raw_count = "returns" if camera else "recall"
+    raw_primary = "saves" if camera else "set"
+    return [{
+        "slot": row["slot"],
+        primary: row[raw_primary],
+        count: row[raw_count],
+        count + "PerMin": _per_minute(row[raw_count], seconds),
+    } for row in rows]
+
+
+def _actions(row, seconds):
+    return {
+        "selectionChangesPerMin": _per_minute(row["selectionChanges"], seconds),
+        "queuedCommandShare": round(row["queuedCommands"] / max(row["commands"], 1), 4),
+    }
+
+
+def extract_my_mechanics(replay, player_id, game_length):
+    if replay is None or not isinstance(player_id, int) or player_id <= 0:
+        return None
+    fps, seconds = _clock(replay, game_length, whole_game=True)
+    try:
+        evidence = extract_behavior_signature(replay, opponent_pid=player_id,
+                                              game_length_sec=game_length, whole_game=True)
+    except Exception as exc:
+        log.warning("my_mechanics_actions_failed: %s", exc)
+        evidence = {}
+    try:
+        camera = extract_camera_signature(replay, opponent_pid=player_id, fps=fps,
+                                          active_seconds=seconds, whole_game=True)
+    except Exception as exc:
+        log.warning("my_mechanics_camera_failed: %s", exc)
+        camera = None
+    groups = evidence.get("controlGroups")
+    actions = evidence.get("actions")
+    if groups is None and actions is None and camera is None:
+        return None
+
+    out = {"activeSeconds": seconds}
+    phases = {}
+    if groups is not None:
+        out["groups"] = _slots(groups["slots"], seconds)
+        for phase in groups["phases"]:
+            start, end = phase["startSec"], phase["endSec"]
+            phases.setdefault((start, end), {})["groups"] = _slots(phase["slots"], end - start)
+    if actions is not None:
+        out.update(_actions(actions, seconds))
+        for phase in actions["phases"]:
+            start, end = phase["startSec"], phase["endSec"]
+            phases.setdefault((start, end), {}).update(_actions(phase, end - start))
+    if camera is not None:
+        out["camera"] = _slots(camera["slots"], seconds, camera=True)
+        out["cameraReturnsPerMin"] = _per_minute(camera["returns"], seconds)
+        out["screenChangesPerMin"] = _per_minute(sum(row["screenChanges"] for row in camera["phases"]), seconds)
+        for phase in camera["phases"]:
+            start, end = phase["startSec"], phase["endSec"]
+            phases.setdefault((start, end), {}).update({
+                "camera": _slots(phase["slots"], end - start, camera=True),
+                "cameraReturnsPerMin": _per_minute(phase["returns"], end - start),
+                "screenChangesPerMin": _per_minute(phase["screenChanges"], end - start),
+            })
+    out["phases"] = [{"startSec": start, "endSec": end, **phase}
+                     for (start, end), phase in sorted(phases.items())]
+    return out

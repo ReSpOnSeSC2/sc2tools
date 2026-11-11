@@ -212,6 +212,9 @@ export function ReplayStage({
   const stageRef = useRef<HTMLElement>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [clipOpen, setClipOpen] = useState(false);
+  const [camera, setCamera] = useState<import("@/lib/replayCamera").ReplayCameraMode>("free");
+  const cameraMode = camera === "free" || playback.camera?.[camera] ? camera : "free";
+  const releaseCamera = useCallback(() => setCamera("free"), []);
   const replayerRef = useRef<MapReplayerHandle | null>(null);
   const [seekAnnouncement, setSeekAnnouncement] = useState("");
   const setVision = useCallback((next: ReplayVision) => {
@@ -385,6 +388,8 @@ export function ReplayStage({
             onMarkerClick={onMarkerClick}
             patchEra={patchEra}
             vision={vision}
+            cameraMode={cameraMode}
+            onReleaseCamera={releaseCamera}
             sideLabels={{ me: myName, opp: oppName }}
             handleRef={replayerRef}
           />
@@ -440,6 +445,10 @@ export function ReplayStage({
           oppName={oppName}
           vision={vision}
           onVision={setVision}
+          camera={cameraMode}
+          cameraTracks={playback.camera}
+          canReanalyzeCamera={clip === "owner"}
+          onCamera={setCamera}
           approximateVision={!visionIsObserved(playback)}
         />
       </TransportDock>

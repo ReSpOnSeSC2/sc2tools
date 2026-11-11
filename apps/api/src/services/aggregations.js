@@ -488,15 +488,7 @@ class AggregationsService {
             wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
             losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
             total: { $sum: 1 },
-            // $avg skips nulls/missing, so buckets whose games predate
-            // macro scoring simply come back null instead of dragging
-            // the average toward zero.
-            avgMacroScore: { $avg: "$macroScore" },
-            avgApm: { $avg: "$apm" },
-            avgSpq: { $avg: "$spq" },
-            macroN: { $sum: { $cond: [{ $isNumber: "$macroScore" }, 1, 0] } },
-            apmN: { $sum: { $cond: [{ $isNumber: "$apm" }, 1, 0] } },
-            spqN: { $sum: { $cond: [{ $isNumber: "$spq" }, 1, 0] } },
+            ...MEASURED_TIMESERIES_AGGREGATES,
           },
         },
         // Keep the most recent N buckets (not the oldest). Users with
@@ -512,12 +504,7 @@ class AggregationsService {
             wins: 1,
             losses: 1,
             total: 1,
-            avgMacroScore: 1,
-            avgApm: 1,
-            avgSpq: 1,
-            macroN: 1,
-            apmN: 1,
-            spqN: 1,
+            ...MEASURED_TIMESERIES_PROJECTION,
           },
         },
       ])
@@ -1052,15 +1039,29 @@ async function applyRaceGrouping(filters, runOnce) {
   return out;
 }
 
+const MEASURED_TIMESERIES = [
+  ["macroScore", "avgMacroScore", "macroN"],
+  ["apm", "avgApm", "apmN"],
+  ["spq", "avgSpq", "spqN"],
+  ["groupsUsed", "avgGroupsUsed", "groupsUsedN"],
+  ["cameraReturnsPerMin", "avgCameraReturns", "cameraReturnsN"],
+];
+// $avg skips missing data. The separate sample count makes coverage visible.
+const MEASURED_TIMESERIES_AGGREGATES = Object.fromEntries(MEASURED_TIMESERIES.flatMap(([source, average, count]) => [
+  [average, { $avg: `$${source}` }],
+  [count, { $sum: { $cond: [{ $isNumber: `$${source}` }, 1, 0] } }],
+]));
+const MEASURED_TIMESERIES_PROJECTION = Object.fromEntries(MEASURED_TIMESERIES.flatMap(([, average, count]) => [[average, 1], [count, 1]]));
+
 /** Round measured means without converting missing data into zero.
  * @param {Record<string, any>} row */
 function shapeTimeseriesPoint(row) {
   /** @type {Record<string, any>} */
   const point = { ...row, winRate: row.total ? row.wins / row.total : 0 };
-  for (const key of ["avgMacroScore", "avgApm", "avgSpq"]) {
+  for (const key of MEASURED_TIMESERIES.map(([, average]) => average)) {
     point[key] = typeof row[key] === "number" && Number.isFinite(row[key]) ? Math.round(row[key] * 10) / 10 : null;
   }
-  for (const key of ["macroN", "apmN", "spqN"]) {
+  for (const key of MEASURED_TIMESERIES.map(([, , count]) => count)) {
     point[key] = Number.isInteger(row[key]) && row[key] >= 0 ? row[key] : 0;
   }
   return point;

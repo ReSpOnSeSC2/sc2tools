@@ -102,6 +102,8 @@ const GAME_SLIM_FIELDS = new Set([
   "myMmrSource",
   "myToonHandle",
   "top3Leaks",
+  "groupsUsed",
+  "cameraReturnsPerMin",
   // Small, Mongo-queryable Map Intel samples. Kept inline so heatmaps and
   // proxy-aware custom-build reclassification can project them without a
   // detail-store round trip.
@@ -2031,6 +2033,8 @@ function normalizeSlimField(key, value) {
 const SLIM_FIELD_NORMALIZER_ENTRIES = [
   ["spatial", sanitizeSpatial],
   ["top3Leaks", sanitizeTopLeakArray],
+  ["groupsUsed", (value) => boundedInteger(value, 0, 10)],
+  ["cameraReturnsPerMin", (value) => boundedNumber(value, 0, 599940)],
   ["duration", (value) => boundedNumber(value, 0, 24 * 60 * 60)],
   ["macro_score", (value) => boundedNumber(value, 0, 100)],
   ["oppMmr", (value) => boundedInteger(value, 0, 9999)],

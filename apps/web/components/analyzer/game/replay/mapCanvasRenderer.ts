@@ -10,6 +10,7 @@ import { attackAt, attackFrame, drawWeaponEffects, unitFacingAt } from "@/lib/re
 
 import { type IconKind } from "@/lib/sc2-icons";
 
+import { replayCameraAt, type ReplayCameraMode } from "@/lib/replayCamera";
 import { drawMarkers, type ReplayMapMarker } from "@/lib/replayMarkers";
 import { buildingFirstSeen, VISION_EDGE, VisionGrid, visionViewer, type ReplayVision, type SightRadii } from "@/lib/replayVision";
 import { pushHit, type ReplayEntityRef, type ReplayHitBuffer } from "@/lib/replayInspect";
@@ -98,6 +99,7 @@ export interface RenderFrameOptions {
   hits?: ReplayHitBuffer | null;
   /** Ringed so the inspected or followed unit stands out. */
   selected?: ReplayEntityRef | null;
+  camera?: ReplayCameraMode;
 }
 
 export function renderFrame(
@@ -509,6 +511,7 @@ export function renderFrame(
     ctx.stroke();
   }
 
+  drawOtherCamera(ctx, playback, t, options?.camera, proj, view.z);
   ctx.restore();
 
   // Edge vignette, OUTSIDE the view transform so it hugs the stage
@@ -601,4 +604,19 @@ function vignetteFor(
   grad.addColorStop(1, `rgba(6,9,14,${VIGNETTE_ALPHA})`);
   vignetteCache.set(ctx, { w, h, grad });
   return grad;
+}
+
+
+function drawOtherCamera(
+  ctx: CanvasRenderingContext2D, playback: MapPlayback, time: number,
+  camera: ReplayCameraMode | undefined, proj: ReturnType<typeof worldProjection>, zoom: number,
+) {
+  if (!camera || camera === "free") return;
+  const point = replayCameraAt(playback.camera?.[camera === "me" ? "opp" : "me"], time);
+  if (!point) return;
+  const x = projectX(playback.bounds, proj, point.x);
+  const y = projectY(playback.bounds, proj, point.y);
+  ctx.strokeStyle = "rgba(255,255,255,0.4)";
+  ctx.lineWidth = 1 / zoom;
+  ctx.strokeRect(x - 12 * proj.k, y - 7 * proj.k, 24 * proj.k, 14 * proj.k);
 }

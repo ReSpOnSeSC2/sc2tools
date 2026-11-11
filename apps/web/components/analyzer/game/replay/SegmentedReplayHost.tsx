@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useRef, useState, type ComponentProps } from "react";
 import { useAuth } from "@clerk/nextjs";
 import type { PlaybackManifest } from "@/lib/segmentedPlayback";
@@ -8,6 +9,8 @@ import { clampReplayTime } from "@/lib/replayLink";
 import { Button } from "@/components/ui/Button";
 import { CompactReplayHost } from "./CompactReplayHost";
 import { ReplayStage } from "./ReplayStage";
+
+const AttentionCard = dynamic(() => import("./AttentionCard").then(module => module.AttentionCard));
 
 type Props = {
   gameId: string; manifest: PlaybackManifest; compact?: boolean; maxHeightPx?: number;
@@ -47,6 +50,7 @@ export function SegmentedReplayHost({ manifest, compact, segmentPath, segmentLin
     castMarkers, buffering, playbackWindow: { start: current.entry.start, end: current.entry.end } };
   return <div className="relative" aria-busy={buffering && !error}>
     {compact ? <CompactReplayHost key={scope} {...shared} /> : <ReplayStage key={scope} {...shared} />}
+    {props.clip === "owner" ? <div className="mt-2"><AttentionCard playback={current.playback} start={current.entry.start} end={current.entry.end} /></div> : null}
     {buffering && (error ? <div className="absolute inset-0 z-30 flex items-center justify-center rounded-lg bg-bg-surface/95">{loading}</div>
       : <div role="status" className="pointer-events-none absolute right-3 top-3 z-30 rounded-md bg-black/80 px-3 py-2 text-caption text-white">Loading next replay section…</div>)}
   </div>;
