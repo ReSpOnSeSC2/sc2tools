@@ -7,7 +7,7 @@
  *      (era, opponent league, matchup), with the k = 50 sample floor, the
  *      distinct-player floor, the per-player cap and a per-timing floor;
  *      no pseudonymous key reaches the output collection;
- *   2. personal timings use only the caller's own samples, in one era;
+ *   2. personal timings use the caller's recent ranked replays in one era;
  *   3. the personal side (/v1/benchmarks/targets) picks the most played
  *      matchup, medians the last 20 games and pairs net MMR like Trends;
  *   4. the HTTP contract, the drilldown filters and the league prefs.
@@ -125,18 +125,6 @@ describe("league timing percentiles", () => {
     expect(await db.db.collection(COLLECTION_NAME).countDocuments({})).toBe(0);
   });
 
-  test("personal medians use the caller's own samples in their latest era", async () => {
-    await db.guideSamples.insertMany([
-      sample("me", { playedOn: new Date("2026-10-20") }, { "Nexus#2": 90 }),
-      sample("me", { playedOn: new Date("2026-10-21") }, { "Nexus#2": 100 }),
-      sample("me", { playedOn: new Date("2026-10-22") }, { "Nexus#2": 110 }),
-      sample("me", { playedOn: new Date("2026-06-30"), era: "before" }, { "Nexus#2": 160 }),
-      sample("someone", { playedOn: new Date("2026-10-23") }, { "Nexus#2": 10 }),
-    ]);
-    const mine = await timings.personal("user-hash-me", "PvZ");
-    expect(mine).toMatchObject({ era: "after", n: 3, timings: { natural: { n: 3, median: 100 } } });
-    expect((await timings.personal("user-hash-none", "PvZ")).timings.natural).toEqual({ n: 0, median: null });
-  });
 });
 
 describe("personal targets", () => {
@@ -160,7 +148,7 @@ describe("personal targets", () => {
       game({ myMmr: 4050, myMmrSource: "replay", opponent: { race: "Terran" } }),
       game({ userId: "someone-else", myMmr: 6000, myMmrSource: "replay" }),
     ].map((row, i) => ({ ...row, date: new Date(Date.UTC(2026, 10, 1, 0, i)) })));
-    const svc = new LeagueTargetsService(db, { timings, userHash: (id) => `user-hash-${id}` });
+    const svc = new LeagueTargetsService(db, { findMany: async () => new Map() });
     const out = await svc.personal(OWNER, null);
     expect(out.matchup).toBe("PvZ");
     expect(out.matchups[0]).toEqual({ matchup: "PvZ", games: 25 });
@@ -170,6 +158,29 @@ describe("personal targets", () => {
     // The pulse-sourced rating is ignored; the replay one is current.
     expect(out.mmr).toMatchObject({ current: 4050, region: "NA" });
     expect((await svc.personal(OWNER, "PvT")).sample.n).toBe(5);
+  });
+
+  test("reads private timings even for builds absent from the guide corpus", async () => {
+    const version = "5.0.17.98100";
+    const buildLog = (natural) => ["[0:00] Nexus", `[1:${natural}] Nexus`, "[4:00] Nexus", "[3:00] Stargate"];
+    const replay = game({ gameVersion: version });
+    const ownerGames = [
+      game({ gameVersion: "5.0.16.97425", buildLog: buildLog(10) }),
+      game({ gameVersion: version, buildLog: buildLog(30) }),
+      game({ gameVersion: version, buildLog: buildLog(50) }),
+      { ...replay, date: new Date(replay.date.getTime() + 300_000) },
+      game({ gameVersion: version, excluded: true, buildLog: buildLog(10) }),
+      game({ gameVersion: version, userId: "someone-else", buildLog: buildLog(10) }),
+    ];
+    await db.games.insertMany(ownerGames);
+    const findMany = jest.fn(async () => new Map([[replay.gameId, { buildLog: buildLog(40) }]]));
+    const svc = new LeagueTargetsService(db, { findMany });
+    const out = await svc.personal(OWNER, "PvZ");
+    expect(out.timings).toMatchObject({ era: "after", n: 3, timings: { natural: { n: 3, median: 100 }, third: { n: 3, median: 240 }, keyTech: { n: 3, median: 180 } } });
+    expect(findMany).toHaveBeenCalledWith(OWNER, [replay.gameId], { fields: ["buildLog"], concurrency: 2 });
+    findMany.mockClear();
+    expect((await svc.personal(OWNER, "PvZ", false)).timings).toBeNull();
+    expect(findMany).not.toHaveBeenCalled();
   });
 
   test("net MMR per game follows the Trends pairing rules", () => {
@@ -217,7 +228,9 @@ describe("HTTP contract, drill filters and preferences", () => {
     const server = app({ leagueTargets: { personal } });
     const res = await request(server).get("/v1/benchmarks/targets?matchup=PvZ").expect(200);
     expect(res.headers["cache-control"]).toBe("private, no-store");
-    expect(personal).toHaveBeenCalledWith("owner", "PvZ");
+    expect(personal).toHaveBeenCalledWith("owner", "PvZ", true);
+    await request(server).get("/v1/benchmarks/targets?timings=0").expect(200);
+    expect(personal).toHaveBeenLastCalledWith("owner", null, false);
     await request(server).get("/v1/benchmarks/targets?matchup=Pv").expect(400);
   });
 

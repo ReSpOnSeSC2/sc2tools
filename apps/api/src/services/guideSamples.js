@@ -691,6 +691,7 @@ async function relabelEraRule(coll) {
 module.exports = {
   GuideSamplesService,
   extractSample,
+  extractMilestones,
   relabelEraRule,
   MAX_PENDING_WRITES,
   SKIP,

@@ -39,10 +39,13 @@ function useTimingTable(leagueId: number | null, matchup: string | null, era: st
  * current and next league's metric and timing tables (SWR 1 h). A 404 on a
  * table means that band is under the 50-game floor.
  */
-export function useTargetsData(requestedMatchup: string | null) {
+export function useTargetsData(requestedMatchup: string | null, includeTimings = true) {
   const { dbRev } = useFilters();
+  const query = new URLSearchParams();
+  if (requestedMatchup) query.set("matchup", requestedMatchup);
+  if (!includeTimings) query.set("timings", "0");
   const targets = useApi<TargetsResponse>(
-    `/v1/benchmarks/targets${requestedMatchup ? `?matchup=${requestedMatchup}` : ""}#${dbRev}`,
+    `/v1/benchmarks/targets${query.size ? `?${query}` : ""}#${dbRev}`,
     { keepPreviousData: true, revalidateOnFocus: false },
   );
   const prefsReq = useApi<LeagueTargetsPrefs>("/v1/me/preferences/leagueTargets", { revalidateOnFocus: false });
@@ -56,8 +59,9 @@ export function useTargetsData(requestedMatchup: string | null) {
   const era = targets.data?.timings?.era ?? "after";
   const current = useLeagueTable(bands?.current ?? null, matchup);
   const next = useLeagueTable(bands?.next ?? null, matchup);
-  const currentTimings = useTimingTable(bands?.current ?? null, matchup, era);
-  const nextTimings = useTimingTable(bands?.next ?? null, matchup, era);
+  const timingMatchup = includeTimings ? matchup : null;
+  const currentTimings = useTimingTable(bands?.current ?? null, timingMatchup, era);
+  const nextTimings = useTimingTable(bands?.next ?? null, timingMatchup, era);
   return {
     targets,
     prefsReq,
