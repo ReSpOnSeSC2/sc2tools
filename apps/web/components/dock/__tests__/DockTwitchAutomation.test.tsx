@@ -46,3 +46,14 @@ it("held response bodies time out so a retry is available", async () => {
 it("a replaced token tells the parent to stop all old Dock controls", async () => {
   fetcher.mockResolvedValue(new Response(JSON.stringify({ error: { code: "overlay_token_replaced" } }), { status: 401 })); const invalid = vi.fn(); render(<DockTwitchAutomation token="replaced" onInvalid={invalid} />); await waitFor(() => expect(invalid).toHaveBeenCalledWith(true));
 });
+
+
+it("links to signed-in reward settings without carrying the private Dock token", async () => {
+  render(<DockTwitchAutomation token="private-dock-token" />);
+  await screen.findByText("Prediction · Open");
+  const link = screen.getByRole("link", { name: "Reward settings" });
+  expect(link.getAttribute("href")).toBe("/settings?tab=chat#twitch-reward-actions");
+  expect(link.getAttribute("target")).toBe("_blank");
+  expect(link.getAttribute("rel")).toContain("noreferrer");
+  expect(fetcher.mock.calls).toHaveLength(1);
+});

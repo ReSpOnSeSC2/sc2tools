@@ -26,6 +26,7 @@ const article: HelpArticle = {
   updated: "2026-11-05",
   body: [
     { type: "paragraph", text: "Reply from **Chat** using the message box below the feed. Choose **All available** or select individual platforms, then press **Send** or Enter. Twitch, Kick and YouTube require **Connect chat sending** in **Settings → Chat & alerts → Connected accounts**; an already connected matching Twitch bot can also send. Each destination reports its own result. If only some sends succeed, your draft stays and only the failed destinations remain selected. TikTok chat is receive-only in the Dock; reply through TikTok LIVE." },
+    { type: "paragraph", text: "Open **Reward settings** in the Game section’s **Twitch Channel Points** panel to manage reward mappings and see recent redemptions. The settings page opens separately and uses your signed-in account." },
     { type: "paragraph", text: "The Game section also shows **Twitch Channel Points** state when configured. This is separate from Crystal Ball. **Resolve verified result** uses the stored replay result; **Cancel / refund** asks Twitch to refund and reports success only after confirmation. Missing provider IDs require a manual Twitch dashboard check. Both automation switches and the server feature gate start off. Current desktop telemetry cannot prove ranked queue status, so automatic Twitch Predictions remain unavailable; opted-in live 1v1 start markers can still work. [Twitch setup and recovery](/help/viewer-engagement#twitch-predictions)." },
     {
       type: "paragraph",
