@@ -13,6 +13,8 @@
  * Discord's field limits.
  */
 
+const { recordedRating } = require("./gameMomentRules");
+
 const SITE = "https://sc2tools.com";
 const COLORS = { win: 0x2fbf71, loss: 0xe5484d, neutral: 0x7c8a9a, brand: 0x3aa7ff };
 const DEFAULT_OPTIONS = Object.freeze({ opponentNames: false, mmr: true, replayLink: false });
@@ -70,12 +72,14 @@ function resultMessage(game, ctx) {
   const matchup = `${letter(game.myRace)}v${letter(game.opponent?.race)}`;
   const fields = [];
   if (game.myBuild) fields.push({ name: "Build", value: md(game.myBuild, 80) || "—", inline: true });
+  const ownMmr = recordedRating(game);
+  const opponentMmr = game.opponent?.mmrSource === "replay" && Number.isFinite(game.opponent.mmr) && game.opponent.mmr > 0 ? game.opponent.mmr : null;
   const opponent = [options.opponentNames && game.opponent?.displayName ? md(game.opponent.displayName, 40) : null,
-    md(game.opponent?.race, 12) || null, typeof game.opponent?.mmr === "number" && options.mmr ? `${num(game.opponent.mmr)} MMR` : null].filter(Boolean);
+    md(game.opponent?.race, 12) || null, opponentMmr !== null && options.mmr ? `${num(opponentMmr)} MMR` : null].filter(Boolean);
   if (opponent.length) fields.push({ name: "Opponent", value: opponent.join(" · "), inline: true });
-  if (options.mmr && typeof game.myMmr === "number") {
+  if (options.mmr && ownMmr !== null) {
     const delta = typeof ctx.mmrDelta === "number" && ctx.mmrDelta !== 0 ? ` (${signed(ctx.mmrDelta)})` : "";
-    fields.push({ name: "MMR", value: `${num(game.myMmr)}${delta}`, inline: true });
+    fields.push({ name: "MMR", value: `${num(ownMmr)}${delta}`, inline: true });
   }
   const length = clock(game.durationSec);
   if (length) fields.push({ name: "Length", value: length, inline: true });
@@ -84,6 +88,23 @@ function resultMessage(game, ctx) {
   const label = outcome === "win" ? "Victory" : outcome === "loss" ? "Defeat" : "Tie";
   return message([{ title: `${label} · ${matchup} on ${md(game.map, 60) || "Unknown map"}`, color: COLORS[outcome], fields,
     ...(url ? { url } : {}), ...(game.date ? { timestamp: new Date(game.date).toISOString() } : {}), footer: { text: "SC2 Tools" } }]);
+}
+
+/** Historical result embeds stored formatted MMR without provenance.
+ * Keep the result, removing the two structured places that held ratings.
+ * @param {any} payload */
+function withoutLegacyResultRatings(payload) {
+  if (!Array.isArray(payload?.embeds)) return payload;
+  return { ...payload, embeds: payload.embeds.map((/** @type {any} */ embed) => {
+    if (!Array.isArray(embed?.fields)) return embed;
+    const fields = embed.fields.flatMap((/** @type {any} */ field) => {
+      if (field?.name === "MMR") return [];
+      if (field?.name !== "Opponent" || typeof field.value !== "string") return [field];
+      const value = field.value.replace(/(?:^| · )[-−]?(?:[0-9,]+|NaN|∞) MMR$/, "");
+      return value ? [{ ...field, value }] : [];
+    });
+    return { ...embed, fields };
+  }) };
 }
 
 /**
@@ -148,4 +169,4 @@ function battleReportMessage(report) {
     url: `${SITE}/g/${encodeURIComponent(report.token)}#battle-report`, footer: { text: "SC2 Tools · Battle report" } }]);
 }
 
-module.exports = { resultMessage, sessionMessage, weeklyMessage, milestoneMessage, promotionMessage, testMessage, battleReportMessage, hookOptions, md, DEFAULT_OPTIONS };
+module.exports = { resultMessage, withoutLegacyResultRatings, sessionMessage, weeklyMessage, milestoneMessage, promotionMessage, testMessage, battleReportMessage, hookOptions, md, DEFAULT_OPTIONS };

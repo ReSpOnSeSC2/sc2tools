@@ -4,6 +4,10 @@ const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
+const { accountMatchHandles } = require("../util/accountFilter");
+const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
+const { normalizeRace } = require("./buildIntentCommon");
+const { recordedRating } = require("./gameMomentRules");
 const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 const { SHARE_TOKEN_RE } = require("./gameShares");
 const { bandFromId } = require("../util/leagueBands");
@@ -44,6 +48,36 @@ const TEST_COOLDOWN_MS = 30_000;
 const DISABLE_AFTER = 3;
 const EVENTS = ["result", "session", "weekly", "milestone"];
 const PEAK_MIN_HISTORY = 20;
+const REPLAY_RATING_POLICY = 1;
+const RANKED_QUEUE_RACES = /** @type {Record<string, RegExp>} */ ({
+  Protoss: /^\s*(?:p|prot|protoss)\s*$/i,
+  Terran: /^\s*(?:t|terr|terran)\s*$/i,
+  Zerg: /^\s*(?:z|zerg)\s*$/i,
+  Random: /^\s*(?:r|rand|random)\s*$/i,
+});
+
+/** The ladder queue can be Random even when the replay shows a concrete race.
+ * @param {string} userId @param {any} game */
+function rankedHistoryCohort(userId, game) {
+  const race = normalizeRace(game.myLadderRace ?? game.myRace);
+  const at = new Date(game.date);
+  const oneVsOne = game.matchFormat == null ? game.playerCount === 2
+    : game.matchFormat === "1v1" && (game.playerCount == null || game.playerCount === 2);
+  if (!race || !oneVsOne || !Number.isFinite(+at) || typeof game.myToonHandle !== "string"
+    || game.isResumedFromReplay === true || game.excluded === true || game._deleted === true || game._deletionPending === true) return null;
+  let handles;
+  try { handles = accountMatchHandles([game.myToonHandle]); } catch { return null; }
+  const handle = handles?.[0];
+  if (!handle || !ladderRegionFromToonHandle(handle)) return null;
+  const raceMatch = RANKED_QUEUE_RACES[race];
+  return { race, handle, at, match: {
+    ...gamesMatchStage(userId, {}), myToonHandle: { $in: handles }, isLadderGame: true, gameId: { $ne: game.gameId },
+    $and: [
+      { $or: [{ matchFormat: "1v1", playerCount: { $in: [2, null] } }, { matchFormat: null, playerCount: 2 }] },
+      { $or: [{ myLadderRace: raceMatch }, { myLadderRace: null, myRace: raceMatch }] },
+    ],
+  } };
+}
 
 /** @param {number} status @param {string} code @param {string} msg */
 function discordError(status, code, msg) { return Object.assign(new Error(msg), { status, code }); }
@@ -199,10 +233,11 @@ class DiscordWebhooksService {
   /** @param {string} userId @param {string} kind @param {ReturnType<typeof templates.hookOptions>} options */
   async previewOne(userId, kind, options) {
     const latest = await this.db.games.find(gamesMatchStage(userId, {}), { projection: { _id: 0 } }).sort({ date: -1 }).limit(1).toArray();
-    const game = latest[0] || { result: "Victory", myRace: "Protoss", map: "Example map", myBuild: "Example build", myMmr: 4000, durationSec: 742, opponent: { race: "Zerg", mmr: 3980, displayName: "Opponent" } };
+    const game = latest[0] || { result: "Victory", myRace: "Protoss", map: "Example map", myBuild: "Example build", myMmr: 4000,
+      myMmrSource: "replay", durationSec: 742, opponent: { race: "Zerg", mmr: 3980, mmrSource: "replay", displayName: "Opponent" } };
     const example = !latest[0];
-    if (kind === "result") return { example, payload: templates.resultMessage(game, { options, mmrDelta: 18, replaySlug: null }) };
-    if (kind === "milestone") return { example, payload: templates.milestoneMessage({ mmr: (game.myMmr || 4000) + 1, previousPeak: game.myMmr || 4000, race: game.myRace || "" }, { options }) };
+    if (kind === "result") return { example, payload: templates.resultMessage(game, { options, mmrDelta: example ? 18 : null, replaySlug: null }) };
+    if (kind === "milestone") return { example: true, payload: templates.milestoneMessage({ mmr: 4001, previousPeak: 4000, race: "Protoss" }, { options }) };
     if (kind === "weekly" && this.weekly) {
       const report = await this.weekly.report(userId, {}).catch(() => null);
       if (report && report.totals.games) return { example: false, payload: templates.weeklyMessage(report, { options }) };
@@ -233,6 +268,7 @@ class DiscordWebhooksService {
         dedupeKey: crypto.createHash("sha256").update(`${hook._id}:${eventKey}`).digest("base64url"),
         payload: build(options), options, hookEnabledAt: hook.enabledAt || null, attempts: 0, status: "queued",
         ...(delivery.shareToken ? { shareToken: delivery.shareToken } : {}),
+        ...(kind === "milestone" || (kind === "result" && !delivery.shareToken) ? { ratingPolicy: REPLAY_RATING_POLICY } : {}),
         ...(delivery.replaySlug && options.replayLink ? { replaySlug: delivery.replaySlug } : {}),
         nextAttemptAt: new Date(now), createdAt: new Date(now), expiresAt: new Date(now + OUTBOX_TTL_MS),
       }, COLLECTIONS.DISCORD_OUTBOX);
@@ -255,40 +291,37 @@ class DiscordWebhooksService {
   async queueGame(userId, game) {
     const user = await this.db.users.findOne({ userId }, { projection: { _id: 0, replaySharing: 1 } });
     const slug = user?.replaySharing?.enabled === true && typeof user.replaySharing.slug === "string" ? user.replaySharing.slug : null;
-    const rated = typeof game.myMmr === "number" && game.myMmr > 0;
-    const sameAccount = { myToonHandle: game.myToonHandle, myRace: game.myRace, myMmr: { $gt: 0 }, gameId: { $ne: game.gameId } };
-    const previous = rated ? await this.db.games.find({ ...gamesMatchStage(userId, { until: new Date(new Date(game.date).getTime() - 1) }), ...sameAccount },
-      { projection: { _id: 0, myMmr: 1 } }).sort({ date: -1 }).limit(1).toArray() : [];
-    const mmrDelta = previous[0] ? game.myMmr - previous[0].myMmr : null;
+    const ownMmr = recordedRating(game);
+    const cohort = rankedHistoryCohort(userId, game);
+    const ratedHistory = ownMmr !== null && cohort ? { ...cohort.match, myMmrSource: "replay", myMmr: { $type: "number", $gt: 0, $lte: 9999 } } : null;
+    const projection = { _id: 0, myMmr: 1, myMmrSource: 1 };
+    const previous = ratedHistory && cohort ? await this.db.games.findOne({ ...ratedHistory, date: { $lt: cohort.at } },
+      { projection, sort: { date: -1, _id: -1 } }) : null;
+    const priorMmr = previous ? recordedRating(previous) : null;
+    const mmrDelta = priorMmr !== null && ownMmr !== null ? ownMmr - priorMmr : null;
     await this.enqueue(userId, "result", `result:${game.gameId}`, (options) => templates.resultMessage(game, { options, mmrDelta, replaySlug: slug }), { replaySlug: slug });
-    if (await this.queuePromotion(userId, game) || !rated) return;
-    const higher = await this.db.games.findOne({ ...gamesMatchStage(userId, {}), ...sameAccount, myMmr: { $gte: game.myMmr } }, { projection: { _id: 1 } });
+    if (await this.queuePromotion(userId, game, cohort) || !ratedHistory || !cohort || ownMmr === null) return;
+    // Avoid the historical sort for ordinary results below an existing peak.
+    const higher = await this.db.games.findOne({ ...ratedHistory, myMmr: { ...ratedHistory.myMmr, $gte: ownMmr } }, { projection: { _id: 1 } });
     if (higher) return;
-    const history = await this.db.games.find({ ...gamesMatchStage(userId, {}), ...sameAccount }, { projection: { _id: 0, myMmr: 1 } }).sort({ myMmr: -1 }).limit(PEAK_MIN_HISTORY).toArray();
-    if (history.length < PEAK_MIN_HISTORY) return;
-    const milestone = { mmr: game.myMmr, previousPeak: history[0].myMmr, race: String(game.myRace || "") };
-    await this.enqueue(userId, "milestone", `peak:${game.myToonHandle}:${game.myRace}:${game.myMmr}`, (options) => templates.milestoneMessage(milestone, { options }));
+    const history = await this.db.games.find(ratedHistory, { projection }).sort({ myMmr: -1 }).limit(PEAK_MIN_HISTORY).toArray();
+    const previousPeak = history[0] ? recordedRating(history[0]) : null;
+    if (history.length < PEAK_MIN_HISTORY || previousPeak === null || previousPeak >= ownMmr || history.some(row => recordedRating(row) === null)) return;
+    const milestone = { mmr: ownMmr, previousPeak, race: cohort.race };
+    await this.enqueue(userId, "milestone", `peak:${cohort.handle}:${cohort.race}:${ownMmr}`, (options) => templates.milestoneMessage(milestone, { options }));
   }
 
-  /** Use consecutive observed ladder ranks for the same account and queue. @param {string} userId @param {any} game */
-  async queuePromotion(userId, game) {
+  /** Use consecutive observed ladder ranks for the same account and queue.
+   * @param {string} userId @param {any} game @param {ReturnType<typeof rankedHistoryCohort>} cohort */
+  async queuePromotion(userId, game, cohort) {
     const current = Number.isInteger(game.myLeagueId) ? bandFromId(game.myLeagueId) : null;
-    const queueRace = game.myLadderRace || game.myRace;
-    const oneVsOne = game.matchFormat === "1v1" || (game.matchFormat === undefined && game.playerCount === 2);
-    if (!current || !oneVsOne || typeof game.myToonHandle !== "string" || !game.myToonHandle.trim() || !queueRace
-      || game.isResumedFromReplay === true || game.excluded === true) return false;
-    const prior = await this.db.games.find({
-      ...gamesMatchStage(userId, {}), excluded: { $ne: true }, gameId: { $ne: game.gameId },
-      date: { $lt: new Date(game.date) }, myToonHandle: game.myToonHandle, isLadderGame: true,
-      $and: [
-        { $or: [{ matchFormat: "1v1" }, { matchFormat: { $exists: false }, playerCount: 2 }] },
-        { $or: [{ myLadderRace: queueRace }, { myLadderRace: { $exists: false }, myRace: queueRace }] },
-      ],
-    }, { projection: { _id: 0, myLeagueId: 1 } }).sort({ date: -1, _id: -1 }).limit(1).next();
+    if (!current || !cohort) return false;
+    const prior = await this.db.games.findOne({ ...cohort.match, date: { $lt: cohort.at } },
+      { projection: { _id: 0, myLeagueId: 1 }, sort: { date: -1, _id: -1 } });
     const priorId = prior?.myLeagueId;
     const previous = Number.isInteger(priorId) ? bandFromId(priorId) : null;
     if (!previous || current.id <= previous.id) return false;
-    const milestone = { previous: previous.label, current: current.label, race: queueRace, mmr: game.myMmr };
+    const milestone = { previous: previous.label, current: current.label, race: cohort.race, mmr: recordedRating(game) ?? undefined };
     await this.enqueue(userId, "milestone", `promotion:${game.gameId}`, (options) => templates.promotionMessage(milestone, { options }));
     return true;
   }
@@ -327,7 +360,7 @@ class DiscordWebhooksService {
   async sharedReportGame(userId, token) {
     const share = await this.db.gameShares.findOne({ _id: token, userId, revokedAt: null }, { projection: { gameId: 1 } });
     if (!share) return null;
-    return this.db.games.findOne({ userId, gameId: share.gameId, ...LIVE_GAME_MATCH }, { projection: { _id: 0, result: 1 } });
+    return this.db.games.findOne({ userId, gameId: share.gameId, ...LIVE_GAME_MATCH }, { projection: { _id: 0, result: 1, gameId: 1 } });
   }
 
   /**
@@ -409,19 +442,22 @@ class DiscordWebhooksService {
     const claimed = await this.db.discordOutbox.updateOne({ _id: row._id, status: "queued", nextAttemptAt: row.nextAttemptAt },
       { $set: { nextAttemptAt: new Date(this.now() + 5 * 60_000) } });
     if (claimed.modifiedCount !== 1) return "dropped";
-    const [hook, user] = await Promise.all([
-      this.db.discordHooks.findOne({ _id: row.hookId, userId: row.userId }),
-      this.db.users.findOne({ userId: row.userId }, { projection: { _id: 0, userId: 1, _gdprMutation: 1, replaySharing: 1 } }),
-    ]);
-    if (!user || user._gdprMutation || !this.canDeliver(row, hook)) {
-      await this.retireRow(row, "dropped");
-      return "dropped";
-    }
-    const response = await this.withLease(row.userId, async () => {
-      if (row.shareToken && !await this.sharedReportGame(row.userId, row.shareToken)) return null;
-      return this.postWithDetails(hook, this.currentPayload(row, user));
+    const outcome = await this.withLease(row.userId, async (lease) => {
+      // Resolve the shared game's existence before the final consent reads so
+      // a slow game lookup cannot leave old channel settings in memory.
+      const game = row.shareToken ? await this.sharedReportGame(row.userId, row.shareToken) : null;
+      if (row.shareToken && !game) return null;
+      try { await lease.assert(); } catch { return null; }
+      const [hook, user, share] = await Promise.all([
+        this.db.discordHooks.findOne({ _id: row.hookId, userId: row.userId }),
+        this.db.users.findOne({ userId: row.userId, _gdprMutation: { $exists: false } }, { projection: { _id: 0, replaySharing: 1 } }),
+        game ? this.db.gameShares.findOne({ _id: row.shareToken, userId: row.userId, gameId: game.gameId, revokedAt: null }, { projection: { _id: 1 } }) : null,
+      ]);
+      if (!user || (row.shareToken && !share) || !this.canDeliver(row, hook)) return null;
+      const response = await this.postWithDetails(hook, this.currentPayload(row, user));
+      return this.settle(row, hook, response);
     });
-    if (response) return this.settle(row, hook, response);
+    if (outcome) return outcome;
     await this.retireRow(row, "dropped");
     return "dropped";
   }
@@ -429,22 +465,28 @@ class DiscordWebhooksService {
   /** A queued payload uses the privacy choices approved when it was made. @param {any} row @param {any} hook */
   canDeliver(row, hook) {
     if (hook?.enabled !== true || hook.status !== "active" || hook.events?.[row.kind] !== true) return false;
-    if (new Date(row.expiresAt).getTime() <= this.now() || !row.options) return false;
+    if (!(new Date(row.expiresAt).getTime() > this.now()) || !row.options) return false;
+    // Unlike a plain result, the validity of a historical peak headline
+    // itself cannot be recovered from its preformatted embed.
+    if (row.kind === "milestone" && row.ratingPolicy !== REPLAY_RATING_POLICY) return false;
     const options = templates.hookOptions(hook.options);
+    if (row.shareToken && !options.replayLink) return false;
     return +new Date(row.hookEnabledAt) === +new Date(hook.enabledAt) &&
       options.opponentNames === row.options.opponentNames && options.mmr === row.options.mmr && options.replayLink === row.options.replayLink;
   }
 
   /** Remove an archive link when archive consent was withdrawn. @param {any} row @param {any} user */
   currentPayload(row, user) {
-    if (!row.replaySlug || (user.replaySharing?.enabled === true && user.replaySharing.slug === row.replaySlug)) return row.payload;
-    return { ...row.payload, embeds: row.payload.embeds.map((/** @type {any} */ embed) => ({ ...embed, url: undefined })) };
+    const payload = row.kind === "result" && !row.shareToken && row.ratingPolicy !== REPLAY_RATING_POLICY
+      ? templates.withoutLegacyResultRatings(row.payload) : row.payload;
+    if (!row.replaySlug || (user.replaySharing?.enabled === true && user.replaySharing.slug === row.replaySlug)) return payload;
+    return { ...payload, embeds: payload.embeds.map((/** @type {any} */ embed) => ({ ...embed, url: undefined })) };
   }
 
   /** Keep the dedupe receipt until its existing TTL, without the message. @param {any} row @param {string} status @param {Record<string, unknown>} [details] */
   async retireRow(row, status, details = {}) {
     await this.db.discordOutbox.updateOne({ _id: row._id },
-      { $set: { status, ...details }, $unset: { payload: "", options: "", shareToken: "", replaySlug: "" } });
+      { $set: { status, ...details }, $unset: { payload: "", options: "", shareToken: "", replaySlug: "", ratingPolicy: "" } });
   }
 
   /**
@@ -526,11 +568,11 @@ class DiscordWebhooksService {
     return res.deletedCount || 0;
   }
 
-  /** Fence a background delivery operation against erasure. @template T @param {string} userId @param {() => Promise<T>} work */
+  /** Fence a background delivery operation against erasure. @template T @param {string} userId @param {(lease: Awaited<ReturnType<typeof claimUserDataLease>>) => Promise<T>} work */
   async withLease(userId, work) {
     let lease;
     try { lease = await claimUserDataLease(this.db.users, userId); } catch { return null; }
-    try { return await work(); } finally { await lease.release(); }
+    try { return await work(lease); } finally { await lease.release(); }
   }
 }
 
