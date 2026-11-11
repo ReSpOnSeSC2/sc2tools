@@ -334,12 +334,18 @@ class ReanalysisService {
     if (!userId || !DEVICE_ID.test(String(data.deviceId || ""))) return false;
     const outcome = parseOutcomeEvent(raw);
     if (!outcome) return false;
+    // While paused, the last device can still report its in-flight game.
+    // Dispatching again replaces that delivery's generation and device.
+    const delivery = { "batch.deviceId": data.deviceId, $or: [
+      { "batch.dispatchedGeneration": outcome.generation },
+      { "batch.dispatchedGeneration": null, generation: outcome.generation },
+    ] };
     const job = await this.jobs.findOne(
-      { _id: new ObjectId(outcome.jobId), userId, active: true },
+      { ...delivery, _id: new ObjectId(outcome.jobId), userId, active: true, "batch.seq": outcome.seq },
       { projection: { "batch.seq": 1, "batch.createdAt": 1 } },
     );
-    if (!job?.batch || job.batch.seq !== outcome.seq) return false;
-    const settled = await this._settle(userId, job._id, job.batch, outcome);
+    if (!job?.batch) return false;
+    const settled = await this._settle(userId, job._id, job.batch, outcome, delivery);
     if (settled) {
       this._progress(userId, settled, false);
       void this._schedule(userId, false);
@@ -477,12 +483,14 @@ class ReanalysisService {
     const claimed = await this.jobs.findOneAndUpdate(
       { _id: job._id, active: true, status: "running", generation: job.generation, "batch.seq": job.batch.seq,
         "batch.dispatchedAt": job.batch.dispatchedAt ?? null },
-      { $set: { "batch.dispatchedAt": at, "batch.deviceId": device.data.deviceId, updatedAt: at } },
+      { $set: { "batch.dispatchedAt": at, "batch.deviceId": device.data.deviceId,
+        "batch.dispatchedGeneration": job.generation, updatedAt: at } },
       { returnDocument: "after", projection: { _id: 1 } },
     );
     if (!claimed) return false;
+    const delivery = { generation: job.generation, "batch.deviceId": device.data.deviceId, "batch.dispatchedAt": at };
     if (!await this._current(device, userId)) {
-      await this._stall(job);
+      await this._stall(job, delivery);
       return false;
     }
     const payload = {
@@ -507,18 +515,19 @@ class ReanalysisService {
       return false;
     }
     if (!ack || ack.code !== "accepted") {
-      await this._stall(job);
+      await this._stall(job, delivery);
       return false;
     }
     const acked = new Date(this.now());
     const marked = await this.jobs.updateOne(
-      { _id: job._id, active: true, generation: job.generation, "batch.seq": job.batch.seq },
+      { ...delivery, _id: job._id, active: true, "batch.seq": job.batch.seq },
       { $set: { "batch.acked": true, "batch.ackedGeneration": job.generation, "batch.lastActivityAt": acked, "batch.stalls": 0, updatedAt: acked } },
     );
+    if (marked.matchedCount !== 1) return false;
     let latest = null;
-    for (const outcome of ack.outcomes) latest = await this._settle(userId, job._id, job.batch, outcome) || latest;
+    for (const outcome of ack.outcomes) latest = await this._settle(userId, job._id, job.batch, outcome, delivery) || latest;
     if (latest) this._progress(userId, latest, false);
-    return marked.matchedCount === 1;
+    return true;
   }
 
   /**
@@ -526,12 +535,12 @@ class ReanalysisService {
    * missed MAX_STALLS redeliveries, its remaining games settle as failed so
    * one stuck item cannot hold the job forever. A batch no agent ever accepted
    * is never failed this way: it simply waits.
-   * @param {any} job
+   * @param {any} job @param {Record<string, any>} delivery
    */
-  async _stall(job) {
+  async _stall(job, delivery) {
     const at = new Date(this.now());
     const stalled = await this.jobs.findOneAndUpdate(
-      { _id: job._id, active: true, "batch.seq": job.batch.seq },
+      { ...delivery, _id: job._id, active: true, "batch.seq": job.batch.seq },
       { $inc: { "batch.stalls": 1 }, $set: { updatedAt: at } },
       { returnDocument: "after", projection: { "batch.seq": 1, "batch.stalls": 1, "batch.acked": 1, "batch.items": 1, "batch.createdAt": 1 } },
     );
@@ -539,9 +548,9 @@ class ReanalysisService {
     let latest = null;
     for (const item of stalled.batch.items) {
       if (typeof item.outcome === "string") continue;
-      latest = await this._settle(job.userId, job._id, stalled.batch, { gameId: item.gameId, outcome: "no_result", engineVersion: null }) || latest;
+      latest = await this._settle(job.userId, job._id, stalled.batch,
+        { gameId: item.gameId, outcome: "no_result", engineVersion: null }, delivery) || latest;
     }
-    await this.jobs.updateOne({ _id: job._id, active: true, "batch.seq": job.batch.seq }, { $set: { "batch.acked": true } });
     if (latest) this._progress(job.userId, latest, true);
     void this._schedule(job.userId, false);
   }
@@ -550,14 +559,15 @@ class ReanalysisService {
    * Record one terminal outcome exactly once (the item must still be open).
    * @param {string} userId @param {any} jobId @param {any} batch
    * @param {{gameId: string, outcome: string, engineVersion: string|null}} outcome
+   * @param {Record<string, any>} delivery
    */
-  async _settle(userId, jobId, batch, outcome) {
+  async _settle(userId, jobId, batch, outcome, delivery) {
     let counter = OUTCOMES.get(outcome.outcome);
     if (!counter) return null;
     if (counter === "updated" && !await this._verifiedUpload(userId, outcome, batch.createdAt)) counter = "failed";
     const at = new Date(this.now());
     return this.jobs.findOneAndUpdate(
-      { _id: jobId, userId, active: true, "batch.seq": batch.seq,
+      { ...delivery, _id: jobId, userId, active: true, "batch.seq": batch.seq,
         "batch.items": { $elemMatch: { gameId: outcome.gameId, outcome: null } } },
       { $set: { "batch.items.$.outcome": outcome.outcome, "batch.lastActivityAt": at, updatedAt: at },
         $inc: { processed: 1, [counter]: 1 } },

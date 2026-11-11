@@ -443,6 +443,7 @@ async function ensureIndexes(ctx, opts = {}) {
   // Public-profile availability resolves a toon across users. A userId-leading
   // index cannot answer this lookup; include the character id for a covered read.
   await ctx.opponents.createIndex({ pulseId: 1, pulseCharacterId: 1 });
+  await ctx.opponents.createIndex({ userId: 1, pulseCharacterId: 1 });
   await ctx.opponents.createIndex({ userId: 1, lastSeen: -1 });
   // Admin per-user top-opponents card runs
   // ``find({userId}).sort({gameCount: -1}).limit(5)`` against this
