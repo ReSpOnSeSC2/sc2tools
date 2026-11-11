@@ -9,7 +9,7 @@ const { ObjectId } = require("mongodb");
 const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { hmac } = require("../util/hash");
 const { expectedVersion } = require("../db/schemaVersioning");
-const { gamesMatchStage } = require("../util/parseQuery");
+const { gamesMatchStage, resultBucket } = require("../util/parseQuery");
 const { parseExactMapNames } = require("../util/exactMapFilter");
 const { accountMatchHandles } = require("../util/accountFilter");
 const { opponentSeries } = require("./opponentSeries");
@@ -4239,8 +4239,9 @@ function aggregateByMapAndStrategy(games) {
   /** @type {Record<string, {wins: number, losses: number}>} */
   const byStrategy = {};
   for (const g of games) {
-    const isWin = g.result === "Victory";
-    const isLoss = g.result === "Defeat";
+    const result = resultBucket(g.result);
+    const isWin = result === "win";
+    const isLoss = result === "loss";
     const mapName = g.map || "";
     if (mapName) {
       if (!byMap[mapName]) byMap[mapName] = { wins: 0, losses: 0 };
@@ -4270,10 +4271,13 @@ function computeTotals(games, doc) {
   let wins = 0;
   let losses = 0;
   for (const g of games) {
-    if (g.result === "Victory") wins += 1;
-    else if (g.result === "Defeat") losses += 1;
+    const result = resultBucket(g.result);
+    if (result === "win") wins += 1;
+    else if (result === "loss") losses += 1;
   }
-  if (wins === 0 && losses === 0 && doc) {
+  // Stored counters can stand in for missing metadata, but never replace
+  // recorded ties or unknown outcomes with unrelated lifetime wins/losses.
+  if (games.length === 0 && doc) {
     wins = doc.wins || 0;
     losses = doc.losses || 0;
   }

@@ -87,10 +87,17 @@ describe("opponent profile query", () => {
     );
 
     expect(query.get("map")).toBe("Alcyone LE");
+    expect(query.get("map_exact")).toBe('["Alcyone LE"]');
     expect(query.get("build")).toBe("Blink");
     expect(query.get("opp_strategy")).toBe("2-1-1");
     expect(query.get("map_pool")).toBe("ladder");
     expect(query.get("game_size")).toBe("1v1");
     expect(query.get("mergeLinked")).toBe("1");
+  });
+  it("replaces an older exact-map cohort when selecting a dossier map", () => {
+    const query = params(buildOpponentReplayHistoryQuery({
+      map: "Alcyone", map_exact: '["Alcyone LE", "Alcyone AIE"]', map_exact_label: "Alcyone",
+    }, true, "Alcyone LE"));
+    expect(query.get("map_exact")).toBe('["Alcyone LE"]');
   });
 });
