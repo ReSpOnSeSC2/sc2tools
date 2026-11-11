@@ -20,7 +20,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 - Record the engine and agent versions that analyzed each uploaded game.
 
 ### Changed
-- Move the desktop Settings form into its own module.
+- Move the desktop Settings form into its own module. Use a section index on
+  wider windows and see when changes take effect.
 
 ### Fixed
 - Make Practice HUD drag, resize and window controls respond in Move mode.

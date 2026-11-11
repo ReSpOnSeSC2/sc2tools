@@ -9,6 +9,71 @@ from .help_links import help_button
 
 # Format the sync-range controls and the corresponding saved dates consistently.
 SYNC_DATE_FORMAT = "yyyy-MM-dd"
+APPLIES_INSTANTLY = "Applies instantly"
+SAVED_WITH_SAVE = "Saved with Save"
+NEEDS_RESTART = "Needs restart"
+_SECTION_INDEX_MIN_WIDTH = 900
+
+
+def settings_timing(QtWidgets, timing, *controls):
+    """Display timing and include it in each control's accessible description."""
+    note = QtWidgets.QLabel(timing)
+    note.setObjectName("hint")
+    for control in controls:
+        description = control.accessibleDescription()
+        control.setAccessibleDescription(" ".join(part for part in (description, timing) if part))
+    return note
+
+
+def _with_timing(QtWidgets, field, timing, *controls):
+    block = QtWidgets.QWidget()
+    layout = QtWidgets.QVBoxLayout(block)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(theme.SPACE_XS)
+    layout.addWidget(field)
+    layout.addWidget(settings_timing(QtWidgets, timing, *(controls or (field,))))
+    return block
+
+
+def _install_section_index(scroller, jump_label, jump, sections, open_section, *, QtCore, QtWidgets):
+    index = QtWidgets.QListWidget(scroller)
+    index.setAccessibleName("Settings section index")
+    index.addItems(list(sections))
+    index.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+    index.itemClicked.connect(lambda item: open_section(item.text()))
+    index.itemActivated.connect(lambda item: open_section(item.text()))
+    QtWidgets.QWidget.setTabOrder(index, jump)
+    index.hide()
+
+    class ResponsiveIndex(QtCore.QObject):
+        def __init__(self):
+            super().__init__(scroller)
+            self.wide = False
+            scroller.installEventFilter(self)
+
+        def eventFilter(self, watched, event):
+            if event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.Show):
+                self.refresh()
+            return False
+
+        def refresh(self):
+            wide = scroller.width() >= _SECTION_INDEX_MIN_WIDTH
+            width = index.sizeHintForColumn(0) + 2 * theme.SPACE_S
+            if wide != self.wide:
+                self.wide = wide
+                transfer_focus = jump.hasFocus() if wide else index.hasFocus()
+                scroller.setViewportMargins(theme.PAGE_MARGIN_X + width if wide else 0, 0, 0, 0)
+                index.setVisible(wide)
+                jump_label.setVisible(not wide)
+                jump.setVisible(not wide)
+                if transfer_focus:
+                    (index if wide else jump).setFocus()
+            if wide:
+                height = sum(index.sizeHintForRow(row) for row in range(index.count())) + 2 * index.frameWidth()
+                height = min(height, max(0, scroller.height() - 2 * theme.PAGE_MARGIN_Y))
+                index.setGeometry(theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y, width, height)
+
+    return ResponsiveIndex()
 
 
 def build_settings_page(
@@ -46,6 +111,7 @@ def build_settings_page(
                                      lambda: window._open_help("desktop-app-settings")))
     navigation.addWidget(help_button(QtWidgets, "Keyboard shortcuts",
                                      lambda: window._open_help("desktop-app-shortcuts")))
+    navigation.addStretch()
     v.addLayout(navigation)
 
     form_card = QtWidgets.QFrame()
@@ -80,6 +146,7 @@ def build_settings_page(
     window._api_test_btn.clicked.connect(window._test_api_address)
     api_actions.addWidget(window._api_test_btn)
     api_v.addLayout(api_row)
+    api_v.addWidget(settings_timing(QtWidgets, NEEDS_RESTART, window._api_input))
     api_actions.addStretch(1)
     api_v.addLayout(api_actions)
     api_hint = QtWidgets.QLabel("Leave blank to use sc2tools.com")
@@ -95,7 +162,7 @@ def build_settings_page(
     api_v.addWidget(window._api_test_status)
     window._api_input.editingFinished.connect(window._validate_api_address)
     window._api_input.textChanged.connect(window._on_api_text_changed)
-    api_label = QtWidgets.QLabel(f"API base URL<br/><span style='color:{theme.TEXT_MUTED}'>Needs restart</span>")
+    api_label = QtWidgets.QLabel("API base URL")
     api_label.setBuddy(window._api_input)
     form.addRow(api_label, api_block)
 
@@ -248,10 +315,7 @@ def build_settings_page(
     # Hint text trailing the buttons — explains the
     # rate-limit reasoning so the user knows why we don't
     # expose more options.
-    upload_conc_hint = QtWidgets.QLabel(
-        "More than 2 risks rate-limit retries. Click to "
-        "apply instantly — no restart needed."
-    )
+    upload_conc_hint = QtWidgets.QLabel("More than 2 risks rate-limit retries.")
     upload_conc_hint.setWordWrap(True)
     upload_conc_hint.setObjectName("hint")
     upload_conc_h.addWidget(upload_conc_hint, 2)
@@ -387,15 +451,15 @@ def build_settings_page(
     from ..game_activity import background_workers
     window._speed_combo.currentIndexChanged.connect(lambda _index:window._concurrency_slider.setValue(
         background_workers(window._speed_combo.currentData(),PARSE_CONCURRENCY_USEFUL_MAX)))
-    performance_hint = QtWidgets.QLabel("Background worker speed applies after restarting SC2 Tools.")
-    performance_hint.setWordWrap(True)
-    performance_v.addWidget(performance_hint)
+    window._speed_combo.setAccessibleName("Background import speed")
+    performance_v.addWidget(settings_timing(QtWidgets, NEEDS_RESTART, window._speed_combo))
     window._pause_history_check = QtWidgets.QCheckBox("Pause history import while I'm in a game")
     window._pause_history_check.setChecked(initial_settings.pause_history_in_game is not False)
     window._battery_check = QtWidgets.QCheckBox("Pause on battery")
     window._battery_check.setChecked(initial_settings.pause_on_battery is True)
     performance_v.addWidget(window._pause_history_check)
     performance_v.addWidget(window._battery_check)
+    performance_v.addWidget(settings_timing(QtWidgets, SAVED_WITH_SAVE, window._pause_history_check, window._battery_check))
     form.addRow(window._help_label("Performance", "desktop-app-performance"), performance)
 
     window._log_combo = QtWidgets.QComboBox()
@@ -532,6 +596,7 @@ def build_settings_page(
     window._replay_capture_check = QtWidgets.QCheckBox(
         "Automatically capture map replays (uses more CPU)",
     )
+    window._replay_capture_check.setAccessibleDescription(APPLIES_INSTANTLY)
     capture_v.addWidget(window._replay_capture_check)
     window._replay_capture_feedback = window._instant_feedback()
     capture_v.addWidget(window._replay_capture_feedback)
@@ -540,36 +605,51 @@ def build_settings_page(
         "for new and re-synced replays. Uses StarCraft II in the background "
         "and substantial CPU for several minutes per replay. Saved recordings "
         "are reused. For games already synced, use Re-sync once. When off, "
-        "Generate accurate playback on the website records one replay. "
-        "This switch applies immediately."
+        "Generate accurate playback on the website records one replay."
     )
     capture_help.setObjectName("muted")
     capture_help.setWordWrap(True)
     capture_v.addWidget(capture_help)
-    form.addRow("Map replay", capture_block)
+    form.addRow(capture_block)
 
     def section(name, fields):
         group = QtWidgets.QGroupBox(name, page)
         destination = QtWidgets.QFormLayout(group)
         destination.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
-        for field in fields:
+        for field, timing, *controls in fields:
             row = form.takeRow(field)
             caption = row.labelItem.widget() if row.labelItem else None
+            buddy = controls[0] if controls else field
+            if isinstance(caption, QtWidgets.QLabel) and buddy.focusPolicy() != QtCore.Qt.NoFocus:
+                caption.setBuddy(buddy)
+            body = _with_timing(QtWidgets, field, timing, *controls) if timing else field
             if caption is not None:
-                if isinstance(caption, QtWidgets.QLabel) and field.focusPolicy() != QtCore.Qt.NoFocus:
-                    caption.setBuddy(field)
-                destination.addRow(caption, field)
+                destination.addRow(caption, body)
             else:
-                destination.addRow(field)
+                destination.addRow(body)
         return group, destination
 
-    replays, _ = section("Replays", (folder_block, filter_block, window._handle_input))
-    app_group, _ = section("App · Saved with Save", (window._autostart_check, window._minimized_check,
-                                                       window._notifications_combo, window._close_behavior_combo))
-    updates, _ = section("Updates · Saved with Save", (window._autoupdate_check,))
-    map_replay, _ = section("Map replay · Applies instantly", (capture_block,))
-    advanced, advanced_form = section("Advanced", (api_block, concurrency_block, upload_conc_block,
-                                                     upload_batch_block, performance, window._log_combo))
+    replays, _ = section("Replays", (
+        (folder_block, APPLIES_INSTANTLY, add_btn, remove_btn, auto_btn, locate, window._folder_undo),
+        (filter_block, SAVED_WITH_SAVE, window._filter_combo, window._filter_since, window._filter_until),
+        (window._handle_input, SAVED_WITH_SAVE),
+    ))
+    app_group, _ = section("App", (
+        (window._autostart_check, SAVED_WITH_SAVE),
+        (window._minimized_check, SAVED_WITH_SAVE),
+        (window._notifications_combo, SAVED_WITH_SAVE),
+        (window._close_behavior_combo, SAVED_WITH_SAVE),
+    ))
+    updates, _ = section("Updates", ((window._autoupdate_check, SAVED_WITH_SAVE),))
+    map_replay, _ = section("Map replay", ((capture_block, None),))
+    advanced, advanced_form = section("Advanced", (
+        (api_block, None, window._api_input),
+        (concurrency_block, None),
+        (upload_conc_block, APPLIES_INSTANTLY, *window._upload_conc_buttons.values()),
+        (upload_batch_block, SAVED_WITH_SAVE, window._upload_batch_slider),
+        (performance, None),
+        (window._log_combo, NEEDS_RESTART),
+    ))
     for group in (replays, app_group, updates):
         v.addWidget(group)
     from .build_checkin_settings import CheckinSettingsGroup
@@ -605,14 +685,25 @@ def build_settings_page(
     section_select.addItem("Jump to a section…", None)
     for section_name in anchors:
         section_select.addItem(section_name, section_name)
-    def jump_to_section(index):
-        name = section_select.itemData(index)
-        if name == "Advanced":
+    def scroll_to_section(anchor):
+        top = anchor.mapTo(page, QtCore.QPoint()).y() - theme.SPACE_S
+        scroller.verticalScrollBar().setValue(top)
+
+    def open_section(name):
+        anchor = anchors.get(name)
+        if anchor is None:
+            return
+        if name == "Advanced" and not window._settings_advanced.isChecked():
             window._settings_advanced.setChecked(True)
-        if name in anchors:
-            scroller.ensureWidgetVisible(anchors[name], 8, 8)
-            section_select.setCurrentIndex(0)
-    section_select.activated.connect(jump_to_section)
+            v.activate()
+            # Advanced changes the scroll range. Wait for the viewport's
+            # geometry before jumping, so the old maximum cannot clamp it.
+            QtCore.QTimer.singleShot(0, scroller, lambda: scroll_to_section(anchor))
+        else:
+            scroll_to_section(anchor)
+        section_select.setCurrentIndex(0)
+
+    section_select.activated.connect(lambda row: open_section(section_select.itemData(row)))
 
     window._settings_status = QtWidgets.QLabel("")
     window._settings_status.setObjectName("muted")
@@ -651,4 +742,7 @@ def build_settings_page(
     scroller.setWidget(page)
     from .qt_helpers import install_responsive_forms
     window._settings_responsive_forms = install_responsive_forms(scroller, QtCore=QtCore, QtWidgets=QtWidgets)
+    window._settings_section_index = _install_section_index(
+        scroller, section_label, section_select, anchors, open_section, QtCore=QtCore, QtWidgets=QtWidgets,
+    )
     return scroller

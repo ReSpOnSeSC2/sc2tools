@@ -46,7 +46,9 @@ log = logging.getLogger(__name__)
 # ceiling — see the comment block there for why 12.
 from .qt_helpers import guard_value_widgets, validate_api_base, probe_api_health
 from .help_links import help_url, help_button, site_url
-from .settings_page import SYNC_DATE_FORMAT, build_settings_page
+from .settings_page import (
+    APPLIES_INSTANTLY, SAVED_WITH_SAVE, SYNC_DATE_FORMAT, build_settings_page, settings_timing,
+)
 from . import palette
 from ..health import GAMES_HELP, SYNC_HELP
 from ..config import _DEFAULT_API_BASE
@@ -1970,8 +1972,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._obs_enable_check.setToolTip(
                 "Requires obs-websocket, which ships with OBS 28 and "
                 "later: OBS → Tools → WebSocket Server Settings → "
-                "Enable WebSocket server. This switch applies immediately.",
+                "Enable WebSocket server.",
             )
+            self._obs_enable_check.setAccessibleDescription(APPLIES_INSTANTLY)
             outer.addWidget(self._obs_enable_check)
             self._obs_toggle_feedback = self._instant_feedback()
             outer.addWidget(self._obs_toggle_feedback)
@@ -2118,6 +2121,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             delay_row.addWidget(self._obs_debounce_spin)
             delay_row.addStretch(1)
             outer.addLayout(delay_row)
+            outer.addWidget(settings_timing(
+                QtWidgets, SAVED_WITH_SAVE,
+                self._obs_host_input, self._obs_port_input, self._obs_password_input, self._obs_clear_password,
+                self._obs_website_add_check, *self._obs_scene_combos.values(),
+                self._obs_replay_check, self._obs_debounce_spin,
+            ))
 
             return card
 
