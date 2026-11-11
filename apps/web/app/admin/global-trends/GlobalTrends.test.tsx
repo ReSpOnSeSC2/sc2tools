@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import AdminGlobalTrendsPage from "./page";
 import { useFilters } from "@/lib/filterContext";
-import { useTrendsApi, useTrendsDataScope } from "@/lib/trendsDataContext";
+import { useTrendsDataScope } from "@/lib/trendsDataContext";
 import { ALL_PLAYERS, DEFAULT_TREND_VIEW, populationQuery, readTrendView, selectPlayers, trendViewQuery, type TrendViewPreferences } from "./globalTrendsState";
 
 const api = vi.hoisted(() => ({ useApi: vi.fn(), mutate: vi.fn(), request: vi.fn() }));
@@ -13,12 +13,17 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: navigation.replace }),
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "admin-test" }) }));
-vi.mock("@/lib/clientApi", () => ({ useApi: (...args: unknown[]) => api.useApi(...args) }));
+vi.mock("@/lib/clientApi", () => ({ useApi: (path: string, ...args: unknown[]) => {
+  const result = api.useApi(path, ...args);
+  if (path.includes("/global-trends/timeseries") && !result.data && !result.error && !result.isLoading) {
+    return { ...result, data: { points: [] } };
+  }
+  return result;
+} }));
 vi.mock("@/lib/useSeasons", () => ({ useSeasons: () => ({ data: { items: [] } }), rollUpSeasons: () => [] }));
-vi.mock("@/components/analyzer/TrendsTab", () => ({ TrendsTab: () => {
+vi.mock("@/components/analyzer/TrendsTab", () => ({ TrendsTabView: () => {
   const { filters } = useFilters();
   const scope = useTrendsDataScope();
-  useTrendsApi("/v1/timeseries");
   return <output data-testid="chart-scope">{JSON.stringify({ ...scope, filters })}</output>;
 } }));
 
@@ -35,6 +40,7 @@ const PLAYERS = [
 async function renderWithPlayers() {
   const page = render(<AdminGlobalTrendsPage />);
   await screen.findByRole("region", { name: "Player population" });
+  await screen.findByTestId("chart-scope");
   return page;
 }
 
@@ -122,6 +128,28 @@ describe("Global Trends", () => {
     expect(scope().cohort.included_players).toBe(ALPHA);
   });
 
+  it("keeps the chart canvas deferred during admission and shows the initial summary retry", async () => {
+    let summary = { isLoading: true } as { isLoading?: boolean; error?: { status: number; message: string }; data?: { points: unknown[] } };
+    api.useApi.mockImplementation((path: string) => ({
+      ...(path.includes("/global-trends/timeseries") ? summary : { data: path.includes("/players") ? { items: PLAYERS } : undefined }),
+      mutate: api.mutate,
+    }));
+    const page = render(<AdminGlobalTrendsPage />);
+    expect(screen.getByRole("status", { name: "Loading summary" })).toBeTruthy();
+    expect(screen.queryByTestId("chart-scope")).toBeNull();
+    summary = { error: { status: 500, message: "Summary temporarily unavailable" } };
+    page.rerender(<AdminGlobalTrendsPage />);
+    expect(screen.queryByTestId("chart-scope")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(api.mutate).toHaveBeenCalledOnce();
+    summary = { data: { points: [] } };
+    page.rerender(<AdminGlobalTrendsPage />);
+    expect(await screen.findByTestId("chart-scope")).toBeTruthy();
+    summary = { isLoading: true };
+    page.rerender(<AdminGlobalTrendsPage />);
+    expect(screen.getByTestId("chart-scope")).toBeTruthy();
+  });
+
   it.each(["filter-options", "players", "timeseries"])("shows a page-level 403 from %s without probing /v1/me", async resource => {
     api.useApi.mockImplementation((path: string) => path.includes(`/global-trends/${resource}`)
       ? { error: { status: 403, message: "Forbidden" }, mutate: api.mutate }
@@ -177,9 +205,9 @@ describe("Global Trends", () => {
 
   it("shows a retry action instead of treating a failed directory as empty", async () => {
     const options = { maps: [], builds: [], strategies: [] };
-    api.useApi.mockImplementation((path: string) => path.includes("filter-options")
-      ? { data: options, isLoading: false, mutate: api.mutate }
-      : { error: { status: 500, message: "Try later." }, isLoading: false, mutate: api.mutate });
+    api.useApi.mockImplementation((path: string) => path.includes("/players")
+      ? { error: { status: 500, message: "Try later." }, isLoading: false, mutate: api.mutate }
+      : { data: path.includes("filter-options") ? options : { points: [] }, isLoading: false, mutate: api.mutate });
     await renderWithPlayers();
     expect(screen.getByRole("alert").textContent).toContain("Could not load players");
     fireEvent.click(screen.getByRole("button", { name: "Retry player directory" }));

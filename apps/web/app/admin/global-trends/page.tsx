@@ -11,7 +11,7 @@ import { FiltersContext, applyFilterPatch, describeActiveFilters, filtersToQuery
 import { rollUpSeasons, useSeasons } from "@/lib/useSeasons";
 import { TrendsDataProvider } from "@/lib/trendsDataContext";
 import { ActiveFilterChips } from "@/components/analyzer/ActiveFilterChips";
-import { TrendsTab } from "@/components/analyzer/TrendsTab";
+import { GlobalTrendsCharts } from "./GlobalTrendsCharts";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Card";
 import { SaveBar } from "@/components/ui/SaveBar";
@@ -181,7 +181,7 @@ function GlobalTrendsContent() {
             {describeActiveFilters(filters, { defaults: ALL_GAME_FILTERS, seasons }).length || countTrendChanges(DEFAULT_TREND_VIEW, trendDraft(applied))
               ? <Button variant="ghost" size="sm" onClick={() => commit(DEFAULT_TREND_VIEW)}>Reset all</Button> : null}
           </div>
-          <TrendsDataProvider mode="global" cohort={cohort} onForbidden={onForbidden}><TrendsTab /></TrendsDataProvider>
+          <TrendsDataProvider mode="global" cohort={cohort} onForbidden={onForbidden}><GlobalTrendsCharts /></TrendsDataProvider>
         </section>
       </FiltersContext.Provider>
       {viewsOpen ? <GlobalTrendsViews current={applied} onApply={view => { commit(view); setViewsOpen(false); }} onClose={() => setViewsOpen(false)} /> : null}
