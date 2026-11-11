@@ -692,6 +692,75 @@ describe("admin notification events", () => {
     expect(counts.body.unreadCount).toBe(0);
   });
 
+  test("per-event read/unread round trips idempotently and keeps the first readAt", async () => {
+    const event = await services.adminEvents.record("agent_download", { platform: "windows", version: "0.3.11" });
+    const path = `/v1/admin/events/${event.eventId}`;
+    const read = await asAdmin(request(app).post(`${path}/read`));
+    expect(read.status).toBe(200);
+    expect(read.headers["cache-control"]).toContain("no-store");
+    expect(read.body.event).toMatchObject({ eventId: event.eventId, type: "agent_download" });
+    const firstReadAt = read.body.event.readAt;
+    expect(typeof firstReadAt).toBe("string");
+    await sleep(5);
+    const again = await asAdmin(request(app).post(`${path}/read`));
+    expect(again.body.event.readAt).toBe(firstReadAt);
+    expect((await asAdmin(request(app).get("/v1/admin/events/counts"))).body.unreadCount).toBe(0);
+    for (let i = 0; i < 2; i += 1) {
+      const unread = await asAdmin(request(app).post(`${path}/unread`));
+      expect(unread.status).toBe(200);
+      expect(unread.body.event.readAt).toBeNull();
+    }
+    expect((await db.adminEvents.findOne({ eventId: event.eventId })).readAt).toBeNull();
+    // Audit writes are fire-and-forget after the response; wait for all four.
+    let audit = [];
+    for (let i = 0; i < 50 && audit.length < 4; i += 1) {
+      await sleep(20);
+      audit = await db.adminAudit.find({ target: event.eventId }).toArray();
+    }
+    expect(audit.map((row) => row.action).sort()).toEqual(["event.read", "event.read", "event.unread", "event.unread"]);
+  });
+
+  test("per-event read state 404s an unknown event, 400s a malformed id and stays admin-only", async () => {
+    const missing = await asAdmin(request(app).post("/v1/admin/events/0b3c1f8e-6f0e-4a59-9d0c-3e1f5e0c2d11/read"));
+    expect(missing.status).toBe(404);
+    expect(missing.body.error.code).toBe("event_not_found");
+    expect((await asAdmin(request(app).post("/v1/admin/events/no-such-event/unread"))).status).toBe(404);
+    for (const id of ["has%20space", "a.b", "x".repeat(65), "%24where"]) {
+      const res = await asAdmin(request(app).post(`/v1/admin/events/${id}/read`));
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("invalid_event_id");
+    }
+    const event = await services.adminEvents.record("agent_download", { platform: "linux" });
+    const denied = await request(app).post(`/v1/admin/events/${event.eventId}/read`).set("authorization", "Bearer user-token");
+    expect(denied.status).toBe(403);
+    expect((await db.adminEvents.findOne({ eventId: event.eventId })).readAt).toBeNull();
+  });
+
+  test("typed mark-all only touches that type and counts report unread per type", async () => {
+    await services.adminEvents.record("user_message", { userId: "u-1", subject: "One", message: "Body" });
+    await services.adminEvents.record("user_message", { userId: "u-2", subject: "Two", message: "Body" });
+    await services.adminEvents.record("agent_download", { platform: "windows" });
+    await services.adminEvents.record("user_signup", { clerkUserId: "clerk_typed", userId: "u-typed", source: "first_touch" });
+    await db.adminEvents.insertOne({ eventId: "legacy-type", type: "retired_type", payload: {}, createdAt: new Date(), readAt: null });
+    const before = await asAdmin(request(app).get("/v1/admin/events/counts"));
+    expect(before.body.unreadCount).toBe(5);
+    expect(before.body.unreadByType).toEqual({ user_signup: 1, agent_download: 1, agent_connected: 0, user_message: 2, backup_stale: 0, job_overdue: 0 });
+    const typed = await asAdmin(request(app).post("/v1/admin/events/mark-read").send({ type: "user_message" }));
+    expect(typed.status).toBe(200);
+    expect(typed.body).toEqual({ markedRead: 2, type: "user_message" });
+    const after = await asAdmin(request(app).get("/v1/admin/events/counts"));
+    expect(after.body.unreadCount).toBe(3);
+    expect(after.body.unreadByType).toMatchObject({ user_message: 0, agent_download: 1, user_signup: 1 });
+    for (const body of [{ type: "nope" }, { type: 7 }, { type: ["user_message"] }]) {
+      const bad = await asAdmin(request(app).post("/v1/admin/events/mark-read").send(body));
+      expect(bad.status).toBe(400);
+      expect(bad.body.error.code).toBe("invalid_event_type");
+    }
+    expect((await asAdmin(request(app).get("/v1/admin/events/counts"))).body.unreadCount).toBe(3);
+    const all = await asAdmin(request(app).post("/v1/admin/events/mark-read"));
+    expect(all.body).toEqual({ markedRead: 3, type: null });
+  });
+
   function sendWebhook(payload) {
     const id = "msg_test_" + crypto.randomUUID();
     const timestamp = Math.floor(Date.now() / 1000).toString();

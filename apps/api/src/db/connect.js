@@ -58,6 +58,8 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   arcadeLeaderboard: import('mongodb').Collection,
  *   adminEvents: import('mongodb').Collection,
  *   jobRuns: import('mongodb').Collection<any>,
+ *   classifierQuality: import('mongodb').Collection<any>,
+ *   classifierQualityIndexes?: import('./guideIndexes').BackgroundIndexBuilds,
  *   adminAudit: import('mongodb').Collection<any>,
  *   supportEmailSync: import('mongodb').Collection<any>,
  *   sitePresence: import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>,
@@ -173,6 +175,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
     adminEvents: db.collection(COLLECTIONS.ADMIN_EVENTS),
     jobRuns: db.collection(COLLECTIONS.JOB_RUNS),
+    classifierQuality: db.collection(COLLECTIONS.CLASSIFIER_QUALITY),
     adminAudit: db.collection(COLLECTIONS.ADMIN_AUDIT),
     supportEmailSync: db.collection(COLLECTIONS.SUPPORT_EMAIL_SYNC),
     siteConfig: db.collection(COLLECTIONS.SITE_CONFIG),
@@ -395,6 +398,7 @@ async function ensureIndexes(ctx, opts = {}) {
   await Promise.all([
     ctx.siteConfig.createIndex({ kind: 1, revision: -1 }, { name: "preset_policy_history" }),
     ctx.jobRuns.createIndex({ job: 1, startedAt: -1 }),
+    ctx.classifierQuality.createIndex({ kind: 1, generatedAt: -1 }),
     ctx.users.createIndex({ createdAt: -1, userId: 1 }),
     ctx.adminAudit.createIndex({ createdAt: 1 }, { expireAfterSeconds: 400 * 86400 }),
     ctx.adminAudit.createIndex({ target: 1, createdAt: -1 }),
@@ -762,6 +766,10 @@ async function ensureIndexes(ctx, opts = {}) {
   }
   await ctx.adminEvents.createIndex({ readAt: 1, createdAt: -1, eventId: -1 });
   await ctx.adminEvents.createIndex({ type: 1, readAt: 1, createdAt: -1, eventId: -1 });
+  // Per-event read/unread (POST /v1/admin/events/:eventId/read|unread)
+  // looks a row up by id alone; the keyset indexes above lead with
+  // createdAt/type. Not unique: a legacy duplicate must never fail boot.
+  await ctx.adminEvents.createIndex({ eventId: 1 }, { name: "admin_events_event_id" });
   await ctx.adminEvents.createIndex(
     { ingestionKey: 1 },
     {
@@ -804,11 +812,12 @@ async function ensureIndexes(ctx, opts = {}) {
   // competes with the awaited ones above.
   const logger = opts.logger || null, guides = startBackgroundIndexBuilds(ctx, logger);
   const search = startPrivateSearchIndex(ctx, logger), corpus = require("./corpusIndexes").startCorpusStampIndex(ctx, logger);
+  const classifier = require("./classifierQualityIndexes").startClassifierQualityIndexes(ctx, logger);
   // GuideStats waits on this existing guide-only authority. The unrelated optional
   // search and corpus-stamp builds must not lengthen its bounded readiness wait.
   ctx.backgroundIndexes = guides; ctx.corpusIndexes = corpus;
-  ctx.privateSearchIndexes = search;
-  if (opts.awaitBackground) await Promise.all([guides.settled, search.settled, corpus.settled]);
+  ctx.privateSearchIndexes = search; ctx.classifierQualityIndexes = classifier;
+  if (opts.awaitBackground) await Promise.all([guides.settled, search.settled, corpus.settled, classifier.settled]);
   return guides;
 }
 

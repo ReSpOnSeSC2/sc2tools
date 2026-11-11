@@ -157,9 +157,28 @@ export type AdminGameVsOpponentRow = {
   };
 };
 
+/** Win, loss, tie, or a result that was not recorded (Undecided, missing). */
+export type AdminResultClass = "win" | "loss" | "tie" | "unknown";
+
+/** Head-to-head over every game against one opponent (first page only). */
+export type OpponentGamesSummary = {
+  wins: number;
+  losses: number;
+  ties: number;
+  unknown: number;
+  avgDurationSec: number | null;
+  /** Top five maps by games. */
+  maps: Array<{ map: string; games: number; wins: number; losses: number; ties: number }>;
+  /** Every map name (most played first), for the map filter. */
+  mapOptions: string[];
+  /** Most recent first. */
+  last10: AdminResultClass[];
+};
+
 export type OpponentGamesResp = {
   items: AdminGameVsOpponentRow[];
   nextBefore: string | null;
+  summary?: OpponentGamesSummary;
 };
 
 export type RebuildResp = {
@@ -631,6 +650,9 @@ export type AdminEventsListResp = {
   nextBefore: string | null;
 };
 
+/** POST /v1/admin/events/:eventId/read | /unread. */
+export type AdminEventReadResp = { event: AdminEvent };
+
 export type AdminEventCountsResp = {
   totalUsers: number;
   signupsToday: number;
@@ -645,6 +667,8 @@ export type AdminEventCountsResp = {
     linux: number;
   };
   unreadCount: number;
+  /** Unread rows per type, for the Notifications filter chips. */
+  unreadByType?: Partial<Record<AdminEventType, number>>;
   supportEmail?: {
     configured: boolean;
     labelName?: string | null;

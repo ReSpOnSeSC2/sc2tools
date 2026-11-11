@@ -36,6 +36,15 @@ export interface GlossaryTerm {
 
 export const GLOSSARY: readonly GlossaryTerm[] = [
   {
+    id: "player-corrections",
+    term: "Player corrections",
+    short: "Confirmed build check-ins that named this build; the line counts how often the detector named it too.",
+    long: "Counted nightly over the last 90 days and shown only once at least three different players checked in with the build. It is disagreement volume from players who checked in, not an accuracy score. People review disagreements and edit rules by hand; nothing tunes itself.",
+    related: [],
+    category: "builds",
+    help: { slug: "build-check-in", anchor: "corrections-improve-labels" },
+  },
+  {
     id: "likely-range",
     term: "Likely range",
     short: "The uncertainty around a guide's recorded win rate; fewer games make the range wider.",

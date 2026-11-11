@@ -39,7 +39,7 @@ const GDPR_CLASSIFICATION = Object.freeze({
   PLAYER_IDENTITY_SUBMISSIONS: "purge_only", PLAYER_IDENTITY_DIRECTORY: "global", REVIEW_REQUESTS: "user_scoped",
   REVIEW_COMMENTS: "user_scoped", REVIEW_KARMA_EVENTS: "purge_only", REVIEW_BLOCKS: "purge_only", NOTIFICATIONS: "purge_only",
   BROWSER_INGEST_DAILY: "ttl_ephemeral", GUIDE_SAMPLES: "purge_only", GUIDE_STATS: "global", GUIDE_NOTES: "global",
-  JOB_RUNS: "global", ADMIN_AUDIT: "purge_only",
+  JOB_RUNS: "global", ADMIN_AUDIT: "purge_only", CLASSIFIER_QUALITY: "global",
   GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
   GHOST_EXAMPLES: "purge_only", PLAYER_GOALS: "purge_only",
   // Reports and delivery channels: exported explicitly (Discord URLs
