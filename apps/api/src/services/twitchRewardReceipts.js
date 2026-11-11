@@ -5,6 +5,9 @@ const { KEEP_MS, PENDING_MS, NEXT_GAME_MS } = require("./twitchRewardPolicy");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const RUNNING_MS = 2 * 60_000;
+const REWARD_ACTIVITY_PROJECTION = Object.freeze({
+  _id: 0, rewardId: 1, rewardTitle: 1, action: 1, receivedAt: 1, state: 1, reason: 1, settlement: 1,
+});
 
 class TwitchRewardReceipts {
   /** @param {import('mongodb').Collection<any>} rows @param {()=>number} [now] */
@@ -87,10 +90,9 @@ class TwitchRewardReceipts {
 
   /** @param {string} userId */
   async recent(userId) {
-    return this.rows.find({ kind: "redemption", userId }, { projection: {
-      _id: 0, rewardId: 1, rewardTitle: 1, action: 1, receivedAt: 1, state: 1, reason: 1, settlement: 1,
-    } }).sort({ receivedAt: -1 }).limit(20).toArray();
+    return this.rows.find({ kind: "redemption", userId }, { projection: REWARD_ACTIVITY_PROJECTION })
+      .sort({ receivedAt: -1 }).limit(20).toArray();
   }
 }
 
-module.exports = { TwitchRewardReceipts };
+module.exports = { TwitchRewardReceipts, REWARD_ACTIVITY_PROJECTION };

@@ -1,6 +1,7 @@
 "use strict";
 
 const { calendarExportRecord } = require("./calendarFeed");
+const { REWARD_ACTIVITY_PROJECTION } = require("./twitchRewardReceipts");
 
 const { USER_SCOPED_COLLECTIONS, publicCoachingParty, publicCoachedStudent,
   exportedCoachingAssignment, exportedCoachingCalendar } = require("./accountExportPolicy");
@@ -126,6 +127,8 @@ async function* accountExportRecords(db, userId, options = {}) {
   yield* collectionRecords(db, "streamSessions", { userId }, { _id: 0 }, signal);
   yield* collectionRecords(db, "discordHooks", { userId }, { _id: 0, enc: 0 }, signal);
   yield* collectionRecords(db, "pushSubscriptions", { userId }, { _id: 0, endpointHash: 0 }, signal);
+  // Receipt data can include transient viewer input until dispatch completes.
+  yield* collectionRecords(db, "twitchRewardReceipts", { userId, kind: "redemption" }, REWARD_ACTIVITY_PROJECTION, signal);
   // The link token is a bearer credential for the public page: the archive
   // lists each share (game, dates, views) but never the token itself.
   yield* collectionRecords(db, "gameShares", { userId }, { _id: 0, activeKey: 0 }, signal);

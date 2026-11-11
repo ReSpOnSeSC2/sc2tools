@@ -13,6 +13,7 @@ const { MultichatStudioService } = require("../src/services/multichatStudio");
 const { TwitchRewardActions } = require("../src/services/twitchRewardActions");
 const { TwitchRewardProvider } = require("../src/services/twitchRewardProvider");
 const { TwitchAutomationProvider } = require("../src/services/twitchAutomationProvider");
+const { collectAccountExport } = require("../src/services/accountExportData");
 const { TwitchRewardReceipts } = require("../src/services/twitchRewardReceipts");
 const { TwitchRewardsService } = require("../src/services/twitchRewards");
 const { targetId } = require("../src/services/twitchRewardPolicy");
@@ -295,4 +296,19 @@ test("the server-only next-game seam replaces a real first pick once under the M
   expect((await db.buildIntentLive.findOne({ userId: OWNER, gameKey })).randomizer).toMatchObject({ key: "build-b", rewardRerolled: true, rerolledAt: new Date(now), widgetReveal: true });
   await expect(nativeRandomizerRoll(native, OWNER, gameKey, body, "reward-c")).rejects.toMatchObject({ code: "randomizer_already_rerolled" });
   expect(native.notifier.changed).toHaveBeenCalledTimes(1);
+});
+
+
+test("account export includes only the caller's redacted Twitch activity", async () => {
+  const receivedAt = new Date();
+  const publicFields = { rewardId: "reward", rewardTitle: "Replay recap", receivedAt, action: "pin", state: "pending" };
+  const privateFields = { input: "viewer private text", viewerId: "viewer-1", name: "Viewer", login: "view_login",
+    broadcasterId: "42", redemptionId: "opaque-redemption", settingsKey: "internal-fence", gameKey: "private-game" };
+  await db.twitchRewardReceipts.insertMany([
+    { ...publicFields, ...privateFields, userId: OWNER, kind: "redemption" },
+    { ...publicFields, userId: OTHER, kind: "redemption", rewardId: "other-owner-reward" },
+    { userId: OWNER, kind: "cooldown", expiresAt: new Date(Date.now() + 60_000) },
+  ]);
+  const archive = await collectAccountExport(db, OWNER);
+  expect(archive.data.twitchRewardReceipts).toEqual([publicFields]);
 });
