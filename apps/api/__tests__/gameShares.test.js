@@ -268,6 +268,18 @@ describe("presigned segment links", () => {
     expect(playbackArtifacts.getSegment).toHaveBeenCalledWith("u_owner", "game-1", ARTIFACT, 3);
   });
 
+  test("does not return segment bytes when the token becomes unavailable during storage read", async () => {
+    const { shares, playbackArtifacts } = service();
+    playbackArtifacts.getSegment.mockImplementationOnce(async () => {
+      shares.resolve.mockRejectedValueOnce(Object.assign(new Error("Share unavailable"), { status: 404, code: "share_not_found" }));
+      return Buffer.from(JSON.stringify({ playback: { units: [] } }));
+    });
+    await expect(shares.playbackSegment("AAAAAAAAAAAAAAAA", ARTIFACT, 0)).rejects.toMatchObject({
+      status: 404, code: "share_not_found",
+    });
+    expect(shares.resolve).toHaveBeenCalledTimes(2);
+  });
+
   test("a segment carrying identity keys gets no link and no bytes", async () => {
     const dirty = Buffer.from(JSON.stringify({ playback: { units: [{ owner: "opp", name: "Zergling", playerName: SECRET.name }] } }));
     const { shares, playbackArtifacts } = service({ segment: dirty });
