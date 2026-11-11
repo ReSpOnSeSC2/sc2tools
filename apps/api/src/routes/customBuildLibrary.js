@@ -1,6 +1,7 @@
 "use strict";
 
 const { CUSTOM_BUILD_LIBRARY } = require("../config/constants");
+const { reserveExport, waitForDrain } = require("./exportAdmission");
 const { validateCustomBuild, validateBuildMeta } = require("../validation/customBuild");
 
 /**
@@ -191,14 +192,43 @@ function registerHistoryRoutes(router, { deps, persistBuild }, route) {
   }));
 }
 
+/** @param {import('express').Request} req @param {import('express').Response} res
+ * @param {import('../services/customBuildLibrary').CustomBuildLibraryService} library @param {string} userId */
+async function streamLibraryExport(req, res, library, userId) {
+  res.set("Cache-Control", "private, no-store");
+  if (req.aborted || res.destroyed || res.writableEnded) return;
+  const lease = reserveExport(res);
+  if (!lease) { fail(res, 503, "export_busy"); return; }
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  req.once("aborted", cancel);
+  res.once("close", cancel);
+  try {
+    res.set("Content-Disposition", 'attachment; filename="sc2tools-builds.json"').type("json");
+    for await (const chunk of library.exportAll(userId, controller.signal)) {
+      controller.signal.throwIfAborted();
+      if (!res.write(chunk)) await waitForDrain(res, controller.signal);
+    }
+    if (!controller.signal.aborted) res.end();
+  } catch {
+    if (!res.destroyed && !controller.signal.aborted) {
+      if (res.headersSent) res.destroy();
+      else {
+        res.removeHeader("Content-Disposition");
+        fail(res, 503, "export_unavailable");
+      }
+    }
+  } finally {
+    controller.abort();
+    req.off("aborted", cancel);
+    res.off("close", cancel);
+    lease.settle();
+  }
+}
+
 /** Export and batched import. @param {import('express').Router} router @param {LibraryRouteContext} ctx @param {RouteWrapper} route */
 function registerImportExportRoutes(router, { deps, persistBuild }, route) {
-  router.get("/custom-builds/export", route(async (_req, res, userId, library) => {
-    const body = await library.exportAll(userId);
-    res.set("Cache-Control", "private, no-store")
-      .set("Content-Disposition", 'attachment; filename="sc2tools-builds.json"')
-      .json(body);
-  }));
+  router.get("/custom-builds/export", route((req, res, userId, library) => streamLibraryExport(req, res, library, userId)));
 
   router.post("/custom-builds/import", route(async (req, res, userId, library) => {
     const body = req.body && typeof req.body === "object" ? req.body : {};
