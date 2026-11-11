@@ -1,7 +1,9 @@
 "use strict";
 
 const { ObjectId } = require("mongodb");
-const { MATCHUPS, normalizeSyncedGhostBuildConfig } = require("./ghostConfig");
+const { MATCHUPS, readStoredGhostBuildConfig } = require("./ghostConfig");
+const { checkpointStats, normalizeCheckpoints } = require("./practiceCheckpoints");
+const { canonicalTimeZone, localWindow, parsePlainDate } = require("../util/recurrenceBuckets");
 const {
   NO_BUILD_LOG,
   decodeDrifts,
@@ -84,7 +86,7 @@ class PracticeLogService {
     const date = toDate(game.date);
     const now = this.now();
     if (!date || !armedBefore(slot, date, now)) return null;
-    const record = practiceRecord({ target: slot.target, hash: slot.hash, matchup, buildLog: game.buildLog, via: "ingest", gradedAt: now });
+    const record = practiceRecord({ target: slot.target, hash: slot.hash, matchup, buildLog: game.buildLog, via: "ingest", gradedAt: now, checkpoints: slot.checkpoints });
     return (await this._store(userId, game.gameId, record)) ? record : null;
   }
 
@@ -133,6 +135,7 @@ class PracticeLogService {
     const hash = requested || (armed ? armed.hash : null);
     const mine = sample.filter((game) => game.practice.targetHash === hash);
     const graded = mine.filter((game) => typeof game.practice.grade === "string");
+    const current = armed?.hash === hash ? armed : null;
     return {
       matchup,
       target: describeTarget(hash, armed, mine),
@@ -141,7 +144,8 @@ class PracticeLogService {
       grades: gradeCounts(graded),
       history: graded.slice(0, HISTORY_LIMIT).map(historyRow),
       divergence: divergenceSteps(graded),
-      steps: armed && armed.hash === hash ? stepStats(armed.target, graded) : null,
+      steps: current ? stepStats(current.target, graded) : null,
+      checkpoints: summarizeCheckpoints(current, graded),
     };
   }
 
@@ -178,6 +182,40 @@ class PracticeLogService {
     return row ? row.practice : null;
   }
 
+  /** Update private checkpoint criteria only if the slot and draft are current.
+   * @param {string} userId @param {{matchup?:unknown,targetHash?:unknown,checkpoints?:unknown,expected?:unknown}} body */
+  async saveCheckpoints(userId, body) {
+    const matchup = parseMatchup(body.matchup);
+    const hash = parseHash(body.targetHash);
+    if (!hash) throw failure("invalid_practice_target", 400);
+    const path = `preferences.ghost.slots.${matchup}`;
+    const row = await this.db.users.findOne({ userId }, { projection: { _id: 0, [path]: 1 } });
+    const raw = row?.preferences?.ghost?.slots?.[matchup];
+    const target = readStoredGhostBuildConfig({ v: 2, slots: { [matchup]: raw } })?.slots[matchup];
+    if (!target || targetHash(target) !== hash) throw failure("practice_target_changed", 409);
+    const next = normalizeCheckpoints(body.checkpoints, target.steps.length);
+    const expected = normalizeCheckpoints(body.expected, target.steps.length);
+    if (!next || !expected) throw failure("invalid_practice_checkpoints", 400);
+    const current = normalizeCheckpoints(raw.checkpoints, target.steps.length) ?? [];
+    if (JSON.stringify(expected) !== JSON.stringify(current)) throw failure("practice_target_changed", 409);
+    const result = await this.db.users.updateOne({ userId, [path]: { $eq: raw } }, { $set: { [path]: { ...target, checkpoints: next } } });
+    if (!result.matchedCount) throw failure("practice_target_changed", 409);
+    return { checkpoints: next };
+  }
+
+  /** A private, bounded result for one Arcade local day. @param {string} userId
+   * @param {{day?:unknown,tz?:unknown}} query */
+  async dailyQuest(userId, query) {
+    const { startsAt, endsAt } = questWindow(query.day, query.tz);
+    const [context, result] = await Promise.all([
+      this.ingestContext(userId),
+      this.db.games.findOne({ userId, ...LIVE_ROW, date: { $gte: startsAt, $lt: endsAt },
+        "practice.via": "ingest", "practice.grade": { $in: ["S", "A", "B"] },
+      }, { projection: { _id: 1 }, maxTimeMS: 2000 }),
+    ]);
+    return { eligible: !!context || !!result, done: !!result };
+  }
+
   /**
    * "Grade my last games": the newest ungraded games of the matchup, at most
    * REQUEST_GRADE_LIMIT, graded against the armed target on request. Each is
@@ -196,21 +234,23 @@ class PracticeLogService {
     const candidates = await this.db.games
       .find(
         { userId, practice: { $exists: false }, myRace: raceMatch(races.mine), "opponent.race": raceMatch(races.theirs), ...LIVE_ROW },
-        { projection: { _id: 0, gameId: 1 }, maxTimeMS: 5000 },
+        { projection: { _id: 0, gameId: 1, buildLog: 1 }, maxTimeMS: 5000 },
       )
       .sort({ date: -1 })
       .limit(REQUEST_GRADE_LIMIT + 1)
       .toArray();
-    const ids = candidates.map((c) => c.gameId).filter((id) => id !== slot.target.sourceGameId).slice(0, REQUEST_GRADE_LIMIT);
+    const selected = candidates.filter((row) => row.gameId !== slot.target.sourceGameId).slice(0, REQUEST_GRADE_LIMIT);
+    const ids = selected.filter((row) => !Array.isArray(row.buildLog)).map((row) => row.gameId);
     const details = ids.length > 0 ? await this.gameDetails.findMany(userId, ids, { fields: ["buildLog"], concurrency: 2 }) : new Map();
     let graded = 0;
     const gradedAt = this.now();
-    for (const gameId of ids) {
-      const detail = details.get(gameId);
-      const record = practiceRecord({ target: slot.target, hash: slot.hash, matchup, buildLog: detail && detail.buildLog, via: "request", gradedAt });
-      if (await this._store(userId, gameId, record)) graded += 1;
+    for (const { gameId, buildLog } of selected) {
+      const ownLog = Array.isArray(buildLog) ? buildLog : details.get(gameId)?.buildLog;
+      const record = practiceRecord({ target: slot.target, hash: slot.hash, matchup, buildLog: ownLog, via: "request", gradedAt, checkpoints: slot.checkpoints });
+      const stored = await this._store(userId, gameId, record);
+      if (stored && record.grade) graded += 1;
     }
-    return { matchup, considered: ids.length, graded };
+    return { matchup, considered: selected.length, graded };
   }
 }
 
@@ -219,13 +259,14 @@ class PracticeLogService {
  *   target: {v: 1, name: string, steps: Array<{name: string, t: number, supply: number|null}>, sourceGameId?: string},
  *   hash: string,
  *   armedAt: Date | null,
+ *   checkpoints: import('./practiceCheckpoints').Checkpoint[],
  * }} ArmedSlot
  */
 
 /** @param {any} row @returns {Record<string, ArmedSlot>} */
 function armedSlots(row) {
   const prefs = row && row.preferences;
-  const config = normalizeSyncedGhostBuildConfig(prefs && prefs.ghost);
+  const config = readStoredGhostBuildConfig(prefs && prefs.ghost);
   if (!config) return {};
   const stamps = prefs.ghostArmedAt && typeof prefs.ghostArmedAt === "object" ? prefs.ghostArmedAt : {};
   /** @type {Record<string, ArmedSlot>} */
@@ -234,7 +275,8 @@ function armedSlots(row) {
     const hash = targetHash(target);
     const stamp = stamps[matchup];
     const armedAt = stamp && stamp.hash === hash && stamp.at instanceof Date && !Number.isNaN(stamp.at.getTime()) ? stamp.at : null;
-    out[matchup] = { target, hash, armedAt };
+    const checkpoints = normalizeCheckpoints(prefs.ghost.slots[matchup]?.checkpoints, target.steps.length) ?? [];
+    out[matchup] = { target, hash, armedAt, checkpoints };
   }
   return out;
 }
@@ -260,6 +302,26 @@ function describeTarget(hash, armed, rows) {
   }
   const named = rows.find((game) => typeof game.practice.targetName === "string");
   return { hash, name: named ? named.practice.targetName : null, current: false, armedAt: null, steps: null };
+}
+
+/** @param {ArmedSlot|null} current @param {any[]} graded */
+function summarizeCheckpoints(current, graded) {
+  const rules = current
+    ? current.checkpoints.map((point) => ({ ...point, name: current.target.steps[point.i].name }))
+    : graded.find((game) => game.practice.checkpoints?.length)?.practice.checkpoints ?? [];
+  return checkpointStats(rules, graded);
+}
+
+/** @param {unknown} day @param {unknown} tz */
+function questWindow(day, tz) {
+  const zone = canonicalTimeZone(tz);
+  if (!zone) throw failure("invalid_practice_day", 400);
+  try {
+    const date = parsePlainDate(day, "day");
+    const window = localWindow(date, date, zone);
+    if (window) return window;
+  } catch { /* An invalid calendar date has no quest window. */ }
+  throw failure("invalid_practice_day", 400);
 }
 
 /** Every target seen in the sample, the armed one first.

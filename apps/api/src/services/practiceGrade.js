@@ -16,6 +16,7 @@
  */
 
 const crypto = require("crypto");
+const { gradeCheckpoints } = require("./practiceCheckpoints");
 
 /** A matched step this far off counts as the point the build fell apart. */
 const DIVERGENCE_DRIFT_SEC = 30;
@@ -165,9 +166,10 @@ function clampDrift(n) {
  *   target: {name: string, steps: Array<{name: string, t: number, supply: number|null}>},
  *   hash: string, matchup: string, buildLog: unknown,
  *   via: "ingest" | "request", gradedAt: Date,
+ *   checkpoints?: import('./practiceCheckpoints').Checkpoint[],
  * }} input
  */
-function practiceRecord({ target, hash, matchup, buildLog, via, gradedAt }) {
+function practiceRecord({ target, hash, matchup, buildLog, via, gradedAt, checkpoints = [] }) {
   const base = { v: PRACTICE_RECORD_VERSION, targetHash: hash, targetName: target.name, matchup, via, gradedAt };
   if (parseExecutedLog(buildLog).length === 0) return { ...base, status: NO_BUILD_LOG };
   const result = gradeExecution(target, buildLog);
@@ -188,6 +190,7 @@ function practiceRecord({ target, hash, matchup, buildLog, via, gradedAt }) {
       ? { i: divergence.index, name: divergence.name, expectedT: divergence.expectedT, actualT: divergence.actualT }
       : null,
     worstSteps,
+    ...(checkpoints.length ? { checkpoints: gradeCheckpoints(checkpoints, result.perStep) } : {}),
     drifts: result.perStep.map((s) => (s.driftSec === null ? "x" : String(clampDrift(s.driftSec)))).join(","),
   };
 }

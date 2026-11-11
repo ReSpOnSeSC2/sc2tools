@@ -17,6 +17,11 @@ import type { ArcadeGame } from "../types";
 const DAY = "2026-07-11";
 
 const useArcadeDataMock = vi.fn();
+const practiceQuest = vi.hoisted(() => vi.fn(() => ({ data: undefined as { eligible: boolean; done: boolean } | undefined, isLoading: false })));
+vi.mock("@/lib/clientApi", async (original) => ({
+  ...(await original<typeof import("@/lib/clientApi")>()),
+  useApi: (path: string) => { expect(path).toContain("/v1/practice/quest?day=2026-07-11&tz=UTC"); return practiceQuest(); },
+}));
 vi.mock("../hooks/useArcadeData", () => ({
   useArcadeData: () => useArcadeDataMock(),
 }));
@@ -43,6 +48,7 @@ vi.mock("@clerk/nextjs", () => ({
 afterEach(() => {
   cleanup();
   useArcadeDataMock.mockReset();
+  practiceQuest.mockReset().mockReturnValue({ data: undefined, isLoading: false });
 });
 
 function fixtureGames(): ArcadeGame[] {
@@ -100,4 +106,12 @@ describe("DailyQuests", () => {
     expect(screen.getByText("Daily Quests")).toBeTruthy();
     expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
   });
+});
+
+it("shows a completed practice quest from the private daily result", async () => {
+  useArcadeDataMock.mockReturnValue({ data: { games: fixtureGames().slice(-1) }, loading: false });
+  practiceQuest.mockReturnValue({ data: { eligible: true, done: true }, isLoading: false });
+  render(<DailyQuests />);
+  expect(screen.getByText("Grade B or better on your practice build")).toBeTruthy();
+  expect(screen.getByText("1/2 done")).toBeTruthy();
 });
