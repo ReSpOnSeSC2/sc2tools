@@ -54,4 +54,5 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Test
-        run: npx jest --runInBand --coverage=false
+        # The full serial run reached Node's default 4 GiB heap ceiling.
+        run: node --max-old-space-size=6144 node_modules/jest/bin/jest.js --runInBand --coverage=false

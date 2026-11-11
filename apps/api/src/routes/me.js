@@ -561,9 +561,8 @@ function buildMeRouter(deps) {
       }
       if (deps.buildIntents) {
         try {
-          // Build check-in switches reach the agent as a user-room ping;
-          // randomizer pools change which builds are check-in options.
-            await deps.buildIntents.preferencesChanged(auth.userId, type);
+          // The owner-room ping refreshes desktop build check-in and Randomizer preferences.
+          await deps.buildIntents.preferencesChanged(auth.userId, type);
         } catch {
           // Advisory: clients also refresh on their own.
         }

@@ -77,8 +77,8 @@ class BuildIntentsService {
   /**
    * A preference block was replaced (``PUT /v1/me/preferences/:type``).
    * ``buildCheckin`` pings the user room with ``build-intent:changed
-   * {prefs: true}`` so the agent drops its cards within one round trip;
-   * ``randomizer`` changes which builds are options.
+   * {prefs: true}`` so the agent refreshes its cards. Randomizer changes
+   * also refresh its desktop opt-in, check-in options and overlay config.
    * @param {string} userId
    * @param {string} type
    */
