@@ -16,6 +16,7 @@ const SIDES = [["me", "buildLog"], ["opponent", "oppBuildLog"]];
 
 /** @typedef {ReturnType<typeof prepareBuildOrderRequest>} ExportRequest */
 /** @typedef {{_id:import('mongodb').ObjectId,date:Date|string|number|null,gameId:string}} Metadata */
+/** @typedef {{buildLog:string[],oppBuildLog:string[],buildLogSupply?:unknown}} BuildOrderDetail */
 
 class BuildOrderExportService {
   /** @type {import('crypto').KeyObject} */ #signingKey;
@@ -54,10 +55,13 @@ class BuildOrderExportService {
       const details = await readBatch(this.gameDetails, request.owner, batch, signal);
       for (let index = 0; index < batch.length; index++) {
         const game = batch[index], detail = details[index];
+        const alignedSupply = Array.isArray(detail.buildLogSupply) && detail.buildLogSupply.length === detail.buildLog.length
+          ? detail.buildLogSupply : [];
         for (const [side, key] of SIDES) {
-          for (const line of detail[key]) {
+          for (const [step, line] of detail[key].entries()) {
             signal.throwIfAborted();
-            const row = { gameId: game.gameId, side, ...parseLogLine(line) };
+            const supply = side === "me" ? alignedSupply[step] : null;
+            const row = { gameId: game.gameId, side, ...parseLogLine(line, supply) };
             yield request.format === "ndjson" ? jsonLine(row)
               : boundedRow(`${[row.gameId, row.side, row.time, row.supply, row.name].map(csvCell).join(",")}\r\n`);
             events++;
@@ -109,18 +113,18 @@ async function readBatch(service, owner, batch, signal) {
   const tasks = batch.map(async game => {
     try {
       controller.signal.throwIfAborted();
-      const found = await service.findMany(owner, [game.gameId], { fields: ["buildLog", "oppBuildLog"], strict: true, concurrency: 1, signal: controller.signal });
+      const found = await service.findMany(owner, [game.gameId], { fields: ["buildLog", "oppBuildLog", "buildLogSupply"], strict: true, concurrency: 1, signal: controller.signal });
       controller.signal.throwIfAborted();
       const detail = found.get(game.gameId);
       validateLogs(detail);
-      return /** @type {{buildLog:string[],oppBuildLog:string[]}} */ (detail);
+      return /** @type {BuildOrderDetail} */ (detail);
     } catch { controller.abort(); throw unavailable(); }
   });
   try {
     const outcomes = await Promise.allSettled(tasks);
     signal.throwIfAborted();
     if (outcomes.some(result => result.status === "rejected")) throw unavailable();
-    return outcomes.map(result => /** @type {PromiseFulfilledResult<{buildLog:string[],oppBuildLog:string[]}>} */ (result).value);
+    return outcomes.map(result => /** @type {PromiseFulfilledResult<BuildOrderDetail>} */ (result).value);
   } finally { controller.abort(); signal.removeEventListener("abort", abort); }
 }
 
@@ -133,16 +137,17 @@ function validateLogs(detail) {
   }
 }
 
-/** Persisted strings contain no supply measurement. Preserve names/order/duplicates.
- * @param {unknown} line */
-function parseLogLine(line) {
+/** Preserve names, order and duplicates. Supply is optional and aligned by the caller.
+ * @param {unknown} line @param {unknown} [supply] */
+function parseLogLine(line, supply) {
   if (typeof line !== "string" || line.length > MAX_LOG_LINE_CHARS || /[\u0000-\u001f\u007f]/u.test(line)
     || Buffer.from(line).toString("utf8") !== line) throw unavailable();
   const match = /^\[(\d+):([0-5]\d)\] (.+)$/u.exec(line);
   if (!match || !match[3].trim()) throw unavailable();
   const time = Number(match[1]) * 60 + Number(match[2]);
   if (!Number.isSafeInteger(time) || time < 0) throw unavailable();
-  return { time, supply: null, name: match[3] };
+  const exact = typeof supply === "number" && Number.isFinite(supply) && supply >= 0 && supply <= 2000;
+  return { time, supply: exact ? supply : null, name: match[3] };
 }
 
 /** @param {Record<string,any>} row */
