@@ -76,6 +76,11 @@ corresponding GitHub Release.
 - Compare recent donation totals with the site's monthly running costs.
   Supporters can choose to appear publicly after review.
 
+### Coaching notifications
+
+- Read booking notices in Sessions or the shared notifications inbox to clear
+  the same alert. A newer cancellation remains unread until you see it.
+
 ### Trends and arcade fixes
 
 - Put performance ratings on the matchup chart's vertical scale, label game order horizontally, and inspect rolling windows by mouse, touch or keyboard.
@@ -5715,7 +5720,12 @@ Released as `agent-v0.4.0` on GitHub. Installer:
   `(+N more)` when more than one folder is being watched. The watcher
   picks up new entries on its next sweep without a restart.
 
-## [Unreleased] - 2026-05-04
+## [Unreleased]
+
+### Coaching notifications
+
+- Read booking notices in Sessions or the shared notifications inbox to clear
+  the same alert. A newer cancellation remains unread until you see it. - 2026-05-04
 
 ### Added
 

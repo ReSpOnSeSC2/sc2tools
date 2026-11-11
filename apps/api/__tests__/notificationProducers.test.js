@@ -101,6 +101,8 @@ describe("event-driven notification producers", () => {
     expect(rows.filter((row) => row.kind === "coaching.assigned")).toHaveLength(1);
     expect(rows.filter((row) => row.kind === "coaching.booked")).toHaveLength(1);
     expect(rows.filter((row) => row.kind === "coaching.cancelled")).toHaveLength(2);
-    expect(rows.every((row) => row.href === "/coaching")).toBe(true);
+    const schedule = rows.filter(row => row.href === "/coaching?view=schedule");
+    expect(schedule.map(row => row.kind).sort()).toEqual(["coaching.booked", "coaching.cancelled"]);
+    expect(rows.filter(row => !schedule.includes(row)).every(row => row.href === "/coaching")).toBe(true);
   });
 });

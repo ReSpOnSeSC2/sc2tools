@@ -2,6 +2,7 @@
 "use strict";
 
 const { MongoClient } = require("mongodb");
+const { NotificationsService } = require("../src/services/notifications");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const {
   CoachingService,
@@ -134,6 +135,7 @@ describe("coaching scheduling", () => {
         games: raw.collection("games"),
         devicePairings: raw.collection("device_pairings"),
         deviceTokens: raw.collection("device_tokens"),
+        notifications: raw.collection("notifications"),
       };
     });
 
@@ -332,6 +334,56 @@ describe("coaching scheduling", () => {
         unreadCount: 1,
         alert: { kind: "cancelled" },
       });
+    });
+
+    test("shares read receipts between the notification inbox and exact visible calendar alerts", async () => {
+      const notifications = new NotificationsService(db);
+      service.notifications = notifications;
+      const slots = (await service.calendarFor("student-user-1", studentOneRole, "UTC")).slots.filter(slot => slot.durationMinutes === 30);
+      await service.bookSession("student-user-1", studentOneRole, slots[0]);
+      const [firstNotice] = (await notifications.list("coach-user", { unread: true })).items;
+      const second = await service.bookSession("student-user-2", studentTwoRole, slots[1]);
+      const list = await notifications.list("coach-user", { unread: true, kind: "coaching" });
+      expect(list.items).toHaveLength(2);
+      await notifications.markRead("coach-user", { ids: [firstNotice.id] });
+      await expect(service.alertSummary("coach-user", coachRole)).resolves.toMatchObject({ unreadCount: 1 });
+      const calendar = await service.calendarFor("coach-user", coachRole, "UTC");
+      expect(calendar.unreadAlerts.map(alert => alert.bookingId)).toEqual([second.booking.id]);
+      await service.cancelSession("student-user-2", studentTwoRole, second.booking.id);
+      await service.markAlertsRead("coach-user", coachRole, { alerts: calendar.unreadAlerts });
+      const unread = await notifications.list("coach-user", { unread: true, kind: "coaching" });
+      expect(unread.items.map(row => row.kind)).toEqual(["coaching.cancelled"]);
+      const current = await service.calendarFor("coach-user", coachRole, "UTC");
+      await service.markAlertsRead("student-user-1", studentOneRole, { alerts: current.unreadAlerts });
+      await expect(notifications.unreadCount("coach-user")).resolves.toEqual({ count: 1 });
+      await service.markAlertsRead("coach-user", coachRole, { alerts: current.unreadAlerts });
+      await expect(notifications.unreadCount("coach-user")).resolves.toEqual({ count: 0 });
+      await expect(service.alertSummary("coach-user", coachRole)).resolves.toMatchObject({ unreadCount: 0 });
+    });
+
+    test("a late shared delivery stays read when Sessions was opened first", async () => {
+      const notifications = new NotificationsService(db);
+      service.notifications = notifications;
+      const notify = notifications.notify.bind(notifications);
+      let release, entered;
+      const called = new Promise(resolve => { entered = resolve; });
+      jest.spyOn(notifications, "notify").mockImplementation(async (...args) => {
+        await new Promise(resolve => { release = resolve; entered(); });
+        return notify(...args);
+      });
+      const slot = (await service.calendarFor("student-user-1", studentOneRole, "UTC")).slots.find(row => row.durationMinutes === 30);
+      const booking = service.bookSession("student-user-1", studentOneRole, slot);
+      await called;
+      try {
+        const visible = await service.calendarFor("coach-user", coachRole, "UTC");
+        expect(visible.unreadAlerts).toHaveLength(1);
+        await service.markAlertsRead("coach-user", coachRole, { alerts: visible.unreadAlerts });
+      } finally {
+        release();
+        await booking;
+      }
+      await expect(notifications.unreadCount("coach-user")).resolves.toEqual({ count: 0 });
+      await expect(notifications.list("coach-user")).resolves.toMatchObject({ items: [{ readAt: expect.any(String) }] });
     });
 
     test("a student can mark only their own cancellation alert read", async () => {
