@@ -4,9 +4,14 @@ import { CommunityBuildCard } from "../CommunityBuildCard";
 import { VoteScore } from "../VoteScore";
 import type { CommunityBuildListItem } from "../types";
 
-vi.mock("../CommunityBuildOwnerControls", () => ({ CommunityBuildOwnerControls: () => null }));
+const owner = vi.hoisted(() => ({ items: [] as Array<{ slug: string }>, loadControls: vi.fn() }));
+vi.mock("../useOwnerBuilds", () => ({ useOwnerBuilds: () => ({ data: { items: owner.items } }) }));
+vi.mock("../CommunityBuildOwnerControls", () => {
+  owner.loadControls();
+  return { CommunityBuildOwnerControls: () => <button type="button">Your build options</button> };
+});
 vi.mock("../CommunityOwnerReplayCount", () => ({ CommunityOwnerReplayCount: () => <span>41 classified replays</span> }));
-afterEach(cleanup);
+afterEach(() => { cleanup(); owner.items = []; });
 const build: CommunityBuildListItem = { slug: "pvt-three-gate", ownerUserId: "owner-1", authorProfileHandle: "author-0123456789", authorName: "A".repeat(80), title: "PvT 3 Gate", description: "Three gate pressure", matchup: "PvT", votes: 0, publishedAt: "2026-08-13T12:00:00Z", updatedAt: "2026-10-03T12:00:00Z", build: { race: "Protoss", skillLevel: "diamond" } };
 
 describe("Community scores and cards", () => {
@@ -24,9 +29,25 @@ describe("Community scores and cards", () => {
     expect(author.parentElement?.className).toContain("max-w-[50%]");
     expect(screen.getByRole("link", { name: build.title }).className).toContain("after:inset-0");
     expect(screen.getByText("Diamond")).toBeTruthy(); expect(screen.getByLabelText("Net score 0")).toBeTruthy();
-    expect(screen.getByText("41 classified replays")).toBeTruthy();
     expect(screen.queryByText("Open")).toBeNull(); expect(container.querySelector(".pr-24")).toBeNull();
     expect(author.closest("footer")?.className).toContain("relative");
+  });
+  it("loads private actions only for a build confirmed in the current owner's list", async () => {
+    owner.items = [{ slug: "another-build" }];
+    const view = render(<CommunityBuildCard build={build} />);
+    expect(screen.getByRole("link", { name: build.title })).toBeTruthy();
+    expect(screen.queryByText("41 classified replays")).toBeNull();
+    expect(owner.loadControls).not.toHaveBeenCalled();
+
+    owner.items = [{ slug: build.slug }];
+    view.rerender(<CommunityBuildCard build={build} />);
+    expect(await screen.findByRole("button", { name: "Your build options" })).toBeTruthy();
+    expect(await screen.findByText("41 classified replays")).toBeTruthy();
+
+    owner.items = [];
+    view.rerender(<CommunityBuildCard build={build} />);
+    expect(screen.queryByRole("button", { name: "Your build options" })).toBeNull();
+    expect(screen.queryByText("41 classified replays")).toBeNull();
   });
   it("shows saves and the content update time, and the author's record only when present", () => {
     const view = render(<CommunityBuildCard build={{ ...build, saves: 12, contentUpdatedAt: "2026-09-01T12:00:00Z" }} />);
