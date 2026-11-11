@@ -20,7 +20,7 @@ describe("Settings section catalog", () => {
       expect(settingsSectionsForTab(tab.id)).toBe(SETTINGS_SECTIONS[tab.id]);
     }
     expect(SETTINGS_SECTIONS.help).toEqual([]);
-    expect(SETTINGS_SECTIONS.preferences.map(section => section.id)).toEqual(["app-preferences", "setup-privacy", "reports", "notifications", "push"]);
+    expect(SETTINGS_SECTIONS.preferences.map(section => section.id)).toEqual(["app-preferences", "appearance", "setup-privacy", "reports", "notifications", "push"]);
     expect(SETTINGS_SECTIONS.randomizer).toHaveLength(6);
     expect(SETTINGS_SECTIONS.import.map(section => section.id)).toContain("folder-sync");
   });

@@ -2,6 +2,7 @@
 import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { useCallback, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { RefreshCw } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useGlobalTrendsApi } from "@/lib/globalTrendsApi";
@@ -12,9 +13,13 @@ import { TrendsTab } from "@/components/analyzer/TrendsTab";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Card";
 import { ForbiddenCard } from "../components/AdminFragments";
-import { GlobalPlayerPicker } from "./GlobalPlayerPicker";
 import { GlobalGameFilters } from "./GlobalGameFilters";
 import { ALL_GAME_FILTERS, ALL_PLAYERS, populationQuery, type Population, type TrendFilterOptions } from "./globalTrendsState";
+
+const GlobalPlayerPicker = dynamic(() => import("./GlobalPlayerPicker").then((module) => module.GlobalPlayerPicker), {
+  ssr: false,
+  loading: () => <div role="status" aria-label="Loading player population"><Skeleton rows={3} /></div>,
+});
 
 export default function AdminGlobalTrendsPage() {
   // Give this access probe its own request identity so an unbounded chrome

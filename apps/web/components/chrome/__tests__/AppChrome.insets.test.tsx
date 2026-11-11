@@ -149,13 +149,15 @@ describe("floating surfaces on a 390px phone", () => {
     expect(Z_LAYERS.toast).toBeGreaterThan(Z_LAYERS.banner);
   });
 
-  it("Settings' floating save bars all clear the tab bar", () => {
-    // SaveBar is shared; Multi-platform chat portals its own bar.
+  it("the shared Settings save bar clears the tab bar", () => {
+    // The shell owns the bar for every tab.
     const dir = path.join(process.cwd(), "components/analyzer/settings");
     const pinnedToBottom = readdirSync(dir)
       .filter((file) => file.endsWith(".tsx"))
       .filter((file) => /fixed inset-x-0 bottom-0/.test(readFileSync(path.join(dir, file), "utf8")));
     expect(pinnedToBottom).toEqual([]);
-    expect(readFileSync(path.join(dir, "SettingsMultiChat.tsx"), "utf8")).toContain("bottom-above-chrome z-banner");
+    expect(readFileSync(path.join(dir, "SettingsShell.tsx"), "utf8")).toContain("<SettingsSaveBar");
+    expect(readFileSync(path.join(dir, "SettingsSaveBar.tsx"), "utf8")).toContain("<SaveBar");
+    expect(readFileSync(path.join(dir, "../../ui/SaveBar.tsx"), "utf8")).toContain("bottom-above-chrome z-banner");
   });
 });

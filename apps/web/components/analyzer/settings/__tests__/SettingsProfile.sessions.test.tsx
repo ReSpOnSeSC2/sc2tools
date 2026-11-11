@@ -17,10 +17,11 @@ vi.mock("@/components/ui/Toast", () => ({ useToast: () => ({ toast: { success: m
 vi.mock("../SettingsPlayerChannels", () => ({ SettingsPlayerChannels: () => null }));
 vi.mock("../SettingsPublicProfile", () => ({ SettingsPublicProfile: () => null }));
 import { SettingsProfile } from "../SettingsProfile";
+import { SettingsSaveScope } from "../SettingsSaveBar";
 
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
-function View() { return <SWRConfig value={{ provider: () => new Map() }}><SettingsProfile /></SWRConfig>; }
-function edit(value: string) { fireEvent.change(screen.getByPlaceholderText("Auto"), { target: { value } }); fireEvent.click(screen.getByRole("button", { name: "Save changes" })); }
+function View() { return <SWRConfig value={{ provider: () => new Map() }}><SettingsSaveScope tabId="profile"><SettingsProfile /></SettingsSaveScope></SWRConfig>; }
+function edit(value: string) { fireEvent.change(screen.getByPlaceholderText("Auto"), { target: { value } }); fireEvent.click(screen.getByRole("button", { name: "Save profile" })); }
 beforeEach(() => {
   mocks.owner = "a"; mocks.writes = []; mocks.body = null;
   mocks.token.mockReset().mockImplementation(async () => `token-${mocks.owner}`);
@@ -41,8 +42,9 @@ it("saves an integer preference and preserves the normal dirty/Save flow", async
   expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ sessionGapMinutes: 15, sessionPolicy: { gapMinutes: 15, source: "preference", storedGapMinutes: 15 } }), { revalidate: false });
   expect(mocks.error).not.toHaveBeenCalled();
 });
-it("rejects a fractional draft before any write or optimistic mutation", () => {
+it("rejects a fractional draft before any write or optimistic mutation", async () => {
   render(<View />); edit("15.5");
+  await screen.findByRole("button", { name: "Retry" });
   expect(mocks.token).not.toHaveBeenCalled(); expect(mocks.writes).toEqual([]); expect(mocks.mutate).not.toHaveBeenCalled(); expect(mocks.error).toHaveBeenCalledOnce();
 });
 it("held JWT across A->B->A cannot issue a retired policy write with the same token callback", async () => {
@@ -107,7 +109,7 @@ it("a held JWT reaches its deadline, leaves a retryable draft, and cannot dispat
   render(<View />); edit("45");
   await act(async () => { await vi.advanceTimersByTimeAsync(15_001); });
   expect(mocks.error).toHaveBeenCalledWith("Couldn't save profile", expect.any(Object));
-  expect(screen.getByRole("button", { name: "Save changes" }).hasAttribute("disabled")).toBe(false);
+  expect(screen.getByRole("button", { name: "Retry" }).hasAttribute("disabled")).toBe(false);
   const before = mocks.mutate.mock.calls.length;
   await act(async () => { held.resolve("late-a-token"); await Promise.resolve(); });
   expect(mocks.writes).toEqual([]); expect(mocks.mutate).toHaveBeenCalledTimes(before);

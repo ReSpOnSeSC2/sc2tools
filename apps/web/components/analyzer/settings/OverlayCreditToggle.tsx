@@ -25,7 +25,7 @@ export function OverlayCreditToggle({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-2 text-caption text-text-dim">
+    <label className="flex items-start gap-2 text-caption text-text-dim">
       <Toggle checked={checked} onChange={onChange} disabled={disabled} label={`Show “${OVERLAY_CREDIT_TEXT}” on stream`} />
       <span>
         <InstantBadge className="mr-1.5 align-middle" />
@@ -34,6 +34,6 @@ export function OverlayCreditToggle({
         players find the tool. Saved to your account; after switching it
         off, copy your URLs into OBS again.
       </span>
-    </div>
+    </label>
   );
 }

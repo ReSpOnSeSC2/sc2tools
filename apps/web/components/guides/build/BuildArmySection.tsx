@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { GUIDE_PANEL_CLASS, GUIDE_TABLE_WRAP_CLASS, unitDisplayName } from "@/components/guides/guideUi";
-import { ArmyMobileTabs } from "./ArmyMobileTabs";
+import { ArmyMobileTabs } from "./LazyBuildStatistics";
 import { fmtClock, fmtCount, fmtPresence } from "@/lib/guides/format";
 import { getIconPath } from "@/lib/sc2-icons";
 import type { GuideArmy, GuideArmyCheckpoint, GuideArmyCheckpointKey, GuideArmyUnit } from "@/lib/guides/types";

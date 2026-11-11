@@ -52,9 +52,7 @@ import { DOCK_BLOCKLIST_MAX, DOCK_CONFIG_REFRESH_MS } from "./dockConstants";
 import { DockPollCard } from "./DockPollCard";
 import { DockGoals } from "./DockGoals";
 import { DockScenes, DockTimer } from "./DockScenes";
-import { DockClips } from "./DockClips";
 import { DockMarkUndoNotice, useDockMarkUndo } from "./DockMarkUndo";
-import { BuildProfileEditor } from "./BuildProfileEditor";
 import { useEngagementState } from "@/lib/multichat/useEngagementState";
 import { newestStudioSnapshot, useStudioUpdates } from "@/lib/multichat/useStudioUpdates";
 import type { DockPost } from "./dockActions";
@@ -73,6 +71,8 @@ export { DockButton } from "./DockControls";
 import { DockStatusHeader } from "./DockStatusHeader";
 import { loadGameDesk } from "./dockLazyLoaders";
 import { DockLazyPanel } from "./DockLazyPanel";
+const loadClips = () => import("./DockClips").then(module => module.DockClips);
+const loadBuildProfile = () => import("./BuildProfileEditor").then(module => module.BuildProfileEditor);
 const loadScout = () => import("./DockScout").then(module => module.DockScout);
 const loadTwitchAutomation = () => import("./DockTwitchAutomation").then(module => module.DockTwitchAutomation);
 const loadSeries = () => import("./DockSeries").then(module => module.DockSeries);
@@ -466,13 +466,12 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
               />
     </>,
     "dock-build-profile": <>
-<BuildProfileEditor
-                key={token}
-                profile={studio.buildProfile}
-                busy={busy}
-                ready={studioSnapshotReady}
-                onPost={postStudio}
-              />
+<DockLazyPanel key={token} label="build assessment" loader={loadBuildProfile} componentProps={{
+                profile: studio.buildProfile,
+                busy: busy,
+                ready: studioSnapshotReady,
+                onPost: postStudio,
+              }} />
     </>,
     "dock-timer": <>
 <DockTimer
@@ -500,20 +499,23 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
                 onPost={postStudioAction}
               />
     </>,
-    "dock-clips": <>
-<DockClips
-                key={token}
-                token={token}
-                loadHistory={!layout.collapsed.includes("dock-clips")}
-                markUndo={markUndo?.surface === "clips" ? <DockMarkUndoNotice surface="clips" busy={busy} undo={() => void undo()} /> : null}
-                studioReady={studioSnapshotReady}
-                moments={engagement.clipMoments}
-                streamStartMs={studio.streamStartMs}
-                vodUrl={studio.vodUrl}
-                busy={busy}
-                onPost={postStudioAction}
-              />
-    </>,
+    "dock-clips": <DockLazyPanel
+      key={token}
+      label="clip log"
+      loader={loadClips}
+      componentProps={{
+        token,
+        loadHistory: !layout.collapsed.includes("dock-clips"),
+        markUndo: markUndo?.surface === "clips"
+          ? <DockMarkUndoNotice surface="clips" busy={busy} undo={() => void undo()} /> : null,
+        studioReady: studioSnapshotReady,
+        moments: engagement.clipMoments,
+        streamStartMs: studio.streamStartMs,
+        vodUrl: studio.vodUrl,
+        busy,
+        onPost: postStudioAction,
+      }}
+    />,
     "dock-actions": <>
 <div className="space-y-3">
                 <DockButton

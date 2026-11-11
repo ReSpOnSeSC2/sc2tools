@@ -15,7 +15,6 @@
  */
 import { agentPresence } from "@/lib/agentPresence";
 import { ERROR_CODE_COPY, isBenignImportSkip } from "@/lib/syncReasons";
-import { formatNumber } from "@/lib/i18n/format";
 
 /** The API's rule order. */
 export const SYNC_HEALTH_CODES = [
@@ -86,7 +85,7 @@ export type SyncFix =
 export interface SyncReason {
   title: string;
   tone: SyncTone;
-  sentence: (count: number) => string;
+  sentence: (count: number, formatNumber?: SyncNumberText) => string;
   fix: SyncFix;
   helpSlug: string;
   anchor: string;
@@ -94,7 +93,9 @@ export interface SyncReason {
 
 /** Where every Sync health link lands: one section of the article per reason. */
 const article = (anchor: string) => ({ helpSlug: "my-game-didnt-show-up", anchor });
-const plural = (n: number, one: string, many: string) => `${formatNumber(n)} ${n === 1 ? one : many}`;
+type SyncNumberText = (count: number) => string;
+const stableSyncNumber = new Intl.NumberFormat("en-US").format;
+const plural = (n: number, one: string, many: string, formatNumber: SyncNumberText = stableSyncNumber) => `${formatNumber(n)} ${n === 1 ? one : many}`;
 
 /** The Settings section (id "sync-health" in lib/settingsIndex.ts). */
 export const SYNC_HEALTH_SETTINGS_HREF = "/settings?tab=account#sync-health";
@@ -110,8 +111,8 @@ export const SYNC_REASONS: Readonly<Record<SyncHealthCode, SyncReason>> = {
     title: "No replay folder",
     tone: "warn",
     // The count is configured folders that no longer exist (0 when none is set up).
-    sentence: (n) => n > 0
-      ? `The desktop app can't find ${plural(n, "replay folder", "replay folders")}, so new games can't sync.`
+    sentence: (n, formatNumber) => n > 0
+      ? `The desktop app can't find ${plural(n, "replay folder", "replay folders", formatNumber)}, so new games can't sync.`
       : "The desktop app isn't watching a replay folder, so new games can't sync.",
     fix: { kind: "agent", text: "Open the desktop app and add your replay folder." },
     ...article("sync-no-folder"),
@@ -119,8 +120,8 @@ export const SYNC_REASONS: Readonly<Record<SyncHealthCode, SyncReason>> = {
   agent_paused: {
     title: "Syncing is paused",
     tone: "info",
-    sentence: (n) => n > 0
-      ? `Syncing is paused in the desktop app. ${plural(n, "game is", "games are")} waiting to upload.`
+    sentence: (n, formatNumber) => n > 0
+      ? `Syncing is paused in the desktop app. ${plural(n, "game is", "games are", formatNumber)} waiting to upload.`
       : "Syncing is paused in the desktop app.",
     fix: { kind: "agent", text: "Press Resume syncing in the desktop app." },
     ...article("sync-paused"),
@@ -128,7 +129,7 @@ export const SYNC_REASONS: Readonly<Record<SyncHealthCode, SyncReason>> = {
   agent_upload_failing: {
     title: "Uploads are failing",
     tone: "error",
-    sentence: (n) => `The desktop app can't upload ${plural(n, "game", "games")}.`,
+    sentence: (n, formatNumber) => `The desktop app can't upload ${plural(n, "game", "games", formatNumber)}.`,
     fix: { kind: "agent", text: "Open the desktop app and press Retry now." },
     ...article("sync-upload-failing"),
   },
@@ -142,7 +143,7 @@ export const SYNC_REASONS: Readonly<Record<SyncHealthCode, SyncReason>> = {
   replays_skipped_unresolved: {
     title: "Recent unmatched replays",
     tone: "warn",
-    sentence: (n) => `The desktop app recently couldn't match ${plural(n, "replay", "replays")} to your linked accounts. `
+    sentence: (n, formatNumber) => `The desktop app recently couldn't match ${plural(n, "replay", "replays", formatNumber)} to your linked accounts. `
       + "Downloaded replays of other players can be skipped. If these are your games, review your profile, then re-sync.",
     fix: { kind: "link", label: "Review profile", href: "/settings?tab=profile" },
     ...article("sync-player-unresolved"),
@@ -150,7 +151,7 @@ export const SYNC_REASONS: Readonly<Record<SyncHealthCode, SyncReason>> = {
   uploads_rejected: {
     title: "Uploads rejected",
     tone: "warn",
-    sentence: (n) => `SC2 Tools rejected ${plural(n, "upload", "uploads")} in the last 7 days.`,
+    sentence: (n, formatNumber) => `SC2 Tools rejected ${plural(n, "upload", "uploads", formatNumber)} in the last 7 days.`,
     fix: { kind: "report", label: "Report" },
     ...article("sync-uploads-rejected"),
   },
@@ -161,7 +162,7 @@ export const SYNC_REASONS: Readonly<Record<SyncHealthCode, SyncReason>> = {
 export const SYNC_WINDOW_REASON: SyncReason = {
   title: "Outside the sync date range",
   tone: "info",
-  sentence: (n) => `${plural(n, "replay is", "replays are")} outside the desktop app's sync date range.`,
+  sentence: (n, formatNumber) => `${plural(n, "replay is", "replays are", formatNumber)} outside the desktop app's sync date range.`,
   fix: { kind: "help", label: "Change sync window", helpSlug: "desktop-app-sync-range", anchor: "choose-range" },
   ...article("sync-date-range"),
 };
@@ -192,8 +193,8 @@ export function syncDeviceName(device: Pick<SyncHealthDevice, "label" | "hostnam
   return device?.label || device?.hostname || "Your PC";
 }
 
-function worded(reason: SyncReason, code: string, count: number, key: string, device?: SyncHealthDevice): SyncHealthItem {
-  return { key, code, tone: reason.tone, title: reason.title, sentence: reason.sentence(count), count, fix: reason.fix,
+function worded(reason: SyncReason, code: string, count: number, key: string, device?: SyncHealthDevice, formatNumber?: SyncNumberText): SyncHealthItem {
+  return { key, code, tone: reason.tone, title: reason.title, sentence: reason.sentence(count, formatNumber), count, fix: reason.fix,
     helpSlug: reason.helpSlug, anchor: reason.anchor,
     ...(device ? { deviceId: device.deviceId, pc: syncDeviceName(device) } : {}) };
 }
@@ -205,12 +206,12 @@ const listOf = <T,>(value: readonly T[] | null | undefined): readonly T[] => (Ar
  * leaves replays out. Errors come first, then warnings, then information;
  * the API's order holds within each.
  */
-export function syncHealthItems(data: SyncHealthResponse): SyncHealthItem[] {
+export function syncHealthItems(data: SyncHealthResponse, formatNumber?: SyncNumberText): SyncHealthItem[] {
   const devices = new Map(listOf(data.devices).map((device) => [device.deviceId, device]));
   const items = listOf(data.rows).map((row, index): SyncHealthItem => {
     const device = row.deviceId ? devices.get(row.deviceId) : undefined;
     const key = `${row.code}:${row.deviceId ?? "account"}:${index}`;
-    if (isSyncHealthCode(row.code)) return worded(SYNC_REASONS[row.code], row.code, row.count, key, device);
+    if (isSyncHealthCode(row.code)) return worded(SYNC_REASONS[row.code], row.code, row.count, key, device, formatNumber);
     // A code this web build doesn't know yet still shows, with the API's article.
     return { key, code: row.code, tone: TONE_RANK[row.severity] === undefined ? "warn" : row.severity, title: "Sync check",
       sentence: "The desktop app reported a sync problem.", count: row.count, fix: null,
@@ -219,7 +220,7 @@ export function syncHealthItems(data: SyncHealthResponse): SyncHealthItem[] {
   });
   for (const device of devices.values()) {
     const filtered = device.reported ? device.sync?.filtered ?? 0 : 0;
-    if (filtered > 0) items.push(worded(SYNC_WINDOW_REASON, "replays_filtered", filtered, `replays_filtered:${device.deviceId}`, device));
+    if (filtered > 0) items.push(worded(SYNC_WINDOW_REASON, "replays_filtered", filtered, `replays_filtered:${device.deviceId}`, device, formatNumber));
   }
   return items.map((item, index) => ({ item, index }))
     .sort((a, b) => TONE_RANK[a.item.tone] - TONE_RANK[b.item.tone] || a.index - b.index)
@@ -335,7 +336,7 @@ export interface DeviceSyncSummary {
  * counts, never names. The rules mirror the API's device rules except the
  * version floor, which needs the release. Null for a PC that never reported.
  */
-export function deviceSyncSummary(device: { sync?: SyncReport | null; syncReportedAt?: string | null }, now: number): DeviceSyncSummary | null {
+export function deviceSyncSummary(device: { sync?: SyncReport | null; syncReportedAt?: string | null }, now: number, formatNumber: SyncNumberText = stableSyncNumber): DeviceSyncSummary | null {
   const sync = device.sync;
   if (!sync || typeof sync !== "object") return null;
   const codes: SyncHealthCode[] = [];
@@ -346,7 +347,7 @@ export function deviceSyncSummary(device: { sync?: SyncReport | null; syncReport
   const worst = codes.map((code) => SYNC_REASONS[code]).sort((a, b) => TONE_RANK[a.tone] - TONE_RANK[b.tone])[0];
   const skipped = Object.values(sync.skipped ?? {}).reduce<number>((sum, n) => sum + countOf(n), 0);
   const details = [
-    countOf(sync.foldersWatched) > 0 ? plural(countOf(sync.foldersWatched), "folder", "folders") : "",
+    countOf(sync.foldersWatched) > 0 ? plural(countOf(sync.foldersWatched), "folder", "folders", formatNumber) : "",
     typeof sync.pending === "number" ? `${formatNumber(countOf(sync.pending))} waiting` : "",
     skipped > 0 ? `${formatNumber(skipped)} skipped` : "",
     countOf(sync.filtered) > 0 ? `${formatNumber(countOf(sync.filtered))} outside sync range` : "",

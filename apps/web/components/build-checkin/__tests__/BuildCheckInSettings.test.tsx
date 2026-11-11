@@ -36,6 +36,7 @@ vi.mock("@/lib/clientApi", () => ({
 }));
 
 import { BuildCheckInSettings } from "../BuildCheckInSettings";
+import { SettingsSaveScope } from "@/components/analyzer/settings/SettingsSaveBar";
 
 afterEach(() => {
   cleanup();
@@ -54,7 +55,7 @@ const switchFor = (name: string) => screen.getByRole("switch", { name });
 describe("BuildCheckInSettings", () => {
   it("defaults every switch to off when nothing is stored", () => {
     harness.data = {};
-    render(<BuildCheckInSettings />);
+    render(<SettingsSaveScope tabId="checkin"><BuildCheckInSettings /></SettingsSaveScope>);
     expect(screen.getByRole("heading", { name: "Build check-in" })).toBeTruthy();
     expect(document.querySelectorAll('[id="build-check-in"]')).toHaveLength(1);
     expect(document.getElementById("build-check-in")?.tagName).toBe("SECTION");
@@ -66,7 +67,7 @@ describe("BuildCheckInSettings", () => {
 
   it("opens the step-by-step guide in the help panel", async () => {
     harness.data = {};
-    render(<BuildCheckInSettings />);
+    render(<SettingsSaveScope tabId="checkin"><BuildCheckInSettings /></SettingsSaveScope>);
     const link = () => screen.getByRole("link", { name: "How build check-in works, step by step" });
     expect(link().getAttribute("href")).toBe("/help/build-check-in");
     await vi.waitFor(() => expect(link().getAttribute("aria-haspopup")).toBe("dialog"), { timeout: 10_000 });
@@ -74,7 +75,7 @@ describe("BuildCheckInSettings", () => {
 
   it("disables the agent prompts while check-ins are off", () => {
     harness.data = { enabled: false, askAtLoading: true, askAfterGame: false };
-    render(<BuildCheckInSettings />);
+    render(<SettingsSaveScope tabId="checkin"><BuildCheckInSettings /></SettingsSaveScope>);
     expect(switchFor("Build check-ins").getAttribute("aria-checked")).toBe("false");
     expect(switchFor("Ask during the loading screen").hasAttribute("disabled")).toBe(true);
     expect(switchFor("Ask after each game").getAttribute("aria-checked")).toBe("false");
@@ -83,10 +84,10 @@ describe("BuildCheckInSettings", () => {
   it("saves exactly the three flags and refreshes the header chip", async () => {
     harness.data = { enabled: true, askAtLoading: true, askAfterGame: true };
     harness.apiCall.mockResolvedValue({ enabled: true, askAtLoading: false, askAfterGame: true });
-    render(<BuildCheckInSettings />);
+    render(<SettingsSaveScope tabId="checkin"><BuildCheckInSettings /></SettingsSaveScope>);
     fireEvent.click(switchFor("Ask during the loading screen"));
     expect(screen.getByRole("region", { name: "Unsaved changes" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save build check-in settings" }));
     await waitFor(() =>
       expect(harness.toast.success).toHaveBeenCalledWith("Build check-in settings saved"),
     );
@@ -104,36 +105,37 @@ describe("BuildCheckInSettings", () => {
   it("reports a failed save and keeps the draft", async () => {
     harness.data = {};
     harness.apiCall.mockRejectedValue({ status: 429, code: "rate_limited", message: "x" });
-    render(<BuildCheckInSettings />);
+    render(<SettingsSaveScope tabId="checkin"><BuildCheckInSettings /></SettingsSaveScope>);
     fireEvent.click(switchFor("Build check-ins"));
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save build check-in settings" }));
     await waitFor(() => expect(harness.toast.error).toHaveBeenCalled());
     expect(harness.toast.error).toHaveBeenCalledWith("Couldn't save build check-in settings", {
       description: expect.stringMatching(/Too many check-in changes/),
     });
     expect(switchFor("Build check-ins").getAttribute("aria-checked")).toBe("true");
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy();
     expect(harness.bump).not.toHaveBeenCalled();
   });
 
   it("refetches the switches when the desktop app changes them", () => {
     harness.data = { enabled: true, askAtLoading: true, askAfterGame: true };
-    const view = render(<BuildCheckInSettings />);
+    const view = render(<SettingsSaveScope tabId="checkin"><BuildCheckInSettings /></SettingsSaveScope>);
     expect(harness.mutate).not.toHaveBeenCalled();
     harness.prefsRevision = 1;
-    view.rerender(<BuildCheckInSettings />);
+    view.rerender(<SettingsSaveScope tabId="checkin"><BuildCheckInSettings /></SettingsSaveScope>);
     expect(harness.mutate).toHaveBeenCalledTimes(1);
     expect(harness.mutate).toHaveBeenCalledWith();
 
     // The refetched value replaces a clean draft.
     harness.data = { enabled: true, askAtLoading: false, askAfterGame: true };
-    view.rerender(<BuildCheckInSettings />);
+    view.rerender(<SettingsSaveScope tabId="checkin"><BuildCheckInSettings /></SettingsSaveScope>);
     expect(switchFor("Ask during the loading screen").getAttribute("aria-checked")).toBe("false");
     expect(screen.queryByRole("region", { name: "Unsaved changes" })).toBeNull();
   });
 
   it("offers a retry when the settings can't load", () => {
     harness.error = { status: 503, message: "Something went wrong on our side." };
-    render(<BuildCheckInSettings />);
+    render(<SettingsSaveScope tabId="checkin"><BuildCheckInSettings /></SettingsSaveScope>);
     expect(screen.getByRole("alert").textContent).toContain("Couldn't load your build check-in settings.");
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(harness.mutate).toHaveBeenCalled();

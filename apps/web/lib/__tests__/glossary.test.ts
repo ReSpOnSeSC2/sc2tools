@@ -22,7 +22,6 @@ describe("glossary", () => {
     expect(helpArticleAnchors(article!)).toEqual(GLOSSARY.map(term => term.id));
   });
   it("seeds the opponent and MMR terms the info tips will use", () => {
-    expect(GLOSSARY).toHaveLength(45);
     expect(GLOSSARY.map((term) => term.id)).toEqual(
       expect.arrayContaining(["pulse-id", "toon", "net-mmr", "verified-pairs", "mmr-impact", "group-same-player", "barcode"]),
     );

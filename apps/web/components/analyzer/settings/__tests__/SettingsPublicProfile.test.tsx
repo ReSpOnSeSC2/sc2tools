@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { SettingsPublicProfile } from "../SettingsPublicProfile";
+import { SettingsSaveScope } from "../SettingsSaveBar";
 import { PLAYER_SETTINGS } from "@/components/public-profile/__fixtures__/publicPlayer";
 const mocks = vi.hoisted(() => ({ owner: "owner-a" as string | null, token: vi.fn(), fetch: vi.fn() }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: mocks.owner, isLoaded: true, isSignedIn: Boolean(mocks.owner), getToken: mocks.token }) }));
@@ -10,7 +11,7 @@ const response = (data: unknown) => new Response(JSON.stringify(data), { status:
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(next => { resolve = next; }); return { promise, resolve }; }
 function mount() {
   const store = new Map();
-  const ui = () => <SWRConfig value={{ provider: () => store, dedupingInterval: 0, shouldRetryOnError: false }}><SettingsPublicProfile /></SWRConfig>;
+  const ui = () => <SWRConfig value={{ provider: () => store, dedupingInterval: 0, shouldRetryOnError: false }}><SettingsSaveScope tabId="profile"><SettingsPublicProfile /></SettingsSaveScope></SWRConfig>;
   const view = render(ui()); return { ...view, update: () => view.rerender(ui()) };
 }
 beforeEach(() => {
@@ -83,7 +84,7 @@ describe("public player privacy settings", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(20_001); });
     expect(screen.getByRole("alert").textContent).toMatch(/Couldn't save/);
     expect(screen.getByRole("checkbox", { name: "Public profile on" })).toHaveProperty("checked", true);
-    expect(screen.getByRole("button", { name: "Save public profile" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Retry" })).toHaveProperty("disabled", false);
     await act(async () => pending.resolve(response({ ...PLAYER_SETTINGS, enabled: false })));
     expect(screen.getByRole("checkbox", { name: "Public profile on" })).toHaveProperty("checked", true);
   });

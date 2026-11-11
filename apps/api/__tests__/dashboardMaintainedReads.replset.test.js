@@ -87,15 +87,19 @@ function expectReadCosts(fallback, ownerId = userId) {
 
 test("qualified /me keeps its exact DTO, one owner/prefs read, and zero stats queries", async () => {
   await seed();
+  await db.users.updateOne({ userId }, { $set: { "preferences.reports": { timezone: "Asia/Tokyo" } } });
   const summary = jest.spyOn(users, "getSummary"), prefs = jest.spyOn(users, "getPreferences");
-  const response = await read();
+  // Monday in the saved zone, still Sunday in UTC.
+  const clock = jest.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-08T23:30:00Z"));
+  const response = await read().finally(() => clock.mockRestore());
   expect(response.status).toBe(200);
   expect(response.body).toEqual({ userId, source: "device", games: { total: 2, latest: played.toISOString() },
     email: "reader@example.invalid", agentVersion: "1.0.0", agentPaired: true, agentLastSeenAt: played.toISOString(),
-    activeImportJob: null, onboarding: { goals: ["improve"], dismissedAt: null }, isAdmin: false });
+    activeImportJob: null, onboarding: { goals: ["improve"], dismissedAt: null }, weeklyReportWeek: "2026-W45", isAdmin: false });
   expect(summary).not.toHaveBeenCalled(); expect(prefs).not.toHaveBeenCalled(); expectReadCosts(false);
   const projection = commands.find(command => command.find === "users").projection;
-  expect(projection["preferences.onboarding"]).toBe(1); expect(projection["preferences.replayArchive"]).toBeUndefined();
+  expect(projection["preferences.onboarding"]).toBe(1); expect(projection["preferences.reports"]).toBe(1);
+  expect(projection["preferences.replayArchive"]).toBeUndefined();
 });
 
 test.each([[[]], [[{ gameId: "missing-date" }]], [[{ gameId: "null-date", date: null }]]])("ready empty/positive-null tuples preserve Doctor's strict no_games rule: %j", async rows => {

@@ -1,6 +1,8 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useOverlaySeriesState } from "@/components/overlay/useOverlaySeriesState";
+const LazyStatsTickerWidget = dynamic(() => import("@/components/overlay/widgets/StatsTickerWidget").then(module => module.StatsTickerWidget), { ssr: false });
+const LazyBuildProfileWidget = dynamic(() => import("@/components/overlay/widgets/BuildProfileWidget").then(module => module.BuildProfileWidget), { ssr: false });
 const LazySeriesWidget = dynamic(() => import("@/components/overlay/widgets/SeriesWidget").then(module => module.SeriesWidget), { ssr: false });
 
 import {
@@ -82,9 +84,7 @@ import {
   ChatOracleWidget,
   ClipFlagWidget,
   LowerThirdWidget,
-  StatsTickerWidget,
   CountdownTimerWidget,
-  BuildProfileWidget,
   SessionRecapWidget,
   StreamSceneWidget,
   SupporterWallWidget,
@@ -614,7 +614,7 @@ export function WidgetRenderer({
       // visibility timer slides it away between games.
       return <LowerThirdWidget live={live} />;
     case "build-profile":
-      return <BuildProfileWidget token={token} studioEvent={studioEvent} />;
+      return <LazyBuildProfileWidget token={token} studioEvent={studioEvent} />;
     case "series":
       return <LazySeriesWidget rawSeries={series} preview={live?.isTest === true} visible={visible} />;
     case "countdown-timer":
@@ -628,7 +628,7 @@ export function WidgetRenderer({
       // into an endless marquee. ``liveGame`` powers the in-game
       // opponent segments (H2H, cheese watch, scouted opener).
       return (
-        <StatsTickerWidget
+        <LazyStatsTickerWidget
           token={token}
           studioEvent={studioEvent}
           engagementEvent={engagementEvent}

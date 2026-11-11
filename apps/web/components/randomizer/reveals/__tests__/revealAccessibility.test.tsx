@@ -20,13 +20,15 @@ afterEach(() => { cleanup(); document.documentElement.removeAttribute("data-moti
 function MotionProbe() { return <output>{useReducedMotion() ? "reduced" : "full"}</output>; }
 
 describe("randomizer motion preference", () => {
-  it("combines live OS and page preferences without overriding device reduction", async () => {
+  it("uses the OS setting in System mode and follows explicit motion choices", async () => {
     const view = render(<MotionProbe />);
     expect(screen.getByRole("status").textContent).toBe("full");
     await act(async () => { document.documentElement.dataset.motion = "reduce"; });
     expect(screen.getByRole("status").textContent).toBe("reduced");
     act(() => { osReduced = true; listeners.forEach(listener => listener()); });
     await act(async () => { document.documentElement.dataset.motion = "full"; });
+    expect(screen.getByRole("status").textContent).toBe("full");
+    await act(async () => { document.documentElement.dataset.motion = "system"; });
     expect(screen.getByRole("status").textContent).toBe("reduced");
     act(() => { osReduced = false; listeners.forEach(listener => listener()); });
     expect(screen.getByRole("status").textContent).toBe("full");
