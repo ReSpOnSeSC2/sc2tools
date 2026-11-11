@@ -96,6 +96,8 @@ def test_native_panel_follows_exact_live_clock_and_master_switch_without_erasing
     assert page.panel.isVisible()
     assert "2:05" in page.panel.subtitle.text()
     assert page.panel.steps.topLevelItem(1).text(0) == "Stalker"
+    assert page.panel.steps.topLevelItem(1).font(0).bold()
+    assert not page.panel.steps.topLevelItem(0).font(0).bold()
     assert page.panel.steps.topLevelItem(1).text(3) == "Target +25s"
     before = len(calls)
     page.set_assistance_enabled(False)

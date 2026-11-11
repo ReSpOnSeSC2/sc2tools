@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from textwrap import dedent
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -14,8 +15,9 @@ from sc2tools_agent.build_checkin.models import PostgameCardModel
 from sc2tools_agent.ui import theme
 from sc2tools_agent.ui.companion_builds import build_companion_builds
 from sc2tools_agent.ui.companion_ghost import build_companion_ghost
-from sc2tools_agent.ui.companion_page import _STYLE
 from sc2tools_agent.ui.companion_randomizer import build_companion_randomizer
+from tests._gui_offscreen import run_gui_check
+from tests.test_companion_resize_shell import THEMED_SETUP
 
 
 @pytest.fixture
@@ -44,7 +46,7 @@ def themed_app():
 def host_page(page):
     host = QtWidgets.QWidget()
     host.setObjectName("companionDesk")
-    host.setStyleSheet(_STYLE)
+    host.setStyleSheet(theme.COMPANION_PAGE_STYLE)
     layout = QtWidgets.QVBoxLayout(host)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.addWidget(page)
@@ -150,6 +152,10 @@ def test_ghost_replay_library_actions_wrap_and_history_remains_reachable(themed_
             settle(app)
             source_scroll = page.sources.widget(1)
             assert_full_width(controls, source_scroll.widget())
+            filters = (page.matchup_filter, page.build_filter, page.map_filter, page.result_filter,
+                       page.starred_filter, page.clear_filters_button)
+            assert_full_width((*filters, page.compare_button), source_scroll.widget())
+            assert all(page.filters_widget.rect().contains(control.geometry()) for control in filters)
             assert source_scroll.widget().width() == source_scroll.viewport().width()
             if width <= 440:
                 assert len({control.y() for control in controls}) > 1
@@ -165,3 +171,36 @@ def test_ghost_replay_library_actions_wrap_and_history_remains_reachable(themed_
             assert page.target_name.text() == "Keep my replay target draft"
     finally:
         close_page(host, page, app)
+
+
+@pytest.mark.parametrize("scale", ["1.25", "1.5"])
+def test_companion_tools_fit_the_minimum_window_at_display_scale(tmp_path, monkeypatch, scale):
+    monkeypatch.setenv("QT_SCALE_FACTOR", scale)
+    run_gui_check(tmp_path, THEMED_SETUP.replace("FONT_SIZE", "10") + dedent('''
+        _ui, window = make_window(window_page="companion", window_animations=False)
+        window.setUpdatesEnabled(False)
+        window.show()
+        window.resize(480, 360)
+        page = window._companion_page
+        builds, ghost = page.build_selectors, page.ghost_page
+        try:
+            for route, scroll, controls in (
+                ("builds", builds.scroll, (builds.loading_toggle, builds.postgame_toggle, builds.refresh_button)),
+                ("ghost", ghost.scroll, (ghost.enabled_toggle, ghost.matchup, ghost.clear_button)),
+            ):
+                page.console.navigate(route)
+                QtTest.QTest.qWait(25)
+                assert window.size() == QtCore.QSize(480, 360)
+                content = scroll.widget()
+                assert content.width() <= scroll.viewport().width(), route
+                assert scroll.horizontalScrollBar().maximum() == 0, route
+                for control in controls:
+                    x = control.mapTo(content, QtCore.QPoint()).x()
+                    assert 0 <= x <= content.width() - control.width(), (route, control.objectName())
+                    assert control.width() >= control.minimumSizeHint().width(), (route, control.objectName())
+                assert scroll.verticalScrollBar().maximum() > 0, route
+        finally:
+            page.shutdown()
+            window._race_effects.shutdown()
+            window.hide()
+    '''))

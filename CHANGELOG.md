@@ -238,6 +238,8 @@ corresponding GitHub Release.
 - Build check-in preview buttons wrap to keep Settings usable without
   horizontal scrolling at the smallest window size.
 - Pressing Enter or F3 in the Activity log brings the selected match into view.
+- Companion, its build selectors and Build Order Ghost share the desktop
+  theme, with flat surfaces, clearer headings and each skin's mark and accent.
 
 ### Agent 0.24.11
 

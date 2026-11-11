@@ -30,31 +30,8 @@ def palette_for_skin(skin):
 
 
 def css_for_skin(skin):
-    """What a skin adds after the default stylesheet: its canvas, accent and focus colours.
-
-    The default skin adds nothing. Companion's pages still carry their own
-    stylesheets, so their accents are recoloured here as well.
-    """
-    skin = normalize_skin(skin)
-    if skin == "default":
-        return ""
-    return theme.skin_layer(skin) + _companion_layer(theme.SKINS[skin])
-
-
-def _companion_layer(skin):
-    return f"""
-QFrame#companionConsole {{ background: {skin.canvas}; border-color: {theme.BORDER}; }}
-QFrame#companionConsole QPushButton:hover, QFrame#companionConsole QToolButton:hover,
-QWidget#companionDesk QPushButton:hover, QWidget#companionPanel QPushButton:hover,
-QWidget#ghostDesk QPushButton:hover {{ border-color: {skin.accent_hover}; }}
-QFrame#companionConsole QPushButton:checked, QFrame#companionConsole QToolButton:checked,
-QWidget#companionDesk QPushButton:checked, QWidget#ghostDesk QPushButton:checked,
-QWidget#companionDesk QListWidget::item:selected, QWidget#companionDesk QTabBar::tab:selected,
-QWidget#ghostDesk QTabBar::tab:selected {{ background: {skin.selected}; border-color: {skin.accent}; }}
-QWidget#companionDesk QLineEdit:focus, QWidget#companionDesk QComboBox:focus,
-QWidget#companionDesk QPlainTextEdit:focus, QWidget#ghostDesk QLineEdit:focus,
-QWidget#ghostDesk QComboBox:focus {{ border-color: {skin.focus}; }}
-"""
+    """The canvas, accent and focus colours to add after the default stylesheet."""
+    return theme.skin_layer(normalize_skin(skin))
 
 
 def create_race_effects(window, *, QtCore, QtGui, QtWidgets, compact_bezel=False):

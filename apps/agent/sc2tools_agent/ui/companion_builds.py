@@ -7,6 +7,7 @@ import time
 
 from ..build_checkin.models import CheckinPrefs, LoadingCardModel, PostgameCardModel
 from ..build_checkin.scouting import plain_text
+from . import theme
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
         def __init__(self):
             super().__init__(parent)
             self.setObjectName("companionBuilds")
-            self.setStyleSheet(card_stylesheet())
+            self.setStyleSheet(card_stylesheet() + theme.COMPANION_BUILDS_STYLE)
             self.loading_model = None
             self.postgame_model = None
             self._loading_open = False
@@ -51,14 +52,14 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
             self.scroll.setWidgetResizable(True)
             self.scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             content = QtWidgets.QWidget()
+            layout = QtWidgets.QVBoxLayout(content)
+            layout.setContentsMargins(*(theme.SPACE_M,) * 4)
+            layout.setSpacing(theme.SPACE_S)
             self.scroll.setWidget(content)
             outer.addWidget(self.scroll)
-            layout = QtWidgets.QVBoxLayout(content)
-            layout.setContentsMargins(14, 12, 14, 12)
-            layout.setSpacing(10)
-            title = plain_label("BUILD CHECK-INS", "checkinEyebrow")
+            title = plain_label("BUILD CHECK-INS", "companionBuildsHeading")
             layout.addWidget(title)
-            choices = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets, spacing=10)
+            choices = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets, spacing=theme.SPACE_S)
             self.loading_toggle = QtWidgets.QCheckBox("Pre-game build selector")
             self.postgame_toggle = QtWidgets.QCheckBox("Post-game build selector")
             self.loading_toggle.toggled.connect(lambda checked: self._change_pref("ask_at_loading", checked))
@@ -85,8 +86,8 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
         def _loading_tab(self):
             tab = QtWidgets.QWidget()
             layout = QtWidgets.QVBoxLayout(tab)
-            layout.setContentsMargins(12, 12, 12, 12)
-            layout.setSpacing(8)
+            layout.setContentsMargins(*(theme.SPACE_M,) * 4)
+            layout.setSpacing(theme.SPACE_S)
             self.loading_title = plain_label("Your next match", "checkinTitle", wrap=True)
             layout.addWidget(self.loading_title)
             self.loading_status = plain_label("Build choices appear when a match loads.", "checkinStatus", wrap=True)
@@ -94,7 +95,7 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
             self.loading_body = QtWidgets.QWidget()
             body = QtWidgets.QVBoxLayout(self.loading_body)
             body.setContentsMargins(0, 0, 0, 0)
-            body.setSpacing(8)
+            body.setSpacing(theme.SPACE_S)
             self.loading_waiting = plain_label("", "checkinMuted", wrap=True)
             body.addWidget(self.loading_waiting)
             self.locked = plain_label("", "checkinLocked", wrap=True)
@@ -129,8 +130,8 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
         def _postgame_tab(self):
             tab = QtWidgets.QWidget()
             layout = QtWidgets.QVBoxLayout(tab)
-            layout.setContentsMargins(12, 12, 12, 12)
-            layout.setSpacing(8)
+            layout.setContentsMargins(*(theme.SPACE_M,) * 4)
+            layout.setSpacing(theme.SPACE_S)
             self.postgame_title = plain_label("Your last match", "checkinTitle", wrap=True)
             layout.addWidget(self.postgame_title)
             self.postgame_status = plain_label("Confirm your plan after the next match.", "checkinStatus", wrap=True)
@@ -141,7 +142,7 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
             self.postgame_body = QtWidgets.QWidget()
             body = QtWidgets.QVBoxLayout(self.postgame_body)
             body.setContentsMargins(0, 0, 0, 0)
-            body.setSpacing(8)
+            body.setSpacing(theme.SPACE_S)
             self.prompt = plain_label("", "checkinPrompt", wrap=True)
             self.detected = plain_label("", "checkinMuted", wrap=True)
             body.addWidget(self.prompt)

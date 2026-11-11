@@ -80,7 +80,8 @@ def test_plain_containers_are_transparent_and_window_surfaces_are_explicit():
     assert "background: transparent;" in base_rule
     assert "QMainWindow, QWidget#agentRoot { background: " + theme.BG in theme.STYLE
     assert "QDialog, QMessageBox, QFileDialog, QInputDialog { background: " + theme.SURFACE in theme.STYLE
-    assert "QWidget#companionPanel, QWidget#ghostPanel { background: " + theme.SURFACE in theme.STYLE
+    assert declared_colour(theme.STYLE, "QWidget#companionPanel", BACKGROUND) == theme.BG
+    assert declared_colour(theme.STYLE, "QWidget#ghostPanel", BACKGROUND) == theme.SURFACE
     assert "QWidget#checkinWindow { background: transparent; }" in theme.STYLE
 
 
@@ -195,7 +196,6 @@ def declared_colour(style, selector, properties):
 
 
 def test_check_in_cards_keep_a_filled_primary_and_every_field_outlined_at_3_to_1():
-    from sc2tools_agent.ui import companion_ghost, companion_page
     from sc2tools_agent.ui.build_checkin_widgets import card_stylesheet
 
     card = card_stylesheet()
@@ -203,13 +203,30 @@ def test_check_in_cards_keep_a_filled_primary_and_every_field_outlined_at_3_to_1
     assert contrast(fill, theme.SURFACE) >= 3, fill
     assert contrast(declared_colour(card, "QPushButton#checkinPrimary", ("color",)), fill) >= 4.5
     for style, field in ((card, "QLineEdit#checkinSearch"), (card, "QPlainTextEdit#checkinNotes"),
-                         (companion_page._STYLE, "QWidget#companionDesk QLineEdit"),
-                         (companion_page._STYLE, "QWidget#companionPanel QComboBox"),
-                         (companion_ghost._STYLE, "QWidget#ghostDesk QLineEdit"),
-                         (companion_ghost._STYLE, "QWidget#ghostDesk QComboBox")):
+                         (theme.COMPANION_PAGE_STYLE, "QWidget#companionDesk QLineEdit"),
+                         (theme.COMPANION_PAGE_STYLE, "QWidget#companionPanel QComboBox"),
+                         (theme.COMPANION_GHOST_STYLE, "QWidget#ghostDesk QLineEdit"),
+                         (theme.COMPANION_GHOST_STYLE, "QWidget#ghostDesk QComboBox")):
         outline = declared_colour(style, field, BORDER)
         for surface in (theme.SURFACE, declared_colour(style, field, BACKGROUND)):
             assert contrast(outline, surface) >= 3, (field, outline, surface)
+
+
+@pytest.mark.parametrize("name", list(theme.SKINS))
+def test_companion_uses_the_skin_canvas_and_readable_accent(name):
+    skin = theme.SKINS[name]
+    style = theme.STYLE + theme.skin_layer(name)
+    canvas = declared_colour(style, "QFrame#companionConsole", BACKGROUND)
+    assert canvas == skin.canvas
+    assert declared_colour(style, "QFrame#consoleProfile", BACKGROUND) == theme.ELEVATED
+    assert declared_colour(style, "QFrame#consoleDisplay", BACKGROUND) == theme.SURFACE
+    for label in ("QLabel#companionAccent", "QLabel#consoleGameTitle"):
+        colour = declared_colour(style, label, ("color",))
+        assert colour == skin.accent
+        assert all(contrast(colour, fill) >= 4.5 for fill in (canvas, theme.SURFACE, theme.ELEVATED))
+    tab = "QWidget#companionBuilds QTabBar::tab"
+    assert declared_colour(style, tab + ":selected", ("border-bottom-color",)) == skin.accent
+    assert declared_colour(style, tab + ":focus", ("border-bottom-color",)) == skin.focus
 
 
 FOCUSABLE = ("QPushButton", "QToolButton", "QLineEdit", "QComboBox", "QPlainTextEdit", "QTextEdit",
