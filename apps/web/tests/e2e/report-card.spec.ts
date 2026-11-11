@@ -2,8 +2,8 @@ import path from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { decodeReportComparison, encodeReportCard, reportCardLink } from "../../lib/instant/reportCardLink";
 import { REPORT_CARD_PATH, REPORT_COMPARE_PATH, reportCardPreviewPath } from "../../lib/instant/reportCardRoute";
-import { contrastRatio } from "../../scripts/contrast-tokens.mjs";
 import { captureAccessibility, checkAccessibility } from "./accessibility-check";
+import { contrastRatio } from "./contrast";
 
 const fragment = encodeReportCard({
   totals: { games: 10, wins: 7, losses: 2 },
@@ -136,7 +136,7 @@ async function buildComparison(page: Page, info: TestInfo, own: string, theme: "
   await expect(manual).toBeFocused();
   const selection = await manual.evaluate(element => {
     const { color, backgroundColor } = getComputedStyle(element, "::selection");
-    return [color, backgroundColor].map(paint => (paint.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number));
+    return [color, backgroundColor];
   });
   expect(contrastRatio(selection[0], selection[1]), `Selected link contrast in ${theme} mode`).toBeGreaterThanOrEqual(4.5);
   const link = new URL(await manual.inputValue());
