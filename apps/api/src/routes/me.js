@@ -4,7 +4,7 @@ const express = require("express");
 const { accountExportHandler } = require("./accountExport");
 const { buildDoctor, buildSyncHealth, withReplayResyncState, emptyReplayArchiveCounts } = require("../services/doctor");
 const { NOTIFICATIONS_PREF_TYPE, sanitizeNotificationPrefs } = require("../services/notificationPrefs");
-const { REPORTS_PREF_TYPE, sanitizeReportPrefs } = require("../services/reportPreferences");
+const { REPORTS_PREF_TYPE, sanitizeReportPrefs, todayReportWeek } = require("../services/reportPreferences");
 const { validateProfile } = require("../validation/profile");
 const { publicDataRetention } = require("../services/dataInventory");
 const {
@@ -155,12 +155,11 @@ function buildMeRouter(deps) {
           // inject them keep working — the fields just come back null.
           deps.imports ? deps.imports.activeJob(auth.userId) : null,
         ]);
-      const { summary, onboarding } = snapshot;
       // Lazy email backfill: if the row pre-dates the webhook (or no
       // webhook is configured), pull the email from Clerk on first read
       // and cache it. Best-effort — clerk.getEmail returns null on
       // failure and we just render "—" until the next request.
-      let email = summary.email;
+      let email = snapshot.summary.email;
       if (!email && clerk && auth.source === "clerk" && auth.clerkUserId) {
         const fresh = await clerk.getEmail(auth.clerkUserId);
         if (fresh) {
@@ -223,7 +222,8 @@ function buildMeRouter(deps) {
         // mount the progress card on first paint.
         activeImportJob: activeImportJob || null,
         // Client-only onboarding bits (downloadStartedAt, dismissedAt).
-        onboarding: onboarding || {},
+        onboarding: snapshot.onboarding || {},
+        weeklyReportWeek: stats.total > 0 ? todayReportWeek(snapshot.reportPrefs) : null,
         isAdmin: admin,
       });
     } catch (err) {
@@ -1017,7 +1017,7 @@ async function readMeSnapshot(users, userId) {
   const [summary, onboarding] = await Promise.all([
     users.getSummary(userId), users.getPreferences(userId, "onboarding"),
   ]);
-  return { summary, onboarding, statsCandidate: null };
+  return { summary, onboarding, statsCandidate: null, reportPrefs: null };
 }
 
 /**

@@ -268,10 +268,11 @@ class UsersService {
    * @param {string} userId */
   async getMeSnapshot(userId) {
     const doc = await this.db.users.findOne({ userId }, { readPreference: "primary",
-      projection: { ...SUMMARY_PROJECTION, ...OWNER_STATS_PROJECTION, "preferences.onboarding": 1 } });
+      projection: { ...SUMMARY_PROJECTION, ...OWNER_STATS_PROJECTION, "preferences.onboarding": 1, "preferences.reports": 1 } });
     return { summary: summaryDto(doc, userId),
       statsCandidate: readyStatsFromOwnerRow(doc, userId, this.db.gameStatsTransactions),
-      onboarding: (doc && doc.preferences && doc.preferences.onboarding) || {} };
+      onboarding: (doc && doc.preferences && doc.preferences.onboarding) || {},
+      reportPrefs: doc?.preferences?.reports ?? null };
   }
 
   /** Internal Doctor envelope; the public profile getter retains its DTO.
