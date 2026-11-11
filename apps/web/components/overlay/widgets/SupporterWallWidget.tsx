@@ -1,4 +1,6 @@
 "use client";
+
+import { OverlayPanel } from "../OverlayPanel";
 import { withOverlayDemo } from "../OverlayDemoBoundary";
 import fixtures from "@/lib/overlaySamples.json";
 
@@ -80,15 +82,15 @@ function ConnectedSupporterWallWidget({
       `}</style>
       {testActive ? <div style={testTagStyle}>TEST</div> : null}
       {showToast ? (
-        <div className="sw-card" style={{ ...cardStyle, borderLeft: "4px solid #f5b942" }}>
+        <OverlayPanel className="sw-card" style={cardStyle} accent="#f5b942" accentSize="4px" contentStyle={{ padding: "var(--ov-padding, 10px 14px)" }}>
           <div style={{ ...kickerStyle, color: "#f5b942" }}>LEVEL UP</div>
           <div style={{ marginTop: 4, fontSize: 15, fontWeight: 800, color: "#fff" }}>
             {showToast.user} reached {rankNameFor(race, showToast.level)}!
           </div>
-        </div>
+        </OverlayPanel>
       ) : null}
       {wall.length > 0 ? (
-        <div className="sw-card" style={cardStyle}>
+        <OverlayPanel className="sw-card" style={cardStyle} contentStyle={{ padding: "var(--ov-padding, 10px 14px)" }}>
           <div style={kickerStyle}>⚡ TOP SUPPORTERS</div>
           <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
             {wall.map((w) => {
@@ -120,7 +122,7 @@ function ConnectedSupporterWallWidget({
             })}
           </div>
           <div style={hintStyle}>chat to earn XP · type !rank to see yours</div>
-        </div>
+        </OverlayPanel>
       ) : null}
     </div>
   );
@@ -146,12 +148,7 @@ const cardStyle: CSSProperties = {
   width: "100%",
   minWidth: 250,
   maxWidth: 340,
-  background:
-    "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
-  border: "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))",
-  borderRadius: "var(--ov-radius, 12px)",
   boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
-  padding: "10px 14px",
   color: "#e6e8ee",
 };
 

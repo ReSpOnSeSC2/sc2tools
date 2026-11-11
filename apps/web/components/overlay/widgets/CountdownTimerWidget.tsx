@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 /**
  * CountdownTimerWidget — a standalone on-stream countdown you can
  * show at any time, set from the Stream Dock's Timer panel (optional
@@ -65,7 +67,7 @@ export function CountdownTimerWidget({
         @media (prefers-reduced-motion: reduce) { .cdt-card, .cdt-pulse { animation: none; } }
       `}</style>
       {testActive ? <div style={testTagStyle}>TEST</div> : null}
-      <div className="cdt-card" style={cardStyle}>
+      <OverlayPanel className="cdt-card" style={cardStyle} contentStyle={{ padding: "var(--ov-padding, 12px 18px)" }}>
         <div style={kickerStyle}>⏱ COUNTDOWN</div>
         {timer.label ? <div style={labelStyle}>{timer.label}</div> : null}
         <div
@@ -81,7 +83,7 @@ export function CountdownTimerWidget({
         >
           {done ? "TIME!" : formatCountdown(remainMs)}
         </div>
-      </div>
+      </OverlayPanel>
     </div>
   );
 }
@@ -108,12 +110,7 @@ const cardStyle: CSSProperties = {
   width: "fit-content",
   minWidth: 180,
   maxWidth: 340,
-  background:
-    "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
-  border: "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))",
-  borderRadius: "var(--ov-radius, 12px)",
   boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
-  padding: "12px 18px",
   color: "#e6e8ee",
   textAlign: "center",
 };

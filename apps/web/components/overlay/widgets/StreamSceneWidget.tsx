@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 /**
  * StreamSceneWidget — full-screen BRB / Starting Soon scene for OBS.
  * Add it as a full-canvas Browser Source in the BRB and Starting
@@ -137,7 +139,7 @@ export function StreamSceneCanvas({
   const done = remainMs !== null && remainMs <= 0;
 
   return (
-    <div
+    <OverlayPanel scale={false} frame={false}
       data-scene-layout={hasBroll ? "broll" : "default"}
       style={hasBroll ? brollFrameStyle : defaultFrameStyle}
     >
@@ -221,7 +223,7 @@ export function StreamSceneCanvas({
           </div>
         </>
       )}
-    </div>
+    </OverlayPanel>
   );
 }
 
@@ -296,15 +298,14 @@ const brollFrameStyle: CSSProperties = {
   position: "absolute",
   inset: 0,
   overflow: "hidden",
-  background: "#03070d",
-  fontFamily: "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
+  background: "var(--ov-panel-bg, #03070d)",
   color: "#e6e8ee",
 };
 
 const defaultFrameStyle: CSSProperties = {
   ...brollFrameStyle,
   background:
-    "radial-gradient(120% 90% at 50% 10%, #101623 0%, #0a0d14 55%, #05070b 100%)",
+    "var(--ov-panel-bg, radial-gradient(120% 90% at 50% 10%, #101623 0%, #0a0d14 55%, #05070b 100%))",
 };
 
 const glowA: CSSProperties = {

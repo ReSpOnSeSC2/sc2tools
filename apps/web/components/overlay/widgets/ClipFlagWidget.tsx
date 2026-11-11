@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 /**
  * ClipFlagWidget — a small "🔥 Clip that!" pulse that appears for a
  * few seconds whenever the engagement service detects a clip-worthy
@@ -52,13 +54,13 @@ export function ClipFlagWidget({
         @media (prefers-reduced-motion: reduce) { .cf-chip { animation: none; } }
       `}</style>
       {testActive ? <div style={testTagStyle}>TEST</div> : null}
-      <div className="cf-chip" style={chipStyle}>
+      <OverlayPanel className="cf-chip" style={chipStyle} contentStyle={{ display: "flex", alignItems: "center", gap: 8, padding: "var(--ov-padding, 8px 14px)" }}>
         <span style={{ fontSize: 16 }}>🔥</span>
         <span style={{ fontWeight: 800, letterSpacing: "0.06em" }}>
           CLIP THAT!
         </span>
         <span style={reasonStyle}>{shown}</span>
-      </div>
+      </OverlayPanel>
     </div>
   );
 }
@@ -82,14 +84,9 @@ const testTagStyle: CSSProperties = {
 
 const chipStyle: CSSProperties = {
   display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
   maxWidth: 380,
-  background:
-    "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
   border: "1px solid rgba(245,185,66,0.6)",
-  borderRadius: 999,
-  padding: "8px 14px",
+  borderRadius: "999px",
   color: "#f5b942",
   fontSize: 13,
 };
