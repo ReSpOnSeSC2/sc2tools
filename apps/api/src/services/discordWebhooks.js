@@ -8,7 +8,7 @@ const { accountMatchHandles } = require("../util/accountFilter");
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { normalizeRace } = require("./buildIntentCommon");
 const { recordedRating } = require("./gameMomentRules");
-const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
+const { LIVE_GAME_MATCH, STATS_GAME_MATCH } = require("../util/gameVisibility");
 const { SHARE_TOKEN_RE } = require("./gameShares");
 const { bandFromId } = require("../util/leagueBands");
 const { buildJobLock } = require("../util/jobLock");
@@ -49,6 +49,12 @@ const DISABLE_AFTER = 3;
 const EVENTS = ["result", "session", "weekly", "milestone"];
 const PEAK_MIN_HISTORY = 20;
 const REPLAY_RATING_POLICY = 1;
+const RANKED_RESULT_PROJECTION = {
+  _id: 0, gameId: 1, date: 1, result: 1, myRace: 1, myLadderRace: 1, myToonHandle: 1,
+  matchFormat: 1, playerCount: 1, myLeagueId: 1, myMmr: 1, myMmrSource: 1,
+  myBuild: 1, map: 1, durationSec: 1, "opponent.displayName": 1, "opponent.race": 1,
+  "opponent.mmr": 1, "opponent.mmrSource": 1,
+};
 const RANKED_QUEUE_RACES = /** @type {Record<string, RegExp>} */ ({
   Protoss: /^\s*(?:p|prot|protoss)\s*$/i,
   Terran: /^\s*(?:t|terr|terran)\s*$/i,
@@ -278,13 +284,21 @@ class DiscordWebhooksService {
     return queued;
   }
 
-  /** Ingest hook for a just-finished ranked game: result and MMR peak. @param {string} userId @param {any} game */
-  async onFreshGame(userId, game) {
-    if (!this.available || !game || game.isLadderGame !== true || typeof game.gameId !== "string") return;
+  /** Ingest hook for a just-finished ranked game.
+   * @param {string} userId @param {{gameId?: unknown, isLadderGame?: unknown}} candidate */
+  async onFreshGame(userId, candidate) {
+    const gameId = candidate?.gameId;
+    if (!this.available || candidate?.isLadderGame !== true || typeof gameId !== "string") return;
     const hooks = await this.db.discordHooks.find({ userId, enabled: true, status: "active", $or: [{ "events.result": true }, { "events.milestone": true }] },
       { projection: { _id: 1 } }).limit(1).toArray();
     if (!hooks.length) return;
-    await this.withLease(userId, () => this.queueGame(userId, game));
+    await this.withLease(userId, async () => {
+      // The compact overlay candidate only identifies the game. Use the
+      // committed label and rating provenance in this private delivery lane.
+      const game = await this.db.games.findOne({ userId, gameId, ...STATS_GAME_MATCH, isLadderGame: true, isResumedFromReplay: { $ne: true } },
+        { projection: RANKED_RESULT_PROJECTION });
+      if (game) await this.queueGame(userId, game);
+    });
   }
 
   /** @param {string} userId @param {any} game */
