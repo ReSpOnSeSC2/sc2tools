@@ -2,6 +2,7 @@
 
 const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
+const { isPublicReplayReference } = require("../util/publicReplayReference");
 
 // enrich=none answers without VOD, channel or SC2Pulse lookups (ADR 0069, 2026-11-01 amendment).
 const NO_VODS = Object.freeze({ configuredPlatforms: [], linksByGameId: Object.freeze({}) });
@@ -59,6 +60,8 @@ function buildReplaysRouter(deps) {
     }
   });
 
+  router.post("/me/replay-sharing/reference", deps.auth, replaySharingReference(deps.replayLibrary));
+
   router.get("/replays", deps.auth, async (req, res, next) => {
     try {
       const auth = requireAuth(req);
@@ -88,6 +91,34 @@ function buildReplaysRouter(deps) {
   });
 
   return router;
+}
+
+/** Resolve a game's archive reference for its owner before copying or
+ * enabling publication. The same detector-view eligibility check guards
+ * the public card. The reference itself does not grant access.
+ * @param {Pick<import('../services/replayLibrary').ReplayLibraryService, 'getDetail'>} library
+ * @returns {import('express').RequestHandler}
+ */
+function replaySharingReference(library) {
+  return async (req, res, next) => {
+    privateNoStore(res);
+    try {
+      const auth = requireAuth(req);
+      const { gameId } = req.body ?? {};
+      if (typeof gameId !== "string" || !gameId.trim() || gameId.length > 200
+        || /[\u0000-\u001f\u007f]/u.test(gameId) || Object.keys(req.body).length !== 1) {
+        throw httpError(400, "invalid_replay_sharing_reference", "Choose a game from your replay library.");
+      }
+      const detail = await library.getDetail(auth.userId, gameId, { view: "detector" });
+      const reference = detail?.game.publicReference;
+      if (!isPublicReplayReference(reference)) {
+        throw httpError(404, "replay_not_shareable", "This game is unavailable in your public replay archive.");
+      }
+      res.json({ reference });
+    } catch (err) {
+      next(err);
+    }
+  };
 }
 
 /** @param {Record<string, unknown>} raw */

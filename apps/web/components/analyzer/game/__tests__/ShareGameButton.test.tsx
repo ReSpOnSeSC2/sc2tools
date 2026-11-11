@@ -47,6 +47,8 @@ const GAME: GameSummary = {
     strategy: "Zerg - Roach Push",
   },
 };
+const REFERENCE_PATH = "/v1/me/replay-sharing/reference";
+const REFERENCE = "r-0123456789abcdef01234567";
 const SHARES = `/v1/games/${encodeURIComponent(GAME.gameId)}/shares`;
 const TOKEN = "AbCdEfGhIjKlMnOp";
 const share = (active = true) => ({ token: TOKEN, gameId: GAME.gameId, url: `/g/${TOKEN}`, active, createdAt: "2026-11-10T10:00:00Z", revokedAt: null, viewCount: 3, lastViewedAt: null });
@@ -63,6 +65,7 @@ beforeEach(() => {
   mocks.fetch.mockReset().mockImplementation(async (url: string, init?: RequestInit) => {
     if (String(url).endsWith(SHARES) && (init?.method ?? "GET") === "GET") return json({ shares: [], activeCount: 0, limit: 200 });
     if (String(url).endsWith(SHARES) && init?.method === "POST") return json({ share: share(), created: true }, 201);
+    if (String(url).endsWith(REFERENCE_PATH) && init?.method === "POST") return json({ reference: REFERENCE });
     return json({}, 404);
   });
   vi.stubGlobal("fetch", mocks.fetch);
@@ -80,15 +83,16 @@ function mount(props: Partial<Parameters<typeof ShareGameButton>[0]> = {}) {
   );
 }
 /** Answer the replay-sharing read (or fail it with a status) and record PUTs. */
-function replaySharing(answer: { enabled: boolean; handle: string | null } | number) {
+function replaySharing(answer: { enabled: boolean; handle: string | null } | number, reference?: Response) {
   const base = mocks.fetch.getMockImplementation()!;
   mocks.fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (reference && String(url).endsWith(REFERENCE_PATH) && init?.method === "POST") return reference;
     if (!String(url).endsWith("/v1/me/replay-sharing")) return base(url, init);
     if (init?.method === "PUT") return json({ enabled: true, handle: "bob", updatedAt: "2026-11-10T12:00:00Z" });
     return typeof answer === "number" ? json({ error: { code: "auth_required" } }, answer) : json({ ...answer, updatedAt: null });
   });
 }
-const PUBLIC_URL = `${window.location.origin}/players/bob/replays/${encodeURIComponent(GAME.gameId)}`;
+const PUBLIC_URL = `${window.location.origin}/players/bob/replays/${REFERENCE}`;
 const trigger = () => screen.getByRole("button", { name: "Share" });
 function openMenu() {
   fireEvent.click(trigger());
@@ -214,6 +218,9 @@ describe("ShareGameButton menu", () => {
     mount();
     fireEvent.click(await within(openMenu()).findByRole("menuitem", { name: /Copy public link/ }));
     await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(PUBLIC_URL));
+    const post = mocks.fetch.mock.calls.find(([url, init]) => String(url).endsWith(REFERENCE_PATH) && init?.method === "POST");
+    expect(String(post?.[0])).not.toContain("SecretFoe");
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ gameId: GAME.gameId });
     expect(mocks.fetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
   });
 
@@ -223,15 +230,34 @@ describe("ShareGameButton menu", () => {
     fireEvent.click(await within(openMenu()).findByRole("menuitem", { name: /Turn on public replays/ }));
     const dialog = await screen.findByRole("dialog", { name: "Turn on public replays?" });
     expect(within(dialog).getByText(/Exactly what visitors can see/)).toBeTruthy();
-    expect(mocks.fetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+    expect(mocks.fetch.mock.calls.some(([, init]) => ["POST", "PUT"].includes(init?.method ?? ""))).toBe(false);
     fireEvent.click(within(dialog).getByRole("button", { name: "Turn on and copy link" }));
     await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(PUBLIC_URL));
-    const put = mocks.fetch.mock.calls.find(([, init]) => init?.method === "PUT");
-    expect(JSON.parse(String(put?.[1]?.body))).toEqual({ enabled: true });
+    const writes = mocks.fetch.mock.calls.filter(([, init]) => ["POST", "PUT"].includes(init?.method ?? ""));
+    expect(writes.map(([url, init]) => [new URL(String(url)).pathname, init?.method])).toEqual([
+      [REFERENCE_PATH, "POST"],
+      ["/v1/me/replay-sharing", "PUT"],
+    ]);
+    expect(JSON.parse(String(writes[1][1]?.body))).toEqual({ enabled: true });
     expect(await screen.findByText("Public replay page is live. Link copied.")).toBeTruthy();
   });
 
+  it.each([true, false])("fails closed if the reference cannot be verified (sharing enabled: %s)", async (enabled) => {
+    replaySharing({ enabled, handle: enabled ? "bob" : null }, json({ reference: GAME.gameId }));
+    mount();
+    const menu = within(openMenu());
+    fireEvent.click(await menu.findByRole("menuitem", { name: enabled ? /Copy public link/ : /Turn on public replays/ }));
+    if (!enabled) {
+      const dialog = await screen.findByRole("dialog", { name: "Turn on public replays?" });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Turn on and copy link" }));
+    }
+    expect(await screen.findByText("Couldn't copy a public replay link")).toBeTruthy();
+    expect(mocks.writeText).not.toHaveBeenCalled();
+    expect(mocks.fetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+  });
+
   it.each([
+    ["an excluded game", { enabled: true, handle: "bob" } as const, { ...GAME, excluded: true }],
     ["a resumed game", { enabled: true, handle: "bob" } as const, { ...GAME, isResumedFromReplay: true }],
     ["an unreadable sharing status", 401, GAME],
   ])("hides the public rows for %s and keeps the others", async (_case, answer, game) => {
