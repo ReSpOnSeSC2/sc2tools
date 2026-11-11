@@ -9,6 +9,9 @@ import { clearDraft, loadDraft, saveDraft } from "@/lib/reviewDrafts";
 import { useReviewShortcutLabel } from "./useReviewShortcutLabel";
 import { apiCall, useOwnerRequestScope } from "@/lib/clientApi";
 import { gaEvent } from "@/lib/analytics/gtag";
+import { reviewMomentUrl } from "@/lib/reviewNavigation";
+import { useCopy } from "@/lib/useCopy";
+import { useToastOptional } from "@/components/ui/Toast";
 import {
   REVIEW_LIMITS,
   formatClock,
@@ -43,6 +46,10 @@ type Props = {
   onCancel?: () => void;
   /** False when there is no map playback to pin on. */
   canPin: boolean;
+  /** The request's path; enables "Copy link at 5:12" beside the time chip. */
+  requestUrl?: string;
+  /** Focus the text field on open (the C shortcut). */
+  focusOnOpen?: boolean;
 };
 
 export function ReviewComposer(props: Props) {
@@ -55,7 +62,7 @@ export function ReviewComposer(props: Props) {
 function OwnedReviewComposer({
   requestId, durationSec, currentTime, initialTime, parentId = null, draftPin,
   nextPinNumber = 1, pinMode, onTogglePinMode, onClearPin, onPosted, onCancel, canPin,
-  ownerId, getToken,
+  requestUrl, focusOnOpen = false, ownerId, getToken,
 }: Props & { ownerId: string; getToken: () => Promise<string | null> }) {
   const runOwned = useOwnerRequestScope(ownerId, getToken);
   const mounted = useRef(true);
@@ -72,6 +79,10 @@ function OwnedReviewComposer({
   const [restored, setRestored] = useState(false);
   const shortcut = useReviewShortcutLabel();
   const initial = useRef({ initialTime, durationSec });
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  // The C shortcut opens the composer to type in; a click or a ?t= link does not.
+  const focusAtMount = useRef(focusOnOpen);
+  useEffect(() => { if (focusAtMount.current) bodyRef.current?.focus(); }, []);
 
   useEffect(() => {
     const saved = loadDraft(ownerId, requestId, parentId);
@@ -151,6 +162,7 @@ function OwnedReviewComposer({
           <Clock className="h-3.5 w-3.5 text-accent-cyan" aria-hidden />
           {end !== null ? `${formatClock(start)}–${formatClock(end)}` : `at ${formatClock(start)}`}
         </span>
+        {requestUrl ? <MomentLinkButton requestUrl={requestUrl} seconds={start} /> : null}
         <button type="button" onClick={() => { setStart(roundTenth(currentTime)); if (end !== null && end <= currentTime) setEnd(null); }} className="min-h-[32px] rounded-full px-2 font-semibold text-accent-cyan hover:underline">
           Use current time ({formatClock(currentTime)})
         </button>
@@ -198,6 +210,7 @@ function OwnedReviewComposer({
         <label htmlFor={bodyId} className="sr-only">Comment</label>
         <textarea
           id={bodyId}
+          ref={bodyRef}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           onBlur={() => setTouched(true)}
@@ -235,4 +248,47 @@ function OwnedReviewComposer({
 
 function roundTenth(n: number) {
   return Math.round(Math.max(0, n) * 10) / 10;
+}
+
+/** "Copy link at 5:12": the request opened at the composer's moment. */
+function MomentLinkButton({ requestUrl, seconds }: { requestUrl: string; seconds: number }) {
+  const toasts = useToastOptional();
+  const inputId = useId();
+  const clipboard = useCopy({
+    scopeKey: `${requestUrl}|${formatClock(seconds)}`,
+    onCopied: () => {
+      toasts?.toast.success("Link copied");
+      gaEvent("review_shared", { channel: "moment_link" });
+    },
+  });
+  const setInput = (node: HTMLInputElement | null) => { clipboard.inputRef.current = node; };
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => void clipboard.copy(reviewMomentUrl(window.location.origin, requestUrl, seconds))}
+        className="min-h-[32px] rounded-full px-2 font-semibold text-text-muted hover:text-text hover:underline"
+      >
+        {clipboard.copied ? "Link copied" : `Copy link at ${formatClock(seconds)}`}
+      </button>
+      {clipboard.fallbackText !== null ? (
+        <span className="flex basis-full flex-col gap-1">
+          <label htmlFor={inputId} className="text-micro text-text-muted">Copy this link</label>
+          <input
+            ref={setInput}
+            id={inputId}
+            readOnly
+            value={clipboard.fallbackText}
+            onFocus={(event) => event.currentTarget.select()}
+            onKeyDown={(event) => {
+              // Enter in a form field would post the comment; Escape dismisses the copy box.
+              if (event.key === "Enter") event.preventDefault();
+              if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); clipboard.clear(); }
+            }}
+            className="min-h-10 w-full rounded border border-line bg-bg px-2 text-caption text-text"
+          />
+        </span>
+      ) : null}
+    </>
+  );
 }

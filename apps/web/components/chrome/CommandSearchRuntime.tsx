@@ -13,6 +13,7 @@ import { readCommandSearchRecentEntries } from "@/lib/commandSearchRecent";
 import { commandPrivateHref } from "@/lib/commandSearchActivation";
 import type { CommandPrivateTarget } from "@/lib/commandSearchTarget";
 import { COMMAND_GO_KEYS } from "@/lib/useCommandSearchShortcuts";
+import { usePageShortcutSections } from "@/lib/pageShortcuts";
 import { COMMAND_QUERY_MAX_CHARS, type CommandSearchItem } from "@/lib/commandSearch";
 import { privateCommandQuery, type PrivateCommandChoice } from "@/lib/privateCommandSearch";
 import { recentGamesQuery } from "@/lib/recentGamesCommandSearch";
@@ -134,7 +135,14 @@ function PaletteRuntime({ frame, navigation, settingsTabs, allowDefaultSettings,
 
 function Shortcuts({ frame, navigation, onClose }: Props) {
   const returnFocusRef = useRef(frame.returnFocus ?? null);
+  const pageSections = usePageShortcutSections();
   return <Modal open title="Keyboard shortcuts" onClose={onClose} returnFocusRef={returnFocusRef}>
+    {pageSections.map((section) => <section key={section.title} aria-label={section.title} className="mb-4 border-b border-border pb-4">
+      <h3 className="mb-2 font-display text-caption font-bold uppercase tracking-wider text-text-muted">{section.title}</h3>
+      <dl className="space-y-2 text-body">
+        {section.items.map((item) => <div key={item.keys}><dt className="font-semibold">{item.keys}</dt><dd>{item.label}</dd></div>)}
+      </dl>
+    </section>)}
     <dl className="space-y-3 text-body">
       <div><dt className="font-semibold">Ctrl K or ⌘ K</dt><dd>Open quick search outside a field.</dd></div>
       <div><dt className="font-semibold">/</dt><dd>Focus this page’s search, or open quick search.</dd></div>

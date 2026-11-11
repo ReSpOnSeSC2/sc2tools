@@ -4,6 +4,7 @@ const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
 const { REGION_LABELS } = require("../util/regionFromToonHandle");
 const { ASSIGNMENT_STATES } = require("../services/coachingAssignmentState");
+const { bookingDigestRoute, calendarRoute } = require("./coachingSessions");
 
 // Whole-state payloads carry embedded media (voice memos, images,
 // small replays) as base64. Body parsing is owned by the app-level
@@ -171,21 +172,8 @@ function buildCoachingRouter(deps) {
     }
   });
 
-  router.get("/coaching/calendar", withRole, async (req, res, next) => {
-    try {
-      const { auth, cr } = ctx(req);
-      if (cr.role === "none") {
-        res.status(404).json({ error: "not_found" });
-        return;
-      }
-      const timeZone = typeof req.query.timeZone === "string"
-        ? req.query.timeZone
-        : undefined;
-      res.json(await deps.coaching.calendarFor(auth.userId, cr, timeZone));
-    } catch (err) {
-      next(err);
-    }
-  });
+  router.get("/coaching/calendar", withRole, calendarRoute(deps, ctx));
+  router.get("/coaching/calendar/bookings/:bookingId/digest", withRole, bookingDigestRoute(deps, ctx));
 
   router.put("/coaching/calendar/availability", withRole, async (req, res, next) => {
     try {

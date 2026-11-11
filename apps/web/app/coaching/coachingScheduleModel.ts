@@ -45,3 +45,15 @@ export type AvailabilityDraft = {
   durations: number[];
   windows: AvailabilityWindow[];
 };
+
+/** GET /v1/coaching/calendar?past=1: ended sessions, newest first. */
+export type SessionHistory = {
+  role: "coach" | "student";
+  bookings: Booking[];
+  total: number;
+  held: number;
+  limit: number;
+  hasMore: boolean;
+  /** Coach only: totals per student across the whole history. */
+  students?: Array<{ studentId: string; name: string; held: number; cancelled: number }>;
+};

@@ -1,6 +1,6 @@
 "use client";
 import { useAuth } from "@clerk/nextjs";
-import { CalendarCheck2, CalendarClock, Check, Plus, Trash2 } from "lucide-react";
+import { CalendarCheck2, CalendarClock, Check, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { apiCall } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
@@ -11,22 +11,25 @@ import { Modal } from "@/components/ui/Modal";
 import { SaveBar } from "@/components/ui/SaveBar";
 import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
-import { apiMessage, cloneAvailability, clockValue, COACHING_DAYS, compareWindows, formatDuration, minuteValue, PRESET_SESSION_DURATIONS, timeZoneOptions, useZoneClock, windowProblems } from "./coachingTime";
-import { BookingCard, BookingSummary, ChoiceChip, EmptySchedule } from "./CoachingScheduleParts";
+import { apiMessage, cloneAvailability, formatDuration, PRESET_SESSION_DURATIONS, splitSessions, timeZoneOptions, useZoneClock, windowProblems } from "./coachingTime";
 import { CalendarFeedCard } from "./CalendarFeedCard";
-import type { AvailabilityDraft, AvailabilityWindow, Booking, CalendarPayload } from "./coachingScheduleModel";
+import { BookingCard, BookingSummary, ChoiceChip, EmptySchedule, PastSessions, type HistoryState } from "./CoachingScheduleParts";
+import { WeeklyHoursEditor } from "./WeeklyHoursEditor";
+import type { AvailabilityDraft, Booking, CalendarPayload } from "./coachingScheduleModel";
 export function CoachSchedule({
   data,
   localTimeZone,
   refresh,
   onDirtyChange,
   active,
+  history,
 }: {
   data: CalendarPayload;
   localTimeZone: string;
   refresh: (next?: CalendarPayload, options?: { revalidate: boolean }) => Promise<CalendarPayload | undefined>;
   onDirtyChange?: (dirty: boolean) => void;
   active: boolean;
+  history?: HistoryState;
 }) {
   const { getToken } = useAuth();
   const { toast } = useToast();
@@ -85,34 +88,6 @@ export function CoachSchedule({
       return;
     }
     if (!draft.durations.includes(minutes)) toggleDuration(minutes);
-  };
-
-  const addWindow = (day: number) => {
-    change((current) => ({
-      ...current,
-      windows: [...current.windows, { day, startMinute: 9 * 60, endMinute: 17 * 60 }]
-        .sort(compareWindows),
-    }));
-  };
-
-  const updateWindow = (
-    target: AvailabilityWindow,
-    field: "startMinute" | "endMinute",
-    value: number,
-  ) => {
-    change((current) => ({
-      ...current,
-      windows: current.windows.map((window) =>
-        window === target ? { ...window, [field]: value } : window,
-      ),
-    }));
-  };
-
-  const removeWindow = (target: AvailabilityWindow) => {
-    change((current) => ({
-      ...current,
-      windows: current.windows.filter((window) => window !== target),
-    }));
   };
 
   const save = async () => {
@@ -191,9 +166,8 @@ export function CoachSchedule({
     }
   };
 
-  const upcoming = data.bookings.filter(
-    (booking) => booking.status === "booked" && new Date(booking.startAt).getTime() > Date.now(),
-  );
+  const sessions = splitSessions(data.bookings, Date.now());
+  const upcoming = sessions.upcoming;
   const revert = () => {
     loadedStamp.current = data.availability?.updatedAt ?? "empty";
     loadedAvailabilityRev.current = data.availabilityRev;
@@ -286,76 +260,7 @@ export function CoachSchedule({
             </div>
           </section>
 
-          <section aria-labelledby="weekly-hours-heading">
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <h3 id="weekly-hours-heading" className="text-caption font-bold text-text">
-                  Weekly hours
-                </h3>
-                <p className="mt-1 text-caption text-text-muted">
-                  Timeclock-style recurring windows in {draft.timeZone.replaceAll("_", " ")}.
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border">
-              {COACHING_DAYS.map((day) => {
-                const windows = draft.windows.filter((window) => window.day === day.day);
-                return (
-                  <div key={day.day} className="grid gap-3 bg-bg-surface p-3 sm:grid-cols-[92px_1fr] sm:items-start">
-                    <div className="flex items-center justify-between gap-2 sm:block">
-                      <div className="font-display text-caption font-bold text-text">{day.long}</div>
-                      <span className="text-micro text-text-dim sm:mt-0.5 sm:block">
-                        {windows.length ? `${windows.length} window${windows.length === 1 ? "" : "s"}` : "Unavailable"}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {windows.map((window, index) => (
-                        <div key={`${day.day}-${index}`} className="flex flex-wrap items-start gap-2">
-                          <Field label="Starts" error={problems[draft.windows.indexOf(window)]} className="min-w-32 flex-1 sm:flex-none">
-                          <Input
-                            aria-label={`${day.long} start time ${index + 1}`}
-                            type="time"
-                            step={1800}
-                            value={clockValue(window.startMinute)}
-                            onChange={(event) => updateWindow(window, "startMinute", minuteValue(event.target.value))}
-                            invalid={Boolean(problems[draft.windows.indexOf(window)])}
-                          />
-                          </Field>
-                          <Field label="Ends" error={problems[draft.windows.indexOf(window)]} className="min-w-32 flex-1 sm:flex-none">
-                          <Input
-                            aria-label={`${day.long} end time ${index + 1}`}
-                            type="time"
-                            step={1800}
-                            value={clockValue(window.endMinute)}
-                            onChange={(event) => updateWindow(window, "endMinute", minuteValue(event.target.value))}
-                            invalid={Boolean(problems[draft.windows.indexOf(window)])}
-                          />
-                          </Field>
-                          <button
-                            type="button"
-                            aria-label={`Remove ${day.long} window ${index + 1}`}
-                            onClick={() => removeWindow(window)}
-                            className="mt-6 grid h-10 w-10 place-items-center rounded-full text-text-muted hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden />
-                          </button>
-                        </div>
-                      ))}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        iconLeft={<Plus className="h-4 w-4" />}
-                        onClick={() => addWindow(day.day)}
-                        disabled={windows.length >= 6}
-                      >
-                        {windows.length ? "Add hours" : "Set hours"}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+          <WeeklyHoursEditor draft={draft} problems={problems} onChange={change} />
         </Card.Body>
         {!dirty ? <Card.Footer className="flex-col items-stretch sm:flex-row sm:items-center">
           <span className="mr-auto text-caption text-text-muted">
@@ -392,13 +297,14 @@ export function CoachSchedule({
           </span>
         </Card.Header>
         <Card.Body className="space-y-3">
-          {upcoming.length ? upcoming.map((booking) => (
+          {upcoming.length ? upcoming.map((booking, index) => (
             <BookingCard
               key={booking.id}
               booking={booking}
               primaryTimeZone={bookingTimeZone}
               showStudent
-              calendarSummary={`Coaching session with ${booking.studentName}`}
+              viewer={{ role: "coach", coachName: data.coach.name }}
+              digestOpen={index === 0}
               onCancel={() => setCancelBooking(booking)}
             />
           )) : (
@@ -408,6 +314,7 @@ export function CoachSchedule({
               body="Published openings will appear here after a student books one."
             />
           )}
+          <PastSessions viewer="coach" timeZone={bookingTimeZone} history={history} recent={sessions.past} />
         </Card.Body>
       </Card>
 
