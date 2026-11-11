@@ -61,10 +61,11 @@ def settle(app):
 
 def assert_full_width(controls, container):
     for control in controls:
-        assert control.width() >= control.sizeHint().width(), control.text()
+        label = control.metaObject().className()
+        assert control.width() >= control.sizeHint().width(), label
         position = control.mapTo(container, QtCore.QPoint())
-        assert position.x() >= 0, control.text()
-        assert position.x() + control.width() <= container.width(), control.text()
+        assert position.x() >= 0, label
+        assert position.x() + control.width() <= container.width(), label
 
 
 def close_page(host, page, app):
