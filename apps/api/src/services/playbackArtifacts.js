@@ -1,7 +1,7 @@
 "use strict";
 const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 
-const { createHash, createHmac } = require("crypto");
+const { createHash, createHmac, randomUUID } = require("crypto");
 const { PutObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { validateManifest, validateSegment, MAX_SEGMENT_BYTES, MAX_MANIFEST_BYTES, SHA } = require("../validation/playbackArtifact");
@@ -145,15 +145,24 @@ class PlaybackArtifactsService {
       const body = Buffer.from(JSON.stringify(manifest));
       const artifactId = digest(body);
       const pending = game.playbackUpload;
-      const version = pending?.artifactId === artifactId ? this.storageVersion(pending)
-        : this.keySecret ? OPAQUE_STORAGE : LEGACY_STORAGE;
+      const sameArtifact = pending?.artifactId === artifactId;
+      const version = sameArtifact ? this.storageVersion(pending) : this.keySecret ? OPAQUE_STORAGE : LEGACY_STORAGE;
       const job = getPlaybackJob(userId, gameId);
-      const requestId = job && ["queued", "processing", "uploading"].includes(job.status) ? job.requestId : undefined;
-      const reserved = await this.games.updateOne({ userId, gameId, ...LIVE_GAME_MATCH }, {
-        $set: { playbackUpload: { artifactId, preparedAt: new Date(),
+      const activeJob = job && ["queued", "processing", "uploading"].includes(job.status);
+      // A retry can land on a peer that has no in-memory job. Preserve the
+      // request already bound to these bytes unless this process knows its status.
+      const requestId = activeJob ? job.requestId : !job && sameArtifact ? pending.requestId : undefined;
+      const reserved = await this.games.updateOne({
+        userId, gameId, ...LIVE_GAME_MATCH,
+        playbackUpload: pending === undefined ? { $exists: false } : { $eq: pending },
+      }, {
+        $set: { playbackUpload: { artifactId, generationId: randomUUID(), preparedAt: new Date(),
           ...(version === OPAQUE_STORAGE ? { storageVersion: version } : {}), ...(requestId ? { requestId } : {}) } },
       });
-      if (reserved.matchedCount !== 1) throw error(404, "game_not_found");
+      if (reserved.matchedCount !== 1) {
+        await this.owned(userId, gameId);
+        throw error(503, "playback_artifact_busy");
+      }
       await this.put(this.key(userId, gameId, artifactId, "manifest.json", version), body);
       await this.stillOwned(userId, gameId, artifactId, version);
       return { ok: true, artifactId };
@@ -196,11 +205,13 @@ class PlaybackArtifactsService {
       }
       const requestId = typeof marker.requestId === "string" ? marker.requestId : null;
       const completed = { artifactId, replaySha256: m.replaySha256, segmentCount: m.segments.length, storedAt: new Date(),
+        ...(marker.generationId ? { generationId: marker.generationId } : {}),
         ...(version === OPAQUE_STORAGE ? { storageVersion: version } : {}), ...(requestId ? { requestId } : {}) };
       const pending = path === "playbackUpload";
       const result = await this.games.updateOne({
-        userId, gameId, ...LIVE_GAME_MATCH, [`${path}.artifactId`]: artifactId,
-        [`${path}.storageVersion`]: marker.storageVersion ?? { $exists: false },
+        // Legacy markers have no generationId. Match the whole stored marker
+        // in both layouts, including the reservation's request and timestamp.
+        userId, gameId, ...LIVE_GAME_MATCH, [path]: { $eq: marker },
         ...(!pending ? { "playbackUpload.artifactId": { $ne: artifactId } } : {}),
       }, { $set: { playbackArtifact: completed }, ...(pending ? { $unset: { playbackUpload: "" } } : {}) });
       const response = { ok: true, artifactId, segmentCount: m.segments.length };
@@ -208,6 +219,12 @@ class PlaybackArtifactsService {
         const current = await this.stillOwned(userId, gameId, artifactId, version);
         const published = current.playbackArtifact;
         if (published?.artifactId === artifactId && this.storageVersion(published) === version) return response;
+        const newer = current.playbackUpload;
+        if (newer?.artifactId === artifactId && this.storageVersion(newer) === version) {
+          // The agent already retries this code in place. The next attempt
+          // reads the current reservation and attributes its own notification.
+          throw error(503, "playback_artifact_busy");
+        }
         throw error(409, "playback_artifact_superseded");
       }
       if (requestId && this.notifications) {

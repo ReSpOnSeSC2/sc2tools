@@ -115,7 +115,7 @@ function versionedStorage(games) {
     keySecret: Buffer.alloc(32, 41), signer: /** @type {any} */ (signer) };
   const opaque = new PlaybackArtifactsService(options);
   const replica = new PlaybackArtifactsService(options);
-  return { legacy, opaque, replica, signer, objects };
+  return { legacy, opaque, replica, signer, objects, client };
 }
 
 test("legacy and opaque generations with the same ID remain readable and are deleted by owner", async () => {
@@ -179,6 +179,76 @@ test("legacy and opaque generations with the same ID remain readable and are del
     await db.close();
     await mongo.stop();
   }
+});
+
+/** @param {ReturnType<typeof setup>["client"]} client */
+function holdNextHead(client) {
+  let markStarted = () => {};
+  let release = () => {};
+  const started = new Promise(resolve => { markStarted = () => resolve(undefined); });
+  const wait = new Promise(resolve => { release = () => resolve(undefined); });
+  const send = client.send.getMockImplementation();
+  if (!send) throw new Error("Missing S3 test transport");
+  let held = false;
+  client.send.mockImplementation(async command => {
+    if (!held && command.constructor.name === "HeadObjectCommand") {
+      held = true;
+      markStarted();
+      await wait;
+    }
+    return send(command);
+  });
+  return { started, release };
+}
+
+test.each(["pending", "published"])("a stale %s completion leaves a newer same-content generation intact", async state => {
+  const { MongoMemoryServer } = require("mongodb-memory-server");
+  const { connect } = require("../src/db/connect");
+  const { NotificationsService } = require("../src/services/notifications");
+  const { startPlaybackJob, updatePlaybackJob } = require("../src/services/replayPlaybackJobs");
+  const mongo = await MongoMemoryServer.create();
+  const db = await connect({ uri: mongo.getUri(), dbName: "playback_generation_test" });
+  try {
+    const { opaque, replica, client } = versionedStorage(db.games);
+    const notifications = new NotificationsService(db);
+    const notify = jest.spyOn(notifications, "notify");
+    opaque.notifications = replica.notifications = notifications;
+    const userId = `generation-${state}`, gameId = "same-game";
+    const query = { userId, gameId };
+    await db.users.insertOne({ userId });
+    await db.games.insertOne(query);
+    const first = startPlaybackJob(userId, gameId).job;
+    const { manifest, body } = fixture();
+    const { artifactId } = await opaque.prepare(userId, gameId, manifest);
+    await opaque.upload(userId, gameId, artifactId, 0, body);
+    if (state === "published") await opaque.complete(userId, gameId, artifactId);
+    const oldField = state === "published" ? "playbackArtifact" : "playbackUpload";
+    await db.games.updateOne(query, { $unset: { [`${oldField}.generationId`]: "" } });
+    notify.mockClear();
+
+    const hold = holdNextHead(client);
+    const completion = { ok: true, artifactId, segmentCount: 1 };
+    const stale = opaque.complete(userId, gameId, artifactId);
+    const result = state === "published" ? expect(stale).resolves.toEqual(completion)
+      : expect(stale).rejects.toMatchObject({ status: 503, code: "playback_artifact_busy" });
+    let next;
+    try {
+      await hold.started;
+      updatePlaybackJob(userId, gameId, first.requestId, { status: "failed" });
+      next = startPlaybackJob(userId, gameId).job;
+      await replica.prepare(userId, gameId, manifest);
+      if (state === "published") await replica.complete(userId, gameId, artifactId);
+    } finally { hold.release(); }
+    await result;
+    if (state === "pending") {
+      expect((await db.games.findOne(query))?.playbackUpload).toMatchObject({ artifactId, requestId: next.requestId });
+      expect(notify).not.toHaveBeenCalled();
+      await expect(opaque.complete(userId, gameId, artifactId)).resolves.toEqual(completion);
+    }
+    expect((await db.games.findOne(query))?.playbackArtifact).toMatchObject({ artifactId, requestId: next.requestId });
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith(userId, expect.objectContaining({ eventKey: `playback_ready:${gameId}:${next.requestId}` }));
+  } finally { await db.close(); await mongo.stop(); }
 });
 
 test("bounded read and write lanes reject excess work immediately", async () => {
