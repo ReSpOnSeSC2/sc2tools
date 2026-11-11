@@ -35,7 +35,7 @@ import { withOverlayDemo } from "../OverlayDemoBoundary";
  * Settings live preview so the preview is pixel-honest.
  */
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Socket } from "socket.io-client";
 import { useTwitchRewardSpeech } from "@/lib/multichat/useTwitchRewardSpeech";
 import { useOverlayPreview } from "@/lib/overlayPreviewContext";
@@ -316,7 +316,7 @@ function ConnectedMultiChatWidget({
   rewardSocket,
 }: {
   token: string;
-  rewardSocket?: RefObject<Socket | null>;
+  rewardSocket?: Socket | null;
   /** Shared overlay payload — supplies Test-fire flag and sample score. */
   live?: LiveGamePayload | null;
   /** Authoritative cloud session aggregate for the optional score header. */
