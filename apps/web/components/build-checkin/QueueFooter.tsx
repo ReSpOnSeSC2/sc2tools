@@ -23,19 +23,23 @@ export function QueueFooter({
   count,
   disabled,
   suggestedCount,
+  retryCount,
   progress,
   onClose,
   onDismissed,
   onConfirmAll,
+  onRetry,
 }: {
   count: number;
   disabled: boolean;
   /** Games still waiting that carry a suggestion. */
   suggestedCount: number;
+  retryCount: number;
   progress: ConfirmAllProgress;
   onClose: () => void;
   onDismissed: () => void;
   onConfirmAll: () => void;
+  onRetry: () => void;
 }) {
   const { getToken } = useAuth();
   const toastContext = useToastOptional();
@@ -138,8 +142,8 @@ export function QueueFooter({
       )}
       <ConfirmAllSummary
         progress={progress}
-        remaining={suggestedCount}
-        onRetry={onConfirmAll}
+        remaining={disabled ? 0 : retryCount}
+        onRetry={onRetry}
       />
       {error ? (
         <p role="alert" className="w-full text-right text-caption text-danger">
