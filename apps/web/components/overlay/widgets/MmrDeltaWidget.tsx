@@ -4,8 +4,8 @@ import type { LiveGamePayload } from "../types";
 import { Dim, WidgetFooter, WidgetHeader, WidgetShell } from "../WidgetShell";
 
 export function MmrDeltaWidget({ live }: { live: LiveGamePayload | null }) {
-  if (!live || typeof live.mmrDelta !== "number") return null;
-  const positive = live.mmrDelta >= 0;
+  if (!live || typeof live.mmrChangeBetweenStarts !== "number") return null;
+  const positive = live.mmrChangeBetweenStarts >= 0;
   return (
     <WidgetShell
       slot="top-right-mmr"
@@ -15,7 +15,7 @@ export function MmrDeltaWidget({ live }: { live: LiveGamePayload | null }) {
       width={300}
     >
       <WidgetHeader>
-        <Dim>MMR</Dim>
+        <Dim>MMR between game starts</Dim>
         <span
           style={{
             fontSize: 28,
@@ -28,12 +28,12 @@ export function MmrDeltaWidget({ live }: { live: LiveGamePayload | null }) {
           }}
         >
           {positive ? "+" : ""}
-          {live.mmrDelta}
+          {live.mmrChangeBetweenStarts}
         </span>
       </WidgetHeader>
       {typeof live.myMmr === "number" && (
         <WidgetFooter>
-          <Dim>now</Dim>
+          <Dim>Latest starting MMR</Dim>
           <span style={{ fontVariantNumeric: "tabular-nums" }}>{live.myMmr}</span>
         </WidgetFooter>
       )}

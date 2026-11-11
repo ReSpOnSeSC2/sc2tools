@@ -62,7 +62,7 @@ test("heartbeat receipts require device auth, stay owner scoped and are advisory
 test.each(["overlay_rotation_pending", "overlay_token_resolve_busy", "invalid_overlay_token"])("a raced %s clip credential cannot suppress a later healthy game moment", async code => {
   const { emitOverlayLive } = require("../src/routes/games");
   const recordMoment = jest.fn(async token => { if (token === "raced") throw Object.assign(new Error(code), { code }); });
-  await emitOverlayLive({ to: () => ({ emit: jest.fn() }) }, { buildFromGame: async () => ({ result: "win", mmrDelta: 50, gameKey: "game" }) },
+  await emitOverlayLive({ to: () => ({ emit: jest.fn() }) }, { buildFromGame: async () => ({ result: "win", durationSec: 1300, gameKey: "game" }) },
     { list: async () => [{ token: "raced" }, { token: "healthy" }] }, "owner", { gameId: "game" }, null,
     { settlePrediction: async () => {}, recordMoment });
   expect(recordMoment.mock.calls.map(([token]) => token)).toEqual(["raced", "healthy"]);

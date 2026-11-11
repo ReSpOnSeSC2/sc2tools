@@ -15,7 +15,7 @@ vi.mock("socket.io-client", () => ({ io: (_url: string, options: { auth: Record<
 vi.mock("@/lib/clientApi", () => ({ API_BASE: "http://test.invalid" }));
 vi.mock("@/lib/timeseries", () => ({ clientTimezone: () => "UTC" }));
 vi.mock("@/components/overlay/useVoiceReadout", () => ({ useVoiceReadout: () => ({ needsGesture: false }) }));
-vi.mock("@/components/overlay/widgets/MmrDeltaWidget", () => ({ MmrDeltaWidget: ({ live }: { live: { mmrDelta?: number } | null }) => live?.mmrDelta != null ? <span data-testid="rating-card">Rating change</span> : null }));
+vi.mock("@/components/overlay/widgets/MmrDeltaWidget", () => ({ MmrDeltaWidget: ({ live }: { live: { mmrChangeBetweenStarts?: number } | null }) => live?.mmrChangeBetweenStarts != null ? <span data-testid="rating-card">Rating change</span> : null }));
 vi.mock("@/components/overlay/scenes/SC2BackdropScene", () => ({
   SC2BackdropScene: ({ accent }: { accent: string }) => <span data-testid="scene-accent">{accent}</span>,
   accentForRace: () => "#a855f7", DEFAULT_BACKDROP_ACCENT: "#3ec0c7", VARIANT_LAYOUT: { "between-games": "frame" },
@@ -29,7 +29,7 @@ const config = (socket: Socket, duration = 45, revision = 1, accent = "#abcdef")
   socket.fire("overlay:multichat", { gameWidgetsPaused: false });
   socket.fire("overlay:config", { enabledWidgets: ["mmr-delta"], profile: profile(duration, accent), profileRevision: revision });
 });
-const live = (socket: Socket, extra = {}) => act(() => socket.fire("overlay:live", { gameKey: "new-game", mmrDelta: 18, oppName: "Synthetic", ...extra }));
+const live = (socket: Socket, extra = {}) => act(() => socket.fire("overlay:live", { gameKey: "new-game", mmrChangeBetweenStarts: 18, oppName: "Synthetic", ...extra }));
 const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
 const accent = (container: HTMLElement) => container.querySelector<HTMLElement>('[style*="--ov-accent"]')?.style.getPropertyValue("--ov-accent") || "";
 beforeEach(() => { sockets.length = 0; authPackets.length = 0; window.history.replaceState(null, "", "/overlay/one"); vi.useFakeTimers(); vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false })); });

@@ -352,7 +352,7 @@ const SAMPLE_LIVE: LiveGamePayload = {
   matchup: "PvZ",
   map: "Alcyone LE",
   durationSec: 754,
-  mmrDelta: 18,
+  mmrChangeBetweenStarts: 18,
   myMmr: 4211,
 };
 
