@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Coaching Content Studio
+
+- Create guided notes, voice memos, videos, annotated screenshots, replay
+  feedback, and practice PDFs on student shelves. Content Studio keeps its
+  own revision-checked backup and restore history.
+
 ### Coaching Locker shelf
 
 - Open the React Locker Shelf to review student feedback, manage reusable

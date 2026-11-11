@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState, type ComponentType, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
@@ -19,8 +19,8 @@ const FILE_HINTS: Partial<Record<StudioKind, string>> = {
   voice: "Audio up to 2.5 MiB", video: "MP4 or WebM up to 6 MiB", replay: "SC2Replay up to 900 KiB", pdf: "PDF up to 4 MiB",
 };
 
-export function LockerContentStudioEditor({ kind, studentName, studentUserId, busy, revisionChanged, targetUnavailable = false, onReviewLatest, onClose, onAdd, Annotation }: {
-  kind: StudioKind; studentName: string; studentUserId?: string; busy: boolean; revisionChanged: boolean;
+export function LockerContentStudioEditor({ kind, studentName, studentUserId, busy, retryNotice, revisionChanged, targetUnavailable = false, onReviewLatest, onClose, onAdd, Annotation }: {
+  kind: StudioKind; studentName: string; studentUserId?: string; busy: boolean; retryNotice?: ReactNode; revisionChanged: boolean;
   targetUnavailable?: boolean;
   onReviewLatest: () => void; onClose: () => void; onAdd: (draft: StudioDraft) => Promise<boolean>;
   Annotation: ComponentType<StudioAnnotationProps>;
@@ -66,7 +66,7 @@ export function LockerContentStudioEditor({ kind, studentName, studentUserId, bu
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving.current || working || recording || chooser || revisionChanged || targetUnavailable) return;
+    if (saving.current || working || recording || chooser || retryNotice || revisionChanged || targetUnavailable) return;
     saving.current = true; setSubmitting(true); setError("");
     try {
       const draft = await validateStudioDraft({ kind, title, notes, file, link, replay: replay ? shelfReplayContext(replay) : undefined });
@@ -118,13 +118,14 @@ export function LockerContentStudioEditor({ kind, studentName, studentUserId, bu
       <Field label={kind === "notes" ? "Session notes" : "Coaching note"} required={kind === "notes"}>
         <textarea className={TEXTAREA} rows={5} value={notes} maxLength={5000} disabled={working} onChange={event => setNotes(event.target.value)} />
       </Field>
+      {retryNotice}
       {targetUnavailable ? <p role="alert" className="text-caption text-danger">This student is no longer available. You can copy your draft before closing.</p> : null}
-      {revisionChanged && !targetUnavailable ? <div className="space-y-2" role="status"><p className="text-caption text-text-muted">The shelf changed while you were editing. Review the shelf before adding your draft to the latest version.</p>
+      {revisionChanged && !targetUnavailable && !retryNotice ? <div className="space-y-2" role="status"><p className="text-caption text-text-muted">The shelf changed while you were editing. Review the shelf before adding your draft to the latest version.</p>
         <Button type="button" size="sm" variant="secondary" disabled={working} onClick={onReviewLatest}>Use the latest shelf revision</Button></div> : null}
       {error ? <p role="alert" className="text-caption text-danger">{error}</p> : null}
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="secondary" disabled={working} onClick={onClose}>Cancel</Button>
-        <Button type="submit" disabled={working || recording || !!chooser || revisionChanged || targetUnavailable}>{working ? "Adding…" : "Add to shelf"}</Button>
+        <Button type="submit" disabled={working || recording || !!chooser || !!retryNotice || revisionChanged || targetUnavailable}>{working ? "Adding…" : "Add to shelf"}</Button>
       </div>
     </form>
   </Modal>;

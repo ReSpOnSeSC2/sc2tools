@@ -7,9 +7,10 @@ import { useToast } from "@/components/ui/Toast";
 import { confirmLockerBackup, loadLockerBackup, stageLockerBackup } from "./lockerBackup";
 import type { LockerDocument, LockerState } from "./lockerRosterModel";
 
-export function useLockerView(accountId: string, view: "roster" | "shelf" | "worksheets", role: "admin" | "coach" | "student", memberId: string | null) {
+export function useLockerView(accountId: string, view: "roster" | "shelf" | "content-studio" | "worksheets", role: "admin" | "coach" | "student", memberId: string | null) {
+  const mode = view === "content-studio" ? "shelf" : view;
   const scope = useMemo(() => [accountId, view + ":" + role + ":" + (memberId ?? "")] as const, [accountId, view, role, memberId]);
-  const document = useApi<LockerDocument>(`/v1/coaching/state?${view}=1`, {
+  const document = useApi<LockerDocument>(`/v1/coaching/state?${mode}=1`, {
     revalidateOnFocus: true,
     keepPreviousData: false,
   });
