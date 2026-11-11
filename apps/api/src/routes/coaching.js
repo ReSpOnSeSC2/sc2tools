@@ -6,7 +6,7 @@ const { parseFilters } = require("../util/parseQuery");
 const { REGION_LABELS } = require("../util/regionFromToonHandle");
 const { ASSIGNMENT_STATES } = require("../services/coachingAssignmentState");
 const { bookingDigestRoute, calendarRoute } = require("./coachingSessions");
-const { mergeWorksheetWrite, studentWorksheetRead } = require("../services/coachingWorksheetState");
+const { mergeClassicStudentWorksheets, mergeWorksheetWrite, studentWorksheetRead } = require("../services/coachingWorksheetState");
 const WORKSHEET_CONFLICT = Object.freeze({ code: "conflict", message: "The Locker changed. Reload before editing." });
 
 // Whole-state payloads carry embedded media (voice memos, images,
@@ -126,7 +126,7 @@ function buildCoachingRouter(deps) {
       if (cr.role === "none" || !lockerRosterAllowed(req, auth, cr)) { coachingNotFound(res); return; }
       const { state, rev } = await deps.coaching.getDoc();
       if (worksheets && cr.rev !== rev) { res.status(409).json({ error: WORKSHEET_CONFLICT }); return; }
-      res.json({ rev, scoped: cr.role !== "admin", state: scopeLockerState(worksheets ? studentWorksheetRead(state, cr) : state, cr) });
+      res.json({ rev, scoped: cr.role !== "admin", state: scopeLockerState(state, cr) });
     } catch (err) {
       next(err);
     }
@@ -240,7 +240,7 @@ function buildCoachingRouter(deps) {
       if (worksheets) {
         if (cr.rev !== current.rev) { res.status(409).json({ error: WORKSHEET_CONFLICT }); return; }
         if (rev !== current.rev) {
-          res.status(409).json({ error: WORKSHEET_CONFLICT, rev: current.rev, state: scopeLockerState(studentWorksheetRead(current.state, cr), cr) });
+          res.status(409).json({ error: WORKSHEET_CONFLICT, rev: current.rev, state: scopeLockerState(current.state, cr) });
           return;
         }
         toWrite = mergeWorksheetWrite(current.state, incoming, cr);
@@ -714,7 +714,10 @@ function mergeStudentWrite(serverState, incoming, studentId) {
   if (!mineIncoming) return null;
   const students = /** @type {any[]} */ (serverState.students || []).map((s) => {
     if (!s || s.id !== studentId) return s;
-    return { ...mineIncoming, coachId: s.coachId, userId: s.userId };
+    const { worksheets, ...changes } = mineIncoming;
+    return { ...changes, coachId: s.coachId, userId: s.userId,
+      ...(s.worksheets === undefined ? {} : { worksheets: mergeClassicStudentWorksheets(s.worksheets, worksheets) }),
+    };
   });
   // New assets referenced by the student's record (e.g. uploaded
   // replays) ride along; existing assets are never overwritten.
@@ -776,7 +779,7 @@ function mergeCoachWrite(serverState, incoming, coachId) {
 function scopeLockerState(state, actor) {
   if (actor.role === "coach") return scopeCoachState(state, actor.coachId);
   if (actor.role !== "student") return state;
-  const student = /** @type {any[]} */ (state.students || []).find((row) => row?.id === actor.studentId);
+  const student = studentWorksheetRead(state, actor).students[0];
   return {
     coach: state.coach,
     coaches: /** @type {any[]} */ (state.coaches || []).map((coach) => ({ id: coach.id, name: coach.name })),

@@ -29,6 +29,7 @@ vi.mock("@/lib/clientApi", () => ({
 }));
 vi.mock("./LockerRoster", () => ({ default: () => <div data-testid="locker-roster">Roster content</div> }));
 vi.mock("./LockerShelf", () => ({ default: ({ viewerRole }: { viewerRole: string }) => <div data-testid="locker-shelf">{viewerRole}</div> }));
+vi.mock("./LockerWorksheets", () => ({ default: ({ viewerRole }: { viewerRole: string }) => <div data-testid="locker-worksheets">{viewerRole}</div> }));
 vi.mock("./LockerHost", () => ({
   default: () => <div data-testid="locker-host">Locker content</div>,
 }));
@@ -107,6 +108,15 @@ describe("CoachingWorkspace", () => {
     expect((await screen.findByTestId("locker-shelf")).textContent).toBe("student");
     expect(screen.queryByTestId("locker-host")).toBeNull();
     expect(screen.queryByRole("link", { name: "Open Locker roster" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Classic Locker" }).getAttribute("href")).toBe("/coaching");
+  });
+
+  it.each(["coach", "student"])("opens a direct %s Worksheets link without loading Classic", async role => {
+    harness.search = "locker=worksheets"; harness.role = role;
+    render(<CoachingWorkspace />);
+    expect((await screen.findByTestId("locker-worksheets")).textContent).toBe(role);
+    expect(screen.queryByTestId("locker-host")).toBeNull();
+    expect(screen.queryByTestId("locker-shelf")).toBeNull();
     expect(screen.getByRole("link", { name: "Classic Locker" }).getAttribute("href")).toBe("/coaching");
   });
 

@@ -18,9 +18,10 @@ const safeId = (/** @type {unknown} */ value) => typeof value === "string" && ID
 function studentWorksheetRead(state, actor) {
   if (actor.role !== "student") return state;
   const student = rows(state.students).find(item => item?.id === actor.studentId);
-  return { ...state, students: student ? [{ ...student,
+  if (!student || !Array.isArray(student.worksheets)) return { ...state, students: student ? [student] : [] };
+  return { ...state, students: [{ ...student,
     worksheets: rows(student.worksheets).filter(item => item?.state === "sent" || item?.state === "submitted"),
-  }] : [] };
+  }] };
 }
 
 /** @param {Row|null} incoming @param {Row|undefined} [previous] */
@@ -60,7 +61,9 @@ function authorWorksheet(incoming, previous) {
   if (incoming.state === "sent" && (!incoming.title.trim() || !blocks.length || blocks.some(block => !block.q.trim()
     || block.ty === "mc" && (!("opts" in block) || !Array.isArray(block.opts)
       || block.opts.filter((/** @type {string} */ item) => item.trim()).length < 2)))) return null;
-  const { answers: _answers, submittedAt: _submittedAt, ...authorData } = incoming;
+  const authorData = { ...incoming };
+  delete authorData.answers;
+  delete authorData.submittedAt;
   return { ...(previous || authorData), id: incoming.id, title: incoming.title, blocks, state: incoming.state,
     answers: previous?.answers ?? {} };
 }
@@ -158,7 +161,8 @@ function studentWorksheetChange(student, candidate, worksheet, target) {
   const wanted = rows(candidate.submissions);
   if (worksheet.state === "submitted") {
     const wantedIds = new Set(wanted.map(item => item?.id));
-    const { submittedAt: _submittedAt, ...previous } = worksheet;
+    const previous = { ...worksheet };
+    delete previous.submittedAt;
     return { worksheet: { ...previous, state: "sent", answers: {} },
       submissions: submissions.filter(item => item?.build !== label || wantedIds.has(item.id)) };
   }
@@ -204,4 +208,19 @@ function mergeWorksheetWrite(state, incoming, actor) {
   return null;
 }
 
-module.exports = { mergeWorksheetWrite, studentWorksheetRead };
+/** Classic saves the complete student record. Retain coach drafts and
+ * sent prompts when the student sends their own worksheet answers.
+ * @param {unknown} previous @param {unknown} requested */
+function mergeClassicStudentWorksheets(previous, requested) {
+  if (!Array.isArray(previous)) return previous;
+  const incoming = new Map(rows(requested).filter(item => safeId(item?.id)).map(item => [item.id, item]));
+  return rows(previous).map(worksheet => {
+    if (worksheet?.state !== "sent") return worksheet;
+    const next = incoming.get(worksheet.id);
+    if (next?.state !== "submitted") return worksheet;
+    const parsed = worksheetAnswers(worksheet, next);
+    return parsed ? { ...worksheet, state: "submitted", answers: parsed.answers, submittedAt: new Date().toISOString() } : worksheet;
+  });
+}
+
+module.exports = { mergeClassicStudentWorksheets, mergeWorksheetWrite, studentWorksheetRead };

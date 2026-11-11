@@ -155,3 +155,17 @@ that write is still the latest change. **Download backup** exports the
 existing Locker JSON format for that role. Keep Classic available until the
 owner has completed one week of real Shelf use and checked old media, sharing,
 backup and restore.
+
+## React Worksheets preview
+
+Open **Locker → Open Worksheets** and choose the student. Start blank, copy
+a worksheet template, or plan around evidence, a decision, practice and proof.
+The guided plan stays in memory for the current visit. Review the actual
+questions before sending. Students only receive sent worksheets and can attach
+replays when they answer. Keep private coaching thoughts in the guided plan.
+
+The view takes a local backup before every write. Confirm that a student can
+submit a disposable worksheet with a replay and restore that submission while
+its revision is current. Repeat with a staff draft. Use **Classic Locker** if
+you need the previous workflow. Keep it available through one week of real
+Worksheets use and owner review.

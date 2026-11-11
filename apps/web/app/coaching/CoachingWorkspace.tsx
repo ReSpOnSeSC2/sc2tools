@@ -24,6 +24,10 @@ const LockerShelf = dynamic(() => import("./LockerShelf"), {
   loading: () => <p role="status" className="text-caption text-text-muted">Loading the Locker shelf…</p>,
 });
 
+const LockerWorksheets = dynamic(() => import("./LockerWorksheets"), {
+  loading: () => <p role="status" className="text-caption text-text-muted">Loading worksheets…</p>,
+});
+
 type CoachingMe = {
   role: "admin" | "coach" | "student" | "none";
   coachId: string | null;
@@ -50,6 +54,8 @@ export default function CoachingWorkspace() {
   const lockerView = searchParams.get("locker");
   const rosterOpen = manageLocker && routeView === "locker" && lockerView === "roster";
   const shelfOpen = routeView === "locker" && lockerView === "shelf";
+  const worksheetsOpen = routeView === "locker" && lockerView === "worksheets";
+  const modernLocker = rosterOpen || shelfOpen || worksheetsOpen;
   const [view, setView] = useState<WorkspaceView>(routeView);
   const [lockerActivated, setLockerActivated] = useState(routeView === "locker");
   const [classicActivated, setClassicActivated] = useState(false);
@@ -61,10 +67,10 @@ export default function CoachingWorkspace() {
     setView(routeView);
     if (routeView === "locker") {
       setLockerActivated(true);
-      if (workspaceRole && !rosterOpen && !shelfOpen) setClassicActivated(true);
+      if (workspaceRole && !modernLocker) setClassicActivated(true);
     }
     if (routeView === "sessions") setSessionsActivated(true);
-  }, [workspaceRole, rosterOpen, shelfOpen, routeView]);
+  }, [workspaceRole, modernLocker, routeView]);
 
   if (isLoading || (!data && !error)) {
     return <CoachingShellSkeleton />;
@@ -147,13 +153,15 @@ export default function CoachingWorkspace() {
       {lockerActivated ? (
         <Tabs.Content value="locker" keepMounted className="space-y-3">
           <nav className="flex flex-wrap items-center gap-x-4" aria-label="Locker views">
-            {rosterOpen || shelfOpen ? <Link href="/coaching" prefetch={false} className={LOCKER_LINK}>Classic Locker</Link> : null}
+            {modernLocker ? <Link href="/coaching" prefetch={false} className={LOCKER_LINK}>Classic Locker</Link> : null}
             {manageLocker && !rosterOpen ? <Link href="/coaching?locker=roster" prefetch={false} className={LOCKER_LINK}>Open Locker roster</Link> : null}
             {!shelfOpen ? <Link href="/coaching?locker=shelf" prefetch={false} className={LOCKER_LINK}>Open Locker shelf</Link> : null}
+            {!worksheetsOpen ? <Link href="/coaching?locker=worksheets" prefetch={false} className={LOCKER_LINK}>Open Worksheets</Link> : null}
           </nav>
           {rosterOpen && manageLocker && view === "locker" ? <LockerRoster viewerRole={workspaceRole} coachId={data.coachId} /> : null}
           {shelfOpen && view === "locker" ? <LockerShelf viewerRole={data.role} memberId={data.role === "student" ? data.studentId : data.coachId} /> : null}
-          {classicActivated ? <div hidden={view !== "locker" || rosterOpen || shelfOpen} inert={view !== "locker" || rosterOpen || shelfOpen}><LockerHost /></div> : null}
+          {worksheetsOpen && view === "locker" ? <LockerWorksheets viewerRole={data.role} memberId={data.role === "student" ? data.studentId : data.coachId} /> : null}
+          {classicActivated ? <div hidden={view !== "locker" || modernLocker} inert={view !== "locker" || modernLocker}><LockerHost /></div> : null}
         </Tabs.Content>
       ) : null}
       <Tabs.Content value="practice"><CoachingPractice role={data.role} /></Tabs.Content>

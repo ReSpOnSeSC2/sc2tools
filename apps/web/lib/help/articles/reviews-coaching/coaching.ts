@@ -16,6 +16,7 @@ const article: HelpArticle = {
     "student",
     "lesson",
     "locker",
+    "worksheet",
     "private coaching",
     "invite",
     "practice",
@@ -32,7 +33,7 @@ const article: HelpArticle = {
     "past sessions",
     "prep digest",
   ],
-  updated: "2026-11-10",
+  updated: "2026-11-11",
   order: 20,
   body: [
     {
@@ -61,6 +62,10 @@ const article: HelpArticle = {
         "**Coaches:** pick a student in the left rail, then use **Weekly focus**, **Performance**, **Worksheets**, **Builds**, **Shelf** and **Inbox**. The Inbox lists the games your student picked or sent for review. The Locker's **?** button reopens its walkthrough and its own help, including backups of the whole Locker.",
       ],
     },
+    { type: "heading", anchor: "worksheets", text: "Worksheets" },
+    { type: "paragraph", text: "In **Locker**, choose **Open Worksheets**. Coaches can start from a blank worksheet, choose a template or use **Guided planning**. Guided planning notes stay in the current visit. The student sees only the sent worksheet and their own answers. Use **Classic Locker** to switch back." },
+    { type: "paragraph", text: "Students can answer a sent worksheet and attach .SC2Replay files up to 900 KB each. Typed answers stay in the current browser tab until sent. Attachments must be selected again if you leave the editor before sending." },
+    { type: "paragraph", text: "Before a save, Worksheets backs up the current Locker state on this device. **Restore previous version** is available after a successful save while its revision is still current. **Download backup** exports the same JSON format as Classic Locker." },
     { type: "heading", anchor: "practice-sharing", text: "Practice sharing (the student's consent)" },
     {
       type: "paragraph",

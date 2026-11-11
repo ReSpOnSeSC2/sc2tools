@@ -70,9 +70,34 @@ test("react student reads and conflicts omit drafts while Classic remains availa
   expect(JSON.stringify(current.body)).not.toMatch(/Unpublished prompt|Other student private/);
   const conflict = await student.put(WORKSHEETS).send({ ...current.body, rev: 0 }).expect(409);
   expect(conflict.body.state).toEqual(current.body.state);
-  expect((await student.get(STATE).expect(200)).body.state.students[0].worksheets).toHaveLength(3);
+  expect((await student.get(STATE).expect(200)).body.state.students[0].worksheets.map(row => row.id)).toEqual(["sent-1", "completed-1"]);
   await app("student-1", "device").get(WORKSHEETS).expect(404);
+  await student.get(`${WORKSHEETS}&shelf=1`).expect(404);
+  const previousRole = jest.spyOn(coaching, "roleFor").mockResolvedValueOnce({ role: "student", studentId: "student-a", rev: 0 });
+  try {
+    const retired = await student.get(WORKSHEETS).expect(409);
+    expect(retired.body).toEqual({ error: { code: "conflict", message: "The Locker changed. Reload before editing." } });
+  } finally { previousRole.mockRestore(); }
   await app("no-role").get(WORKSHEETS).expect(404);
+});
+
+test("Classic can submit a worksheet without erasing or exposing coach drafts", async () => {
+  const student = app("student-1");
+  const before = (await student.get(STATE).expect(200)).body;
+  const own = before.state.students[0];
+  own.worksheets[0].state = "submitted";
+  own.worksheets[0].blocks[0].q = "Ignore the forged question";
+  own.worksheets[0].answers = { choice: 0, long: "Classic student answer" };
+  own.worksheets[1].answers.long = "Ignore the forged prior answer";
+  own.submissions.push(attachment);
+  await student.put(STATE).send(before).expect(200);
+  const saved = (await coaching.getDoc()).state;
+  const expected = fixture();
+  expected.students[0].worksheets[1] = { ...sent, state: "submitted", answers: { choice: 0, long: "Classic student answer" },
+    submittedAt: saved.students[0].worksheets[1].submittedAt };
+  expected.students[0].submissions.push(attachment);
+  expect(saved).toEqual(expected);
+  expect(JSON.stringify((await student.get(STATE).expect(200)).body)).not.toContain("Unpublished prompt");
 });
 
 test("staff draft CAS preserves other state and authoritative student answers and can restore", async () => {
