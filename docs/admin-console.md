@@ -301,8 +301,23 @@ for the views, the nightly job, Copy as test fixture and its guardrails.
 
 ## Global Trends
 
-Use a narrow range and relevant filters before opening expensive platform-wide
-views. Read the sample size alongside a rate; a small cohort can move sharply.
+Player population controls choose whose uploaded perspectives contribute.
+Use the directory, races played and each player's latest available rating to
+define the cohort. Game filters narrow the individual games by date, matchup,
+opponent rating and other recorded details. If both players uploaded the same
+match, both perspectives count. MMR changes and momentum follow each player's
+history separately. Read the sample size alongside a rate.
+
+The filters share one pending state. Choose **Apply** or press Enter in a
+filter field to update the charts and the address together. **Reset** restores
+the applied settings. Remove an active chip above the charts to apply just that
+removal, or choose **Reset all** to clear every filter.
+
+Open **Views** to save, rename, apply or delete a private cohort. Built-in
+presets are available to every administrator. **Copy view link** shares the
+applied filters with another administrator. Links carry opaque player
+references and include up to 50 selected or excluded players. Save larger
+selections as a private view.
 
 ## Guides
 

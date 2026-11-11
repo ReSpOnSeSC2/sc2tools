@@ -9,6 +9,7 @@ const { stampVersion } = require("../db/schemaVersioning");
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
+const { ADMIN_TREND_VIEWS, sanitizeAdminTrendViews } = require("../util/adminTrendViews");
 const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("./twitchAutomationPolicy");
 const { PLAYER_SLUG_RE, PLAYER_UUID_RE, createPlayerSlug } = require("../util/publicPlayerConfig");
 const { ACTIVATION_QUERY_MAX_TIME_MS, activationTimestamp, activationUnavailable } = require("./activation");
@@ -799,6 +800,7 @@ class UsersService {
       { projection: { _id: 0, [`preferences.${type}`]: 1 } },
     );
     const prefs = (doc && doc.preferences && doc.preferences[type]) || {};
+    if (type === ADMIN_TREND_VIEWS) return sanitizeAdminTrendViews(prefs);
     return type === "analyzerViews" ? sanitizeAnalyzerViews(prefs) : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(prefs)
       : type === "chatCommands" ? sanitizeChatCommands(prefs) : prefs;
   }
@@ -849,6 +851,7 @@ class UsersService {
    * @returns {Promise<Record<string, unknown>>}
    */
   async updatePreferences(userId, type, prefs) {
+    if (type === ADMIN_TREND_VIEWS) return this.updateAdminTrendViews(userId, prefs);
     if (type === "analyzerViews") prefs = sanitizeAnalyzerViews(prefs, true);
     if (type === TWITCH_PREF_TYPE) prefs = sanitizeTwitchAutomation(prefs, true);
     if (type === "multichat" && prefs.alerts && typeof prefs.alerts === "object") {
@@ -878,6 +881,23 @@ class UsersService {
       { $set: { [`preferences.${type}`]: prefs, ...(type === REPORTS_PREF_TYPE && prefs.stream === false ? { streamReportPublicEpoch: crypto.randomUUID() } : {}) } },
     );
     return prefs;
+  }
+
+  /** Compare and set the signed-in administrator's exact preference revision.
+   * @param {string} userId @param {Record<string,unknown>} input */
+  async updateAdminTrendViews(userId, input) {
+    const { revision, views } = sanitizeAdminTrendViews(input, true);
+    const field = `preferences.${ADMIN_TREND_VIEWS}`;
+    const revisionField = `${field}.revision`;
+    const next = { revision: revision + 1, views };
+    const saved = await this.db.users.updateOne({
+      userId, _gdprMutation: { $exists: false },
+      ...(revision === 0 ? { $or: [{ [revisionField]: 0 }, { [revisionField]: { $exists: false } }] } : { [revisionField]: revision }),
+    }, { $set: { [field]: next } });
+    if (saved.matchedCount !== 1) throw Object.assign(new Error("Saved views changed. Reload them before editing."), {
+      status: 409, code: "admin_trend_views_changed",
+    });
+    return next;
   }
 
   /**
