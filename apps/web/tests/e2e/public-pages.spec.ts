@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { checkAccessibility } from "./accessibility-check";
+import { contrastRatio } from "./contrast";
 
 /**
  * Public-page responsive smoke, run at 360 / 768 / 1280 via the
@@ -212,20 +213,6 @@ if (process.env.NEXT_PUBLIC_INSTANT_IMPORT === "all") {
       `comparison table overflows its box: ${box.scrollWidth}px > ${box.clientWidth}px`,
     ).toBeLessThanOrEqual(box.clientWidth + 1);
   });
-}
-
-/** WCAG 2.x relative luminance of a computed `rgb()` / `rgba()` colour. */
-function luminance(color: string): number {
-  const [r, g, b] = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((channel) => {
-    const value = Number(channel) / 255;
-    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-function contrastRatio(a: string, b: string): number {
-  const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (lighter + 0.05) / (darker + 0.05);
 }
 
 async function paint(target: Locator): Promise<{ color: string; background: string }> {
