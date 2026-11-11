@@ -1,4 +1,6 @@
 "use client";
+
+import { OverlayPanel } from "../OverlayPanel";
 import { withOverlayDemo } from "../OverlayDemoBoundary";
 import fixtures from "@/lib/overlaySamples.json";
 
@@ -183,7 +185,7 @@ function WindowCard({
 }) {
   const winPct = tally.total > 0 ? Math.round((tally.win / tally.total) * 100) : 50;
   return (
-    <div className="oracle-card" style={cardStyle}>
+    <OverlayPanel className="oracle-card" style={cardStyle} accent="#9b6ef0" accentSize="4px" contentStyle={{ padding: "var(--ov-padding, 12px 14px)" }}>
       <div style={kickerStyle}>
         <span className="oracle-pulse">🔮</span> CRYSTAL BALL
       </div>
@@ -212,7 +214,7 @@ function WindowCard({
           {tally.loss} LOSS
         </span>
       </div>
-    </div>
+    </OverlayPanel>
   );
 }
 
@@ -225,7 +227,7 @@ function RevealCard({ settle }: { settle: Settle }) {
       : 0;
   const chatRight = tally.total > 0 && majority === result;
   return (
-    <div className="oracle-card" style={cardStyle}>
+    <OverlayPanel className="oracle-card" style={cardStyle} accent="#9b6ef0" accentSize="4px" contentStyle={{ padding: "var(--ov-padding, 12px 14px)" }}>
       <div style={kickerStyle}>🔮 THE ORACLE SPEAKS</div>
       <div style={titleStyle}>
         {settle.manual ? `Result: ${result.toUpperCase()} — resolved manually` : tally.total === 0
@@ -246,7 +248,7 @@ function RevealCard({ settle }: { settle: Settle }) {
           ))}
         </div>
       ) : null}
-    </div>
+    </OverlayPanel>
   );
 }
 
@@ -302,13 +304,8 @@ const cardStyle: CSSProperties = {
   width: "100%",
   minWidth: 250,
   maxWidth: 360,
-  background:
-    "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
   border: "1px solid rgba(150,110,240,0.4)",
-  borderLeft: "4px solid #9b6ef0",
-  borderRadius: "var(--ov-radius, 12px)",
   boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
-  padding: "12px 14px",
   color: "#e6e8ee",
 };
 

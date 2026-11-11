@@ -12,7 +12,8 @@
       "components/analyzer/explorer/ExplorerCharts.tsx",
       "components/instant/report/OfflineMacroChart.tsx",
       "lib/instant/reportCard.ts",
-      "lib/shareReportPalette.ts"
+      "lib/shareReportPalette.ts",
+      "lib/overlayRaceColors.ts"
     ]
   },
   "entries": [

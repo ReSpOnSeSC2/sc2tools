@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 /**
  * ChatPollWidget — live chat poll with viewer voting via chat.
  *
@@ -96,7 +98,7 @@ export function ChatPollWidget({
 
   return (
     <div style={frameStyle}>
-      <div style={cardStyle}>
+      <OverlayPanel style={cardStyle} contentStyle={{ padding: "var(--ov-padding, 14px 16px)" }}>
         <div style={headerRowStyle}>
           <span style={titleStyle}>
             CHAT POLL
@@ -161,7 +163,7 @@ export function ChatPollWidget({
               ) : null;
             })()
           : null}
-      </div>
+      </OverlayPanel>
     </div>
   );
 }
@@ -187,14 +189,8 @@ const cardStyle: CSSProperties = {
   width: "100%",
   minWidth: 260,
   maxWidth: 420,
-  background:
-    "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
-  border: "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))",
-  borderRadius: "var(--ov-radius, 12px)",
   boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
-  padding: "14px 16px",
   color: "#e6e8ee",
-  fontFamily: "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
 };
 
 const headerRowStyle: CSSProperties = {

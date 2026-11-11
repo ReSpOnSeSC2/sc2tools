@@ -13,6 +13,7 @@ export const HEX_ALLOWLIST = {
     "components/instant/report/OfflineMacroChart.tsx",
     "lib/instant/reportCard.ts",
     "lib/shareReportPalette.ts",
+    "lib/overlayRaceColors.ts",
   ],
 };
 

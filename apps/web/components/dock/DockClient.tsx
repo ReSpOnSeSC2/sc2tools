@@ -273,7 +273,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
   );
 
   const { active: markUndo, offer, undo } = useDockMarkUndo(token, studio.streamStartMs, postStudio);
-  const postStudioAction: DockPost = useCallback(async function sendStudioAction(patch, retry) {
+  const postStudioAction: DockPost = useCallback(async function sendStudioAction(patch: Parameters<DockPost>[0], retry?: Parameters<DockPost>[1]) {
     const previous = latestStudioRef.current?.state.streamStartMs;
     const saved = await postStudio(patch, retry ?? (() => sendStudioAction(patch)));
     if (saved && previous && previous !== saved.streamStartMs) {

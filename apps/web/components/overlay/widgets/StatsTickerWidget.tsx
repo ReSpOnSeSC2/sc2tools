@@ -1,4 +1,6 @@
 "use client";
+
+import { OverlayPanel } from "../OverlayPanel";
 import { withOverlayDemo } from "../OverlayDemoBoundary";
 import fixtures from "@/lib/overlaySamples.json";
 
@@ -243,7 +245,7 @@ function ConnectedStatsTickerWidget({
           .ticker-strip { animation: none; }
         }
       `}</style>
-      <div style={barStyle}>
+      <OverlayPanel scale={false} frame={false} style={barStyle}>
         <div style={badgeStyle}>LIVE</div>
         <div style={windowStyle}>
           <div className="ticker-strip" ref={stripRef}>
@@ -256,7 +258,7 @@ function ConnectedStatsTickerWidget({
             ))}
           </div>
         </div>
-      </div>
+      </OverlayPanel>
     </div>
   );
 }
@@ -375,7 +377,6 @@ const frameStyle: CSSProperties = {
   inset: 0,
   display: "flex",
   alignItems: "flex-end",
-  fontFamily: "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
 };
 
 const barStyle: CSSProperties = {

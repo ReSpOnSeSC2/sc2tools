@@ -62,6 +62,8 @@ test("hex colors use only explicit visualization exceptions", () => {
   assert.deepEqual(rules(source, "components/analyzer/charts/Example.tsx"), []);
   assert.equal(rules(source, "components/unrelated-chart/Example.tsx").length, 4);
   assert.deepEqual(rules(source, "lib/instant/reportCard.ts"), []);
+  assert.deepEqual(rules(source, "lib/overlayRaceColors.ts"), []);
+  assert.equal(rules(source, "lib/overlayRaceColorsExtra.ts").length, 4);
   assert.equal(rules(source, "lib/instant/reportSharing.ts").length, 4);
   assert.equal(rules(source, "lib/instant/reportCardExtra.ts").length, 4);
   assert.deepEqual(rules(`const anchors = ['#app', '#abcde', '#abcdefgh'];`), []);

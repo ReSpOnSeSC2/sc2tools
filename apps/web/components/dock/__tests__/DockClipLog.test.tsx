@@ -54,7 +54,7 @@ it("disables chapters without a stream mark or enough separated moments", () => 
 it("restores a mark once and stops offering an Undo after eight seconds or a newer change", async () => {
   vi.useFakeTimers();
   const post = vi.fn<DockPost>().mockResolvedValue({ ...DEFAULT_STUDIO_STATE, streamStartMs: start });
-  const view = renderHook(({ current }: { current: number | null }) => useDockMarkUndo("dock-token", current, post), { initialProps: { current: null } });
+  const view = renderHook(({ current }: { current: number | null }) => useDockMarkUndo("dock-token", current, post), { initialProps: { current: null as number | null } });
   act(() => view.result.current.offer(start, null, "clips"));
   await act(async () => view.result.current.undo());
   expect(post).toHaveBeenCalledWith({ streamMarkUndo: { previous: start, expected: null } });

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowLeft, ArrowRight, CheckCircle2, Layers3 } from "lucide-react";
 import { buttonClassName } from "@/components/ui/buttonStyles";
 import { LearnSectionNav } from "./LearnSectionNav";
-import { CrashCourse } from "./CrashCourse";
+import { StreamStudioCourse } from "./SetupStatus";
 import { WidgetExplorer } from "./WidgetExplorer";
 import { LearnTroubleshooting } from "./LearnTroubleshooting";
 
@@ -37,7 +37,7 @@ export function LearnPage() {
 
       <LearnSectionNav />
 
-      <CrashCourse />
+      <StreamStudioCourse />
 
       <section id="starter-setups" aria-labelledby="starter-setups-title" className="scroll-mt-28 pt-16 md:pt-24">
         <p className="kicker">Pick a starting point</p>
@@ -45,7 +45,7 @@ export function LearnPage() {
         <p className="mt-4 max-w-2xl text-body-lg text-text-muted">Choose a starter pack, review exactly what it enables in Settings, then add and test its Browser Sources.</p>
         <div className="mt-7 grid gap-5 lg:grid-cols-3">
           {STARTERS.map((starter) => (
-            <article key={starter.name} className="flex min-w-0 flex-col rounded-md border-2 border-line bg-bg-surface p-5 shadow-hard sm:p-6">
+            <article key={starter.id} id={`starter-${starter.id}`} className="scroll-mt-28 flex min-w-0 flex-col rounded-md border-2 border-line bg-bg-surface p-5 shadow-hard sm:p-6">
               <CheckCircle2 className="h-6 w-6 text-accent" aria-hidden />
               <h3 className="mt-4 font-display text-h3 font-bold text-text">{starter.name}</h3>
               <p className="mt-2 text-body text-text-muted">{starter.goal}</p>
