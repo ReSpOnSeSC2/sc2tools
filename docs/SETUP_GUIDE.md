@@ -20,6 +20,15 @@ For app-specific commands see the [API README](../apps/api/README.md), the
 [web README](../apps/web/README.md), and the
 [Windows packaging guide](../apps/agent/packaging/README.md).
 
+## All-in-one OBS layouts
+
+Open [Settings → Overlay → Theme → Layout](https://sc2tools.com/settings?tab=overlay#layout).
+Arrange widgets around the marked HUD areas and save the overlay display. The
+All-in-one source uses your landscape layout at 1920 × 1080. For a vertical
+scene, copy the separate private vertical URL from Layout and set the OBS
+Browser Source to 1080 × 1920. Verify both scenes off-air. Use **Reset layout to
+default** and save to restore the stock widget positions for that orientation.
+
 ## Environment variables
 
 Keep secrets in the relevant platform's environment store or a gitignored local

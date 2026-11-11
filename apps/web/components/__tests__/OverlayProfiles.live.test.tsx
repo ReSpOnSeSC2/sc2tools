@@ -15,12 +15,17 @@ vi.mock("socket.io-client", () => ({ io: (_url: string, options: { auth: Record<
 vi.mock("@/lib/clientApi", () => ({ API_BASE: "http://test.invalid" }));
 vi.mock("@/lib/timeseries", () => ({ clientTimezone: () => "UTC" }));
 vi.mock("@/components/overlay/useVoiceReadout", () => ({ useVoiceReadout: () => ({ needsGesture: false }) }));
-vi.mock("@/components/overlay/widgets/MmrDeltaWidget", () => ({ MmrDeltaWidget: ({ live }: { live: { mmrChangeBetweenStarts?: number } | null }) => live?.mmrChangeBetweenStarts != null ? <span data-testid="rating-card">Rating change</span> : null }));
+vi.mock("@/components/overlay/widgets/MmrDeltaWidget", async () => {
+  const { WidgetShell: Shell } = await import("../overlay/WidgetShell");
+  return { MmrDeltaWidget: ({ live }: { live: { mmrChangeBetweenStarts?: number } | null }) => live?.mmrChangeBetweenStarts != null ? <Shell><span data-testid="rating-card">Rating change</span></Shell> : null };
+});
 vi.mock("@/components/overlay/scenes/SC2BackdropScene", () => ({
   SC2BackdropScene: ({ accent }: { accent: string }) => <span data-testid="scene-accent">{accent}</span>,
   accentForRace: () => "#a855f7", DEFAULT_BACKDROP_ACCENT: "#3ec0c7", VARIANT_LAYOUT: { "between-games": "frame" },
 }));
 import { OverlayClient } from "../OverlayClient";
+import { WidgetShell } from "../overlay/WidgetShell";
+import { OverlayPlacement } from "../overlay/OverlayPlacement";
 import { OverlayWidgetClient } from "../OverlayWidgetClient";
 import { OverlaySceneClient } from "../overlay/scenes/OverlaySceneClient";
 
@@ -68,6 +73,39 @@ for (const surface of ["all-in-one", "widget"] as const) describe(`${surface} sa
     expect(accent(view.container)).toBe("");
     config(returned, 5, 2, "#654321"); expect(accent(view.container)).toBe("#654321");
   });
+});
+
+const landscape = { anchor: "top", xPct: 25, yPct: 8, scale: 1.25, zIndex: 3 } as const;
+const vertical = { anchor: "bottom", xPct: 73, yPct: 10, scale: 0.8, zIndex: 9 } as const;
+
+it.each(["landscape", "vertical", "widget"] as const)("applies only the selected composite canvas in %s", canvas => {
+  render(canvas === "widget" ? <OverlayWidgetClient token="one" widget="mmr-delta" /> : <OverlayClient token="one" canvas={canvas} />);
+  const socket = sockets[0];
+  const setLayout = (revision: number, layout: object, layoutVertical: object) => act(() => socket.fire("overlay:config", {
+    enabledWidgets: ["mmr-delta"], profileRevision: revision, profile: { ...profile(), layout, layoutVertical },
+  }));
+  act(() => socket.fire("overlay:multichat", { gameWidgetsPaused: false }));
+  setLayout(2, { "mmr-delta": landscape }, { "mmr-delta": vertical }); live(socket);
+  setLayout(1, {}, {});
+  const card = screen.getByTestId("rating-card").closest<HTMLElement>(".widget-shell");
+  const placement = canvas === "landscape" ? landscape : canvas === "vertical" ? vertical : null;
+  if (placement) {
+    expect(card?.style.left).toBe(`${placement.xPct}%`);
+    expect(card?.style[placement.anchor]).toBe(`${placement.yPct}%`);
+    expect(card?.style.zIndex).toBe(String(placement.zIndex));
+  } else expect(card?.style.transform).not.toContain("scale(");
+  setLayout(3, {}, {});
+  expect(card?.style.left).not.toBe("25%");
+  expect(card?.style.left).not.toBe("73%");
+});
+
+it("retains widget DOM and local state when placement is added and reset", () => {
+  const view = render(<OverlayPlacement><WidgetShell>Sample</WidgetShell></OverlayPlacement>);
+  const card = screen.getByText("Sample");
+  view.rerender(<OverlayPlacement placement={landscape}><WidgetShell>Sample</WidgetShell></OverlayPlacement>);
+  expect(screen.getByText("Sample")).toBe(card);
+  view.rerender(<OverlayPlacement><WidgetShell>Sample</WidgetShell></OverlayPlacement>);
+  expect(screen.getByText("Sample")).toBe(card);
 });
 
 it("scene sources share live profile precedence and reject a late connect snapshot", () => {

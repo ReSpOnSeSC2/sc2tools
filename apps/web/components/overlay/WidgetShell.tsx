@@ -5,6 +5,7 @@ import { coerceRace } from "@/lib/race";
 import { resolveRaceIcon } from "@/lib/sc2-icons";
 import { OVERLAY_RACE_COLORS, overlayRaceColor } from "@/lib/overlayRaceColors";
 import { OverlayPanel, OVERLAY_PANEL_SCALE } from "./OverlayPanel";
+import { useOverlayPlacement } from "./OverlayPlacement";
 
 type Slot =
   | "top-left-series"
@@ -97,13 +98,14 @@ export function WidgetShell({
   halo = false,
   children,
 }: WidgetShellProps) {
-  const placement = SLOT_STYLE[slot];
+  const customPlacement = useOverlayPlacement();
+  const placement = customPlacement ?? SLOT_STYLE[slot];
   const accentColor = race ? raceToAccent(race) : ACCENT_BG[accent];
   const haloColor = race ? `${accentColor}2e` : ACCENT_HALO[accent];
 
   return (
     <div
-      className="widget-shell"
+      className={customPlacement ? "widget-shell widget-shell--placed" : "widget-shell"}
       style={shellStyle(placement, width || 380, visible, haloColor)}
     >
       <OverlayPanel scale={false} accent={accentColor} accentSize="6px" halo={halo ? haloColor : undefined}

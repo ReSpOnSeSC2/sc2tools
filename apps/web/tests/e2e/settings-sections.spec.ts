@@ -282,3 +282,42 @@ for (const theme of ["light", "dark"] as const) {
     });
   }
 }
+
+
+for (const width of [390, 1280]) {
+  test(`All-in-one layout editing at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const evidence = await openSettingsSectionsFixture(page, "dark", { layoutPreview: true });
+    await page.evaluate(() => (window as SectionWindow).sectionNavigate("/settings?tab=overlay#layout"));
+    await expect(page).toHaveURL(/#layout$/);
+    const editor = page.getByRole("group", { name: "Arrange All-in-one widgets" });
+    await expect(editor).toBeVisible();
+    const card = editor.locator('[data-layout-widget="opponent"] .widget-shell');
+    const move = editor.getByRole("button", { name: "Move Opponent identity", exact: true });
+    await expect(card).toHaveCount(1);
+    await expect(move).toBeVisible();
+    await move.scrollIntoViewIfNeeded();
+    const initial = (await card.boundingBox())!;
+    const start = (await move.boundingBox())!;
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(start.x + start.width / 2 - 22, start.y + start.height / 2 + 20, { steps: 4 });
+    await page.mouse.up();
+    await expect.poll(async () => (await card.boundingBox())!.x).toBeLessThan(initial.x - 5);
+    await expect(editor.getByRole("button", { name: "Reset widget", exact: true })).toBeEnabled();
+    const dragged = (await card.boundingBox())!;
+    await move.press("Shift+ArrowRight");
+    await expect.poll(async () => (await card.boundingBox())!.x).toBeGreaterThan(dragged.x);
+    await editor.getByRole("button", { name: "Vertical", exact: true }).click();
+    await expect(editor.getByText("Use a 1080 × 1920 Browser Source in OBS for this vertical URL.")).toBeVisible();
+    await expect(editor.getByRole("button", { name: "Reset widget", exact: true })).toBeDisabled();
+    await editor.getByRole("button", { name: "Reveal", exact: true }).click();
+    await expect(editor.getByText(/owner-a-one\?canvas=vertical/)).toBeVisible();
+    await editor.getByRole("button", { name: "Landscape", exact: true }).click();
+    await expect(editor.getByRole("button", { name: "Reset widget", exact: true })).toBeEnabled();
+    await capture(page, info, "dark", width, "overlay-layout");
+    await editor.getByRole("button", { name: "Reset layout to default", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Unsaved changes", exact: true })).toHaveCount(0);
+    await clean(page, evidence, info);
+  });
+}

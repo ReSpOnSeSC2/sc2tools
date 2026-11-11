@@ -62,9 +62,9 @@ export default function OverlayLayout({
         @media (prefers-reduced-motion: reduce) {
           .widget-shell {
             transition: opacity 120ms linear !important;
-            transform: none !important;
             animation: none !important;
           }
+          .widget-shell:not(.widget-shell--placed) { transform: none !important; }
           .widget-shell .widget-halo { animation: none !important; }
         }
         @keyframes widgetHaloPulse {
