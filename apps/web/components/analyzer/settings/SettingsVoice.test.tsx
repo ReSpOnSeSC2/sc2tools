@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { SettingsVoice } from "./SettingsVoice";
+import { SettingsSaveScope } from "./SettingsSaveBar";
 
 /* ------------------------------------------------------------------
  * Mocks for the SettingsVoice dependencies. The component pulls in:
@@ -9,7 +10,6 @@ import { SettingsVoice } from "./SettingsVoice";
  *   - useAuth + apiCall (we no-op on save — tests cover preview).
  *   - useToast (we capture toast calls so the unlock banner test can
  *     verify the autoplay-block path does NOT toast).
- *   - SettingsContext usePublishDirty (no-op).
  * ------------------------------------------------------------------ */
 
 const mockToast = {
@@ -41,10 +41,6 @@ vi.mock("@/lib/clientApi", () => ({
 
 vi.mock("@/components/ui/Toast", () => ({
   useToast: () => ({ toast: mockToast }),
-}));
-
-vi.mock("./SettingsContext", () => ({
-  usePublishDirty: () => undefined,
 }));
 
 vi.mock("@/components/ui/Card", () => ({
@@ -86,10 +82,6 @@ vi.mock("@/components/ui/Button", () => ({
       {children}
     </button>
   ),
-}));
-
-vi.mock("@/components/ui/SaveBar", () => ({
-  SaveBar: () => null,
 }));
 
 vi.mock("@/components/ui/useDirtyForm", () => ({
@@ -218,7 +210,7 @@ describe("<SettingsVoice />", () => {
     // produces at match start so the streamer hears in Settings exactly
     // what they'll hear in OBS: name, race, MMR, H2H with win-%, and a
     // trailing "Good luck."
-    render(<SettingsVoice />);
+    render(<SettingsSaveScope tabId="voice"><SettingsVoice /></SettingsSaveScope>);
     const btn = screen.getByRole("button", { name: /test voice/i });
     act(() => {
       fireEvent.click(btn);
@@ -232,7 +224,7 @@ describe("<SettingsVoice />", () => {
   });
 
   it("shows the autoplay-blocked banner when speak fires onerror with not-allowed", () => {
-    render(<SettingsVoice />);
+    render(<SettingsSaveScope tabId="voice"><SettingsVoice /></SettingsSaveScope>);
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: /test voice/i }));
     });
@@ -248,7 +240,7 @@ describe("<SettingsVoice />", () => {
   });
 
   it("shows the banner when the engine silently drops the utterance (no onstart in 2s)", () => {
-    render(<SettingsVoice />);
+    render(<SettingsSaveScope tabId="voice"><SettingsVoice /></SettingsSaveScope>);
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: /test voice/i }));
     });
@@ -261,7 +253,7 @@ describe("<SettingsVoice />", () => {
   });
 
   it("does not show the banner when onstart fires before the silent-failure threshold", () => {
-    render(<SettingsVoice />);
+    render(<SettingsSaveScope tabId="voice"><SettingsVoice /></SettingsSaveScope>);
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: /test voice/i }));
     });
@@ -276,7 +268,7 @@ describe("<SettingsVoice />", () => {
   });
 
   it("toasts a generic error for non-autoplay failures (e.g. synthesis-failed)", () => {
-    render(<SettingsVoice />);
+    render(<SettingsSaveScope tabId="voice"><SettingsVoice /></SettingsSaveScope>);
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: /test voice/i }));
     });
@@ -292,7 +284,7 @@ describe("<SettingsVoice />", () => {
   });
 
   it("ignores benign cancellations (interrupted/canceled)", () => {
-    render(<SettingsVoice />);
+    render(<SettingsSaveScope tabId="voice"><SettingsVoice /></SettingsSaveScope>);
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: /test voice/i }));
     });

@@ -4,7 +4,7 @@
 
 Overview contains Dashboard and Notifications. Community contains Users, Player
 identities, Player channels and Moderation. Insights contains Global players,
-Global trends and Web analytics. Content contains Guides. Operations contains
+Global trends, Classifier and Web analytics. Content contains Guides. Operations contains
 Tools, Audit log and Infrastructure. Each page's Help link opens the relevant section here.
 
 ## Granting admin
@@ -25,7 +25,8 @@ panel shows the complete support message, included diagnostics and exact time;
 linked accounts and infrastructure alerts have their corresponding destination
 links. Status / Reply works inside the panel. Escape, Close or the backdrop
 closes it and returns focus to the row. Opening details does not mark activity
-read; Mark all unread as read remains a separate action.
+read; use the row's own Mark as read control or a mark-all action (see
+[Notifications and support inbox](#notifications-and-support-inbox)).
 
 ## Moderation
 
@@ -116,7 +117,23 @@ user filter is active.
 The opponent and global-player game lists and selected-game detail use the same
 result labels: Win, Loss and Tie. A neutral dash means the result was not
 recorded, including an undecided replay; assistive technology reads it as
-"Result not recorded". These are the stored game's result labels.
+"Result not recorded". These are the stored game's result labels. Victory/Win
+and Defeat/Loss are the only wins and losses; Tie/Draw is a tie, and anything
+else is unknown, never a loss.
+
+The opponent page opens with a **Head-to-head** strip over every game against
+that opponent, whatever the list filter: W–L–T, win rate over decided games only
+(ties and unrecorded results never count), average length of games with a
+recorded duration, the five most played maps with each map's record, and the
+last 10 results. Fewer than five decided games shows **Small sample**.
+
+Both game pages filter by result (All, Wins, Losses, Ties) and map; the
+global-player page also filters by user. Filters live in the URL, reset the
+cursor and keep the selected game. In the list, j or ↓ selects the next game,
+k or ↑ the previous one, and Enter opens the game and moves focus to its
+detail; the arrows act while focus is in the list, and no shortcut fires while
+you type in a field. Each selection is announced, for example "Game 3 of 25:
+Victory on Alcyone".
 
 ### Repairing a user's data
 
@@ -147,8 +164,36 @@ for job health, Run now, audit retention and cohort definitions.
 
 ## Notifications and support inbox
 
-Read the report, supplied context and Error ID. Mark activity read after triage;
-filter to the relevant activity type or use View all activity to clear filters.
+Event types:
+
+- **Signups**: a new account, from the Clerk webhook or its first sign-in.
+- **Downloads**: a website Download click (an anonymous beacon with a masked IP).
+- **Installs**: a paired desktop agent confirmed by its first heartbeat.
+- **Messages**: a signed-in user's report from the app, or support email
+  imported from Gmail.
+- **Backups** and **Jobs**: an overdue Atlas snapshot or background job.
+
+The line under the header shows Gmail import status. Only mail with the
+configured label (default **SC2Tools Support**) is imported; a failed check
+shows its error code and the next poll retries. Read the report, supplied
+context and Error ID. A message's **Status** and in-app **Reply** live in its
+row and its details panel. **Open user** opens the linked account directly
+from a signup, install or message row.
+
+Read state works at three scopes:
+
+- **One event:** the row's Mark as read / Mark as unread button (on hover or
+  focus with a mouse, always visible on touch screens). The change shows at
+  once; if saving fails it reverts and offers Retry. Repeating it is harmless.
+- **One type:** with a filter chip active, the header button reads, for
+  example, **Mark 3 messages read** and marks only that type.
+- **Everything:** with All selected it reads **Mark all 12 read**.
+
+Each chip shows its unread count (hidden at zero). A failed mark-all shows an
+alert with Retry; nothing is marked by the failed attempt. Mark-all is disabled
+while a user filter is active. The sidebar badge updates in the same tab after
+any of these. Add `?debug=1` to show the API source line when checking a
+staging deployment.
 
 ## Audit log
 
@@ -213,6 +258,15 @@ GA4 metrics may take 24–48 hours to settle. Realtime is separate and can be re
 without discarding the summary. Export CSV downloads the displayed top pages or
 channels for the selected range. Share percentages use the displayed breakdown's
 total; top pages use total page views when supplied.
+
+## Classifier console
+
+**Insights → Classifier** shows where confirmed build check-ins disagree with the
+label the replay detector produced, by disagreement volume. It never claims an
+accuracy. Rows appear only once at least three players contributed, and samples
+carry no player, game or opponent identity. Rules stay human-edited in Build
+Studio; nothing here changes one. See [Classifier quality](classifier-quality.md)
+for the views, the nightly job, Copy as test fixture and its guardrails.
 
 ## Global Trends
 

@@ -8,6 +8,8 @@ import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataCont
 import { TrendsRequestError } from "./charts/TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
+import { dayName, formatNumber } from "@/lib/i18n/format";
+import { useFormat } from "@/lib/i18n/useFormat";
 import { Card, EmptyState, Skeleton, Stat } from "@/components/ui/Card";
 import {
   apiToPeriods,
@@ -129,9 +131,11 @@ export function TrendsTab() {
   const groupProps = (id: Group) => ({ id, collapsed: Boolean(collapsed[id]), toggle: () => setCollapsed({ ...collapsed, [id]: !collapsed[id] }) });
 
   const tz = useMemo(() => clientTimezone(), []);
+  // Weekly buckets start on the account's first day of the week.
+  const weekStart = dayName(useFormat().weekStartDay);
   const params = useMemo(
-    () => ({ ...filters, interval: bucket, tz }),
-    [filters, bucket, tz],
+    () => ({ ...filters, interval: bucket, tz, weekStart }),
+    [filters, bucket, tz, weekStart],
   );
   const { data, isLoading, error, mutate } = useApi<ApiTimeseriesResponse>(
     `/v1/timeseries${filtersToQuery(params)}#${dbRev}`,
@@ -190,7 +194,7 @@ export function TrendsTab() {
           value={kpis.totalGames > 0 ? pct1(kpis.wr) : "—"}
           color={wrColor(kpis.wr, kpis.totalGames)}
         />
-        <Stat label="Recorded results" value={`${kpis.totalWins.toLocaleString()}W · ${kpis.totalLoss.toLocaleString()}L`} />
+        <Stat label="Recorded results" value={`${formatNumber(kpis.totalWins)}W · ${formatNumber(kpis.totalLoss)}L`} />
         <Stat label={`Active ${effectiveBucket}s`} value={kpis.activePeriods} />
       </div>}
 

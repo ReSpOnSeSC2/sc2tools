@@ -8,6 +8,8 @@ const express = require("express");
  *   GET  /practice/summary?matchup=PvZ[&targetHash=]   progress for a target
  *   GET  /practice/games?matchup=PvZ[&targetHash=&cursor=&limit=]  graded games, paged
  *   GET  /practice/games/:gameId                       one game's stored grade
+ *   GET  /practice/quest?day=YYYY-MM-DD&tz=IANA        Arcade's daily practice quest
+ *   PUT  /practice/checkpoints                       update a slot's private checkpoints
  *   POST /practice/grade-recent {matchup}              grade the newest ungraded games, at most 20
  *
  * Owner-only by construction: every handler reads ``req.auth.userId``. No
@@ -41,6 +43,13 @@ function buildPracticeRouter(deps) {
       return;
     }
     res.json({ practice: await deps.practice.game(owner(req), gameId) });
+  }));
+  router.get("/practice/quest", wrap(async (req, res) => {
+    res.json(await deps.practice.dailyQuest(owner(req), req.query));
+  }));
+  router.put("/practice/checkpoints", wrap(async (req, res) => {
+    const body = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+    res.json(await deps.practice.saveCheckpoints(owner(req), body));
   }));
   router.post("/practice/grade-recent", wrap(async (req, res) => {
     const body = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};

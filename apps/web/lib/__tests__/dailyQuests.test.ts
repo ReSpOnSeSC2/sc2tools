@@ -638,3 +638,15 @@ describe("day boundaries (arcade local-day convention)", () => {
     expect(evals[0]).toMatchObject({ progress: 1, done: true });
   });
 });
+
+it("uses the private daily practice progress when the target is eligible", () => {
+  const games = [mkGame({ result: "Win" })];
+  const select = (practice?: { eligible: boolean; done: boolean }) => selectDailyQuests(DAY, games, 20, "practice-tester", practice);
+  expect(select().quests.some((quest) => quest.id === "practice-grade-b")).toBe(false);
+  for (const done of [false, true]) {
+    const selection = select({ eligible: true, done });
+    const quest = selection.quests.find((entry) => entry.id === "practice-grade-b")!;
+    const [result] = evaluateQuests([quest], games, DAY, "UTC", selection.context);
+    expect(result).toMatchObject({ done, progress: done ? 1 : 0 });
+  }
+});

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useApi } from "@/lib/clientApi";
+import { formatTime } from "@/lib/i18n/format";
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
@@ -53,7 +54,7 @@ export default function AdminModerationPage() {
           : visible.length ? <ul className="space-y-3">{visible.map((group) => <li key={group.key}>
             <ReportGroupCard group={group} onResolved={() => q.mutate()} />
           </li>)}</ul> : <Card><EmptyStatePanel title={groups.length ? "No reports match this type" : "Queue clear"}
-            description={groups.length ? "Choose another report type." : `No open reports. Last checked ${lastChecked?.toLocaleTimeString() ?? "not available"}.`}
+            description={groups.length ? "Choose another report type." : `No open reports. Last checked ${lastChecked ? formatTime(lastChecked) : "not available"}.`}
             action={<Button variant="secondary" onClick={() => groups.length ? setFilter("all") : void q.mutate()}>{groups.length ? "Clear filters" : "Refresh"}</Button>} /></Card>}
     </div>
   );

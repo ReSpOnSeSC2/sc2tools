@@ -1,5 +1,9 @@
 import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import { CoverageMeter } from "@/components/donate/CoverageMeter";
+import { getDonationCoverage } from "@/lib/donationCoverageServer";
+import { FIXED_MONTHLY_FALLBACK_USD, getInfrastructureCosts, monthlyCostSummary } from "@/lib/infrastructureCosts";
 import { LandingPageContent } from "@/components/landing/LandingPageContent";
 
 /**
@@ -37,6 +41,14 @@ const WEBSITE_JSON_LD = {
     "Replay analysis, opponent intel, build coaching, and a complete OBS Stream Studio for StarCraft II.",
 };
 
+async function LandingDonationCoverage() {
+  const costs = await getInfrastructureCosts();
+  const coverage = await getDonationCoverage(costs ? monthlyCostSummary(costs).totalUsd : FIXED_MONTHLY_FALLBACK_USD);
+  return coverage && !coverage.covered
+    ? <div className="mx-auto mt-4 max-w-xl rounded-lg border border-border bg-bg-surface p-4"><CoverageMeter coverage={coverage} compact /></div>
+    : null;
+}
+
 export default function LandingPage() {
   return (
     <div className="mx-auto max-w-6xl">
@@ -48,7 +60,7 @@ export default function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(WEBSITE_JSON_LD) }}
       />
-      <LandingPageContent />
+      <LandingPageContent donationCoverage={<Suspense fallback={null}><LandingDonationCoverage /></Suspense>} />
     </div>
   );
 }

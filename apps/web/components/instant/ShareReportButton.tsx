@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { Button } from "@/components/ui/Button";
 import type { InstantReport } from "@/lib/instant/report";
+import type { ReportFilters } from "@/lib/instant/reportFilters";
 import type { ShareReportDialogProps } from "./ShareReportDialog";
 
 /** The canvas/catalog/dialog code loads only after this explicit action. */
-export function ShareReportButton({ report }: { report: InstantReport }) {
+export function ShareReportButton({ report, filters }: { report: InstantReport; filters?: ReportFilters }) {
   const [Dialog, setDialog] = useState<ComponentType<ShareReportDialogProps> | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
@@ -35,5 +36,5 @@ export function ShareReportButton({ report }: { report: InstantReport }) {
   }
   return <><Button ref={trigger} variant="secondary" disabled={loading} onClick={() => void show()}>{loading ? "Loading preview…" : error ? "Retry share preview" : "Share report"}</Button>
     {error ? <p role="alert" className="text-caption text-text-muted">{error}</p> : null}
-    {Dialog && open ? <Dialog report={report} onClose={() => setOpen(false)} /> : null}</>;
+    {Dialog && open ? <Dialog report={report} filters={filters} onClose={() => setOpen(false)} /> : null}</>;
 }

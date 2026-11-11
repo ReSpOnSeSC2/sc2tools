@@ -8,6 +8,7 @@ import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
 import { buildWinRateTrend, type WinRatePeriod, type WinRateSampleTarget } from "@/lib/winRateTrend";
 import { WinRateSampleSummary, WinRateSampleToggle, WinRateTrendPlot } from "./WinRateTrendPlot";
+import { formatNumber } from "@/lib/i18n/format";
 
 type MatchupPoint = { bucket: string; matchup: string; wins: number; losses: number; total: number };
 type MatchupResponse = { interval: "day" | "week" | "month"; points: MatchupPoint[] };
@@ -50,7 +51,7 @@ export function MatchupOverTimeChart(_props: { bucket: "day" | "week" | "month" 
   if (!panels.length) return (
     <Card title="Win rate by matchup over time">
       <EmptyState title={totalGames ? "Played races are not recorded" : "Not enough games yet"} sub={totalGames
-        ? `${totalGames.toLocaleString()} selected ${recordLabel} are missing one or both concrete played races. Matchup trends need both races.`
+        ? `${formatNumber(totalGames)} selected ${recordLabel} are missing one or both concrete played races. Matchup trends need both races.`
         : "Matchup trend lines appear when the selected records include games with both played races recorded."} />
     </Card>
   );
@@ -71,7 +72,7 @@ export function MatchupOverTimeChart(_props: { bucket: "day" | "week" | "month" 
                 <p className="text-micro text-text-muted">{RACE_NAMES[key[0]]} vs {RACE_NAMES[key[2]]}</p>
               </div>
               <div className="text-right text-micro tabular-nums text-text-muted">
-                <div>{trend.overall.games.toLocaleString()} {isGlobal ? "records" : trend.overall.games === 1 ? "game" : "games"}</div>
+                <div>{formatNumber(trend.overall.games)} {isGlobal ? "records" : trend.overall.games === 1 ? "game" : "games"}</div>
                 {!trend.readyPoints && <div>Overall {trend.overall.rate?.toFixed(1)}%</div>}
               </div>
             </div>
@@ -84,7 +85,7 @@ export function MatchupOverTimeChart(_props: { bucket: "day" | "week" | "month" 
         All panels share the same dates and 0–100% scale. {target === "all" ? "Each point counts every game in the range up to that date." : `Samples keep whole ${periods}, so counts can exceed ${target}.`} The dashed line is each matchup’s overall rate in this range.
         {isGlobal ? " Results combine the selected players." : ""}
       </p>
-      {unassignedGames > 0 && <p className="mt-2 text-micro text-text-muted">{unassignedGames.toLocaleString()} selected {recordLabel} are missing one or both concrete played races and cannot be assigned to these matchups.</p>}
+      {unassignedGames > 0 && <p className="mt-2 text-micro text-text-muted">{formatNumber(unassignedGames)} selected {recordLabel} are missing one or both concrete played races and cannot be assigned to these matchups.</p>}
     </Card>
   );
 }

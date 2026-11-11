@@ -22,6 +22,10 @@ const { sanitizeBuildProfile, prepareBuildProfileUpdate } = require("./buildProf
 
 const POLL_MAX_OPTIONS = 6;
 const POLL_MAX_TEXT = 120;
+/** The only poll timers the Dock offers; anything else runs untimed. */
+const POLL_DURATIONS_SEC = Object.freeze([30, 60, 120, 300]);
+/** A Dock clock this far ahead still closes a timed poll at its deadline. */
+const POLL_CLOCK_SKEW_MS = 2_000;
 const GOALS_MAX = 4;
 const GOAL_MAX_LABEL = 40;
 const HIGHLIGHT_MAX_TEXT = 500;
@@ -55,12 +59,14 @@ const DEFAULT_BROLL = Object.freeze({
 class MultichatStudioService {
   /**
    * @param {{ multichatStudio: import('mongodb').Collection }} db
-   * @param {{ io?: import('socket.io').Server, overlayTokens?: Pick<import('./overlayTokens').OverlayTokensService, "withWrite"> }} [deps]
+   * @param {{ io?: import('socket.io').Server, overlayTokens?: Pick<import('./overlayTokens').OverlayTokensService, "withWrite">, now?: () => number }} [deps]
    */
   constructor(db, deps = {}) {
     this.col = db.multichatStudio;
     this.io = deps.io || null;
     this.overlayTokens = deps.overlayTokens;
+    /** Server clock for poll deadlines (injectable in tests). */
+    this.now = deps.now || (() => Date.now());
     /** Serialize same-token b-roll writes inside this API process. */
     this.brollUpdateQueues = new Map();
   }
@@ -96,6 +102,22 @@ class MultichatStudioService {
     return doc;
   }
 
+  /** @param {string} token @param {number} now @param {number} cooldownMs */
+  async claimManualMoment(token, now, cooldownMs) {
+    await this.ensureCanonical(token);
+    const result = await this.col.updateOne({ studioKey: token, $or: [
+      { manualMomentAt: { $exists: false } }, { manualMomentAt: { $lte: now - cooldownMs } },
+    ] }, { $set: { manualMomentAt: now } });
+    if (result.matchedCount) return null;
+    const current = await this.col.findOne({ studioKey: token }, { projection: { manualMomentAt: 1 } });
+    return Math.max(1, Math.min(cooldownMs, (Number(current?.manualMomentAt) || now) + cooldownMs - now));
+  }
+
+  /** @param {string} token @param {number} now */
+  releaseManualMoment(token, now) {
+    return this.col.updateOne({ studioKey: token, manualMomentAt: now }, { $unset: { manualMomentAt: "" } });
+  }
+
   /** Manual session resets only move the mark forward; normal explicit clip
    * edits retain their existing clear/replace behavior. @param {string} token @param {number} at */
   async advanceStreamStart(token, at) {
@@ -119,7 +141,9 @@ class MultichatStudioService {
     );
     return {
       highlight: doc?.highlight ?? null,
-      poll: doc?.poll ?? null,
+      // An expired timed poll reads as closed, so the result is final even
+      // when no Dock is open to post the close.
+      poll: pollForRead(doc?.poll, this.now()),
       goals: Array.isArray(doc?.goals) ? doc.goals : [],
       blockedUsers: Array.isArray(doc?.blockedUsers) ? doc.blockedUsers : [],
       recapSeq: Number(doc?.recapSeq) || 0,
@@ -152,6 +176,7 @@ class MultichatStudioService {
 
   /** @param {string} token @param {Record<string, unknown>} patch */
   async _updateAdmitted(token, patch) {
+    if ("streamMarkUndo" in patch) return this._restoreStreamMark(token, patch.streamMarkUndo);
     if (!("broll" in patch)) return this._updateUnlocked(token, patch);
 
     // Dock controls send small b-roll patches. Serializing them prevents a
@@ -169,6 +194,24 @@ class MultichatStudioService {
         this.brollUpdateQueues.delete(token);
       }
     }
+  }
+
+  /** Undo the mark only if this Dock still owns the replacement it saw.
+   * @param {string} token @param {unknown} input */
+  async _restoreStreamMark(token, input) {
+    const undo = /** @type {{expected?: unknown, previous?: unknown}|null} */ (input && typeof input === "object" ? input : null);
+    const previous = sanitizeStreamStartMs(undo?.previous);
+    const expected = undo?.expected === null ? null : sanitizeStreamStartMs(undo?.expected);
+    if (previous === null || (expected === null && undo?.expected !== null)) {
+      throw Object.assign(new Error("invalid stream mark"), { status: 400, code: "invalid_stream_mark" });
+    }
+    await this.ensureCanonical(token);
+    const result = await this.col.updateOne({ studioKey: token, streamStartMs: expected },
+      { $set: { streamStartMs: previous, updatedAt: new Date() } });
+    if (!result.matchedCount) throw Object.assign(new Error("Stream start changed in another Dock."), { status: 409, code: "stream_mark_changed" });
+    const state = await this.get(token);
+    this.io?.to(`overlay:${token}`).emit("overlay:multichat", state);
+    return state;
   }
 
   /**
@@ -199,7 +242,10 @@ class MultichatStudioService {
       set.highlight = sanitizeHighlight(patch.highlight);
     }
     if ("poll" in patch) {
-      set.poll = sanitizePoll(patch.poll);
+      set.poll = preparePollUpdate(patch.poll, previousDocument?.poll, this.now());
+      set.pollWriteRevision = nextBrollWriteRevision(
+        sanitizeBrollWriteRevision(previousDocument?.pollWriteRevision),
+      );
     }
     if ("goals" in patch) {
       set.goals = sanitizeGoals(patch.goals);
@@ -242,17 +288,10 @@ class MultichatStudioService {
     /** @type {Record<string, any>} */
     const updateDoc = { $set: set, $setOnInsert: { token } };
     if (Object.keys(inc).length > 0) updateDoc.$inc = inc;
-    if ("broll" in patch || "buildProfile" in patch) {
-      const revisions = [];
-      if ("broll" in patch) {
-        revisions.push({ field: "brollWriteRevision", previous: previousWriteRevision });
-      }
-      if ("buildProfile" in patch) {
-        revisions.push({
-          field: "buildProfileWriteRevision",
-          previous: sanitizeBrollWriteRevision(previousDocument?.buildProfileWriteRevision),
-        });
-      }
+    const revisions = ["brollWriteRevision", "buildProfileWriteRevision", "pollWriteRevision"]
+      .filter((field) => Object.hasOwn(set, field))
+      .map((field) => ({ field, previous: sanitizeBrollWriteRevision(previousDocument?.[field]) }));
+    if (revisions.length) {
       const written = await this._writeStudioCompareAndSwap(
         token,
         updateDoc,
@@ -263,7 +302,7 @@ class MultichatStudioService {
         if (attempt + 1 >= BROLL_WRITE_MAX_ATTEMPTS) {
           const error = Object.assign(new Error("Concurrent studio update did not settle"), {
             status: 409,
-            code: "buildProfile" in patch ? "build_profile_conflict" : "broll_conflict",
+            code: "buildProfile" in patch ? "build_profile_conflict" : "broll" in patch ? "broll_conflict" : "poll_conflict",
           });
           throw error;
         }
@@ -408,6 +447,8 @@ function sanitizePoll(raw) {
     // "open" collects votes; "closed" shows final results until cleared.
     status: p.status === "closed" ? "closed" : "open",
   };
+  const durationSec = sanitizePollDuration(p.durationSec);
+  if (durationSec !== null) out.durationSec = durationSec;
   // Optional structured meta — currently only the build vote, which
   // lets the widget show the winner's real win-rate on close.
   if (p.meta && typeof p.meta === "object" && p.meta.kind === "build") {
@@ -424,6 +465,82 @@ function sanitizePoll(raw) {
     out.meta = { kind: "build", winRates };
   }
   return out;
+}
+
+/**
+ * A poll timer from the allowlist, in seconds, or null for an untimed poll.
+ * @param {unknown} raw @returns {number | null}
+ */
+function sanitizePollDuration(raw) {
+  const seconds = Number(raw);
+  return POLL_DURATIONS_SEC.includes(seconds) ? seconds : null;
+}
+
+/** @param {unknown} raw @returns {number | null} */
+function finiteMs(raw) {
+  const ms = Number(raw);
+  return raw !== null && raw !== undefined && raw !== "" && Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * The poll as clients should see it at ``nowMs``. An open poll whose
+ * server deadline has passed reads as closed at that deadline, so a stream
+ * with no Dock open still ends its vote. The stored poll is not rewritten.
+ *
+ * @param {unknown} raw
+ * @param {number} nowMs
+ * @returns {Record<string, any> | null}
+ */
+function pollForRead(raw, nowMs) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const poll = /** @type {Record<string, any>} */ (raw);
+  const endsAtMs = finiteMs(poll.endsAtMs);
+  if (poll.status !== "closed" && endsAtMs !== null && nowMs >= endsAtMs) {
+    return { ...poll, status: "closed", closedAtMs: endsAtMs };
+  }
+  return poll;
+}
+
+/**
+ * Merge a Dock poll patch with the stored poll. The server owns poll timing:
+ *
+ *   - a new poll is stamped startedAtMs = openedAtMs = now, and an
+ *     allowlisted durationSec adds endsAtMs = now + duration;
+ *   - a patch naming the stored poll (same startedAtMs) keeps its stored
+ *     question, options and timing. Closing is final: a second close, or a
+ *     late "open" echo, returns the closed poll unchanged (idempotent);
+ *   - a close arriving within POLL_CLOCK_SKEW_MS of the deadline closes at
+ *     the deadline, so a Dock clock slightly ahead cannot cut votes short;
+ *   - a close naming any other poll is stale (an older Dock) and leaves the
+ *     stored poll alone.
+ *
+ * ``closedAtMs`` is the vote cutoff every client tallies against, so the Dock
+ * and each Browser Source agree on the final result. null clears the poll.
+ *
+ * @param {unknown} raw
+ * @param {unknown} previousRaw
+ * @param {number} nowMs
+ * @returns {Record<string, any> | null}
+ */
+function preparePollUpdate(raw, previousRaw, nowMs) {
+  const next = sanitizePoll(raw);
+  if (!next) return null;
+  const previous = pollForRead(previousRaw, nowMs);
+  const named = finiteMs(/** @type {Record<string, any>} */ (raw).startedAtMs);
+  const current = previous && named !== null && named === finiteMs(previous.startedAtMs) ? previous : null;
+  if (current) {
+    if (current.status === "closed" || next.status !== "closed") return current;
+    const endsAtMs = finiteMs(current.endsAtMs);
+    const closedAtMs = endsAtMs !== null && endsAtMs - nowMs <= POLL_CLOCK_SKEW_MS
+      ? endsAtMs
+      : nowMs;
+    return { ...current, status: "closed", closedAtMs };
+  }
+  if (next.status === "closed") return previous;
+  /** @type {Record<string, any>} */
+  const opened = { ...next, startedAtMs: nowMs, openedAtMs: nowMs };
+  if (opened.durationSec) opened.endsAtMs = nowMs + opened.durationSec * 1000;
+  return opened;
 }
 
 /** @param {unknown} raw */
@@ -899,6 +1016,10 @@ module.exports = {
   MultichatStudioService,
   sanitizeHighlight,
   sanitizePoll,
+  pollForRead,
+  preparePollUpdate,
+  POLL_DURATIONS_SEC,
+  POLL_CLOCK_SKEW_MS,
   sanitizeGoals,
   sanitizeBlockedUsers,
   sanitizeScene,

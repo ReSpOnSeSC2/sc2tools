@@ -1,3 +1,4 @@
+import { formatNumber } from "@/lib/i18n/format";
 /**
  * Replay Review Exchange — shared web types and pure helpers
  * (docs/reviews.md). The shapes mirror apps/api/src/services/reviews.js;
@@ -382,7 +383,7 @@ export type CommentDraft = {
 export function validateComment(draft: CommentDraft, durationSec: number | null): string | null {
   const length = draft.body.trim().length;
   if (length < REVIEW_LIMITS.COMMENT_MIN) return `Comments need at least ${REVIEW_LIMITS.COMMENT_MIN} characters.`;
-  if (length > REVIEW_LIMITS.COMMENT_MAX) return `Comments are limited to ${REVIEW_LIMITS.COMMENT_MAX.toLocaleString("en-US")} characters.`;
+  if (length > REVIEW_LIMITS.COMMENT_MAX) return `Comments are limited to ${formatNumber(REVIEW_LIMITS.COMMENT_MAX)} characters.`;
   if ((draft.body.match(URL_RE) || []).length > REVIEW_LIMITS.COMMENT_MAX_LINKS) {
     return `Use at most ${REVIEW_LIMITS.COMMENT_MAX_LINKS} links.`;
   }

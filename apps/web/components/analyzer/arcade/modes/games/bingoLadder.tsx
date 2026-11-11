@@ -362,7 +362,7 @@ function Render({
         <div
           role="grid"
           aria-label="Bingo card"
-          className="grid auto-rows-fr grid-cols-5 gap-1.5 text-center text-micro"
+          className="grid auto-rows-fr grid-cols-5 gap-[4px] text-center text-micro sm:gap-1.5"
         >
           {Array.from({ length: Math.ceil(card.cells.length / 5) }, (_, row) => (
             <div role="row" className="contents" key={row}>
@@ -372,7 +372,7 @@ function Render({
                   key={c.id}
                   aria-label={c.label}
                   className={[
-                    "flex min-h-[72px] min-w-0 flex-col items-center justify-center rounded border px-1 py-1.5",
+                    "flex min-h-[72px] min-w-0 flex-col items-center justify-center rounded border px-[2px] py-1.5 sm:px-1",
                     c.ticked
                       ? "border-success bg-success/15 text-text"
                       : "border-border bg-bg-surface text-text-muted",

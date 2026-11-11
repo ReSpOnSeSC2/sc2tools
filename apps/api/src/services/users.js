@@ -1,6 +1,7 @@
 "use strict";
 const { sanitizeGameMomentAlerts } = require("./multichatAppearance");
 const { sanitizeChatCommands } = require("./chatCommands");
+const { REPORTS_PREF_TYPE } = require("./reportPreferences");
 
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
@@ -268,10 +269,11 @@ class UsersService {
    * @param {string} userId */
   async getMeSnapshot(userId) {
     const doc = await this.db.users.findOne({ userId }, { readPreference: "primary",
-      projection: { ...SUMMARY_PROJECTION, ...OWNER_STATS_PROJECTION, "preferences.onboarding": 1 } });
+      projection: { ...SUMMARY_PROJECTION, ...OWNER_STATS_PROJECTION, "preferences.onboarding": 1, "preferences.reports": 1 } });
     return { summary: summaryDto(doc, userId),
       statsCandidate: readyStatsFromOwnerRow(doc, userId, this.db.gameStatsTransactions),
-      onboarding: (doc && doc.preferences && doc.preferences.onboarding) || {} };
+      onboarding: (doc && doc.preferences && doc.preferences.onboarding) || {},
+      reportPrefs: doc?.preferences?.reports ?? null };
   }
 
   /** Internal Doctor envelope; the public profile getter retains its DTO.
@@ -873,7 +875,7 @@ class UsersService {
     }
     await this.db.users.updateOne(
       { userId },
-      { $set: { [`preferences.${type}`]: prefs } },
+      { $set: { [`preferences.${type}`]: prefs, ...(type === REPORTS_PREF_TYPE && prefs.stream === false ? { streamReportPublicEpoch: crypto.randomUUID() } : {}) } },
     );
     return prefs;
   }

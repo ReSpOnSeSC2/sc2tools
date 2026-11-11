@@ -15,6 +15,7 @@ import {
   type InstantPayload,
 } from "../report";
 import { bare } from "./fixtures/reportGames";
+import { computeRecordByLength, computeRecordByMap } from "../reportHighlights";
 
 // Real payload: the desktop agent's parse_replay_for_cloud_ex + to_payload +
 // compact_json_bytes on apps/replay-engine/tests/fixtures/replays/warpgate_adept_tracking.SC2Replay.
@@ -116,6 +117,40 @@ describe("toArcadeGame", () => {
   });
 });
 
+describe("report highlights and record splits", () => {
+  it("uses recap streak, map and rival sample floors", () => {
+    const win = realWin();
+    const data = [win, { ...win, gameId: "streak-2" }, { ...win, gameId: "streak-3" }];
+    const report = buildInstantReport(data, NOW);
+    expect(report.highlights).toMatchObject({
+      longestWinStreak: 3,
+      favoriteMap: { name: "Tourmaline LE", wins: 3, games: 3 },
+      bestVictim: { name: "Squirtuoz" },
+      biggestUpset: null,
+      nemesis: null,
+    });
+    expect(buildInstantReport([bare()], NOW).highlights).toEqual({
+      longestWinStreak: null, favoriteMap: null, bestVictim: null, biggestUpset: null, nemesis: null,
+    });
+  });
+
+  it("sorts map records by games, then name, with missing maps last", () => {
+    const maps = ["Zeta", "Alpha", null, "Zeta", null, null, "Beta"];
+    const rows = computeRecordByMap(maps.map((map) => bare({ map })));
+    expect(rows?.map(({ map, games }) => [map, games])).toEqual([
+      ["Zeta", 2], ["Alpha", 1], ["Beta", 1], ["Unknown map", 3],
+    ]);
+  });
+
+  it("uses exact length boundaries and counts missing lengths", () => {
+    const games = [479, 480, 899, 900, null].map((durationSec) => bare({ durationSec }));
+    const record = computeRecordByLength(games);
+    expect(record?.buckets.map(({ key, games }) => [key, games])).toEqual([["short", 1], ["mid", 2], ["long", 1]]);
+    expect(record?.missing).toBe(1);
+    expect(computeRecordByLength([bare()])).toEqual({ buckets: [], missing: 1 });
+  });
+});
+
 describe("buildInstantReport on real data", () => {
   it("summarises a win and a loss against the same opponent", () => {
     const report = buildInstantReport([realWin(), derivedDefeat()], NOW);
@@ -187,6 +222,9 @@ describe("buildInstantReport null-safety", () => {
       macro: null,
       mmr: null,
       lastLoss: null,
+      highlights: { longestWinStreak: null, biggestUpset: null, favoriteMap: null, nemesis: null, bestVictim: null },
+      recordByMap: null,
+      recordByLength: null,
       games: [],
     });
   });

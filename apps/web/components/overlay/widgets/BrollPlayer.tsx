@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 import {
   useCallback,
   useEffect,
@@ -476,7 +478,7 @@ export function BrollPlayer({
     hasStartedPlayback && status !== "empty" && status !== "fallback";
 
   return (
-    <div
+    <OverlayPanel scale={false} frame={false}
       className="broll-player"
       data-audio-owner={audioOwner ? "true" : "false"}
       data-clip-id={currentClip?.id ?? ""}
@@ -522,7 +524,7 @@ export function BrollPlayer({
           ? `B-roll status: playing ${currentClip.title}`
           : `B-roll status: ${standbyCopy.toLowerCase()}`}
       </span>
-    </div>
+    </OverlayPanel>
   );
 }
 
@@ -861,9 +863,8 @@ const playerFrameStyle: CSSProperties = {
   position: "absolute",
   inset: 0,
   overflow: "hidden",
-  background: "#03070d",
+  background: "var(--ov-panel-bg, #03070d)",
   color: "#edf8fb",
-  fontFamily: "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
 };
 
 const fallbackStyle: CSSProperties = {

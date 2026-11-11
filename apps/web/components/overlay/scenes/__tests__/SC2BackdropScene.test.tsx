@@ -12,6 +12,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { OVERLAY_RACE_COLORS } from "@/lib/overlayRaceColors";
 import {
   LOOP_SEC,
   SC2BackdropScene,
@@ -33,17 +34,17 @@ const ALL_VARIANTS: BackdropVariant[] = [
 
 describe("accentForRace", () => {
   it("maps each race to its design-system accent", () => {
-    expect(accentForRace("Terran")).toBe("#3B82F6");
-    expect(accentForRace("Zerg")).toBe("#A855F7");
-    expect(accentForRace("Protoss")).toBe("#F59E0B");
-    expect(accentForRace("Random")).toBe("#94A3B8");
+    expect(accentForRace("Terran")).toBe(OVERLAY_RACE_COLORS.T);
+    expect(accentForRace("Zerg")).toBe(OVERLAY_RACE_COLORS.Z);
+    expect(accentForRace("Protoss")).toBe(OVERLAY_RACE_COLORS.P);
+    expect(accentForRace("Random")).toBe(OVERLAY_RACE_COLORS.R);
   });
 
   it("is case- and whitespace-insensitive", () => {
     // The agent normalises race, but the post-game payload and the
     // live envelope have historically disagreed on casing.
-    expect(accentForRace("  zerg ")).toBe("#A855F7");
-    expect(accentForRace("PROTOSS")).toBe("#F59E0B");
+    expect(accentForRace("  zerg ")).toBe(OVERLAY_RACE_COLORS.Z);
+    expect(accentForRace("PROTOSS")).toBe(OVERLAY_RACE_COLORS.P);
   });
 
   it("falls back to the stock accent rather than guessing", () => {

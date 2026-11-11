@@ -15,6 +15,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BookOpen, MessagesSquare, MonitorPlay, Swords, Trophy } from "lucide-react";
 import { PRODUCT_FACTS } from "@/lib/productFacts";
+import { POLL_VOTE_HINT } from "@/lib/multichat/poll";
 import { OVERLAY_CREDIT_TEXT } from "@/lib/overlayCredit";
 import { StreamStudioCtas } from "./StreamStudioCtas";
 import { StreamManagerShowcase } from "@/components/landing/StreamManagerShowcase";
@@ -56,7 +57,7 @@ export const FEATURE_GROUPS: ReadonlyArray<FeatureGroup> = [
     items: [
       { name: "Multi-platform chat", guideId: "multichat", body: `Twitch, Kick, YouTube and TikTok chat merged into one feed (${PRODUCT_FACTS.chatPlatforms} platforms).` },
       { name: "Event alerts", guideId: "chat-alerts", body: "Subs, raids, gifts and superchats as an alert toaster." },
-      { name: "Polls and highlights", guideId: "chat-poll", body: "Viewer polls with !1 / !2 voting, and pinned chat messages." },
+      { name: "Polls and highlights", guideId: "chat-poll", body: `Timed viewer polls and pinned chat messages. ${POLL_VOTE_HINT}.` },
       { name: "Crystal Ball predictions", guideId: "chat-oracle", body: "Chat calls !win or !loss before each game and climbs a leaderboard." },
       { name: "Supporter wall", guideId: "supporter-wall", body: "Cross-platform loyalty ranks, from Probe to Mothership." },
       { name: "Goals, ticker, timer and clip flags", guideId: "stream-goals", body: "Goal bars, a scrolling stats line, a countdown, and a CLIP THAT! pulse when chat spikes." },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { isPublicReplayReference } from "@/lib/replayRouteAccess";
 import { useApi, type ClientApiError } from "@/lib/clientApi";
 import type { GameBuildOrderResponse, GameSummary } from "@/components/analyzer/game/types";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
@@ -36,18 +37,17 @@ function stateOf(request: { data?: unknown; error?: ClientApiError }, missingCod
 }
 
 /**
- * One side of a comparison: the same three requests the game page
- * makes (so SWR shares them when you arrive from a game), each with its
- * own loading / missing / error state, plus the derived series, build
+ * One side of a comparison: three authenticated reads of the owner's game,
+ * each with its own loading / missing / error state, plus the derived series, build
  * steps and mechanics. A missing breakdown hides only this side's
  * timeline and mechanics; a missing build order only its diff column.
  */
 export function useCompareSide(id: string | null): CompareSide {
-  const enc = id ? encodeURIComponent(id) : null;
+  const path = id && isPublicReplayReference(id) ? "/v1/compare-games/" + id : null;
   const options = { revalidateOnFocus: false } as const;
-  const gameReq = useApi<GameSummary>(enc ? `/v1/games/${enc}` : null, options);
-  const macroReq = useApi<MacroBreakdownData>(enc ? `/v1/games/${enc}/macro-breakdown` : null, options);
-  const buildReq = useApi<GameBuildOrderResponse>(enc ? `/v1/games/${enc}/build-order` : null, options);
+  const gameReq = useApi<GameSummary>(path ? path + "/game" : null, options);
+  const macroReq = useApi<MacroBreakdownData>(path ? path + "/macro-breakdown" : null, options);
+  const buildReq = useApi<GameBuildOrderResponse>(path ? path + "/build-order" : null, options);
   const game = gameReq.data ?? null;
   const breakdown = macroReq.data ?? null;
   const series = useMemo(

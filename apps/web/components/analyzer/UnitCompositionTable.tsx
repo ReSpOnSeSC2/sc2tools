@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/Icon";
 import Link from "next/link";
 import { gameReplayHref } from "@/lib/replayLink";
 import { UnitGameComparison } from "./UnitGameComparison";
+import { formatNumber } from "@/lib/i18n/format";
 
 export type UnitExample = { gameId: string; count: number; timeSec: number };
 export type UnitComparison = {
@@ -49,8 +50,8 @@ export function unitLabel(token: string) {
   return token.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Z])([A-Z][a-z])/g, "$1 $2");
 }
 
-const number = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 1 });
-const average = (value: number) => value.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const number = (value: number) => formatNumber(value, { maximumFractionDigits: 1 });
+const average = (value: number) => formatNumber(value, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const focus = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
 
 /** Every statistic is supplied by the server over the same observed-game cohort.

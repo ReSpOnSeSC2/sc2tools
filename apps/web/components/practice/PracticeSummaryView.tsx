@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDate } from "@/lib/i18n/format";
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
@@ -20,6 +21,7 @@ import {
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { PracticeGamesList } from "./PracticeGamesList";
+import { CheckpointEditor, CheckpointResults } from "./CheckpointEditor";
 import { GRADE_TEXT_CLASS } from "./gradeStyles";
 
 export function PracticeSummaryView({ summary, matchup, onSelectTarget, onGraded }: {
@@ -32,6 +34,12 @@ export function PracticeSummaryView({ summary, matchup, onSelectTarget, onGraded
   return (
     <div className="space-y-5">
       <TargetCard summary={summary} matchup={matchup} onSelectTarget={onSelectTarget} onGraded={onGraded} />
+      {target?.current && target.steps?.length ? (
+        <CheckpointEditor key={`${matchup}:${target.hash}`} matchup={matchup} targetHash={target.hash}
+          steps={target.steps} checkpoints={summary.checkpoints ?? []} onSaved={onGraded} />
+      ) : summary.checkpoints?.length ? (
+        <Card title="Checkpoints"><CheckpointResults checkpoints={summary.checkpoints} /></Card>
+      ) : null}
       {summary.sample.graded === 0 ? (
         <p role="status" className="rounded-lg border border-border p-4 text-caption text-text-muted">
           No graded {matchup} games for this target yet. Play a {matchup} game, or grade your recent ones above.
@@ -60,7 +68,9 @@ function TargetCard({ summary, matchup, onSelectTarget, onGraded }: Parameters<t
     setState({ busy: true, message: null, error: false });
     try {
       const result = await apiCall<{ graded: number; considered: number }>(getToken, "/v1/practice/grade-recent", { method: "POST", body: JSON.stringify({ matchup }) });
-      setState({ busy: false, error: false, message: result.graded ? `Graded ${result.graded} of your recent ${matchup} games.` : `No ungraded recent ${matchup} games to grade.` });
+      const message = result.graded ? `Graded ${result.graded} of your recent ${matchup} games.`
+        : result.considered ? `Your ungraded ${matchup} games are missing build logs.` : `No ungraded recent ${matchup} games to grade.`;
+      setState({ busy: false, error: false, message });
       onGraded();
     } catch {
       setState({ busy: false, error: true, message: "Couldn't grade your recent games. Try again." });
@@ -72,7 +82,7 @@ function TargetCard({ summary, matchup, onSelectTarget, onGraded }: Parameters<t
         <p className="text-body font-medium text-text">{target?.name ?? "Unnamed target"}</p>
         <p className="text-caption text-text-muted">
           {target?.current
-            ? target.armedAt ? `Armed ${new Date(target.armedAt).toLocaleDateString()}. Games you play in ${matchup} from then on are graded against it.` : `Games you play in ${matchup} are graded against it.`
+            ? target.armedAt ? `Armed ${formatDate(new Date(target.armedAt))}. Games you play in ${matchup} from then on are graded against it.` : `Games you play in ${matchup} are graded against it.`
             : "No longer armed. Its graded games stay in your log."}
           {" "}{summary.sample.graded} graded{summary.sample.ungraded ? `, ${summary.sample.ungraded} without a build log` : ""}{summary.sample.capped ? ` (latest ${summary.sample.limit})` : ""}.
         </p>
@@ -127,7 +137,7 @@ function GradeTrend({ summary }: { summary: PracticeSummary }) {
           return (
             <circle key={point.row.gameId} cx={p.cx} cy={p.cy} r={4} aria-hidden
               className={point.row.via === "request" ? "fill-bg-surface stroke-accent" : "fill-accent stroke-bg-surface"} strokeWidth={2}>
-              <title>{`${new Date(point.row.date).toLocaleDateString()}: ${point.row.grade}, ${point.row.matched}/${point.row.total} steps, ${point.row.avgDrift}s average drift${point.row.via === "request" ? " (graded on request)" : ""}`}</title>
+              <title>{`${formatDate(new Date(point.row.date))}: ${point.row.grade}, ${point.row.matched}/${point.row.total} steps, ${point.row.avgDrift}s average drift${point.row.via === "request" ? " (graded on request)" : ""}`}</title>
             </circle>
           );
         })}

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Modal } from "@/components/ui/Modal";
-import { PublicReplayShareButton } from "../PublicReplayShareButton";
+import { ShareButton } from "../ShareButton";
 
 const h = vi.hoisted(() => ({ write: vi.fn(), success: vi.fn(), info: vi.fn(), exec: vi.fn() }));
 vi.mock("@/components/ui/Toast", () => ({
@@ -10,7 +10,7 @@ vi.mock("@/components/ui/Toast", () => ({
 
 const publicPath = "/players/reaver-0123456789/replays?matchup=PvZ&search=Blink&page=2&cursor=synthetic";
 const otherPath = "/players/other-0123456789/replays?result=win";
-const manualLabel = "Copy replay page link manually";
+const manualLabel = "Copy link manually";
 const originalExec = Object.getOwnPropertyDescriptor(document, "execCommand");
 type Outcome = "resolve" | "reject" | "abort";
 type Transition = "path" | "player" | "ABA";
@@ -27,7 +27,9 @@ async function settle(pending: ReturnType<typeof held>, outcome: Outcome) {
   });
 }
 const href = (value = publicPath) => `${window.location.origin}${value}`;
-const content = (path = publicPath, playerName = "Reaver") => <PublicReplayShareButton path={path} playerName={playerName} />;
+const content = (path = publicPath, playerName = "Reaver") => <ShareButton path={path}
+  title={playerName + "'s StarCraft II replays"} text={"View and download " + playerName + "'s shared StarCraft II replays."}
+  label="Share replay page" aria-label={"Share " + playerName + "'s replay page"} />;
 function clickShare(playerName = "Reaver") {
   const trigger = screen.getByRole("button", { name: `Share ${playerName}'s replay page` });
   trigger.focus(); fireEvent.click(trigger); return trigger;
@@ -53,7 +55,7 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-describe("PublicReplayShareButton", () => {
+describe("ShareButton", () => {
   it("opens native sharing immediately with the supplied canonical path and query", async () => {
     const share = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { share, clipboard: { writeText: h.write } });
@@ -68,7 +70,7 @@ describe("PublicReplayShareButton", () => {
       text: "View and download Reaver's shared StarCraft II replays.", url: href(),
     });
     expect(await screen.findByText("Shared")).toBeTruthy();
-    expect(h.success).toHaveBeenCalledWith("Replay page shared");
+    expect(h.success).toHaveBeenCalledWith("Link shared");
     expect(h.write).not.toHaveBeenCalled();
   });
 
@@ -76,7 +78,7 @@ describe("PublicReplayShareButton", () => {
     render(content()); clickShare();
     expect(await screen.findByText("Link copied")).toBeTruthy();
     expect(h.write).toHaveBeenCalledTimes(1); expect(h.write).toHaveBeenCalledWith(href());
-    expect(h.success).toHaveBeenCalledTimes(1); expect(h.success).toHaveBeenCalledWith("Replay page link copied");
+    expect(h.success).toHaveBeenCalledTimes(1); expect(h.success).toHaveBeenCalledWith("Link copied");
   });
 
   it("treats native AbortError as quiet cancellation without clipboard or manual recovery", async () => {
@@ -98,7 +100,7 @@ describe("PublicReplayShareButton", () => {
     render(content()); clickShare();
     expect(await screen.findByText("Link copied")).toBeTruthy();
     expect(h.write).toHaveBeenCalledWith(href());
-    expect(h.success).toHaveBeenCalledWith("Replay page link copied");
+    expect(h.success).toHaveBeenCalledWith("Link copied");
   });
 
   it("keeps a held native share pending without timing out into clipboard", async () => {
@@ -150,7 +152,7 @@ describe("PublicReplayShareButton", () => {
     expect(screen.queryByRole("dialog", { name: manualLabel })).toBeNull();
     await settle(currentNative, "resolve");
     expect(trigger.textContent).toContain("Shared"); expect(h.success).toHaveBeenCalledTimes(1);
-    expect(h.success).toHaveBeenCalledWith("Replay page shared");
+    expect(h.success).toHaveBeenCalledWith("Link shared");
   });
 
   it.each(["resolve", "reject", "abort"] as const)("ignores native %s after unmount", async outcome => {

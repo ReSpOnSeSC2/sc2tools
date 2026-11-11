@@ -20,12 +20,12 @@ import { Section } from "@/components/ui/Section";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { SaveBar } from "@/components/ui/SaveBar";
 import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
-import { usePublishDirty } from "./SettingsContext";
+import { useSaveSource } from "./SettingsContext";
 import { SettingsPlayerChannels } from "./SettingsPlayerChannels";
 import { SettingsPublicProfile } from "./SettingsPublicProfile";
+import { SettingsSupporterWall } from "./SettingsSupporterWall";
 import { SettingsLoadError } from "./SettingsLoadError";
 import { SettingsSectionsReady } from "./SettingsSectionNav";
 
@@ -122,15 +122,15 @@ function SettingsProfileForm({ owner }: { owner: string | null }) {
     const lifetime = form.current; lifetime.active = true;
     return () => { lifetime.active = false; };
   }, []);
-  const [channelsDirty, setChannelsDirty] = useState(false);
-
   const serverDraft = useMemo(() => data ? toDraft(data) : undefined, [data]);
   const { draft, setDraft, dirty, hydrated, reset, markSaved } = useDirtyForm<Draft>(
     serverDraft,
     DEFAULT_DRAFT,
   );
 
-  usePublishDirty("profile", dirty || channelsDirty);
+  // Profile saves first and channels second, through the tab's one SaveBar:
+  // channels can use the Pulse IDs this save adds.
+  useSaveSource("profile", { label: "profile", dirty, save, reset, order: 0 }, "profile-details");
 
   // Auto-fill BattleTag from SC2Pulse: when the field is empty but the
   // user has Pulse IDs, ask the API to resolve the owning account's
@@ -174,12 +174,13 @@ function SettingsProfileForm({ owner }: { owner: string | null }) {
     return (data?.detectedPulseIds ?? []).filter((id) => !known.has(id));
   }, [data?.detectedPulseIds, draft.pulseIds]);
 
-  async function save() {
+  async function save(): Promise<boolean> {
     const lifetime = form.current;
-    if (lifetime.pending || saving || !hydrated || !owner) return;
+    if (!dirty) return true;
+    if (lifetime.pending || saving || !hydrated || !owner) return false;
     const rawGap = draft.sessionGapInput;
     if (rawGap !== "" && (!/^\d+$/.test(rawGap) || !validGap(Number(rawGap)))) {
-      toast.error("Use a whole number from 15 to 480 minutes, or clear it for Auto"); return;
+      toast.error("Use a whole number from 15 to 480 minutes, or clear it for Auto"); return false;
     }
     lifetime.pending = true;
     setSaving(true);
@@ -196,22 +197,24 @@ function SettingsProfileForm({ owner }: { owner: string | null }) {
         });
         assertCurrent(); return answer;
       }, 15_000);
-      if (!lifetime.active) return;
+      if (!lifetime.active) return false;
       // The PUT is confirmed. A local cache problem cannot turn that commit
       // into a failed save or trigger a second policy HTTP request.
       try { await mutate(saved, { revalidate: false }); } catch { /* Advisory cache publication. */ }
-      if (!lifetime.active) return;
+      if (!lifetime.active) return false;
       try {
         await mutateCache((key: unknown) => Array.isArray(key) && key[0] === "authenticated-api"
           && key[1] === owner && key[2] === SESSION_POLICY_PATH,
         readSessionPolicy(saved.sessionPolicy), { revalidate: false });
       } catch { /* The confirmed Profile save still stands. */ }
-      if (!lifetime.active) return;
+      if (!lifetime.active) return false;
       markSaved(); toast.success("Profile saved");
+      return true;
     } catch (error) {
-      if (!lifetime.active) return;
+      if (!lifetime.active) return false;
       const message = (error as ClientApiError | undefined)?.message ?? "Please try again.";
       toast.error("Couldn't save profile", { description: message });
+      return false;
     } finally {
       lifetime.pending = false;
       if (lifetime.active) setSaving(false);
@@ -380,19 +383,11 @@ function SettingsProfileForm({ owner }: { owner: string | null }) {
       <SettingsPlayerChannels
         savedPulseIds={data?.pulseIds ?? []}
         profileDirty={dirty}
-        onDirtyChange={setChannelsDirty}
       />
 
       <SettingsPublicProfile />
 
-      <SaveBar
-        buttonClassName="min-h-11"
-        stackOnMobile
-        visible={dirty}
-        saving={saving}
-        onSave={save}
-        onReset={reset}
-      />
+      <SettingsSupporterWall defaultName={data?.displayName ?? ""} />
     </>
   );
 }

@@ -10,6 +10,7 @@ import type {
   ControlGroupOpeningStep,
   IdentityCandidate,
 } from "./OpponentIdentityCandidates";
+import { formatNumber } from "@/lib/i18n/format";
 
 /** Expandable, evidence-by-evidence explanation for one identity lead. */
 export function CandidateEvidenceDetails({
@@ -384,8 +385,8 @@ function EvidenceDetailCard({
           </p>
           {"targetEvents" in evidence && "candidateEvents" in evidence ? (
             <p className="mt-1 text-micro text-text-dim">
-              Recorded events: {finiteCount(evidence.targetEvents).toLocaleString()} target ·{" "}
-              {finiteCount(evidence.candidateEvents).toLocaleString()} candidate
+              Recorded events: {formatNumber(finiteCount(evidence.targetEvents))} target ·{" "}
+              {formatNumber(finiteCount(evidence.candidateEvents))} candidate
             </p>
           ) : null}
           {"consistency" in evidence && evidence.consistency ? (
@@ -488,7 +489,7 @@ function DimensionValue({ value, unit, samples }: {
 
 function formatDimensionValue(value: number, unit?: string): string {
   if (unit === "ratio") return formatPercent(value);
-  const number = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const number = formatNumber(value, { maximumFractionDigits: 2 });
   if (unit === "per_minute") return `${number}/min`;
   if (unit === "seconds") return `${number}s`;
   if (!unit || unit === "count") return number;

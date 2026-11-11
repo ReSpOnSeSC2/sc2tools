@@ -55,6 +55,9 @@ test("guide ranks and complete map disclosure remain available without JavaScrip
   const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 375, height: 900 } });
   try {
     const page = await context.newPage(); const openers = await page.goto(`${baseURL}/guides/pvz`); expect(openers?.status()).toBe(200); const cards = page.getByRole("list", { name: "Opener cards" }); await expect(cards.getByRole("listitem")).toHaveCount(4); await expect(cards.getByRole("listitem").first()).toContainText("#1Stargate into Glaives");
-    const build = await page.goto(`${baseURL}/guides/pvz/stargate-into-glaives`); expect(build?.status()).toBe(200); await expect(page.getByRole("table", { name: "Too close to call opponent openers" }).getByRole("rowheader")).toHaveCount(5); await page.getByText("Show all 7 maps", { exact: true }).click(); await expect(page.getByRole("table", { name: "All maps for this build" }).getByRole("rowheader")).toHaveCount(7); await noOverflow(page);
+    const build = await page.goto(`${baseURL}/guides/pvz/stargate-into-glaives`); expect(build?.status()).toBe(200);
+    const league = page.getByRole("table", { name: "Win rate by opponent league" });
+    await expect(league.getByRole("rowheader", { name: "Diamond" })).toHaveCount(1);
+    await expect(page.getByRole("table", { name: "Too close to call opponent openers" }).getByRole("rowheader")).toHaveCount(5); await page.getByText("Show all 7 maps", { exact: true }).click(); await expect(page.getByRole("table", { name: "All maps for this build" }).getByRole("rowheader")).toHaveCount(7); await noOverflow(page);
   } finally { await context.close(); }
 });

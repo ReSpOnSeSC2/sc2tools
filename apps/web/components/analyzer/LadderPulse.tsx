@@ -51,6 +51,7 @@ import { MapLabel } from "@/components/maps/MapArtwork";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { LadderPulseFrame as PulseFrame } from "./LadderPulseFrame";
+import { formatNumber } from "@/lib/i18n/format";
 
 const RECENT_RAIL_SIZE = 6;
 const META_REFRESH_MS = 60 * 60 * 1000;
@@ -277,7 +278,7 @@ function LatestDispatch({
         {mmr ? (
           <SignalChip
             label={[
-              `MMR ${mmr.to.toLocaleString()}`,
+              `MMR ${formatNumber(mmr.to)}`,
               `${mmr.delta >= 0 ? "+" : ""}${mmr.delta} vs prior`,
             ].join(" · ")}
             title="Recorded in this replay; movement is versus the prior replay on the same account and ladder race."
@@ -445,7 +446,7 @@ function MetaMovementCard({
         {movement}
       </p>
       <p className="mt-3 text-caption text-text-muted">
-        {opener.games.toLocaleString()} games · {pct1(opener.winRate)} win rate
+        {formatNumber(opener.games)} games · {pct1(opener.winRate)} win rate
         {" · "}
         {pct1(opener.frequency)} of published {row.matchup} openers
       </p>
@@ -696,7 +697,7 @@ function formatLeakSignal(leak: PulseLeak): {
       label:
         samples == null
           ? name
-          : `${name} · ${samples.toLocaleString()} ${
+          : `${name} · ${formatNumber(samples)} ${
               samples === 1 ? "reading" : "readings"
             } over 800 minerals`,
       title: detail,

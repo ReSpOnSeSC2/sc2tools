@@ -15,6 +15,7 @@ export const SETTINGS_SECTIONS = {
     { id: "pulse-ids", label: "Pulse IDs" },
     { id: "player-channels", label: "Twitch & YouTube" },
     { id: "public-profile", label: "Public player page" },
+    { id: "supporter-wall", label: "Supporter wall" },
   ],
   backups: [
     { id: "replay-archive", label: "Replay archive" },
@@ -67,6 +68,7 @@ export const SETTINGS_SECTIONS = {
   voice: [{ id: "voice-readout", label: "Voice readout" }],
   preferences: [
     { id: "app-preferences", label: "App preferences" },
+    { id: "appearance", label: "Appearance & region" },
     { id: "setup-privacy", label: "Setup & privacy" },
     { id: "reports", label: "Reports" },
     { id: "notifications", label: "Notifications" },
@@ -132,6 +134,7 @@ export const SETTINGS_FIELDS = [
   { id: "chat-bot", tab: "chat", section: "bot", label: "Chat bot", synonyms: ["bot account", "bot login", "chatbot"] },
   { id: "voice-readout", tab: "voice", section: "voice-readout", label: "Voice readout", synonyms: ["scouting voice", "speech volume", "voice notifications", "spoken opponent"] },
   { id: "app-preferences", tab: "preferences", section: "app-preferences", label: "Default tab", synonyms: ["start page", "app preferences", "default dashboard"] },
+  { id: "appearance", tab: "preferences", section: "appearance", label: "Appearance & region", synonyms: ["text size", "font size", "density", "compact", "24-hour clock", "12-hour clock", "time format", "date format", "language", "locale", "week starts on", "Monday"] },
   { id: "setup-privacy", tab: "preferences", section: "setup-privacy", label: "Setup & privacy", synonyms: ["analytics cookies", "cookie consent", "setup guide", "setup checklist"] },
   { id: "notifications", tab: "preferences", section: "notifications", label: "Notification preferences", synonyms: ["mute notifications", "in-app updates", "notifications"] },
   { id: "reports", tab: "preferences", section: "reports", label: "Weekly and stream reports", synonyms: ["weekly report", "stream report", "report time zone", "Monday summary"] },

@@ -12,6 +12,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 import { readConsent, setConsent } from "@/lib/analytics/consent";
 import { SettingsMisc, miscForSave } from "../SettingsMisc";
 import { SettingsShell } from "../SettingsShell";
+import { SettingsSaveScope } from "../SettingsSaveBar";
 
 const mocks = vi.hoisted(() => ({
   misc: {} as Record<string, unknown>,
@@ -76,7 +77,7 @@ afterEach(() => {
 function renderMisc() {
   return render(
     <ToastProvider>
-      <SettingsMisc />
+      <SettingsSaveScope tabId="preferences"><SettingsMisc /></SettingsSaveScope>
     </ToastProvider>,
   );
 }
@@ -162,19 +163,21 @@ describe("Devices navigation from real Preferences forms", () => {
 });
 
 describe("SettingsMisc default tab", () => {
-  it("keeps notification-only edits guarded after resetting the other Preferences form", () => {
+  it("guards all Preferences drafts and discards both forms through one bar", () => {
     mocks.ownerId = "synthetic-settings-owner";
     render(<ToastProvider><SettingsShell initialTab="preferences" renderTab={(id) => id === "preferences" ? <SettingsMisc /> : <p>panel {id}</p>} /></ToastProvider>);
     const notifications = screen.getByRole("checkbox", { name: "New reviews" });
     fireEvent.click(notifications);
     fireEvent.change(screen.getByLabelText("Default tab"), { target: { value: "macro" } });
-    fireEvent.click(within(screen.getByRole("region", { name: "Unsaved changes" })).getByRole("button", { name: "Discard" }));
     expect(screen.getAllByRole("img", { name: "Unsaved changes" })).toHaveLength(2);
+    expect(screen.getAllByRole("region", { name: "Unsaved changes" })).toHaveLength(1);
     fireEvent.click(screen.getAllByRole("tab", { name: "Profile" })[0]);
     expect(screen.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Stay on this tab" }));
     expect((notifications as HTMLInputElement).checked).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: /^Reset$/ }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Unsaved changes" })).getByRole("button", { name: "Discard" }));
+    expect((notifications as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Default tab") as HTMLSelectElement).value).toBe("today");
     expect(screen.queryAllByRole("img", { name: "Unsaved changes" })).toHaveLength(0);
     fireEvent.click(screen.getAllByRole("tab", { name: "Profile" })[0]);
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -217,7 +220,7 @@ describe("SettingsMisc default tab", () => {
     renderMisc();
     fireEvent.change(screen.getByLabelText("Default tab"), { target: { value: "macro" } });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save preferences" }));
     });
     expect(mocks.apiCall).toHaveBeenCalledWith(expect.anything(), "/v1/me/preferences/misc", {
       method: "PUT",
@@ -262,7 +265,7 @@ describe("SettingsMisc setup and analytics", () => {
     expect(analyticsStatus()).toBe("Analytics cookies: On");
     fireEvent.click(screen.getByRole("button", { name: "Turn off analytics cookies" }));
     expect(readConsent()).toBe("denied");
-    expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save preferences" })).toBeNull();
     expect(mocks.apiCall).not.toHaveBeenCalled();
   });
 

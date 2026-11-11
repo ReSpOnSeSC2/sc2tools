@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/i18n/format";
 // SC2 ladder season fallback catalog.
 //
 // The analyzer's real authority is /v1/seasons, which proxies
@@ -64,6 +65,6 @@ export function listSeasons(
 /** Format a season range as a short label for picker UIs. */
 export function formatSeasonRange(range: SeasonRange): string {
   const fmt = (d: Date) =>
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    formatDate(d, { month: "short", day: "numeric", year: "numeric" });
   return `${fmt(range.start)} – ${fmt(range.end)}`;
 }

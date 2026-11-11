@@ -22,7 +22,8 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/Stat";
 import { SectionNav } from "@/components/ui/SectionNav";
-import { PlayerCopyButton } from "./PlayerCopyButton";
+import { ShareButton } from "@/components/ui/ShareButton";
+import { sharedReplayTitle } from "@/lib/sharedReplayTitle";
 import { fmtDate, fmtDateCompact, fmtMinutes, fmtMmr, macroScoreTone } from "@/lib/format";
 import { coerceRace, raceIconName } from "@/lib/race";
 import { archiveBackLabel, parseArchiveFrom, sharedAnalysisHref } from "./archiveQuery";
@@ -34,7 +35,7 @@ export function PublicReplayAnalysis({ data, from }: { data: PublicReplayDetailR
   const { profile, game, macroBreakdown, buildOrder, streams } = data;
   const root = `/players/${encodeURIComponent(profile.handle)}/replays`;
   const listFrom = parseArchiveFrom(from);
-  const canonicalPath = sharedAnalysisHref(root, game.gameId, listFrom);
+  const canonicalPath = sharedAnalysisHref(root, game.gameId);
   const opponentName = game.opponent?.displayName?.trim() || "Unknown opponent";
   const matchup = matchupLabel(game.myRace, game.opponent?.race);
   const multiplayerLabel = replayFormatLabel(game.matchFormat, game.playerCount);
@@ -89,14 +90,14 @@ export function PublicReplayAnalysis({ data, from }: { data: PublicReplayDetailR
                   gameId={game.gameId}
                   available={game.replayAvailable}
                   sizeBytes={game.replaySizeBytes}
-                  showLabel
+                  appearance="pill"
                   contextLabel={
                     multiplayerLabel
                       ? `${profile.displayName}'s ${multiplayerLabel.toLowerCase()}`
                       : `${profile.displayName} vs ${opponentName}`
                   }
                 />
-                <PlayerCopyButton path={canonicalPath} label="Copy analysis link" />
+                <ShareButton path={canonicalPath} label="Share analysis" title={sharedReplayTitle(profile.displayName, { result, matchup, map: game.map })} />
               </div>
             }
           />
@@ -113,7 +114,7 @@ export function PublicReplayAnalysis({ data, from }: { data: PublicReplayDetailR
         <StatCard label="Result" value={<span className={result === "Win" ? "text-success" : result === "Loss" ? "text-danger" : "text-text"}>{result}</span>} size="sm" />
         <StatCard label="Length" value={fmtMinutes(game.durationSec)} size="sm" />
         <StatCard label={`${profile.displayName} MMR`} value={fmtMmr(game.myMmr)} size="sm" />
-        <StatCard label={`${opponentPrefix} MMR`} value={fmtMmr(game.opponent?.mmr)} size="sm" />
+        <StatCard label={`${opponentPrefix} MMR (approx.)`} value={fmtMmr(game.opponent?.mmr)} size="sm" />
         <StatCard label="Macro score" value={<span className={macroScoreTone(game.macroScore)}>{game.macroScore != null ? Math.round(game.macroScore) : "—"}</span>} hint="out of 100" size="sm" className="col-span-2 lg:col-span-1" />
       </div>
 

@@ -10,6 +10,7 @@ import { MapPreviewDialog } from "@/components/maps/MapPreviewDialog";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
 import { buildWinRateTrend, type WinRatePeriod, type WinRateTrend } from "@/lib/winRateTrend";
 import { WinRateSampleSummary, WinRateTrendPlot } from "./WinRateTrendPlot";
+import { formatNumber } from "@/lib/i18n/format";
 
 type MapPoint = {
   bucket: string;
@@ -152,7 +153,7 @@ function MapPanel({
           </h4>
           <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-micro tabular-nums text-text-muted">
             <span>{overall.rate == null ? "—" : `${Math.round(overall.rate)}%`} overall</span>
-            <span>{overall.games.toLocaleString()} {overall.games === 1 ? recordLabel.slice(0, -1) : recordLabel}</span>
+            <span>{formatNumber(overall.games)} {overall.games === 1 ? recordLabel.slice(0, -1) : recordLabel}</span>
           </div>
         </div>
       </div>

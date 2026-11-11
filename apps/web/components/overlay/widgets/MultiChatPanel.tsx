@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 import type { CSSProperties, ReactNode } from "react";
 import { appearanceStyles, type ChatAppearance } from "@/lib/multichat/appearance";
 
@@ -23,7 +25,7 @@ export function MultiChatPanel({
     && Number.isInteger(score.losses) && score.losses >= 0;
 
   return (
-    <div
+    <OverlayPanel frame={false}
       data-testid="mc-panel"
       style={{
         position: "relative",
@@ -35,6 +37,7 @@ export function MultiChatPanel({
         display: "flex",
         flexDirection: "column",
         background: styles.panelBackground,
+        fontFamily: styles.fontFamily,
         border: appearance.panelBorder
           ? framed ? "4px ridge #777d80" : "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))"
           : "none",
@@ -90,6 +93,6 @@ export function MultiChatPanel({
         </div>
       ) : null}
       {children}
-    </div>
+    </OverlayPanel>
   );
 }

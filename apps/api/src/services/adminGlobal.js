@@ -1,5 +1,6 @@
 "use strict";
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+const { resultFilterQuery } = require("../util/gameResultClass");
 
 /**
  * AdminGlobalService — platform-wide ("global") tracking for the
@@ -211,10 +212,11 @@ class AdminGlobalService {
           displayNameSample: "$rep.displayNameSample",
           race: "$rep.race",
           pulseCharacterId: "$rep.pulseCharacterId",
+          // Decided games only: ties and unrecorded results never dilute it.
           winRate: {
             $cond: [
-              { $gt: ["$gameCount", 0] },
-              { $divide: ["$wins", "$gameCount"] },
+              { $gt: [{ $add: ["$wins", "$losses"] }, 0] },
+              { $divide: ["$wins", { $add: ["$wins", "$losses"] }] },
               0,
             ],
           },
@@ -436,7 +438,7 @@ class AdminGlobalService {
     const perUser = rows
       .map((/** @type {any} */ r) => {
         const gc = Number(r.gameCount) || 0;
-        const w = Number(r.wins) || 0;
+        const w = Number(r.wins) || 0, l = Number(r.losses) || 0;
         return {
           userId: String(r.userId || ""),
           email: emails.get(String(r.userId)) || null,
@@ -444,8 +446,8 @@ class AdminGlobalService {
           race: r.race || "",
           gameCount: gc,
           wins: w,
-          losses: Number(r.losses) || 0,
-          winRate: gc > 0 ? w / gc : 0,
+          losses: l,
+          winRate: w + l > 0 ? w / (w + l) : 0,
           mmr: typeof r.mmr === "number" ? r.mmr : null,
           firstSeen: r.firstSeen instanceof Date ? r.firstSeen : null,
           lastSeen: r.lastSeen instanceof Date ? r.lastSeen : null,
@@ -484,7 +486,7 @@ class AdminGlobalService {
       gameCount,
       wins,
       losses,
-      winRate: gameCount > 0 ? wins / gameCount : 0,
+      winRate: wins + losses > 0 ? wins / (wins + losses) : 0,
       trackedByUsers: rows.length,
       mmr,
       leagueId,
@@ -505,9 +507,11 @@ class AdminGlobalService {
    * so the admin UI can attribute each game and deep-link its build
    * order via the existing ``/admin/users/<userId>/games/<gameId>``
    * endpoints. ``opponent.strategy`` is the classifier's label.
+   * ``result`` (win|loss|tie, the gameResultClass classification),
+   * ``map`` (exact name) and ``userId`` (one owner) narrow the list.
    *
    * @param {string} pulseId
-   * @param {{ limit?: number, before?: Date }} [opts]
+   * @param {{ limit?: number, before?: Date, result?: import('../util/gameResultClass').ResultFilter, map?: string, userId?: string }} [opts]
    * @returns {Promise<{
    *   items: Array<{
    *     gameId: string,
@@ -537,6 +541,9 @@ class AdminGlobalService {
     const limit = clampLimit(opts.limit, 50);
     /** @type {Record<string, any>} */
     const filter = pulseGamesMatch(pulseId);
+    if (opts.result) Object.assign(filter, resultFilterQuery(opts.result));
+    if (opts.map) filter.map = opts.map;
+    if (opts.userId) filter.userId = opts.userId;
     if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
       filter.date = { $lt: opts.before };
     }
@@ -565,30 +572,7 @@ class AdminGlobalService {
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const emails = await this._emailMap(page.map((/** @type {any} */ g) => String(g.userId)));
-    const items = page.map((/** @type {any} */ g) => {
-      const opp = g.opponent || {};
-      return {
-        gameId: String(g.gameId || ""),
-        userId: String(g.userId || ""),
-        userEmail: emails.get(String(g.userId)) || null,
-        date: g.date instanceof Date ? g.date : null,
-        // Patch era, with ``date``: the detail view prices units by it.
-        gameVersion: typeof g.gameVersion === "string" ? g.gameVersion : null,
-        gameBuild: typeof g.gameBuild === "number" ? g.gameBuild : null,
-        result: g.result || null,
-        myRace: g.myRace || null,
-        map: g.map || null,
-        durationSec: typeof g.durationSec === "number" ? g.durationSec : null,
-        myMmr: typeof g.myMmr === "number" ? g.myMmr : null,
-        macroScore: typeof g.macroScore === "number" ? g.macroScore : null,
-        opponent: {
-          displayName: opp.displayName || "",
-          race: opp.race || "",
-          mmr: typeof opp.mmr === "number" ? opp.mmr : null,
-          strategy: opponentDetectorView(g).strategy,
-        },
-      };
-    });
+    const items = page.map((g) => globalGameRow(g, emails));
     return {
       items,
       nextBefore: hasMore && page.length > 0 ? page[page.length - 1].date : null,
@@ -715,6 +699,32 @@ function clampLimit(raw, fallback) {
 /** @param {string} s */
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** @param {any} g @param {Map<string,string|null>} emails */
+function globalGameRow(g, emails) {
+  const opp = g.opponent || {};
+  return {
+    gameId: String(g.gameId || ""),
+    userId: String(g.userId || ""),
+    userEmail: emails.get(String(g.userId)) || null,
+    date: g.date instanceof Date ? g.date : null,
+    // Patch era, with ``date``: the detail view prices units by it.
+    gameVersion: typeof g.gameVersion === "string" ? g.gameVersion : null,
+    gameBuild: typeof g.gameBuild === "number" ? g.gameBuild : null,
+    result: g.result || null,
+    myRace: g.myRace || null,
+    map: g.map || null,
+    durationSec: typeof g.durationSec === "number" ? g.durationSec : null,
+    myMmr: typeof g.myMmr === "number" ? g.myMmr : null,
+    macroScore: typeof g.macroScore === "number" ? g.macroScore : null,
+    opponent: {
+      displayName: opp.displayName || "",
+      race: opp.race || "",
+      mmr: typeof opp.mmr === "number" ? opp.mmr : null,
+      strategy: opponentDetectorView(g).strategy,
+    },
+  };
 }
 
 module.exports = { AdminGlobalService, PLAYER_SORT_FIELDS, BREAKDOWN_LIMIT };

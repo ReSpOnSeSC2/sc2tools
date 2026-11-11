@@ -9,11 +9,20 @@ import { clientTimezone, localDateKey } from "@/lib/timeseries";
 import { formatTrendDate } from "@/lib/winRateTrend";
 import { LinkButton } from "@/components/ui/Button";
 import { sessionHistoryHref } from "@/lib/sessionHistoryUrls";
+import { useFormat } from "@/lib/i18n/useFormat";
+import type { Formatter } from "@/lib/i18n/format";
+import { formatDate, formatNumber } from "@/lib/i18n/format";
 
 type ActivityDay = { day: string; wins: number; losses: number; total: number; winRate: number };
 type ActivityResponse = { timezone: string; days: ActivityDay[] };
-type CalCell = { date: string; wins: number; losses: number; total: number };
-const DAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
+export type CalCell = { date: string; wins: number; losses: number; total: number };
+/** Row labels from the account's first weekday: every other row is named. */
+export function weekdayRowLabels(format: Pick<Formatter, "date" | "weekStartDay">): string[] {
+  // 4 January 2026 is a Sunday, so day 4 + n is weekday n.
+  return Array.from({ length: 7 }, (_, row) => row % 2
+    ? ""
+    : format.date(new Date(Date.UTC(2026, 0, 4 + ((format.weekStartDay + row) % 7))), { weekday: "short", timeZone: "UTC" }));
+}
 const MS_PER_DAY = 86_400_000;
 const VOLUME_LEVELS = [
   { label: "0", className: "bg-bg-elevated" },
@@ -32,6 +41,9 @@ export function ActivityCalendarChart({ weeks = 26 }: { weeks?: number }) {
   const { isGlobal } = useTrendsDataScope();
   const recordLabel = isGlobal ? "player game records" : "games";
   const tz = useMemo(() => clientTimezone(), []);
+  const format = useFormat();
+  const weekStartDay = format.weekStartDay;
+  const dayLabels = useMemo(() => weekdayRowLabels(format), [format]);
   const params = useMemo(() => ({ ...filters, tz }), [filters, tz]);
   const { data, isLoading, error, mutate } = useApi<ActivityResponse>(`/v1/activity-calendar${filtersToQuery(params)}#${dbRev}`);
   const calendar = useMemo(() => {
@@ -44,8 +56,8 @@ export function ActivityCalendarChart({ weeks = 26 }: { weeks?: number }) {
     const today = localDateKey(new Date(), zone);
     const until = filters.until ? calendarKey(filters.until, zone) : today;
     const since = filters.since ? calendarKey(filters.since, zone) : "";
-    return buildCalendar(dayMap, weeks, until && until < today ? until : today, since);
-  }, [data, filters.since, filters.until, tz, weeks]);
+    return buildCalendar(dayMap, weeks, until && until < today ? until : today, since, weekStartDay);
+  }, [data, filters.since, filters.until, tz, weeks, weekStartDay]);
   const visible = useMemo(() => calendar.flat().filter((cell): cell is CalCell => cell != null), [calendar]);
   const totalGames = visible.reduce((sum, cell) => sum + cell.total, 0);
   const activeDays = visible.filter((cell) => cell.total > 0).length;
@@ -80,12 +92,12 @@ export function ActivityCalendarChart({ weeks = 26 }: { weeks?: number }) {
     const first = week.find((cell) => cell != null);
     const previous = calendar[index - 1]?.find((cell) => cell != null);
     if (!first || (index > 0 && index < 3) || first.date.slice(0, 7) === previous?.date.slice(0, 7)) return "";
-    return new Date(`${first.date}T12:00:00Z`).toLocaleDateString(undefined, { month: "short", ...(index === 0 || first.date.slice(0, 4) !== previous?.date.slice(0, 4) ? { year: "2-digit" as const } : {}), timeZone: "UTC" });
+    return formatDate(new Date(`${first.date}T12:00:00Z`), { month: "short", ...(index === 0 || first.date.slice(0, 4) !== previous?.date.slice(0, 4) ? { year: "2-digit" as const } : {}), timeZone: "UTC" });
   });
   return (
     <Card title="Activity calendar" className="min-w-0">
       <div className="mb-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <span className="text-caption font-semibold tabular-nums text-text">{totalGames.toLocaleString()} {recordLabel} shown</span>
+        <span className="text-caption font-semibold tabular-nums text-text">{formatNumber(totalGames)} {recordLabel} shown</span>
         <span className="text-caption tabular-nums text-text-muted">{activeDays} active {activeDays === 1 ? "day" : "days"} / {visible.length} shown</span>
       </div>
       <p className="mb-3 text-micro leading-relaxed text-text-muted">
@@ -96,7 +108,7 @@ export function ActivityCalendarChart({ weeks = 26 }: { weeks?: number }) {
         <div className="flex w-max gap-2">
           <div aria-hidden="true" className="sticky left-0 z-10 bg-bg-surface pr-1 text-micro text-text-muted">
             <div className="h-5" />
-            {DAY_LABELS.map((label, i) => <div key={i} className="flex h-6 items-center mb-0.5">{label}</div>)}
+            {dayLabels.map((label, i) => <div key={i} className="flex h-6 items-center mb-0.5">{label}</div>)}
           </div>
           <div className="flex gap-0.5">
             {calendar.map((week, wi) => <div key={wi}>
@@ -117,7 +129,7 @@ export function ActivityCalendarChart({ weeks = 26 }: { weeks?: number }) {
         {VOLUME_LEVELS.map((item) => <span key={item.label} className="inline-flex items-center gap-1"><span aria-hidden="true" className={`h-3 w-3 rounded border border-border/40 ${item.className}`} />{item.label}</span>)}
       </div>
       {selected && <div role="status" aria-live="polite" aria-atomic="true" className="mt-3 rounded-lg border border-border bg-bg-elevated/50 p-3 text-caption">
-        <div className="flex flex-wrap justify-between gap-2"><strong className="text-text">{formatTrendDate(selected.date, true)}</strong><span className="tabular-nums text-text-muted">{selected.total.toLocaleString()} {recordLabel}</span></div>
+        <div className="flex flex-wrap justify-between gap-2"><strong className="text-text">{formatTrendDate(selected.date, true)}</strong><span className="tabular-nums text-text-muted">{formatNumber(selected.total)} {recordLabel}</span></div>
         <p className="mt-1 tabular-nums text-text-muted">{selected.total ? `${selected.wins}W · ${selected.losses}L${selected.total > selected.wins + selected.losses ? ` · ${selected.total - selected.wins - selected.losses} other` : ""}` : "No selected games on this day."}</p>
         {!isGlobal ? <LinkButton className="mt-2" variant="ghost" href={sessionHistoryHref(filters, { day: selected.date, tz: data.timezone || tz })}>View sessions on this day</LinkButton> : null}
       </div>}
@@ -126,17 +138,20 @@ export function ActivityCalendarChart({ weeks = 26 }: { weeks?: number }) {
   );
 }
 
-/** Calendar arithmetic uses date-only UTC keys, avoiding DST duplicates and gaps. */
-function buildCalendar(dayMap: Map<string, CalCell>, weeks: number, end: string, since: string): Array<Array<CalCell | null>> {
+/**
+ * Calendar arithmetic uses date-only UTC keys, avoiding DST duplicates and
+ * gaps. Columns are weeks starting on `weekStartDay` (0 = Sunday).
+ */
+export function buildCalendar(dayMap: Map<string, CalCell>, weeks: number, end: string, since: string, weekStartDay = 1): Array<Array<CalCell | null>> {
+  const row = (ms: number) => (new Date(ms).getUTCDay() - weekStartDay + 7) % 7;
   const endMs = Date.parse(`${end}T00:00:00Z`);
-  const endDow = (new Date(endMs).getUTCDay() + 6) % 7;
   const count = Number.isFinite(weeks) ? Math.max(1, Math.min(104, Math.floor(weeks))) : 26;
-  const lastSunday = endMs + (6 - endDow) * MS_PER_DAY;
-  let startMs = lastSunday - (count * 7 - 1) * MS_PER_DAY;
+  const lastWeekEnd = endMs + (6 - row(endMs)) * MS_PER_DAY;
+  let startMs = lastWeekEnd - (count * 7 - 1) * MS_PER_DAY;
   const sinceMs = since ? Date.parse(`${since}T00:00:00Z`) : NaN;
-  if (Number.isFinite(sinceMs) && sinceMs > startMs) startMs = sinceMs - ((new Date(sinceMs).getUTCDay() + 6) % 7) * MS_PER_DAY;
+  if (Number.isFinite(sinceMs) && sinceMs > startMs) startMs = sinceMs - row(sinceMs) * MS_PER_DAY;
   const out: Array<Array<CalCell | null>> = [];
-  for (let week = startMs; week <= lastSunday; week += MS_PER_DAY * 7) {
+  for (let week = startMs; week <= lastWeekEnd; week += MS_PER_DAY * 7) {
     out.push(Array.from({ length: 7 }, (_, offset) => {
       const date = new Date(week + offset * MS_PER_DAY).toISOString().slice(0, 10);
       if (date > end || (since && date < since)) return null;

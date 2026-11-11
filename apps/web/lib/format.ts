@@ -1,5 +1,8 @@
 // Shared formatting helpers — ported from
 // reveal-sc2-opponent-main/stream-overlay-backend/public/analyzer/utils.
+// Dates and numbers go through lib/i18n/format, so they follow the
+// account's language and region, clock and week start.
+import { formatDate, formatDateTime, formatNumber, formatRelative, formatTime } from "@/lib/i18n/format";
 
 export function pct(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";
@@ -15,19 +18,14 @@ export function fmtAgo(iso: string | number | Date | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  const sec = Math.max(0, (Date.now() - d.getTime()) / 1000);
-  if (sec < 60) return `${Math.round(sec)}s ago`;
-  if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
-  if (sec < 86400) return `${Math.round(sec / 3600)}h ago`;
-  if (sec < 604800) return `${Math.round(sec / 86400)}d ago`;
-  return d.toLocaleDateString();
+  return formatRelative(d);
 }
 
 export function fmtDate(iso: string | number | Date | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString();
+  return formatDateTime(d);
 }
 
 /** Game header date without seconds, plus a short recent-game age. */
@@ -35,37 +33,36 @@ export function fmtGameDate(iso: string | number | Date | null | undefined, now 
   if (iso === null || iso === undefined || iso === "") return "—";
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return "—";
-  const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
-  const time = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date);
+  const day = formatDate(date, { month: "short", day: "numeric", year: "numeric" });
+  const time = formatTime(date, { hour: "numeric", minute: "2-digit" });
   const elapsed = Math.max(0, now - date.getTime());
   const minute = 60_000; const hour = 60 * minute; const days = Math.floor(elapsed / (24 * hour));
   const age = elapsed < minute ? "just now" : elapsed < hour ? `${Math.floor(elapsed / minute)}m ago` : elapsed < 24 * hour ? `${Math.floor(elapsed / hour)}h ago` : days === 1 ? "yesterday" : elapsed <= 30 * 24 * hour ? `${days} days ago` : "";
   return `${day} · ${time}${age ? ` (${age})` : ""}`;
 }
 
-const UTC_DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-const UTC_MONTH = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+const UTC_DAY: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" };
+const UTC_MONTH: Intl.DateTimeFormatOptions = { month: "short", year: "numeric", timeZone: "UTC" };
 
 export function fmtDay(iso: string | null | undefined): string {
   const date = iso ? new Date(iso) : null;
-  return date && Number.isFinite(date.getTime()) ? UTC_DAY.format(date) : "—";
+  return date && Number.isFinite(date.getTime()) ? formatDate(date, UTC_DAY) : "—";
 }
 
 export function fmtMonthYear(iso: string | null | undefined): string {
   const date = iso ? new Date(iso) : null;
-  return date && Number.isFinite(date.getTime()) ? UTC_MONTH.format(date) : "—";
+  return date && Number.isFinite(date.getTime()) ? formatDate(date, UTC_MONTH) : "—";
 }
 
 const compactDateOptions: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
-const compactDateFormatter = new Intl.DateTimeFormat("en-US", compactDateOptions);
-const compactDateYearFormatter = new Intl.DateTimeFormat("en-US", { ...compactDateOptions, year: "numeric" });
+const compactDateYearOptions: Intl.DateTimeFormatOptions = { ...compactDateOptions, year: "numeric" };
 
 /** Short replay date, with the year retained for older games. */
 export function fmtDateCompact(iso: string | number | Date | null | undefined): string {
   if (iso === null || iso === undefined || iso === "") return "—";
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return "—";
-  return (date.getFullYear() === new Date().getFullYear() ? compactDateFormatter : compactDateYearFormatter).format(date);
+  return formatDate(date, date.getFullYear() === new Date().getFullYear() ? compactDateOptions : compactDateYearOptions);
 }
 
 /** Shared macro score bands; unavailable scores keep a neutral tone. */
@@ -241,12 +238,8 @@ export const PLAYTIME_FORMAT_OPTIONS: ReadonlyArray<{
   { value: "minutesSeconds", label: "Minutes and seconds" },
 ];
 
-const DECIMAL_PLAYTIME = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 2,
-});
-const INTEGER_PLAYTIME = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 0,
-});
+const DECIMAL_PLAYTIME = { format: (value: number) => formatNumber(value, { maximumFractionDigits: 2 }) };
+const INTEGER_PLAYTIME = { format: (value: number) => formatNumber(value, { maximumFractionDigits: 0 }) };
 
 /**
  * Format a total number of in-game seconds in the unit selected on Trends.

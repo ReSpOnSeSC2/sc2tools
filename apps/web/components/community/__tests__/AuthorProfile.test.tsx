@@ -2,8 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { AuthorProfile } from "../AuthorProfile";
 import type { CommunityAuthorProfile } from "../types";
-vi.mock("../CommunityBuildOwnerControls", () => ({ CommunityBuildOwnerControls: () => null }));
-vi.mock("../CommunityOwnerReplayCount", () => ({ CommunityOwnerReplayCount: () => null }));
+vi.mock("../CommunityCardOwnerActions", () => ({ CommunityCardOwnerActions: () => null }));
 
 /**
  * Community author pages share the public-profile opt-in (a published

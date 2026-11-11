@@ -11,6 +11,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Field } from "@/components/ui/Field";
 import { useToastOptional } from "@/components/ui/Toast";
 import { consequence, targetHref, TARGET_LABEL, type ReportGroup } from "./moderationGroups";
+import { formatDateTime } from "@/lib/i18n/format";
 
 type Action = "dismiss" | "remove";
 type Failure = { error: ClientApiError; action: Action; note: string };
@@ -53,11 +54,11 @@ export function ReportGroupCard({ group, onResolved }: { group: ReportGroup; onR
           <h2 className="break-words font-semibold">{report.target?.title ?? report.targetId}</h2>
           <span className="rounded-full bg-bg-elevated px-2 text-caption">{TARGET_LABEL[report.targetType]}</span>
         </div>
-        <p className="text-caption text-text-muted">{group.reports.length} {group.reports.length === 1 ? "report" : "reports"} · {group.tally} · Oldest {new Date(group.oldest).toLocaleString()}</p>
+        <p className="text-caption text-text-muted">{group.reports.length} {group.reports.length === 1 ? "report" : "reports"} · {group.tally} · Oldest {formatDateTime(new Date(group.oldest))}</p>
         <p className="break-words text-body">{report.target?.snippet || "Target no longer exists"}</p>
         {href ? <Link href={href} target="_blank" rel="noreferrer" className="text-accent-cyan underline">Open in context<span className="sr-only"> (opens in new tab)</span></Link> : null}
         <details><summary>Individual reports</summary><ul className="space-y-2">{group.reports.map((r) => <li key={r.id} className="break-words text-caption">
-          {r.reason}{r.note ? ` · ${r.note}` : ""} · <Link className="text-accent-cyan underline" href={`/admin/users/${encodeURIComponent(r.reporterUserId)}`}>{r.reporterUserId}</Link> · {new Date(r.createdAt).toLocaleString()}
+          {r.reason}{r.note ? ` · ${r.note}` : ""} · <Link className="text-accent-cyan underline" href={`/admin/users/${encodeURIComponent(r.reporterUserId)}`}>{r.reporterUserId}</Link> · {formatDateTime(new Date(r.createdAt))}
         </li>)}</ul></details>
         <details><summary>Add note</summary><ResolutionNote value={note} onChange={setNote} /></details>
         {failure ? <div role="alert" className="space-y-2 rounded-lg border border-danger p-3">

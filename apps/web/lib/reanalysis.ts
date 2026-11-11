@@ -1,3 +1,4 @@
+import { getServerFormatter } from "@/lib/i18n/format";
 /**
  * Client contract for the re-analysis center (GET/POST /v1/me/reanalysis).
  * Counts and states only: the API never sends game ids, paths or URLs here.
@@ -137,7 +138,7 @@ export function formatMilestoneDate(date: string | undefined): string | null {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
   const value = new Date(`${date}T00:00:00Z`);
   if (Number.isNaN(value.getTime())) return null;
-  return value.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  return getServerFormatter().date(value, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
 export const REANALYSIS_ERROR_COPY: Record<string, string> = {

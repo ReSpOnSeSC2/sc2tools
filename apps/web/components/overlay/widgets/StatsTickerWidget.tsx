@@ -1,4 +1,6 @@
 "use client";
+
+import { OverlayPanel } from "../OverlayPanel";
 import { withOverlayDemo } from "../OverlayDemoBoundary";
 import fixtures from "@/lib/overlaySamples.json";
 
@@ -38,6 +40,7 @@ import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
 import { resolveLiveOpponentMmr } from "../liveGameOpponentMmr";
 import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 import type { SessionSummary } from "./SessionWidget";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * Constant scroll speed in CSS px per second. The animation duration
@@ -242,7 +245,7 @@ function ConnectedStatsTickerWidget({
           .ticker-strip { animation: none; }
         }
       `}</style>
-      <div style={barStyle}>
+      <OverlayPanel scale={false} frame={false} style={barStyle}>
         <div style={badgeStyle}>LIVE</div>
         <div style={windowStyle}>
           <div className="ticker-strip" ref={stripRef}>
@@ -255,7 +258,7 @@ function ConnectedStatsTickerWidget({
             ))}
           </div>
         </div>
-      </div>
+      </OverlayPanel>
     </div>
   );
 }
@@ -293,7 +296,7 @@ function opponentSegments(
       `NOW PLAYING: vs ${name}` +
         (intel.matchup ? ` (${intel.matchup})` : "") +
         (oppMmr !== null
-          ? ` · ${oppMmr.toLocaleString("en-US")} MMR`
+          ? ` · ${formatNumber(oppMmr)} MMR`
           : ""),
     );
   }
@@ -374,7 +377,6 @@ const frameStyle: CSSProperties = {
   inset: 0,
   display: "flex",
   alignItems: "flex-end",
-  fontFamily: "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
 };
 
 const barStyle: CSSProperties = {

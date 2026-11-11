@@ -1,8 +1,7 @@
 /**
  * gameCompare — the pure comparisons behind /app/compare?a=&b=.
  *
- * Two of the owner's games, read through the endpoints the game page
- * already uses (no server change), compared on one game clock:
+ * Two of the owner's games, compared on one game clock:
  *
  *   timelines   workers, army value, income and supply per game from
  *               ``stats_events`` (the macro timeline's ``SeriesPoint``s),
@@ -27,16 +26,6 @@ import type { SeriesPoint } from "@/components/analyzer/macro/activeArmyLayout";
 import { normalizeGhostName } from "@/lib/ghostBuild";
 import { computeEffectiveRace, getRaceDetail } from "@/lib/macro";
 import { isWorkerUnit } from "@/lib/mapReplay";
-
-/** Game ids as the game page accepts them: bounded, printable, no slashes. */
-export function isCompareGameId(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && value.length <= 200 && /^[\x21-\x7e]+$/.test(value) && !value.includes("/");
-}
-
-/** The shareable comparison link. */
-export function compareHref(a: string, b: string): string {
-  return `/app/compare?${new URLSearchParams({ a, b })}`;
-}
 
 /* ── build-order diff ─────────────────────────────────────────── */
 

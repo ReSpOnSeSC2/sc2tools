@@ -20,6 +20,7 @@ import {
   strategyShares,
   type CommunityOpponentAggregate,
 } from "@/lib/communityOpponent";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * Public scouting profile for one opponent, combined from every SC2
@@ -107,7 +108,7 @@ export default async function CommunityOpponentPage({ params }: PageProps) {
             )
           }
         />
-        <StatCard size="sm" label="Games" value={data.games.toLocaleString()} hint={`${data.contributors} players`} />
+        <StatCard size="sm" label="Games" value={formatNumber(data.games)} hint={`${data.contributors} players`} />
         <StatCard
           size="sm"
           label="Wins – losses"

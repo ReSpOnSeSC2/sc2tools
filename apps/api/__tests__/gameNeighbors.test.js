@@ -152,3 +152,26 @@ test("malformed or absent owned pulse identifiers stay omitted instead of being 
   const library = new ReplayLibraryService(h.db);
   for (const row of (await library.list("u_owner")).items) expect(row.opponent).not.toHaveProperty("pulseId");
 });
+
+test("opaque replay previews require the same owner and visibility as the archive", async () => {
+  const privateName = "Fixture Rival";
+  const current = game("date|" + privateName + "|Map");
+  await h.db.games.insertMany([
+    { ...current, _id: oid(30) },
+    game("excluded", 1, { _id: oid(31), excluded: true }),
+    game("other-owner", 2, { _id: oid(32), userId: "u_other" }),
+  ]);
+  const sharing = await request(h.app).put("/v1/me/replay-sharing")
+    .set("authorization", h.bearer("owner")).send({ enabled: true }).expect(200);
+  const base = "/v1/public/replays/" + sharing.body.handle;
+  const ref = "r-" + oid(30).toHexString();
+  const list = await request(h.app).get(base).expect(200);
+  expect(list.body.items.map((row) => row.gameId)).toEqual([ref]);
+  expect(JSON.stringify(list.body)).not.toContain(privateName);
+  expect((await request(h.app).get(base + "?search=" + encodeURIComponent(privateName)).expect(200)).body.items).toEqual([]);
+  const card = await request(h.app).get(base + "/" + ref + "/card").expect(200);
+  expect(card.body.game).toMatchObject({ result: "Victory", matchup: "PvZ", map: current.map, myBuild: "Blink pressure" });
+  expect(JSON.stringify(card.body)).not.toMatch(/Fixture Rival|owner-private-pulse|gameId/);
+  for (const id of [31, 32]) await request(h.app).get(base + "/r-" + oid(id).toHexString() + "/card").expect(404);
+  await request(h.app).get(base + "/excluded").set("authorization", h.bearer("other")).expect(404);
+});

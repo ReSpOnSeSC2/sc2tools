@@ -14,6 +14,9 @@ import { AdminTable, AdminMobileSort, type AdminColumn } from "../../../componen
 import { useAdminQueryState } from "../../../components/useAdminQueryState";
 import { useAdminCursor } from "../../../components/useAdminCursor";
 import { AdminSelectedGame } from "../../../components/AdminSelectedGame";
+import { AdminGamesMasterDetail } from "../../../components/AdminGamesMasterDetail";
+import { AdminGameFilters } from "../../../components/AdminGameFilters";
+import { RESULT_FILTERS, type AdminResultFilter } from "../../../components/adminResult";
 import { BreakdownList } from "../../../components/BreakdownList";
 import { compactNumber, timeSince, raceLabel, pctLabel } from "../../../components/format";
 import {
@@ -21,12 +24,8 @@ import {
   LoadingRows,
   MetricStat,
 } from "../../../components/AdminFragments";
-import {
-  fmtDate,
-  fmtDuration,
-} from "../../../components/AdminGameDetail";
-import { ResultBadge } from "../../../components/ResultBadge";
 import type {
+  GlobalBreakdownRow,
   GlobalPlayerGamesResp,
   GlobalPlayerProfilePerUser,
   GlobalPlayerProfileResp,
@@ -87,7 +86,7 @@ function GlobalPlayerBody({
               rows={profile.data.maps}
             />
           </div>
-          <GamesSection pulseId={pulseId} />
+          <GamesSection pulseId={pulseId} maps={profile.data.maps} users={profile.data.perUser} />
         </>
       ) : null}
     </div>
@@ -147,20 +146,26 @@ function PerUserSection({ rows, pulseId }: { rows: GlobalPlayerProfilePerUser[];
   return <section className="space-y-3"><h2 className="text-h2">Tracked by</h2><AdminMobileSort columns={columns} sort={sort} /><AdminTable columns={columns} rows={sorted} rowKey={row => row.userId} rowHref={row => `/admin/users/${encodeURIComponent(row.userId)}/opponents/${encodeURIComponent(pulseId)}`} sort={sort} caption="Users tracking this player" empty={<p>No users track this player.</p>} /></section>;
 }
 
-function GamesSection({ pulseId }: { pulseId: string }) {
-  const [view, setView] = useAdminQueryState({ game: "", owner: "", before: "" });
+function GamesSection({ pulseId, maps, users }: { pulseId: string; maps: GlobalBreakdownRow[]; users: GlobalPlayerProfilePerUser[] }) {
+  const [view, setView] = useAdminQueryState({ game: "", owner: "", before: "", result: "all", map: "", userId: "" }, { allowed: { result: RESULT_FILTERS } });
   const before = view.before;
+  const result = view.result as AdminResultFilter;
   const paging = useAdminCursor(before, before => setView({ before }));
   const query = new URLSearchParams();
   query.set("limit", String(PAGE_SIZE));
   if (before) query.set("before", before);
+  if (result !== "all") query.set("result", result);
+  if (view.map) query.set("map", view.map);
+  if (view.userId) query.set("userId", view.userId);
   const { data, error, isLoading, isValidating, mutate } = useApi<GlobalPlayerGamesResp>(
     `/v1/admin/global/players/${encodeURIComponent(
       pulseId,
     )}/games?${query.toString()}`, { keepPreviousData: true },
   );
 
-  const selected = data?.items.find(g => g.gameId === view.game && g.userId === view.owner);
+  const items = data?.items || [];
+  const selected = items.find(g => g.gameId === view.game && g.userId === view.owner);
+  const filtered = result !== "all" || !!view.map || !!view.userId;
 
   return (
     <div className="space-y-3">
@@ -171,70 +176,30 @@ function GamesSection({ pulseId }: { pulseId: string }) {
         <RequestError error={error} onRetry={() => mutate()} />
       ) : isLoading && !data ? (
         <LoadingRows rows={8} />
-      ) : (!data || data.items.length === 0) && !view.game ? (
+      ) : items.length === 0 && !view.game && !filtered ? (
         <Card padded>
           <EmptyStatePanel title="No games recorded against this player" action={<Button variant="secondary" onClick={() => void mutate()}>Refresh</Button>} />
         </Card>
       ) : (
-        <div className="lg:grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:gap-4">
-          {/* Games list — hidden on mobile once a game is selected. */}
-          <div className={view.game ? "hidden lg:block" : "block"}>
-            <Card padded={false}>
-              <p role="status" className="text-caption text-text-muted">{data?.items.length || 0} games{data && isValidating ? " · Updating…" : ""}</p>
-              <ul aria-busy={isValidating} className={`divide-y divide-border transition-opacity ${isValidating ? "opacity-60" : ""}`}>
-                {(data?.items || []).map((g) => {
-                  const active = g.gameId === view.game && g.userId === view.owner;
-                  return (
-                    <li key={`${g.userId}:${g.gameId}`}>
-                      <button
-                        type="button"
-                        aria-current={active ? "true" : undefined}
-                        onClick={() => setView({ game: g.gameId, owner: g.userId })}
-                        className={[
-                          "flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors",
-                          active ? "bg-accent/10" : "hover:bg-bg-elevated/40",
-                        ].join(" ")}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <ResultBadge result={g.result} />
-                          <span className="text-caption text-text-dim">
-                            {fmtDate(g.date)}
-                          </span>
-                        </div>
-                        <div className="text-caption text-text-muted">
-                          {(g.myRace || "?")[0]}v{(g.opponent.race || "?")[0]}
-                          {" · "}
-                          {g.map || "—"}
-                          {" · "}
-                          {fmtDuration(g.durationSec)}
-                        </div>
-                        <div className="truncate text-caption text-text-dim">
-                          {g.userEmail || g.userId}
-                          {g.opponent.strategy ? ` · ${g.opponent.strategy}` : ""}
-                        </div>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Card>
-
-            <AdminPagination hasPrev={paging.hasPrev} prevLabel={paging.prevLabel} hasNext={!!data?.nextBefore} onPrev={paging.previous} onNext={() => paging.next(data?.nextBefore || "")} label={paging.page} loading={isValidating} itemCount={data?.items.length || 0} />
-          </div>
-
-          {/* Detail — hidden on mobile until a game is selected. */}
-          <div className={view.game ? "block" : "hidden lg:block"}>
-            {view.game ? (
-              <AdminSelectedGame userId={view.owner} gameId={view.game} row={selected} onClear={() => setView({ game: "", owner: "" })} />
-            ) : (
-              <Card padded>
-                <p className="text-text-muted">
-                  Select a game to view its build orders, APM, and macro.
-                </p>
-              </Card>
-            )}
-          </div>
-        </div>
+        <AdminGamesMasterDetail
+          games={items}
+          gameKey={g => `${g.userId}:${g.gameId}`}
+          selectedKey={view.game ? `${view.owner}:${view.game}` : null}
+          onSelect={g => setView({ game: g.gameId, owner: g.userId })}
+          label="Games against this player"
+          busy={isValidating}
+          status={<>{items.length === 0 && filtered ? "No games match these filters." : `${items.length} games`}{data && isValidating ? " · Updating…" : ""}</>}
+          rowMeta={g => <span className="truncate text-caption text-text-dim">{g.userEmail || g.userId}{g.opponent.strategy ? ` · ${g.opponent.strategy}` : ""}</span>}
+          filters={<div className="space-y-2">
+            <AdminGameFilters result={result} map={view.map} maps={maps.map(row => row.key)}
+              onResult={value => setView({ result: value })} onMap={value => setView({ map: value })}
+              user={view.userId} users={users.map(row => ({ userId: row.userId, label: row.email || row.userId }))} onUser={value => setView({ userId: value })} />
+            {filtered ? <Button size="sm" variant="ghost" onClick={() => setView({ result: "all", map: "", userId: "" })}>Clear filters</Button> : null}
+          </div>}
+          pagination={<AdminPagination hasPrev={paging.hasPrev} prevLabel={paging.prevLabel} hasNext={!!data?.nextBefore} onPrev={paging.previous} onNext={() => paging.next(data?.nextBefore || "")} label={paging.page} loading={isValidating} itemCount={items.length} />}
+          detail={view.game ? <AdminSelectedGame userId={view.owner} gameId={view.game} row={selected} onClear={() => setView({ game: "", owner: "" })} /> : null}
+          placeholder="Select a game to view its build orders, APM, and macro."
+        />
       )}
     </div>
   );

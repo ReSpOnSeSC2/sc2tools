@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 /**
  * SessionRecapWidget — a "SESSION RECAP" card the streamer fires from
  * the Stream Dock (e.g. before ending the stream). The dock bumps the
@@ -100,7 +102,7 @@ export function SessionRecapWidget({
           .session-recap-card { animation: none; }
         }
       `}</style>
-      <div className="session-recap-card" style={cardStyle}>
+      <OverlayPanel className="session-recap-card" style={cardStyle} accent="#e6b450" accentSize="5px" contentStyle={{ padding: "var(--ov-padding, 16px 20px)" }}>
         <div style={titleStyle}>
           SESSION RECAP
           {testActive ? <span style={testTagStyle}>TEST</span> : null}
@@ -139,7 +141,7 @@ export function SessionRecapWidget({
             </>
           ) : null}
         </div>
-      </div>
+      </OverlayPanel>
     </div>
   );
 }
@@ -157,15 +159,8 @@ const cardStyle: CSSProperties = {
   width: "100%",
   minWidth: 260,
   maxWidth: 380,
-  background:
-    "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
-  border: "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))",
-  borderLeft: "5px solid #e6b450",
-  borderRadius: "var(--ov-radius, 12px)",
   boxShadow: "0 6px 20px rgba(0,0,0,0.55)",
-  padding: "16px 20px",
   color: "#e6e8ee",
-  fontFamily: "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
 };
 
 const titleStyle: CSSProperties = {

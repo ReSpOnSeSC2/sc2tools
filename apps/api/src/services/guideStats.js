@@ -91,6 +91,7 @@ const PRIOR_PROJECTION = Object.freeze({
  * @property {Date} computedAt
  * @property {number} durationMs
  * @property {GuideStatsRunCounts} counts
+ * @property {number} [corpusGames]
  * @property {number|null} eraRule util/patchEra.js PATCH_ERA_RULE the run
  *   was computed under; null for runs from before the rule was recorded
  */
@@ -250,6 +251,7 @@ class GuideStatsService {
       computedAt,
       durationMs: Math.max(0, this.now() - startedMs),
       counts: runCounts(docs),
+      corpusGames: results.reduce((sum, { facet }) => sum + Number(facet.corpus?.[0]?.games || 0), 0),
       eraRule: PATCH_ERA_RULE,
     };
     await this.coll.replaceOne(
