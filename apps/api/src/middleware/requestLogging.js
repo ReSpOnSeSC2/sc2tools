@@ -61,7 +61,7 @@ function sanitiseRequestUrl(value) {
   let redacted = raw.replace(
     CREDENTIAL_PATH_SEGMENT,
     (_match, route) => `/${route}/[redacted]`,
-  );
+  ).replace(/(\/public\/replays\/[^/?#]+\/)[^/?#]+/giu, "$1[redacted]");
   try {
     const parsed = new URL(redacted, "http://request.invalid");
     const isOauthCallback = OAUTH_CALLBACK_PATH.test(parsed.pathname);

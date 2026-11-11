@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   buildOrders: vi.fn(),
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false }) }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: async () => ({ userId: "viewer" }) }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
@@ -466,8 +467,9 @@ describe("authenticated shared replay detail route", () => {
       handle: PLAYER_SLUG,
       gameId: "game/42",
       available: true,
-      showLabel: true,
+      appearance: "pill",
     }));
+    expect(screen.getAllByRole("button", { name: "Share analysis" })).toHaveLength(1);
     expect(mocks.mechanics).toHaveBeenCalledWith(
       expect.objectContaining({
         emptyDescription: "Detailed macro mechanics were not captured for this replay.",
@@ -559,11 +561,10 @@ describe("protected replay detail metadata", () => {
     const metadata = await generateDetailMetadata({
       params: Promise.resolve({ player: PLAYER_SLUG, gameId: "game/42" }),
     });
-    expect(String(metadata.title)).toContain("Shared replay analysis");
+    expect(String(metadata.title)).toContain("Reaver's replay");
+    expect(String(metadata.title)).not.toContain("Rival");
     expect(String(metadata.description)).toMatch(/Sign in/i);
-    expect(metadata.alternates?.canonical).toBe(
-      `/players/${PLAYER_SLUG}/replays/game%2F42`,
-    );
+    expect(metadata.alternates?.canonical).toBe("/players/" + PLAYER_SLUG + "/replays");
     expect(metadata.robots).toMatchObject({ index: false, follow: false });
     expect(mocks.getJsonWithStatus).not.toHaveBeenCalled();
     expect(mocks.apiFetch).toHaveBeenCalledWith(`/v1/public/replays/${PLAYER_SLUG}/game%2F42`);

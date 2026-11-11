@@ -1,7 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
 import { lowercaseGuidePath } from "./lib/guides/canonicalPath";
-import { isSharedReplayDetailPath } from "./lib/replayRouteAccess";
+import { legacyReplayArchivePath } from "./lib/replayRouteAccess";
 import { isPublicStatusRequest, statusHostRedirect } from "./lib/publicStatusRoute";
 
 const PERMANENT_REDIRECT = 308;
@@ -43,8 +43,17 @@ const isProtected = createRouteMatcher([
 const authenticatedMiddleware = clerkMiddleware(async (auth, req) => {
   const guideRedirect = guideCaseRedirect(req);
   if (guideRedirect) return guideRedirect;
-  if (isProtected(req) || isSharedReplayDetailPath(req.nextUrl.pathname)) {
-    await auth.protect();
+  if (isProtected(req)) await auth.protect();
+  const legacyArchive = legacyReplayArchivePath(req.nextUrl.pathname);
+  if (legacyArchive && !(await auth()).userId) {
+    // An old raw game ID can contain an opponent name. Never carry it
+    // through Clerk's return URL. Already-signed-in legacy links resolve
+    // to their replacement reference in the replay page.
+    const signIn = req.nextUrl.clone();
+    signIn.pathname = "/sign-in";
+    signIn.search = "";
+    signIn.searchParams.set("redirect_url", legacyArchive);
+    return NextResponse.redirect(signIn);
   }
 });
 
@@ -63,7 +72,7 @@ export const config = {
     "/(api|trpc)(.*)",
     // The general matcher skips dotted paths as static assets. Replay ids may
     // contain dots, so explicitly run middleware for both replay URL families;
-    // isSharedReplayDetailPath still leaves their public list/assets alone.
+    // Public archives, opaque preview paths and metadata images stay accessible.
     "/players/(.*)",
     "/p/(.*)",
   ],

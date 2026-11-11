@@ -17,6 +17,7 @@ vi.mock("react", async (original) => ({
 }));
 vi.mock("@/lib/serverApi", () => ({ getJsonWithStatus: (...args: unknown[]) => mocks.getJson(...args) }));
 vi.mock("@/lib/api", () => ({ apiFetch: (...args: unknown[]) => mocks.apiFetch(...args) }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: async () => ({ userId: "viewer" }) }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("not-found"); }, redirect: () => { throw new Error("redirect"); } }));
 
 import ProfilePage, { generateMetadata as profileMetadata } from "@/app/players/[player]/page";

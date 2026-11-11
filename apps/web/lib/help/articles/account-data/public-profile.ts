@@ -65,7 +65,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Shared replay page", anchor: "replay-page" },
     {
       type: "paragraph",
-      text: "Separately, you can share your whole replay archive from [Replays](/app/replays) with **Share replay page**. Visitors see every synced game with its map, result, players, MMR, builds and stream links, and can download your original replay files. Turn it off there at any time. See [Replays](/help/replays).",
+      text: "Separately, you can share your whole replay archive from [Replays](/app/replays) with **Share replay page**. Visitors see every synced game with its map, result, races, MMR, builds and stream links, and can download your original replay files. Turn it off there at any time. See [Replays](/help/replays).",
     },
     {
       type: "callout",
@@ -74,8 +74,9 @@ const article: HelpArticle = {
       text: "An opponent faced by at least 5 SC2 Tools players gets a combined public profile with no names. Your games add to it without naming you. See [Opponent dossier](/help/opponent-dossier).",
     },
     { type: "heading", text: "Sharing your page", anchor: "sharing-your-page" },
-    { type: "paragraph", text: "Use **Share profile** on your Overview or **Share** on the public replay archive. Your device opens its share sheet when supported. Otherwise SC2 Tools copies the link or selects it for manual copy." },
+    { type: "paragraph", text: "Use **Share profile** on your Overview, **Share** on the public replay archive, or **Share analysis** on a game. Your device opens its share sheet when supported. Otherwise SC2 Tools copies the link or selects it for manual copy." },
     { type: "paragraph", text: "When your archive is linked, select a matchup or signature build on your Overview to open the matching replays. The replay archive counts each game's detected build label, so the archive's count can differ from your Overview stats." },
+    { type: "paragraph", text: "Shared game links use an opaque replay reference. Their preview shows result, matchup, map, length and build labels. Opponents are anonymous in the archive and analysis. Visitors can open the game preview without signing in, then sign in for the full timeline, macro breakdown and build orders. The original replay file itself contains the names and chat StarCraft II recorded." },
     { type: "heading", text: "Finding a game", anchor: "finding-a-game" },
     {
       type: "paragraph",
