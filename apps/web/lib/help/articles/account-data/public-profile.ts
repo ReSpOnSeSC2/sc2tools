@@ -28,7 +28,7 @@ const article: HelpArticle = {
     "season record",
     "player link",
   ],
-  updated: "2026-10-25",
+  updated: "2026-11-11",
   body: [
     {
       type: "paragraph",
@@ -73,6 +73,9 @@ const article: HelpArticle = {
       title: "Opponents have a public page too",
       text: "An opponent faced by at least 5 SC2 Tools players gets a combined public profile with no names. Your games add to it without naming you. See [Opponent dossier](/help/opponent-dossier).",
     },
+    { type: "heading", text: "Sharing your page", anchor: "sharing-your-page" },
+    { type: "paragraph", text: "Use **Share profile** on your Overview or **Share** on the public replay archive. Your device opens its share sheet when supported. Otherwise SC2 Tools copies the link or selects it for manual copy." },
+    { type: "paragraph", text: "When your archive is linked, select a matchup or signature build on your Overview to open the matching replays. The replay archive counts each game's detected build label, so the archive's count can differ from your Overview stats." },
     { type: "heading", text: "Finding a game", anchor: "finding-a-game" },
     {
       type: "paragraph",

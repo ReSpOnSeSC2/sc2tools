@@ -1,5 +1,4 @@
-import { Card } from "@/components/ui/Card";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PlayerProfileHero } from "./PlayerProfileHero";
 import { AuthorBuildsList } from "@/components/community/AuthorBuildsList";
 import { publicDate } from "@/lib/seo/publicDate";
 import { PublicProfile, ReviewerSection } from "./PublicProfile";
@@ -13,7 +12,7 @@ export function PublicPlayerPage({ profile, requestedTab }: { profile: PublicPla
   if (profile.sections?.showReplays && profile.replayArchive) sections.push("replays");
   if (profile.reviewer) sections.push("reviews");
   const active = sections.includes(requestedTab as PlayerSection) && requestedTab !== "replays" ? requestedTab as PlayerSection : "overview";
-  return <article className="min-w-0 space-y-6"><Card variant="feature" padded><PageHeader eyebrow="Player profile" title={<span className="[overflow-wrap:anywhere]">{profile.displayName}</span>} description={profile.mainRace ? `${profile.mainRace} player · SC2 Tools` : "StarCraft II player · SC2 Tools"} /></Card>
+  return <article className="min-w-0 space-y-6"><PlayerProfileHero profile={profile} overview={active === "overview"} />
     <PlayerSectionNav handle={profile.handle} active={active} sections={sections} />
     {active === "builds" ? <PublishedBuilds profile={profile} />
       : active === "reviews" && profile.reviewer ? <ReviewerSection reviewer={profile.reviewer} />

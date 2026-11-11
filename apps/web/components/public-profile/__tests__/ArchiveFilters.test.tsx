@@ -7,7 +7,7 @@ import { ArchiveFilterEnhancer } from "../ArchiveFilterEnhancer";
 import { PublicReplayLibrary } from "../PublicReplayLibrary";
 import type { ReplayLibraryResponse } from "@/components/analyzer/replays/types";
 
-vi.mock("../PublicReplayShareButton", () => ({ PublicReplayShareButton: () => null }));
+vi.mock("@/components/ui/ShareButton", () => ({ ShareButton: () => null }));
 vi.mock("@/components/analyzer/replays/ReplayList", () => ({ ReplayList: ({ emptyTitle }: { emptyTitle: string }) => <p>{emptyTitle}</p> }));
 const data: ReplayLibraryResponse = { profile: { handle: "player", displayName: "Player" }, items: Array.from({ length: 25 }, (_, i) => ({ gameId: String(i) })), page: { hasMore: true, nextCursor: "next/cursor" }, summary: { total: 312, wins: 180, losses: 129, ties: 3, avgDurationSec: 785 }, facets: { matchups: ["PvZ", "TvP"], maps: ["Alcyone LE", "Oceanborn LE"] } };
 beforeEach(() => vi.useRealTimers());
