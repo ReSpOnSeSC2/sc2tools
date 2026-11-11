@@ -115,9 +115,11 @@ class BuildIntentsService {
     return this.live.nativeRoll(userId, gameKey, body);
   }
 
-  /** @param {string} userId @param {unknown} envelope */
-  registerFromEnvelope(userId, envelope) {
-    return this.live.registerFromEnvelope(userId, envelope);
+  /** @param {string} userId @param {unknown} envelope @param {boolean} [fromDevice] */
+  async registerFromEnvelope(userId, envelope, fromDevice = false) {
+    const record = await this.live.registerFromEnvelope(userId, envelope);
+    if (fromDevice) await this.live.maybeAutoRoll(userId, envelope);
+    return record;
   }
 
   /** @param {string} userId */

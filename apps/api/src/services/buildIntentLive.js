@@ -20,6 +20,7 @@ const { BUILD_INTENT, COLLECTIONS } = require("../config/constants");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { sanitizeNotes } = require("./buildIntentShape");
 const { randomizerPool, readBuildIntentPrefs } = require("./buildIntentPrefs");
+const { earlyRandomizerEnvelope } = require("./buildIntentAutoRandomizer");
 const { nativeRandomizerRoll } = require("./buildIntentNativeRandomizer");
 const {
   BuildIntentError,
@@ -184,6 +185,7 @@ class BuildIntentLive {
     this.registrations = new BoundedMap(BUILD_INTENT.REGISTRATION_CACHE_MAX_ENTRIES);
     // Accepted randomizer roll reports per user + game key.
     this.rollReports = new BoundedMap(BUILD_INTENT.ROLL_TRACKER_MAX_ENTRIES);
+    this.autoRollAttempts = new BoundedMap(BUILD_INTENT.REGISTRATION_CACHE_MAX_ENTRIES);
   }
 
   /**
@@ -266,6 +268,30 @@ class BuildIntentLive {
    * @param {string} userId @param {string} gameKey @param {string} matchup @param {string} redemptionId */
   rewardReroll(userId, gameKey, matchup, redemptionId) {
     return nativeRandomizerRoll(this, userId, gameKey, { matchup, releaseHold: false, revealInWidget: true }, redemptionId);
+  }
+
+  /** Consider only trusted, current, early one-on-one envelopes. A noisy
+   * live feed must not repeat the preference and presence queries each tick.
+   * @param {string} userId @param {unknown} envelope */
+  async maybeAutoRoll(userId, envelope) {
+    const candidate = earlyRandomizerEnvelope(envelope);
+    if (!candidate || !this.broker?.isTrustedDeviceGame(userId, candidate.gameKey)) return;
+    const now = this.now();
+    const previous = this.autoRollAttempts.get(userId);
+    if (previous?.gameKey === candidate.gameKey && (previous.inFlight || previous.retryAt > now)) return;
+    const attempt = { gameKey: candidate.gameKey, inFlight: true, retryAt: now + 2500 };
+    this.autoRollAttempts.set(userId, attempt);
+    try {
+      await nativeRandomizerRoll(this, userId, candidate.gameKey, {
+        matchup: candidate.matchup, releaseHold: false, automatic: true,
+      });
+      attempt.retryAt = Infinity;
+    } catch (err) {
+      if (!(err instanceof BuildIntentError)) throw err;
+      if (err.code === "build_declared" || err.code === "already_bound") attempt.retryAt = Infinity;
+    } finally {
+      attempt.inFlight = false;
+    }
   }
 
   /**

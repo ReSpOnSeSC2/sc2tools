@@ -2,6 +2,7 @@
 
 const { BUILD_INTENT } = require("../config/constants");
 const { BuildIntentError, normalizeRace, matchupFromRaces, holdRemainingMs, overlayPayload } = require("./buildIntentCommon");
+const { allowAutomaticRoll } = require("./buildIntentAutoRandomizer");
 const { readBuildIntentPrefs, randomizerPool } = require("./buildIntentPrefs");
 
 /** @param {string} value */
@@ -101,7 +102,7 @@ function rewardAlternate(config, builds, initial, seed) {
  * @param {import('./buildIntentLive').BuildIntentLive} service
  * @param {string} userId
  * @param {string} gameKey
- * @param {{matchup:string,releaseHold:boolean,revealInWidget?:boolean}} body @param {string} [redemptionId]
+ * @param {{matchup:string,releaseHold:boolean,revealInWidget?:boolean,automatic?:boolean}} body @param {string} [redemptionId]
  */
 async function nativeRandomizerRoll(service, userId, gameKey, body, redemptionId) {
   let latest = currentEnvelope(service, userId, gameKey);
@@ -109,6 +110,8 @@ async function nativeRandomizerRoll(service, userId, gameKey, body, redemptionId
   if (!matchup || matchup !== body.matchup) {
     throw new BuildIntentError(409, "matchup_changed", "The current matchup changed. Refresh before rolling.");
   }
+  const automaticPrefs = body.automatic ? await readBuildIntentPrefs(service.users, userId) : null;
+  if (automaticPrefs) await allowAutomaticRoll(service, userId, gameKey, automaticPrefs.randomizer);
   let doc = await service.collection.findOne({ userId, gameKey });
   if (!doc) {
     doc = await service._upsert(userId, gameKey, {
@@ -121,7 +124,7 @@ async function nativeRandomizerRoll(service, userId, gameKey, body, redemptionId
   if (doc.randomizer && !redemptionId) return service._state(userId, doc);
   if (doc.randomizer?.rewardRerolled === true || doc.randomizer?.rerolledAt) throw new BuildIntentError(409, "randomizer_already_rerolled", "A viewer already rerolled this game.");
   const priorPick = typeof doc.randomizer?.key === "string" ? doc.randomizer.key : null;
-  const prefs = await readBuildIntentPrefs(service.users, userId);
+  const prefs = automaticPrefs ?? await readBuildIntentPrefs(service.users, userId);
   const pool = randomizerPool(prefs.randomizer, matchup);
   if (!pool.enabled) throw new BuildIntentError(409, "randomizer_disabled", "Enable the randomizer and select at least one build for this matchup.");
   latest = currentEnvelope(service, userId, gameKey, matchup);
@@ -133,12 +136,8 @@ async function nativeRandomizerRoll(service, userId, gameKey, body, redemptionId
   const ref = await resolveAvailableBuild(service, userId, matchup, config, gameKey, priorPick, redemptionId);
   if (!ref) throw new BuildIntentError(409, "unknown_build", "No available builds remain in this pool. Edit the pool and try again.");
   currentEnvelope(service, userId, gameKey, matchup);
-  const currentPrefs = await readBuildIntentPrefs(service.users, userId);
-  const currentConfig = /** @type {Record<string, any>} */ (currentPrefs.randomizer).matchups?.[matchup];
-  if (!randomizerPool(currentPrefs.randomizer, matchup).enabled
-      || !currentConfig || JSON.stringify([currentConfig.useCustomWeights, currentConfig.builds]) !== JSON.stringify([config.useCustomWeights, config.builds])) {
-    throw new BuildIntentError(409, "pool_changed", "The randomizer pool changed. Refresh before rolling.");
-  }
+  const currentPrefs = await recheckPool(service, userId, matchup, config);
+  if (body.automatic) await allowAutomaticRoll(service, userId, gameKey, currentPrefs.randomizer);
   const finalEnvelope = currentEnvelope(service, userId, gameKey, matchup);
   if (!body.releaseHold && finalEnvelope.phase === "match_loading" && currentPrefs.checkin.enabled && currentPrefs.checkin.askAtLoading) {
     throw new BuildIntentError(409, "hold_active", "Waiting for the loading check-in. Choose Roll now or wait for the match to start.");
@@ -178,6 +177,18 @@ async function saveRoll(service, userId, gameKey, widgetReveal, doc, ref, priorP
     throw await service._alreadyBound(userId, gameKey);
   }
   return { updated, won: true };
+}
+
+/** @param {import("./buildIntentLive").BuildIntentLive} service @param {string} userId
+ * @param {string} matchup @param {Record<string,any>} config */
+async function recheckPool(service, userId, matchup, config) {
+  const currentPrefs = await readBuildIntentPrefs(service.users, userId);
+  const currentConfig = /** @type {Record<string, any>} */ (currentPrefs.randomizer).matchups?.[matchup];
+  if (!randomizerPool(currentPrefs.randomizer, matchup).enabled
+      || !currentConfig || JSON.stringify([currentConfig.useCustomWeights, currentConfig.builds]) !== JSON.stringify([config.useCustomWeights, config.builds])) {
+    throw new BuildIntentError(409, "pool_changed", "The randomizer pool changed. Refresh before rolling.");
+  }
+  return currentPrefs;
 }
 
 module.exports = { nativeRandomizerRoll, selectedBuildId, seededRandom };
