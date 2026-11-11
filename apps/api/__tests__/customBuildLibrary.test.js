@@ -259,7 +259,10 @@ describe("custom build library and community trust", () => {
       const res = await post("saver", "/custom-builds/import", { items }).expect(409);
       expect(res.body.error.code).toBe("library_full");
       expect(await db.customBuilds.countDocuments({ userId: ids.saver })).toBe(499);
-      await post("saver", "/custom-builds/import", { items: items.slice(0, 1) }).expect(200);
+      const concurrent = await Promise.all(items.map((item) => post("saver", "/custom-builds/import", { items: [item] })));
+      expect(concurrent.map((response) => response.status).sort()).toEqual([200, 409]);
+      expect(concurrent.find((response) => response.status === 409).body.error.code).toBe("library_full");
+      expect(await db.customBuilds.countDocuments({ userId: ids.saver })).toBe(500);
     });
 
     test("exports every live build as validated JSON without publication state", async () => {
@@ -298,6 +301,21 @@ describe("custom build library and community trust", () => {
       const detail = await get("third", `/community/builds/${publicSlug}`).expect(200);
       expect(detail.body).toEqual(expect.objectContaining({ saves: 2, version: 1 }));
       expect(await db.communitySaves.countDocuments({ slug: publicSlug })).toBe(2);
+    });
+
+    test("reconciles a receipt after a failed save-count update", async () => {
+      const publicSlug = await publishAuthorBuild();
+      const failed = jest.spyOn(db.communityBuilds, "updateOne").mockRejectedValueOnce(new Error("simulated write failure"));
+      try {
+        await saveCopy("saver", "copy-1", publicSlug).expect(200);
+        expect(await db.communitySaves.countDocuments({ slug: publicSlug })).toBe(1);
+        expect((await db.communityBuilds.findOne({ slug: publicSlug })).saves).toBe(0);
+      } finally {
+        failed.mockRestore();
+      }
+      await saveCopy("saver", "copy-2", publicSlug).expect(200);
+      expect(await db.communitySaves.countDocuments({ slug: publicSlug })).toBe(1);
+      expect((await db.communityBuilds.findOne({ slug: publicSlug })).saves).toBe(1);
     });
 
     test("content edits bump the version; Apply update keeps the saver's notes and skill level", async () => {

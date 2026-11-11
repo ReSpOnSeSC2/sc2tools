@@ -541,6 +541,7 @@ export interface CustomBuildRecord {
   isPublic?: boolean;
   communityAuthorName?: string;
   publishAnonymously?: boolean;
+  forkedFrom?: { communitySlug: string; version: string; savedAt?: string };
 }
 
 export interface ReclassifyQueueResult {
