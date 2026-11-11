@@ -215,7 +215,10 @@ def test_companion_tools_fit_the_minimum_window_at_display_scale(tmp_path, monke
                        ghost.starred_filter, ghost.clear_filters_button)
             reference_actions = (ghost.reference_button, ghost.reference_side, ghost.compare_button)
             assert_fits(library, (*filters, *reference_actions))
-            assert all(ghost.filters_widget.rect().contains(control.geometry()) for control in filters)
+            filter_box = ghost.filters_widget
+            assert filter_box.height() >= filter_box.layout().heightForWidth(filter_box.width())
+            assert all(filter_box.rect().contains(control.geometry()) for control in filters)
+            assert filter_box.geometry().bottom() < ghost.library_count.geometry().top()
             for control in (*filters, *reference_actions):
                 library.ensureWidgetVisible(control)
                 position = control.mapTo(library.viewport(), QtCore.QPoint())
