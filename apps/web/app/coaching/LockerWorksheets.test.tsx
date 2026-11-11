@@ -5,7 +5,7 @@ import { loadLockerBackup } from "./lockerBackup";
 import type { LockerDocument } from "./lockerRosterModel";
 
 const harness = vi.hoisted(() => ({
-  data: undefined as LockerDocument | undefined, request: vi.fn(), mutate: vi.fn(), useApi: vi.fn(),
+  data: undefined as LockerDocument | undefined, error: undefined as { status: number } | undefined, request: vi.fn(), mutate: vi.fn(), useApi: vi.fn(),
   toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "student-account" }) }));
@@ -28,7 +28,8 @@ beforeEach(() => {
   vi.stubGlobal("IDBKeyRange", IDBKeyRange);
   sessionStorage.clear();
   harness.data = fixture();
-  harness.useApi.mockReset().mockImplementation(() => ({ data: harness.data, request: harness.request, mutate: harness.mutate }));
+  harness.error = undefined;
+  harness.useApi.mockReset().mockImplementation(() => ({ data: harness.data, error: harness.error, request: harness.request, mutate: harness.mutate }));
   harness.request.mockReset().mockImplementation(async (init: RequestInit) => {
     const input = JSON.parse(String(init.body));
     if (input.rev !== harness.data!.rev) throw { code: "conflict", status: 409 };
@@ -74,4 +75,38 @@ it("keeps the answer when a backup cannot be saved and sends no request", async 
   expect(harness.request).not.toHaveBeenCalled();
   expect((screen.getByLabelText("Which cue?") as HTMLTextAreaElement).value).toBe("Nexus");
   expect(harness.data).toEqual(fixture());
+});
+
+it("keeps an answer draft editable through a 503, but never writes until the retry succeeds", async () => {
+  const view = render(<LockerWorksheets viewerRole="student" memberId="s1" />);
+  fireEvent.click(screen.getByRole("button", { name: "Answer worksheet" }));
+  fireEvent.change(screen.getByLabelText("Which cue?"), { target: { value: "Unsaved answer" } });
+  harness.error = { status: 503 };
+  view.rerender(<LockerWorksheets viewerRole="student" memberId="s1" />);
+  const editor = within(screen.getByRole("dialog", { name: "Replay review" }));
+  expect(editor.getByLabelText<HTMLTextAreaElement>("Which cue?").value).toBe("Unsaved answer");
+  expect(editor.getByRole<HTMLButtonElement>("button", { name: "Send to Coach" }).disabled).toBe(true);
+  expect(editor.getAllByRole<HTMLButtonElement>("button", { name: "Close" }).every(button => !button.disabled)).toBe(true);
+  fireEvent.click(editor.getByRole("button", { name: "Retry Locker" }));
+  expect(harness.mutate).toHaveBeenCalledOnce();
+  expect(harness.request).not.toHaveBeenCalled();
+  harness.error = undefined;
+  view.rerender(<LockerWorksheets viewerRole="student" memberId="s1" />);
+  fireEvent.click(editor.getByRole("button", { name: "Send to Coach" }));
+  await waitFor(() => expect(harness.toast.success).toHaveBeenCalledWith("Worksheet submitted"));
+  expect(harness.data!.state.students![0].worksheets).toEqual([expect.objectContaining({ answers: { q1: "Unsaved answer" } })]);
+});
+
+it.each([401, 403, 404])("immediately hides the prior document after GET %i even if a later retry fails with 503", status => {
+  const view = render(<LockerWorksheets viewerRole="student" memberId="s1" />);
+  fireEvent.click(screen.getByRole("button", { name: "Answer worksheet" }));
+  harness.error = { status };
+  view.rerender(<LockerWorksheets viewerRole="student" memberId="s1" />);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByText("Replay review")).toBeNull();
+  harness.error = { status: 503 };
+  view.rerender(<LockerWorksheets viewerRole="student" memberId="s1" />);
+  expect(screen.queryByText("Replay review")).toBeNull();
+  expect(screen.getByText("Worksheets could not load.")).toBeTruthy();
+  expect(harness.request).not.toHaveBeenCalled();
 });

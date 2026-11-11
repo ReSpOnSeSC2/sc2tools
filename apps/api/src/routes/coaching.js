@@ -1,7 +1,7 @@
 "use strict";
 const { mergeShelfWrite, selectLockerAssets } = require("../services/coachingLockerShelf");
-const { mergeClassicStudentWorksheets, mergeWorksheetWrite, studentWorksheetRead } = require("../services/coachingWorksheetState");
-const WORKSHEET_CONFLICT = Object.freeze({ code: "conflict", message: "The Locker changed. Reload before editing." });
+const { mergeClassicStudentWorksheets, mergeWorksheetWrite, preserveWorksheetReplayLinks, studentWorksheetRead } = require("../services/coachingWorksheetState");
+const LOCKER_CONFLICT = Object.freeze({ code: "conflict", message: "The Locker changed. Reload before editing." });
 
 const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
@@ -122,10 +122,10 @@ function buildCoachingRouter(deps) {
     res.set("Cache-Control", "private, no-store, max-age=0");
     try {
       const { auth, cr } = ctx(req);
-      const worksheets = req.query.worksheets === "1";
+      const guardedView = req.query.worksheets === "1" || req.query.shelf === "1";
       if (cr.role === "none" || !lockerRosterAllowed(req, auth, cr)) { coachingNotFound(res); return; }
       const { state, rev } = await deps.coaching.getDoc();
-      if (worksheets && cr.rev !== rev) { res.status(409).json({ error: WORKSHEET_CONFLICT }); return; }
+      if (guardedView && cr.rev !== rev) { res.status(409).json({ error: LOCKER_CONFLICT }); return; }
       res.json({ rev, scoped: cr.role !== "admin", state: scopeLockerState(state, cr) });
     } catch (err) {
       next(err);
@@ -227,6 +227,8 @@ function buildCoachingRouter(deps) {
       // mutate state. Scoped-write safety for students is enforced by the
       // merge below; coaches/admin write the full document.
       const worksheets = req.query.worksheets === "1";
+      const shelf = req.query.shelf === "1";
+      const guardedView = worksheets || shelf;
       if (role === "none" || !lockerRosterAllowed(req, auth, cr)) { coachingNotFound(res); return; }
       const body = req.body || {};
       const incoming = body.state;
@@ -235,22 +237,18 @@ function buildCoachingRouter(deps) {
         || worksheets && (!Number.isSafeInteger(body.rev) || body.rev < 0)) {
         res.status(400).json({ error: "bad_state" }); return;
       }
-      let toWrite = incoming;
+      if (shelf && (!Number.isSafeInteger(body.rev) || body.rev < 0)) { res.status(400).json({ error: "bad_revision" }); return; }
       const current = await deps.coaching.getDoc();
+      if (guardedView && cr.rev !== current.rev) { res.status(409).json({ error: LOCKER_CONFLICT }); return; }
+      if (guardedView && rev !== current.rev) {
+        res.status(409).json({ error: LOCKER_CONFLICT, rev: current.rev, state: scopeLockerState(current.state, cr) });
+        return;
+      }
+      let toWrite = incoming;
       if (worksheets) {
-        if (cr.rev !== current.rev) { res.status(409).json({ error: WORKSHEET_CONFLICT }); return; }
-        if (rev !== current.rev) {
-          res.status(409).json({ error: WORKSHEET_CONFLICT, rev: current.rev, state: scopeLockerState(current.state, cr) });
-          return;
-        }
         toWrite = mergeWorksheetWrite(current.state, incoming, cr);
         if (!toWrite) { res.status(403).json({ error: "not_writer" }); return; }
-      } else if (req.query.shelf === "1") {
-        if (!Number.isSafeInteger(body.rev) || body.rev < 0) { res.status(400).json({ error: "bad_revision" }); return; }
-        if (rev !== current.rev) {
-          res.status(409).json({ error: "conflict", rev: current.rev, state: scopeLockerState(current.state, cr) });
-          return;
-        }
+      } else if (shelf) {
         const shelfWrite = mergeShelfWrite(current.state, incoming, cr, scopeLockerState(current.state, cr).assets || {});
         if (!shelfWrite) { res.status(400).json({ error: "bad_attachment" }); return; }
         toWrite = shelfWrite;
@@ -265,13 +263,14 @@ function buildCoachingRouter(deps) {
           return;
         }
       }
+      if (!guardedView) toWrite = preserveWorksheetReplayLinks(current.state, toWrite);
       const out = await deps.coaching.putStateWithRosterGuard(
         toWrite,
         rev,
         [auth.userId],
       );
       if (!out.ok) {
-        if (worksheets) { res.status(409).json({ error: WORKSHEET_CONFLICT }); return; }
+        if (guardedView) { res.status(409).json({ error: LOCKER_CONFLICT }); return; }
         res.status(409).json({ error: "conflict", rev: out.rev, state: scopeLockerState(out.state, cr) });
         return;
       }

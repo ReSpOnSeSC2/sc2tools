@@ -8,6 +8,8 @@ const harness = vi.hoisted(() => ({
   replace: vi.fn(),
   mutate: vi.fn(async () => undefined),
   loading: false,
+  meError: undefined as { status: number } | undefined,
+  meIdentity: undefined as { role: string; coachId: string; studentId: null } | undefined,
   authLoaded: true,
   assignments: [] as unknown[],
   assignmentsError: false,
@@ -21,14 +23,19 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string) => ({
-    data: path === "/v1/coaching/assignments?state=active&limit=100" ? { assignments: harness.assignments, serverTime: "2026-09-06T12:00:00Z", hasMore: false } : path === "/v1/coaching/practice-sharing" ? { relationships: harness.relationships } : path === "/v1/coaching/alerts" ? { unreadCount: 2 } : harness.loading ? undefined : { role: harness.role, coachId: harness.role === "coach" ? "coach-1" : null, studentId: null },
-    error: path === "/v1/coaching/assignments?state=active&limit=100" && harness.assignmentsError ? { message: "Unavailable" } : undefined,
+    data: path === "/v1/coaching/assignments?state=active&limit=100" ? { assignments: harness.assignments, serverTime: "2026-09-06T12:00:00Z", hasMore: false } : path === "/v1/coaching/practice-sharing" ? { relationships: harness.relationships } : path === "/v1/coaching/alerts" ? { unreadCount: 2 } : harness.loading ? undefined : harness.meIdentity ?? { role: harness.role, coachId: harness.role === "coach" ? "coach-1" : null, studentId: null },
+    error: path === "/v1/coaching/me" ? harness.meError : path === "/v1/coaching/assignments?state=active&limit=100" && harness.assignmentsError ? { message: "Unavailable" } : undefined,
     isLoading: harness.loading,
     mutate: harness.mutate,
   }),
 }));
 vi.mock("./LockerRoster", () => ({ default: () => <div data-testid="locker-roster">Roster content</div> }));
-vi.mock("./LockerShelf", () => ({ default: ({ viewerRole }: { viewerRole: string }) => <div data-testid="locker-shelf">{viewerRole}</div> }));
+vi.mock("./LockerShelf", () => ({
+  default: function ShelfMock({ viewerRole }: { viewerRole: string }) {
+    const [draft, setDraft] = useState("");
+    return <div data-testid="locker-shelf">{viewerRole}<input aria-label="Shelf draft" value={draft} onChange={event => setDraft(event.target.value)} /></div>;
+  },
+}));
 vi.mock("./LockerWorksheets", () => ({ default: ({ viewerRole }: { viewerRole: string }) => <div data-testid="locker-worksheets">{viewerRole}</div> }));
 vi.mock("./LockerHost", () => ({
   default: () => <div data-testid="locker-host">Locker content</div>,
@@ -57,6 +64,7 @@ afterEach(() => {
   harness.replace.mockClear();
   harness.mutate.mockClear();
   harness.loading = false; harness.authLoaded = true; harness.relationships = [];
+  harness.meError = undefined; harness.meIdentity = undefined;
   harness.assignments = []; harness.assignmentsError = false;
 });
 
@@ -189,4 +197,20 @@ describe("CoachingWorkspace", () => {
     expect(screen.getByRole("textbox", { name: "Availability draft" })).toBe(input);
     expect(input.value).toBe("Monday 10:00");
   });
+});
+
+it("preserves a mounted Shelf draft if identity refresh fails temporarily and clears it on a refusal", () => {
+  harness.search = "locker=shelf";
+  harness.meIdentity = { role: "coach", coachId: "coach-1", studentId: null };
+  const view = render(<CoachingWorkspace />);
+  fireEvent.change(screen.getByLabelText("Shelf draft"), { target: { value: "Unsaved drill" } });
+  harness.meError = { status: 503 };
+  view.rerender(<CoachingWorkspace />);
+  expect(screen.getByLabelText<HTMLInputElement>("Shelf draft").value).toBe("Unsaved drill");
+  harness.meError = { status: 403 };
+  view.rerender(<CoachingWorkspace />);
+  expect(screen.queryByLabelText("Shelf draft")).toBeNull();
+  harness.meError = { status: 503 };
+  view.rerender(<CoachingWorkspace />);
+  expect(screen.queryByLabelText("Shelf draft")).toBeNull();
 });

@@ -179,3 +179,46 @@ test("the Shelf preimage can restore records that predate both Shelf fields", as
   await api.put(path).send({ ...original, rev: 2 }).expect(200);
   expect((await coaching.getDoc()).state).toEqual(seed);
 });
+
+test.each(["get", "put"])("Shelf %s suppresses the newer state after the coach's role snapshot becomes stale", async method => {
+  const path = "/v1/coaching/state?shelf=1";
+  const api = request(app("coach-1"));
+  const before = (await api.get(path).expect(200)).body;
+  const resolveRole = coaching.roleFor.bind(coaching);
+  const stale = jest.spyOn(coaching, "roleFor").mockImplementationOnce(async (...args) => {
+    const role = await resolveRole(...args);
+    await db.coaching.updateOne({ _id: "locker" }, {
+      $inc: { rev: 1 },
+      $set: { "state.coaches.1.userId": "replacement-coach", "state.students.0.note": "Replacement coach private note" },
+    });
+    return role;
+  });
+  try {
+    const pending = api[method](path);
+    const conflict = await (method === "put" ? pending.send(before) : pending).expect(409);
+    expect(conflict.headers["cache-control"]).toContain("no-store");
+    expect(conflict.body).toEqual({ error: { code: "conflict", message: "The Locker changed. Reload before editing." } });
+    await api.get(path).expect(404);
+  } finally { stale.mockRestore(); }
+});
+
+test("Shelf suppresses the post-CAS conflict state when the original coach loses access", async () => {
+  const path = "/v1/coaching/state?shelf=1";
+  const api = request(app("coach-1"));
+  const before = (await api.get(path).expect(200)).body;
+  const commit = coaching.putStateWithRosterGuard.bind(coaching);
+  const raced = jest.spyOn(coaching, "putStateWithRosterGuard").mockImplementationOnce(async (...args) => {
+    await db.coaching.updateOne({ _id: "locker" }, {
+      $inc: { rev: 1 },
+      $set: { "state.coaches.1.userId": "replacement-coach", "state.students.0.note": "Replacement coach private note" },
+    });
+    return commit(...args);
+  });
+  try {
+    before.state.students[0].shelf.push({ id: "added", ty: "notes", t: "Before access changed" });
+    const conflict = await api.put(path).send(before).expect(409);
+    expect(conflict.body).toEqual({ error: { code: "conflict", message: "The Locker changed. Reload before editing." } });
+    expect((await coaching.getDoc()).state.students[0].shelf).toEqual(fixture().students[0].shelf);
+    await api.get(path).expect(404);
+  } finally { raced.mockRestore(); }
+});

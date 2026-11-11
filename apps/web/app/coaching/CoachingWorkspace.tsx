@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -15,6 +15,7 @@ import LockerHost from "./LockerHost";
 import CoachingPractice from "./CoachingPractice";
 import CoachingSchedule from "./CoachingSchedule";
 import { useCoachingBadges } from "./useCoachingBadges";
+import { retryableLockerRead } from "./lockerRosterModel";
 
 const LockerRoster = dynamic(() => import("./LockerRoster"), {
   loading: () => <p role="status" className="text-caption text-text-muted">Loading the Locker roster…</p>,
@@ -38,7 +39,8 @@ type WorkspaceView = "locker" | "practice" | "sessions";
 const LOCKER_LINK = "inline-flex min-h-11 items-center font-semibold text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
 export default function CoachingWorkspace() {
-  const { data, error, isLoading, mutate } = useApi<CoachingMe>("/v1/coaching/me");
+  const { data: identity, error, isLoading, mutate } = useApi<CoachingMe>("/v1/coaching/me", { keepPreviousData: false });
+  const lastIdentity = useRef<CoachingMe | undefined>(undefined);
   const router = useRouter();
   const searchParams = useSearchParams();
   const routeView: WorkspaceView =
@@ -49,9 +51,13 @@ export default function CoachingWorkspace() {
     searchParams.has("booking")
       ? "sessions"
       : "locker";
+  const lockerView = searchParams.get("locker");
+  const preserveEditor = routeView === "locker" && (lockerView === "shelf" || lockerView === "worksheets");
+  const retainIdentity = preserveEditor && retryableLockerRead(error) && identity === lastIdentity.current;
+  const data = !error || retainIdentity ? identity : undefined;
+  useLayoutEffect(() => { lastIdentity.current = data; }, [data]);
   const workspaceRole = data?.role;
   const manageLocker = workspaceRole === "admin" || workspaceRole === "coach";
-  const lockerView = searchParams.get("locker");
   const rosterOpen = manageLocker && routeView === "locker" && lockerView === "roster";
   const shelfOpen = routeView === "locker" && lockerView === "shelf";
   const worksheetsOpen = routeView === "locker" && lockerView === "worksheets";
@@ -76,7 +82,7 @@ export default function CoachingWorkspace() {
     return <CoachingShellSkeleton />;
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <Card className="mx-auto max-w-xl">
         <div className="py-8 text-center">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
@@ -61,8 +61,9 @@ function ResponseText({ block, answer }: { block: WorksheetBlock; answer?: Works
   </>;
 }
 
-export function LockerWorksheetReview({ worksheet, onClose }: { worksheet: Worksheet; onClose: () => void }) {
+export function LockerWorksheetReview({ worksheet, onClose, retryNotice }: { worksheet: Worksheet; onClose: () => void; retryNotice?: ReactNode }) {
   return <Modal open size="lg" title={worksheet.title} onClose={onClose}>
+    {retryNotice}
     <ol className="space-y-3" aria-label={worksheet.state === "submitted" ? "Worksheet answers" : "Worksheet questions"}>
       {worksheet.blocks.map(block => <li key={block.id} className="space-y-2 rounded-lg border border-border p-3">
         <p className="text-caption text-text-muted">{WORKSHEET_BLOCK_TYPES[block.ty]}</p>
@@ -75,11 +76,12 @@ export function LockerWorksheetReview({ worksheet, onClose }: { worksheet: Works
   </Modal>;
 }
 
-export function LockerWorksheetAnswers({ accountId, worksheet, coachName, busy, onClose, onSubmit }: {
+export function LockerWorksheetAnswers({ accountId, worksheet, coachName, busy, retryNotice, onClose, onSubmit }: {
   accountId: string;
   worksheet: Worksheet;
   coachName: string;
   busy: boolean;
+  retryNotice?: ReactNode;
   onClose: () => void;
   onSubmit: (answers: WorksheetAnswers, replays: WorksheetReplay[]) => Promise<boolean>;
 }) {
@@ -111,12 +113,14 @@ export function LockerWorksheetAnswers({ accountId, worksheet, coachName, busy, 
   };
   const setAnswer = (id: string, answer: WorksheetAnswer) => setAnswers(previous => ({ ...previous, [id]: answer }));
   const submit = async () => {
+    if (retryNotice) return;
     const counts = Object.fromEntries(Object.entries(replays).map(([id, files]) => [id, { count: files.length }]));
     if (await onSubmit({ ...answers, ...counts }, attachments)) {
       writeDraft(key, null); onClose();
     }
   };
   return <Modal open size="lg" title={worksheet.title} description="Your answers are shared when you send the worksheet." onClose={close}>
+    {retryNotice}
     <ol className="space-y-4" aria-label="Worksheet questions">
       {worksheet.blocks.map((block, index) => {
         const prompt = block.q;
@@ -161,7 +165,7 @@ export function LockerWorksheetAnswers({ accountId, worksheet, coachName, busy, 
         <Button variant="danger" onClick={onClose}>Close and remove attachments</Button></div>
     </div> : null}
     <div className="mt-4 flex flex-wrap gap-2">
-      <Button loading={busy} disabled={reading} onClick={() => void submit()}>Send to {coachName}</Button>
+      <Button loading={busy} disabled={reading || !!retryNotice} onClick={() => void submit()}>Send to {coachName}</Button>
       <Button variant="secondary" disabled={busy || reading} onClick={close}>Close</Button>
     </div>
   </Modal>;

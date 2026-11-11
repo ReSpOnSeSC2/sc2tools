@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
@@ -15,10 +15,11 @@ const PROMPTS: Record<WorksheetBlockType, string> = {
   image: "What do you see in this frame?", replay: "Attach representative games from your next practice set.",
 };
 
-export function LockerWorksheetEditor({ initial, studentName, busy, playbook, onClose, onSave }: {
+export function LockerWorksheetEditor({ initial, studentName, busy, retryNotice, playbook, onClose, onSave }: {
   initial: Worksheet;
   studentName: string;
   busy: boolean;
+  retryNotice?: ReactNode;
   playbook?: WorksheetPlaybook;
   onClose: () => void;
   onSave: (worksheet: Worksheet) => Promise<boolean>;
@@ -48,6 +49,7 @@ export function LockerWorksheetEditor({ initial, studentName, busy, playbook, on
     else onClose();
   };
   const save = async (state: "draft" | "sent") => {
+    if (retryNotice) return;
     const validation = state === "sent" ? worksheetValidation(draft) : null;
     if (validation) { setError(validation); return; }
     setError("");
@@ -55,6 +57,7 @@ export function LockerWorksheetEditor({ initial, studentName, busy, playbook, on
   };
 
   return <Modal open size="xl" title={annotationBlock ? "Annotate a screenshot" : `Worksheet for ${studentName}`} onClose={close}>
+    {retryNotice}
     {annotationBlock ? <LockerWorksheetAnnotation existing={annotationBlock.img} onCancel={() => setAnnotation(null)} onSave={img => {
       patch(annotationBlock.id, { img }); setAnnotation(null);
     }} /> : <div className="space-y-4">
@@ -109,8 +112,8 @@ export function LockerWorksheetEditor({ initial, studentName, busy, playbook, on
         </div>
       </div> : null}
       <div className="flex flex-wrap gap-2">
-        <Button loading={busy} onClick={() => void save("draft")}>Save draft</Button>
-        <Button variant="secondary" disabled={busy} onClick={() => void save("sent")}>Send to {studentName}</Button>
+        <Button loading={busy} disabled={!!retryNotice} onClick={() => void save("draft")}>Save draft</Button>
+        <Button variant="secondary" disabled={busy || !!retryNotice} onClick={() => void save("sent")}>Send to {studentName}</Button>
         <Button variant="ghost" disabled={busy} onClick={close}>Close editor</Button>
       </div>
     </div>}

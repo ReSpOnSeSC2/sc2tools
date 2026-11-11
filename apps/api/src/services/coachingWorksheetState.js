@@ -120,13 +120,13 @@ function mergeAuthorWrite(state, incoming, actor) {
   return isDeepStrictEqual(next, state) ? null : next;
 }
 
-/** @param {Row} item @param {string} label */
-function worksheetReplay(item, label) {
+/** @param {Row} item @param {string} label @param {string} worksheetId */
+function worksheetReplay(item, label, worksheetId) {
   if (!item || !safeId(item.id) || typeof item.name !== "string" || !/^[^\u0000-\u001f/\\]+\.SC2Replay$/i.test(item.name)
     || !Number.isInteger(item.size) || item.size < 1 || item.size > MAX_REPLAY_BYTES || item.build !== label
     || typeof item.b64 !== "string" || item.b64.length !== 4 * Math.ceil(item.size / 3) || !/^[A-Za-z0-9+/]+={0,2}$/.test(item.b64)
     || Buffer.byteLength(item.b64, "base64") !== item.size || typeof item.at !== "string" || !Number.isFinite(Date.parse(item.at))) return null;
-  return { id: item.id, name: item.name, size: item.size, b64: item.b64, build: label, at: item.at, exported: false };
+  return { id: item.id, name: item.name, size: item.size, b64: item.b64, build: label, at: item.at, exported: false, worksheetId };
 }
 
 /** @param {Row} worksheet @param {Row} candidate */
@@ -164,7 +164,7 @@ function studentWorksheetChange(student, candidate, worksheet, target) {
     const previous = { ...worksheet };
     delete previous.submittedAt;
     return { worksheet: { ...previous, state: "sent", answers: {} },
-      submissions: submissions.filter(item => item?.build !== label || wantedIds.has(item.id)) };
+      submissions: submissions.filter(item => item?.worksheetId !== worksheet.id || wantedIds.has(item.id)) };
   }
   const parsed = worksheetAnswers(worksheet, target);
   if (!parsed) return null;
@@ -172,7 +172,7 @@ function studentWorksheetChange(student, candidate, worksheet, target) {
   const appended = [];
   for (const item of wanted) {
     if (seen.has(item?.id)) continue;
-    const replay = worksheetReplay(item, label);
+    const replay = worksheetReplay(item, label, worksheet.id);
     if (!replay) return null;
     seen.add(replay.id); appended.push(replay);
   }
@@ -223,4 +223,28 @@ function mergeClassicStudentWorksheets(previous, requested) {
   });
 }
 
-module.exports = { mergeClassicStudentWorksheets, mergeWorksheetWrite, studentWorksheetRead };
+/** Keep links from the authoritative copy when Classic saves a student record.
+ * Classic can add legacy replay records, but cannot assign them to a worksheet.
+ * @param {Row} before @param {Row} after */
+function preserveWorksheetReplayLinks(before, after) {
+  if (!Array.isArray(after.students)) return after;
+  const previous = new Map(rows(before.students).filter(Boolean).map(student => [student.id, student]));
+  const students = rows(after.students).map(student => {
+    if (!Array.isArray(student?.submissions)) return student;
+    const links = new Map(rows(previous.get(student.id)?.submissions).filter(item => safeId(item?.worksheetId))
+      .map(item => [item.id, item.worksheetId]));
+    const submissions = rows(student.submissions).map(item => {
+      if (!row(item)) return item;
+      const worksheetId = links.get(item.id);
+      if (worksheetId) return item.worksheetId === worksheetId ? item : { ...item, worksheetId };
+      if (!Object.hasOwn(item, "worksheetId")) return item;
+      const legacy = { ...item };
+      delete legacy.worksheetId;
+      return legacy;
+    });
+    return { ...student, submissions };
+  });
+  return { ...after, students };
+}
+
+module.exports = { mergeClassicStudentWorksheets, mergeWorksheetWrite, preserveWorksheetReplayLinks, studentWorksheetRead };

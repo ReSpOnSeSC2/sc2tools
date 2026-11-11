@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/Select";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { downloadLockerBackup, type loadLockerBackup } from "./lockerBackup";
 import { rosterCoaches, rosterStudents, type LockerDocument, type LockerState } from "./lockerRosterModel";
+import { LockerReadRetry } from "./LockerReadRetry";
 import { LockerWorksheetAnswers, LockerWorksheetReview } from "./LockerWorksheetAnswers";
 import { LockerWorksheetEditor, type WorksheetPlaybook } from "./LockerWorksheetEditor";
 import {
@@ -37,6 +38,8 @@ export type WorksheetLockerView = {
   document?: LockerDocument;
   loading: boolean;
   retry: () => Promise<unknown>;
+  retrying?: boolean;
+  refreshRequired?: boolean;
   backup: Awaited<ReturnType<typeof loadLockerBackup>>;
   busy: boolean;
   save: (state: LockerState, revision: number, message: string) => Promise<boolean>;
@@ -45,22 +48,34 @@ export type WorksheetLockerView = {
 type OpenPanel = { kind: "edit" | "review" | "answer"; worksheet: Worksheet; revision: number }
   | { kind: "templates" | "playbook"; revision: number };
 
-export function LockerWorksheetsPanel({ accountId, role, memberId, locker }: {
+type PanelProps = {
   accountId: string;
   role: "admin" | "coach" | "student";
   memberId: string | null;
   locker: WorksheetLockerView;
-}) {
+};
+
+export function LockerWorksheetsPanel(props: PanelProps) {
+  const { locker } = props;
+  if (!locker.document) return <Card>
+    <p role={locker.loading ? "status" : "alert"}>{locker.loading ? "Loading worksheets…" : "Worksheets could not load."}</p>
+    {locker.loading ? null : <Button className="mt-3" onClick={() => void locker.retry()}>Try again</Button>}
+  </Card>;
+  return <WorksheetDocument {...props} doc={locker.document} />;
+}
+
+function WorksheetDocument({ accountId, role, memberId, locker, doc }: PanelProps & { doc: LockerDocument }) {
   const [studentId, setStudentId] = useState("");
   const [panel, setPanel] = useState<OpenPanel | null>(null);
   const [plans, setPlans] = useState<Record<string, WorksheetPlaybook>>({});
   const [error, setError] = useState("");
   const confirmation = useConfirm(accountId);
-  const doc = locker.document;
-  if (!doc) return <Card>
-    <p role={locker.loading ? "status" : "alert"}>{locker.loading ? "Loading worksheets…" : "Worksheets could not load."}</p>
-    {locker.loading ? null : <Button className="mt-3" onClick={() => void locker.retry()}>Try again</Button>}
-  </Card>;
+  const cancelConfirmation = confirmation.cancel;
+  const writeBlocked = locker.busy || locker.refreshRequired;
+  const retryNotice = locker.refreshRequired ? <LockerReadRetry retry={locker.retry} retrying={locker.retrying} /> : null;
+  useEffect(() => {
+    if (locker.refreshRequired) cancelConfirmation();
+  }, [locker.refreshRequired, cancelConfirmation]);
 
   const studentRole = role === "student";
   const students = rosterStudents(doc.state).filter(student => role === "admin" || (studentRole ? student.id === memberId : student.coachId === memberId));
@@ -97,10 +112,11 @@ export function LockerWorksheetsPanel({ accountId, role, memberId, locker }: {
     <Card.Header className="flex-wrap gap-3">
       <h2 className="text-h4 font-semibold">Worksheets</h2>
       <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" disabled={!locker.backup || locker.busy} onClick={() => void restore()}>Restore previous version</Button>
+        <Button variant="secondary" disabled={!locker.backup || writeBlocked} onClick={() => void restore()}>Restore previous version</Button>
         {locker.backup ? <Button variant="ghost" onClick={() => downloadLockerBackup(locker.backup!)}>Download backup</Button> : null}
       </div>
     </Card.Header>
+    {panel ? null : retryNotice}
     {!studentRole && students.length ? <Field label="Student"><Select value={selected?.id ?? ""} onChange={event => {
       setStudentId(event.target.value); setPanel(null); setError("");
     }}>{students.map(student => <option key={student.id} value={student.id}>{student.name}</option>)}</Select></Field> : null}
@@ -125,19 +141,19 @@ export function LockerWorksheetsPanel({ accountId, role, memberId, locker }: {
               {worksheet.state === "submitted" ? "Review answers" : studentRole ? "Answer worksheet" : "View worksheet"}
             </Button>}
           {!studentRole ? <>
-            <Button size="sm" variant="ghost" disabled={locker.busy} onClick={() => void saveTemplate(worksheet)}>Save as template</Button>
-            {worksheet.state !== "submitted" ? <Button size="sm" variant="ghost" disabled={locker.busy} onClick={() => void removeWorksheet(worksheet)}>Delete worksheet</Button> : null}
+            <Button size="sm" variant="ghost" disabled={writeBlocked} onClick={() => void saveTemplate(worksheet)}>Save as template</Button>
+            {worksheet.state !== "submitted" ? <Button size="sm" variant="ghost" disabled={writeBlocked} onClick={() => void removeWorksheet(worksheet)}>Delete worksheet</Button> : null}
           </> : null}
         </div>
       </li>)}
     </ul> : <p className="text-caption text-text-muted">{studentRole ? "No worksheets have been assigned." : selected ? "No worksheets for this student yet." : "Add a student to create worksheets."}</p>}
 
-    {selected && panel?.kind === "edit" ? <LockerWorksheetEditor initial={panel.worksheet} studentName={selected.name} busy={locker.busy}
+    {selected && panel?.kind === "edit" ? <LockerWorksheetEditor initial={panel.worksheet} studentName={selected.name} busy={locker.busy} retryNotice={retryNotice}
       playbook={plans[panel.worksheet.id]} onClose={() => setPanel(null)} onSave={worksheet => saveWorksheet(worksheet, panel.revision, worksheet.state === "sent" ? "Worksheet sent" : "Worksheet draft saved")} /> : null}
-    {panel?.kind === "review" ? <LockerWorksheetReview worksheet={panel.worksheet} onClose={() => setPanel(null)} /> : null}
-    {selected && panel?.kind === "answer" ? <LockerWorksheetAnswers accountId={accountId} worksheet={panel.worksheet} coachName={coachName} busy={locker.busy}
+    {panel?.kind === "review" ? <LockerWorksheetReview worksheet={panel.worksheet} retryNotice={retryNotice} onClose={() => setPanel(null)} /> : null}
+    {selected && panel?.kind === "answer" ? <LockerWorksheetAnswers accountId={accountId} worksheet={panel.worksheet} coachName={coachName} busy={locker.busy} retryNotice={retryNotice}
       onClose={() => setPanel(null)} onSubmit={(answers, replays) => save(withWorksheetSubmission(doc.state, selected.id, panel.worksheet, answers, replays, new Date().toISOString()), panel.revision, "Worksheet submitted")} /> : null}
-    {selected && panel?.kind === "templates" ? <WorksheetTemplates privateTemplates={templatesFor(doc.state)} busy={locker.busy} onClose={() => setPanel(null)}
+    {selected && panel?.kind === "templates" ? <WorksheetTemplates privateTemplates={templatesFor(doc.state)} busy={locker.busy} retryNotice={retryNotice} onClose={() => setPanel(null)}
       onUse={async (title, blocks, customize) => {
         const worksheet = newWorksheet(title, blocks);
         if (customize) setPanel({ kind: "edit", worksheet, revision: panel.revision });
@@ -146,7 +162,7 @@ export function LockerWorksheetsPanel({ accountId, role, memberId, locker }: {
         if (!await confirmation.confirm({ title: `Delete ${template.title}?`, confirmLabel: "Delete template", intent: "danger", focusCancel: true })) return;
         await save(withWorksheetTemplate(doc.state, template.id, null), doc.rev, "Worksheet template deleted");
       }} /> : null}
-    {selected && panel?.kind === "playbook" ? <GuidedWorksheet onClose={() => setPanel(null)} onPlan={plan => {
+    {selected && panel?.kind === "playbook" ? <GuidedWorksheet retryNotice={retryNotice} onClose={() => setPanel(null)} onPlan={plan => {
       const worksheet = newWorksheet(`${plan.matchup || "Coaching"} decision check-in`, GUIDED_PROMPTS);
       setPlans(old => ({ ...old, [worksheet.id]: plan }));
       setPanel({ kind: "edit", worksheet, revision: panel.revision });
@@ -155,9 +171,10 @@ export function LockerWorksheetsPanel({ accountId, role, memberId, locker }: {
   </Card>;
 }
 
-function WorksheetTemplates({ privateTemplates, busy, onUse, onDelete, onClose }: {
+function WorksheetTemplates({ privateTemplates, busy, retryNotice, onUse, onDelete, onClose }: {
   privateTemplates: WorksheetTemplate[];
   busy: boolean;
+  retryNotice?: ReactNode;
   onUse: (title: string, blocks: WorksheetPrompt[], customize: boolean) => Promise<void>;
   onDelete: (template: WorksheetTemplate) => Promise<void>;
   onClose: () => void;
@@ -165,11 +182,12 @@ function WorksheetTemplates({ privateTemplates, busy, onUse, onDelete, onClose }
   const [filter, setFilter] = useState("");
   const system = kits.templates.filter(template => !filter || (filter === "Core" ? !template.matchup : template.matchup === filter));
   const actions = (title: string, blocks: WorksheetPrompt[]) => <div className="flex flex-wrap gap-2">
-    <Button size="sm" variant="secondary" disabled={busy} onClick={() => void onUse(title, blocks, false)}>Use as-is</Button>
+    <Button size="sm" variant="secondary" disabled={busy || !!retryNotice} onClick={() => void onUse(title, blocks, false)}>Use as-is</Button>
     <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onUse(title, blocks, true)}>Customize</Button>
   </div>;
   return <Modal open size="xl" title="Worksheet template library" onClose={() => { if (!busy) onClose(); }}>
     <div className="space-y-4">
+      {retryNotice}
       <Field label="Template matchup"><Select value={filter} onChange={event => setFilter(event.target.value)}><option value="">All</option><option>Core</option>{MATCHUPS.map(value => <option key={value}>{value}</option>)}</Select></Field>
       <ul className="grid gap-3 sm:grid-cols-2" aria-label="System worksheet templates">
         {system.map(template => <li key={template.id} className="space-y-2 rounded-lg border border-border p-3">
@@ -189,18 +207,19 @@ function WorksheetTemplates({ privateTemplates, busy, onUse, onDelete, onClose }
           <p className="font-semibold">{template.title}</p>
           <p className="text-caption text-text-muted">{template.blocks.length} {template.blocks.length === 1 ? "question" : "questions"}</p>
           {actions(template.title, template.blocks)}
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onDelete(template)}>Delete template</Button>
+          <Button size="sm" variant="ghost" disabled={busy || !!retryNotice} onClick={() => void onDelete(template)}>Delete template</Button>
         </li>)}
       </ul> : <p className="text-caption text-text-muted">No saved templates yet.</p>}
     </div>
   </Modal>;
 }
 
-function GuidedWorksheet({ onClose, onPlan }: { onClose: () => void; onPlan: (plan: WorksheetPlaybook) => void }) {
+function GuidedWorksheet({ onClose, onPlan, retryNotice }: { onClose: () => void; onPlan: (plan: WorksheetPlaybook) => void; retryNotice?: ReactNode }) {
   const [draft, setDraft] = useState<WorksheetPlaybook>({ matchup: "", evidence: "", decision: "", practice: "", proof: "" });
   const disabled = PLANNING_QUESTIONS.every(([key]) => !draft[key].trim());
   return <Modal open size="lg" title="Plan a worksheet" description="Your playbook stays in this visit. It is never saved to the worksheet or shared with the student." onClose={onClose}>
     <div className="space-y-3">
+      {retryNotice}
       <Field label="Matchup"><Select value={draft.matchup} onChange={event => setDraft(old => ({ ...old, matchup: event.target.value }))}><option value="">Any matchup</option>{MATCHUPS.map(value => <option key={value}>{value}</option>)}</Select></Field>
       {PLANNING_QUESTIONS.map(([key, label, hint]) => <Field key={key} label={label} hint={hint}>
         <textarea rows={2} className="w-full rounded-lg border border-border bg-bg-surface p-2" value={draft[key]} onChange={event => setDraft(old => ({ ...old, [key]: event.target.value }))} />

@@ -153,8 +153,40 @@ test("student submits and restores only the addressed worksheet answers and new 
   const expected = structuredClone(fixture());
   expected.students[0].worksheets[1] = { ...sent, state: "submitted", answers: { choice: 0, long: "Saw the Nexus", replay: { count: 1 } },
     submittedAt: saved.students[0].worksheets[1].submittedAt };
-  expected.students[0].submissions.push(attachment);
+  expected.students[0].submissions.push({ ...attachment, worksheetId: "sent-1" });
   expect(saved).toEqual(expected);
   await student.put(WORKSHEETS).send({ rev: 2, state: before.state }).expect(200);
   expect((await coaching.getDoc()).state).toEqual(fixture());
+});
+
+test("restoring one of two identically titled worksheets keeps the other's linked and legacy replays", async () => {
+  const baseline = fixture();
+  baseline.students[0].worksheets.push({ ...sent, id: "sent-2" });
+  await db.coaching.updateOne({ _id: "locker" }, { $set: { state: baseline } });
+  const student = app("student-1");
+  const submit = async (worksheetId, replay) => {
+    const body = (await student.get(WORKSHEETS).expect(200)).body;
+    const own = body.state.students[0];
+    Object.assign(own.worksheets.find(row => row.id === worksheetId), { state: "submitted", answers: { replay: { count: 1 } } });
+    own.submissions.push(replay);
+    await student.put(WORKSHEETS).send(body).expect(200);
+    return body.state;
+  };
+  await submit("sent-1", { ...attachment, worksheetId: "forged-link" });
+  await submit("sent-2", { ...attachment, id: "second-replay" });
+  const classic = (await student.get(STATE).expect(200)).body;
+  const submissions = classic.state.students[0].submissions;
+  submissions[0].worksheetId = "sent-2";
+  submissions[1].worksheetId = "sent-2";
+  await student.put(STATE).send(classic).expect(200);
+  const current = await coaching.getDoc();
+  expect(current.state.students[0].submissions).toEqual([older, { ...attachment, worksheetId: "sent-1" },
+    { ...attachment, id: "second-replay", worksheetId: "sent-2" }]);
+
+  const restore = (await student.get(WORKSHEETS).expect(200)).body;
+  const own = restore.state.students[0];
+  Object.assign(own.worksheets.find(row => row.id === "sent-2"), { state: "sent", answers: {} });
+  own.submissions = [];
+  await student.put(WORKSHEETS).send(restore).expect(200);
+  expect((await coaching.getDoc()).state.students[0].submissions).toEqual([older, { ...attachment, worksheetId: "sent-1" }]);
 });
