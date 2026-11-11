@@ -424,6 +424,22 @@ corresponding GitHub Release.
 - Pressing Enter or F3 in the Activity log brings the selected match into view.
 - Companion, its build selectors and Build Order Ghost share the desktop
   theme, with flat surfaces, clearer headings and each skin's mark and accent.
+- Newly analyzed replays include recorded camera tracks, a fuller build log,
+  unit trade details, and your own control-group and camera habits.
+- Follow a build in the native Practice HUD with a countdown, optional voice,
+  and a capture-hidden preview. Move mode supports dragging, resizing, and
+  window controls.
+- Choose replay folders, initial sync history, and Windows start-up during
+  pairing. Settings adds keyboard shortcuts, a section index on wider windows,
+  save and revert controls, and a rolling Last 30 days sync range.
+- Report verified league changes in enabled Discord channels when ranked 1v1
+  replays record the player's league.
+- Opt in to desktop randomizer draws without opening an OBS source. Play a
+  saved pick, reroll once, or dismiss the loading card.
+- Re-analyze requested games from a local replay or a verified Cloud Replay
+  Archive copy, and record the engine and agent versions for uploaded games.
+- Show the packaged agent version in Windows file properties and reject a
+  version mismatch before signing or packaging the executable.
 
 ### Agent 0.24.11
 

@@ -2,34 +2,6 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
-## Unreleased
-
-### Added
-- Include recorded camera tracks, a fuller build log, unit trade details and
-  your own control-group and camera habits in newly analyzed replays.
-- Follow a build in the native Practice HUD with a countdown, optional voice, and a capture-hidden preview you can reposition.
-- Choose replay folders, history and Windows start-up on first setup before syncing begins. Existing linked devices keep their settings.
-- Use keyboard shortcuts, save or revert pending settings, and choose a rolling Last 30 days replay sync range.
-- Include your observed league when a ranked 1v1 replay records it, so
-  enabled Discord channels can show verified league changes.
-- Opt in to desktop randomizer draws without an open OBS source. Play the
-  saved pick, reroll once, or dismiss the loading card.
-- Re-analyze games on request from **Settings → Backups & data** on the website:
-  the agent re-reads each requested game with the current analysis engine, from
-  the replay on this PC or, when it is gone, a verified copy from your Cloud
-  Replay Archive that is deleted right after reading, and uploads it like a new
-  game. One game at a time, 100 per batch; never a full Re-sync or a recording.
-- Record the engine and agent versions that analyzed each uploaded game.
-
-### Changed
-- Move the desktop Settings form into its own module. Use a section index on
-  wider windows and see when changes take effect.
-
-### Fixed
-- Show the release version in Windows file properties for the packaged agent.
-  Reject a version mismatch before signing or packaging the executable.
-- Make Practice HUD drag, resize and window controls respond in Move mode.
-
 ## 0.25.0
 
 ### Added
@@ -47,6 +19,21 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   settings, on by default. A pinned report now opens only when your library has
   an earlier game against the opponent. The Scouting button still opens it, with
   your own five games and **First meeting** on the opponent's side, never a guess.
+- Include recorded camera tracks, a fuller build log, unit trade details and
+  your own control-group and camera habits in newly analyzed replays.
+- Follow a build in the native Practice HUD with a countdown, optional voice, and a capture-hidden preview you can reposition.
+- Choose replay folders, history and Windows start-up on first setup before syncing begins. Existing linked devices keep their settings.
+- Use keyboard shortcuts, save or revert pending settings, and choose a rolling Last 30 days replay sync range.
+- Include your observed league when a ranked 1v1 replay records it, so
+  enabled Discord channels can show verified league changes.
+- Opt in to desktop randomizer draws without an open OBS source. Play the
+  saved pick, reroll once, or dismiss the loading card.
+- Re-analyze games on request from **Settings → Backups & data** on the website:
+  the agent re-reads each requested game with the current analysis engine, from
+  the replay on this PC or, when it is gone, a verified copy from your Cloud
+  Replay Archive that is deleted right after reading, and uploads it like a new
+  game. One game at a time, 100 per batch; never a full Re-sync or a recording.
+- Record the engine and agent versions that analyzed each uploaded game.
 
 ### Changed
 - Refresh Streams, menus and dialogs with the shared Agent theme. Stream setup
@@ -75,6 +62,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   colours, the two upload-concurrency buttons as one segmented choice in the
   skin's accent, setting names always on the left, a muted subtitle, and
   Help's checks together in one card.
+- Move the desktop Settings form into its own module. Use a section index on
+  wider windows and see when changes take effect.
 
 ### Fixed
 - Status lights on the Dashboard keep their colour after you change the skin.
@@ -89,6 +78,9 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   page fits the smallest window without horizontal scrolling.
 - The Dashboard's four counts and their captions sit on one line; View
   problems moves to the foot of its card.
+- Show the release version in Windows file properties for the packaged agent.
+  Reject a version mismatch before signing or packaging the executable.
+- Make Practice HUD drag, resize and window controls respond in Move mode.
 
 ## 0.24.11
 
