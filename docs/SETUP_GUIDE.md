@@ -108,10 +108,11 @@ the compatible API to recover access to version 2 recordings.
    [latest published agent](https://github.com/ReSpOnSeSC2/sc2tools/releases)
    against the release under test before starting installed acceptance.
 
-Agent 0.25.0 belongs to the growth release. Check the latest published release
-and available tag before building a roadmap installer. If 0.25.0 ships before
-these native changes reach main, use the next unused agent version after that
-release. Installed acceptance and signed delivery are owner steps.
+Agent 0.25.0 belongs to the growth release. Before tagging it, verify the
+tagged main commit includes the native merge listed in the roadmap delivery
+record. Move the native Unreleased entries into the 0.25.0 release notes. If
+the published tag predates that merge, use the next unused agent version.
+Installed acceptance and signed delivery are owner steps.
 
 For a source regression, revert the affected change through a checked PR.
 Roll the web back before removing an API contract it uses. Follow the
@@ -157,9 +158,11 @@ See the [database restore runbook](runbooks/restore-database.md),
 | 85 | Record, cancel and download a short clip in a supported desktop browser. Check the final file duration, replay frames, scoreboard and watermark. Repeat across a recorded replay section boundary and with GIF where available. |
 | 93–95 | Supply the matching VAPID key pair and subject on Render to enable push. Subscribe on a test device and verify opt-in categories, notification delivery and unsubscribe. Use a disposable Discord channel to verify opt-in delivery and revocation. Test promotion posts with two observed league values for the same ranked account and race on the updated agent. Keep private calendar links and account exports out of logs and shared screenshots. Verify an export after direct sign-in contains the active secret for a link created with `PLATFORM_TOKEN_ENCRYPTION_KEY` configured. Older links keep working until rotated or revoked. |
 | 90, 96, 184–187 | On the released agent, try a fresh link and an existing link, replay folder and history choices, Save and Revert, shortcuts, restart-required changes, tray status and Practice HUD placement. Check voice, countdown and capture exclusion off-air. |
+| 97 | Verify a fresh snapshot from the scheduled classifier-quality job. In Admin → Insights → Classifier, open a cohort with enough confirmed check-ins and verify the counts and drill-downs. See [Classifier quality](classifier-quality.md). |
 | 157–159 | On an off-air OBS scene, verify the timed poll, clip log, Large overlay scale and starter widget connections. Source presence is checked by connection; confirm visibility and audio directly in OBS. |
-| 87, 193, 194 | After updating and re-analyzing a replay, follow both cameras, check the attention heatmap, compare recorded control-group and camera phases, and verify unit trades, lifespans and build-supply labels. |
+| 87, 193, 194 | After updating, try Add camera data under Re-analyze games on a small cohort. Follow both cameras, check the attention heatmap, compare recorded control-group and camera phases, and verify unit trades, lifespans and observed supply in the private build-order export. |
 | 195 | Test the React Locker roster, Shelf, Worksheets and Content Studio separately with disposable linked accounts. Check role scoping, legacy media, student worksheet submission, Content Studio authoring and sharing, local backup and revision-checked restore. Keep Classic available until the owner has recorded one week of real use for each view. |
+| 197 | Use a disposable production share to verify the public battle-report headline, map image, PNG download and Discord unfurl. Test opt-in delivery and revoke the share afterward. |
 
 Use the [roadmap ledger](handoff/roadmap-progress-2026-10-28.json) for
 requirement-level status and the [Windows release runbook](runbooks/agent-wave2-release.md)
