@@ -376,32 +376,10 @@ class OverlayLiveService {
     const streak = await this._computeStreak(userId);
     if (streak) payload.streak = streak;
 
-    // MMR delta — compare against the previous game's myMmr if both
-    // are populated. Otherwise leave undefined so the widget hides.
-    // The previous game must be comparable: same account, same ladder
-    // race, replay-verified — a region/account switch may not fake a
-    // thousand-MMR swing on stream.
-    //
-    // Sign guard: replay ``myMmr`` is the game-START rating, so
-    // prev→this actually measures the PREVIOUS game's outcome. Most
-    // of the time the two agree (streaks), but after a result flip
-    // the lagged value contradicts this game's verified result —
-    // streamers saw "Victory — -35 MMR swing" on the clip log. A
-    // ranked win never loses rating, so a sign-contradicting delta is
-    // provably not this game's swing: suppress it rather than lie.
-    if (Number.isFinite(Number(game.myMmr))) {
-      const prev = await this._previousGameMmr(userId, game.gameId, game.date, {
-        myToonHandle: game.myToonHandle,
-        ladderRace: game.myLadderRace || game.myRace,
-      });
-      if (prev !== null) {
-        const delta = Number(game.myMmr) - prev;
-        const contradicts =
-          (payload.result === "win" && delta < 0) ||
-          (payload.result === "loss" && delta > 0);
-        if (!contradicts) payload.mmrDelta = delta;
-      }
-    }
+    // Both replays record their starting ratings. Report the observed change
+    // between them separately from this game's result.
+    const mmrChange = await aggregations.mmrChangeBetweenStarts(this.db.games, userId, game);
+    if (mmrChange !== null) payload.mmrChangeBetweenStarts = mmrChange;
 
     // Rank — the streamer's REAL current-season league + tier from
     // SC2Pulse (the ladder team behind the account that just played).
@@ -531,7 +509,7 @@ class OverlayLiveService {
    * opponent identity. Mirrors the post-game card's contextual fields
    * (H2H, RIVAL/FAMILIAR, last-games list, favourite opening, best
    * answer, predicted strategies, cheese, top builds, meta, opponent
-   * phases) — result-specific fields (result/durationSec/mmrDelta/map)
+   * phases) — result-specific fields (result/durationSec/mmrChangeBetweenStarts/map)
    * are NOT populated; those only land post-game.
    *
    * Three-tier opponent-row lookup:
@@ -968,23 +946,6 @@ class OverlayLiveService {
    */
   _computeStreak(userId) {
     return aggregations.computeStreak(this.db.games, userId);
-  }
-
-  /**
-   * @param {string} userId
-   * @param {string} [excludeGameId]
-   * @param {Date|string} [beforeDate]
-   * @param {{ myToonHandle?: unknown, ladderRace?: unknown }} [context]
-   * @returns {Promise<number|null>}
-   */
-  _previousGameMmr(userId, excludeGameId, beforeDate, context) {
-    return aggregations.previousGameMmr(
-      this.db.games,
-      userId,
-      excludeGameId,
-      beforeDate,
-      context,
-    );
   }
 
   /**

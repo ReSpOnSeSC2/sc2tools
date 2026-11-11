@@ -15,7 +15,9 @@
  * aggregation pipeline the service runs.
  */
 
+const { createHmac } = require("node:crypto");
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+const { catalogCheckinLabels } = require("./buildIntentOptions");
 const { DETECTOR_MY_BUILD_FIELD } = require("./buildIntentReaders");
 const {
   assignmentGameStartExpression,
@@ -126,12 +128,36 @@ function digestGameMatch(userId, since, until) {
   };
 }
 
+const CATALOG_KEYS = catalogCheckinLabels.map(({ key }) => key);
+const CATALOG_NAMES = catalogCheckinLabels.map(({ name }) => name);
+
+/** @param {Date} grantedAt */
+function catalogLabelAfter(grantedAt) {
+  return { $let: {
+    vars: { index: { $indexOfArray: [CATALOG_KEYS, "$buildIntent.build.key"] } },
+    in: { $cond: [
+      { $and: [
+        { $gt: [assignmentGameStartExpression(), grantedAt] },
+        { $eq: ["$buildIntent.status", "confirmed"] },
+        { $eq: ["$buildIntent.applied", true] },
+        { $eq: ["$buildIntent.build.source", "catalog"] },
+        { $gte: ["$$index", 0] },
+      ] },
+      { $arrayElemAt: [CATALOG_NAMES, "$$index"] },
+      DETECTOR_MY_BUILD_FIELD,
+    ] },
+  } };
+}
+
 /** @param {string} userId @param {Date} since @param {Date} until
- * @param {Record<string,any>[]|null} [assignmentMatches] null for the owner's view */
-function digestPipeline(userId, since, until, assignmentMatches = null) {
+ * @param {Record<string,any>[]|null} [assignmentMatches] null for the owner's view
+ * @param {Date|null} [catalogLabelsSince] supplemental sharing start */
+function digestPipeline(userId, since, until, assignmentMatches = null, catalogLabelsSince = null) {
   const own = assignmentMatches === null;
   const recordScope = own ? [] : [{ $match: { isLadderGame: true } }];
   const evidenceScope = own ? [] : [{ $match: assignmentMatches.length ? { $or: assignmentMatches } : { _id: null } }];
+  const sharedLabels = !own && catalogLabelsSince
+    ? [{ $addFields: { _digestBuild: catalogLabelAfter(catalogLabelsSince) } }] : [];
   const build = { $let: {
     vars: { name: { $cond: [{ $eq: [{ $type: "$_digestBuild" }, "string"] }, { $trim: { input: "$_digestBuild" } }, ""] } },
     in: { $cond: [{ $lte: [{ $strLenCP: "$$name" }, 120] }, "$$name", ""] },
@@ -144,7 +170,7 @@ function digestPipeline(userId, since, until, assignmentMatches = null) {
         _digestMyRace: coachingRaceExpr("$myRace"),
         _digestOppRace: coachingRaceExpr("$opponent.race"),
         // Check-ins update the owner's effective myBuild. The coach's
-        // accepted grant covers only the original detected label.
+        // base grant covers only the original detected label.
         _digestBuild: own ? "$myBuild" : DETECTOR_MY_BUILD_FIELD,
       },
     },
@@ -158,7 +184,7 @@ function digestPipeline(userId, since, until, assignmentMatches = null) {
           },
         }],
         builds: [
-          ...evidenceScope,
+          ...evidenceScope, ...sharedLabels,
           { $group: { _id: build, games: { $sum: 1 } } }, { $sort: { games: -1, _id: 1 } },
           { $group: { _id: null, rows: { $firstN: { input: "$$ROOT", n: DIGEST_BUILD_ROWS + 1 } },
             unclassified: { $sum: { $cond: [{ $eq: ["$_id", ""] }, "$games", 0] } },
@@ -170,9 +196,11 @@ function digestPipeline(userId, since, until, assignmentMatches = null) {
           ...evidenceScope,
           { $sort: { date: -1, _id: -1 } },
           { $limit: DIGEST_RECENT_GAMES },
+          ...sharedLabels,
           {
             $project: {
-              _id: 0, ...(own ? { gameId: 1 } : {}), date: 1, startedAt: 1, durationSec: 1, map: 1,
+              _id: 0, gameId: 1, date: 1, startedAt: 1, durationSec: 1, map: 1,
+              ...(!own ? { "replayFile.storedAt": 1 } : {}),
               _digestResult: 1, _digestMyRace: 1, _digestOppRace: 1, _digestBuild: 1,
             },
           },
@@ -250,13 +278,24 @@ function digestGameStart(row) {
   return end;
 }
 
-/** @param {any} row @param {boolean} own */
-function serializeDigestGame(row, own) {
+/** Stable across digest refreshes, scoped to one booking and current grant.
+ * The reference has no independent replay access.
+ * @param {string} grantId @param {string} bookingId @param {string} gameId */
+function digestReplayRef(grantId, bookingId, gameId) {
+  return createHmac("sha256", grantId).update(JSON.stringify(["coaching-digest-replay-v1", bookingId, gameId])).digest("base64url");
+}
+
+/** @param {any} row @param {boolean} own @param {string} bookingId @param {string|null} grantId */
+function serializeDigestGame(row, own, bookingId, grantId) {
   const my = row && row._digestMyRace;
   const opp = row && row._digestOppRace;
   const result = row && row._digestResult;
+  const gameId = boundedText(row && row.gameId, 200);
+  const evidenceRef = !own && grantId && gameId && row?.replayFile?.storedAt
+    ? digestReplayRef(grantId, bookingId, gameId) : null;
   return {
-    ...(own ? { gameId: boundedText(row && row.gameId, 200) } : {}),
+    ...(own ? { gameId } : {}),
+    ...(evidenceRef ? { evidenceRef } : {}),
     playedAt: isoOrNull(digestGameStart(row)),
     map: boundedText(row && row.map, 120),
     matchup: RACES.has(my) && RACES.has(opp) ? `${my}v${opp}` : null,
@@ -269,7 +308,7 @@ function serializeDigestGame(row, own) {
  * Shape the pipeline's single $facet document into the public digest.
  *
  * @param {any} root
- * @param {{bookingId:string, role:string, window:ReturnType<typeof digestWindow>}} context
+ * @param {{bookingId:string, role:string, grantId?:string|null, window:ReturnType<typeof digestWindow>}} context
  */
 function shapeDigest(root, context) {
   /** @type {{_id:string,games:number}[]} */
@@ -282,7 +321,7 @@ function shapeDigest(root, context) {
   const own = context.role === "student";
   /** @type {any[]} */
   const recent = Array.isArray(root?.recent) ? root.recent : [];
-  const replays = recent.map((row) => serializeDigestGame(row, own)).filter((game) => !own || game.gameId);
+  const replays = recent.map((row) => serializeDigestGame(row, own, context.bookingId, context.grantId ?? null)).filter((game) => !own || game.gameId);
   const replayCount = count(root?.evidenceCount?.[0]?.n);
   return {
     bookingId: context.bookingId,
@@ -370,6 +409,7 @@ module.exports = {
   previousSession,
   digestWindow,
   digestGameMatch,
+  digestReplayRef,
   digestPipeline,
   shapeDigest,
   sessionHistory,

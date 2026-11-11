@@ -1375,6 +1375,7 @@ function compactGameForRealtime(game) {
     myRace: game.myRace,
     myLadderRace: game.myLadderRace,
     myMmr: game.myMmr,
+    myMmrSource: game.myMmrSource,
     myLeagueId: game.myLeagueId,
     myToonHandle: game.myToonHandle,
     isLadderGame: game.isLadderGame,
@@ -1537,12 +1538,8 @@ async function emitOverlayLive(
         gameKey: payload.gameKey,
         result: payload.result,
       });
-      const delta = Number(payload.mmrDelta);
       const streak = payload.streak;
       const reasons = [];
-      if (Number.isFinite(delta) && Math.abs(delta) >= 30) {
-        reasons.push(`${delta > 0 ? "+" : ""}${delta} MMR swing`);
-      }
       if (streak && streak.kind === "win" && Number(streak.count) >= 3) {
         reasons.push(`${streak.count}-game win streak`);
       }

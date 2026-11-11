@@ -324,6 +324,29 @@ become links too), using the same inline renderer as replay reviews.
 Public payloads include only `{ body,
 updatedAt }`; who edited a note is never exposed.
 
+### Admin workflow
+
+Open **Admin → Guides → Notes**. The coverage table shows which matchups
+have published notes and which have drafts. Expand a matchup and choose a
+build to edit. The address can link directly to a matchup and build.
+Notes support `###` headings, `-` lists, bold, italic, inline code and
+HTTPS links. The preview uses the same renderer as the public guide.
+
+**Ctrl+S** or **Cmd+S** saves the selected note. Use **Save all** for several
+drafts. Saves run in order and failed notes remain available to retry.
+Switching tabs or using browser Back keeps drafts in this browser tab for
+the signed-in account. Following a link out of the page asks before leaving.
+**Discard all** asks before clearing drafts.
+
+Use **Videos** to search the channel list and filter by match status,
+visibility, 8-worker patch or Shorts. Pin up to three videos or hide up to
+20 on a guide. A global hide applies to every guide. An 8-worker video stays
+in the 8-worker list unless pinned on that guide.
+
+Use **Stats runs → Recompute now** to refresh statistics from stored samples.
+Choose **Backfill** when eligible past games have no samples yet. Review the
+backfill window and results before recomputing.
+
 ## Configuration
 
 API (`apps/api`, see `render.yaml` and `.env.example`):

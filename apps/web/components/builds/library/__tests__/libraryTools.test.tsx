@@ -77,6 +77,7 @@ beforeEach(() => {
     "/v1/community/builds/author-build": { slug: "author-build", version: 2, build: { race: "Protoss", vsRace: "Zerg", rules: [{ type: "before", name: "BuildStargate", time_lt: 200 }] } },
   };
   harness.apiCall.mockReset().mockResolvedValue({});
+  harness.mutate.mockReset().mockResolvedValue(undefined);
   harness.toast.success.mockClear();
   harness.toast.error.mockClear();
   harness.toast.info.mockClear();
@@ -154,8 +155,33 @@ describe("build library tools", () => {
     const dialog = await screen.findByRole("dialog", { name: "Review update" });
     expect(within(dialog).getByText(/Changed/)).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Apply update" }));
-    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledWith(harness.getToken, "/v1/custom-builds/saved-copy/apply-update", { method: "POST", body: "{}" }));
-    await waitFor(() => expect(harness.toast.success).toHaveBeenLastCalledWith("Updated “Saved copy” to the author's latest version"));
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledWith(harness.getToken, "/v1/custom-builds/saved-copy/apply-update", {
+      method: "POST", body: JSON.stringify({ communitySlug: "author-build", version: 2 }),
+    }));
+    await waitFor(() => expect(harness.toast.success).toHaveBeenLastCalledWith("Updated “Saved copy” to version 2"));
+  });
+
+  it("refreshes a stale review without applying a different version automatically", async () => {
+    harness.apiCall.mockRejectedValueOnce({ status: 409, code: "community_update_changed", message: "Review the newer version." });
+    const view = render(<Harness />);
+    fireEvent.click(within(screen.getByTestId("card-saved-copy")).getByRole("button", { name: "Author updated" }));
+    const dialog = await screen.findByRole("dialog", { name: "Review update" });
+    const apply = within(dialog).getByRole("button", { name: "Apply update" });
+    fireEvent.click(apply);
+    expect(await within(dialog).findByText("The version shown is no longer current.")).toBeTruthy();
+    expect(apply).toHaveProperty("disabled", true);
+    expect(harness.mutate).toHaveBeenCalled();
+    expect(harness.apiCall).toHaveBeenCalledOnce();
+
+    harness.responses["/v1/community/builds/author-build"] = {
+      slug: "author-build", version: 3, build: { race: "Protoss", rules: [{ type: "before", name: "BuildStargate", time_lt: 180 }] },
+    };
+    view.rerender(<Harness />);
+    expect(apply).toHaveProperty("disabled", false);
+    fireEvent.click(apply);
+    await waitFor(() => expect(harness.apiCall).toHaveBeenLastCalledWith(harness.getToken, "/v1/custom-builds/saved-copy/apply-update", {
+      method: "POST", body: JSON.stringify({ communitySlug: "author-build", version: 3 }),
+    }));
   });
 
   it("dismisses an author update by acknowledging its version", async () => {

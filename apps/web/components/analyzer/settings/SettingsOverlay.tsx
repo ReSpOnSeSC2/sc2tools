@@ -13,6 +13,7 @@ import { WidgetList } from "./OverlayWidgetGrid";
 import { useToast } from "@/components/ui/Toast";
 import { useOverlayTests, OverlayLiveTestDialog } from "./OverlayTestControls";
 import { OverlayProfileEditor } from "./OverlayProfileEditor";
+import { LazyOverlayLayout } from "./LazyOverlayLayout";
 import { useGhostPractice } from "@/lib/useGhostPractice";
 import { GhostPracticeSettings } from "./GhostPracticeSettings";
 import { SettingsBuildProfile } from "./SettingsBuildProfile";
@@ -71,7 +72,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     }
   }
   return (
-    <OverlayProfileEditor key={`${userId}:${activeToken.token}`} token={activeToken} onSaved={saved => { if (current()) patchToken(saved); }}>{({ profile, saving: profileSaving, setTheme, setDuration }) => <GuidedTours id="overlay" recordKey={String(credential.key)} ready={current()} isCurrent={current} className="space-y-6">
+    <OverlayProfileEditor key={`${userId}:${activeToken.token}`} token={activeToken} onSaved={saved => { if (current()) patchToken(saved); }}>{({ profile, saving: profileSaving, setTheme, setDuration, setLayout }) => <GuidedTours id="overlay" recordKey={String(credential.key)} ready={current()} isCurrent={current} className="space-y-6">
       <header><h2 className="text-body-lg font-semibold text-text">Overlay</h2>
         <Link href="/stream-studio/learn" target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-11 items-center gap-2 text-caption text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Build your first stream setup<span className="sr-only"> (opens in a new tab)</span><ArrowUpRight className="h-4 w-4" aria-hidden /></Link>
       </header>
@@ -155,7 +156,9 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         </Card>
       </Section>
 
-      <fieldset className="min-w-0 max-w-full" disabled={profileSaving}><OverlayThemeSection theme={profile.theme} onChange={setTheme} /></fieldset>
+      <fieldset className="min-w-0 max-w-full" disabled={profileSaving}><OverlayThemeSection theme={profile.theme} onChange={setTheme}>
+        <LazyOverlayLayout profile={profile} onChange={setLayout} token={activeToken.token} origin={origin} disabled={profileSaving} />
+      </OverlayThemeSection></fieldset>
 
       <OverlayLiveTestDialog pending={pendingLiveTest} busy={testingWidget !== null} origin={origin}
         onClose={() => setPendingLiveTest(null)} onSend={() => { if (pendingLiveTest) void testWidget(pendingLiveTest.token, pendingLiveTest.widget, true); }} />

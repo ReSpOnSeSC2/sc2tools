@@ -1,5 +1,6 @@
+import { navigation } from "@/app/admin/components/__tests__/navigationFixture";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import AdminPlayerChannelsPage from "@/app/admin/player-channels/page";
 import { SettingsPlayerChannels } from "@/components/analyzer/settings/SettingsPlayerChannels";
 import { SettingsSaveScope } from "@/components/analyzer/settings/SettingsSaveBar";
@@ -9,6 +10,7 @@ const apiCallMock = vi.fn();
 const useApiMock = vi.fn();
 const mutateMock = vi.fn();
 const getToken = vi.fn();
+vi.mock("next/navigation", () => import("@/app/admin/components/__tests__/navigationFixture"));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken }) }));
 vi.mock("@/lib/clientApi", () => ({
   apiCall: (...args: unknown[]) => apiCallMock(...args),
@@ -33,7 +35,8 @@ function renderMy() {
   return render(<SettingsSaveScope tabId="profile"><SettingsPlayerChannels savedPulseIds={["1-S2-1-267727"]} profileDirty={false} /></SettingsSaveScope>);
 }
 
-beforeEach(() => { apiCallMock.mockReset(); useApiMock.mockReset(); mutateMock.mockReset(); });
+beforeEach(() => {
+  navigation.visit("/admin/player-channels"); apiCallMock.mockReset(); useApiMock.mockReset(); mutateMock.mockReset(); });
 afterEach(cleanup);
 
 describe("player channel settings", () => {
@@ -122,6 +125,20 @@ describe("player channel settings", () => {
 });
 
 describe("admin player channel directory", () => {
+  it("deep-links to pending channels and restores search, page and removed state", () => {
+    setupAdmin();
+    navigation.visit("/admin/player-channels?pendingOnly=1");
+    render(<AdminPlayerChannelsPage />);
+    expect(screen.getByRole("checkbox", { name: "Pending review only" })).toHaveProperty("checked", true);
+    expect(useApiMock.mock.lastCall?.[0]).toBe("/v1/admin/player-channels?search=&page=0&limit=25&includeRemoved=false&pendingOnly=true");
+    act(() => navigation.visit("/admin/player-channels?search=Example&page=2&includeRemoved=1"));
+    expect(screen.getByLabelText("Search players")).toHaveProperty("value", "Example");
+    expect(screen.getByRole("checkbox", { name: "Include removed" })).toHaveProperty("checked", true);
+    expect(useApiMock.mock.lastCall?.[0]).toBe("/v1/admin/player-channels?search=Example&page=2&limit=25&includeRemoved=true&pendingOnly=false");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Pending review only" }));
+    expect(useApiMock.mock.lastCall?.[0]).toBe("/v1/admin/player-channels?search=Example&page=0&limit=25&includeRemoved=true&pendingOnly=true");
+  });
+
   it("adds a player absent from SC2Pulse using a toon handle", async () => {
     setupAdmin({ entries: [], total: 0 }); apiCallMock.mockResolvedValue({ entry: ENTRY });
     render(<AdminPlayerChannelsPage />);

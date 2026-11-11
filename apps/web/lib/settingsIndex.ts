@@ -37,6 +37,7 @@ export const SETTINGS_SECTIONS = {
     { id: "gateway-draw", label: "Opening Gateway draw" },
     { id: "sound-effects", label: "Sound effects" },
     { id: "randomizer-preview", label: "Live preview" },
+    { id: "randomizer-challenge", label: "Randomizer challenge" },
   ],
   import: [
     { id: "desktop-import", label: "Desktop agent import" },
@@ -114,6 +115,8 @@ export const SETTINGS_FIELDS = [
   { id: "randomizer-pool", tab: "randomizer", section: "build-randomizer", label: "Build randomizer pool", synonyms: ["matchup", "build choices", "catalog builds", "custom weights", "Gateway units", "opening unit draw"] },
   { id: "randomizer-sounds", tab: "randomizer", section: "sound-effects", label: "Randomizer sound effects", synonyms: ["randomizer volume", "fanfare", "reveal sounds"] },
   { id: "randomizer-preview", tab: "randomizer", section: "randomizer-preview", label: "Randomizer live preview", synonyms: ["spin preview", "build reveal"] },
+  { id: "randomizer-desktop", tab: "randomizer", section: "build-randomizer", label: "Roll on the desktop card", synonyms: ["randomize without OBS", "desktop randomizer"] },
+  { id: "randomizer-challenge", tab: "randomizer", section: "randomizer-challenge", label: "Randomizer challenge", synonyms: ["pool completion", "reset challenge"] },
   { id: "desktop-import", tab: "import", section: "desktop-import", label: "Replay import", synonyms: ["desktop import", "browser import", "Folder Sync", "replay folders", "re-scan", "replay history"] },
   { id: "import-jobs", tab: "import", section: "import-jobs", label: "Recent import jobs", synonyms: ["import progress", "previous imports", "import runs"] },
   { id: "overlay-setup", tab: "overlay", section: "setup", label: "OBS overlay setup", synonyms: ["streaming", "overlay connection", "starter packs"] },

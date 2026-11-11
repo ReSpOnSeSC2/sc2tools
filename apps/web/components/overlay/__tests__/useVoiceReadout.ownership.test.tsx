@@ -183,7 +183,7 @@ describe("shared automatic scouting voice ownership", () => {
     await flush();
     expect(speak).toHaveBeenCalledTimes(1);
     unmount();
-    renderHook(() => useVoiceReadout({ result: "win", mmrDelta: 22 }, { ...PREFS, events: { matchEnd: true } }, null, claim));
+    renderHook(() => useVoiceReadout({ result: "win", mmrChangeBetweenStarts: 22 }, { ...PREFS, events: { matchEnd: true } }, null, claim));
     await flush();
     expect(speak).toHaveBeenCalledTimes(2);
     expect(claim).not.toHaveBeenCalled();

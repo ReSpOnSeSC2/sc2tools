@@ -11,7 +11,7 @@
     "durationSec": 612,
     "oppMmr": 4250,
     "myMmr": 4310,
-    "mmrDelta": 22,
+    "mmrChangeBetweenStarts": 22,
     "opponentNotes": {
       "text": "Checks the natural early, then hides proxy tech behind the third.",
       "readAloud": true
@@ -271,7 +271,7 @@
       "result"
     ],
     "mmr-delta": [
-      "mmrDelta",
+      "mmrChangeBetweenStarts",
       "myMmr"
     ],
     "streak": [
@@ -343,7 +343,7 @@
       "result",
       "map",
       "matchup",
-      "mmrDelta",
+      "mmrChangeBetweenStarts",
       "headToHead",
       "session",
       "oppName"
@@ -640,7 +640,7 @@
       "patch": {
         "result": null,
         "durationSec": 0,
-        "mmrDelta": 0
+        "mmrChangeBetweenStarts": 0
       },
       "phase": "match_loading"
     },
@@ -649,7 +649,7 @@
       "label": "Victory",
       "patch": {
         "result": "win",
-        "mmrDelta": 22
+        "mmrChangeBetweenStarts": 22
       },
       "phase": "match_ended"
     },
@@ -658,7 +658,7 @@
       "label": "Defeat",
       "patch": {
         "result": "loss",
-        "mmrDelta": -18
+        "mmrChangeBetweenStarts": -18
       },
       "phase": "match_ended"
     },

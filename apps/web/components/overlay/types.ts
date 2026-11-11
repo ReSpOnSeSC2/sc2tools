@@ -99,8 +99,8 @@ export type LiveGamePayload = {
   oppMmr?: number;
   /** Player MMR if known. */
   myMmr?: number;
-  /** MMR delta from this game (signed). */
-  mmrDelta?: number;
+  /** Signed change from the previous comparable replay's starting MMR to this one's. */
+  mmrChangeBetweenStarts?: number;
   /** Head-to-head record vs this opponent. */
   headToHead?: { wins: number; losses: number };
   /** Opponent tendencies observed in the cloud's recent replay sample. */
@@ -589,7 +589,7 @@ export interface LiveGameEnvelope {
    * head-to-head, recent games (with build labels), RIVAL/FAMILIAR
    * tier, best-answer, cheese probability, predicted strategies.
    *
-   * Result-specific fields (``result``, ``durationSec``, ``mmrDelta``,
+   * Result-specific fields (``result``, ``durationSec``, ``mmrChangeBetweenStarts``,
    * ``map``) are deliberately absent — those only land post-game when
    * the replay parses.
    */

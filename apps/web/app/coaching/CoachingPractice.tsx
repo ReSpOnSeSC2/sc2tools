@@ -30,6 +30,7 @@ import {
   addDays,
   buildId,
   buildSuggestionKey,
+  DIGEST_LABEL_SHARING_VERSION,
   localDateKey,
   nextWindowDraft,
   requestId,
@@ -211,6 +212,29 @@ function PracticeWorkspace({ role }: { role: CoachingRole }) {
       toast.error("Your choice was not saved", { description: apiMessage(error) });
     } finally {
       setSharingBusy(false);
+    }
+  };
+
+  const setDigestLabels = async (enabled: boolean) => {
+    if (role !== "student" || practiceRelationship?.status !== "accepted" || !sharing.data) return;
+    setSharingBusy(true);
+    try {
+      await apiCall(getToken, "/v1/coaching/practice-sharing/digest-labels", {
+        method: "POST",
+        body: JSON.stringify({
+          expectedRev: sharing.data.rev, coachId: practiceRelationship.coach.id,
+          policyVersion: DIGEST_LABEL_SHARING_VERSION, enabled,
+        }),
+      });
+      if (!mounted.current) return;
+      await sharing.mutate();
+      if (mounted.current) toast.success(enabled ? "Check-in label sharing enabled" : "Check-in label sharing stopped");
+    } catch (error) {
+      if (!mounted.current) return;
+      await sharing.mutate();
+      if (mounted.current) toast.error("Your choice was not saved", { description: apiMessage(error) });
+    } finally {
+      if (mounted.current) setSharingBusy(false);
     }
   };
 
@@ -535,6 +559,7 @@ function PracticeWorkspace({ role }: { role: CoachingRole }) {
         onRequest={() => void requestPracticeSharing()}
         onRespond={(decision) => void respondPracticeSharing(decision)}
         onRevoke={() => setConfirmRevoke(true)}
+        onDigestLabels={(enabled) => void setDigestLabels(enabled)}
       />
 
       {!allPlayers && assignments.data?.counts ? <div role="group" aria-label="Practice plan state" className="flex flex-wrap gap-2">{(["active", "upcoming", "ended", "cancelled", "all"] as const).map(state => <Button key={state} className="min-h-11" size="sm" variant={(stateFilter ?? "active") === state ? "primary" : "secondary"} aria-pressed={(stateFilter ?? "active") === state} onClick={() => { setStateFilter(state); setAssignmentPage(1); }}>{state[0].toUpperCase() + state.slice(1)} ({assignments.data?.counts?.[state] ?? 0})</Button>)}</div> : null}

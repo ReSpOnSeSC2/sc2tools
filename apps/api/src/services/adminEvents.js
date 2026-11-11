@@ -25,6 +25,8 @@ const BACKUP_SNAPSHOT_STATUSES = new Set([
   "queued", "inProgress", "completed", "failed", "unknown",
 ]);
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const TRIAGE_READ_MS = 5000;
+const DAILY_TYPES = [EVENT_TYPES.USER_SIGNUP, EVENT_TYPES.AGENT_DOWNLOAD, EVENT_TYPES.AGENT_CONNECTED];
 const FEED_LIMIT_DEFAULT = 50;
 const FEED_LIMIT_MAX = 200;
 const SOCKET_ADMIN_ROOM = "admin";
@@ -309,6 +311,41 @@ class AdminEventsService {
       }
       return null;
     }
+  }
+
+  countUnreadMessages() {
+    return this.db.adminEvents.countDocuments({
+      type: EVENT_TYPES.USER_MESSAGE, readAt: null, "report.status": { $in: [null, "new"] },
+    }, { maxTimeMS: TRIAGE_READ_MS });
+  }
+
+  countUnreadAlerts() {
+    return this.db.adminEvents.countDocuments({
+      type: { $in: [EVENT_TYPES.BACKUP_STALE, EVENT_TYPES.JOB_OVERDUE] }, readAt: null,
+    }, { maxTimeMS: TRIAGE_READ_MS });
+  }
+
+  /** Daily recorded events, from the first UTC day through the current instant.
+   * @param {unknown} days @param {Date} [now] */
+  async daily(days, now = new Date()) {
+    const supplied = typeof days === "number" || (typeof days === "string" && days.trim()) ? Number(days) : NaN;
+    const count = Number.isFinite(supplied) ? Math.min(90, Math.max(7, Math.trunc(supplied))) : 30;
+    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const start = new Date(today - (count - 1) * MS_PER_DAY);
+    const grouped = await this.db.adminEvents.aggregate([
+      { $match: { type: { $in: DAILY_TYPES }, createdAt: { $gte: start, $lte: now } } },
+      { $group: { _id: { date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "UTC" } }, type: "$type" }, total: { $sum: 1 } } },
+    ], { maxTimeMS: TRIAGE_READ_MS }).toArray();
+    const totals = new Map(grouped.map((row) => [row._id.date + ":" + row._id.type, row.total]));
+    return { days: Array.from({ length: count }, (_, offset) => {
+      const date = new Date(start.getTime() + offset * MS_PER_DAY).toISOString().slice(0, 10);
+      return {
+        date,
+        user_signup: totals.get(date + ":" + EVENT_TYPES.USER_SIGNUP) || 0,
+        agent_download: totals.get(date + ":" + EVENT_TYPES.AGENT_DOWNLOAD) || 0,
+        agent_connected: totals.get(date + ":" + EVENT_TYPES.AGENT_CONNECTED) || 0,
+      };
+    }) };
   }
 
   /**

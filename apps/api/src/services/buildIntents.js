@@ -22,6 +22,8 @@ const { BuildIntentNotifier } = require("./buildIntentCommon");
 const { CHECKIN_PREF_TYPE, readBuildIntentPrefs } = require("./buildIntentPrefs");
 const { overlayRandomizerConfig } = require("./overlayRandomizerConfig");
 
+const { BuildIntentRandomizerChallenge } = require("./buildIntentRandomizerChallenge");
+
 class BuildIntentsService {
   /**
    * @param {import('../db/connect').DbContext} db
@@ -49,6 +51,7 @@ class BuildIntentsService {
       overlayTokens: db.overlayTokens,
     });
     this.gameState = new BuildIntentGameState({ ...shared, perGame: opts.perGame || null });
+    this.randomizerChallenge = new BuildIntentRandomizerChallenge(db, now);
     this.binder = new BuildIntentBind({ ...shared, perGame: opts.perGame || null });
   }
 
@@ -84,9 +87,18 @@ class BuildIntentsService {
       this.notifier.changed(userId, { prefs: true });
     } else if (type === "randomizer") {
       this.options.invalidate(userId);
+      this.live.resetDesktopAttempt(userId);
+      this.notifier.changed(userId, { prefs: true });
       return this.overlayRandomizerConfig(userId).then((config) =>
         this.notifier.overlay(userId, { randomizer: config }, "overlay:config"));
     }
+  }
+
+  /** Private desktop settings combine the two independent opt-ins.
+   * @param {string} userId */
+  async agentCheckinPrefs(userId) {
+    const { checkin, randomizer } = await readBuildIntentPrefs(this.live.users, userId);
+    return { ...checkin, ...(randomizer.rollOnDesktop === true ? { rollOnDesktop: true } : {}) };
   }
 
   /** @param {string} userId */
@@ -115,9 +127,11 @@ class BuildIntentsService {
     return this.live.nativeRoll(userId, gameKey, body);
   }
 
-  /** @param {string} userId @param {unknown} envelope */
-  registerFromEnvelope(userId, envelope) {
-    return this.live.registerFromEnvelope(userId, envelope);
+  /** @param {string} userId @param {unknown} envelope @param {boolean} [fromDevice] */
+  async registerFromEnvelope(userId, envelope, fromDevice = false) {
+    const record = await this.live.registerFromEnvelope(userId, envelope);
+    if (fromDevice) await this.live.maybeAutoRoll(userId, envelope);
+    return record;
   }
 
   /** @param {string} userId */

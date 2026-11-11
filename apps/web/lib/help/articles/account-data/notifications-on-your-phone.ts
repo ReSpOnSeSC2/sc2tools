@@ -30,7 +30,7 @@ const article: HelpArticle = {
     { type: "paragraph", text: "On the [Coaching](/coaching) sessions tab, every booked session has **Add to calendar**, which saves a calendar file for that one session. To keep your calendar up to date automatically, press **Create calendar link** under **Add sessions to your calendar**, copy the link, and subscribe to it in Google Calendar (Other calendars → From URL), Apple Calendar or Outlook." },
     { type: "list", items: [
       "The link lists booked and cancelled sessions only: times and your coach's name for students, and no student names for coaches.",
-      "It is shown once. **Regenerate link** replaces it and stops the old one at once; **Turn off link** removes it.",
+      "The new link appears when you create it. After you sign in, your account export can include the active secret when encrypted recovery is available. Keep the export private. **Regenerate link** replaces it and stops the old one. **Turn off link** removes it.",
       "Calendar apps refresh subscribed calendars on their own schedule, often every few hours.",
     ] },
   ],

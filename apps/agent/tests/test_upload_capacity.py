@@ -141,6 +141,17 @@ def test_busy_artifact_writer_is_waited_out(monkeypatch, tmp_path):
     assert calls[-1] == 'complete'
 
 
+def test_busy_completion_retries_without_repreparing_or_uploading_segments(monkeypatch, tmp_path):
+    manifest, segments = _stub_bundle(monkeypatch, tmp_path)
+    ok = response(200, {'ok': True, 'artifactId': 'c' * 64, 'segmentCount': len(segments)})
+    request, calls = _playback_server(segments, {'complete': [busy('playback_artifact_busy'), ok]})
+    monkeypatch.setattr(client.requests, 'request', request)
+    monkeypatch.setattr(client.time, 'sleep', lambda _s: None)
+    result = client.ApiClient('https://example.invalid', 'secret').upload_playback_artifact('g', manifest)
+    assert result['segmentCount'] == 2
+    assert calls == ['prepare', 'segment0', 'segment1', 'complete', 'complete']
+
+
 def test_rejected_segment_is_not_retried(monkeypatch, tmp_path):
     manifest, segments = _stub_bundle(monkeypatch, tmp_path)
     rejected = response(400, {'error': {'code': 'invalid_playback_artifact'}})

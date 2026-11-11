@@ -168,7 +168,7 @@ export async function openSettingsSearchFixture(page, theme, options = {}) {
         ["/v1/me/replay-archive-status", { enabled: false, totalGames: 0, archivedGames: 0, missingGames: 0, archiveComplete: true, backfillVersion: 0, resyncRequestedAt: null, requiresResync: false }],
         ["/v1/games/hidden", { items: [], nextCursor: null }],
         ["/v1/me/reanalysis", { catalogRevision: "0123456789abcdef", agent: "offline", job: null, cohorts: [{ id: "engine-before:1.6.11", kind: "engine", engine: "1.6.11", date: "2026-10-14", summary: "Synthetic label change.", matchups: ["PvT", "TvP"], count: 3, unknown: 1 }, { id: "missing-macro", kind: "macro", count: 0 }, { id: "no-engine-stamp", kind: "engine-unknown", count: 1 }] }],
-        ["/v1/me/preferences/randomizer", {}], ["/v1/me/preferences/voice", {}], ["/v1/me/preferences/misc", {}],
+        ["/v1/me/preferences/randomizer", {}], ["/v1/build-intents/randomizer-stats", { challengeStartedAt: null, pools: [] }], ["/v1/me/preferences/voice", {}], ["/v1/me/preferences/misc", {}],
         ["/v1/me/preferences/appearance", {}],
         ["/v1/me/preferences/notifications", { muted: [] }], ["/v1/me/preferences/buildCheckin", {}],
         ["/v1/me/preferences/reports", { weekly: true, stream: true, timezone: null }],
@@ -182,6 +182,7 @@ export async function openSettingsSearchFixture(page, theme, options = {}) {
         ["/v1/me/preferences/chatCommands", { v: 1, builtins: {}, custom: [] }],
         ["/v1/me/chatbot", { enabled: false, username: "", channel: "", replyCommands: true, announceOracle: true, announceLevelUps: true, hasToken: false, status: { state: "off", channel: null, lastError: null, lastConnectedAt: null } }],
         ["/v1/me/integrations", { platforms: ["twitch", "kick", "youtube"].map(platform => ({ platform, configured: false, connected: false, ready: false, platformUserName: "", scopes: [], connectedAt: null, lastSyncedAt: null, lastError: null })) }],
+        ["/v1/me/twitch-rewards", { permission: false, available: false, settings: { enabled: false, target: null, mappings: [] }, targets: [], builds: [], activity: [] }],
         ["/v1/me/twitch-automation", { serverEnabled: false, configured: false, connected: false, eligible: false, predictionPermission: false, markerPermission: false, preferences: { predictionsEnabled: false, markersEnabled: false, windowSec: 90, titleTemplate: "{me} vs {opp}" } }],
       ]);
       if (url.pathname === "/v1/overlay-tokens") {

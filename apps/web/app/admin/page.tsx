@@ -14,8 +14,6 @@ import { Card } from "@/components/ui/Card";
 import {
   compactNumber,
   formatBytes,
-  formatUsd,
-  timeSince,
 } from "./components/format";
 import { ForbiddenCard, LoadingRows, MetricStat } from "./components/AdminFragments";
 import { AdminEventRow } from "./components/AdminEventRow";
@@ -24,28 +22,20 @@ import {
   upsertLiveAdminEvent,
 } from "./components/adminEventFeed";
 import { useAdminEventsSocket } from "./components/useAdminEventsSocket";
+import { AdminNeedsAttention } from "./components/AdminNeedsAttention";
+import { AdminDailyActivity } from "./components/AdminDailyActivity";
+import { weekOverWeek } from "./components/adminDailyEvents";
 import type {
+  AdminDailyEvent,
+  AdminDailyEventsResp,
   AdminEvent,
   AdminEventCountsResp,
   AdminEventsListResp,
-  StorageStatsResp,
+  AdminStorageSummary,
 } from "./components/adminTypes";
-import { formatNumber } from "@/lib/i18n/format";
 
 const RECENT_FEED_SIZE = 8;
 
-/**
- * /admin — Dashboard tab.
- *
- * Layers three sources of truth onto one screen:
- *   1. Live activity counters (signups + downloads) backed by
- *      ``GET /v1/admin/events/counts``, refreshed by the
- *      ``admin:event`` Socket.io broadcast.
- *   2. The most recent eight events, spliced live so a new signup
- *      pops to the top without a page refresh.
- *   3. Per-collection MongoDB storage stats — the original Dashboard
- *      payload, useful for capacity triage.
- */
 export default function AdminDashboardPage() {
   const { userId } = useAuth();
   const counts = useApi<AdminEventCountsResp>("/v1/admin/events/counts", { refreshInterval: 60000 });
@@ -53,7 +43,11 @@ export default function AdminDashboardPage() {
     `/v1/admin/events?limit=${RECENT_FEED_SIZE}`,
     { refreshInterval: 60000 },
   );
-  const storage = useApi<StorageStatsResp>("/v1/admin/storage-stats");
+  const storage = useApi<AdminStorageSummary>("/v1/admin/storage-summary");
+  const daily = useApi<AdminDailyEventsResp>("/v1/admin/events/daily?days=30", { refreshInterval: 60_000 });
+  const refreshCounts = counts.mutate;
+  const refreshRecent = recent.mutate;
+  const refreshDaily = daily.mutate;
 
   const [liveEvents, setLiveEvents] = useState<AdminEvent[]>([]);
   useEffect(() => { setLiveEvents([]); }, [userId]);
@@ -64,14 +58,16 @@ export default function AdminDashboardPage() {
         setLiveEvents((prev) =>
           upsertLiveAdminEvent(prev, event, RECENT_FEED_SIZE),
         );
-        counts.mutate();
+        void refreshCounts();
+        if (event.type === "user_signup" || event.type === "agent_download" || event.type === "agent_connected") void refreshDaily();
       },
-      [counts],
+      [refreshCounts, refreshDaily],
     ),
     useCallback(() => {
-      void recent.mutate();
-      void counts.mutate();
-    }, [recent, counts]),
+      void refreshRecent();
+      void refreshCounts();
+      void refreshDaily();
+    }, [refreshRecent, refreshCounts, refreshDaily]),
   );
 
   const merged = useMemo<AdminEvent[]>(() => {
@@ -82,102 +78,57 @@ export default function AdminDashboardPage() {
   const forbidden =
     counts.error?.status === 403 ||
     recent.error?.status === 403 ||
-    storage.error?.status === 403;
+    storage.error?.status === 403 ||
+    daily.error?.status === 403;
   if (forbidden) return <ForbiddenCard />;
-
-  const loading = counts.isLoading && recent.isLoading && storage.isLoading
-    && !counts.error && !recent.error && !storage.error;
-  if (loading) return <div className="space-y-6"><AdminPageHeader anchor="daily-triage" title="Dashboard" description="Activity and database storage at a glance." /><DashboardSkeleton /></div>;
 
   return (
     <div className="space-y-6">
-      <AdminPageHeader anchor="daily-triage" title="Dashboard" description="Activity and database storage at a glance." />
-
-      <ActivitySection counts={counts.data ?? null} error={counts.error ?? null} onRetry={() => counts.mutate()} />
-
+      <AdminPageHeader anchor="daily-triage" title="Dashboard" description="Review open queues and recent platform activity." />
+      <AdminNeedsAttention />
+      <ActivitySection counts={counts.data} days={daily.error ? undefined : daily.data?.days}
+        error={counts.error} onRetry={refreshCounts} />
+      <AdminDailyActivity days={daily.data?.days} error={daily.error} onRetry={refreshDaily} />
       <RecentActivityCard
         events={merged}
         data={recent.data}
         isLoading={recent.isLoading && merged.length === 0}
         error={recent.error ?? null}
-        onRetry={() => recent.mutate()}
+        onRetry={refreshRecent}
       />
-
-      <StorageSection
-        data={storage.data ?? null}
-        error={storage.error ?? null}
-        onRetry={() => storage.mutate()}
-      />
+      {storage.error ? <RequestError title="Storage summary unavailable" error={storage.error} onRetry={() => storage.mutate()} />
+        : storage.data ? <Link href="/admin/health" className="inline-flex min-h-11 items-center rounded text-body text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          Database {formatBytes(storage.data.dataBytes + storage.data.indexBytes)} → Infrastructure
+        </Link> : null}
     </div>
   );
 }
 
-function ActivitySection({
-  counts,
-  error,
-  onRetry,
-}: {
-  counts: AdminEventCountsResp | null;
-  error: ClientApiError | null;
+function ActivitySection({ counts, days, error, onRetry }: {
+  counts: AdminEventCountsResp | undefined;
+  days: AdminDailyEvent[] | undefined;
+  error: ClientApiError | undefined;
   onRetry: () => unknown;
 }) {
-  if (error) {
-    return <RequestError error={error} onRetry={onRetry} />;
-  }
-  const c = counts;
-  const platforms = c?.downloadsByPlatform || {
-    windows: 0,
-    macos: 0,
-    linux: 0,
-  };
-  const agents = c?.agents || { total: 0, active24h: 0, active7d: 0 };
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <MetricStat
-          label="Total users"
-          value={compactNumber(c?.totalUsers ?? 0)}
-          caption={
-            c
-              ? `+${c.signupsToday} today · +${c.signupsThisWeek} this week`
-              : "—"
-          }
-        />
-        <MetricStat
-          label="Active agents"
-          value={compactNumber(agents.active24h)}
-          caption={
-            c
-              ? `running in 24h · ${compactNumber(agents.active7d)} in 7d · ${compactNumber(agents.total)} paired`
-              : "—"
-          }
-        />
-        <MetricStat
-          label="Agent downloads"
-          value={compactNumber(c?.totalDownloads ?? 0)}
-          caption={
-            c
-              ? `+${c.downloadsToday} today · +${c.downloadsThisWeek} this week`
-              : "—"
-          }
-        />
-        <MetricStat
-          label="Unread"
-          value={compactNumber(c?.unreadCount ?? 0)}
-          caption="open the Notifications tab to clear"
-        />
-        <MetricStat
-          label="Downloads by OS"
-          value={compactNumber(
-            (platforms.windows || 0)
-              + (platforms.macos || 0)
-              + (platforms.linux || 0),
-          )}
-          caption={`Win ${compactNumber(platforms.windows)} · Mac ${compactNumber(platforms.macos)} · Linux ${compactNumber(platforms.linux)}`}
-        />
-      </div>
-    </div>
-  );
+  if (error) return <RequestError title="Activity totals unavailable" error={error} onRetry={onRetry} />;
+  if (!counts) return <div role="status" aria-label="Loading activity totals"><LoadingRows rows={2} /></div>;
+  const { windows, macos, linux } = counts.downloadsByPlatform;
+  const signupDelta = days ? weekOverWeek(days, "user_signup") : null;
+  const downloadDelta = days ? weekOverWeek(days, "agent_download") : null;
+  const connectionDelta = days ? weekOverWeek(days, "agent_connected") : null;
+  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <MetricStat label="Total users" value={compactNumber(counts.totalUsers)} href="/admin/users"
+      caption="Registered accounts"
+      detail={signupDelta ? "Signups " + signupDelta : null} />
+    <MetricStat label="Active agents" value={compactNumber(counts.agents.active24h)} href="/admin/users?filter=with_agent"
+      caption="Paired devices seen in the last 24h"
+      detail={connectionDelta ? "First connections " + connectionDelta : null} />
+    <MetricStat label="Agent downloads" value={compactNumber(counts.totalDownloads)} href="/admin/notifications?type=agent_download&unread=0"
+      caption="Recorded download clicks"
+      detail={["Windows " + compactNumber(windows), "macOS " + compactNumber(macos), "Linux " + compactNumber(linux), downloadDelta].filter(Boolean).join(" · ")} />
+    <MetricStat label="Unread" value={compactNumber(counts.unreadCount)} href="/admin/notifications"
+      caption="Activity and messages marked unread" />
+  </div>;
 }
 
 function RecentActivityCard({
@@ -212,7 +163,7 @@ function RecentActivityCard({
       ) : isLoading ? (
         <ul className="divide-y divide-border">
           {Array.from({ length: 4 }).map((_, i) => (
-            <li key={i} className="flex animate-pulse gap-3 px-4 py-3">
+            <li key={i} className="flex motion-safe:animate-pulse gap-3 px-4 py-3">
               <div className="h-9 w-9 rounded-full bg-bg-elevated" />
               <div className="flex-1 space-y-1.5">
                 <div className="h-4 w-2/5 rounded bg-bg-elevated" />
@@ -222,7 +173,7 @@ function RecentActivityCard({
           ))}
         </ul>
       ) : events.length === 0 ? (
-        <EmptyStatePanel title="No activity yet" description="New signups, agent downloads and confirmed installs will appear here."
+        <EmptyStatePanel title="No activity yet" description="New signups, agent download clicks and first connections will appear here."
           action={<Button variant="secondary" onClick={onRetry}>Refresh</Button>} />
       ) : (
         <ul className="divide-y divide-border">
@@ -236,231 +187,5 @@ function RecentActivityCard({
         </ul>
       )}
     </Card>
-  );
-}
-
-function StorageSection({
-  data,
-  error,
-  onRetry,
-}: {
-  data: StorageStatsResp | null;
-  error: ClientApiError | null;
-  onRetry: () => unknown;
-}) {
-  if (error) {
-    return <RequestError title="Storage stats unavailable" error={error} onRetry={onRetry} />;
-  }
-  if (!data) return null;
-  return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <h2 className="text-h3 font-semibold text-text">Storage</h2>
-        <p className="text-body text-text-muted">
-          Whole application-database allocation first, followed by the
-          tracked collection breakdown.
-        </p>
-      </div>
-
-      <DatabaseFootprint database={data.database} />
-
-      <h3 className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-        Tracked collection totals
-      </h3>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricStat
-          label="Total documents"
-          value={compactNumber(data.totalDocs)}
-          caption="across tracked collections"
-        />
-        <MetricStat
-          label="Data size"
-          value={formatBytes(data.totalDataBytes)}
-          caption="uncompressed"
-        />
-        <MetricStat
-          label="Storage size"
-          value={formatBytes(data.totalStorageBytes)}
-          caption="on disk after WiredTiger"
-        />
-        <MetricStat
-          label="Index size"
-          value={formatBytes(data.totalIndexBytes)}
-          caption="all secondary indexes"
-        />
-      </div>
-
-      <Card padded={false}>
-        <Card.Header>
-          <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
-            Collections
-          </h3>
-          <span className="text-caption text-text-dim">
-            sorted by data size
-          </span>
-        </Card.Header>
-        <div className="block md:hidden">
-          <ul className="divide-y divide-border">
-            {data.collections.map((row) => (
-              <li key={row.name} className="space-y-1 px-4 py-3">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-mono text-body font-semibold">
-                    {row.name}
-                  </span>
-                  <span className="text-caption text-text-dim">
-                    {compactNumber(row.count)} docs
-                  </span>
-                </div>
-                <dl className="grid grid-cols-3 gap-2 text-caption text-text-muted">
-                  <div>
-                    <dt className="text-text-dim">Data</dt>
-                    <dd className="tabular-nums text-text">
-                      {formatBytes(row.totalSize)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-text-dim">Disk</dt>
-                    <dd className="tabular-nums text-text">
-                      {formatBytes(row.storageSize)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-text-dim">Indexes</dt>
-                    <dd className="tabular-nums text-text">
-                      {formatBytes(row.indexSize)}
-                    </dd>
-                  </div>
-                </dl>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="hidden md:block">
-          <table className="w-full text-sm">
-            <thead className="bg-bg-elevated/40 text-left text-caption uppercase tracking-wider text-text-dim">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Collection</th>
-                <th className="px-4 py-3 text-right font-semibold">Documents</th>
-                <th className="px-4 py-3 text-right font-semibold">Avg doc</th>
-                <th className="px-4 py-3 text-right font-semibold">Data size</th>
-                <th className="px-4 py-3 text-right font-semibold">On disk</th>
-                <th className="px-4 py-3 text-right font-semibold">Indexes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {data.collections.map((row) => (
-                <tr key={row.name} className="hover:bg-bg-elevated/30">
-                  <td className="px-4 py-2 font-mono text-text">{row.name}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-text">
-                    {formatNumber(row.count)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-text-muted">
-                    {row.avgObjSize > 0 ? formatBytes(row.avgObjSize) : "—"}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-text">
-                    {formatBytes(row.totalSize)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-text">
-                    {formatBytes(row.storageSize)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-text-muted">
-                    {formatBytes(row.indexSize)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function DatabaseFootprint({
-  database,
-}: {
-  database: StorageStatsResp["database"] | undefined;
-}) {
-  const app = database?.available ? database.appData : null;
-  if (!app) {
-    return (
-      <Card padded>
-        <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
-          Application database footprint
-        </h3>
-        <p className="mt-2 text-body text-text-muted">
-          Whole-database dbStats are temporarily unavailable. No storage value
-          has been inferred from the collection table below.
-        </p>
-      </Card>
-    );
-  }
-  const planning = database?.pricing;
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
-          Application database footprint
-        </h3>
-        <span className="text-caption text-text-dim">
-          database-only dbStats · measured {timeSince(app.measuredAt)}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <MetricStat
-          label="Logical app data"
-          value={formatBytes(app.logicalDataBytes)}
-          caption="uncompressed documents"
-        />
-        <MetricStat
-          label="Allocated documents"
-          value={formatBytes(app.allocatedDocumentBytes)}
-          caption="WiredTiger document allocation"
-        />
-        <MetricStat
-          label="Allocated indexes"
-          value={formatBytes(app.allocatedIndexBytes)}
-          caption="database index allocation"
-        />
-        <MetricStat
-          label="Allocated app total"
-          value={formatBytes(app.allocatedTotalBytes)}
-          caption="documents + indexes"
-        />
-        <MetricStat
-          label="Mongo planning baseline"
-          value={
-            planning
-              ? `${formatUsd(planning.monthlyPlanningEstimateUsd)}/mo`
-              : "Unavailable"
-          }
-          caption="repository planning estimate"
-        />
-      </div>
-      <p className="text-caption text-text-dim">
-        This is the SC2 Tools application database only. It is not Atlas disk
-        capacity, backup storage, data transfer, or a provider bill.
-      </p>
-    </div>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <div className="h-8 w-40 animate-pulse rounded bg-bg-elevated" />
-        <div className="h-4 w-72 animate-pulse rounded bg-bg-elevated" />
-      </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={i}
-            className="h-24 animate-pulse rounded-xl bg-bg-elevated"
-          />
-        ))}
-      </div>
-      <LoadingRows rows={8} />
-    </div>
   );
 }

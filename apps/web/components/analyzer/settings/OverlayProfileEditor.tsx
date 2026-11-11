@@ -14,9 +14,10 @@ import { Button } from "@/components/ui/Button";
 import { useSaveSource } from "./SettingsContext";
 import { OverlayFlagsContext, type OverlayFlags } from "./overlayFlags";
 import type { OverlayToken } from "./OverlayTokenHeader";
+import type { SetOverlayLayout } from "./OverlayLayoutEditor";
 
 type SavedProfile = { profile: OverlayProfile; profileRevision: number };
-type EditorControls = { profile: OverlayProfile; saving: boolean; setTheme: (theme: OverlayTheme) => void; setDuration: (widget: string, durationSec: number | null) => void };
+type EditorControls = { profile: OverlayProfile; saving: boolean; setTheme: (theme: OverlayTheme) => void; setDuration: (widget: string, durationSec: number | null) => void; setLayout: SetOverlayLayout };
 
 const CONFLICT = "This overlay changed in another tab. Reload Settings to review the latest profile before saving again. Your draft is still here.";
 
@@ -65,6 +66,12 @@ export function OverlayProfileEditor({ token, children, onSaved }: {
     try { localStorage.setItem(migrationKey, "1"); } catch { /* No persistent write is required. */ }
   };
   const change = (next: OverlayProfile) => { setMessage(null); setDraft(withoutOverlayFlags(normalizeOverlayProfile(next))); };
+
+  const setLayout: SetOverlayLayout = (canvas, update) => {
+    const key = canvas === "vertical" ? "layoutVertical" : "layout";
+    setMessage(null);
+    setDraft(current => withoutOverlayFlags(normalizeOverlayProfile({ ...current, [key]: update(current[key] ?? {}) })));
+  };
 
   /** PUT one profile with CAS; resolves the verified saved profile. */
   async function send(profile: OverlayProfile, expectedRevision: number, controller: AbortController): Promise<SavedProfile | null> {
@@ -159,7 +166,7 @@ export function OverlayProfileEditor({ token, children, onSaved }: {
       <p className="text-caption text-text-muted">This browser has a previous theme. Add it to your draft, then Save to update connected sources. Nothing moves automatically.</p>
       <div className="flex flex-wrap gap-2"><Button onClick={() => { change({ ...draft, theme: legacyTheme }); dismissMigration(); }} disabled={saving}>Use previous theme</Button><Button variant="ghost" onClick={dismissMigration}>Dismiss</Button></div>
     </aside> : null}
-    {children({ profile: draft, saving: saving || !hydrated, setTheme: theme => change({ ...draft, theme }), setDuration: (widget, durationSec) => change({ ...draft, widgetOptions: { ...draft.widgetOptions, [widget]: { durationSec } } }) })}
+    {children({ profile: draft, saving: saving || !hydrated, setLayout, setTheme: theme => change({ ...draft, theme }), setDuration: (widget, durationSec) => change({ ...draft, widgetOptions: { ...draft.widgetOptions, [widget]: { durationSec } } }) })}
     {message ? <p role="status" className="rounded-lg border border-border bg-bg-surface p-3 text-caption text-text-muted">{message}</p> : null}
   </OverlayFlagsContext.Provider>;
 }

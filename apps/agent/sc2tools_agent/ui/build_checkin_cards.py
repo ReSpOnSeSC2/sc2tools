@@ -476,6 +476,12 @@ class LoadingCardWindow(CardWindow):
         self.roll_now.setToolTip("Select and save one build for this match. Animation and audio stay in the separate widget.")
         self.roll_now.clicked.connect(self._roll_now)
         strip_row.addWidget(self.roll_now, 0, QtCore.Qt.AlignVCenter)
+        self.play_roll = button("Play it", "checkinSmall", focusable=False)
+        self.play_roll.clicked.connect(self._play_roll)
+        strip_row.addWidget(self.play_roll, 0, QtCore.Qt.AlignVCenter)
+        self.reroll = button("Reroll", "checkinSmall", focusable=False)
+        self.reroll.clicked.connect(self._reroll)
+        strip_row.addWidget(self.reroll, 0, QtCore.Qt.AlignVCenter)
         full.addWidget(self.strip)
 
         self.builds = BuildList(selectable=False, searchable=False, focusable=False)
@@ -571,7 +577,7 @@ class LoadingCardWindow(CardWindow):
         self.title.setText(model.title)
         self.title.setVisible(bool(model.title))
         self.not_now.setText("Close" if model.scouting_only else "Not now")
-        self.dont_ask.setVisible(not model.scouting_only)
+        self.dont_ask.setVisible(not model.scouting_only and not model.randomizer_only)
         if model.scouting_only:
             for widget in (self.intro, self.waiting, self.strip, self.builds, self.loading, self.empty, self.status):
                 widget.hide()
@@ -586,6 +592,9 @@ class LoadingCardWindow(CardWindow):
         if strip is not None:
             self.strip_label.setText(strip.label)
             self.roll_now.setVisible(strip.can_roll_now)
+            self.play_roll.setVisible(bool(strip.rolled_key))
+            self.play_roll.setEnabled(strip.can_play)
+            self.reroll.setVisible(strip.can_reroll)
 
         has_rows = bool(model.featured or model.more)
         if has_rows:
@@ -595,10 +604,10 @@ class LoadingCardWindow(CardWindow):
                 reason_key=model.locked_key if model.changing else None,
                 reason_label=model.current_pick_label if model.changing else None,
             )
-        self.builds.setVisible(not model.waiting_for_matchup and self.builds.has_rows())
-        self.loading.setVisible(model.options_loading and not self.builds.has_rows())
+        self.builds.setVisible(not model.randomizer_only and not model.waiting_for_matchup and self.builds.has_rows())
+        self.loading.setVisible(not model.randomizer_only and model.options_loading and not self.builds.has_rows())
         self.empty.setVisible(
-            bool(model.matchup)
+            not model.randomizer_only and bool(model.matchup)
             and not model.options_loading
             and not self.builds.has_rows()
             and not model.status
@@ -617,6 +626,15 @@ class LoadingCardWindow(CardWindow):
     def _change(self) -> None:
         if self.model is not None:
             self._act("undeclare", self.model.game_key)
+
+    def _play_roll(self) -> None:
+        strip = self.model.randomizer if self.model is not None else None
+        if strip is not None and strip.rolled_key and strip.can_play:
+            self._declare(strip.rolled_key)
+
+    def _reroll(self) -> None:
+        if self.model is not None and self.model.randomizer is not None and self.model.randomizer.can_reroll:
+            self._act("reroll", self.model.game_key)
 
     def _roll_now(self) -> None:
         if self.model is not None:

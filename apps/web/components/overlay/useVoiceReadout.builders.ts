@@ -62,10 +62,10 @@ export function buildMatchEndLine(live: LiveGamePayload): string {
       : live.result === "loss"
         ? "Defeat"
         : "Match over";
-  const delta = Number(live.mmrDelta);
+  const delta = Number(live.mmrChangeBetweenStarts);
   if (Number.isFinite(delta) && delta !== 0) {
     const sign = delta > 0 ? "plus" : "minus";
-    return `${word}. ${sign} ${Math.abs(delta)} MMR.`;
+    return `${word}. Between recorded game starts, ${sign} ${Math.abs(delta)} MMR.`;
   }
   return `${word}.`;
 }
@@ -112,7 +112,7 @@ export function matchEndFingerprint(live: LiveGamePayload): string {
     "E",
     (live.oppName || "").toLowerCase(),
     live.result ?? "",
-    live.mmrDelta ?? "",
+    live.mmrChangeBetweenStarts ?? "",
     live.isTest ? "T" : "",
   ].join("|");
 }

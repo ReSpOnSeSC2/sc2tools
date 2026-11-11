@@ -91,6 +91,10 @@ const BASE_LESSONS: ReadonlyArray<Lesson> = [
         body: <>Use <strong>Drag into OBS</strong> on a widget card to create a named source at its recommended dimensions for Normal scale. Increase the Browser Source dimensions if a larger scale clips the preview. Alternatively, choose <strong>Sources → + → Browser</strong>, paste its private URL with Copy and enter the card&apos;s width and height. All-in-one uses your canvas size, usually <strong>1920 × 1080</strong>; Build profile uses <strong>720 × 900</strong>. Press Test and review Preview before sending any live sample.</>,
       },
       {
+        title: "Arrange All-in-one widgets",
+        body: <>Open <Link href="/settings?tab=overlay#layout">Theme → Layout</Link>. Drag the sample widgets away from the shaded HUD areas and save the overlay display. Use the vertical URL in that panel for a 1080 × 1920 OBS Browser Source.</>,
+      },
+      {
         title: "Place it above your gameplay",
         body: "Move the Browser Source above your game capture in the Sources list and leave its eye icon on. Use the preview to position individual widgets and keep your minimap and supply count clear. Avoid showing the same widget through both All-in-one and an individual source.",
       },

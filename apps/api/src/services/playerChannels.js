@@ -286,6 +286,10 @@ class PlayerChannelsService {
     return { channelsByGameId };
   }
 
+  countPending() {
+    return this.col.countDocuments({ pending: true, removed: { $ne: true } }, { maxTimeMS: 5000 });
+  }
+
   /** @param {any} [opts] */
   async list(opts = {}) {
     await this.ensureSeeds();
