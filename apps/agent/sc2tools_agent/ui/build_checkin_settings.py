@@ -22,6 +22,9 @@ from typing import Any, Callable, Optional
 
 from PySide6 import QtCore, QtWidgets
 
+from . import theme
+from .qt_helpers import build_flow_layout
+
 HINT_NO_LIVE = (
     "Build check-ins need live game detection, which is turned off for "
     "this session (--no-live). You can still check in on sc2tools.com."
@@ -86,9 +89,13 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         self._on_reset_positions = on_reset_positions
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(10)
+        layout.setContentsMargins(theme.SPACE_L, theme.SPACE_L, theme.SPACE_L, theme.SPACE_L)
+        layout.setSpacing(theme.SPACE_S)
+        self._add_preferences(layout, on_help)
+        self._add_card_controls(layout, on_open_queue)
+        self._paint(None)
 
+    def _add_preferences(self, layout, on_help):
         title = QtWidgets.QLabel("Build check-in")
         title.setObjectName("h2")
         title_row = QtWidgets.QHBoxLayout()
@@ -119,7 +126,7 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         layout.addWidget(self.enabled_box)
         for box in (self.loading_box, self.after_box, self.scouting_box):
             row = QtWidgets.QHBoxLayout()
-            row.setContentsMargins(24, 0, 0, 0)
+            row.setContentsMargins(theme.SPACE_XL, 0, 0, 0)
             row.addWidget(box)
             row.addStretch(1)
             layout.addLayout(row)
@@ -141,26 +148,27 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         )
         self.scouting_box.toggled.connect(self._scouting_changed)
 
+    def _add_card_controls(self, layout, on_open_queue):
         cards_title = QtWidgets.QLabel("Cards")
         cards_title.setObjectName("h2")
         layout.addWidget(cards_title)
-        previews = QtWidgets.QHBoxLayout()
+        previews = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets, spacing=theme.SPACE_S)
         self.preview_loading = QtWidgets.QPushButton("Preview loading card")
         self.preview_postgame = QtWidgets.QPushButton("Preview after-game card")
         for widget, kind in ((self.preview_loading, "loading"), (self.preview_postgame, "postgame")):
-            widget.setEnabled(on_preview is not None)
+            widget.setEnabled(self._on_preview is not None)
             widget.clicked.connect(lambda _checked=False, kind=kind: self._preview(kind))
             previews.addWidget(widget)
-        previews.addStretch(1)
         layout.addLayout(previews)
         positions = QtWidgets.QHBoxLayout()
         self.reset_positions = QtWidgets.QPushButton("Reset card positions")
-        self.reset_positions.setEnabled(on_reset_positions is not None)
+        self.reset_positions.setEnabled(self._on_reset_positions is not None)
         self.reset_positions.clicked.connect(self._reset_positions)
         positions.addWidget(self.reset_positions)
         self.positions_status = QtWidgets.QLabel("")
         self.positions_status.setObjectName("muted")
-        positions.addWidget(self.positions_status); positions.addStretch(1)
+        positions.addWidget(self.positions_status)
+        positions.addStretch(1)
         layout.addLayout(positions)
         self._position_feedback = QtCore.QTimer(self)
         self._position_feedback.setSingleShot(True)
@@ -178,7 +186,6 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         self.preview_hint.setWordWrap(True)
         self.preview_hint.setTextFormat(QtCore.Qt.PlainText)
         layout.addWidget(self.preview_hint)
-        self._paint(None)
 
     def _preview(self, kind: str) -> None:
         if self._on_preview is None:

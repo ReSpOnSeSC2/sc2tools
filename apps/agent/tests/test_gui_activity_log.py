@@ -72,7 +72,7 @@ def test_log_search_copy_follow_and_help_navigation(tmp_path):
         gui.webbrowser.open = lambda url, **kwargs: opened.append(url)
         for button in win.findChildren(QtWidgets.QToolButton):
             if button.objectName() == "helpLink": button.click()
-        sidebar = next(button for button in win.findChildren(QtWidgets.QPushButton) if button.text() == "Help && support")
+        sidebar = next(button for button in win.findChildren(QtWidgets.QPushButton) if button.text() == "Help and support")
         before_native_help = list(opened)
         sidebar.click()
         assert win._PAGE_KEYS[win._stack.currentIndex()] == "help"

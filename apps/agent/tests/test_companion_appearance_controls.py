@@ -53,7 +53,7 @@ def test_appearance_options_jump_and_save_failure_notice_keep_selected_replay(de
 def test_agent_menu_opens_border_controls_without_losing_selected_replay(desk_factory):
     page, state, app = desk_factory()
     selected = page._current_build_key()
-    action = next(action for action in page.agent_menu_button.menu().actions() if action.text() == "Border && animations…")
+    action = next(action for action in page.agent_menu_button.menu().actions() if action.text() == "Border and animations…")
     action.trigger()
     assert page.console.current_route() == "settings"
     assert page._current_build_key() == selected

@@ -58,9 +58,8 @@ win.hide()
 ''')
 
 
-def test_dashboard_stat_numbers_and_captions_share_one_line_and_labels_show_their_ampersand(tmp_path):
+def test_dashboard_stat_numbers_and_captions_share_one_line_and_labels_carry_no_ampersand(tmp_path):
     run_gui_check(tmp_path, '''
-import re
 app.setStyleSheet(gui._STYLE)
 ui, win = make_window(window_page="dashboard")
 # Wide enough that each stat card is wider than its contents, so an alignment shows.
@@ -80,8 +79,8 @@ ink = [x for x in range(rect.left(), rect.right())
 assert ink and ink[0] - rect.left() <= 16, (ink[:1], rect.getRect())
 texts = [*(button.text() for button in win.findChildren(QtWidgets.QAbstractButton)),
          *(action.text() for action in win.findChildren(QtGui.QAction))]
-# An "&" before a space makes the space an access key, so "Help & support" draws as "Help  support".
-assert not [text for text in texts if re.search(r"&\\s", text.replace("&&", ""))], texts
+# A lone "&" draws "Help & support" as "Help  support" (the space becomes the access key), so labels say "and".
+assert not [text for text in texts if "&" in text], texts
 win._companion_page.shutdown()
 win.hide()
 ''')

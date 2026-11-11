@@ -342,8 +342,15 @@ corresponding GitHub Release.
   stays. Text keeps at least 4.5:1 contrast in every skin.
 - Shorten the border animation and skip it while Windows has animation effects
   turned off. Status lights keep their colour after a skin change.
-- Show the "&" in Help & support and three other labels, and line up the
-  Dashboard's four counts.
+- Say "and" in Help and support and three other labels that Windows drew with
+  a gap, and line up the Dashboard's four counts.
+- Give Recent games, Activity log, Settings and Help and troubleshooting the
+  same flat look, with one page margin and the shared status colours. Activity
+  log and Recent games scroll at the smallest window size instead of squeezing
+  their controls over one another.
+- Build check-in preview buttons wrap to keep Settings usable without
+  horizontal scrolling at the smallest window size.
+- Pressing Enter or F3 in the Activity log brings the selected match into view.
 
 ### Agent 0.24.11
 

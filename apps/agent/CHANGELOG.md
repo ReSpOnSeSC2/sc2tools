@@ -52,11 +52,23 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   every control. Help buttons are round again instead of squeezed.
 - Shorten the border animation to 0.3 s, and skip it while Windows has
   animation effects turned off.
+- Bring Recent games, Activity log, Settings and Help and troubleshooting into
+  the same look: one page margin, results and statuses in the shared status
+  colours, the two upload-concurrency buttons as one segmented choice in the
+  skin's accent, setting names always on the left, a muted subtitle, and
+  Help's checks together in one card.
 
 ### Fixed
 - Status lights on the Dashboard keep their colour after you change the skin.
-- Help & support, Border & animations…, Help & troubleshooting and Save title
-  & description show their "&" instead of a gap.
+- Say "and" in Help and support, Border and animations…, Help and
+  troubleshooting and Save title and description. Windows read their "&" as a
+  keyboard shortcut and drew a gap.
+- Activity log and Recent games scroll at the smallest window size instead of
+  squeezing their heading, filters and search over one another.
+- Pressing Enter or F3 in the Activity log reveals the selected match while
+  keeping keyboard focus on the search field.
+- Build check-in preview buttons in Settings wrap when space is tight, so the
+  page fits the smallest window without horizontal scrolling.
 - The Dashboard's four counts and their captions sit on one line; View
   problems moves to the foot of its card.
 

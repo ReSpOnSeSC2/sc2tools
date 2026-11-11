@@ -12,7 +12,7 @@ win.show()
 app.processEvents()
 page = win._companion_page
 expected = ["Companion", "Dashboard", "Recent games", "Streams", "Activity log", "Settings", "Help",
-            "Border && animations…", "Help && troubleshooting", "Check for updates", "Quit SC2 Tools"]
+            "Border and animations…", "Help and troubleshooting", "Check for updates", "Quit SC2 Tools"]
 for route in ("companion", "dashboard", "recent", "streams", "log", "settings", "help", "companion"):
     win._go_to_page(route)
     app.processEvents()
@@ -97,21 +97,36 @@ win.show()
 app.processEvents()
 page = win._companion_page
 win._handle_input.setText("Unsaved player")
+draft_answers = []
+def answer_draft(text):
+    prompt = app.activeModalWidget()
+    assert prompt.windowTitle() == "Unsaved settings"
+    button = next(button for button in prompt.buttons() if button.text().replace("&", "") == text)
+    draft_answers.append(text)
+    button.click()
+
 for route in ("settings", "companion"):
     win._go_to_page(route)
     app.processEvents()
     button = page.agent_menu_button if route == "companion" else win._agent_menu_button
     actions = {action.text(): action for action in button.menu().actions() if not action.isSeparator()}
-    actions["Border && animations…"].trigger()
+    if route == "settings":
+        QtCore.QTimer.singleShot(0, lambda: answer_draft("Cancel"))
+        actions["Border and animations…"].trigger()
+        assert win._PAGE_KEYS[win._stack.currentIndex()] == "settings"
+        QtCore.QTimer.singleShot(0, lambda: answer_draft("Keep draft"))
+    actions["Border and animations…"].trigger()
     app.processEvents()
     assert win._stack.currentWidget() is page
     assert page.console.current_route() == "settings"
     assert page.appearance_controls.isVisible()
     assert win._handle_input.text() == "Unsaved player"
-    actions["Help && troubleshooting"].trigger()
+    actions["Help and troubleshooting"].trigger()
     app.processEvents()
     assert win._stack.currentWidget() is win._help_page
 assert opened == []
+assert draft_answers == ["Cancel", "Keep draft"]
+assert win._settings_draft.count() > 0
 actions["Quit SC2 Tools"].trigger()
 assert quit_requests == [True]
 assert saved == []

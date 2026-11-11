@@ -10,7 +10,7 @@ const article: HelpArticle = {
   keywords: ["title", "stream", "Twitch", "Kick", "YouTube", "MMR", "tokens", "automatic", "quota", "opponent", "head-to-head", "map", "aka"],
   updated: "2026-11-06",
   body: [
-    { type: "paragraph", text: "Open **Streams** in the desktop app. Connect the Twitch, Kick or YouTube accounts you want to control through SC2 Tools. Type a title and check its live preview. **Save title & description** explicitly applies the rendered title through your existing platform connections; YouTube also saves it for future sessions. Per-platform receipts distinguish verified titles from accepted requests whose readback is unavailable." },
+    { type: "paragraph", text: "Open **Streams** in the desktop app. Connect the Twitch, Kick or YouTube accounts you want to control through SC2 Tools. Type a title and check its live preview. **Save title and description** explicitly applies the rendered title through your existing platform connections; YouTube also saves it for future sessions. Per-platform receipts distinguish verified titles from accepted requests whose readback is unavailable." },
     { type: "heading", text: "Add your own statistics", anchor: "tokens" },
     { type: "table", head: ["Token", "Value"], rows: [
       ["{mmr} / {league}", "Your session widget's current or last known rating and its league when available. No rating threshold is used to invent a league."],

@@ -1207,7 +1207,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 for title, route in (("Dashboard", "dashboard"), ("Recent games", "recent"), ("Settings", "settings"), ("Streams", "streams"), ("Logs", "log")):
                     menu.addAction(title, lambda _checked=False, destination=route: self.agentPageRequested.emit(destination))
                 menu.addSeparator()
-                menu.addAction("Border && animations…", self.show_appearance_settings)
+                menu.addAction("Border and animations…", self.show_appearance_settings)
             self.agent_menu_button.setMenu(menu)
             self.console.brand_actions.addWidget(self.agent_menu_button)
             from .team_roster import build_team_roster
