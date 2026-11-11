@@ -43,7 +43,7 @@ test("strict singleton details preserve both sides, duplicates, exact raw names 
     { gameId: "game-1", side: "opponent", time: 0, supply: null, name: "Other" },
   ]);
   expect(out.at(-1)).toEqual({ type: "complete", games: 1, events: 4, continuation: null });
-  expect(gameDetails.findMany).toHaveBeenCalledWith("A", ["game-1"], expect.objectContaining({ fields: ["buildLog", "oppBuildLog", "buildLogSupply"], strict: true, concurrency: 1, signal: expect.any(AbortSignal) }));
+  expect(gameDetails.findMany).toHaveBeenCalledWith("A", ["game-1"], expect.objectContaining({ fields: ["buildLog", "oppBuildLog"], strict: true, concurrency: 1, signal: expect.any(AbortSignal) }));
   expect(games.find.mock.calls[0][1]).toMatchObject({ projection: { _id: 1, date: 1, gameId: 1 }, comment: REPLAY_SEARCH_COMMENT });
   expect(games.cursors[0].limit).toHaveBeenCalledWith(2001); expect(games.cursors[0].batchSize).toHaveBeenCalledWith(1);
   expect(games.cursors[0].close).toHaveBeenCalledTimes(1);
@@ -58,7 +58,7 @@ test("NDJSON uses only valid owner supply aligned by step, including repeated cl
   };
   const misaligned = { buildLog: ["[0:01] Worker"], oppBuildLog: [], buildLogSupply: [12, 13] };
   const { service } = serviceFor([row(), row(2)], async (_owner, ids) => new Map([[ids[0], ids[0] === "game-1" ? detail : misaligned]]));
-  const prepared = await service.prepare(service.request("A", {}, "ndjson"), new AbortController().signal);
+  const prepared = await service.prepare(service.request("A", {}, "ndjson", true), new AbortController().signal);
   const output = decoded(await bytes(prepared.stream)).slice(1, -1);
   expect(output.map(record => [record.gameId, record.side, record.supply])).toEqual([
     ...[0, 13.5, null, null, null, null, null, 2000].map(supply => ["game-1", "me", supply]),
@@ -190,7 +190,7 @@ describe("owned keyset metadata and real detail-store integration", () => {
       { userId: "paged", _deletionPending: true }, { userId: "paged", isResumedFromReplay: true },
     ].map((fields, index) => ({ ...row(3000 + index), ...fields }))]);
     const requested = [];
-    const details = { findMany: jest.fn(async (owner, ids, opts) => { requested.push([owner, ...ids]); expect(opts).toMatchObject({ strict: true, concurrency: 1, fields: ["buildLog", "oppBuildLog", "buildLogSupply"] }); return new Map([[ids[0], { buildLog: ["[0:01] Worker"], oppBuildLog: [] }]]); }) };
+    const details = { findMany: jest.fn(async (owner, ids, opts) => { requested.push([owner, ...ids]); expect(opts).toMatchObject({ strict: true, concurrency: 1, fields: ["buildLog", "oppBuildLog"] }); return new Map([[ids[0], { buildLog: ["[0:01] Worker"], oppBuildLog: [] }]]); }) };
     const service = new BuildOrderExportService({ games, users }, { gameDetails: details, pepper });
     const first = await service.prepare(service.request("paged", {}, "ndjson"), new AbortController().signal);
     expect(first.games).toBe(2000); expect(first.hasMore).toBe(true); expect(details.findMany).not.toHaveBeenCalled();
@@ -215,7 +215,7 @@ describe("owned keyset metadata and real detail-store integration", () => {
     ]);
     const details = new GameDetailsService(new MongoDetailsStore({ gameDetails }));
     const service = new BuildOrderExportService({ games, users }, { gameDetails: details, pepper });
-    const first = await service.prepare(service.request("detail-owner", {}, "ndjson"), new AbortController().signal);
+    const first = await service.prepare(service.request("detail-owner", {}, "ndjson", true), new AbortController().signal);
     const output = await bytes(first.stream);
     expect(decoded(output)[1]).toEqual({ gameId: "game-5000", side: "me", time: 62, supply: 22.5, name: "Marine" });
     expect(output).not.toMatch(/private detail|Foreign secret|macroBreakdown/);

@@ -17,6 +17,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 function request(query = {}, owner = "A") { return Object.assign(new EventEmitter(), { query, auth: { userId: owner }, aborted: false }); }
 function response() {
   const res = Object.assign(new EventEmitter(), { headers: {}, chunks: [], statusCode: 200, destroyed: false, writableEnded: false, headersSent: false,
+    vary(name) { this.headers.vary = name; },
     setHeader(key, value) { this.headers[key] = value; }, removeHeader(key) { delete this.headers[key]; },
     status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; this.end(); },
     write(chunk) { this.headersSent = true; this.chunks.push(String(chunk)); return true; },
@@ -80,6 +81,28 @@ test("authenticated route formats produce private five-field streams and require
   expect(csv.text).toBe("\uFEFFgameId,side,time,supply,name\r\none,me,1,,Worker\r\n");
   const denied = response(); await buildOrderExportHandler(service, "csv")(request({}, null), denied);
   expect(denied.statusCode).toBe(401);
+});
+
+test("new NDJSON route sends exact supply only to the supported Accept profile; CSV includes it by default", async () => {
+  const { service, gameDetails } = makeService([game()]);
+  gameDetails.findMany.mockResolvedValue(new Map([["one", {
+    buildLog: ["[0:01] Worker"], oppBuildLog: ["[0:01] Opponent worker"], buildLogSupply: [13.5],
+  }]]));
+  const app = express(); app.use("/v1", buildBuildOrderExportRouter({ buildOrderExport: service,
+    auth: (req, _res, next) => { req.auth = { userId: "A" }; next(); } }));
+  for (const accept of [undefined, "application/x-ndjson", "application/x-ndjson; profile=unknown"]) {
+    const req = supertest(app).get("/v1/export/build-orders.ndjson");
+    if (accept) req.set("Accept", accept);
+    const legacy = await req.expect(200);
+    expect(legacy.headers.vary).toContain("Accept");
+    expect(legacy.text.trim().split("\n").map(JSON.parse).slice(1, -1).map(row => row.supply)).toEqual([null, null]);
+  }
+  const exact = await supertest(app).get("/v1/export/build-orders.ndjson")
+    .set("Accept", "application/x-ndjson; profile=exact-supply").expect(200);
+  expect(exact.headers.vary).toContain("Accept");
+  expect(exact.text.trim().split("\n").map(JSON.parse).slice(1, -1).map(row => row.supply)).toEqual([13.5, null]);
+  const csv = await supertest(app).get("/v1/export/build-orders.csv").expect(200);
+  expect(csv.text).toBe("\uFEFFgameId,side,time,supply,name\r\none,me,1,13.5,Worker\r\none,opponent,1,,Opponent worker\r\n");
 });
 
 test("invalid filters and foreign/tampered/expired cursors do not charge or read", async () => {
