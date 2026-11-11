@@ -6,8 +6,7 @@ import { fmtAgo } from "@/lib/format";
 import { SKILL_LEVELS } from "@/lib/build-rules";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorChip } from "./AuthorChip";
-import { CommunityBuildOwnerControls } from "./CommunityBuildOwnerControls";
-import { CommunityOwnerReplayCount } from "./CommunityOwnerReplayCount";
+import { CommunityCardOwnerActions } from "./CommunityCardOwnerActions";
 import { KeySteps } from "./KeySteps";
 import { CommunityTrustLine } from "./CommunityTrustLine";
 import { VoteScore } from "./VoteScore";
@@ -37,8 +36,7 @@ export function CommunityBuildCard({ build, hideAuthor = false, showOwnerActions
         <VoteScore votes={build.votes} />
         <CommunityTrustLine build={build} />
         <span className="text-micro text-text-dim">Updated {fmtAgo(build.contentUpdatedAt || build.updatedAt || build.publishedAt)}</span>
-        {showOwnerActions ? <><CommunityBuildOwnerControls slug={build.slug} title={build.title} compact />
-          <CommunityOwnerReplayCount publicSlug={build.slug} /></> : null}
+        {showOwnerActions ? <CommunityCardOwnerActions slug={build.slug} title={build.title} /> : null}
       </footer>
     </div>
   </Card>;
