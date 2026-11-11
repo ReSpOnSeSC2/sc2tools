@@ -55,17 +55,21 @@ import builds_buildOrdersExport from "./builds/build-orders-export";
 import builds_communityBuilds from "./builds/community-builds";
 import builds_customBuilds from "./builds/custom-builds";
 import builds_practiceGhostBuild from "./builds/practice-ghost-build";
+import builds_practiceHud from "./builds/practice-hud";
 import builds_practiceLog from "./builds/practice-log";
 import builds_publishCommunityBuilds from "./builds/publish-community-builds";
 import builds_randomizer from "./builds/randomizer";
 import builds_readingGuideStats from "./builds/reading-guide-stats";
 import builds_rulesExplained from "./builds/rules-explained";
 import desktopApp_desktopAppActivityLog from "./desktop-app/desktop-app-activity-log";
+import desktopApp_desktopAppFirstRun from "./desktop-app/desktop-app-first-run";
 import desktopApp_desktopAppImport from "./desktop-app/desktop-app-import";
 import desktopApp_desktopAppInstall from "./desktop-app/desktop-app-install";
 import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
 import desktopApp_desktopAppPerformance from "./desktop-app/desktop-app-performance";
 import desktopApp_desktopAppRecentGames from "./desktop-app/desktop-app-recent-games";
+import desktopApp_desktopAppSettings from "./desktop-app/desktop-app-settings";
+import desktopApp_desktopAppShortcuts from "./desktop-app/desktop-app-shortcuts";
 import desktopApp_desktopAppStatus from "./desktop-app/desktop-app-status";
 import desktopApp_desktopAppSupport from "./desktop-app/desktop-app-support";
 import desktopApp_desktopAppSyncProblems from "./desktop-app/desktop-app-sync-problems";
@@ -173,17 +177,21 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_communityBuilds,
   builds_customBuilds,
   builds_practiceGhostBuild,
+  builds_practiceHud,
   builds_practiceLog,
   builds_publishCommunityBuilds,
   builds_randomizer,
   builds_readingGuideStats,
   builds_rulesExplained,
   desktopApp_desktopAppActivityLog,
+  desktopApp_desktopAppFirstRun,
   desktopApp_desktopAppImport,
   desktopApp_desktopAppInstall,
   desktopApp_desktopAppOverview,
   desktopApp_desktopAppPerformance,
   desktopApp_desktopAppRecentGames,
+  desktopApp_desktopAppSettings,
+  desktopApp_desktopAppShortcuts,
   desktopApp_desktopAppStatus,
   desktopApp_desktopAppSupport,
   desktopApp_desktopAppSyncProblems,

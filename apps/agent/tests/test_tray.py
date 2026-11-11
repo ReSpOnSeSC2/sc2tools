@@ -149,3 +149,28 @@ def test_build_checkin_menu_item_only_when_wired() -> None:
     labels = _labels(wired)
     assert labels.index("Build check-in…") == labels.index("Open dashboard") + 1
     assert "Build check-in…" not in _labels(TrayUI(dashboard_url="https://example.test"))
+
+
+def test_practice_move_is_a_native_tray_action_only_when_wired():
+    calls = []
+    tray = TrayUI(dashboard_url="https://example.test", on_move_practice_hud=lambda: calls.append("move"))
+    menu = tray._build_menu(_FakePystray)
+    item = next(item for item in menu.items if getattr(item, "text", None) == "Move Practice HUD")
+    item.action(None, item)
+    assert calls == ["move"]
+    without_gui = TrayUI(dashboard_url="https://example.test")
+    assert "Move Practice HUD" not in _labels(without_gui)
+
+
+def test_off_preference_mutes_windows_notifications_without_removing_the_tray():
+    from types import SimpleNamespace
+
+    notices = []
+    enabled = [False]
+    tray = TrayUI(dashboard_url="https://example.test", notifications_enabled=lambda: enabled[0])
+    tray._icon = SimpleNamespace(notify=lambda *args: notices.append(args))
+    tray.show_notice("quiet")
+    assert notices == []
+    enabled[0] = True
+    tray.show_notice("important")
+    assert notices == [("important", "SC2 Tools Agent")]

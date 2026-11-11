@@ -258,7 +258,7 @@ instead of silently claiming playback.
 | Dashboard | Shared status and recovery; Last game and locally tracked Today W–L/MMR; Synced with today's uploads, Waiting, persistent relative Last upload, Failed (24 h), and history-import progress. Pause and Open dashboard remain here; Re-sync is in Settings → Maintenance and Updates is beside the sidebar version. |
 | Recent games | Latest 200 local outcomes, kept across restarts. When, result, matchup, opponent, map, length, own MMR and status; status/date filters and collapsed history imports. Double-click opens game analysis. Right-click selects the exact replay in Explorer, copies its path/error, retries or re-analyzes; select failed rows for Retry failed. |
 | Activity log | Incremental tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log`, with complete tracebacks, readable level filters, Ctrl+F search, follow/pause, copy selection or last 200 lines, and Open log folder. |
-| Settings | Replay folders and sync date range, start-up, updates, capture, build check-in and OBS. Save confirms what applied; API address, log level and import speed name their restart requirement. The API field supports Reset to default and Test. |
+| Settings | Replay folders and sync date range (including Last 30 days), start-up, updates, capture, build check-in and OBS. Save confirms what applied. API address, log level and import speed name their restart requirement. The API field supports Reset to default and Test. |
 | Streams | Shared stream title and YouTube description, connected channels, and verified or accepted per-platform save results. |
 
 Closing the window hides it in the tray while syncing continues. A one-time reminder
@@ -612,3 +612,10 @@ build pipeline including code signing and the release-feed publish
 step.
 
 Read [Install, start-up and uninstall](https://sc2tools.com/help/desktop-app-install).
+
+
+### Practice HUD and keyboard shortcuts
+
+In **Companion → Build Order Ghost**, assign a target for your matchup and enable Ghost. Preview or move the Practice HUD between games, adjust opacity and size, and turn on voice cues if you want them. The HUD is hidden from screen capture by default and passes clicks through after you finish moving it. It follows target timings and does not verify your builds until the replay is available. See [Practice in-game with the desktop HUD](https://sc2tools.com/help/practice-hud).
+
+Press **Ctrl+1–6** to open Companion, Dashboard, Recent games, Streams, Activity log, or Settings. **Ctrl+,** opens Settings, **Ctrl+S** saves on Settings, **Ctrl+F** opens log search, and **F5** refreshes the current data page. Use **Up** and **Down** to move between sidebar buttons and **Enter** to open the focused page.

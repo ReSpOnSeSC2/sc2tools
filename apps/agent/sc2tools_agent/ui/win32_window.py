@@ -272,6 +272,13 @@ def exclude_from_capture(hwnd: Optional[int]) -> Optional[int]:
     return _safely("exclude_from_capture", apply, None)
 
 
+def allow_capture(hwnd: Optional[int]) -> bool:
+    """Clear a previous display-affinity restriction on this window."""
+    if not hwnd:
+        return False
+    return bool(_safely("allow_capture", lambda api: api.set_display_affinity(hwnd, 0), False))
+
+
 def keep_topmost(hwnd: Optional[int]) -> bool:
     """Re-assert ``HWND_TOPMOST`` without moving, sizing or activating."""
     if not hwnd:

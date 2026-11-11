@@ -7,6 +7,7 @@ the agent uploads in the same vocabulary they use to read them back:
   * ``all``                — no filter (default; legacy behaviour)
   * ``current_season``     — replays played in the in-progress
                              ladder season
+  * ``last_30_days``       — today and the preceding 29 UTC dates
   * ``season:<N>``         — replays played during a specific season
   * ``custom``             — user-supplied ``since`` / ``until`` ISO
                              dates (either bound is optional)
@@ -59,6 +60,8 @@ log = logging.getLogger(__name__)
 
 PRESET_ALL = "all"
 PRESET_CURRENT_SEASON = "current_season"
+PRESET_LAST_30_DAYS = "last_30_days"
+PRESET_SINCE_SETUP = "since_setup"
 PRESET_CUSTOM = "custom"
 PRESET_SEASON_PREFIX = "season:"
 
@@ -82,7 +85,7 @@ MTIME_SLACK = timedelta(days=7)
 # patterns. Anything else is treated as ``all`` (i.e. the user gets the
 # full feed) so a malformed state file can't hide replays from the
 # user without a clear error.
-_PRESET_RE = re.compile(r"^(all|current_season|custom|season:-?\d+)$")
+_PRESET_RE = re.compile(r"^(all|current_season|last_30_days|since_setup|custom|season:-?\d+)$")
 
 
 @dataclass(frozen=True)
@@ -114,6 +117,8 @@ class SyncFilter:
         normalised = (preset or "").strip().lower()
         if not _PRESET_RE.match(normalised):
             normalised = PRESET_ALL
+        if normalised == PRESET_SINCE_SETUP and _parse_iso_date(since_iso) is None:
+            return cls(preset=PRESET_ALL)
         if normalised == PRESET_CUSTOM:
             since = _parse_iso_date(since_iso)
             until = _parse_iso_date(until_iso)
@@ -140,6 +145,14 @@ class SyncFilter:
                 _parse_iso_date(self.since_iso),
                 _parse_iso_date(self.until_iso, end_of_day=True),
             )
+        if self.preset == PRESET_SINCE_SETUP:
+            return _parse_iso_date(self.since_iso), None
+        if self.preset == PRESET_LAST_30_DAYS:
+            current = now or datetime.now(timezone.utc)
+            if current.tzinfo is not None:
+                current = current.astimezone(timezone.utc)
+            midnight = datetime.combine(current.date(), datetime.min.time(), tzinfo=timezone.utc)
+            return midnight - timedelta(days=29), midnight + timedelta(days=1, microseconds=-1)
         if self.preset == PRESET_CURRENT_SEASON:
             return _season_bounds(current_season(now=now), now=now)
         if self.preset.startswith(PRESET_SEASON_PREFIX):
@@ -211,6 +224,10 @@ class SyncFilter:
         """Short human label for log lines / status bar."""
         if self.preset == PRESET_ALL:
             return "all time"
+        if self.preset == PRESET_LAST_30_DAYS:
+            return "last 30 days"
+        if self.preset == PRESET_SINCE_SETUP:
+            return "only games since setup"
         if self.preset == PRESET_CURRENT_SEASON:
             return f"Season {current_season()}"
         if self.preset.startswith(PRESET_SEASON_PREFIX):
