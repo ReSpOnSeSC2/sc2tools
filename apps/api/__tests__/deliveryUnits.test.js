@@ -11,7 +11,8 @@ const { dueReminder } = require("../src/services/coachingReminders");
 const { weekBounds, weekKeyAt, shiftWeek, mondayOf } = require("../src/services/reportTime");
 const { fitSize, crystalBall, downsample, MAX_BYTES } = require("../src/services/streamReports");
 const { sanitizeReportPrefs } = require("../src/services/reportPreferences");
-const { isCredentialBodyPath } = require("../src/middleware/privateSearchTelemetry");
+const { isCredentialBodyPath, privateSearchSentryCallbacks, privateSearchHttpOptions, runPrivateSearchScope,
+  PRIVATE_SEARCH_TAG } = require("../src/middleware/privateSearchTelemetry");
 const { sanitiseRequestForLog } = require("../src/middleware/requestLogging");
 
 const b64 = (value) => Buffer.from(value, "base64url");
@@ -169,4 +170,32 @@ test("delivery credentials stay out of request logs and Sentry bodies", () => {
   expect(isCredentialBodyPath("https://api.sc2tools.com/v1/me/push/subscriptions")).toBe(true);
   expect(isCredentialBodyPath("/v1/push/subscription-change")).toBe(true);
   expect(isCredentialBodyPath("/v1/me/push/test")).toBe(false);
+});
+
+test("private calendar feed links stay out of Sentry events and traces", () => {
+  const file = `${"A".repeat(43)}.ics`;
+  const callbacks = privateSearchSentryCallbacks();
+  const http = privateSearchHttpOptions();
+  for (const path of [`/v1/calendar/${file}`, `/V1/Calendar/${file}/?test=fixture`, `/calendar/${file}`]) {
+    const url = `https://api.example.test${path}`;
+    expect(http.ignoreIncomingRequests(path)).toBe(true);
+    expect(http.ignoreIncomingRequestBody(path)).toBe(true);
+    expect(callbacks.beforeSend({ request: { url } })).toBeNull();
+    expect(callbacks.beforeSend({ sdkProcessingMetadata: { normalizedRequest: { url } } })).toBeNull();
+    expect(callbacks.beforeSendTransaction({ transaction: `GET ${path}` })).toBeNull();
+  }
+
+  const next = jest.fn();
+  const setTag = jest.fn();
+  const sdk = { withIsolationScope: callback => callback({ setTag }), suppressTracing: jest.fn(callback => callback()) };
+  runPrivateSearchScope({ originalUrl: `/v1/calendar/${file}` }, next, sdk);
+  expect(setTag).toHaveBeenCalledWith(PRIVATE_SEARCH_TAG, "1");
+  expect(sdk.suppressTracing).toHaveBeenCalledWith(next);
+  expect(next).toHaveBeenCalledTimes(1);
+
+  for (const path of ["/v1/me/calendar-feed", "/v1/me/export", "/v1/calendar", `/v1/calendar/${file}/child`]) {
+    const event = { request: { url: path } };
+    expect(http.ignoreIncomingRequests(path)).toBe(false);
+    expect(callbacks.beforeSend(event)).toBe(event);
+  }
 });
