@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { LazyReportIssueModal } from "../LazyReportIssueModal";
 
 vi.mock("@clerk/nextjs", () => ({
@@ -15,6 +15,7 @@ describe("LazyReportIssueModal", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
 
     rerender(<LazyReportIssueModal open onClose={vi.fn()} prefill={{ type: "idea" }} />);
-    expect(await screen.findByRole("dialog", { name: "Suggest a feature" })).toBeTruthy();
+    await act(async () => { await vi.dynamicImportSettled(); });
+    expect(screen.getByRole("dialog", { name: "Suggest a feature" })).toBeTruthy();
   });
 });

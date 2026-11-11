@@ -79,7 +79,8 @@ function tree(settings = false) {
 }
 async function open(options: CommandOpening = { query: "Literal own" }) {
   act(() => h.open!(options));
-  return screen.findByRole("combobox", { name: options.scope === "guides" ? "Find a guide" : "Search" });
+  await act(async () => { await vi.dynamicImportSettled(); });
+  return screen.getByRole("combobox", { name: options.scope === "guides" ? "Find a guide" : "Search" });
 }
 async function ready() { return screen.findByRole("option", { name: "Literal own opponent" }); }
 function queryEntry(query: string) {
