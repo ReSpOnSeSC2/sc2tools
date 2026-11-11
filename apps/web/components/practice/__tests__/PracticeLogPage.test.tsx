@@ -11,7 +11,7 @@ const state = vi.hoisted(() => ({
   summary: null as unknown,
   games: null as unknown,
 }));
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token" }) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "o", getToken: async () => "token" }) }));
 vi.mock("@/lib/useGhostPractice", () => ({
   useGhostPractice: () => ({ owner: "o", config: state.config, hasConfig: true, loading: false, offline: false, saving: false, error: null, readError: null, assign: vi.fn() }),
 }));
@@ -19,6 +19,7 @@ vi.mock("@/lib/clientApi", () => ({
   apiCall: (...args: unknown[]) => state.apiCall(...args),
   useApi: (path: string | null) => {
     if (path) state.paths.push(path);
+    if (path === "/v1/build-intents/randomizer-stats") return { data: { challengeStartedAt: null, pools: [] }, mutate: state.mutate };
     const data = !path ? undefined : path.startsWith("/v1/practice/summary") ? state.summary : state.games;
     return { data, error: undefined, isPreviousData: false, mutate: state.mutate };
   },
@@ -70,7 +71,8 @@ describe("/practice", () => {
     expect(screen.getByRole("heading", { name: "Nothing to practise yet" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Choose a build to practice" }).getAttribute("href")).toBe("/builds");
     expect(screen.getByRole("link", { name: "How to start" }).getAttribute("href")).toBe("/help/practice-log#start");
-    expect(state.paths).toEqual([]);
+    expect(state.paths).toEqual(["/v1/build-intents/randomizer-stats"]);
+    expect(screen.getByRole("heading", { name: "Randomizer challenge" })).toBeTruthy();
   });
 
   it("shows the armed target's progress, per-step timing, fall-off step and graded games", () => {

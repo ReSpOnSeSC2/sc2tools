@@ -102,7 +102,11 @@ const DYNAMIC = [
   `${TOKEN_READ} readDeviceTokenCore updateOne param:collection`,
 ];
 // Database-level calls in classified files, with the keys of a literal command document.
-const DB_SITES = ["src/db/connect.js connect command hello,maxTimeMS", "src/services/admin.js storageStats command collStats"];
+const DB_SITES = [
+  "src/db/connect.js connect command hello,maxTimeMS",
+  "src/services/admin.js storageStats command collStats",
+  "src/services/admin.js storageSummary command dbStats,scale,maxTimeMS",
+];
 const FIELDS_FROM_UPDATE = "Object.fromEntries(Object.entries(update).map(([key, value]) => [key, { $literal: value }]))";
 
 const parsed = new Map();

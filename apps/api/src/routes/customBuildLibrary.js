@@ -1,6 +1,7 @@
 "use strict";
 
 const { CUSTOM_BUILD_LIBRARY } = require("../config/constants");
+const { reserveExport, waitForDrain } = require("./exportAdmission");
 const { validateCustomBuild, validateBuildMeta } = require("../validation/customBuild");
 
 /**
@@ -191,14 +192,43 @@ function registerHistoryRoutes(router, { deps, persistBuild }, route) {
   }));
 }
 
+/** @param {import('express').Request} req @param {import('express').Response} res
+ * @param {import('../services/customBuildLibrary').CustomBuildLibraryService} library @param {string} userId */
+async function streamLibraryExport(req, res, library, userId) {
+  res.set("Cache-Control", "private, no-store");
+  if (req.aborted || res.destroyed || res.writableEnded) return;
+  const lease = reserveExport(res);
+  if (!lease) { fail(res, 503, "export_busy"); return; }
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  req.once("aborted", cancel);
+  res.once("close", cancel);
+  try {
+    res.set("Content-Disposition", 'attachment; filename="sc2tools-builds.json"').type("json");
+    for await (const chunk of library.exportAll(userId, controller.signal)) {
+      controller.signal.throwIfAborted();
+      if (!res.write(chunk)) await waitForDrain(res, controller.signal);
+    }
+    if (!controller.signal.aborted) res.end();
+  } catch {
+    if (!res.destroyed && !controller.signal.aborted) {
+      if (res.headersSent) res.destroy();
+      else {
+        res.removeHeader("Content-Disposition");
+        fail(res, 503, "export_unavailable");
+      }
+    }
+  } finally {
+    controller.abort();
+    req.off("aborted", cancel);
+    res.off("close", cancel);
+    lease.settle();
+  }
+}
+
 /** Export and batched import. @param {import('express').Router} router @param {LibraryRouteContext} ctx @param {RouteWrapper} route */
 function registerImportExportRoutes(router, { deps, persistBuild }, route) {
-  router.get("/custom-builds/export", route(async (_req, res, userId, library) => {
-    const body = await library.exportAll(userId);
-    res.set("Cache-Control", "private, no-store")
-      .set("Content-Disposition", 'attachment; filename="sc2tools-builds.json"')
-      .json(body);
-  }));
+  router.get("/custom-builds/export", route((req, res, userId, library) => streamLibraryExport(req, res, library, userId)));
 
   router.post("/custom-builds/import", route(async (req, res, userId, library) => {
     const body = req.body && typeof req.body === "object" ? req.body : {};
@@ -241,9 +271,25 @@ function registerForkUpdateRoutes(router, { deps, persistBuild }, route) {
       fail(res, current ? 409 : 404, current ? "not_a_saved_copy" : "not_found");
       return;
     }
+    const expected = req.body;
+    if (typeof expected?.communitySlug !== "string" || !SLUG_RE.test(expected.communitySlug)
+      || !Number.isSafeInteger(expected.version) || expected.version < 1) {
+      fail(res, 400, "bad_request", "Send the Community build and version you reviewed.");
+      return;
+    }
+    if (expected.communitySlug !== communitySlug) {
+      fail(res, 409, "community_update_changed", "This copy now points to a different Community build. Reopen the review.");
+      return;
+    }
     const publication = deps.community ? await deps.community.getPublic(communitySlug) : null;
     if (!publication) {
       fail(res, 404, "community_build_gone");
+      return;
+    }
+    // The version and rules came from the same publication read. Never
+    // replace the reviewed snapshot with a later one during the save.
+    if (publication.version !== expected.version) {
+      fail(res, 409, "community_update_changed", "The author published another version. Review it before applying.");
       return;
     }
     const checked = validateCustomBuild(forkUpdate(current, publication, new Date()));

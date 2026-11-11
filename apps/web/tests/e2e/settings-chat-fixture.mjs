@@ -101,7 +101,7 @@ export async function openSettingsChatFixture(page, theme, mode = "stable") {
     if (method === "GET" && url.pathname === "/settings" && url.search === "?tab=account" && !url.hash) return { contentType: "text/html", body: `<!doctype html><html lang="en" data-theme="${theme}" data-theme-mode="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local Chat Settings proof</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>` };
     const owner = authorization === "Bearer fixture-owner-a" ? "owner-a" : authorization === "Bearer fixture-owner-b" ? "owner-b" : null;
     if (owner && !url.search && !url.hash) {
-      const allowedReads = new Set(["/v1/overlay-tokens", "/v1/me/preferences/multichat", "/v1/me/chatbot", "/v1/me/integrations", "/v1/me", "/v1/me/preferences/chatCommands", "/v1/me/twitch-automation"]);
+      const allowedReads = new Set(["/v1/overlay-tokens", "/v1/me/preferences/multichat", "/v1/me/chatbot", "/v1/me/integrations", "/v1/me", "/v1/me/preferences/chatCommands", "/v1/me/twitch-automation", "/v1/me/twitch-rewards"]);
       if (method === "GET" && allowedReads.has(url.pathname)) {
         reads.push({ owner, path: url.pathname });
         if (url.pathname === "/v1/overlay-tokens") return json({ items: mode === "unknown" ? [] : [row(owner, "one"), row(owner, "two")] });
@@ -109,6 +109,7 @@ export async function openSettingsChatFixture(page, theme, mode = "stable") {
         if (url.pathname === "/v1/me/chatbot") return json(bots.get(owner) ?? bot);
         if (url.pathname === "/v1/me/integrations") return json({ platforms: ["twitch", "kick", "youtube"].map(platform => ({ platform, configured: false, connected: false, ready: false, platformUserName: "", scopes: [], connectedAt: null, lastSyncedAt: null, lastError: null })) });
         if (url.pathname === "/v1/me") return json({ isAdmin: false });
+        if (url.pathname === "/v1/me/twitch-rewards") return json({ permission: false, available: false, settings: { enabled: false, target: null, mappings: [] }, targets: [], builds: [], activity: [] });
         if (url.pathname === "/v1/me/twitch-automation") return json({ serverEnabled: false, configured: false, connected: false, preferences: {} });
         return json({ v: 1, builtins: {}, custom: [] });
       }

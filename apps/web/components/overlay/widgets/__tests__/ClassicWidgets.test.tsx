@@ -11,6 +11,7 @@
 
 import { afterEach, describe, expect, test } from "vitest";
 import { cleanup, render } from "@testing-library/react";
+import { LowerThirdWidget } from "../LowerThirdWidget";
 import type { LiveGamePayload } from "@/components/overlay/types";
 import {
   BestAnswerWidget,
@@ -41,7 +42,7 @@ const FULL: LiveGamePayload = {
   durationSec: 612,
   oppMmr: 4250,
   myMmr: 4310,
-  mmrDelta: 22,
+  mmrChangeBetweenStarts: 22,
   headToHead: { wins: 4, losses: 2 },
   streak: { kind: "win", count: 3 },
   cheeseProbability: 0.65,
@@ -102,7 +103,12 @@ const CASES: Case[] = [
   {
     name: "MmrDeltaWidget",
     element: (live) => <MmrDeltaWidget live={live} />,
-    expects: ["22"],
+    expects: ["MMR between game starts", "Latest starting MMR", "22"],
+  },
+  {
+    name: "LowerThirdWidget",
+    element: (live) => <LowerThirdWidget live={live} />,
+    expects: ["VICTORY", "MMR between game starts", "+22"],
   },
   {
     name: "StreakWidget",
@@ -174,4 +180,10 @@ describe.each(CASES)("$name", ({ element, expects }) => {
       expect(text).not.toContain(needle);
     }
   });
+});
+
+test("keeps a negative replay-start comparison outside the victory chip", () => {
+  const { getByText } = render(<LowerThirdWidget live={{ ...FULL, mmrChangeBetweenStarts: -22 }} />);
+  expect(getByText("VICTORY").textContent).toBe("VICTORY");
+  expect(getByText("MMR between game starts").parentElement?.textContent).toBe("MMR between game starts−22");
 });

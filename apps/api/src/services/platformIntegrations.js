@@ -1,5 +1,6 @@
 "use strict";
 
+const { signedRedemption } = require("./twitchRewardPolicy");
 const { AsyncLocalStorage } = require("node:async_hooks");
 
 const { PlatformCredentialVault } = require("./platformCredentialVault");
@@ -128,6 +129,7 @@ class PlatformIntegrationsService {
         scopes: [],
         streamingConsent: false,
         predictionsConsent: false,
+        rewardsConsent: false,
         chatConsent: false,
         expiresAt: null,
         connectedAt: null,
@@ -170,17 +172,23 @@ class PlatformIntegrationsService {
    * request no new consent; prediction and marker writes require their own
    * completed grant. A callback is never retried after it starts.
    * @template T
-   * @param {string} userId @param {{predictions?:boolean,markers?:boolean}} permissions
+   * @param {string} userId @param {{predictions?:boolean,markers?:boolean,rewards?:boolean}} permissions
    * @param {(grant:{accessToken:string,platformUserId:string,platformUserName:string,connectionRevision:string,fetchImpl:typeof fetch,boundedFetch:typeof fetch,assertCurrent:()=>Promise<void>})=>Promise<T>} callback */
   async withTwitchAutomationGrant(userId, permissions, callback) {
-    if (!permissions || Object.keys(permissions).some(key => !["predictions", "markers"].includes(key))
+    if (!permissions || Object.keys(permissions).some(key => !["predictions", "markers", "rewards"].includes(key))
       || Object.values(permissions).some(value => typeof value !== "boolean")) {
       throw integrationError(400, "twitch_automation_permission_invalid", "Use supported Twitch automation permissions.");
     }
     return this._withProviderGrant(userId, "twitch", callback, {
-      required: [...oauthDefault.TWITCH_SCOPES, ...(permissions.predictions ? ["channel:manage:predictions"] : []), ...(permissions.markers ? ["channel:manage:broadcast"] : [])],
-      consents: [...(permissions.predictions ? ["predictionsConsent"] : []), ...(permissions.markers ? ["streamingConsent"] : [])],
+      required: [...oauthDefault.TWITCH_SCOPES, ...(permissions.predictions ? ["channel:manage:predictions"] : []), ...(permissions.markers ? ["channel:manage:broadcast"] : []), ...(permissions.rewards ? [oauthDefault.TWITCH_REWARD_SCOPE] : [])],
+      consents: [...(permissions.predictions ? ["predictionsConsent"] : []), ...(permissions.markers ? ["streamingConsent"] : []), ...(permissions.rewards ? ["rewardsConsent"] : [])],
     });
+  }
+
+  /** Serialize preference edits with redemption dispatch, including disconnect.
+   * @template T @param {string} userId @param {()=>Promise<T>} callback */
+  withTwitchRewardSettings(userId, callback) {
+    return this._withConnectionLock(userId, "twitch", callback);
   }
 
   /** @template T
@@ -554,7 +562,7 @@ class PlatformIntegrationsService {
     return updated ? { accessToken: refreshed.accessToken } : null;
   }
 
-  /** @param {string} userId @param {Platform} platform @param {{purpose?:'alerts'|'streaming'|'predictions'|'chat'}} [options] */
+  /** @param {string} userId @param {Platform} platform @param {{purpose?:'alerts'|'streaming'|'predictions'|'chat'|'rewards'}} [options] */
   async begin(userId, platform, options = {}) {
     this._requireConfigured(platform);
     const vault = this._vault();
@@ -565,11 +573,12 @@ class PlatformIntegrationsService {
     // alone must never silently opt a user into another capability.
     const existingScopes = (existing?.scopes || []).filter(scope =>
       (scope !== "channel:manage:predictions" || existing?.predictionsConsent === true)
+      && (scope !== oauthDefault.TWITCH_REWARD_SCOPE || existing?.rewardsConsent === true)
       && (!["channel:manage:broadcast", "channel:write"].includes(scope) || existing?.streamingConsent === true)
       && (!["user:write:chat", "chat:write"].includes(scope) || existing?.chatConsent === true)
       && (scope !== "https://www.googleapis.com/auth/youtube.force-ssl" || existing?.streamingConsent === true || existing?.chatConsent === true));
     const requiredScopes = oauthDefault.scopesForPurpose(platform, purpose, existingScopes);
-    if (["streaming", "predictions", "chat"].includes(purpose) && !vault.supportsStreamingLeases()) {
+    if (["streaming", "predictions", "chat", "rewards"].includes(purpose) && !vault.supportsStreamingLeases()) {
       throw integrationError(503, "streaming_coordination_unavailable", "Stream control is unavailable until server coordination is ready.");
     }
     const provider = this.config[platform];
@@ -654,7 +663,7 @@ class PlatformIntegrationsService {
       if (!token.scopes.length && pending.purpose === "alerts") token.scopes = [...this.oauth.YOUTUBE_SCOPES];
     }
 
-    if (["streaming", "predictions", "chat"].includes(pending.purpose)) {
+    if (["streaming", "predictions", "chat", "rewards"].includes(pending.purpose)) {
       const required = oauthDefault.scopesForPurpose(platform, pending.purpose);
       if (platform === "kick") {
         // Verify the active user grant and actual scopes even when the token
@@ -699,7 +708,7 @@ class PlatformIntegrationsService {
    *   provider:{clientId:string,clientSecret:string,redirectUri:string,callbackUrl?:string,webhookSecret?:string},
    *   token:{accessToken:string,refreshToken?:string|null,expiresAt?:Date|null,scopes?:string[]},
    *   identity:{userId:string,userName?:string},
-   *   purpose?:'alerts'|'streaming'|'predictions'|'chat',
+   *   purpose?:'alerts'|'streaming'|'predictions'|'chat'|'rewards',
    * }} input
    */
   async _installConnection(input) {
@@ -712,6 +721,8 @@ class PlatformIntegrationsService {
       && oauthDefault.STREAMING_SCOPES[input.platform].every(scope => grantedScopes.includes(scope));
     const predictionsConsent = input.platform === "twitch" && (input.purpose === "predictions" || sameIdentity
       && previous?.metadata?.predictionsConsent === true && (input.token.scopes || []).includes("channel:manage:predictions"));
+    const rewardsConsent = input.platform === "twitch" && (input.purpose === "rewards" || sameIdentity
+      && previous?.metadata?.rewardsConsent === true && grantedScopes.includes(oauthDefault.TWITCH_REWARD_SCOPE));
     const chatConsent = input.purpose === "chat" || sameIdentity
       && previous?.metadata?.chatConsent === true
       && oauthDefault.CHAT_SCOPES[input.platform].every(scope => grantedScopes.includes(scope));
@@ -747,6 +758,7 @@ class PlatformIntegrationsService {
           lastError: null,
           streamingConsent,
           predictionsConsent,
+          rewardsConsent,
           chatConsent,
           ...(input.platform === "twitch"
             ? { lastTokenValidatedAt: new Date(this.now()) }
@@ -836,8 +848,9 @@ class PlatformIntegrationsService {
     });
   }
 
-  /** @param {Record<string,unknown>} headers @param {Buffer|string} rawBody */
-  async handleTwitchWebhook(headers, rawBody) {
+  /** @param {Record<string,unknown>} headers @param {Buffer|string} rawBody
+   * @param {import('./twitchRewards').TwitchRewardsService|null} [rewards] */
+  async handleTwitchWebhook(headers, rawBody, rewards) {
     this._requireConfigured("twitch");
     const vault = this._vault();
     const verified = this.webhooks.verifyTwitchWebhook({
@@ -866,7 +879,10 @@ class PlatformIntegrationsService {
       await vault.claimWebhookReceipt("twitch", verified.messageId);
       return { status: 204 };
     }
+    let rewardAdmitted = false;
     if (userId) {
+      const redemption = rewards ? signedRedemption(payload, verified, platformUserId, this.now()) : null;
+      if (rewards && redemption) rewardAdmitted = await rewards.accept(userId, redemption);
       const event = this.webhooks.normalizeTwitchEvent(
         verified.subscriptionType || payload.subscription?.type,
         payload,
@@ -878,7 +894,7 @@ class PlatformIntegrationsService {
     // point remains retryable; concurrent retries are still suppressed by the
     // platformEvents unique index before any socket fan-out.
     await vault.claimWebhookReceipt("twitch", verified.messageId);
-    return { status: 204 };
+    return rewardAdmitted ? { status: 204, rewardAdmitted: true } : { status: 204 };
   }
 
   /** @param {Record<string,unknown>} headers @param {Buffer|string} rawBody */
@@ -1367,7 +1383,7 @@ class PlatformIntegrationsService {
       const vault = this.vault;
       const info = vault?.getStreamingLeaseInfo
         ? await vault.getStreamingLeaseInfo(userId, platform) : null;
-      if (!info || !info.streamingConsent && !info.predictionsConsent && !info.chatConsent && !forceLease) return task();
+      if (!info || !info.streamingConsent && !info.predictionsConsent && !info.rewardsConsent && !info.chatConsent && !forceLease) return task();
       if (!vault || !vault.supportsStreamingLeases()) {
         throw integrationError(503, "streaming_coordination_unavailable", "Stream control coordination is unavailable.");
       }

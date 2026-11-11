@@ -10,6 +10,7 @@ import {
   useFilters,
   type ActiveFilter,
   type ActiveFilterKey,
+  type AnalyzerFilters,
 } from "@/lib/filterContext";
 
 /**
@@ -24,11 +25,13 @@ import {
  * left) and announces the change, so keyboard and screen-reader users
  * keep their place.
  */
-export function ActiveFilterChips({ className = "" }: { className?: string }) {
+export function ActiveFilterChips({ className = "", defaults, showViewLink = true, showReset = true }: {
+  className?: string; defaults?: AnalyzerFilters; showViewLink?: boolean; showReset?: boolean;
+} = {}) {
   const { filters, setFilters, seasons } = useFilters();
   const active = useMemo(
-    () => describeActiveFilters(filters, { seasons }),
-    [filters, seasons],
+    () => describeActiveFilters(filters, { seasons, defaults }),
+    [filters, seasons, defaults],
   );
   const labelId = useId();
   const [announcement, setAnnouncement] = useState("");
@@ -56,7 +59,7 @@ export function ActiveFilterChips({ className = "" }: { className?: string }) {
 
   const reset = () => {
     focusIndex.current = 0;
-    setFilters(defaultAnalyzerFilters(seasons));
+    setFilters(defaults ?? defaultAnalyzerFilters(seasons));
     setAnnouncement("Filters reset to defaults.");
   };
 
@@ -70,7 +73,7 @@ export function ActiveFilterChips({ className = "" }: { className?: string }) {
       <p className="sr-only" role="status">
         {announcement}
       </p>
-      <CopyViewLink />
+      {showViewLink ? <CopyViewLink /> : null}
       {active.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <span id={labelId} className="text-micro uppercase tracking-wider text-text-dim">
@@ -106,14 +109,14 @@ export function ActiveFilterChips({ className = "" }: { className?: string }) {
               </li>
             ))}
           </ul>
-          <button
+          {showReset ? <button
             type="button"
             onClick={reset}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-2 text-caption font-semibold text-text-muted transition-colors hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:ml-auto sm:min-h-8"
           >
             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
             Reset to defaults
-          </button>
+          </button> : null}
         </div>
       ) : null}
     </div>

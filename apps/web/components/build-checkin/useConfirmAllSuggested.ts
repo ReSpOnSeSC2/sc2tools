@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useOwnerRequestScope } from "@/lib/clientApi";
 import {
@@ -34,10 +34,12 @@ export interface ConfirmAllProgress {
   currentGameId: string | null;
   /** Why the run paused (signed out, rate limited). */
   pausedReason: string | null;
+  /** The original, still-unconfirmed suggestions, in their admitted order. */
+  remaining: readonly ConfirmAllTarget[];
 }
 
 const IDLE: ConfirmAllProgress = {
-  phase: "idle", total: 0, confirmed: 0, failed: 0, currentGameId: null, pausedReason: null,
+  phase: "idle", total: 0, confirmed: 0, failed: 0, currentGameId: null, pausedReason: null, remaining: [],
 };
 
 /** Responses that stop the run: nothing after them can succeed right now. */
@@ -110,10 +112,11 @@ export function useConfirmAllSuggested(onResult: (result: ConfirmAllResult) => v
       let confirmed = 0;
       let failed = 0;
       let pausedReason: string | null = null;
+      let remaining = targets;
       const report = (patch: Partial<ConfirmAllProgress>) => {
         if (runRef.current === run) setProgress((current) => ({ ...current, ...patch }));
       };
-      setProgress({ ...IDLE, phase: "running", total: targets.length });
+      setProgress({ ...IDLE, phase: "running", total: targets.length, remaining });
       for (const target of targets) {
         report({ currentGameId: target.gameId });
         const outcome = await attempt(owner, target);
@@ -124,10 +127,12 @@ export function useConfirmAllSuggested(onResult: (result: ConfirmAllResult) => v
           pausedReason = outcome.paused;
           break;
         }
-        if (outcome.ok) confirmed += 1;
-        else failed += 1;
+        if (outcome.ok) {
+          confirmed += 1;
+          remaining = remaining.filter((pending) => pending.gameId !== target.gameId);
+        } else failed += 1;
         onResultRef.current(outcome);
-        report({ confirmed, failed });
+        report({ confirmed, failed, remaining });
       }
       bump();
       report({
@@ -146,6 +151,8 @@ export function useConfirmAllSuggested(onResult: (result: ConfirmAllResult) => v
     runRef.current += 1;
     setProgress(IDLE);
   }, []);
+
+  useLayoutEffect(() => { stop(); }, [owner, stop]);
 
   return { progress, start, stop };
 }

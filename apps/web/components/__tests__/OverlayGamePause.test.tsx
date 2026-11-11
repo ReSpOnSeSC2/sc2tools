@@ -17,7 +17,7 @@ vi.mock("socket.io-client", () => ({ io: () => { const socket = new Socket(); so
 vi.mock("@/lib/clientApi", () => ({ API_BASE: "http://fixture.invalid" }));
 vi.mock("@/components/overlay/useVoiceReadout", () => ({ useVoiceReadout: (...args: unknown[]) => { voice(...args); return { needsGesture: false }; } }));
 vi.mock("@/components/overlay/useRevealAudioUnlock", () => ({ useRevealAudioUnlock: () => {} }));
-vi.mock("@/components/overlay/widgets/MmrDeltaWidget", () => ({ MmrDeltaWidget: ({ live }: { live: LiveGamePayload | null }) => live?.mmrDelta ? <span data-testid="rating-card">Rating change</span> : null }));
+vi.mock("@/components/overlay/widgets/MmrDeltaWidget", () => ({ MmrDeltaWidget: ({ live }: { live: LiveGamePayload | null }) => live?.mmrChangeBetweenStarts ? <span data-testid="rating-card">Rating change</span> : null }));
 vi.mock("@/components/overlay/widgets/SessionWidget", () => ({ SessionWidget: ({ session }: { session: LiveGamePayload["session"] }) => <span data-testid="session-card">{session?.wins} wins</span> }));
 vi.mock("@/components/overlay/widgets/MultiChatWidget", () => ({ MultiChatWidget: () => <span>Chat keeps running</span> }));
 vi.mock("@/components/overlay/widgets/ScoutingWidget", () => ({ ScoutingWidget: () => <span>Scouting card</span> }));
@@ -30,7 +30,7 @@ it.each(["all-in-one", "widget"])("%s waits for saved pause, resumes, and gates 
   render(surface === "all-in-one" ? <OverlayClient token="owner" /> : <OverlayWidgetClient token="owner" widget="mmr-delta" />);
   const socket = sockets[0];
   send(socket, "overlay:config", { enabledWidgets: ["mmr-delta"] });
-  send(socket, "overlay:live", { gameKey: "one", mmrDelta: 20, result: "win" });
+  send(socket, "overlay:live", { gameKey: "one", mmrChangeBetweenStarts: 20, result: "win" });
   expect(screen.queryByTestId("rating-card")).toBeNull();
   send(socket, "overlay:multichat", { gameWidgetsPaused: true }); expect(screen.queryByTestId("rating-card")).toBeNull();
   send(socket, "overlay:multichat", { gameWidgetsPaused: false }); expect(screen.getByTestId("rating-card")).toBeTruthy();

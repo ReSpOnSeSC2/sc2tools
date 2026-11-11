@@ -15,7 +15,7 @@ import { todayKeyIn } from "@/lib/timeseries";
 export type GoalType = "games_played" | "win_rate" | "mmr_reach" | "macro_avg" | "apm_avg" | "sq_avg" | "build_reps";
 export type GoalRecurrence = "once" | "daily" | "weekly" | "monthly" | "season";
 export type GoalBuild = { key: string; name: string; slug: string | null; source: "catalog" | "custom" };
-export type GoalFilters = { matchup: string | null; map: string | null; ranked: boolean };
+export type GoalFilters = { matchup: string | null; map: string | null; ranked: boolean; build?: GoalBuild };
 export type GoalParams = { target: number; minGames?: number; toon?: string | null; build?: GoalBuild };
 export type GoalWindow = {
   recurrence: GoalRecurrence; startsOn: string; endsOn: string; tz: string; season: number | null;
@@ -234,10 +234,11 @@ export function goalDeepLink(goal: Pick<Goal, "type" | "filters" | "params" | "w
     filters.since = range.startsAt;
     filters.until = new Date(Date.parse(range.endsAt) - 1).toISOString();
   }
-  if (goal.filters.ranked) { filters.map_pool = "ladder"; filters.game_size = "1v1"; } else filters.game_size = "1v1";
+  if (goal.filters.ranked || goal.type === "mmr_reach") { filters.map_pool = "ladder"; filters.game_size = "1v1"; } else filters.game_size = "1v1";
   if (goal.filters.matchup) { filters.race = goal.filters.matchup[0]; filters.opp_race = goal.filters.matchup[2]; }
   if (goal.filters.map) filters.map = goal.filters.map;
-  if (goal.type === "build_reps" && goal.params.build) filters.build = goal.params.build.name;
+  const build = goal.type === "build_reps" ? goal.params.build : goal.filters.build;
+  if (build) filters.build = build.name;
   return analyzerViewHref({ section: SECTION_FOR[goal.type], filters: filters as AnalyzerFilters });
 }
 
@@ -247,17 +248,18 @@ export function previewLabel(input: GoalInput): string {
   const scope = [input.filters.ranked ? "ranked" : "", input.filters.matchup ?? ""].filter(Boolean).join(" ");
   const games = scope ? `${scope} games` : "games";
   const on = input.filters.map ? ` on ${input.filters.map}` : "";
+  const withBuild = input.filters.build ? ` with ${input.filters.build.name}` : "";
   const period = input.window.recurrence === "season" ? ` in Season ${input.window.season ?? "?"}`
     : input.window.recurrence === "daily" ? " each day" : input.window.recurrence === "weekly" ? " each week"
       : input.window.recurrence === "monthly" ? " each month" : "";
   const n = getServerFormatter().number(t);
   switch (input.type) {
-    case "games_played": return `Play ${n} ${t === 1 ? games.replace(/games$/, "game") : games}${on}${period}`;
-    case "win_rate": return `Win ${n}% of ${games}${on}${period}`;
-    case "mmr_reach": return `Reach ${n} MMR${period}`;
-    case "macro_avg": return `Average a ${n}+ macro score in ${games}${on}${period}`;
-    case "apm_avg": return `Average ${n}+ APM in ${games}${on}${period}`;
-    case "sq_avg": return `Average ${n}+ SQ in ${games}${on}${period}`;
+    case "games_played": return `Play ${n} ${t === 1 ? games.replace(/games$/, "game") : games}${withBuild}${on}${period}`;
+    case "win_rate": return `Win ${n}% of ${games}${withBuild}${on}${period}`;
+    case "mmr_reach": return `Reach ${n} MMR${withBuild}${on}${period}`;
+    case "macro_avg": return `Average a ${n}+ macro score in ${games}${withBuild}${on}${period}`;
+    case "apm_avg": return `Average ${n}+ APM in ${games}${withBuild}${on}${period}`;
+    case "sq_avg": return `Average ${n}+ SQ in ${games}${withBuild}${on}${period}`;
     case "build_reps": return `Play ${input.params.build?.name ?? "a build"} ${n} time${t === 1 ? "" : "s"}${input.filters.matchup ? ` in ${input.filters.matchup}` : ""}${on}${period}`;
   }
 }

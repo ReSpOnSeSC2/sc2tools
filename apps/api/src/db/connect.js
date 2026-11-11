@@ -46,6 +46,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   youtubeCreateOperations: import('mongodb').Collection,
  *   platformWebhookReceipts: import('mongodb').Collection,
  *   platformEvents: import('mongodb').Collection,
+ *   twitchRewardReceipts: import('mongodb').Collection<any>,
  *   twitchAutomationReceipts: import('mongodb').Collection<any>,
  *   importJobs: import('mongodb').Collection,
  *   macroJobs: import('mongodb').Collection,
@@ -175,6 +176,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     youtubeCreateOperations: db.collection(COLLECTIONS.YOUTUBE_CREATE_OPERATIONS),
     platformWebhookReceipts: db.collection(COLLECTIONS.PLATFORM_WEBHOOK_RECEIPTS),
     platformEvents: db.collection(COLLECTIONS.PLATFORM_EVENTS),
+    twitchRewardReceipts: db.collection(COLLECTIONS.TWITCH_REWARD_RECEIPTS),
     twitchAutomationReceipts: db.collection(COLLECTIONS.TWITCH_AUTOMATION_RECEIPTS),
     importJobs: db.collection(COLLECTIONS.IMPORT_JOBS),
     macroJobs: db.collection(COLLECTIONS.MACRO_JOBS),
@@ -380,6 +382,7 @@ async function ensureBuildIntentIndexes(ctx) {
 async function ensureAdminEventIndexes(ctx) {
   await ctx.adminEvents.createIndex({ readAt: 1, createdAt: -1, eventId: -1 });
   await ctx.adminEvents.createIndex({ type: 1, readAt: 1, createdAt: -1, eventId: -1 });
+  await ctx.adminEvents.createIndex({ type: 1, readAt: 1, "report.status": 1 }, { partialFilterExpression: { type: "user_message" } });
   // Per-event read/unread (POST /v1/admin/events/:eventId/read|unread)
   // looks a row up by id alone; the keyset indexes above lead with
   // createdAt/type. Not unique: a legacy duplicate must never fail boot.
@@ -483,6 +486,10 @@ async function ensureIndexes(ctx, opts = {}) {
 
   await ctx.games.createIndex({ userId: 1, gameId: 1 }, { unique: true });
   await ctx.games.createIndex({ userId: 1, date: -1 });
+  await ctx.games.createIndex({ userId: 1, date: -1, "buildIntent.randomizer.key": 1 }, {
+    name: "randomizer_challenge_owner_date",
+    partialFilterExpression: { "buildIntent.randomizer.key": { $type: "string" } },
+  });
   // Complete-history analysis is cursor-paged by (date, _id).  The _id
   // tie-breaker prevents replay rows with identical timestamps from being
   // skipped between pages while this compound order avoids a blocking sort.
@@ -652,6 +659,7 @@ async function ensureIndexes(ctx, opts = {}) {
     { expiresAt: 1 },
     { expireAfterSeconds: 0 },
   );
+  await new (require("../services/twitchRewardReceipts").TwitchRewardReceipts)(ctx.twitchRewardReceipts).ensureIndexes();
   await new (require("../services/twitchAutomationReceipts").TwitchAutomationReceipts)({ collection: ctx.twitchAutomationReceipts }).ensureIndexes();
 
   await ctx.deviceTokens.createIndex({ tokenHash: 1 }, { unique: true });
@@ -985,6 +993,7 @@ async function ensureDirectoryIndexes(ctx) {
   await ctx.playerChannels.createIndex({ identityKeys: 1 }, { unique: true });
   await ctx.playerChannels.createIndex({ ownerUserId: 1 }, { sparse: true });
   await ctx.playerChannels.createIndex({ removed: 1, displayName: 1, id: 1 });
+  await ctx.playerChannels.createIndex({ pending: 1, removed: 1 });
   await ctx.supporters.createIndex({ userId: 1 }, { unique: true });
   await ctx.supporters.createIndex({ status: 1, month: -1, reviewedAt: -1 });
 }

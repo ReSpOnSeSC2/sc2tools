@@ -6,9 +6,10 @@ const { myLadderRaceExpr } = require("./trendsRegionExpr");
 const { parseGlobalTrendsFilters, playerIncluded } = require("./adminGlobalTrendsScope");
 const { readGlobalPlayers, paginatePlayers } = require("./adminGlobalTrendsPlayers");
 const { globalMmrProgression, fitGlobalInterval } = require("./adminGlobalTrendsMmr");
-const { GlobalTrendsQueries, QUERY_MAX_TIME_MS, queryKey } = require("./adminGlobalTrendsQueries");
+const { GlobalTrendsQueries, QUERY_MAX_TIME_MS, globalTrendsBusy, queryKey } = require("./adminGlobalTrendsQueries");
 const { GlobalTrendsHistory } = require("./adminGlobalTrendsHistory");
 const { EXPLORER_SEQUENCE_HISTORY } = require("./trendsExplorer");
+const { PLAYER_REF, rosterRef } = require("../util/adminTrendViews");
 
 // Never accepted from a query parameter. Only the private collection adapter
 // below can translate this marker; ordinary AggregationsService stays scoped.
@@ -23,8 +24,9 @@ const ALLOWED_METHODS = new Set([
 const NET_METHODS = new Set(["netMmrByMatchup", "netMmrByOpponent"]);
 
 class AdminGlobalTrendsService {
-  /** @param {{db: import('../db/connect').DbContext,mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'>}} deps */
-  constructor({ db, mmrExpectation }) {
+  /** @param {{db: import('../db/connect').DbContext,mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'>,rosterPepper?:Buffer}} deps */
+  constructor({ db, mmrExpectation, rosterPepper }) {
+    this.rosterPepper = rosterPepper;
     this.db = db;
     this.mmrExpectation = mmrExpectation;
     this.queries = new GlobalTrendsQueries();
@@ -54,17 +56,43 @@ class AdminGlobalTrendsService {
       }));
   }
 
+  /** @param {Record<string, unknown>} query
+   * @param {import('./adminGlobalTrendsHistory').HistorySnapshot} snapshot */
+  async _cohort(query, snapshot) {
+    const cohort = parseGlobalTrendsFilters(query);
+    if (query.cohort_refs !== "1" || !(cohort.includedPlayers.length || cohort.excludedPlayers.length)) return cohort;
+    const pepper = this.rosterPepper;
+    if (!pepper) throw globalTrendsBusy();
+    const refs = /** @type {Map<string,string>} */ (await this.queries.cached(queryKey(["roster-refs", snapshot.id]), async () =>
+      new Map((await this._players(snapshot)).map((p) => [rosterRef(pepper, p.playerId), p.playerId]))));
+    const resolve = (/** @type {string[]} */ ids) => ids.flatMap(id => PLAYER_REF.test(id) && refs.has(id) ? [/** @type {string} */ (refs.get(id))] : []);
+    return { ...cohort, includedPlayers: resolve(cohort.includedPlayers), excludedPlayers: resolve(cohort.excludedPlayers) };
+  }
+
   /** @param {Record<string, unknown>} query */
   async players(query = {}) {
     this._refresh(query);
-    return this.history.withSnapshot(async (snapshot) => paginatePlayers(await this._players(snapshot), parseGlobalTrendsFilters(query), query));
+    return this.history.withSnapshot(async (snapshot) => {
+      const cohort = await this._cohort(query, snapshot);
+      const roster = paginatePlayers(await this._players(snapshot), cohort, query);
+      if (query.cohort_refs !== "1") return roster;
+      const pepper = this.rosterPepper;
+      if (!pepper) throw globalTrendsBusy();
+      return { ...roster, items: roster.items.map(({ playerId, toonHandle, displayName, ...row }) => ({
+        ...row, playerId: rosterRef(pepper, playerId),
+        displayName: displayName === toonHandle || displayName === `Legacy history · ${playerId.slice(5)}`
+          ? toonHandle ? "Unnamed player" : "Legacy history" : displayName,
+      })) };
+    });
   }
 
   /** @param {Record<string, unknown>} query */
   async filterOptions(query = {}) {
     this._refresh(query);
-    const cohort = parseGlobalTrendsFilters(query);
-    return this.history.withSnapshot((snapshot) => this.queries.cached(queryKey(["options", snapshot.id, cohort]), () => this._filterOptions(cohort, snapshot)));
+    return this.history.withSnapshot(async (snapshot) => {
+      const cohort = await this._cohort(query, snapshot);
+      return this.queries.cached(queryKey(["options", snapshot.id, cohort]), () => this._filterOptions(cohort, snapshot));
+    });
   }
 
   /** @param {import('./adminGlobalTrendsScope').Cohort} cohort
@@ -87,8 +115,10 @@ class AdminGlobalTrendsService {
   async run(method, query = {}, opts = {}) {
     if (!ALLOWED_METHODS.has(method)) throw new Error("Unsupported global trends method");
     this._refresh(query);
-    const cohort = parseGlobalTrendsFilters(query);
-    return this.history.withSnapshot((snapshot) => this.queries.cached(queryKey(["result", snapshot.id, method, cohort, opts]), () => this._run(method, cohort, opts, snapshot)));
+    return this.history.withSnapshot(async (snapshot) => {
+      const cohort = await this._cohort(query, snapshot);
+      return this.queries.cached(queryKey(["result", snapshot.id, method, cohort, opts]), () => this._run(method, cohort, opts, snapshot));
+    });
   }
 
   /** The adapter's only cursor operation is toArray. Delay acquisition until

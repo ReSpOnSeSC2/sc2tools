@@ -91,6 +91,12 @@ class AdminService {
    *   gdpr: import('./gdpr').GdprService,
    *   adminIds?: () => string[],
    *   infrastructureUsage?: import('./infrastructureUsage').InfrastructureUsageService,
+   *   attentionQueues?: {
+   *     community: Pick<import("./community").CommunityService, "countOpenReports">,
+   *     playerIdentities: Pick<import("./playerIdentities").PlayerIdentitiesService, "countPending">,
+   *     playerChannels: Pick<import("./playerChannels").PlayerChannelsService, "countPending">,
+   *     adminEvents: Pick<import("./adminEvents").AdminEventsService, "countUnreadMessages"|"countUnreadAlerts">,
+   *   },
    * }} deps
    */
   constructor(deps) {
@@ -100,7 +106,34 @@ class AdminService {
     this.userDirectory = new AdminUsersService(deps.db, { adminIds: deps.adminIds });
     this.gdpr = deps.gdpr;
     this.infrastructureUsage = deps.infrastructureUsage || null;
+    this.attentionQueues = deps.attentionQueues || null;
     this._startedAt = Date.now();
+  }
+
+  async attention() {
+    if (!this.attentionQueues) throw new Error("admin_attention_unavailable");
+    const { community, playerIdentities, playerChannels, adminEvents } = this.attentionQueues;
+    const [openReports, pendingIdentities, pendingChannels, unreadMessages, alerts] = await Promise.all([
+      community.countOpenReports(), playerIdentities.countPending(), playerChannels.countPending(),
+      adminEvents.countUnreadMessages(), adminEvents.countUnreadAlerts(),
+    ]);
+    return {
+      openReports, pendingIdentities, pendingChannels, unreadMessages, alerts,
+      advisories: { level: this.infrastructureUsage?.cachedAdvisoryLevel() ?? null },
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  /** One database-only read for the dashboard link. The collection breakdown
+   * and provider diagnostics are loaded from Infrastructure. */
+  async storageSummary() {
+    const stats = await this.db.db.command({ dbStats: 1, scale: 1, maxTimeMS: 5000 });
+    const dataBytes = stats.dataSize;
+    const indexBytes = stats.indexSize;
+    const collectionCount = stats.collections;
+    if (![dataBytes, indexBytes, collectionCount, dataBytes + indexBytes]
+      .every((value) => Number.isSafeInteger(value) && value >= 0)) throw new Error("admin_storage_summary_unavailable");
+    return { dataBytes, indexBytes, collectionCount };
   }
 
   /**

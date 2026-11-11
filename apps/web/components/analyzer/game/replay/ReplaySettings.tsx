@@ -160,7 +160,7 @@ export function ReplaySettings({
                   </button>
                 )}
               </div>
-            ) : <p className="text-micro text-text-muted">Camera tracks unavailable. {canReanalyzeCamera ? <Link href="/settings?tab=backups" className="text-accent underline">Re-analyze this game</Link> : null}</p>}
+            ) : <p className="text-micro text-text-muted">Camera tracks unavailable. {canReanalyzeCamera ? <Link href="/settings?tab=backups#reanalyze" className="text-accent underline">Open Re-analysis</Link> : null}</p>}
           </fieldset> : null}
           <p className="px-3 pb-1 pt-1.5 text-micro font-semibold uppercase tracking-wider text-text-dim">
             Panels

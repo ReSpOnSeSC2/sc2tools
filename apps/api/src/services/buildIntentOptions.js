@@ -648,8 +648,12 @@ function refOf(option) {
   return { key: option.key, name: option.name, slug: option.slug, source: option.source };
 }
 
+// Digest labels use the server catalog, never the name on a game document.
+const catalogCheckinLabels = Object.freeze([...CATALOG_BY_KEY].map(([key, entry]) => ({ key, name: entry.name })));
+
 module.exports = {
   BuildIntentOptions,
+  catalogCheckinLabels,
   MATCHUPS,
   fitsMatchup,
   fitsOpponentMatchup,

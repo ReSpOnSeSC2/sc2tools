@@ -14,12 +14,8 @@ import { ActiveFilterChips } from "@/components/analyzer/ActiveFilterChips";
 import { DoctorBanner } from "@/components/analyzer/DoctorBanner";
 import { NoGamesYet } from "@/components/analyzer/EmptyStates";
 import { Card } from "@/components/ui/Card";
-import {
-  OnboardingChecklist,
-  checklistVisible,
-  type ChecklistMe,
-} from "@/components/onboarding/OnboardingChecklist";
-import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
+import { checklistVisible, type ChecklistMe } from "@/components/onboarding/checklistState";
+import { LazyImportProgressCard } from "@/components/imports/LazyImportProgressCard";
 import { useImportStatus } from "@/components/imports/useImportStatus";
 import { markAppSession } from "@/lib/appSession";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
@@ -31,6 +27,12 @@ import { useLocalStorageState } from "@/lib/useLocalStorageState";
 const FolderSyncAutoRunner = dynamic(
   () => import("@/components/instant/FolderSyncAutoRunner").then((mod) => mod.FolderSyncAutoRunner),
   { ssr: false },
+);
+
+// Accounts that still need onboarding load the full setup controls.
+const OnboardingChecklist = dynamic(
+  () => import("@/components/onboarding/OnboardingChecklist").then(module => module.OnboardingChecklist),
+  { loading: () => <Card><p role="status" className="text-caption text-text-muted">Loading setup checklist…</p></Card> },
 );
 
 // Today starts with its scope note. Load the complete editor when requested
@@ -213,7 +215,7 @@ function ActiveImportCard() {
   }
   return (
     <Card>
-      <ImportProgressCard
+      <LazyImportProgressCard
         job={importStatus.job}
         active={importStatus.active}
         pct={importStatus.pct}

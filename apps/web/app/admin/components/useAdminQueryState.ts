@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type Values = Record<string, string | number | boolean>;
 type QueryState<T> = { [K in keyof T]: T[K] extends boolean ? boolean : T[K] extends number ? number : string };
+type WriteOptions = { history?: "replace" | "push"; canonical?: boolean };
 type Options<T> = { allowed?: Partial<Record<keyof T, readonly (string | number | boolean)[]>>; debounceMs?: Partial<Record<keyof T, number>> };
 
 export function coerceAdminQuery<T extends Values>(defaults: T, params: URLSearchParams, allowed: Options<T>["allowed"] = {}): QueryState<T> {
@@ -29,7 +30,7 @@ export function adminBrowserLocation() {
 function clearTimers(timers: Map<string, ReturnType<typeof setTimeout>>) { for (const timer of timers.values()) clearTimeout(timer); timers.clear(); }
 
 /** URL reads synchronize during render; owned acknowledgements may lag newer input. */
-export function useAdminQueryState<T extends Values>(defaults: T, options: Options<T> = {}): [QueryState<T>, (patch: Partial<QueryState<T>>, options?: { history?: "replace" | "push" }) => void] {
+export function useAdminQueryState<T extends Values>(defaults: T, options: Options<T> = {}): [QueryState<T>, (patch: Partial<QueryState<T>>, options?: WriteOptions) => void] {
   const router = useRouter(), pathname = usePathname(), search = useSearchParams().toString(), key = `${pathname}${search ? `?${search}` : ""}`;
   const latest = useRef({ defaults, options, router }); latest.current = { defaults, options, router };
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -46,12 +47,15 @@ export function useAdminQueryState<T extends Values>(defaults: T, options: Optio
     window.addEventListener("popstate", history);
     return () => { window.removeEventListener("popstate", history); clearTimers(pending); state.epoch++; };
   }, []);
-  const set = useCallback((patch: Partial<QueryState<T>>, settings: { history?: "replace" | "push" } = {}) => {
+  const set = useCallback((patch: Partial<QueryState<T>>, settings: WriteOptions = {}) => {
     const write = (changes: Partial<QueryState<T>>, guard?: { epoch: number; browser: string | undefined }) => {
       const state = nav.current, current = latest.current, live = adminBrowserLocation();
       if (guard && (guard.epoch !== state.epoch || live?.key !== guard.browser && !state.known.has(live?.key || ""))) return;
       const params = new URLSearchParams(state.params), parsed = coerceAdminQuery(current.defaults, params, current.options.allowed);
-      const changed = Object.keys(changes).filter(name => changes[name] !== parsed[name]); if (!changed.length) return;
+      const changed = Object.keys(changes).filter(name => changes[name] !== parsed[name] || (settings.canonical && (
+        params.getAll(name).length > 1 || params.has(name) && changes[name] === current.defaults[name]
+      )));
+      if (!changed.length) return;
       if (changed.some(name => !["page", "before", "game", "owner"].includes(name))) { params.delete("page"); params.delete("before"); }
       for (const [name, value] of Object.entries(changes)) {
         const valueParsed = coerceAdminQuery(current.defaults, new URLSearchParams([[name, String(value)]]), current.options.allowed)[name];

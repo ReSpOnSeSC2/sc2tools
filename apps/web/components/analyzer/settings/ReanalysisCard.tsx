@@ -30,8 +30,8 @@ const STATS_NOTE =
 
 /**
  * Settings → Backups & data: "Re-analyze games". Lists the owner's cohorts
- * (games labelled by an engine older than a label-changing release, games
- * missing a macro score, games with no engine version) and runs one paced
+ * (older analysis engines, missing macro scores, unknown engines and
+ * games analyzed before camera tracks were introduced) and runs one paced
  * job through the desktop agent. Live progress arrives as
  * `reanalysis:progress`; the status read doubles as the job's watchdog.
  */
@@ -148,6 +148,7 @@ function AgentNote({ agent, running }: { agent: ReanalysisOverview["agent"]; run
 function cohortDetail(cohort: ReanalysisCohort): string {
   if (cohort.kind === "engine") return cohort.summary ?? "";
   if (cohort.kind === "macro") return "Games saved without a macro score, for example when it could not be computed at the time.";
+  if (cohort.kind === "camera") return "Games analyzed before camera tracks were introduced and games with an unknown engine version.";
   return "Games uploaded before the desktop agent reported its engine version. Re-analysis records the current one.";
 }
 
