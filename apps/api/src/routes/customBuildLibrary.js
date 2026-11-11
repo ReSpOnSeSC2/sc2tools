@@ -241,9 +241,25 @@ function registerForkUpdateRoutes(router, { deps, persistBuild }, route) {
       fail(res, current ? 409 : 404, current ? "not_a_saved_copy" : "not_found");
       return;
     }
+    const expected = req.body;
+    if (typeof expected?.communitySlug !== "string" || !SLUG_RE.test(expected.communitySlug)
+      || !Number.isSafeInteger(expected.version) || expected.version < 1) {
+      fail(res, 400, "bad_request", "Send the Community build and version you reviewed.");
+      return;
+    }
+    if (expected.communitySlug !== communitySlug) {
+      fail(res, 409, "community_update_changed", "This copy now points to a different Community build. Reopen the review.");
+      return;
+    }
     const publication = deps.community ? await deps.community.getPublic(communitySlug) : null;
     if (!publication) {
       fail(res, 404, "community_build_gone");
+      return;
+    }
+    // The version and rules came from the same publication read. Never
+    // replace the reviewed snapshot with a later one during the save.
+    if (publication.version !== expected.version) {
+      fail(res, 409, "community_update_changed", "The author published another version. Review it before applying.");
       return;
     }
     const checked = validateCustomBuild(forkUpdate(current, publication, new Date()));
