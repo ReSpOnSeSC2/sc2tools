@@ -197,7 +197,8 @@ def test_companion_tools_fit_the_minimum_window_at_display_scale(tmp_path, monke
         try:
             for route, scroll, controls in (
                 ("builds", builds.scroll, (builds.loading_toggle, builds.postgame_toggle, builds.refresh_button)),
-                ("ghost", ghost.scroll, (ghost.enabled_toggle, ghost.matchup, ghost.clear_button)),
+                ("ghost", ghost.scroll, (ghost.enabled_toggle, ghost.matchup, ghost.clear_button,
+                                         ghost._hud_preview_button, ghost._hud_move_button)),
             ):
                 page.console.navigate(route)
                 QtTest.QTest.qWait(25)
