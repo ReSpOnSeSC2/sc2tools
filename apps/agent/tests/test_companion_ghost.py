@@ -373,3 +373,31 @@ def test_comparison_uses_owned_replay_and_side_and_bounds_rows():
     result = client.action({"action": "ghost_comparison", "gameId": "replay-2", "side": "opponent", "buildKey": "Bio"})
     assert len(result["rows"]) == MAX_GHOST_STEPS
     assert calls[-1] == ("GET", "/v1/me/ghost-builds/comparison", {"params": {"gameId": "replay-2", "side": "opponent", "buildKey": "Bio"}})
+
+
+def test_live_practice_reads_web_assignments_and_prefers_exact_declared_reference():
+    clock = 200.0
+    web_target = {"v": 1, "name": "Web assignment", "steps": [{"t": 40, "name": "Gateway"}]}
+    reference = {"v": 1, "name": "Declared reference", "sourceGameId": "ref", "steps": [{"t": 38, "name": "Gateway"}]}
+    paths = []
+
+    def request(method, path):
+        paths.append((method, path))
+        if path == "/v1/me/ghost-builds":
+            return {"v": 1, "slots": {}, "references": {"key": {
+                "matchup": "PvZ", "buildKey": "planned", "side": "you", "target": reference,
+            }}}
+        if path == "/v1/me/preferences/ghost":
+            return {"v": 2, "slots": {"PvZ": web_target}}
+        return {"matchup": "PvZ", "declared": {"key": "planned"}}
+
+    client = GhostClient(request, lambda: {"v": 1, "enabled": True, "slots": {}}, lambda _: None)
+    client.action({"action": "ghost_state"})
+    practice = client.action({"action": "ghost_practice_state", "gameKey": "test|key"})
+    assert paths[-2:] == [("GET", "/v1/me/preferences/ghost"), ("GET", "/v1/build-intents/live/test%7Ckey")]
+    assert practice["practiceSlots"]["PvZ"]["name"] == "Web assignment"
+    session = GhostSession()
+    session.update_snapshot({"liveGame": {"phase": "match_started", "gameKey": "test|key",
+        "capturedAt": clock, "displayTime": 36, "user": {"race": "Protoss"}, "opponent": {"race": "Zerg"}}})
+    assert session.view({"slots": {}}, now=clock, practice=practice)[0]["target"]["name"] == "Declared reference"
+    assert session.view({"slots": {}}, now=clock, practice={**practice, "declaredMatchup": "TvZ"})[0]["target"]["name"] == "Web assignment"

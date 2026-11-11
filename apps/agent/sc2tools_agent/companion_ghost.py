@@ -10,6 +10,7 @@ import threading
 import time
 from urllib.parse import quote
 
+from .practice_hud import normalize_practice_preferences
 from .session_stats import session_account_key
 
 
@@ -111,6 +112,7 @@ def normalize_ghost_state(value):
     owner = owner if isinstance(owner, str) and re.fullmatch(r"[0-9a-f]{64}", owner) else None
     return {"v": 1, "enabled": value["enabled"], "slots": slots,
             **({"accountKey": owner} if owner else {}),
+            **({"practice": normalize_practice_preferences(value["practice"])} if isinstance(value.get("practice"), dict) else {}),
             **({"localOnlyMatchups": [matchup for matchup in MATCHUPS if matchup in local_only]} if local_only else {})}
 
 
@@ -305,11 +307,21 @@ class GhostClient:
                     return self._result(state, warning="Account builds are unavailable. Using targets saved on this PC.")
                 self._save_state(state, connection)
                 return self._result(state)
+        if action == "ghost_practice_state":
+            return self._practice_state(request, account_request)
         if action == "ghost_save":
-            if not ("enabled" in request or "matchup" in request):
+            if not any(key in request for key in ("enabled", "matchup", "practice")):
                 raise GhostError("Choose a Ghost setting to save.")
             if "enabled" in request and type(request["enabled"]) is not bool:
                 raise GhostError("Ghost must be on or off.")
+            practice = request.get("practice")
+            if "practice" in request:
+                if not isinstance(practice, dict) or not practice:
+                    raise GhostError("Choose a Practice HUD setting to save.")
+                valid = normalize_practice_preferences(practice)
+                if any(key not in valid or type(value) is not type(valid[key]) or value != valid[key]
+                       for key, value in practice.items()):
+                    raise GhostError("Choose valid Practice HUD settings.")
             target = None
             if "matchup" in request:
                 if request["matchup"] not in MATCHUPS or "target" not in request:
@@ -322,6 +334,8 @@ class GhostClient:
                 state = self._state_for_connection(connection)
                 if "enabled" in request:
                     state["enabled"] = request["enabled"]
+                if practice:
+                    state["practice"] = {**normalize_practice_preferences(state.get("practice")), **practice}
                 if "matchup" in request:
                     if target is None:
                         state["slots"].pop(request["matchup"], None)
@@ -452,6 +466,37 @@ class GhostClient:
             return {"target": players[0]["target"], "matchup": players[0]["matchup"], "players": players}
         raise GhostError("This Ghost action is unavailable.")
 
+    def _practice_state(self, request, account_request):
+        key = request.get("gameKey")
+        if not isinstance(key, str) or not 0 < len(key) <= 200:
+            raise GhostError("Practice is waiting for a live game.")
+        slots = {}
+        try:
+            config = account_request("GET", "/v1/me/preferences/ghost")
+        except Exception:
+            config = None
+        if isinstance(config, dict) and config.get("v") == 2 and isinstance(config.get("slots"), dict):
+            for matchup in MATCHUPS:
+                target = config["slots"].get(matchup)
+                if isinstance(target, dict):
+                    normalized = normalize_target({**target, "sourceGameId": target.get("sourceGameId") or "web:" + matchup})
+                    if normalized:
+                        slots[matchup] = normalized
+
+        try:
+            live = account_request("GET", "/v1/build-intents/live/" + quote(key, safe=""))
+        except Exception:
+            live = None
+        declaration = live.get("declared") if isinstance(live, dict) else None
+        matchup = live.get("matchup") if isinstance(live, dict) else None
+        build = declaration.get("key") if isinstance(declaration, dict) else None
+        with self._lock:
+            reference = next((row for row in self._references.values()
+                              if row.get("matchup") == matchup and row.get("buildKey") == build
+                              and row.get("side", "you") == "you"), None) if build else None
+        return {"practiceSlots": slots, "declaredMatchup": matchup,
+                "declaredTarget": normalize_target(reference.get("target")) if reference else None}
+
 
 class GhostSession:
     def __init__(self):
@@ -477,7 +522,7 @@ class GhostSession:
         if any(isinstance(race, str) and (race.strip().lower() == "r" or race.strip().lower().startswith("random")) for race in races):
             self._random_blocked = True
 
-    def view(self, state, *, now=None):
+    def view(self, state, *, now=None, practice=None):
         envelope = self._envelope
         if envelope.get("phase") not in {"match_started", "match_in_progress"} or envelope.get("isReplay") is True or not self.game_key:
             return None, "Waiting for a live game"
@@ -500,7 +545,9 @@ class GhostSession:
         if self._random_blocked or not mine or not theirs:
             return None, "Ghost requires two concrete live races"
         matchup = mine + "v" + theirs
-        target = state.get("slots", {}).get(matchup)
+        practice = practice if isinstance(practice, dict) else {}
+        declared = practice.get("declaredTarget") if practice.get("declaredMatchup") == matchup else None
+        target = declared or state.get("slots", {}).get(matchup) or practice.get("practiceSlots", {}).get(matchup)
         if not target:
             return None, "No replay target assigned to " + matchup
         passed = sum(step["t"] <= clock for step in target["steps"])

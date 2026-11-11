@@ -237,7 +237,7 @@ def _opponent_history_known(context):
 
 def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                          checkin_controller_provider=None, speech_factory=None,
-                         panel_positions=None, on_panel_positions=None, agent_menu=None):
+                         panel_positions=None, on_panel_positions=None, agent_menu=None, open_help=None):
     """Build a lazy-Qt page; all handler calls run in daemon workers."""
     icon_root = _icon_root()
 
@@ -1078,7 +1078,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             )
             self.ghost_page = build_companion_ghost(
                 self.workspace_tabs, handler=handler, QtCore=QtCore,
-                QtGui=QtGui, QtWidgets=QtWidgets,
+                QtGui=QtGui, QtWidgets=QtWidgets, open_help=open_help,
             )
             self.ghost_page.referencesChanged.connect(self._ghost_references_changed)
             self.workspace_tabs.addTab(self.build_selectors, "Build selectors")

@@ -6,6 +6,7 @@ def test_value_controls_scroll_the_page_until_deliberately_focused(tmp_path):
         ui, win = make_window()
         win._go_to_page("settings")
         win.show()
+        win._settings_advanced.setChecked(True)
         win._obs_enable_check.setChecked(True)
         win._filter_combo.setCurrentIndex(win._filter_combo.findData("custom"))
         win._log_combo.setCurrentIndex(1)
