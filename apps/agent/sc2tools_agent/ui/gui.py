@@ -46,6 +46,7 @@ log = logging.getLogger(__name__)
 # ceiling — see the comment block there for why 12.
 from .qt_helpers import guard_value_widgets, validate_api_base, probe_api_health
 from .help_links import help_url, help_button, site_url
+from .settings_page import SYNC_DATE_FORMAT, build_settings_page
 from . import palette
 from ..health import GAMES_HELP, SYNC_HELP
 from ..config import _DEFAULT_API_BASE
@@ -114,8 +115,6 @@ _DANGER = palette.RED
 _BORDER = theme.BORDER
 _BORDER_STRONG = theme.BORDER_STRONG
 _STYLE = theme.STYLE
-# Qt date format of the sync range, and of the dates the agent saves.
-_ISO_DATE = "yyyy-MM-dd"
 
 
 # ---------------------------------------------------------------------
@@ -1830,666 +1829,35 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         # ---- Settings tab ----
 
         def _build_settings_tab(self) -> QtWidgets.QWidget:
-            # The form is taller than the window's minimum height, so
-            # everything lives inside a scroll area — otherwise the
-            # bottom rows (and the Save button with them) are simply
-            # clipped off-screen at small window sizes with no way to
-            # reach them.
-            scroller = QtWidgets.QScrollArea()
-            scroller.setWidgetResizable(True)
-            scroller.setFrameShape(QtWidgets.QFrame.NoFrame)
-            scroller.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-            self._settings_scroll = scroller
-
-            page = QtWidgets.QWidget()
-            v = QtWidgets.QVBoxLayout(page)
-            v.setContentsMargins(theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y, theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y)
-            v.setSpacing(14)
-
-            title = QtWidgets.QLabel("Settings")
-            title.setObjectName("h1")
-            v.addWidget(title)
-            navigation = QtWidgets.QHBoxLayout()
-            section_label = QtWidgets.QLabel("Settings section")
-            section_select = QtWidgets.QComboBox()
-            section_select.setAccessibleName("Settings section")
-            section_label.setBuddy(section_select)
-            navigation.addWidget(section_label)
-            navigation.addWidget(section_select, 1)
-            navigation.addWidget(help_button(QtWidgets, "Desktop app settings",
-                                             lambda: self._open_help("desktop-app-settings")))
-            navigation.addWidget(help_button(QtWidgets, "Keyboard shortcuts",
-                                             lambda: self._open_help("desktop-app-shortcuts")))
-            v.addLayout(navigation)
-
-            form_card = QtWidgets.QFrame()
-            form_card.setObjectName("card")
-            form = QtWidgets.QFormLayout(form_card)
-            form.setContentsMargins(12, 14, 12, 14)
-            form.setHorizontalSpacing(20)
-            form.setVerticalSpacing(14)
-            form.setLabelAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-            form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
-
-            self._api_test_generation = 0
-            self._api_input = QtWidgets.QLineEdit()
-            self._api_input.setPlaceholderText(_DEFAULT_API_BASE)
-            self._api_input.setToolTip(
-                "Where the agent uploads parsed replays and fetches your "
-                "profile. Leave blank to use the production cloud API "
-                "(https://sc2tools-api.onrender.com). Override only when "
-                "you're running a private API instance — e.g. local dev "
-                "or a self-hosted ingest endpoint.",
-            )
-            api_block = QtWidgets.QWidget()
-            api_v = QtWidgets.QVBoxLayout(api_block)
-            api_v.setContentsMargins(0, 0, 0, 0)
-            api_row = QtWidgets.QHBoxLayout()
-            api_row.addWidget(self._api_input, 1)
-            api_actions = QtWidgets.QHBoxLayout()
-            self._api_reset_btn = QtWidgets.QPushButton("Reset to default")
-            self._api_reset_btn.clicked.connect(self._reset_api_address)
-            api_actions.addWidget(self._api_reset_btn)
-            self._api_test_btn = QtWidgets.QPushButton("Test")
-            self._api_test_btn.clicked.connect(self._test_api_address)
-            api_actions.addWidget(self._api_test_btn)
-            api_v.addLayout(api_row)
-            api_actions.addStretch(1)
-            api_v.addLayout(api_actions)
-            api_hint = QtWidgets.QLabel("Leave blank to use sc2tools.com")
-            api_hint.setObjectName("muted")
-            api_v.addWidget(api_hint)
-            self._api_error = QtWidgets.QLabel("")
-            self._api_error.setObjectName("fieldError")
-            self._api_error.setWordWrap(True)
-            api_v.addWidget(self._api_error)
-            self._api_test_status = QtWidgets.QLabel("")
-            self._api_test_status.setObjectName("muted")
-            self._api_test_status.setWordWrap(True)
-            api_v.addWidget(self._api_test_status)
-            self._api_input.editingFinished.connect(self._validate_api_address)
-            self._api_input.textChanged.connect(self._on_api_text_changed)
-            api_label = QtWidgets.QLabel(f"API base URL<br/><span style='color:{_TEXT_MUTED}'>Needs restart</span>")
-            api_label.setBuddy(self._api_input)
-            form.addRow(api_label, api_block)
-
-            self._handle_input = QtWidgets.QLineEdit()
-            self._handle_edit_origin = None
-            self._handle_input.textEdited.connect(self._on_handle_edited)
-            self._handle_input.setPlaceholderText(
-                "e.g. ReSpOnSe  (leave blank to use your current profile)",
-            )
-            self._handle_input.setToolTip(
-                "Your in-game player name. Used to identify which player "
-                "is YOU when no saved account ID identifies a player. "
-                "Leave blank to refresh your current account's profile. "
-                "Saved account IDs take priority. A name must uniquely "
-                "match one replay player, including any clan tag or a "
-                "case-sensitive substring. Only an edited value is saved "
-                "as an override for the linked account.",
-            )
-            form.addRow("Player handle", self._handle_input)
-
-            # Parse concurrency. Slider capped at the SMALLER of
-            # ``cpu_count`` and ``_PARSE_CONCURRENCY_USEFUL_MAX`` —
-            # not just ``cpu_count``. Why: the cloud's 120 req/min
-            # rate limit × 25-game upload batches caps total
-            # throughput at ~50 games/sec end-to-end. One parse
-            # worker delivers ~3-5 games/sec depending on replay
-            # length, so 8-12 workers already saturate the upload
-            # pipeline. Anything above that just queues parsed games
-            # in memory while the upload thread drains at the same
-            # rate. Capping the slider at the useful ceiling keeps
-            # the UI honest — moving it from 12 to 32 produces zero
-            # visible speedup, so we don't offer the option. Power
-            # users who self-host the cloud API with a higher rate
-            # limit can override via ``SC2TOOLS_PARSE_CONCURRENCY``.
-            cpu_count = max(1, os.cpu_count() or 4)
-            cpu_max = min(cpu_count, _PARSE_CONCURRENCY_USEFUL_MAX)
-            default_workers = min(4, cpu_max)
-            concurrency_block = QtWidgets.QWidget()
-            concurrency_h = QtWidgets.QHBoxLayout(concurrency_block)
-            concurrency_h.setContentsMargins(0, 0, 0, 0)
-            concurrency_h.setSpacing(10)
-            self._concurrency_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-            self._concurrency_slider.setRange(1, cpu_max)
-            self._concurrency_slider.setValue(default_workers)
-            self._concurrency_slider.setTickPosition(
-                QtWidgets.QSlider.TicksBelow,
-            )
-            # Tick every step. The slider only goes up to ~12 now so
-            # we don't need the high-density compression we used to
-            # apply for 32-thread monsters.
-            self._concurrency_slider.setTickInterval(1)
-            cpu_hint = (
-                f"capped at {cpu_max} (your CPU has {cpu_count} threads "
-                f"but uploads max out around {cpu_max} parsers — more "
-                f"workers won't speed anything up)"
-                if cpu_count > cpu_max
-                else f"capped at your CPU's {cpu_max} threads"
-            )
-            self._concurrency_slider.setToolTip(
-                f"How many replays to parse in parallel. Each worker "
-                f"is a separate process and consumes one CPU thread "
-                f"plus ~150 MB of sc2reader state. The cloud upload "
-                f"pipeline tops out near 50 games/sec, so 8-12 parse "
-                f"workers already saturate it — {cpu_hint}. Takes "
-                f"effect on next agent restart."
-            )
-            self._concurrency_value_label = QtWidgets.QLabel()
-            self._concurrency_value_label.setMinimumWidth(96)
-
-            def _refresh_label(val: int) -> None:
-                self._concurrency_value_label.setText(
-                    f"{int(val)} / {cpu_max} workers",
-                )
-
-            self._concurrency_slider.valueChanged.connect(_refresh_label)
-            _refresh_label(default_workers)
-            concurrency_h.addWidget(self._concurrency_slider, 1)
-            concurrency_h.addWidget(self._concurrency_value_label)
-            self._concurrency_slider.setEnabled(False)
-            form.addRow("Workers after restart", concurrency_block)
-
-            # Upload concurrency. Replaces the older slider with a
-            # 1-or-2 button group: those are the only values worth
-            # offering on the production cloud. The 120 req/min rate
-            # limit means 1 worker uses ~half the budget and 2 uses
-            # the full budget on a typical home connection; 3+ would
-            # just produce 429 retries that settle at the same
-            # throughput, so there's no reason to expose them in the
-            # UI. Power users on a self-hosted API with a higher
-            # rate limit can still override via the
-            # ``SC2TOOLS_UPLOAD_CONCURRENCY`` env var.
-            #
-            # Click-to-apply: each button click immediately fires a
-            # save (no need to click "Save settings") AND hot-swaps
-            # the live upload queue's worker count via the runner's
-            # save handler. Takes effect on the next batch the
-            # agent issues, no restart required.
-            from ..config import (  # local: keeps test imports cheap
-                _DEFAULT_UPLOAD_CONCURRENCY,
-                UPLOAD_CONCURRENCY_USEFUL_MAX,
-                _DEFAULT_UPLOAD_BATCH_SIZE,
-                UPLOAD_BATCH_SIZE_USEFUL_MAX,
-            )
-            upload_conc_block = QtWidgets.QWidget()
-            upload_conc_h = QtWidgets.QHBoxLayout(upload_conc_block)
-            upload_conc_h.setContentsMargins(0, 0, 0, 0)
-            upload_conc_h.setSpacing(8)
-            self._upload_conc_group = QtWidgets.QButtonGroup(self)
-            self._upload_conc_group.setExclusive(True)
-            self._upload_conc_buttons: dict[int, QtWidgets.QPushButton] = {}
-            # Two buttons: 1 worker (safe) and 2 workers (max).
-            # If we ever want to ship a higher option, add it here
-            # — UPLOAD_CONCURRENCY_USEFUL_MAX is still 4 in
-            # config.py, but we deliberately only expose 1/2 in
-            # the UI because anything past 2 risks 429s on the
-            # production rate limit. The state and env var both
-            # accept higher; this is just a UI-side choice.
-            for n in (1, 2):
-                btn = QtWidgets.QPushButton(f"{n}")
-                btn.setCheckable(True)
-                btn.setMinimumWidth(56)
-                btn.setCursor(QtCore.Qt.PointingHandCursor)
-                btn.setObjectName("segment")
-                btn.setToolTip(
-                    f"Use {n} parallel upload "
-                    f"worker{'' if n == 1 else 's'}. "
-                    + (
-                        "Conservative — uses ~half the cloud rate "
-                        "limit budget."
-                        if n == 1
-                        else "Recommended — saturates the 120 req/min "
-                             "rate limit without 429s on a typical "
-                             "home connection."
-                    )
-                )
-                self._upload_conc_group.addButton(btn, n)
-                upload_conc_h.addWidget(btn)
-                self._upload_conc_buttons[n] = btn
-            # Default selection — overridden in _populate_settings if
-            # state has an explicit override.
-            initial_default = max(
-                1, min(2, _DEFAULT_UPLOAD_CONCURRENCY),
-            )
-            self._upload_conc_buttons[initial_default].setChecked(True)
-            # Track the last value we saved so a no-op click (user
-            # clicks the already-selected button) skips the round-
-            # trip through _on_save_settings.
-            self._upload_conc_last_saved: int = initial_default
-            upload_conc_h.addStretch(1)
-            # Hint text trailing the buttons — explains the
-            # rate-limit reasoning so the user knows why we don't
-            # expose more options.
-            upload_conc_hint = QtWidgets.QLabel(
-                "More than 2 risks rate-limit retries. Click to "
-                "apply instantly — no restart needed."
-            )
-            upload_conc_hint.setWordWrap(True)
-            upload_conc_hint.setObjectName("hint")
-            upload_conc_h.addWidget(upload_conc_hint, 2)
-            self._upload_concurrency_feedback = upload_conc_hint
-            form.addRow("Upload concurrency", upload_conc_block)
-
-            # Auto-save handler. Connected via ``buttonClicked``
-            # which fires for every click — including a re-click of
-            # the already-selected button — so we de-dupe on the
-            # ``_upload_conc_last_saved`` cache.
-            def _on_upload_conc_clicked(btn: QtWidgets.QAbstractButton) -> None:
-                if not btn.isChecked():
-                    # Defensive: an exclusive group never reports
-                    # the unchecked button via buttonClicked, but
-                    # this guard makes the contract explicit.
-                    return
-                n = self._upload_conc_group.id(btn)
-                if n == self._upload_conc_last_saved:
-                    return
-                payload = SettingsPayload(upload_concurrency=n, show_summary=False)
-                try:
-                    ui._on_save_settings(payload)
-                except Exception:  # noqa: BLE001
-                    log.warning("upload_concurrency_save_failed")
-                    saved_button = self._upload_conc_group.button(self._upload_conc_last_saved)
-                    if saved_button:
-                        saved_button.setChecked(True)
-                    self._upload_concurrency_feedback.setText("Couldn't save upload concurrency. Try again.")
-                else:
-                    self._upload_conc_last_saved = n
-                    self._upload_concurrency_feedback.setText(f"Applied instantly · {n} concurrent upload" + ("s" if n != 1 else ""))
-
-            self._upload_conc_group.buttonClicked.connect(
-                _on_upload_conc_clicked,
+            return build_settings_page(
+                self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets,
+                initial_settings=ui._initial_settings,
+                checkin_controller=ui._build_checkin_controller,
+                checkin_available=ui._build_checkin_available,
+                open_folder=_open_path_in_explorer,
             )
 
-            # Upload batch size. How many games we cram into a single
-            # ``POST /v1/games``. Bigger batches = more throughput per
-            # rate-limit-budget unit; capped at
-            # ``UPLOAD_BATCH_SIZE_USEFUL_MAX`` (50) by the 5 MB body
-            # limit on long-Zerg-game outliers.
-            upload_batch_block = QtWidgets.QWidget()
-            upload_batch_h = QtWidgets.QHBoxLayout(upload_batch_block)
-            upload_batch_h.setContentsMargins(0, 0, 0, 0)
-            upload_batch_h.setSpacing(10)
-            self._upload_batch_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-            self._upload_batch_slider.setRange(1, UPLOAD_BATCH_SIZE_USEFUL_MAX)
-            self._upload_batch_slider.setValue(_DEFAULT_UPLOAD_BATCH_SIZE)
-            self._upload_batch_slider.setTickPosition(
-                QtWidgets.QSlider.TicksBelow,
-            )
-            # Sparser tick marks at 5-game intervals — 50 ticks would
-            # turn into a comb on the slider track.
-            self._upload_batch_slider.setTickInterval(5)
-            self._upload_batch_slider.setToolTip(
-                f"How many games to pack into one HTTP request. The "
-                f"cloud accepts {UPLOAD_BATCH_SIZE_USEFUL_MAX}-game "
-                f"batches up to 5 MB; long Zerg games with full "
-                f"build_logs run ~150 KB each, so the default of "
-                f"{_DEFAULT_UPLOAD_BATCH_SIZE} leaves margin for "
-                f"outliers. Bigger batches × the 120 req/min rate "
-                f"limit = more throughput. Applies to the next batch."
-            )
-            self._upload_batch_value_label = QtWidgets.QLabel()
-            self._upload_batch_value_label.setMinimumWidth(96)
-
-            def _refresh_upload_batch_label(val: int) -> None:
-                self._upload_batch_value_label.setText(
-                    f"{int(val)} games / req",
-                )
-
-            self._upload_batch_slider.valueChanged.connect(
-                _refresh_upload_batch_label,
-            )
-            _refresh_upload_batch_label(_DEFAULT_UPLOAD_BATCH_SIZE)
-            upload_batch_h.addWidget(self._upload_batch_slider, 1)
-            upload_batch_h.addWidget(self._upload_batch_value_label)
-            form.addRow("Upload batch size", upload_batch_block)
-
-            # Date-range sync filter — mirrors the website's filter bar
-            # (apps/web/lib/datePresets.ts). Restricts which replays the
-            # watcher uploads. New users on PCs with thousands of
-            # historical replays use this to scope the initial backfill
-            # to "Current season" or "Custom range" so they don't grind
-            # through years of old games to hydrate today's stats.
-            from .. import sync_filter as sf  # local import keeps tests cheap
-
-            filter_block = QtWidgets.QWidget()
-            filter_v = QtWidgets.QVBoxLayout(filter_block)
-            filter_v.setContentsMargins(0, 0, 0, 0)
-            filter_v.setSpacing(6)
-
-            self._filter_combo = QtWidgets.QComboBox()
-            cur = sf.current_season()
-            # Build the menu with the same vocabulary the website uses.
-            # Per-season entries cover the last six seasons — beyond
-            # that, "Custom range" is the right escape hatch.
-            self._filter_combo.addItem("All time", "all")
-            self._filter_combo.addItem(
-                f"Current season (Season {cur})", "current_season",
-            )
-            self._filter_combo.addItem("Last 30 days", sf.PRESET_LAST_30_DAYS)
-            if ui._initial_settings.sync_filter_preset == sf.PRESET_SINCE_SETUP:
-                self._filter_combo.addItem("Only games since setup", sf.PRESET_SINCE_SETUP)
-            for n in range(cur, max(cur - 6, 0), -1):
-                self._filter_combo.addItem(f"Season {n}", f"season:{n}")
-            self._filter_combo.addItem("Custom date range…", "custom")
-            self._filter_combo.setToolTip(
-                "Restrict which replays get uploaded. The watcher still "
-                "watches every folder you've added — replays played "
-                "outside the chosen window are skipped, not deleted. "
-                "Existing cloud uploads are not removed when you change "
-                "this setting; the agent runs a fresh sweep on save."
-            )
-            filter_v.addWidget(self._filter_combo)
-
-            # Custom range row — visible only when "Custom" is picked.
-            self._filter_custom_row = QtWidgets.QWidget()
-            custom_h = QtWidgets.QHBoxLayout(self._filter_custom_row)
-            custom_h.setContentsMargins(0, 0, 0, 0)
-            custom_h.setSpacing(8)
-            custom_h.addWidget(QtWidgets.QLabel("From"))
-            self._filter_since = QtWidgets.QDateEdit()
-            self._filter_since.setCalendarPopup(True)
-            self._filter_since.setDisplayFormat(_ISO_DATE)
-            self._filter_since.setDate(QtCore.QDate.currentDate().addMonths(-1))
-            custom_h.addWidget(self._filter_since)
-            custom_h.addWidget(QtWidgets.QLabel("to"))
-            self._filter_until = QtWidgets.QDateEdit()
-            self._filter_until.setCalendarPopup(True)
-            self._filter_until.setDisplayFormat(_ISO_DATE)
-            self._filter_until.setDate(QtCore.QDate.currentDate())
-            custom_h.addWidget(self._filter_until)
-            custom_h.addStretch(1)
-            filter_v.addWidget(self._filter_custom_row)
-
-            def _toggle_custom_visibility() -> None:
-                is_custom = self._filter_combo.currentData() == "custom"
-                self._filter_custom_row.setVisible(is_custom)
-
-            self._filter_combo.currentIndexChanged.connect(
-                lambda _idx: _toggle_custom_visibility(),
-            )
-            _toggle_custom_visibility()
-
-            form.addRow(self._help_label("Sync date range", "desktop-app-sync-range"), filter_block)
-
-            performance = QtWidgets.QWidget()
-            performance_v = QtWidgets.QVBoxLayout(performance)
-            performance_v.setContentsMargins(0,0,0,0)
-            self._speed_combo = QtWidgets.QComboBox()
-            for label, key in (("Gentle", "gentle"),("Balanced", "balanced"),("Maximum", "maximum")):
-                self._speed_combo.addItem(label,key)
-            mode = ui._initial_settings.background_import_speed or "balanced"
-            self._speed_combo.setCurrentIndex(self._speed_combo.findData(mode))
-            performance_v.addWidget(self._speed_combo)
-            from ..game_activity import background_workers
-            self._speed_combo.currentIndexChanged.connect(lambda _index:self._concurrency_slider.setValue(
-                background_workers(self._speed_combo.currentData(),_PARSE_CONCURRENCY_USEFUL_MAX)))
-            performance_hint = QtWidgets.QLabel("Background worker speed applies after restarting SC2 Tools.")
-            performance_hint.setWordWrap(True)
-            performance_v.addWidget(performance_hint)
-            self._pause_history_check = QtWidgets.QCheckBox("Pause history import while I'm in a game")
-            self._pause_history_check.setChecked(ui._initial_settings.pause_history_in_game is not False)
-            self._battery_check = QtWidgets.QCheckBox("Pause on battery")
-            self._battery_check.setChecked(ui._initial_settings.pause_on_battery is True)
-            performance_v.addWidget(self._pause_history_check)
-            performance_v.addWidget(self._battery_check)
-            form.addRow(self._help_label("Performance", "desktop-app-performance"), performance)
-
-            self._log_combo = QtWidgets.QComboBox()
-            self._log_combo.addItems(["INFO", "DEBUG", "WARNING", "ERROR"])
-            form.addRow("Log level", self._log_combo)
-
-            # Replay folders: a real list, because StarCraft II writes
-            # replays to a separate folder per (region, toon) — players
-            # who use multiple regions or BattleTags need more than
-            # one entry. Detected folders are always watched unless the
-            # user removes them here; saving an empty list resets the
-            # agent to detection alone.
-            #
-            # Unsaved removals, sent with Save so only folders the user
-            # removed become exclusions (not ones that appeared later).
-            self._folders_removed: List[str] = []
-            # Set while the list has unsaved edits, so a folder the agent
-            # starts watching meanwhile is appended, not a list rebuild.
-            self._folders_dirty = False
-            folder_block = QtWidgets.QWidget()
-            folder_v = QtWidgets.QVBoxLayout(folder_block)
-            folder_v.setContentsMargins(0, 0, 0, 0)
-            folder_v.setSpacing(6)
-
-            self._folder_list = QtWidgets.QListWidget()
-            self._folder_list.setSelectionMode(
-                QtWidgets.QAbstractItemView.ExtendedSelection,
-            )
-            self._folder_list.setUniformItemSizes(False)
-            self._folder_list.setAlternatingRowColors(False)
-            self._folder_list.setMinimumHeight(96)
-            self._folder_list.setHorizontalScrollBarPolicy(
-                QtCore.Qt.ScrollBarAsNeeded,
-            )
-            self._folder_list.setToolTip(
-                "Each region and battle.net handle stores replays in a "
-                "different folder. Add every Replays/Multiplayer folder "
-                "you want synced.",
-            )
-            folder_v.addWidget(self._folder_list)
-            from .folder_rows import build_folder_rows
-            self._folder_rows = build_folder_rows(self._folder_list, QtCore=QtCore, QtGui=QtGui,
-                                                  QtWidgets=QtWidgets, open_folder=_open_path_in_explorer)
-            self._folder_delete = QtGui.QShortcut(QtGui.QKeySequence.Delete, self._folder_list)
-            self._folder_delete.setContext(QtCore.Qt.WidgetWithChildrenShortcut)
-            self._folder_delete.activated.connect(self._remove_folder_rows)
-            self._folder_empty = QtWidgets.QWidget()
-            empty_layout = QtWidgets.QVBoxLayout(self._folder_empty)
-            empty_layout.addWidget(QtWidgets.QLabel("We couldn't find StarCraft II replays"))
-            locate = QtWidgets.QPushButton("Locate folder…")
-            locate.clicked.connect(self._click_choose_folder)
-            empty_layout.addWidget(locate)
-            folder_v.addWidget(self._folder_empty)
-            self._folder_undo = QtWidgets.QPushButton("Undo folder change")
-            self._folder_undo.clicked.connect(self._undo_folder_change)
-            self._folder_undo.hide()
-            folder_v.addWidget(self._folder_undo)
-
-            folder_btns = QtWidgets.QHBoxLayout()
-            folder_btns.setSpacing(6)
-            add_btn = QtWidgets.QPushButton("Add folder…")
-            add_btn.clicked.connect(self._add_folder_row)
-            folder_btns.addWidget(add_btn)
-            remove_btn = QtWidgets.QPushButton("Remove selected")
-            remove_btn.setToolTip(
-                "Stop watching the selected folders. A folder found "
-                "automatically stays unwatched until Auto-detect or "
-                "Add folder… brings it back.",
-            )
-            remove_btn.clicked.connect(self._remove_folder_rows)
-            folder_btns.addWidget(remove_btn)
-            auto_btn = QtWidgets.QPushButton("Auto-detect")
-            auto_btn.setToolTip(
-                "Scan your StarCraft II Accounts folder and add every "
-                "Replays/Multiplayer directory found. Existing entries "
-                "are preserved; only missing folders are appended.",
-            )
-            auto_btn.clicked.connect(self._auto_detect_folders)
-            folder_btns.addWidget(auto_btn)
-            folder_btns.addStretch(1)
-            folder_v.addLayout(folder_btns)
-
-            form.addRow(self._help_label("Replay folders", "replay-folders"), folder_block)
-
-            from .. import autostart as autostart_mod  # local import keeps import-time safe
-
-            self._autostart_check = QtWidgets.QCheckBox(
-                "Run SC2 Tools Agent on Windows startup",
-            )
-            self._autostart_check.setEnabled(autostart_mod.is_supported())
-            if not autostart_mod.is_supported():
-                self._autostart_check.setToolTip(
-                    "Only available on Windows. On macOS/Linux configure "
-                    "your session manager to launch the agent at login.",
-                )
-            form.addRow("", self._autostart_check)
-
-            self._minimized_check = QtWidgets.QCheckBox(
-                "Start minimised to the system tray",
-            )
-            form.addRow("", self._minimized_check)
-
-            self._notifications_combo = QtWidgets.QComboBox()
-            for label, mode in (("Off", "off"), ("Important", "important"), ("Every game", "all")):
-                self._notifications_combo.addItem(label, mode)
-            self._notifications_combo.setToolTip("Every game includes a result notification on this PC. Replay-history imports stay quiet.")
-            form.addRow("Desktop notifications", self._notifications_combo)
-            self._close_behavior_combo = QtWidgets.QComboBox()
-            self._close_behavior_combo.addItem("Keep syncing in the tray", True)
-            self._close_behavior_combo.addItem("Quit SC2 Tools", False)
-            form.addRow("When closing the window", self._close_behavior_combo)
-
-            # Auto-update consent — the state flag shipped in 0.13.4's
-            # updater hardening but had no UI surface, so the only way
-            # to opt out was hand-editing agent.json. Unchecking turns
-            # the updater notify-only (the badge + notice still appear;
-            # nothing installs behind the user's back).
-            self._autoupdate_check = QtWidgets.QCheckBox(
-                "Install agent updates automatically (recommended)",
-            )
-            self._autoupdate_check.setToolTip(
-                "When enabled, new releases download and install "
-                "silently and the agent restarts minimised. When "
-                "disabled, the agent only notifies — except below the "
-                "cloud's minimum supported version, where the update "
-                "is required to keep working.",
-            )
-            form.addRow("", self._autoupdate_check)
-
-            capture_block = QtWidgets.QWidget()
-            capture_v = QtWidgets.QVBoxLayout(capture_block)
-            capture_v.setContentsMargins(0, 0, 0, 0)
-            capture_v.setSpacing(6)
-            self._replay_capture_check = QtWidgets.QCheckBox(
-                "Automatically capture map replays (uses more CPU)",
-            )
-            capture_v.addWidget(self._replay_capture_check)
-            self._replay_capture_feedback = self._instant_feedback()
-            capture_v.addWidget(self._replay_capture_feedback)
-            capture_help = QtWidgets.QLabel(
-                "Automatically records detailed movement, attacks, spells and creep "
-                "for new and re-synced replays. Uses StarCraft II in the background "
-                "and substantial CPU for several minutes per replay. Saved recordings "
-                "are reused. For games already synced, use Re-sync once. When off, "
-                "Generate accurate playback on the website records one replay. "
-                "This switch applies immediately."
-            )
-            capture_help.setObjectName("muted")
-            capture_help.setWordWrap(True)
-            capture_v.addWidget(capture_help)
-            form.addRow("Map replay", capture_block)
-
-            def section(name, fields):
-                group = QtWidgets.QGroupBox(name, page)
-                destination = QtWidgets.QFormLayout(group)
-                destination.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
-                for field in fields:
-                    row = form.takeRow(field)
-                    caption = row.labelItem.widget() if row.labelItem else None
-                    if caption is not None:
-                        if isinstance(caption, QtWidgets.QLabel) and field.focusPolicy() != QtCore.Qt.NoFocus:
-                            caption.setBuddy(field)
-                        destination.addRow(caption, field)
-                    else:
-                        destination.addRow(field)
-                return group, destination
-
-            replays, _ = section("Replays", (folder_block, filter_block, self._handle_input))
-            app_group, _ = section("App · Saved with Save", (self._autostart_check, self._minimized_check,
-                                                               self._notifications_combo, self._close_behavior_combo))
-            updates, _ = section("Updates · Saved with Save", (self._autoupdate_check,))
-            map_replay, _ = section("Map replay · Applies instantly", (capture_block,))
-            advanced, advanced_form = section("Advanced", (api_block, concurrency_block, upload_conc_block,
-                                                             upload_batch_block, performance, self._log_combo))
-            for group in (replays, app_group, updates):
-                v.addWidget(group)
-            from .build_checkin_settings import CheckinSettingsGroup
-
-            # Applies immediately (cloud preference), like the toggles above.
-            self._checkin_settings = CheckinSettingsGroup(
-                controller=ui._build_checkin_controller,
-                available=ui._build_checkin_available,
-                on_help=lambda: self._open_help("build-check-in"),
-                on_preview=lambda kind: self._checkin_host.show_preview(kind),
-                on_reset_positions=lambda: self._checkin_host.reset_positions(),
-                on_open_queue=lambda: self._open_checkin_queue(),
-            )
-            obs = self._build_obs_card()
-            v.addWidget(obs)
-            v.addWidget(self._checkin_settings)
-            v.addWidget(map_replay)
-            self._settings_advanced = QtWidgets.QPushButton("Show Advanced settings")
-            self._settings_advanced.setCheckable(True)
-            self._settings_advanced.toggled.connect(advanced.setVisible)
-            self._settings_advanced.toggled.connect(lambda opened: self._settings_advanced.setText(
-                "Hide Advanced settings" if opened else "Show Advanced settings",
-            ))
-            advanced.hide()
-            reset = QtWidgets.QPushButton("Reset advanced draft defaults")
-            reset.clicked.connect(self._reset_advanced_draft_defaults)
-            advanced_form.addRow(reset)
-            v.addWidget(self._settings_advanced)
-            v.addWidget(advanced)
-            anchors = {"Replays": replays, "App": app_group, "Updates": updates, "Streaming & OBS": obs,
-                       "Build check-in": self._checkin_settings, "Map replay": map_replay,
-                       "Advanced": self._settings_advanced}
-            section_select.addItem("Jump to a section…", None)
-            for section_name in anchors:
-                section_select.addItem(section_name, section_name)
-            def jump_to_section(index):
-                name = section_select.itemData(index)
-                if name == "Advanced":
-                    self._settings_advanced.setChecked(True)
-                if name in anchors:
-                    scroller.ensureWidgetVisible(anchors[name], 8, 8)
-                    section_select.setCurrentIndex(0)
-            section_select.activated.connect(jump_to_section)
-
-            self._settings_status = QtWidgets.QLabel("")
-            self._settings_status.setObjectName("muted")
-            self._settings_status.setWordWrap(True)
-            self._settings_status.setAccessibleName("Settings save status")
-            v.addWidget(self._settings_status)
-            self._settings_restart_button = QtWidgets.QPushButton("Restart agent now")
-            self._settings_restart_button.clicked.connect(self._confirm_restart)
-            self._settings_restart_button.hide()
-            v.addWidget(self._settings_restart_button, alignment=QtCore.Qt.AlignRight)
-            self._settings_page = page
-            self._settings_draft_footer = QtWidgets.QWidget(page)
-            row = QtWidgets.QHBoxLayout(self._settings_draft_footer)
-            row.setContentsMargins(0, 0, 0, 0)
-            self._settings_draft_label = QtWidgets.QLabel()
-            row.addWidget(self._settings_draft_label, 1)
-            revert = QtWidgets.QPushButton("Revert")
-            revert.clicked.connect(self._revert_settings_draft)
-            row.addWidget(revert)
-            save_btn = self._save_settings_btn = QtWidgets.QPushButton("Save (Ctrl+S)")
-            save_btn.setObjectName("primary")
-            save_btn.clicked.connect(self._click_save_settings)
-            row.addWidget(save_btn)
-            v.addWidget(self._settings_draft_footer)
-
-            maintenance = QtWidgets.QGroupBox("Maintenance")
-            maintenance_layout = QtWidgets.QVBoxLayout(maintenance)
-            warning = QtWidgets.QLabel("Re-sync rebuilds your local upload cursor and revisits your replay library.")
-            warning.setWordWrap(True)
-            maintenance_layout.addWidget(warning)
-            self._resync_btn.setText("Re-sync replay library…")
-            self._resync_btn.setObjectName("dangerButton")
-            maintenance_layout.addWidget(self._resync_btn)
-            v.addWidget(maintenance)
-            v.addStretch(1)
-            scroller.setWidget(page)
-            from .qt_helpers import install_responsive_forms
-            self._settings_responsive_forms = install_responsive_forms(scroller, QtCore=QtCore, QtWidgets=QtWidgets)
-            return scroller
+        def _on_upload_conc_clicked(self, btn: QtWidgets.QAbstractButton) -> None:
+            if not btn.isChecked():
+                # Defensive: an exclusive group never reports
+                # the unchecked button via buttonClicked, but
+                # this guard makes the contract explicit.
+                return
+            n = self._upload_conc_group.id(btn)
+            if n == self._upload_conc_last_saved:
+                return
+            payload = SettingsPayload(upload_concurrency=n, show_summary=False)
+            try:
+                ui._on_save_settings(payload)
+            except Exception:  # noqa: BLE001
+                log.warning("upload_concurrency_save_failed")
+                saved_button = self._upload_conc_group.button(self._upload_conc_last_saved)
+                if saved_button:
+                    saved_button.setChecked(True)
+                self._upload_concurrency_feedback.setText("Couldn't save upload concurrency. Try again.")
+            else:
+                self._upload_conc_last_saved = n
+                self._upload_concurrency_feedback.setText(f"Applied instantly · {n} concurrent upload" + ("s" if n != 1 else ""))
 
         def _populate_obs_settings(self, initial) -> None:
             """Seed the OBS card from saved state.
@@ -4090,8 +3458,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             since_iso: Optional[str] = None
             until_iso: Optional[str] = None
             if preset == "custom":
-                since_iso = self._filter_since.date().toString(_ISO_DATE)
-                until_iso = self._filter_until.date().toString(_ISO_DATE)
+                since_iso = self._filter_since.date().toString(SYNC_DATE_FORMAT)
+                until_iso = self._filter_until.date().toString(SYNC_DATE_FORMAT)
             elif preset == "since_setup":
                 since_iso = ui._initial_settings.sync_filter_since
             # Upload concurrency comes from the QButtonGroup's
@@ -4818,13 +4186,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._filter_combo.setCurrentIndex(0)
             if initial.sync_filter_since:
                 qd = QtCore.QDate.fromString(
-                    initial.sync_filter_since[:10], _ISO_DATE,
+                    initial.sync_filter_since[:10], SYNC_DATE_FORMAT,
                 )
                 if qd.isValid():
                     self._filter_since.setDate(qd)
             if initial.sync_filter_until:
                 qd = QtCore.QDate.fromString(
-                    initial.sync_filter_until[:10], _ISO_DATE,
+                    initial.sync_filter_until[:10], SYNC_DATE_FORMAT,
                 )
                 if qd.isValid():
                     self._filter_until.setDate(qd)
