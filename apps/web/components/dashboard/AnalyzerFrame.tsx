@@ -15,7 +15,7 @@ import { DoctorBanner } from "@/components/analyzer/DoctorBanner";
 import { NoGamesYet } from "@/components/analyzer/EmptyStates";
 import { Card } from "@/components/ui/Card";
 import { checklistVisible, type ChecklistMe } from "@/components/onboarding/checklistState";
-import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
+import { LazyImportProgressCard } from "@/components/imports/LazyImportProgressCard";
 import { useImportStatus } from "@/components/imports/useImportStatus";
 import { markAppSession } from "@/lib/appSession";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
@@ -215,7 +215,7 @@ function ActiveImportCard() {
   }
   return (
     <Card>
-      <ImportProgressCard
+      <LazyImportProgressCard
         job={importStatus.job}
         active={importStatus.active}
         pct={importStatus.pct}

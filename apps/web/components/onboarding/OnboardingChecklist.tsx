@@ -8,7 +8,7 @@ import { Check, Download, Play } from "lucide-react";
 import { apiCall } from "@/lib/clientApi";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
+import { LazyImportProgressCard } from "@/components/imports/LazyImportProgressCard";
 import { useImportStatus } from "@/components/imports/useImportStatus";
 import { useChecklistDismiss } from "./useChecklistDismiss";
 import type { PairedDevice } from "./pairingTypes";
@@ -187,7 +187,7 @@ export function OnboardingChecklist({
           expanded={pairDone && !playDone && (importStatus.active || !!importStatus.job)}
           expandedContent={
             pairDone && importStatus.job && (importStatus.active || !playDone) ? (
-              <ImportProgressCard
+              <LazyImportProgressCard
                 job={importStatus.job}
                 active={importStatus.active}
                 pct={importStatus.pct}
