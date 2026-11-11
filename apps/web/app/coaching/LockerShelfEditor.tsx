@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
@@ -12,9 +12,9 @@ const FILE_TYPES: Partial<Record<ShelfKind, string>> = {
   voice: "audio/*", video: "video/*", image: "image/png,image/jpeg,image/webp,image/gif,image/avif", replay: ".SC2Replay", pdf: ".pdf",
 };
 
-export function LockerShelfEditor({ library, onClose, onAdd, busy }: {
+export function LockerShelfEditor({ library, onClose, onAdd, busy, retryNotice }: {
   library: boolean; onClose: () => void; busy: boolean;
-  onAdd: (item: ShelfItem, asset?: [string, ShelfAsset]) => Promise<boolean>;
+  onAdd: (item: ShelfItem, asset?: [string, ShelfAsset]) => Promise<boolean>; retryNotice?: ReactNode;
 }) {
   const [kind, setKind] = useState<ShelfKind>("notes"), [title, setTitle] = useState(""), [notes, setNotes] = useState("");
   const [file, setFile] = useState<File>(), [link, setLink] = useState("");
@@ -24,7 +24,7 @@ export function LockerShelfEditor({ library, onClose, onAdd, busy }: {
   const working = reading || busy;
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (working || inFlight.current || !title.trim()) return;
+    if (working || retryNotice || inFlight.current || !title.trim()) return;
     setError("");
     const href = shelfLink(link);
     if (link.trim() && !href) { setError("Enter a valid HTTP or HTTPS link."); return; }
@@ -46,6 +46,7 @@ export function LockerShelfEditor({ library, onClose, onAdd, busy }: {
   }
   return <Modal open title={library ? "Add library item" : "Add shelf item"} onClose={() => { if (!working) onClose(); }}>
     <form className="space-y-4" onSubmit={event => void submit(event)}>
+      {retryNotice}
       {library ? <p className="text-caption text-text-muted">Coaches share this library. Choose resources you can reuse with any student.</p> : null}
       <Field label="Item type"><Select value={kind} disabled={working} onChange={event => {
         setKind(event.target.value as ShelfKind); setFile(undefined); setLink(""); setError("");
@@ -58,7 +59,7 @@ export function LockerShelfEditor({ library, onClose, onAdd, busy }: {
       {error ? <p role="alert" className="text-caption text-danger">{error}</p> : null}
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="secondary" disabled={working} onClick={onClose}>Cancel</Button>
-        <Button type="submit" disabled={working || !title.trim()}>{working ? "Adding…" : "Add item"}</Button>
+        <Button type="submit" disabled={working || !!retryNotice || !title.trim()}>{working ? "Adding…" : "Add item"}</Button>
       </div>
     </form>
   </Modal>;

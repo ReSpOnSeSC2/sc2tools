@@ -1486,8 +1486,7 @@ class CoachingService {
     const zone = canonicalTimeZone(viewerTimeZone) || "UTC";
     const allVisible = visibleBookings(doc, actor, new Date());
     const allVisibleIds = new Set(allVisible.map((booking) => booking.id));
-    const visibleUnread = unreadBookings(doc, actor, userId)
-      .filter((booking) => allVisibleIds.has(booking.id));
+    const visibleUnread = await this._visibleUnreadBookings(doc, actor, userId, allVisibleIds);
     const selectedIds = new Set();
     const visible = [...visibleUnread, ...allVisible]
       .filter((booking) => {
@@ -1741,7 +1740,7 @@ class CoachingService {
       bookingId: booking.id,
       kind: "booked",
       startAt: booking.startAt.toISOString(),
-    });
+    }, actor.coach.id, "coach");
     return { booking: publicBooking(booking) };
   }
 
@@ -1768,7 +1767,8 @@ class CoachingService {
     if (toDate(booking.startAt).getTime() <= Date.now()) {
       throw coachingError(409, "booking_started", "Sessions cannot be cancelled after they start.");
     }
-    const at = new Date();
+    const priorUpdate = toDate(booking.updatedAt || booking.createdAt).getTime();
+    const at = new Date(Math.max(Date.now(), priorUpdate + 1));
     const isCoach = actor.kind === "coach";
     /** @type {Record<string,unknown>} */
     const set = {
@@ -1806,11 +1806,16 @@ class CoachingService {
       throw coachingError(409, "booking_cancelled", "That booking was already changed.");
     }
     const recipient = isCoach ? booking.studentUserId : actor.coach.userId;
+    try {
+      if (actor.coach.userId) await this.notifications?.markDeliveryEventsRead(actor.coach.userId, [bookingAlertEvent(booking)]);
+    } catch (err) {
+      this.logger?.warn({ err }, "coaching_notification_receipt_write_failed");
+    }
     await this._notify(recipient, {
       bookingId,
       kind: "cancelled",
       startAt: toDate(booking.startAt).toISOString(),
-    });
+    }, actor.coach.id, isCoach ? "student" : "coach");
     return { ok: true };
   }
 
@@ -1830,15 +1835,35 @@ class CoachingService {
     const visibleIds = new Set(
       visibleBookings(doc, actor, new Date()).map((booking) => booking.id),
     );
-    const unread = unreadBookings(doc, actor, userId)
-      .filter((booking) => visibleIds.has(booking.id))
-      .slice(0, MAX_BOOKINGS_RETURNED);
+    const unread = await this._visibleUnreadBookings(doc, actor, userId, visibleIds);
     const latest = unread[0] || null;
     return {
       eligible: true,
       unreadCount: unread.length,
       alert: latest ? publicAlert(latest, actor.kind) : null,
     };
+  }
+
+  /**
+   * Shared inbox receipts take precedence. Legacy bookings without a receipt
+   * still use their calendar read fields until they leave the visible window.
+   * @param {any} doc @param {any} actor @param {string} userId @param {Set<string>} visibleIds
+   */
+  async _visibleUnreadBookings(doc, actor, userId, visibleIds) {
+    const candidates = unreadBookings(doc, actor, userId).filter(booking => visibleIds.has(booking.id));
+    if (!this.notifications || !candidates.length) return candidates.slice(0, MAX_BOOKINGS_RETURNED);
+    const unread = [];
+    try {
+      for (let offset = 0; offset < candidates.length && unread.length < MAX_BOOKINGS_RETURNED; offset += MAX_BOOKINGS_RETURNED) {
+        const batch = candidates.slice(offset, offset + MAX_BOOKINGS_RETURNED);
+        const read = await this.notifications.readDeliveryEvents(userId, batch.map(bookingAlertEvent));
+        unread.push(...batch.filter(booking => !read.has(bookingAlertEvent(booking))));
+      }
+      return unread.slice(0, MAX_BOOKINGS_RETURNED);
+    } catch (err) {
+      this.logger?.warn({ err }, "coaching_notification_receipt_read_failed");
+      return candidates.slice(0, MAX_BOOKINGS_RETURNED);
+    }
   }
 
   /**
@@ -1871,12 +1896,18 @@ class CoachingService {
       return { bookingId, updatedAt };
     }).filter((alert) => alert !== null));
     if (alerts.length === 0) return { ok: true };
+    const snapshot = new Set(alerts.map(({ bookingId, updatedAt }) => `${bookingId}:${updatedAt.toISOString()}`));
+    const visible = visibleBookings(await this._calendarDoc(actor.coach.id), actor, new Date());
+    const matched = visible.filter(booking => snapshot.has(`${booking.id}:${toDate(booking.updatedAt || booking.createdAt).toISOString()}`));
+    if (!matched.length) return { ok: true };
     const field = actor.kind === "coach" ? "coachReadAt" : "studentReadAt";
     const at = new Date();
     const bookingFilter = {
-      $or: alerts.map((alert) => ({
-        "booking.id": alert.bookingId,
-        "booking.updatedAt": alert.updatedAt,
+      $or: matched.map(booking => ({
+        "booking.id": booking.id,
+        ...(booking.updatedAt ? { "booking.updatedAt": toDate(booking.updatedAt) } : {
+          "booking.updatedAt": null, "booking.createdAt": toDate(booking.createdAt),
+        }),
       })),
       [`booking.${field}`]: null,
       ...(actor.kind === "student"
@@ -1896,6 +1927,7 @@ class CoachingService {
         { arrayFilters: [bookingFilter] },
       ),
     );
+    await this.notifications?.markDeliveryEventsRead(userId, matched.map(bookingAlertEvent));
     return { ok: true };
   }
 
@@ -2082,15 +2114,31 @@ class CoachingService {
     throw coachingError(404, "not_found", "Not found.");
   }
 
-  /** @param {string|undefined|null} userId @param {Record<string,unknown>} payload */
-  async _notify(userId, payload) {
+  /** @param {string|undefined|null} userId
+   * @param {{bookingId:string,kind:"booked"|"cancelled",startAt:string}} payload
+   * @param {string} coachId @param {"coach"|"student"} recipient */
+  async _notify(userId, payload, coachId, recipient) {
     if (!userId) return;
+    await deliverCoachingNotification(this.notifications, userId, payload, this.logger);
+    if (this.notifications) {
+      // Sessions may be opened while the shared row is still being created.
+      // Match the admitted event after delivery so a late inbox write stays read.
+      try {
+        const current = await this._calendarDoc(coachId);
+        const booking = current?.bookings?.find((/** @type {any} */ row) => row?.id === payload.bookingId);
+        const readAt = recipient === "coach" ? booking?.coachReadAt : booking?.studentReadAt;
+        if (!booking || booking.status !== payload.kind || readAt) {
+          await this.notifications.markDeliveryEventsRead(userId, [bookingAlertEvent({ id: payload.bookingId, status: payload.kind })]);
+        }
+      } catch (err) {
+        this.logger?.warn({ err }, "coaching_notification_receipt_write_failed");
+      }
+    }
     try {
       this.io?.to(`user:${userId}`).emit("coaching:booking", payload);
     } catch (err) {
       if (this.logger) this.logger.warn({ err, userId }, "coaching_notification_failed");
     }
-    await deliverCoachingNotification(this.notifications, userId, payload, this.logger);
   }
 }
 
@@ -2912,6 +2960,12 @@ function changedRosterStudents(previous, next) {
     if (changedStudents) changedStudents.add(student.id);
   }
   return changedByCoach;
+}
+
+/** @param {{id:string,status?:string}} booking */
+function bookingAlertEvent(booking) {
+  const status = booking.status === "cancelled" ? "cancelled" : "booked";
+  return `coaching:${status}:${booking.id}`;
 }
 
 /** @param {any} doc @param {any} actor @param {string} userId */
