@@ -5,15 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminShell, NAV_GROUPS } from "./AdminShell";
 import { AdminPagination } from "./AdminPagination";
 import { AdminPageHeader } from "./AdminPageHeader";
-import { ForbiddenCard } from "./AdminFragments";
+import { ForbiddenCard, MetricStat } from "./AdminFragments";
 
 const mocks = vi.hoisted(() => ({ pathname: "/admin/users/example", scroll: vi.fn() }));
 vi.mock("next/navigation", () => ({ usePathname: () => mocks.pathname }));
-vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: { unreadCount: 0, overallStatus: "ok" }, mutate: vi.fn() }) }));
+const queues = vi.hoisted(() => ({ reports: 0, identities: 0, channels: 0, unread: 0 }));
+vi.mock("@/lib/clientApi", () => ({ useApi: (path: string) => ({
+  data: path === "/v1/admin/attention" ? {
+    openReports: queues.reports, pendingIdentities: queues.identities, pendingChannels: queues.channels,
+    advisories: { level: null },
+  } : { unreadCount: queues.unread }, mutate: vi.fn(),
+}) }));
+vi.mock("@/lib/useUserSocket", () => ({ useUserSocket: () => undefined }));
 vi.mock("./useAdminEventsSocket", () => ({ useAdminEventsSocket: () => undefined }));
 const originalScroll = HTMLElement.prototype.scrollIntoView;
 beforeEach(() => { mocks.pathname = "/admin/users/example"; mocks.scroll.mockClear(); HTMLElement.prototype.scrollIntoView = mocks.scroll; });
-afterEach(() => { cleanup(); HTMLElement.prototype.scrollIntoView = originalScroll; vi.unstubAllGlobals(); });
+afterEach(() => { queues.reports = queues.identities = queues.channels = queues.unread = 0; cleanup(); HTMLElement.prototype.scrollIntoView = originalScroll; vi.unstubAllGlobals(); });
 
 describe("admin navigation and page primitives", () => {
   it("respects reduced motion on the first mobile scroll", () => {
@@ -44,6 +51,26 @@ describe("admin navigation and page primitives", () => {
     expect(within(mobile).getByRole("link", { name: "Ghost examples" }).getAttribute("aria-current")).toBe("page");
     mocks.pathname = "/admin/announcements"; rerender(<AdminShell>Page</AdminShell>);
     expect(within(mobile).getByRole("link", { name: "Announcements" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("labels exact queue badges in both navs while capping the visual count", () => {
+    Object.assign(queues, { reports: 105, identities: 3, channels: 1, unread: 7 });
+    render(<AdminShell>Page</AdminShell>);
+    const badge = (name: string) => screen.getAllByRole("img", { name }).map((node) => node.textContent);
+    expect(badge("105 open reports")).toEqual(["99+", "99+"]);
+    expect(badge("3 pending identity submissions")).toEqual(["3", "3"]);
+    expect(badge("1 pending channel submission")).toEqual(["1", "1"]);
+    expect(badge("7 unread")).toEqual(["7", "7"]);
+  });
+
+  it("renders a focusable metric link when a destination exists", () => {
+    const { rerender } = render(<MetricStat label="Total users" value={20} href="/admin/users" />);
+    const link = screen.getByRole("link", { name: "Total users 20" });
+    expect(link.getAttribute("href")).toBe("/admin/users");
+    link.focus();
+    expect(document.activeElement).toBe(link);
+    rerender(<MetricStat label="Total users" value={20} />);
+    expect(screen.queryByRole("link")).toBeNull();
   });
 
   it("hides empty pagination, displays its label, and respects busy/disabled actions", () => {

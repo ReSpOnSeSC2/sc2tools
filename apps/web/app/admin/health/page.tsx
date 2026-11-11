@@ -9,6 +9,7 @@ import { StatusTile, type Tone } from "../components/StatusTile";
 import { formatDuration, timeSince } from "../components/format";
 import { ForbiddenCard } from "../components/AdminFragments";
 import { InfrastructureOverview } from "../components/InfrastructureOverview";
+import { AdminDatabaseStorage } from "../components/AdminDatabaseStorage";
 import { BackgroundJobs } from "../components/BackgroundJobs";
 import { DatabaseBackupsCard } from "../components/DatabaseBackupsCard";
 import { DonationLedgerCard } from "../components/DonationLedgerCard";
@@ -66,6 +67,7 @@ export default function AdminHealthPage() {
       <DatabaseBackupsCard />
       <DonationLedgerCard />
       <BackgroundJobs />
+      <AdminDatabaseStorage />
       <section aria-labelledby="operational-health-heading" className="space-y-3">
         <h2 id="operational-health-heading" className="text-h3 font-semibold text-text">Operational health</h2>
         {health.error ? <RequestError title="API health check failed" error={health.error} onRetry={() => health.mutate()} />

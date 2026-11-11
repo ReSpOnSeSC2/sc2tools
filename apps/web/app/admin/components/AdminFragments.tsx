@@ -3,7 +3,8 @@
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { buttonClassName } from "@/components/ui/buttonStyles";
-import { CircleHelp } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, CircleHelp } from "lucide-react";
 
 /**
  * Small presentational primitives reused across admin tabs. Kept in
@@ -31,16 +32,21 @@ export function MetricStat({
   label,
   value,
   caption,
+  detail,
+  href,
 }: {
   label: string;
   value: import("react").ReactNode;
   caption?: string;
+  detail?: string | null;
+  href?: string;
 }) {
-  return (
-    <Card padded>
+  const content = (
+    <Card padded className="h-full">
       <div className="flex flex-col gap-1">
-        <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
+        <span className="flex items-center justify-between gap-2 text-caption font-semibold uppercase tracking-wider text-text-dim">
           {label}
+          {href ? <ChevronRight className="h-4 w-4 shrink-0" aria-hidden /> : null}
         </span>
         <span className="text-2xl font-semibold tabular-nums text-text">
           {value}
@@ -48,9 +54,11 @@ export function MetricStat({
         {caption ? (
           <span className="text-caption text-text-dim">{caption}</span>
         ) : null}
+        {detail ? <span className="text-caption text-text-muted">{detail}</span> : null}
       </div>
     </Card>
   );
+  return href ? <Link href={href} className="block min-w-0 rounded-xl hover:ring-1 hover:ring-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{content}</Link> : content;
 }
 
 /**
@@ -62,7 +70,7 @@ export function LoadingRows({ rows = 6 }: { rows?: number }) {
     <Card padded={false}>
       <ul className="divide-y divide-border">
         {Array.from({ length: rows }).map((_, i) => (
-          <li key={i} className="flex animate-pulse gap-4 px-4 py-3">
+          <li key={i} className="flex motion-safe:animate-pulse gap-4 px-4 py-3">
             <div className="h-4 w-1/4 rounded bg-bg-elevated" />
             <div className="h-4 w-1/6 rounded bg-bg-elevated" />
             <div className="h-4 w-1/6 rounded bg-bg-elevated" />
@@ -116,9 +124,9 @@ export function ConfirmInline({
   );
 }
 
-export function AdminHelpLink({ anchor }: { anchor: string }) {
+export function AdminHelpLink({ anchor, label = "Help" }: { anchor: string; label?: string }) {
   return <a href={`https://github.com/ReSpOnSeSC2/sc2tools/blob/main/docs/admin-console.md#${anchor}`} target="_blank" rel="noreferrer"
     className={buttonClassName({ variant: "ghost", size: "sm" })}>
-    <CircleHelp className="h-4 w-4" aria-hidden />Help<span className="sr-only"> (opens in new tab)</span>
+    <CircleHelp className="h-4 w-4" aria-hidden />{label}<span className="sr-only"> (opens in new tab)</span>
   </a>;
 }

@@ -20,7 +20,7 @@ vi.mock("@/lib/clientApi", () => ({ API_BASE: "https://api.example.test", apiCal
           : path?.includes("unread-count") ? { count: 0 }
             : path === "/v1/import/status" ? { jobId: "job", status: "running", total: 10, completed: 1, errors: 0 }
               : path?.startsWith("/v1/admin/events?") ? { items: [], nextBefore: null }
-                : path === "/v1/admin/events/counts" ? { unreadCount: 1 } : undefined;
+                : path === "/v1/admin/events/counts" ? { unreadCount: 1, downloadsByPlatform: { windows: 0, macos: 0, linux: 0 }, agents: { active24h: 0 } } : undefined;
       h.resources.set(key, { data, isLoading: false, mutate: vi.fn(async () => data) });
     }
     return h.resources.get(key);
@@ -37,7 +37,7 @@ vi.mock("@/components/onboarding/OnboardingChecklist", () => ({ checklistVisible
 vi.mock("@/components/imports/ImportProgressCard", () => ({ ImportProgressCard: () => null }));
 vi.mock("@/components/ui/Toast", () => ({ useToastOptional: () => null, useToast: () => ({ toast: h.toast }) }));
 vi.mock("@/app/admin/components/AdminPageHeader", () => ({ AdminPageHeader: ({ title, actions }: { title: string; actions: ReactNode }) => <header>{title}{actions}</header> }));
-vi.mock("@/app/admin/components/AdminFragments", () => ({ ForbiddenCard: () => null, LoadingRows: () => null, MetricStat: () => null }));
+vi.mock("@/app/admin/components/AdminFragments", () => ({ ForbiddenCard: () => null, LoadingRows: () => null, MetricStat: () => null, AdminHelpLink: () => null }));
 vi.mock("@/app/admin/components/AdminEventRow", () => ({ AdminEventRow: () => <li>Live durable event</li> }));
 
 import { RealtimeProvider } from "./RealtimeProvider";
@@ -84,15 +84,20 @@ it("mounts every current user and admin consumer on one socket and fans out reco
   await act(async () => {});
   expect(corpusCalls()).toHaveLength(1);
   expect(h.io).toHaveBeenCalledTimes(1);
+  const attention = h.resources.get("/v1/admin/attention")!.mutate;
+  const daily = h.resources.get("/v1/admin/events/daily?days=30")!.mutate;
   const counts = h.resources.get("/v1/admin/events/counts")!.mutate;
   const dashboard = h.resources.get("/v1/admin/events?limit=8")!.mutate;
   const notifications = h.resources.get("/v1/admin/events?limit=50&unread=true")!.mutate;
   act(() => h.handlers.get("connect")?.());
   expect(counts).toHaveBeenCalledTimes(3); expect(dashboard).toHaveBeenCalledOnce(); expect(notifications).toHaveBeenCalledOnce();
+  expect(attention).toHaveBeenCalledOnce(); expect(daily).toHaveBeenCalledOnce();
   expect(screen.getAllByText("● Live")).toHaveLength(2);
   act(() => h.handlers.get("admin:event")?.({ eventId: "a", type: "user_signup", createdAt: new Date().toISOString(), payload: {}, readAt: null }));
   expect(counts).toHaveBeenCalledTimes(6); expect(notifications).toHaveBeenCalledTimes(2); expect(screen.getByText("Live durable event")).toBeTruthy();
+  expect(attention).toHaveBeenCalledTimes(2); expect(daily).toHaveBeenCalledTimes(2);
   act(() => { h.handlers.get("disconnect")?.("transport close"); h.handlers.get("connect")?.(); });
+  expect(attention).toHaveBeenCalledTimes(3); expect(daily).toHaveBeenCalledTimes(3);
   expect(counts).toHaveBeenCalledTimes(9); expect(dashboard).toHaveBeenCalledTimes(2); expect(notifications).toHaveBeenCalledTimes(3);
   act(() => {
     h.handlers.get("notifications:changed")?.({}); h.handlers.get("coaching:booking")?.({});
