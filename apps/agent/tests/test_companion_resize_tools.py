@@ -179,10 +179,10 @@ def test_companion_tools_fit_the_minimum_window_at_display_scale(tmp_path, monke
     run_gui_check(tmp_path, THEMED_SETUP.replace("FONT_SIZE", "10") + dedent('''
         def assert_fits(scroll, controls):
             content = scroll.widget()
-            assert content.width() <= scroll.viewport().width()
-            assert scroll.horizontalScrollBar().maximum() == 0
+            assert content.width() <= scroll.viewport().width(), (content.width(), scroll.viewport().width())
+            assert scroll.horizontalScrollBar().maximum() == 0, scroll.objectName()
             for control in controls:
-                assert control.isVisible()
+                assert control.isVisible(), control.metaObject().className()
                 position = control.mapTo(content, QtCore.QPoint())
                 assert content.rect().contains(QtCore.QRect(position, control.size())), control.objectName()
                 assert control.width() >= control.minimumSizeHint().width(), control.objectName()
@@ -204,8 +204,11 @@ def test_companion_tools_fit_the_minimum_window_at_display_scale(tmp_path, monke
                 assert_fits(scroll, controls)
                 assert scroll.verticalScrollBar().maximum() > 0, route
 
+            page.open_full_details()
+            window.resize(480, 360)
             ghost.sources.setCurrentIndex(1)
             QtTest.QTest.qWait(25)
+            assert window.size() == QtCore.QSize(480, 360)
             library = ghost.sources.currentWidget()
             filters = (ghost.matchup_filter, ghost.build_filter, ghost.map_filter, ghost.result_filter,
                        ghost.starred_filter, ghost.clear_filters_button)
