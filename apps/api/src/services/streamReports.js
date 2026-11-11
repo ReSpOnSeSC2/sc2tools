@@ -236,7 +236,8 @@ class StreamReportsService {
         resolution: { $nin: ["manual", "cancelled"] } }, { projection: { _id: 0, result: 1, picks: 1 } }).limit(300).toArray(),
       this.db.multichatEngagementEvents.find({ token: { $in: tokens }, atMs: range, kind: { $type: "string" } },
         { projection: { _id: 0, userKey: 1 } }).limit(5000).toArray(),
-      this.db.multichatClipMoments.find({ token: { $in: tokens }, atMs: range }, { projection: { _id: 0, atMs: 1, kind: 1, reason: 1 } })
+      this.db.multichatClipMoments.find({ token: { $in: tokens }, atMs: range, kind: { $in: ["game-event", "chat-spike"] } },
+        { projection: { _id: 0, atMs: 1, kind: 1, reason: 1 } })
         .sort({ atMs: 1 }).limit(8).toArray(),
     ]);
     return {
