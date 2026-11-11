@@ -65,9 +65,12 @@ describe("strict semver", () => {
 
 describe("milestone catalog", () => {
   const row = { engine: "1.6.10", date: "2026-10-10", summary: "Changed.", matchups: ["PvT", "TvP"] };
-  test("the shipped catalog covers both label-changing releases in order", () => {
-    expect(MILESTONE_CATALOG.milestones.map((m) => m.engine)).toEqual(["1.6.10", "1.6.11"]);
-    expect(MILESTONE_CATALOG.milestones.every((m) => m.matchups.join() === "PvT,TvP")).toBe(true);
+  test("the shipped catalog keeps release order and the affected matchups", () => {
+    expect(MILESTONE_CATALOG.milestones.map(({ engine, matchups }) => [engine, matchups])).toEqual([
+      ["1.6.10", ["PvT", "TvP"]],
+      ["1.6.11", ["PvT", "TvP"]],
+      ["1.6.13", ["PvP", "PvT", "PvZ", "TvP", "TvT", "TvZ", "ZvP", "ZvT", "ZvZ"]],
+    ]);
     expect(MILESTONE_CATALOG.revision).toMatch(/^[0-9a-f]{16}$/);
   });
   test.each([
@@ -90,6 +93,7 @@ describe("cohort counts", () => {
       game(17, { macroScore: Number.NaN }), game(18, { macroScore: 101 }), game(19, { macroScore: -1 }), game(20, { macroScore: undefined }),
       game(21, { excluded: true }), game(22, { _deleted: true }), game(23, { _deletionPending: true }), game(24, { isResumedFromReplay: true }),
       { ...game(25), userId: OTHER },
+      game(26, { myRace: "Zerg", opponent: { race: "Zerg" }, engineVersion: "1.6.13" }),
     ]);
     const { cohorts, catalogRevision } = await countCohorts(db.games, OWNER);
     expect(catalogRevision).toBe(MILESTONE_CATALOG.revision);
@@ -98,6 +102,12 @@ describe("cohort counts", () => {
     expect(byId["engine-before:1.6.10"]).toMatchObject({ count: 11, unknown: 5 });
     expect(byId["engine-before:1.6.11"]).toMatchObject({ count: 13, unknown: 5 });
     expect(byId["engine-before:1.6.11"].versions).toEqual(["1.6.10", "1.6.11-rc.1", "1.6.9"]);
+    // 1.6.13 adds the 1.6.12 PvT row and the older ZvZ row; the current ZvZ row is up to date.
+    expect(byId["engine-before:1.6.13"]).toMatchObject({
+      count: 15,
+      unknown: 5,
+      versions: ["1.6.10", "1.6.11-rc.1", "1.6.12", "1.6.9"],
+    });
     expect(byId["missing-macro"].count).toBe(6);
     expect(byId["no-engine-stamp"].count).toBe(5);
   });
