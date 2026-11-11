@@ -23,17 +23,17 @@ pending-deletion and unapplied check-ins are ignored.
 - Custom builds are counted as **Custom build**; their names and rules are the
   owner's private data and never appear.
 - 8-worker (5.0.16) era names fold into their released label.
-- **Engine** is the detecting engine: a browser upload's engine version, or the
-  desktop agent (whose uploads do not record a version).
+- **Engine** uses the uploader and its reported engine version for both browser
+  and desktop replays. Older uploads can lack either field.
 
 ## Guardrails
 
-- **k-floor:** a pair, label, engine row or trust line is published only when at
-  least three distinct players contributed. Smaller pairs are withheld and only
-  counted in the "withheld" line.
+- **k-floor:** a pair, label, engine cohort or trust line needs at least three
+  distinct players. Engine filters and sample drill-downs use the same floor.
+  Smaller pairs contribute only to the aggregate withheld count.
 - **Identity:** snapshots hold counts only, no user or game ids. Samples show
-  the day, map, length, engine and provenance, never a player, game id or
-  opponent name.
+  the day, map, length, engine and provenance. Build logs include only recognized
+  game entities, and test fixtures omit player names and game IDs.
 - **Bounded:** the scan uses two partial indexes on confirmed check-ins
   (`classifier_quality_build`, `classifier_quality_opponent`), built in the
   background; until both are ready the job skips and the drill-down returns 503.
@@ -52,10 +52,11 @@ pending-deletion and unapplied check-ins are ignored.
 - **Confusion:** each detected label with the builds players declared instead.
 - **Labels:** per label, matches, misses (declared but not detected) and
   mislabels (detected but declared as something else).
-- **By engine version:** check-ins and disagreements per engine, newest first.
+- **By engine version:** current check-ins and disagreements per engine, with up
+  to seven published snapshot counts to show change over time.
 - **Samples:** up to 20 recent games for one pair, each with its build log up to
-  6:00, next to the declared (and detected) rule's description and any Build
-  Studio edit.
+  6:00, next to the declared and detected rules. Open **Rule requirements** to
+  see released criteria or an enabled Build Studio replacement.
 - **Copy as test fixture** copies one sample's identity-free JSON (axis, matchup,
   races, labels, engine, game version, length and build-log lines) for a
   replay-engine test under `apps/replay-engine/tests`.
@@ -70,8 +71,8 @@ pending-deletion and unapplied check-ins are ignored.
    not detector errors.
 3. Add the copied fixture to a replay-engine test, change the rule (engine code
    or a Build Studio policy edit) and run the engine tests.
-4. After the change ships and the next snapshot runs, the pair's volume should
-   fall. Snapshots are not compared automatically.
+4. After the change ships, compare disagreement counts across recent snapshots
+   while keeping the number of check-ins in view.
 
 ## Public trust line
 

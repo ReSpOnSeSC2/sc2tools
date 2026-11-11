@@ -1,3 +1,5 @@
+import type { PolicyCondition } from "../build-studio/studioTypes";
+
 /** Mirrors apps/api/src/services/classifierQuality.js. */
 export type ClassifierAxis = "build" | "opponent";
 
@@ -12,6 +14,7 @@ export type ClassifierPair = {
   users: number;
   origins: ClassifierOrigins;
   lastConfirmedAt: string | null;
+  engine?: string;
   engines: Array<{ engine: string; count: number }>;
 };
 
@@ -24,7 +27,13 @@ export type ClassifierLabel = {
   users: number;
 };
 
-export type ClassifierEngine = { engine: string; checkIns: number; disagreements: number; users: number };
+export type ClassifierEngine = {
+  engine: string;
+  checkIns: number;
+  disagreements: number;
+  users: number;
+  trend?: Array<{ generatedAt: string; disagreements: number }>;
+};
 
 export type ClassifierConsoleResp = {
   snapshot: null | {
@@ -50,7 +59,8 @@ export type ClassifierRule = null | {
   description: string;
   surfaces: string[];
   implementation: string;
-  policy: null | { revision: number; enabled: boolean; mode: string; anyOf: unknown[]; steps: Array<{ timeSeconds: number; action: string }>; description: string | null };
+  releasedCriteria?: PolicyCondition[][];
+  policy: null | { revision: number; enabled: boolean; mode: string; anyOf: PolicyCondition[][]; steps: Array<{ timeSeconds: number; action: string }>; description: string | null };
 };
 
 export type ClassifierSample = {
@@ -84,6 +94,8 @@ export const ORIGIN_LABEL: Record<keyof ClassifierOrigins, string> = { pregame: 
 export function engineLabel(engine: string): string {
   if (engine === "agent") return "Desktop agent";
   if (engine === "browser") return "Browser engine (version not recorded)";
+  if (engine === "unknown") return "Uploader not recorded";
+  if (engine.startsWith("agent:")) return `Desktop engine ${engine.slice(6)}`;
   return engine.startsWith("browser:") ? `Browser engine ${engine.slice(8)}` : engine;
 }
 

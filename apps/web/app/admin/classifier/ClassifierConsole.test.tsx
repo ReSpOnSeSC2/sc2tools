@@ -15,13 +15,17 @@ const OTHER = { ...PAIR, declared: "Custom build", count: 3 };
 const CONSOLE: ClassifierConsoleResp = {
   snapshot: { generatedAt: "2026-11-10T03:00:00Z", windowStart: "2026-08-12T03:00:00Z", windowDays: 90, kFloor: 3,
     totals: { checkIns: 15, disagreements: 10, users: 6, suppressedPairs: 1, suppressedCheckIns: 2, truncated: false },
-    engines: [{ engine: "agent", checkIns: 14, disagreements: 9, users: 6 }], origins: { pregame: 1, postgame: 12, web: 2, other: 0 }, matchups: ["PvZ", "ZvP"] },
+    engines: [{ engine: "agent", checkIns: 14, disagreements: 9, users: 6, trend: [
+      { generatedAt: "2026-11-09T03:00:00Z", disagreements: 10 },
+      { generatedAt: "2026-11-10T03:00:00Z", disagreements: 9 },
+    ] }], origins: { pregame: 1, postgame: 12, web: 2, other: 0 }, matchups: ["PvZ", "ZvP"] },
   pairs: [PAIR, OTHER], pairsTotal: 2,
   labels: [{ axis: "build", label: "PvZ - 2 Stargate Phoenix", agree: 2, missed: 4, mislabeled: 0, users: 5 }], kFloor: 3, windowDays: 90, sampleLimit: 20,
 };
 const SAMPLES: ClassifierSamplesResp = {
   pair: PAIR, windowStart: "2026-08-12T03:00:00Z", sampleLimit: 20, sampleSeconds: 360,
-  rules: { declared: { name: PAIR.declared, description: "Detected if two Stargates start before 5:00.", surfaces: ["you"], implementation: "procedural", policy: null }, detected: null },
+  rules: { declared: { name: PAIR.declared, description: "Detected if two Stargates start before 5:00.", surfaces: ["you"], implementation: "declarative",
+    releasedCriteria: [[{ kind: "count", category: "building", clock: "start", name: "Stargate", min: 2, beforeSeconds: 300 }]], policy: null }, detected: null },
   samples: [{ sample: 1, day: "2026-11-09", map: "Alcyone LE", durationSec: 600, gameVersion: "5.0.15", engine: "agent", origin: "postgame",
     race: "Protoss", opponentRace: "Zerg", buildLog: ["[0:00] Nexus", "[2:05] Stargate"], buildLogAvailable: true, buildLogTruncated: true }],
 };
@@ -52,6 +56,7 @@ describe("admin classifier console", () => {
     expect(screen.getByRole("link", { name: "Build Studio" }).getAttribute("href")).toBe("/admin/build-studio");
     expect(screen.getByText(/4 check-ins from 3 players · Pre-game plan 1, Post-game check-in 2, Website 1/)).toBeTruthy();
     expect(screen.getByText("9 of 14 check-ins disagree")).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "Desktop agent recent snapshots" })).getAllByRole("listitem")).toHaveLength(2);
   });
 
   it("keeps the axis, matchup, engine and view in the URL and the API query", () => {
@@ -77,6 +82,8 @@ describe("admin classifier console", () => {
     const dialog = screen.getByRole("dialog", { name: "Disagreement samples" });
     expect(paths()).toContain(`/v1/admin/classifier/samples?${new URLSearchParams({ axis: "build", matchup: "PvZ", detected: PAIR.detected, declared: PAIR.declared })}`);
     expect(within(dialog).getByText("Detected if two Stargates start before 5:00.")).toBeTruthy();
+    fireEvent.click(within(dialog).getByText("Rule requirements"));
+    expect(within(dialog).getByText("at least 2 Stargate by 5:00 (start)")).toBeTruthy();
     expect(within(dialog).getByText(/No released rule/)).toBeTruthy();
     expect(within(dialog).getByLabelText("Build log up to 6:00 for sample 1").textContent).toBe("[0:00] Nexus\n[2:05] Stargate\n…");
     await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Copy as test fixture for sample 1" })); });

@@ -92,6 +92,17 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  * }} DbContext
  */
 
+/** @param {import('mongodb').Db} db */
+function adminCollections(db) {
+  return {
+    adminEvents: db.collection(COLLECTIONS.ADMIN_EVENTS),
+    jobRuns: db.collection(COLLECTIONS.JOB_RUNS),
+    classifierQuality: db.collection(COLLECTIONS.CLASSIFIER_QUALITY),
+    adminAudit: db.collection(COLLECTIONS.ADMIN_AUDIT),
+    supportEmailSync: db.collection(COLLECTIONS.SUPPORT_EMAIL_SYNC),
+  };
+}
+
 /**
  * Open the MongoDB connection and return collection handles.
  *
@@ -173,11 +184,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
     pendingIdentityDeletions: db.collection(COLLECTIONS.PENDING_IDENTITY_DELETIONS),
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
-    adminEvents: db.collection(COLLECTIONS.ADMIN_EVENTS),
-    jobRuns: db.collection(COLLECTIONS.JOB_RUNS),
-    classifierQuality: db.collection(COLLECTIONS.CLASSIFIER_QUALITY),
-    adminAudit: db.collection(COLLECTIONS.ADMIN_AUDIT),
-    supportEmailSync: db.collection(COLLECTIONS.SUPPORT_EMAIL_SYNC),
+    ...adminCollections(db),
     siteConfig: db.collection(COLLECTIONS.SITE_CONFIG),
     ghostExamples: db.collection(COLLECTIONS.GHOST_EXAMPLES),
     sitePresence: /** @type {import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>} */ (
@@ -362,6 +369,24 @@ async function ensureBuildIntentIndexes(ctx) {
     {
       name: "build_intent_pending",
       partialFilterExpression: { "buildIntent.status": "pending" },
+    },
+  );
+}
+
+/** @param {DbContext['adminEvents']} events */
+async function ensureAdminEventIndexes(events) {
+  await events.createIndex({ readAt: 1, createdAt: -1, eventId: -1 });
+  await events.createIndex({ type: 1, readAt: 1, createdAt: -1, eventId: -1 });
+  // Per-event read/unread (POST /v1/admin/events/:eventId/read|unread)
+  // looks a row up by id alone; the keyset indexes above lead with
+  // createdAt/type. Not unique: a legacy duplicate must never fail boot.
+  await events.createIndex({ eventId: 1 }, { name: "admin_events_event_id" });
+  await events.createIndex(
+    { ingestionKey: 1 },
+    {
+      unique: true,
+      partialFilterExpression: { ingestionKey: { $type: "string" } },
+      name: "admin_event_unique_ingestion",
     },
   );
 }
@@ -764,20 +789,7 @@ async function ensureIndexes(ctx, opts = {}) {
       if (code !== 27 && codeName !== "IndexNotFound") throw err;
     }
   }
-  await ctx.adminEvents.createIndex({ readAt: 1, createdAt: -1, eventId: -1 });
-  await ctx.adminEvents.createIndex({ type: 1, readAt: 1, createdAt: -1, eventId: -1 });
-  // Per-event read/unread (POST /v1/admin/events/:eventId/read|unread)
-  // looks a row up by id alone; the keyset indexes above lead with
-  // createdAt/type. Not unique: a legacy duplicate must never fail boot.
-  await ctx.adminEvents.createIndex({ eventId: 1 }, { name: "admin_events_event_id" });
-  await ctx.adminEvents.createIndex(
-    { ingestionKey: 1 },
-    {
-      unique: true,
-      partialFilterExpression: { ingestionKey: { $type: "string" } },
-      name: "admin_event_unique_ingestion",
-    },
-  );
+  await ensureAdminEventIndexes(ctx.adminEvents);
 
   // Global, cross-user SC2Pulse cache (services/pulseDirectory.js).
   // ``toonHandle`` is the natural key — one row per real SC2 account,

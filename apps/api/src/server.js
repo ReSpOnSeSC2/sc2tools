@@ -49,6 +49,23 @@ const { startBrowserUploadCorsCheck } = require("./services/replayFilesCors");
 const { deviceCredentialWritesFor } = require("./services/deviceCredentialWrites");
 const { prepareDeviceCredentialsForServing } = require("./services/deviceCredentialReadiness");
 
+/** @param {import('./db/connect').DbContext} db @param {import('pino').Logger} logger
+ * @param {Record<string,unknown>} services */
+function startAnalysisBenchmarkJobs(db, logger, services) {
+  const mmrExpectationJob = buildMmrExpectationRecomputeJob({
+    db, logger, jobLedger: /** @type {any} */ (services).jobLedger,
+    mmrExpectation: /** @type {any} */ (services).mmrExpectation,
+  });
+  mmrExpectationJob.start();
+  // Nightly check-in correction aggregates for /admin/classifier.
+  const classifierQualityJob = buildClassifierQualityJob({
+    db, logger, jobLedger: /** @type {any} */ (services).jobLedger,
+    classifierQuality: /** @type {any} */ (services).classifierQuality,
+  });
+  classifierQualityJob.start();
+  return { mmrExpectationJob, classifierQualityJob };
+}
+
 async function main() {
   const config = loadConfig();
   const logger = pino({ level: config.logLevel });
@@ -347,17 +364,7 @@ async function main() {
     logger,
   });
   leaguePercentilesJob.start();
-  const mmrExpectationJob = buildMmrExpectationRecomputeJob({
-    db, logger, jobLedger: /** @type {any} */ (services).jobLedger,
-    mmrExpectation: /** @type {any} */ (services).mmrExpectation,
-  });
-  mmrExpectationJob.start();
-  // Nightly check-in correction aggregates for /admin/classifier.
-  const classifierQualityJob = buildClassifierQualityJob({
-    db, logger, jobLedger: /** @type {any} */ (services).jobLedger,
-    classifierQuality: /** @type {any} */ (services).classifierQuality,
-  });
-  classifierQualityJob.start();
+  const { mmrExpectationJob, classifierQualityJob } = startAnalysisBenchmarkJobs(db, logger, services);
 
   // Nightly player-level reference for Skill Fingerprint naming. This is a
   // separate table from per-game league benchmarks: each player/matchup window

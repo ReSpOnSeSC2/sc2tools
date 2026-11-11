@@ -6,7 +6,8 @@ import { fmtDate, fmtDuration, type AdminGameDetailGame } from "./AdminGameDetai
 import { ResultBadge } from "./ResultBadge";
 import { RESULT_SPOKEN, resultOf } from "./adminResult";
 
-const EDITABLE = "input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='dialog']";
+const EDITABLE = "input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='dialog']";
+const narrowLayout = () => window.matchMedia?.("(max-width: 1023px)").matches ?? false;
 
 /** "Game 3 of 25: Victory on Alcyone". */
 export function selectionText(game: AdminGameDetailGame, at: number, total: number): string {
@@ -88,11 +89,15 @@ export function AdminGamesMasterDetail<G extends AdminGameDetailGame>({
       const next = from < 0 ? (step > 0 ? 0 : rows.length - 1) : from + step;
       if (next < 0 || next >= rows.length) return;
       event.preventDefault();
+      const focusPane = narrowLayout();
+      focusDetail.current = focusPane;
       select(rows[next]);
       setAnnouncement(selectionText(rows[next], next, rows.length));
-      const button = list.current?.querySelector<HTMLButtonElement>(`[data-game-index="${next}"]`);
-      if (inList) button?.focus();
-      else button?.scrollIntoView?.({ block: "nearest" });
+      if (!focusPane) {
+        const button = list.current?.querySelector<HTMLButtonElement>(`[data-game-index="${next}"]`);
+        if (inList) button?.focus();
+        else button?.scrollIntoView?.({ block: "nearest" });
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -117,7 +122,11 @@ export function AdminGamesMasterDetail<G extends AdminGameDetailGame>({
                     data-game-key={key}
                     data-game-index={at}
                     aria-current={active ? "true" : undefined}
-                    onClick={() => { onSelect(game); setAnnouncement(selectionText(game, at, games.length)); }}
+                    onClick={() => {
+                      focusDetail.current = narrowLayout();
+                      onSelect(game);
+                      setAnnouncement(selectionText(game, at, games.length));
+                    }}
                     className={[
                       "flex min-h-11 w-full flex-col gap-1 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent motion-safe:transition-colors",
                       active ? "bg-accent/10" : "hover:bg-bg-elevated/40",

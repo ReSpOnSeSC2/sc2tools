@@ -137,7 +137,7 @@ function PairsView({ pairs, total, onDrill }: { pairs: ClassifierPair[]; total: 
               <div className="min-w-0 flex-1 space-y-1">
                 <p className="break-words text-body"><span className="text-text-muted">Detected</span> {pair.detected} <span aria-hidden="true">→</span><span className="sr-only">, declared</span> <span className="font-semibold">{pair.declared}</span></p>
                 <p className="text-caption text-text-muted">{pair.matchup} · {AXIS_LABEL[pair.axis]} · {pair.count} {pair.count === 1 ? "check-in" : "check-ins"} from {pair.users} players · {provenanceText(pair.origins)}</p>
-                <p className="text-micro text-text-dim">{pair.engines.map((row) => `${engineLabel(row.engine)} ${row.count}`).join(" · ")}</p>
+                {pair.engines.length ? <p className="text-micro text-text-dim">{pair.engines.map((row) => `${engineLabel(row.engine)} ${row.count}`).join(" · ")}</p> : null}
               </div>
               <Button size="sm" variant="secondary" onClick={() => onDrill(pair)}>Samples<span className="sr-only"> for {pairName(pair)} in {pair.matchup}</span></Button>
             </li>
@@ -207,6 +207,7 @@ function EngineTrend({ engines, selected, onSelect }: { engines: ClassifierEngin
   return (
     <section aria-labelledby="classifier-engines" className="space-y-2">
       <h2 id="classifier-engines" className="text-h3">By engine version</h2>
+      <p className="text-caption text-text-muted">Recent snapshots show disagreement counts over the rolling window.</p>
       <Card padded={false}>
         <ul className="divide-y divide-border">
           {engines.map((row) => (
@@ -216,6 +217,9 @@ function EngineTrend({ engines, selected, onSelect }: { engines: ClassifierEngin
               <span aria-hidden="true" className="h-2 w-24 overflow-hidden rounded-full bg-bg-elevated"><span className="block h-full bg-warning" style={{ width: `${Math.round((row.disagreements / most) * 100)}%` }} /></span>
               <Button size="sm" variant={selected === row.engine ? "primary" : "ghost"} aria-pressed={selected === row.engine}
                 onClick={() => onSelect(selected === row.engine ? "" : row.engine)}>Filter<span className="sr-only"> by {engineLabel(row.engine)}</span></Button>
+              {row.trend && row.trend.length > 1 ? <ul aria-label={`${engineLabel(row.engine)} recent snapshots`} className="flex w-full flex-wrap gap-x-3 gap-y-1 text-micro text-text-dim">
+                {row.trend.map((point) => <li key={point.generatedAt}>{new Date(point.generatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })} · {point.disagreements.toLocaleString()}</li>)}
+              </ul> : null}
             </li>
           ))}
         </ul>

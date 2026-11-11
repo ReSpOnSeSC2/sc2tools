@@ -604,47 +604,7 @@ function buildAdminRouter(deps) {
     }
   });
 
-  // Mark every unread event read, or only one type's with ``{type}`` (the
-  // Notifications page's active filter chip). An unknown type is a 400, never
-  // a silent mark-everything.
-  router.post("/admin/events/mark-read", async (req, res, next) => {
-    try {
-      const type = req.body && typeof req.body === "object" ? req.body.type : undefined;
-      if (type !== undefined && typeof type !== "string") {
-        res.status(400).json({ error: { code: "invalid_event_type" } });
-        return;
-      }
-      res.locals.auditAction = "events.mark-read";
-      if (type) res.locals.auditTarget = type;
-      res.json(await deps.adminEvents.markAllRead(type ? { type } : {}));
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  // Per-event read state. Both directions are idempotent; an id that does
-  // not exist is a 404 so a stale row never looks updated.
-  for (const [suffix, read] of /** @type {const} */ ([["read", true], ["unread", false]])) {
-    router.post(`/admin/events/:eventId/${suffix}`, async (req, res, next) => {
-      try {
-        const eventId = String(req.params.eventId);
-        res.locals.auditAction = `event.${suffix}`;
-        if (!EVENT_ID_RE.test(eventId)) {
-          res.status(400).json({ error: { code: "invalid_event_id" } });
-          return;
-        }
-        res.locals.auditTarget = eventId;
-        const event = await deps.adminEvents.setRead(eventId, read);
-        if (!event) {
-          res.status(404).json({ error: { code: "event_not_found" } });
-          return;
-        }
-        res.set("Cache-Control", "private, no-store").json({ event });
-      } catch (err) {
-        next(err);
-      }
-    });
-  }
+  registerEventReadRoutes(router, deps.adminEvents);
 
   return router;
 }
@@ -680,6 +640,58 @@ function parseGameFilters(query) {
     result: parseResultFilter(query.result),
     map: parseExactText(query.map, "invalid_map_filter", 200),
   };
+}
+
+/** @param {import('express').Router} router
+ * @param {import('../services/adminEvents').AdminEventsService} adminEvents */
+function registerEventReadRoutes(router, adminEvents) {
+  // Mark every unread event read, or only one type's with ``{type}`` (the
+  // Notifications page's active filter chip). An unknown type is a 400, never
+  // a silent mark-everything.
+  router.post("/admin/events/mark-read", async (req, res, next) => {
+    try {
+      const type = parseMarkReadScope(req.body);
+      res.locals.auditAction = "events.mark-read";
+      if (type) res.locals.auditTarget = type;
+      res.json(await adminEvents.markAllRead(type ? { type } : {}));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Per-event read state. Both directions are idempotent; an id that does
+  // not exist is a 404 so a stale row never looks updated.
+  for (const [suffix, read] of /** @type {const} */ ([["read", true], ["unread", false]])) {
+    router.post(`/admin/events/:eventId/${suffix}`, async (req, res, next) => {
+      try {
+        const eventId = String(req.params.eventId);
+        res.locals.auditAction = `event.${suffix}`;
+        if (!EVENT_ID_RE.test(eventId)) {
+          res.status(400).json({ error: { code: "invalid_event_id" } });
+          return;
+        }
+        res.locals.auditTarget = eventId;
+        const event = await adminEvents.setRead(eventId, read);
+        if (!event) {
+          res.status(404).json({ error: { code: "event_not_found" } });
+          return;
+        }
+        res.set("Cache-Control", "private, no-store").json({ event });
+      } catch (err) {
+        next(err);
+      }
+    });
+  }
+}
+
+/** An absent or empty object means all activity. @param {any} body */
+function parseMarkReadScope(body) {
+  if (body === undefined) return undefined;
+  const valid = body && typeof body === "object" && !Array.isArray(body)
+    && Object.keys(body).every((key) => key === "type")
+    && (body.type === undefined || (typeof body.type === "string" && body.type.length > 0));
+  if (!valid) throw Object.assign(new Error("invalid_event_type"), { status: 400, code: "invalid_event_type" });
+  return /** @type {string|undefined} */ (body.type);
 }
 
 /** @param {unknown} raw */

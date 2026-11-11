@@ -491,6 +491,7 @@ class AdminService {
     /** @type {Record<string, any>} */
     const cohort = {
       userId,
+      ...LIVE_GAME_MATCH,
       $or: [{ oppPulseId: pulseId }, { "opponent.pulseId": pulseId }],
     };
     /** @type {Record<string, any>} */
@@ -529,27 +530,7 @@ class AdminService {
     ]);
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    const items = page.map((/** @type {any} */ g) => {
-      const opp = g.opponent || {};
-      return {
-        gameId: String(g.gameId || ""),
-        date: g.date instanceof Date ? g.date : null,
-        // Patch era, with ``date``: the detail view prices units by it.
-        gameVersion: typeof g.gameVersion === "string" ? g.gameVersion : null,
-        gameBuild: typeof g.gameBuild === "number" ? g.gameBuild : null,
-        result: g.result || null,
-        myRace: g.myRace || null,
-        map: g.map || null,
-        durationSec: typeof g.durationSec === "number" ? g.durationSec : null,
-        myMmr: typeof g.myMmr === "number" ? g.myMmr : null,
-        macroScore: typeof g.macroScore === "number" ? g.macroScore : null,
-        opponent: {
-          displayName: opp.displayName || "",
-          race: opp.race || "",
-          mmr: typeof opp.mmr === "number" ? opp.mmr : null,
-        },
-      };
-    });
+    const items = page.map((g) => opponentGameRow(g));
     return {
       items,
       nextBefore: hasMore && page.length > 0 ? page[page.length - 1].date : null,
@@ -779,6 +760,29 @@ function clampLimit(raw, fallback) {
 /** @param {string} s */
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** @param {any} g */
+function opponentGameRow(g) {
+  const opp = g.opponent || {};
+  return {
+    gameId: String(g.gameId || ""),
+    date: g.date instanceof Date ? g.date : null,
+    // Patch era, with ``date``: the detail view prices units by it.
+    gameVersion: typeof g.gameVersion === "string" ? g.gameVersion : null,
+    gameBuild: typeof g.gameBuild === "number" ? g.gameBuild : null,
+    result: g.result || null,
+    myRace: g.myRace || null,
+    map: g.map || null,
+    durationSec: typeof g.durationSec === "number" ? g.durationSec : null,
+    myMmr: typeof g.myMmr === "number" ? g.myMmr : null,
+    macroScore: typeof g.macroScore === "number" ? g.macroScore : null,
+    opponent: {
+      displayName: opp.displayName || "",
+      race: opp.race || "",
+      mmr: typeof opp.mmr === "number" ? opp.mmr : null,
+    },
+  };
 }
 
 module.exports = { AdminService, DASHBOARD_COLLECTIONS };

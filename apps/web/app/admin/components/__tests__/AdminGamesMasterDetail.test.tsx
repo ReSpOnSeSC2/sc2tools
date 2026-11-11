@@ -8,7 +8,7 @@ import { decidedWinRate, resultOf } from "../adminResult";
 import type { AdminGameDetailGame } from "../AdminGameDetail";
 
 vi.mock("../AdminGameDetail", () => ({ fmtDate: () => "date", fmtDuration: (sec: number | null) => (sec ? `${Math.floor(sec / 60)}:00` : "—") }));
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const game = (index: number, result: string | null, map: string | null = `Map ${index}`): AdminGameDetailGame => ({
   gameId: `game-${index}`, date: "2026-10-28T12:00:00Z", result, myRace: "Protoss", map, durationSec: 600,
@@ -96,6 +96,16 @@ describe("AdminGamesMasterDetail keyboard selection", () => {
     expect(document.activeElement).toBe(screen.getByRole("region", { name: "Selected game" }));
     expect(screen.getByText("Detail for game-1")).toBeTruthy();
   });
+});
+
+it("moves focus to the detail when a keyboard selection hides the list on a phone", () => {
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+  render(<Harness />);
+  const row = screen.getByRole("button", { name: /Alcyone/ });
+  row.focus();
+  fireEvent.keyDown(row, { key: "ArrowDown" });
+  expect(current()).toBe("game-1");
+  expect(document.activeElement).toBe(screen.getByRole("region", { name: "Selected game" }));
 });
 
 describe("OpponentSummaryStrip", () => {

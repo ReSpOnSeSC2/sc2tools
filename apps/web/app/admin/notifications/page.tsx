@@ -72,7 +72,7 @@ function NotificationsBody() {
   const paging = useAdminCursor(before, before => setView({ before }));
   const debug = useSearchParams().get("debug") === "1";
   const [markingRead, setMarkingRead] = useState(false);
-  const [markError, setMarkError] = useState<unknown>(null);
+  const [markError, setMarkError] = useState<Filter | null>(null);
 
   const params = new URLSearchParams();
   params.set("limit", String(PAGE_SIZE));
@@ -109,7 +109,7 @@ function NotificationsBody() {
   const items = data?.items || [];
 
   async function markAllRead() {
-    if (markingRead) return;
+    if (markingRead || view.userId) return;
     setMarkingRead(true);
     setMarkError(null);
     try {
@@ -117,8 +117,8 @@ function NotificationsBody() {
         method: "POST", ...(filter !== "all" ? { body: JSON.stringify({ type: filter }) } : {}),
       });
       await Promise.allSettled([mutate(), counts.mutate()]);
-    } catch (failure) {
-      setMarkError(failure);
+    } catch {
+      setMarkError(filter);
     } finally {
       setMarkingRead(false);
     }
@@ -156,9 +156,9 @@ function NotificationsBody() {
         >
           {markingRead ? "Working…" : markAllLabel(filter, scopedUnread)}
         </Button></>} />
-      {markError ? (
+      {markError === filter && !view.userId ? (
         <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-caption text-text">
-          <span>Couldn&apos;t mark {filter === "all" ? "activity" : FILTER_LABEL[filter].toLowerCase()} read. Nothing changed; try again.</span>
+          <span>Couldn&apos;t mark {filter === "all" ? "activity" : FILTER_LABEL[filter].toLowerCase()} read. Try again.</span>
           <Button size="sm" variant="secondary" onClick={() => { void markAllRead(); }} loading={markingRead}>Retry</Button>
         </div>
       ) : null}

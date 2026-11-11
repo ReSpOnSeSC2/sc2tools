@@ -10,6 +10,7 @@ import { useToastOptional } from "@/components/ui/Toast";
 import { useApi } from "@/lib/clientApi";
 import { useCopy } from "@/lib/useCopy";
 import { LoadingRows } from "../components/AdminFragments";
+import type { PolicyCondition } from "../build-studio/studioTypes";
 import { AXIS_LABEL, ORIGIN_LABEL, engineLabel, sampleFixture, type ClassifierPair, type ClassifierRule, type ClassifierSample, type ClassifierSamplesResp } from "./classifierTypes";
 
 /**
@@ -20,6 +21,7 @@ import { AXIS_LABEL, ORIGIN_LABEL, engineLabel, sampleFixture, type ClassifierPa
  */
 export function ClassifierSamples({ pair }: { pair: ClassifierPair }) {
   const params = new URLSearchParams({ axis: pair.axis, matchup: pair.matchup, detected: pair.detected, declared: pair.declared });
+  if (pair.engine) params.set("engine", pair.engine);
   const swr = useApi<ClassifierSamplesResp>(`/v1/admin/classifier/samples?${params}`, { revalidateOnFocus: false });
   return (
     <div className="space-y-4">
@@ -55,9 +57,43 @@ function RuleCard({ heading, rule, name }: { heading: string; rule: ClassifierRu
           {rule.policy ? (
             <p className="mt-1 text-caption text-text-muted">Build Studio revision {rule.policy.revision}: {rule.policy.enabled ? `${rule.policy.mode === "released" ? "released rule" : "edited rule"} with ${rule.policy.anyOf.length} alternative ${rule.policy.anyOf.length === 1 ? "condition set" : "condition sets"}` : "disabled"}{rule.policy.steps.length ? `, ${rule.policy.steps.length} listed steps` : ""}.</p>
           ) : <p className="mt-1 text-micro text-text-dim">Released engine rule; no Build Studio edit.</p>}
+          <RuleRequirements rule={rule} />
         </>
       )}
     </Card>
+  );
+}
+
+function conditionText(condition: PolicyCondition): string {
+  if (condition.kind === "order") return `${condition.names?.join(" before ")} (${condition.clock})`;
+  if (condition.kind === "first") return `${condition.names?.[0]} first among ${condition.names?.join(", ")} (${condition.clock})`;
+  const cap = condition.max === undefined ? "" : `at most ${condition.max}`;
+  const minimum = condition.min === undefined ? "" : `at least ${condition.min}`;
+  const count = [minimum, cap].filter(Boolean).join(" and ");
+  const seconds = condition.beforeSeconds ?? 0;
+  const deadline = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  return `${count ? `${count} ` : ""}${condition.proxy ? "proxy " : ""}${condition.name} by ${deadline} (${condition.clock})`;
+}
+
+function RuleRequirements({ rule }: { rule: Exclude<ClassifierRule, null> }) {
+  const replacement = rule.policy?.enabled && rule.policy.mode === "replacement" ? rule.policy : null;
+  const criteria = replacement?.anyOf ?? rule.releasedCriteria ?? [];
+  if (!criteria.length && !replacement?.steps.length) return null;
+  return (
+    <details className="mt-2 text-caption text-text-muted">
+      <summary className="min-h-11 cursor-pointer py-2 text-text">Rule requirements</summary>
+      {criteria.map((conditions, group) => (
+        <div key={group} className="mt-2">
+          {criteria.length > 1 ? <p className="font-medium text-text">Condition set {group + 1}</p> : null}
+          <ul className="list-disc space-y-1 pl-5">
+            {conditions.map((condition, index) => <li key={index}>{conditionText(condition)}</li>)}
+          </ul>
+        </div>
+      ))}
+      {replacement?.steps.length ? <ul aria-label="Reference steps" className="mt-3 list-disc space-y-1 pl-5">
+        {replacement.steps.map((step, index) => <li key={index}>{step.timeSeconds}s: {step.action}</li>)}
+      </ul> : null}
+    </details>
   );
 }
 

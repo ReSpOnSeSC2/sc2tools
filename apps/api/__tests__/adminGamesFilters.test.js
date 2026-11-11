@@ -27,45 +27,47 @@ const game = (userId, n, result, map, extra = {}) => ({
   opponent: { pulseId: PULSE, displayName: "Rival", race: "Zerg" }, ...extra,
 });
 
-describe("admin game lists: result classes, filters and head-to-head summary", () => {
-  let mongo, db, app, admin, adminGlobal;
+let mongo, db, app, admin, adminGlobal;
 
-  beforeAll(async () => {
-    mongo = await MongoMemoryServer.create();
-    db = await connect({ uri: mongo.getUri(), dbName: "admin_games_filters" });
-    admin = new AdminService({ db, gdpr: {} });
-    adminGlobal = new AdminGlobalService({ db, pulseDirectory: { coverage: async () => ({}) } });
-    app = express();
-    app.use(express.json());
-    app.use("/v1", buildAdminRouter({
-      auth: (req, _res, next) => { req.auth = { userId: "admin" }; next(); },
-      isAdmin: (req) => req.get("x-admin") === "1",
-      admin, adminGlobal, adminGlobalTrends: {}, adminEvents: {}, analytics: {}, gdpr: {}, games: {},
-      opponents: {}, perGame: {}, users: {},
-    }));
-    app.use(buildErrorHandler(pino({ level: "silent" })));
-  });
-  afterAll(async () => { await db?.close(); await mongo?.stop(); });
-  beforeEach(async () => {
-    await db.games.deleteMany({});
-    await db.users.deleteMany({});
-    await db.games.insertMany([
-      game("owner", 1, "Victory", "Alcyone"),
-      game("owner", 2, "Defeat", "Alcyone"),
-      game("owner", 3, "Tie", "Alcyone"),
-      game("owner", 4, "Undecided", "Pylon"),
-      game("owner", 5, null, "Pylon", { durationSec: 0 }),
-      game("owner", 6, " win ", "Ghost River"),
-      game("owner", 7, "draw", "Ghost River"),
-      // Legacy top-level alias only; still the same opponent.
-      { ...game("owner", 8, "LOSS", "Pylon"), opponent: { displayName: "Rival", race: "Zerg" }, oppPulseId: PULSE },
-      game("other", 9, "Victory", "Alcyone"),
-      game("owner", 10, "Victory", "Alcyone", { opponent: { pulseId: "someone-else", race: "Terran" } }),
-    ]);
-  });
+beforeAll(async () => {
+  mongo = await MongoMemoryServer.create();
+  db = await connect({ uri: mongo.getUri(), dbName: "admin_games_filters" });
+  admin = new AdminService({ db, gdpr: {} });
+  adminGlobal = new AdminGlobalService({ db, pulseDirectory: { coverage: async () => ({}) } });
+  app = express();
+  app.use(express.json());
+  app.use("/v1", buildAdminRouter({
+    auth: (req, _res, next) => { req.auth = { userId: "admin" }; next(); },
+    isAdmin: (req) => req.get("x-admin") === "1",
+    admin, adminGlobal, adminGlobalTrends: {}, adminEvents: {}, analytics: {}, gdpr: {}, games: {},
+    opponents: {}, perGame: {}, users: {},
+  }));
+  app.use(buildErrorHandler(pino({ level: "silent" })));
+});
+afterAll(async () => { await db?.close(); await mongo?.stop(); });
+beforeEach(async () => {
+  await db.games.deleteMany({});
+  await db.users.deleteMany({});
+  await db.games.insertMany([
+    game("owner", 1, "Victory", "Alcyone"),
+    game("owner", 2, "Defeat", "Alcyone"),
+    game("owner", 3, "Tie", "Alcyone"),
+    game("owner", 4, "Undecided", "Pylon"),
+    game("owner", 5, null, "Pylon", { durationSec: 0 }),
+    game("owner", 6, " win ", "Ghost River"),
+    game("owner", 7, "draw", "Ghost River"),
+    // Legacy top-level alias only; still the same opponent.
+    { ...game("owner", 8, "LOSS", "Pylon"), opponent: { displayName: "Rival", race: "Zerg" }, oppPulseId: PULSE },
+    game("other", 9, "Victory", "Alcyone"),
+    game("owner", 10, "Victory", "Alcyone", { opponent: { pulseId: "someone-else", race: "Terran" } }),
+    game("owner", 11, "Victory", "Alcyone", { _deleted: true }),
+    game("owner", 12, "Victory", "Alcyone", { _deletionPending: true }),
+  ]);
+});
 
-  const get = (path) => request(app).get(path).set("x-admin", "1");
+const get = (path) => request(app).get(path).set("x-admin", "1");
 
+describe("admin opponent game summary and filters", () => {
   test("resultOf classification: only victory/win, defeat/loss and tie/draw are decided", () => {
     expect(["Victory", " WIN ", "win"].map(resultClassOf)).toEqual(["win", "win", "win"]);
     expect(["Defeat", "loss"].map(resultClassOf)).toEqual(["loss", "loss"]);
@@ -100,7 +102,9 @@ describe("admin game lists: result classes, filters and head-to-head summary", (
     const map = await get(`/v1/admin/users/owner/opponents/${PULSE}/games?map=Ghost%20River`);
     expect(map.body.items.map((g) => g.gameId)).toEqual(["owner-g7", "owner-g6"]);
   });
+});
 
+describe("global player game filters", () => {
   test("global player games filter by result, map and owner", async () => {
     const all = await get(`/v1/admin/global/players/${PULSE}/games`);
     expect(all.body.items).toHaveLength(9);

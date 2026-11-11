@@ -1,7 +1,9 @@
 "use strict";
 
 const crypto = require("crypto");
-const { COLLECTIONS } = require("../config/constants");
+const { COLLECTIONS, INGEST_PROVENANCE } = require("../config/constants");
+const { buildSecondsFor } = require("./buildDurations");
+const { isKnownBuilding, isKnownUpgrade } = require("./knownBuildings");
 const { stampVersion } = require("../db/schemaVersioning");
 const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 const { CLASSIFIER_QUALITY_INDEXES } = require("../db/classifierQualityIndexes");
@@ -41,6 +43,10 @@ const ROW_LIMIT = 100_000;
 const SNAPSHOTS_KEPT = 7;
 const PAIRS_KEPT = 1000;
 const LABELS_KEPT = 1000;
+const ENGINES_KEPT = 50;
+const PAIR_ENGINES_KEPT = 20;
+const ENGINE_VERSION_RE = new RegExp(INGEST_PROVENANCE.ENGINE_VERSION_PATTERN);
+const UNLISTED_LABEL = "Other label";
 const VIEW_LIMIT = 200;
 const SAMPLE_LIMIT = 20;
 /** Drill-down build orders stop at 6:00 of recorded game time. */
@@ -73,7 +79,7 @@ const CANONICAL = new Map([
 /**
  * @typedef {{
  *   axis: Axis, userId: string, matchup: string, engine: string,
- *   declared: string, detected: string, agree: boolean, origin: string,
+ *   declared: string, detected: string, agree: boolean, origin: "pregame"|"postgame"|"web"|"other",
  *   confirmedAt: Date | null,
  * }} CheckIn
  */
@@ -115,7 +121,7 @@ class ClassifierQualityService {
     for (const axis of /** @type {Axis[]} */ (["build", "opponent"])) {
       let read = 0;
       const cursor = this.db.games
-        .find(axisMatch(axis, windowStart), { projection: axisProjection(axis) })
+        .find(axisMatch(axis, windowStart, generatedAt), { projection: axisProjection(axis) })
         .sort({ [`${AXES[axis].intent}.confirmedAt`]: -1 })
         .limit(this.rowLimit + 1)
         .maxTimeMS(SCAN_MAX_TIME_MS);
@@ -164,10 +170,10 @@ class ClassifierQualityService {
     if (!snap) return { snapshot: null, kFloor: this.kFloor, windowDays: this.windowDays, sampleLimit: SAMPLE_LIMIT };
     const pairs = (/** @type {any[]} */ (snap.pairs || []))
       .filter((pair) => (!filters.axis || pair.axis === filters.axis) && (!filters.matchup || pair.matchup === filters.matchup))
-      .map((pair) => filters.engine
-        ? { ...pair, count: (pair.engines.find((/** @type {any} */ e) => e.engine === filters.engine) || { count: 0 }).count }
-        : pair)
-      .filter((pair) => pair.count > 0)
+      .flatMap((pair) => {
+        const scoped = scopePair(pair, filters.engine);
+        return scoped ? [scoped] : [];
+      })
       .sort((a, b) => b.count - a.count || b.users - a.users || compareText(a.declared, b.declared));
     const labels = (/** @type {any[]} */ (snap.labels || []))
       .filter((label) => !filters.axis || label.axis === filters.axis)
@@ -175,7 +181,7 @@ class ClassifierQualityService {
     return {
       snapshot: {
         generatedAt: snap.generatedAt, windowStart: snap.windowStart, windowDays: snap.windowDays,
-        kFloor: snap.kFloor, totals: snap.totals, engines: snap.engines || [], origins: snap.origins || {},
+        kFloor: snap.kFloor, totals: snap.totals, engines: await this.engineTrends(snap), origins: snap.origins || {},
         matchups: [...new Set((/** @type {any[]} */ (snap.pairs || [])).map((pair) => pair.matchup))].sort(),
       },
       pairs: pairs.slice(0, VIEW_LIMIT),
@@ -187,26 +193,43 @@ class ClassifierQualityService {
     };
   }
 
+  /** Keep only published engine cohorts from the bounded snapshot history.
+   * @param {Record<string, any>} latest */
+  async engineTrends(latest) {
+    const prior = await this.collection.find({ kind: "snapshot", generatedAt: { $lt: latest.generatedAt } }, {
+      projection: { _id: 0, generatedAt: 1, engines: 1 },
+    }).sort({ generatedAt: -1 }).limit(SNAPSHOTS_KEPT - 1).toArray();
+    const history = [...prior.reverse(), latest];
+    return (/** @type {any[]} */ (latest.engines || [])).map((engine) => ({
+      ...engine,
+      trend: history.flatMap((snapshot) => {
+        const row = snapshot.engines?.find((/** @type {any} */ item) => item.engine === engine.engine);
+        return row ? [{ generatedAt: snapshot.generatedAt, disagreements: row.disagreements }] : [];
+      }),
+    }));
+  }
+
   /**
    * Up to SAMPLE_LIMIT recent games behind one published disagreement pair,
    * each with the first six minutes of the relevant build log, next to the
    * declared (and detected) rule's requirements. Samples carry no user, game
    * or opponent identity, so "Copy as test fixture" exports only engine input.
    *
-   * @param {{ axis: Axis, matchup: string, detected: string, declared: string }} pair
+   * @param {{ axis: Axis, matchup: string, detected: string, declared: string, engine?: string }} pair
    */
   async samples(pair) {
     this.assertIndexes();
     const snap = await this.latest();
-    const published = snap && (/** @type {any[]} */ (snap.pairs || [])).find((row) => row.axis === pair.axis
+    const pairRow = snap && (/** @type {any[]} */ (snap.pairs || [])).find((row) => row.axis === pair.axis
       && row.matchup === pair.matchup && row.detected === pair.detected && row.declared === pair.declared);
+    const published = pairRow && scopePair(pairRow, pair.engine);
     if (!snap || !published) {
       throw Object.assign(new Error("classifier_pair_not_found"), { status: 404, code: "classifier_pair_not_found" });
     }
     const intent = AXES[pair.axis].intent;
     const rows = await this.db.games
-      .find({ ...axisMatch(pair.axis, snap.windowStart), ...matchupQuery(pair.axis, pair.matchup),
-        ...labelQuery(`${intent}.build`, pair.declared, "declared"), ...labelQuery(`${intent}.detected`, pair.detected, "detected") },
+      .find({ $and: [axisMatch(pair.axis, snap.windowStart, snap.generatedAt), matchupQuery(pair.axis, pair.matchup),
+        labelQuery(`${intent}.build`, pair.declared, "declared"), labelQuery(`${intent}.detected`, pair.detected, "detected"), engineQuery(pair.engine)] },
       { projection: { ...axisProjection(pair.axis), gameId: 1, date: 1, map: 1, durationSec: 1, gameVersion: 1 } })
       .sort({ [`${intent}.confirmedAt`]: -1 })
       .limit(SAMPLE_LIMIT * 3)
@@ -215,9 +238,12 @@ class ClassifierQualityService {
     const matching = rows.filter((row) => {
       const checkIn = normalizeCheckIn(row, pair.axis);
       return checkIn && !checkIn.agree && checkIn.detected === pair.detected && checkIn.declared === pair.declared
-        && checkIn.matchup === pair.matchup;
-    }).slice(0, SAMPLE_LIMIT);
-    const logs = await this.buildLogs(matching, pair.axis === "build" ? "buildLog" : "oppBuildLog");
+        && checkIn.matchup === pair.matchup && (!pair.engine || checkIn.engine === pair.engine);
+    });
+    // A snapshot may outlive a corrected or deleted check-in. Keep the
+    // floor on the current bounded sample before reading replay details.
+    const sampleRows = new Set(matching.map((row) => row.userId)).size >= snap.kFloor ? matching.slice(0, SAMPLE_LIMIT) : [];
+    const logs = await this.buildLogs(sampleRows, pair.axis === "build" ? "buildLog" : "oppBuildLog");
     const policy = this.presetPolicies ? await this.presetPolicies.current().catch(() => null) : null;
     return {
       pair: published,
@@ -225,7 +251,7 @@ class ClassifierQualityService {
       sampleLimit: SAMPLE_LIMIT,
       sampleSeconds: SAMPLE_SECONDS,
       rules: { declared: ruleFor(pair.declared, policy), detected: ruleFor(pair.detected, policy) },
-      samples: matching.map((row, index) => {
+      samples: sampleRows.map((row, index) => {
         const checkIn = /** @type {CheckIn} */ (normalizeCheckIn(row, pair.axis));
         const log = firstMinutes(logs[index]);
         return {
@@ -290,13 +316,18 @@ class ClassifierQualityService {
     }
     /** @type {Map<string, Map<string, Record<string, any>>>} */
     const details = new Map();
-    if (this.gameDetails) {
-      await Promise.all([...byOwner].map(async ([userId, gameIds]) => {
-        try { details.set(userId, await /** @type {any} */ (this.gameDetails).findMany(userId, gameIds, { fields: [field], concurrency: 4 })); }
-        catch { details.set(userId, new Map()); }
-      }));
-    }
-    return rows.map((row) => details.get(row.userId)?.get(String(row.gameId))?.[field] ?? row[field]);
+    await Promise.all([...byOwner].map(async ([userId, gameIds]) => {
+      const found = await this.gameDetails?.findMany(userId, gameIds, { fields: [field], concurrency: 2 }).catch(() => null) || new Map();
+      const missing = gameIds.filter((id) => !Array.isArray(found.get(id)?.[field]));
+      if (missing.length) {
+        const legacy = await this.db.games.find({ userId, gameId: { $in: missing }, ...LIVE_GAME_MATCH }, {
+          projection: { _id: 0, gameId: 1, [field]: 1 }, maxTimeMS: SAMPLE_MAX_TIME_MS,
+        }).toArray();
+        for (const row of legacy) found.set(row.gameId, row);
+      }
+      details.set(userId, found);
+    }));
+    return rows.map((row) => details.get(row.userId)?.get(String(row.gameId))?.[field]);
   }
 }
 
@@ -345,7 +376,13 @@ class Tally {
     }));
     pair.count += 1;
     pair.users.add(c.userId);
-    pair.engines.set(c.engine, (pair.engines.get(c.engine) || 0) + 1);
+    const byEngine = upsert(pair.engines, c.engine, () => ({
+      engine: c.engine, count: 0, users: new Set(), origins: { pregame: 0, postgame: 0, web: 0, other: 0 }, lastConfirmedAt: /** @type {Date|null} */ (null),
+    }));
+    byEngine.count += 1;
+    byEngine.users.add(c.userId);
+    byEngine.origins[c.origin] += 1;
+    if (c.confirmedAt && (!byEngine.lastConfirmedAt || c.confirmedAt > byEngine.lastConfirmedAt)) byEngine.lastConfirmedAt = c.confirmedAt;
     pair.origins[c.origin] += 1;
     if (c.confirmedAt && (!pair.lastConfirmedAt || c.confirmedAt > pair.lastConfirmedAt)) pair.lastConfirmedAt = c.confirmedAt;
   }
@@ -370,6 +407,7 @@ class Tally {
       },
       origins: this.origins,
       engines: [...this.engines.values()].filter((row) => row.users.size >= kFloor)
+        .sort((a, b) => b.checkIns - a.checkIns || compareEngines(a.engine, b.engine)).slice(0, ENGINES_KEPT)
         .map((row) => ({ engine: row.engine, checkIns: row.checkIns, disagreements: row.disagreements, users: row.users.size }))
         .sort((a, b) => compareEngines(a.engine, b.engine)),
       pairs: pairs
@@ -378,7 +416,7 @@ class Tally {
         .map((pair) => ({
           axis: pair.axis, matchup: pair.matchup, detected: pair.detected, declared: pair.declared,
           count: pair.count, users: pair.users.size, origins: pair.origins, lastConfirmedAt: pair.lastConfirmedAt,
-          engines: [...pair.engines].map(([engine, count]) => ({ engine, count })).sort((a, b) => compareEngines(a.engine, b.engine)),
+          engines: publishPairEngines(pair.engines, kFloor),
         })),
       labels: [...this.labels.values()].filter((row) => row.users.size >= kFloor)
         .sort((a, b) => (b.missed + b.mislabeled) - (a.missed + a.mislabeled) || compareText(a.label, b.label))
@@ -389,6 +427,20 @@ class Tally {
         .sort((a, b) => compareText(a.label, b.label)),
     };
   }
+}
+
+/** @param {Map<string, any>} engines @param {number} kFloor */
+function publishPairEngines(engines, kFloor) {
+  return [...engines.values()].filter((row) => row.users.size >= kFloor)
+    .sort((a, b) => b.count - a.count || compareEngines(a.engine, b.engine)).slice(0, PAIR_ENGINES_KEPT)
+    .map((row) => ({ ...row, users: row.users.size }));
+}
+
+/** @param {any} pair @param {string} [engine] */
+function scopePair(pair, engine) {
+  if (!engine) return pair;
+  const row = pair.engines.find((/** @type {any} */ item) => item.engine === engine);
+  return row ? { ...pair, ...row, engines: [row] } : null;
 }
 
 /**
@@ -423,14 +475,14 @@ function normalizeCheckIn(row, axis) {
   };
 }
 
-/** @param {Axis} axis @param {Date} windowStart */
-function axisMatch(axis, windowStart) {
+/** @param {Axis} axis @param {Date} windowStart @param {Date} windowEnd */
+function axisMatch(axis, windowStart, windowEnd) {
   const intent = AXES[axis].intent;
   return {
     ...LIVE_GAME_MATCH,
     [`${intent}.status`]: "confirmed",
     [`${intent}.applied`]: true,
-    [`${intent}.confirmedAt`]: { $gte: windowStart },
+    [`${intent}.confirmedAt`]: { $gte: windowStart, $lte: windowEnd },
   };
 }
 
@@ -456,9 +508,11 @@ function matchupQuery(axis, matchup) {
  */
 function labelQuery(path, label, role) {
   if (label === CUSTOM_LABEL) {
-    return role === "declared" ? { [`${path}.source`]: "custom" } : { [`${path}.slug`]: { $type: "string", $ne: "" } };
+    const hasSlug = { [`${path}.slug`]: { $type: "string", $ne: "" } };
+    return role === "declared" ? { $or: [{ [`${path}.source`]: "custom" }, hasSlug] } : hasSlug;
   }
   if (label === NO_LABEL) return { [`${path}.name`]: { $in: [null, ""] } };
+  if (label === UNLISTED_LABEL) return { [`${path}.name`]: { $nin: [null, "", ...CANONICAL.keys()] } };
   return { [`${path}.name`]: { $in: [...CANONICAL].filter(([, name]) => name === label).map(([alias]) => alias).concat(CANONICAL.has(label) ? [] : [label]) } };
 }
 
@@ -478,6 +532,7 @@ function ruleFor(label, policy) {
     description: entry.description,
     surfaces: entry.surfaces,
     implementation: entry.implementation,
+    releasedCriteria: entry.releasedCriteria ?? [],
     policy: edit ? {
       revision: policy.revision, enabled: edit.enabled, mode: edit.mode || "replacement",
       anyOf: edit.anyOf, steps: edit.steps || [], description: edit.description || null,
@@ -486,8 +541,8 @@ function ruleFor(label, policy) {
 }
 
 /**
- * Build-log lines recorded at or before 6:00, capped; never parsed into
- * identity-bearing structures.
+ * Allowlisted game events at or before 6:00. Older and browser-supplied
+ * logs can contain free text, so copy only recognized entity names.
  *
  * @param {unknown} raw
  * @returns {{ lines: string[], available: boolean, truncated: boolean }}
@@ -496,16 +551,18 @@ function firstMinutes(raw) {
   if (!Array.isArray(raw) || raw.length === 0) return { lines: [], available: false, truncated: false };
   /** @type {string[]} */
   const lines = [];
-  let truncated = false;
-  for (const line of raw) {
-    if (typeof line !== "string") continue;
-    const match = /^\[(\d+):(\d{2})\]/.exec(line.trim());
+  let truncated = raw.length > 5000;
+  for (const line of raw.slice(0, 5000)) {
+    if (typeof line !== "string" || line.length > 120) continue;
+    const match = /^\[(\d{1,3}):([0-5]\d)\]\s+([A-Za-z][A-Za-z0-9 ]{0,79})$/.exec(line.trim());
     if (!match) continue;
-    if (Number(match[1]) * 60 + Number(match[2]) > SAMPLE_SECONDS) { truncated = true; break; }
+    if (Number(match[1]) * 60 + Number(match[2]) > SAMPLE_SECONDS) { truncated = true; continue; }
+    const entity = match[3];
+    if (!isKnownBuilding(entity) && !isKnownUpgrade(entity) && buildSecondsFor(entity) === null) continue;
     if (lines.length >= SAMPLE_LINES_MAX) { truncated = true; break; }
-    lines.push(line.trim().slice(0, 120));
+    lines.push(`[${match[1]}:${match[2]}] ${entity}`);
   }
-  return { lines, available: true, truncated };
+  return { lines, available: lines.length > 0, truncated };
 }
 
 /** @param {unknown} raw */
@@ -520,18 +577,26 @@ function raceName(raw) {
   return letter === "P" ? "Protoss" : letter === "T" ? "Terran" : letter === "Z" ? "Zerg" : null;
 }
 
-/** The detecting engine: a browser upload's engine semver, else the desktop agent. @param {any} row */
+/** The uploader and its reported engine; legacy rows can lack both. @param {any} row */
 function engineOf(row) {
-  if (row.ingestSource === "browser") {
-    return typeof row.engineVersion === "string" && row.engineVersion ? `browser:${row.engineVersion.slice(0, 40)}` : "browser";
-  }
-  return "agent";
+  if (!INGEST_PROVENANCE.SOURCES.includes(row.ingestSource)) return "unknown";
+  const version = row.engineVersion;
+  return typeof version === "string" && version.length <= INGEST_PROVENANCE.ENGINE_VERSION_MAX_LENGTH && ENGINE_VERSION_RE.test(version)
+    ? `${row.ingestSource}:${version}` : row.ingestSource;
+}
+
+/** @param {string} [engine] */
+function engineQuery(engine) {
+  if (!engine) return {};
+  const [source, ...version] = engine.split(":");
+  if (source === "unknown") return { ingestSource: { $nin: [...INGEST_PROVENANCE.SOURCES] } };
+  return version.length ? { ingestSource: source, engineVersion: version.join(":") } : { ingestSource: source };
 }
 
 /** @param {string} name */
 function canonicalLabel(name) {
   const trimmed = name.trim().slice(0, LABEL_MAX);
-  return CANONICAL.get(trimmed) || trimmed;
+  return CANONICAL.get(trimmed) || UNLISTED_LABEL;
 }
 
 /**
@@ -550,11 +615,11 @@ function compareText(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-/** Agent first, then browser engines newest semver first. @param {string} a @param {string} b */
+/** Order uploader groups by reported versions, with unversioned rows last. @param {string} a @param {string} b */
 function compareEngines(a, b) {
-  const rank = (/** @type {string} */ e) => (e === "agent" ? 0 : e === "browser" ? 2 : 1);
+  const rank = (/** @type {string} */ e) => e.startsWith("agent:") ? 0 : e.startsWith("browser:") ? 1 : 2;
   if (rank(a) !== rank(b)) return rank(a) - rank(b);
-  const parts = (/** @type {string} */ e) => e.replace(/^browser:/, "").split(/[.+-]/).map((part) => Number(part) || 0);
+  const parts = (/** @type {string} */ e) => e.replace(/^(?:agent|browser):/, "").split(/[.+-]/).map((part) => Number(part) || 0);
   const left = parts(a), right = parts(b);
   for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
     if ((left[i] || 0) !== (right[i] || 0)) return (right[i] || 0) - (left[i] || 0);
