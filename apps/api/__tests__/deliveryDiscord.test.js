@@ -25,6 +25,12 @@ function game(userId, extra = {}) {
     isLadderGame: true, matchFormat: "1v1", myMmr: 4000, myMmrSource: "replay", myToonHandle: "1-S2-1-1", durationSec: 700,
     opponent: { race: "Zerg", mmr: 3990, mmrSource: "replay", displayName: "SecretOppZed" }, ...extra };
 }
+async function queueFixtureGame(userId, row) {
+  const filter = { userId, gameId: row.gameId };
+  const result = await h.db.games.updateOne(filter, { $setOnInsert: row }, { upsert: true });
+  try { await discord.onFreshGame(userId, { gameId: row.gameId, isLadderGame: row.isLadderGame }); }
+  finally { if (result.upsertedCount) await h.db.games.deleteOne(filter); }
+}
 async function connected(name) {
   const created = await as(name).post("/v1/me/integrations/discord/hooks", { url: URL_A, label: "Clan chat" });
   await as(name).post(`/v1/me/integrations/discord/hooks/${created.body.id}/preview`, {});
@@ -107,15 +113,15 @@ test("send test posts immediately to the decrypted webhook, once per half minute
 test("a ranked result is queued once, sent by the drain, and casual games are ignored", async () => {
   await connected("dee");
   const ranked = game("u_dee");
-  await discord.onFreshGame("u_dee", ranked);
-  await discord.onFreshGame("u_dee", ranked);
-  await discord.onFreshGame("u_dee", game("u_dee", { isLadderGame: false }));
+  await queueFixtureGame("u_dee", ranked);
+  await queueFixtureGame("u_dee", ranked);
+  await queueFixtureGame("u_dee", game("u_dee", { isLadderGame: false }));
   expect(await h.db.discordOutbox.countDocuments({ userId: "u_dee", kind: "result" })).toBe(1);
   expect(await discord.drain()).toEqual({ sent: 1, retried: 0, dropped: 0 });
   expect(JSON.stringify(JSON.parse(calls[0].init.body))).not.toContain("SecretOppZed");
   expect(await h.db.discordOutbox.findOne({ userId: "u_dee" })).toMatchObject({ status: "sent" });
   expect(await h.db.discordOutbox.findOne({ userId: "u_dee", payload: { $exists: true } })).toBeNull();
-  await discord.onFreshGame("u_dee", ranked);
+  await queueFixtureGame("u_dee", ranked);
   expect((await discord.drain()).sent).toBe(0);
   expect(calls).toHaveLength(1);
   expect((await h.db.discordHooks.findOne({ userId: "u_dee" })).lastPostAt).toBeInstanceOf(Date);
@@ -189,7 +195,7 @@ test("revoking a share or withdrawing channel consent blocks queued posts and sc
   const { path, send } = await prepareBattleReport(token);
   await as("dee").patch(path, { options: { replayLink: true, opponentNames: true } }).expect(200);
   await as("dee").post(send, { token, ...battleReport }).expect(200);
-  await discord.onFreshGame("u_dee", game("u_dee"));
+  await queueFixtureGame("u_dee", game("u_dee"));
   await h.db.gameShares.updateOne({ _id: token }, { $set: { revokedAt: new Date() } });
   expect(await discord.deliverRow(await h.db.discordOutbox.findOne({ shareToken: token }))).toBe("dropped");
   await as("dee").patch(path, { options: { opponentNames: false } }).expect(200);
@@ -217,11 +223,11 @@ test("session summaries post once after the session gap, peaks only above a 20-g
   expect((await discord.drain()).sent).toBe(1);
   expect((await discord.sweepSessions()).queued).toBe(0);
   await h.db.games.insertMany(Array.from({ length: 20 }, (_, i) => game("u_dee", { date: new Date(now - (40 + i) * 3600_000), myMmr: 4050 + i })));
-  await discord.onFreshGame("u_dee", game("u_dee", { myMmr: 4060 }));
+  await queueFixtureGame("u_dee", game("u_dee", { myMmr: 4060 }));
   expect(await h.db.discordOutbox.countDocuments({ userId: "u_dee", kind: "milestone" })).toBe(0);
   const peak = game("u_dee", { myMmr: 4100 });
   await h.db.games.insertOne(peak);
-  await discord.onFreshGame("u_dee", peak);
+  await queueFixtureGame("u_dee", peak);
   expect(await h.db.discordOutbox.countDocuments({ userId: "u_dee", kind: "milestone" })).toBe(1);
 });
 
@@ -242,7 +248,7 @@ test("promotion uses observed ranks from the same ladder queue and respects hook
     game(userId, { ...ranked, date: new Date(date - 60_000), myLadderRace: "Protoss", myLeagueId: 6 }),
   ]);
   const current = game(userId, { ...ranked, myLeagueId: 5 });
-  await discord.onFreshGame(userId, current);
+  await queueFixtureGame(userId, current);
   const filter = { userId, kind: "milestone" };
   const row = await h.db.discordOutbox.findOne(filter);
   expect(row.payload.embeds[0]).toMatchObject({ title: "Promotion · Master", description: "Diamond → Master · Random", fields: [] });
@@ -251,7 +257,7 @@ test("promotion uses observed ranks from the same ladder queue and respects hook
   await discord.drain();
   expect(await h.db.discordOutbox.findOne(filter)).toMatchObject({ status: "sent" });
   expect((await h.db.discordOutbox.findOne(filter)).payload).toBeUndefined();
-  await discord.onFreshGame(userId, current);
+  await queueFixtureGame(userId, current);
   expect(await h.db.discordOutbox.countDocuments(filter)).toBe(1);
   expect(await h.db.discordOutbox.countDocuments({ ...filter, status: "queued" })).toBe(0);
 });
@@ -265,9 +271,9 @@ test("promotion is skipped for an unrated observation gap, another account, or a
     game(userId, { ...ranked, date: new Date(date - 60_000) }),
     game(userId, { ...ranked, date: new Date(date - 60_000), myLeagueId: 6, myToonHandle: "1-S2-1-2" }),
   ]);
-  await discord.onFreshGame(userId, game(userId, { ...ranked, myLeagueId: 5 }));
-  await discord.onFreshGame(userId, game(userId, { ...ranked, myLeagueId: 5, myToonHandle: "1-S2-1-2" }));
-  await discord.onFreshGame(userId, game(userId, { ...ranked, myLeagueId: 5, myToonHandle: "1-S2-1-3" }));
+  await queueFixtureGame(userId, game(userId, { ...ranked, myLeagueId: 5 }));
+  await queueFixtureGame(userId, game(userId, { ...ranked, myLeagueId: 5, myToonHandle: "1-S2-1-2" }));
+  await queueFixtureGame(userId, game(userId, { ...ranked, myLeagueId: 5, myToonHandle: "1-S2-1-3" }));
   expect(await h.db.discordOutbox.countDocuments({ userId, kind: "milestone" })).toBe(0);
 });
 
@@ -285,7 +291,7 @@ test("weekly Discord receipts prevent replay after the first post was drained", 
 });
 
 
-test("ranked ingest stores and queues the replay-observed own league", async () => {
+test("ranked ingest queues the effective build and only stored replay ratings and league", async () => {
   const userId = await promotionRecipient("rankupload");
   const date = Date.now() - 30_000;
   const prior = game(userId, { date: new Date(date - 60_000), matchFormat: "1v1", myLeagueId: 4 });
@@ -294,16 +300,35 @@ test("ranked ingest stores and queues the replay-observed own league", async () 
   delete incoming.userId;
   delete incoming.createdAt;
   const enqueue = jest.spyOn(discord, "onFreshGame");
+  const bind = jest.spyOn(h.services.buildIntents, "bindIngestedGame").mockImplementationOnce(async (owner, replay) => {
+    await h.db.games.updateOne({ userId: owner, gameId: replay.gameId }, { $set: { myBuild: "Effective opener" } });
+  });
   try {
     const response = await as("rankupload").post("/v1/games", { games: [incoming] });
     expect(response.status).toBe(202);
-    expect(enqueue).toHaveBeenCalledWith(userId, expect.objectContaining({ myLeagueId: 5 }));
+    expect(enqueue).toHaveBeenCalledWith(userId, { gameId: incoming.gameId, isLadderGame: true });
     await enqueue.mock.results[0].value;
-    expect(await h.db.games.findOne({ userId, gameId: incoming.gameId })).toMatchObject({ myLeagueId: 5 });
+    expect(await h.db.games.findOne({ userId, gameId: incoming.gameId })).toMatchObject({ myLeagueId: 5, myBuild: "Effective opener" });
+    const result = await h.db.discordOutbox.findOne({ userId, kind: "result" });
+    expect(result.payload.embeds[0].fields).toEqual(expect.arrayContaining([
+      { name: "Build", value: "Effective opener", inline: true },
+      { name: "MMR", value: "4,000", inline: true },
+      { name: "Opponent", value: "Zerg · 3,990 MMR", inline: true },
+    ]));
+    expect(JSON.stringify(result.payload)).not.toContain("SecretOppZed");
     expect(await h.db.discordOutbox.findOne({ userId, kind: "milestone" })).toMatchObject({
-      payload: { embeds: [expect.objectContaining({ title: "Promotion · Master" })] },
+      payload: { embeds: [expect.objectContaining({ title: "Promotion · Master", fields: [{ name: "MMR", value: "4,000", inline: true }] })] },
     });
-  } finally { enqueue.mockRestore(); }
+  } finally { bind.mockRestore(); enqueue.mockRestore(); }
+});
+
+test("the ingest delivery lookup requires an eligible replay owned by the recipient", async () => {
+  const userId = await promotionRecipient("ingestowner");
+  const other = game("u_bob");
+  const hidden = game(userId, { excluded: true });
+  await h.db.games.insertMany([other, hidden]);
+  for (const gameId of [other.gameId, hidden.gameId]) await discord.onFreshGame(userId, { gameId, isLadderGame: true });
+  expect(await h.db.discordOutbox.countDocuments({ userId })).toBe(0);
 });
 
 
@@ -311,7 +336,7 @@ test("a result or promotion never includes an unproven rating", async () => {
   const userId = await promotionRecipient("ratingprovenance");
   const now = Date.now() - 60_000;
   await h.db.games.insertOne(game(userId, { myLeagueId: 4, date: new Date(now - 60_000) }));
-  await discord.onFreshGame(userId, game(userId, { myLeagueId: 5, myMmr: 7321, myMmrSource: "unavailable", date: new Date(now),
+  await queueFixtureGame(userId, game(userId, { myLeagueId: 5, myMmr: 7321, myMmrSource: "unavailable", date: new Date(now),
     opponent: { race: "Zerg", mmr: 7123, mmrSource: "pulse", displayName: "Unverified opponent" } }));
   const rows = await h.db.discordOutbox.find({ userId }).toArray();
   const result = rows.find(row => row.kind === "result").payload.embeds[0];
@@ -337,11 +362,11 @@ test("a ranked result shows its starting rating without a delta and a peak uses 
     game(userId, { ...offQueue, myMmr: 8104, matchFormat: "2v2", playerCount: 4 }),
     game(userId, { ...offQueue, myMmr: 8105, excluded: true }),
   ]);
-  await discord.onFreshGame(userId, game(userId, { date: new Date(now), myMmr: 4250, myLadderRace: "Random" }));
+  await queueFixtureGame(userId, game(userId, { date: new Date(now), myMmr: 4250, myLadderRace: "Random" }));
   expect(await h.db.discordOutbox.countDocuments({ userId, kind: "milestone" })).toBe(0);
   expect((await h.db.discordOutbox.findOne({ userId, kind: "result" })).payload.embeds[0].fields).toContainEqual({ name: "MMR", value: "4,250", inline: true });
   await h.db.games.insertOne(game(userId, { ...offQueue, date: new Date(now - 2000), myMmr: 4230 }));
-  await discord.onFreshGame(userId, game(userId, { date: new Date(now), myMmr: 4260, myLadderRace: "rand" }));
+  await queueFixtureGame(userId, game(userId, { date: new Date(now), myMmr: 4260, myLadderRace: "rand" }));
   expect((await h.db.discordOutbox.findOne({ userId, kind: "milestone" })).payload.embeds[0]).toMatchObject({
     title: "New Random MMR peak", description: "4,260 MMR (previous best 4,230)",
   });
@@ -388,7 +413,7 @@ async function changeInsideDispatchLease(row, change) {
 test("rechecks hook privacy after taking the erasure lease", async () => {
   const userId = await promotionRecipient("discordprivacy");
   await h.db.discordHooks.updateOne({ userId }, { $set: { "options.opponentNames": true } });
-  await discord.onFreshGame(userId, game(userId));
+  await queueFixtureGame(userId, game(userId));
   const queued = await h.db.discordOutbox.findOne({ userId });
   expect(JSON.stringify(queued.payload)).toContain("SecretOppZed");
   const outcome = await changeInsideDispatchLease(queued, () => h.db.discordHooks.updateOne({ userId }, { $set: { "options.opponentNames": false } }));
@@ -403,7 +428,7 @@ test("rechecks public archive consent after taking the erasure lease and removes
   const userId = await promotionRecipient("discordarchive");
   await h.db.discordHooks.updateOne({ userId }, { $set: { "options.replayLink": true } });
   await h.db.users.updateOne({ userId }, { $set: { replaySharing: { enabled: true, slug: "account-replay" } } });
-  await discord.onFreshGame(userId, game(userId));
+  await queueFixtureGame(userId, game(userId));
   const queued = await h.db.discordOutbox.findOne({ userId });
   expect(queued.payload.embeds[0].url).toContain("account-replay");
   const outcome = await changeInsideDispatchLease(queued, () => h.db.users.updateOne({ userId }, { $set: { "replaySharing.enabled": false } }));

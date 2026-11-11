@@ -74,13 +74,6 @@
       "example": "\"2px solid #157d8c\""
     },
     {
-      "file": "app/players/[player]/replays/opengraph-image.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "fb0ad21e06c09fbcca9b99e68c43e2d423cce97ef8e4b1ba498341f5cc652feb",
-      "count": 3,
-      "example": "\"radial-gradient(900px 520px at 100% 0%, #157d8c55 0%, #06090e 58%), #06090e\""
-    },
-    {
       "file": "app/reviews/[id]/opengraph-image.tsx",
       "rule": "hex-outside-visualization",
       "signature": "03e6ea568dbac317e845155bf505197ea3cd2d9701433769a047a695f6135ccc",

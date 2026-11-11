@@ -8,7 +8,7 @@ const { isSyncActionPath } = require("./syncActionJson");
 const { isReplayDownloadBatchPath, isReplayDownloadBatchFailure } = require("./replayDownloadBatchBoundary");
 const PRIVATE_SEARCH_TAG = "sc2tools.private_search";
 const HEARTBEAT_PATH = /^\/v1\/devices\/heartbeat\/?$/i;
-const CREDENTIAL_BODY_PATH = /^\/(?:v1\/)?(?:me\/integrations\/discord\/hooks(?:\/[^/]+\/battle-report)?|me\/push\/(?:subscriptions|unsubscribe)|push\/subscription-change)\/?$/i;
+const CREDENTIAL_BODY_PATH = /^\/(?:v1\/)?(?:me\/integrations\/discord\/hooks(?:\/[^/]+\/battle-report)?|me\/push\/(?:subscriptions|unsubscribe)|push\/subscription-change|me\/replay-sharing\/reference)\/?$/i;
 
 // The feed URL itself carries a bearer credential, even for a failed lookup.
 const CALENDAR_FEED_PATH = /^\/(?:v1\/)?calendar\/[^/]+\/?$/i;
@@ -50,7 +50,8 @@ function isHeartbeatBodyPath(value) {
 }
 
 /** Bodies carrying a delivery credential: a Discord webhook URL, or a Web
- * Push endpoint and its keys, or a battle report's share token.
+ * Push endpoint and its keys, a battle report's share token, or an
+ * owner's private replay identifier used to resolve a public link.
  * Example: isCredentialBodyPath("/v1/me/integrations/discord/hooks") === true.
  * @param {unknown} value @returns {boolean} */
 function isCredentialBodyPath(value) {
