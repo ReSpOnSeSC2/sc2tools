@@ -16,6 +16,7 @@ const adapters = {
   "@/lib/instant/flag": `let mode='all';export const getInstantImportMode=()=>mode;export const setFixtureMode=value=>{mode=value}`,
   "@/components/landing/HeroCarousel": "export const HeroCarousel=()=>null;",
   "@/components/landing/RealGameShowcase": "export const RealGameShowcase=()=>null;",
+  "@/components/landing/LiveFromTheLadder": "export const LiveFromTheLadder=()=>null;",
   "@/components/landing/GuidesStrip": "export const GuidesStrip=()=>null;",
   "@/components/landing/StreamManagerShowcase": "export const StreamManagerShowcase=()=>null;",
   "@/components/landing/ReplayDemo": "export const ReplayDemo=()=>null;",

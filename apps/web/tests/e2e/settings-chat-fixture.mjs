@@ -83,6 +83,7 @@ export async function openSettingsChatFixture(page, theme, mode = "stable") {
   const { script, css, cssNames, fonts, buildId } = built;
   const errors = [], unexpectedRequests = [], rejectedWrites = [], externalAttempts = [], reads = [], writes = [], deviceLoads = [], abortedResponses = [];
   const releases = [];
+  let holdBotSave = false;
   const flights = new Set();
   const row = (owner, id) => ({ token: `${owner}-${id}`, label: `${owner} ${id}`, createdAt: "2026-10-26" });
   const configs = new Map(), bots = new Map();
@@ -116,6 +117,7 @@ export async function openSettingsChatFixture(page, theme, mode = "stable") {
         if (!value || typeof value !== "object" || body.length > 100_000) throw new Error("Invalid synthetic draft");
         writes.push({ owner, method, path: url.pathname });
         if (url.pathname.endsWith("multichat")) { configs.set(owner, value); return json(value); }
+        if (holdBotSave) { holdBotSave = false; await new Promise(resolve => releases.push(resolve)); }
         const saved = { ...bot, ...value, hasToken: !!value.token }; delete saved.token; bots.set(owner, saved); return json(saved);
       }
       if (mode === "unknown" && method === "POST" && url.pathname === "/v1/overlay-tokens" && body === JSON.stringify({ label: "Default" })) {
@@ -145,5 +147,6 @@ export async function openSettingsChatFixture(page, theme, mode = "stable") {
   });
   await page.goto(`${origin}/settings?tab=account`); await page.getByRole("heading", { name: "account synthetic panel" }).waitFor();
   await page.evaluate(() => document.fonts.ready);
-  return { errors, unexpectedRequests, rejectedWrites, externalAttempts, reads, writes, deviceLoads, abortedResponses, cssNames, buildId, releaseAll: active.releaseAll };
+  return { errors, unexpectedRequests, rejectedWrites, externalAttempts, reads, writes, deviceLoads, abortedResponses,
+    cssNames, buildId, releaseAll: active.releaseAll, holdNextBotSave: () => { holdBotSave = true; } };
 }

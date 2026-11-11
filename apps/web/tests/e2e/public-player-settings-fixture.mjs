@@ -9,12 +9,14 @@ const ORIGIN = "https://public-player-settings-fixture.local";
 const SOURCE = `import React from "react";import {createRoot} from "react-dom/client";
 import {SWRConfig} from "swr";import {setFixtureOwner,useAuth} from "@clerk/nextjs";
 import {SettingsPublicProfile} from "@/components/analyzer/settings/SettingsPublicProfile";
+import {SettingsSaveScope} from "@/components/analyzer/settings/SettingsSaveBar";
 import {Button} from "@/components/ui/Button";import {ToastProvider} from "@/components/ui/Toast";
 function Fixture(){const auth=useAuth();return <main className="mx-auto max-w-5xl space-y-5 p-4">
 <h1 className="text-h2">Public profile settings fixture</h1><div className="flex flex-wrap gap-2">
 <Button onClick={()=>setFixtureOwner("owner-a")}>Use fixture account A</Button>
 <Button onClick={()=>setFixtureOwner("owner-b")}>Use fixture account B</Button>
-<output aria-label="Fixture owner">{auth.userId}</output></div><SettingsPublicProfile/></main>;}
+<output aria-label="Fixture owner">{auth.userId}</output></div>
+<SettingsSaveScope key={auth.userId} tabId="profile"><SettingsPublicProfile/></SettingsSaveScope></main>;}
 const cache=new Map();createRoot(document.getElementById("root")).render(<SWRConfig value={{provider:()=>cache,dedupingInterval:0,shouldRetryOnError:false}}><ToastProvider><Fixture/></ToastProvider></SWRConfig>);`;
 const adapters = {
   "next/link": 'import React from "react";export default React.forwardRef(function Link({prefetch,replace,scroll,...props},ref){return <a {...props} ref={ref}/>;});',

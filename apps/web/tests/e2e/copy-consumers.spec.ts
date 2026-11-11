@@ -249,15 +249,15 @@ for (const theme of ["light", "dark"] as const) {
     const nativeTrigger = publicReplay.getByRole("button", { name: "Share Synthetic player's replay page", exact: true });
     await page.evaluate(() => (window as FixtureWindow).fixtureNativeMode("abort"));
     const beforeNativeCopy = await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length);
-    await nativeTrigger.click(); await expect(nativeTrigger).toHaveText("Share replay page");
+    await nativeTrigger.click(); await expect(nativeTrigger).toHaveText("Share");
     expect(await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length)).toBe(beforeNativeCopy);
-    await expect(replayManual).toHaveCount(0); await expect(notifications.getByRole("status")).toHaveCount(0);
+    await expect(manualDialog).toHaveCount(0); await expect(notifications.getByRole("status")).toHaveCount(0);
     await page.evaluate(() => (window as FixtureWindow).fixtureNativeMode("failure"));
-    await nativeTrigger.click(); await selectedReadonly(replayInput, COPY_FIXTURE_ORIGIN + PUBLIC_REPLAY_FIXTURE_PATH);
+    await nativeTrigger.click(); await selectedReadonly(shareInput, COPY_FIXTURE_ORIGIN + PUBLIC_REPLAY_FIXTURE_PATH);
     await checkAccessibility(page, info, "/players/synthetic-player/replays#copy-recovery", theme);
     await screenshot(page, info, `public-replay-copy-${theme}`);
-    await replayManual.getByRole("button", { name: "Close", exact: true }).click();
-    await expect(replayManual).toHaveCount(0); await expect(nativeTrigger).toBeFocused();
+    await manualClose.click();
+    await expect(manualDialog).toHaveCount(0); await expect(nativeTrigger).toBeFocused();
     await page.evaluate(() => (window as FixtureWindow).fixtureNativeMode("held"));
     await nativeTrigger.click(); await expect(nativeTrigger).toBeDisabled();
     const beforeLateNative = await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length);
@@ -266,11 +266,19 @@ for (const theme of ["light", "dark"] as const) {
     await page.evaluate(value => (window as FixtureWindow).fixturePublicReplay({ path: value, name: "Synthetic player" }), PUBLIC_REPLAY_FIXTURE_PATH);
     await expect(nativeTrigger).toBeEnabled(); await search.focus();
     await page.evaluate(() => (window as FixtureWindow).fixtureNativeSettle("reject"));
-    await expect(search).toBeFocused(); await expect(replayManual).toHaveCount(0);
+    await expect(search).toBeFocused(); await expect(manualDialog).toHaveCount(0);
     expect(await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes.length)).toBe(beforeLateNative);
     await expect(notifications.getByRole("status")).toHaveCount(0);
     await page.evaluate(() => (window as FixtureWindow).fixtureNativeMode("success"));
     await nativeTrigger.click(); await expect(nativeTrigger).toHaveText("Shared"); await dismissToasts(page);
+    const replayPayload = {
+      title: "Synthetic player's StarCraft II replays",
+      text: "View and download Synthetic player's shared StarCraft II replays.",
+      url: COPY_FIXTURE_ORIGIN + PUBLIC_REPLAY_FIXTURE_PATH,
+    };
+    expect(await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.nativeCalls))
+      .toEqual([replayPayload, replayPayload, replayPayload, replayPayload]);
+    await page.evaluate(() => (window as FixtureWindow).fixtureNativeMode("missing"));
     expect(evidence.apiRequests.filter(row => row.method === "PUT")).toHaveLength(2);
     expect(evidence.apiRequests.filter(row => row.method === "GET")).toHaveLength(3);
     await info.attach("synthetic-replay-consent-requests", { body: JSON.stringify(evidence.apiRequests), contentType: "application/json" });
