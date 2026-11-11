@@ -153,7 +153,7 @@ See the [database restore runbook](runbooks/restore-database.md),
 | 87, 193, 194 | After updating and re-analyzing a replay, follow both cameras, check the attention heatmap, compare recorded control-group and camera phases, and verify unit trades, lifespans and build-supply labels. |
 | 189 | In Chat & alerts, open Twitch automation and connect Channel Points reward actions separately. Grant the incremental reward scope in the broadcaster’s account, choose the OBS source and save an enabled mapping. Verify one controlled redemption for each action you use, plus cooldown, unavailable-action handling and manual or automatic settlement. Automatic settlement requires an app-managed Twitch reward. Disable the mappings or disconnect reward permission to stop actions. |
 | 191 | Pair a released Windows agent, enable the desktop roll in Settings → Randomizer and load an eligible human 1v1. Verify Play it, one Reroll, Not now and the private Challenge totals. Repeat with an active Randomizer source to confirm the browser handles the roll. Check that resetting the Challenge keeps the replay and build library. |
-| 195 | Test the React Locker roster with a disposable linked account, including local backup and revision-checked restore. Keep Classic available and record one week of use before retiring the roster’s HTML view. |
+| 195 | Test the React Locker roster and Shelf separately with disposable linked accounts. Check role scoping, legacy media, local backup and revision-checked restore. Keep Classic available until the owner has recorded one week of real use for each view. |
 
 Use the [roadmap ledger](handoff/roadmap-progress-2026-10-28.json) for
 requirement-level status and the [Windows release runbook](runbooks/agent-wave2-release.md)

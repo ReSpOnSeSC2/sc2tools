@@ -1,4 +1,5 @@
 "use strict";
+const { mergeShelfWrite, selectLockerAssets } = require("../services/coachingLockerShelf");
 
 const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
@@ -230,7 +231,16 @@ function buildCoachingRouter(deps) {
       }
       let toWrite = incoming;
       const current = await deps.coaching.getDoc();
-      if (role === "student") {
+      if (req.query.shelf === "1") {
+        if (!Number.isSafeInteger(body.rev) || body.rev < 0) { res.status(400).json({ error: "bad_revision" }); return; }
+        if (rev !== current.rev) {
+          res.status(409).json({ error: "conflict", rev: current.rev, state: scopeLockerState(current.state, cr) });
+          return;
+        }
+        const shelfWrite = mergeShelfWrite(current.state, incoming, cr, scopeLockerState(current.state, cr).assets || {});
+        if (!shelfWrite) { res.status(400).json({ error: "bad_attachment" }); return; }
+        toWrite = shelfWrite;
+      } else if (role === "student") {
         toWrite = mergeStudentWrite(current.state, incoming, cr.studentId);
         if (!toWrite) { res.status(403).json({ error: "not_writer" }); return; }
       } else if (role === "coach") {
@@ -662,6 +672,7 @@ function buildCoachingRouter(deps) {
 
 /** @param {import('express').Request} req @param {{source:string}} auth @param {{role:string}} cr */
 function lockerRosterAllowed(req, auth, cr) {
+  if (req.query.shelf === "1") return auth.source === "clerk" && (req.method === "GET" || cr.role === "coach" || cr.role === "admin");
   return req.query.roster !== "1" || (auth.source === "clerk" && (cr.role === "coach" || cr.role === "admin"));
 }
 
@@ -808,32 +819,14 @@ function publicStudentState(student) {
  */
 function pickAssets(state, student) {
   if (!student) return {};
-  const blob = JSON.stringify([
-    student.shelf || [], student.builds || [], student.submissions || [],
-    (state.customBuilds || []),
+  return selectLockerAssets(state, [
+    student.shelf || [], student.builds || [], student.submissions || [], state.customBuilds || [],
   ]);
-  /** @type {Record<string, unknown>} */
-  const out = {};
-  for (const [id, a] of Object.entries(state.assets || {})) {
-    if (blob.includes(id)) out[id] = a;
-  }
-  return out;
 }
 
 /** @param {Record<string, any>} state @param {any[]} students */
 function pickAssetsForStudents(state, students) {
-  const blob = JSON.stringify([
-    students,
-    state.customBuilds || [],
-    state.shelfLibrary || [],
-    state.wsTemplates || [],
-  ]);
-  /** @type {Record<string, unknown>} */
-  const out = {};
-  for (const [id, asset] of Object.entries(state.assets || {})) {
-    if (blob.includes(id)) out[id] = asset;
-  }
-  return out;
+  return selectLockerAssets(state, [students, state.customBuilds || [], state.shelfLibrary || [], state.wsTemplates || []]);
 }
 
 const COACHING_MMR_COVERAGE_KEYS = [

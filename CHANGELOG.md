@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Coaching Locker shelf
+
+- Open the React Locker Shelf to review student feedback, manage reusable
+  resources and restore the previous Shelf version. Classic remains
+  available during the staged rollout.
+
 ### Replay camera and mechanics
 
 - Follow either player's recorded camera and open Camera attention to see
