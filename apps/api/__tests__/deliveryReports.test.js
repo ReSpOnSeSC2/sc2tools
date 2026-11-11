@@ -114,6 +114,10 @@ test("stream report: computed once per stream, stored without opponent names, li
   await h.db.multichatPredictions.insertOne({ token: "tok-eve", gameKey: "k1", openedAt: new Date(start + HOUR), settled: true, resolution: "verified", result: "win",
     picks: { "twitch:viewer1": { pick: "win", user: "ViewerOne" }, "twitch:viewer2": { pick: "loss", user: "ViewerTwo" } } });
   await h.db.multichatEngagementEvents.insertOne({ token: "tok-eve", platform: "twitch", msgId: "m1", user: "ViewerOne", userKey: "twitch:viewerone", kind: "sub", atMs: start + HOUR, atDate: new Date() });
+  await h.db.multichatClipMoments.insertMany([
+    { token: "tok-eve", kind: "manual", atMs: start + HOUR, reason: "Private Dock note" },
+    { token: "tok-eve", kind: "game-event", atMs: start + HOUR, reason: "First game won" },
+  ]);
   await streams.start("u_eve", start);
   const [first, second] = await Promise.all([streams.end("u_eve"), streams.end("u_eve")]);
   expect([first, second].filter(Boolean)).toHaveLength(1);
@@ -123,7 +127,8 @@ test("stream report: computed once per stream, stored without opponent names, li
   expect(doc).toMatchObject({ randomizer: { games: 1, wins: 0, losses: 1 }, crystalBall: { rounds: 1, picks: 2, correct: 1, viewers: 2, accuracy: null },
     supporters: { events: 1, viewers: 1, top: [1] }, bestWin: { opponentMmr: 4300, matchup: "PvT" } });
   expect(doc.crystalBall.top).toEqual([{ picks: 1, correct: 1 }, { picks: 1, correct: 0 }]);
-  expect(JSON.stringify(doc)).not.toMatch(/SecretOppZed|ViewerOne|ViewerTwo/);
+  expect(doc.clips).toEqual([{ kind: "game-event", minute: 60, offsetSec: 3600, reason: "First game won" }]);
+  expect(JSON.stringify(doc)).not.toMatch(/SecretOppZed|ViewerOne|ViewerTwo|Private Dock note/);
   expect(Buffer.byteLength(JSON.stringify(doc))).toBeLessThanOrEqual(5120);
   expect(await h.db.notifications.countDocuments({ userId: "u_eve", kind: "report.stream" })).toBe(1);
   expect((await get("eve", "/v1/reports/streams")).body.items[0]).toMatchObject({ id: summary.id, games: 2 });
