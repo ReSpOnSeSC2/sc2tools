@@ -60,6 +60,7 @@ export function ShareReportDialog({ report, filters = DEFAULT_REPORT_FILTERS, on
   const linkFallback = clipboard.fallbackText !== null && clipboard.fallbackText === link;
   const empty = !model.totals && !model.matchups.length && !model.opener && !model.macro;
   function copy(kind: "text" | "link", value: string) {
+    if (busy) return;
     copyKind.current = kind;
     setStatus(kind === "link" ? "Copying card link." : "Copying report text.");
     void clipboard.copy(value);
@@ -100,7 +101,9 @@ export function ShareReportDialog({ report, filters = DEFAULT_REPORT_FILTERS, on
       <Button disabled={busy || empty} onClick={() => void deliver("web_share")}>Share PNG</Button>
       <Button variant="secondary" disabled={busy || empty} onClick={() => void deliver("download")}>Download PNG</Button>
       <Button ref={copyButton} variant="secondary" disabled={busy || empty} onClick={() => copy("text", text)}>Copy text</Button>
-      <Button ref={linkButton} variant="secondary" disabled={busy || !link} onClick={() => { if (link) copy("link", link); }}>Copy card link</Button>
+      <Button ref={linkButton} variant="secondary" disabled={!link} aria-disabled={busy || !link}
+        className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+        onClick={() => { if (link) copy("link", link); }}>Copy card link</Button>
     </div>
     {!empty && !link ? <p className="mt-2 text-caption text-text-muted">The selected rows cannot be shared as a link. Change the selection or share the PNG.</p> : null}
     <p role="status" className="mt-3 text-caption text-text-muted">{empty ? "Select at least one row." : status}</p>

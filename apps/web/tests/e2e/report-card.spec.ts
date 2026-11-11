@@ -1,3 +1,4 @@
+import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { encodeReportCard } from "../../lib/instant/reportCardLink";
 import { REPORT_CARD_PATH } from "../../lib/instant/reportCardRoute";
@@ -9,6 +10,8 @@ const fragment = encodeReportCard({
   opener: { name: "TvT - Proxy Marauder", games: 4, wins: 3, losses: 1 },
   macro: { score: 72, games: 9 },
 });
+const ESCAPED_CARD_PATH = "/card/r%65port/%73ummary";
+const SHARE_FIXTURE = path.resolve(__dirname, "../../../replay-engine/tests/fixtures/replays/warpgate_adept_tracking.SC2Replay");
 
 async function assertNoOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
@@ -25,11 +28,13 @@ test("shows a noindex, self-reported card with accessible text", async ({ page }
   for (const theme of ["light", "dark"] as const) {
     await page.goto("about:blank");
     await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
-    const response = await page.goto(`${REPORT_CARD_PATH}#${fragment}`);
+    const cardPath = theme === "light" ? REPORT_CARD_PATH : ESCAPED_CARD_PATH;
+    const response = await page.goto(`${cardPath}#${fragment}`);
     expect(response?.status()).toBe(200);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
     await expect(page.getByText(/numbers are self-reported/)).toBeVisible();
     await expect(page.getByText(/10 games, 7-2/)).toBeVisible();
+    await expect(page.getByText("These numbers cover the games selected by the sharer.")).toBeVisible();
     const preview = page.getByRole("region", { name: "Shared replay report" });
     await expect(preview.locator("canvas")).toBeVisible();
     await expect.poll(() => preview.locator("canvas").evaluate((element: HTMLCanvasElement) =>
@@ -44,6 +49,44 @@ test("shows a noindex, self-reported card with accessible text", async ({ page }
   }
   expect(requests.some(url => url.includes(fragment))).toBe(false);
   expect(requests.filter(url => /^https?:/.test(url) && new URL(url).origin !== site)).toEqual([]);
+});
+
+test("offers manual card-link copy when the browser denies clipboard access", { tag: "@slow" }, async ({ page }, info) => {
+  test.skip(process.env.NEXT_PUBLIC_INSTANT_IMPORT !== "all", "the report requires public Instant Analysis");
+  test.setTimeout(180_000);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: () => Promise.reject(new DOMException("Denied", "NotAllowedError")) },
+    });
+  });
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await page.goto("/try");
+  await page.getByLabel("Replay files").setInputFiles(SHARE_FIXTURE);
+  await expect(page.getByRole("heading", { name: "Which player are you?" })).toBeVisible({ timeout: 120_000 });
+  await page.getByRole("button", { name: /ReSpOnSe/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Your instant report" })).toBeVisible({ timeout: 120_000 });
+  const share = page.getByRole("button", { name: "Share report", exact: true });
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await share.click();
+    const dialog = page.getByRole("dialog", { name: "Share your report" });
+    const copy = dialog.getByRole("button", { name: "Copy card link", exact: true });
+    await copy.scrollIntoViewIfNeeded();
+    await captureAccessibility(page, info, `report-card-share-${theme}`);
+    await copy.click();
+    const field = dialog.getByRole("textbox", { name: "Copy card link manually" });
+    await expect(field).toBeFocused();
+    const link = new URL(await field.inputValue());
+    expect(link.pathname).toBe(REPORT_CARD_PATH);
+    expect(link.search).toBe("");
+    expect(link.hash).toMatch(/^#[A-Za-z0-9_-]{1,59}$/);
+    await assertNoOverflow(page);
+    await captureAccessibility(page, info, `report-card-copy-fallback-${theme}`);
+    await field.press("Escape");
+    await expect(copy).toBeFocused();
+    await copy.press("Escape");
+    await expect(share).toBeFocused();
+  }
 });
 
 test("renders neutral missing, forged and oversized states", async ({ page }, info) => {

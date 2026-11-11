@@ -49,6 +49,24 @@ describe("report conversion actions", () => {
     expect(mocks.event).not.toHaveBeenCalled();
   });
 
+  it("keeps the card-link button focused while a delayed clipboard write settles", async () => {
+    let finish!: () => void;
+    mocks.copied.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    render(<ShareReportDialog report={source()} onClose={vi.fn()} />);
+    const link = screen.getByRole("button", { name: "Copy card link" }) as HTMLButtonElement;
+    link.focus();
+    fireEvent.click(link);
+    expect(link.getAttribute("aria-disabled")).toBe("true");
+    expect(link.disabled).toBe(false);
+    fireEvent.click(link);
+    expect(mocks.copied).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(link);
+    await act(async () => { finish(); });
+    expect(screen.getByText("Card link copied.")).toBeTruthy();
+    expect(link.getAttribute("aria-disabled")).toBe("false");
+    expect(document.activeElement).toBe(link);
+  });
+
   it("previews selected rows, copies identity-free text and mocks native sharing only", async () => {
     render(<ShareReportDialog report={source()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("checkbox", { name: "Macro score" }));

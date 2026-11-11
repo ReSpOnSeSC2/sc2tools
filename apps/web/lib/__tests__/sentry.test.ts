@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe("browser Sentry", () => {
-  it.each(["/wrapped", "/card/report/summary#LocalData"])("does not initialize or report errors on %s", async pathname => {
+  it.each(["/wrapped", "/card/report/summary#LocalData", "/card/r%65port/%73ummary#LocalData"])("does not initialize or report errors on %s", async pathname => {
     window.history.replaceState(null, "", pathname);
     vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@example.ingest/1");
     const { captureException, initClientSentry } = await import("../sentry");
@@ -21,7 +21,7 @@ describe("browser Sentry", () => {
     expect(sdk.calls).toEqual([]);
   });
 
-  it.each(["/wrapped", "/card/report/summary#LocalData"])("drops events and breadcrumbs after navigating to %s", async pathname => {
+  it.each(["/wrapped", "/card/report/summary#LocalData", "/card/r%65port/%73ummary#LocalData"])("drops events and breadcrumbs after navigating to %s", async pathname => {
     window.history.replaceState(null, "", "/help");
     vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@example.ingest/1");
     const { initClientSentry } = await import("../sentry");

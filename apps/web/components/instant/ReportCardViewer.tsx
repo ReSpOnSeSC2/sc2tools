@@ -9,6 +9,7 @@ import { summaryFromModel } from "@/lib/instant/reportExport";
 import type { ReportCardModel } from "@/lib/instant/reportSharing";
 
 type CardState = { kind: "loading" | "empty" | "invalid" } | { kind: "ready"; model: ReportCardModel };
+const SCOPE_NOTE = "These numbers cover the games selected by the sharer.";
 
 function readCardFragment(): CardState {
   const fragment = window.location.hash.slice(1);
@@ -24,7 +25,7 @@ function ReportPreview({ model }: { model: ReportCardModel }) {
   const draw = useCallback(() => {
     if (!canvas.current) return false;
     try {
-      drawReportCard(canvas.current, model);
+      drawReportCard(canvas.current, model, SCOPE_NOTE);
       setFailed(false);
       return true;
     } catch {
@@ -47,6 +48,7 @@ function ReportPreview({ model }: { model: ReportCardModel }) {
       ) : null}
       <div className="space-y-2 rounded-lg border border-line bg-bg-surface p-4">
         <h2 className="text-body font-semibold text-text">Report details</h2>
+        <p className="text-body text-text-muted">{SCOPE_NOTE}</p>
         <ul className="space-y-1 text-body text-text-muted">
           {summaryFromModel(model).map(line => <li key={line}>{line}</li>)}
         </ul>

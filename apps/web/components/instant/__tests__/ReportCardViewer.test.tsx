@@ -27,7 +27,9 @@ it("replaces a missing card with a report and clears it for an invalid hash", ()
   expect(screen.getByText("No report card in this link")).toBeTruthy();
   act(() => { setFragment(`#${fragment}`); });
   expect(screen.getByText(/5 games, 4-1/)).toBeTruthy();
-  expect(draw).toHaveBeenCalledWith(expect.any(HTMLCanvasElement), model);
+  const scope = "These numbers cover the games selected by the sharer.";
+  expect(screen.getByText(scope)).toBeTruthy();
+  expect(draw).toHaveBeenCalledWith(expect.any(HTMLCanvasElement), model, scope);
   act(() => { setFragment("#Untrusted_Name"); });
   expect(screen.getByText("This report card link is invalid")).toBeTruthy();
   expect(screen.queryByText(/Untrusted_Name|5 games, 4-1/)).toBeNull();
