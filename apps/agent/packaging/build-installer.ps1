@@ -12,8 +12,8 @@
          is provided).
 
 .PARAMETER Version
-    Semver string to embed in the installer + the EXE's VERSIONINFO.
-    Defaults to whatever sc2tools_agent.__version__ reports.
+    Optional expected release version. It must match sc2tools_agent.__version__,
+    which is embedded in both the installer and the agent executable.
 
 .PARAMETER Installer
     Build the NSIS installer in addition to the bare .exe. Defaults to
@@ -63,16 +63,19 @@ $Spec      = Join-Path $PSScriptRoot "sc2tools_agent.spec"
 $Nsi       = Join-Path $PSScriptRoot "installer.nsi"
 
 function Resolve-AgentVersion {
-    if ($Version) { return $Version }
     $initPy = Join-Path $AgentRoot "sc2tools_agent\__init__.py"
     if (-not (Test-Path $initPy)) {
-        throw "Cannot find $initPy - provide -Version explicitly."
+        throw "Cannot find the canonical agent version file: $initPy"
     }
     $line = Select-String -Path $initPy -Pattern '^__version__\s*=\s*"([^"]+)"' -ErrorAction Stop
     if (-not $line) {
-        throw "No __version__ in $initPy - provide -Version explicitly."
+        throw "No canonical __version__ in $initPy."
     }
-    return $line.Matches[0].Groups[1].Value
+    $canonical = $line.Matches[0].Groups[1].Value
+    if ($Version -and $Version -cne $canonical) {
+        throw "Expected version '$Version' does not match the canonical agent version '$canonical'."
+    }
+    return $canonical
 }
 
 function Invoke-Step($Label, [scriptblock]$Body) {
@@ -128,6 +131,8 @@ if ($PackageOnly -and (-not $Installer -or $Clean)) {
     throw '-PackageOnly requires -Installer and cannot be combined with -Clean.'
 }
 
+$AgentVersion = Resolve-AgentVersion
+
 if ($Clean) {
     Invoke-Step "Cleaning build artefacts" {
         $cleanPaths = @($DistDir, $BuildDir)
@@ -143,7 +148,6 @@ if ($Clean) {
     }
 }
 
-$AgentVersion = Resolve-AgentVersion
 Write-Host "Building SC2 Tools Agent v$AgentVersion" -ForegroundColor Green
 
 if (-not $PackageOnly) {
@@ -215,6 +219,10 @@ if (Test-Path $ExePathFolder) {
 }
 Write-Host "Build layout: $BuildLayout (exe at $ExePath)" -ForegroundColor DarkGray
 
+$fileVersionInfo = (Get-Item -LiteralPath $ExePath).VersionInfo
+if ($fileVersionInfo.ProductVersion -cne $AgentVersion -or $fileVersionInfo.FileVersion -cne $AgentVersion) {
+    throw "Agent executable VERSIONINFO does not match $AgentVersion. Rebuild the bundle before packaging."
+}
 Sign-AgentFile $ExePath
 
 Invoke-Step "Checking the packaged GUI offline" {

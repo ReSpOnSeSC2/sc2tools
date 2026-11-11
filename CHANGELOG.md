@@ -89,6 +89,8 @@ corresponding GitHub Release.
 
 ### Replay and account fixes
 
+- Keep the opponent scouting brief and replay history aligned with dossier
+  selections, and count legacy win and loss labels consistently.
 - Include personal goals in account exports and measure edited goals against
   the latest criteria before announcing completion.
 - Keep re-analysis progress tied to the desktop and batch that received

@@ -28,7 +28,7 @@ function bestBuildLine(profile: ScoutingBriefProfile) {
   const cells = [...buildMatchupGrid(chronological((profile.games ?? []).slice(0, 1000)), 1000, 1000).cells.values()].filter(cell => cell.total >= 2);
   cells.sort((a, b) => b.winRate - a.winRate || b.total - a.total || a.myBuild.localeCompare(b.myBuild) || a.oppStrategy.localeCompare(b.oppStrategy));
   const best = cells[0];
-  return best ? `Best recorded pairing: ${label(best.myBuild)} vs ${label(best.oppStrategy)}, ${best.wins}–${best.losses} (${percent(best.wins, best.total)}, n=${best.total})${profile.gamesTruncated ? "; latest analyzed games" : " in this view"}.` : null;
+  return best ? `Best recorded pairing: ${label(best.myBuild)} vs ${label(best.oppStrategy)}, ${best.wins}–${best.losses} (${percent(best.wins, best.total)}, n=${best.total})${profile.gamesTruncated ? "; loaded meeting sample" : " in this view"}.` : null;
 }
 
 /** Pure six-line brief. A missing phase or unsupported observation stays absent. */
@@ -36,7 +36,9 @@ export function buildScoutingBrief(profile: ScoutingBriefProfile): string[] {
   const games = (profile.games ?? []).slice(0, 1000), totals = profile.totals ?? totalsOf(games);
   const wins = count(totals.wins), losses = count(totals.losses), streak = currentAndBestStreak(games).current;
   const lower = profile.gamesTruncated && streak?.count === decidedOnly(games).length ? "≥" : "";
-  const lines = [`Last met ${fmtDay(profile.series?.lastSeen ?? profile.lastSeen)} · This view: ${wins}W–${losses}L${streak ? ` · Recent recorded streak ${streak.result}${lower}${streak.count}` : ""}.`];
+  const lastMet = profile.series?.lastSeen ? "Last met (all time)" : "Last met";
+  const recordScope = profile.gamesTruncated ? "Loaded meeting sample" : "This view";
+  const lines = [`${lastMet} ${fmtDay(profile.series?.lastSeen ?? profile.lastSeen)} · ${recordScope}: ${wins}W–${losses}L${streak ? ` · Recent recorded streak ${streak.result}${lower}${streak.count}` : ""}.`];
   const phase = Object.entries(profile.phases?.finalPhaseDistribution ?? {}).filter(([, n]) => Number.isFinite(n) && n > 0).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
   const phases: Record<string, string> = { early: "early", earlyMid: "early/mid", mid: "mid", midLate: "mid/late", late: "late" };
   const latest = games[0], outcome = latest ? gameOutcome(latest) : "U";

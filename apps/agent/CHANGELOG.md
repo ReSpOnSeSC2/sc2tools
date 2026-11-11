@@ -26,6 +26,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   wider windows and see when changes take effect.
 
 ### Fixed
+- Show the release version in Windows file properties for the packaged agent.
+  Reject a version mismatch before signing or packaging the executable.
 - Make Practice HUD drag, resize and window controls respond in Move mode.
 
 ## 0.25.0
