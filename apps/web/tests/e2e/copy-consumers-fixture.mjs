@@ -10,7 +10,7 @@ const SOURCE = `import React,{useState}from'react';import{createRoot}from'react-
 import{ShareLinkButton}from'@/components/community/ShareLinkButton';
 import{CommunityBuildActionsBar}from'@/components/community/CommunityBuildActionsBar';
 import{DefinitionsCatalog}from'@/components/definitions/DefinitionsCatalog';
-import{ReplayShareControl}from'@/components/analyzer/replays/ReplayShareControl';import{PublicReplayShareButton}from'@/components/public-profile/PublicReplayShareButton';import{SWRConfig}from'swr';
+import{ReplayShareControl}from'@/components/analyzer/replays/ReplayShareControl';import{ShareButton}from'@/components/ui/ShareButton';import{SWRConfig}from'swr';
 import{Modal}from'@/components/ui/Modal';import{Button}from'@/components/ui/Button';import{ToastProvider}from'@/components/ui/Toast';
 const replayCache=new Map(),replayProvider=()=>replayCache;
 const compactBuild={slug:'synthetic-stargate',title:'Synthetic Stargate',description:'Synthetic published rules for a local layout example.',matchup:'PvZ',authorName:'Synthetic author',votes:17,publishedAt:'2026-10-26T00:00:00Z',build:{name:'Synthetic Stargate',race:'Protoss',vsRace:'Zerg',rules:[{type:'count_min',name:'BuildStargate',time_lt:300,count:1}]}};
@@ -19,7 +19,9 @@ return <SWRConfig value={{provider:replayProvider,dedupingInterval:2000}}><Toast
 <section aria-label="Community copy example" className="min-w-0 space-y-3 rounded-xl border border-border bg-bg-surface p-4"><h2 className="text-h3 font-semibold text-text">Community build link</h2><output aria-label="Current public copy path" className="block break-all text-caption text-text-muted">{copyPath}</output><ShareLinkButton path={copyPath} label="Share build link"/><Button variant="secondary" onClick={()=>setOpen(true)}>Open shared link modal</Button></section>
 <section aria-label="Compact Community example" className="min-w-0 space-y-3"><h2 className="text-h3 font-semibold text-text">Compact build actions</h2><CommunityBuildActionsBar build={compactBuild}/></section>
 <section aria-label="Private replay sharing example" className="min-w-0 space-y-3"><h2 className="text-h3 font-semibold text-text">Replay archive consent</h2><ReplayShareControl/></section>
-<section aria-label="Public replay sharing example" className="min-w-0 space-y-3"><h2 className="text-h3 font-semibold text-text">Public replay sharing</h2><PublicReplayShareButton path={player.path} playerName={player.name}/></section>
+<section aria-label="Public replay sharing example" className="min-w-0 space-y-3"><h2 className="text-h3 font-semibold text-text">Public replay sharing</h2><ShareButton path={player.path} title={player.name+"'s StarCraft II replays"}
+  text={"View and download "+player.name+"'s shared StarCraft II replays."}
+  aria-label={"Share "+player.name+"'s replay page"}/></section>
 <section aria-label="Definitions copy example" className="min-w-0 space-y-3"><h2 className="text-h3 font-semibold text-text">Definition links</h2><DefinitionsCatalog/></section>
 <Modal open={open} onClose={()=>setOpen(false)} title="Public link example"><ShareLinkButton path={copyPath} label="Copy modal build link"/></Modal></main></ToastProvider></SWRConfig>}
 createRoot(document.getElementById('root')).render(<Fixture/>);`;
