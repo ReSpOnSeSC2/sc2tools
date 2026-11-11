@@ -5,6 +5,8 @@ const { parseFilters } = require("../util/parseQuery");
 const { REGION_LABELS } = require("../util/regionFromToonHandle");
 const { ASSIGNMENT_STATES } = require("../services/coachingAssignmentState");
 const { bookingDigestRoute, calendarRoute } = require("./coachingSessions");
+const { mergeWorksheetWrite, studentWorksheetRead } = require("../services/coachingWorksheetState");
+const WORKSHEET_CONFLICT = Object.freeze({ code: "conflict", message: "The Locker changed. Reload before editing." });
 
 // Whole-state payloads carry embedded media (voice memos, images,
 // small replays) as base64. Body parsing is owned by the app-level
@@ -22,7 +24,7 @@ const { bookingDigestRoute, calendarRoute } = require("./coachingSessions");
  *
  *   GET  /coaching/me                      — role + linkage for the signed-in user
  *   GET  /coaching/state                   — full state (admin/coach) or scoped (student)
- *   PUT  /coaching/state                   — CAS write {state, rev} (admin/coach)
+ *   PUT  /coaching/state                   — role-scoped CAS write {state, rev}
  *   GET  /coaching/users?q=                — signed-up directory + live agent check (admin/coach)
  *   GET  /coaching/practice-sharing        — live student-approved assignment/replay consent
  *   POST /coaching/students/:id/practice-sharing/request — coach requests or re-requests consent
@@ -119,9 +121,11 @@ function buildCoachingRouter(deps) {
     res.set("Cache-Control", "private, no-store, max-age=0");
     try {
       const { auth, cr } = ctx(req);
-      if (cr.role === "none" || !lockerRosterAllowed(req, auth, cr)) { coachingNotFound(res); return; }
+      const worksheets = req.query.worksheets === "1";
+      if (cr.role === "none" || !lockerRosterAllowed(req, auth, cr) || worksheets && auth.source !== "clerk") { coachingNotFound(res); return; }
       const { state, rev } = await deps.coaching.getDoc();
-      res.json({ rev, scoped: cr.role !== "admin", state: scopeLockerState(state, cr) });
+      if (worksheets && cr.rev !== rev) { res.status(409).json({ error: WORKSHEET_CONFLICT }); return; }
+      res.json({ rev, scoped: cr.role !== "admin", state: scopeLockerState(worksheets ? studentWorksheetRead(state, cr) : state, cr) });
     } catch (err) {
       next(err);
     }
@@ -221,16 +225,26 @@ function buildCoachingRouter(deps) {
       // Students write too — worksheet answers, intake, submissions all
       // mutate state. Scoped-write safety for students is enforced by the
       // merge below; coaches/admin write the full document.
-      if (role === "none" || !lockerRosterAllowed(req, auth, cr)) { coachingNotFound(res); return; }
+      const worksheets = req.query.worksheets === "1";
+      if (role === "none" || !lockerRosterAllowed(req, auth, cr) || worksheets && auth.source !== "clerk") { coachingNotFound(res); return; }
       const body = req.body || {};
       const incoming = body.state;
       const rev = Number(body.rev) || 0;
-      if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+      if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)
+        || worksheets && (!Number.isSafeInteger(body.rev) || body.rev < 0)) {
         res.status(400).json({ error: "bad_state" }); return;
       }
       let toWrite = incoming;
       const current = await deps.coaching.getDoc();
-      if (role === "student") {
+      if (worksheets) {
+        if (cr.rev !== current.rev) { res.status(409).json({ error: WORKSHEET_CONFLICT }); return; }
+        if (rev !== current.rev) {
+          res.status(409).json({ error: WORKSHEET_CONFLICT, rev: current.rev, state: scopeLockerState(studentWorksheetRead(current.state, cr), cr) });
+          return;
+        }
+        toWrite = mergeWorksheetWrite(current.state, incoming, cr);
+        if (!toWrite) { res.status(403).json({ error: "not_writer" }); return; }
+      } else if (role === "student") {
         toWrite = mergeStudentWrite(current.state, incoming, cr.studentId);
         if (!toWrite) { res.status(403).json({ error: "not_writer" }); return; }
       } else if (role === "coach") {
@@ -247,6 +261,7 @@ function buildCoachingRouter(deps) {
         [auth.userId],
       );
       if (!out.ok) {
+        if (worksheets) { res.status(409).json({ error: WORKSHEET_CONFLICT }); return; }
         res.status(409).json({ error: "conflict", rev: out.rev, state: scopeLockerState(out.state, cr) });
         return;
       }
