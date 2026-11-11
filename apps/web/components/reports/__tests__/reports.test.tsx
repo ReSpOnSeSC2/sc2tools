@@ -4,6 +4,7 @@ import { SWRConfig } from "swr";
 import type { ReactNode } from "react";
 import type { StreamReport, WeeklyReport } from "@/lib/reports";
 import { streamDiscordSummary } from "@/lib/reports";
+import { weeklyReportShareCopy } from "@/lib/weeklyReportImage";
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "ann", isLoaded: true, isSignedIn: true, getToken: async () => "fixture-token" }) }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ slug, children }: { slug: string; children?: ReactNode }) => <a href={`/help/${slug}`}>{children ?? "Help"}</a> }));
@@ -51,7 +52,10 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 it("weekly report shows facts beside the week before, with sample floors, week navigation and Trends", async () => {
   mount(<WeeklyReportView week="2026-W46" />);
   expect(await screen.findByText("13–10")).toBeTruthy();
-  expect(new URL(fetcher.mock.calls[0][0], "http://localhost").searchParams.get("week")).toBe("2026-W46");
+  const query = new URL(fetcher.mock.calls[0][0], "http://localhost").searchParams;
+  expect(query.get("week")).toBe("2026-W46");
+  expect(query.has("tz")).toBe(false);
+  expect(screen.getByRole("button", { name: "Share image" })).toBeTruthy();
   expect(screen.getByText("8–10 the week before")).toBeTruthy();
   expect(screen.getByText(/Week before: 2–4 in 6 games/)).toBeTruthy();
   expect(screen.getByText(/4012 → 4098 \(\+86\), peak 4120/)).toBeTruthy();
@@ -61,6 +65,17 @@ it("weekly report shows facts beside the week before, with sample floors, week n
   expect(screen.queryByRole("link", { name: "Next week" })).toBeNull();
   const trends = new URL(screen.getByRole("link", { name: "Open in Trends" }).getAttribute("href")!, "http://localhost");
   expect([trends.pathname, trends.searchParams.get("since"), trends.searchParams.get("until")]).toEqual(["/app/trends", "2026-11-08T23:00:00.000Z", "2026-11-15T22:59:59.999Z"]);
+});
+
+it("prepares weekly share copy from aggregates without account and opponent details", () => {
+  const copy = weeklyReportShareCopy(week);
+  expect(copy).toEqual({
+    label: "Week 46, 2026",
+    stats: [{ label: "Games", value: "23" }, { label: "Wins–losses", value: "13–10" }, { label: "Hours played", value: "6.2" }],
+    previous: "Previous week: 18 games · 8–10 · 4.5 h",
+    matchups: "PvZ 7–4",
+  });
+  expect(JSON.stringify(copy)).not.toMatch(/Europe|4098|Alcyone|Roach/);
 });
 
 it("stream report renders aggregates and copies a Discord summary without names or pings", async () => {

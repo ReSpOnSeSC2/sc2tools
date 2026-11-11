@@ -40,8 +40,8 @@ const article: HelpArticle = {
     { type: "paragraph", text: "**Share report…** under the report shares it through this game's share link. It shows a preview of exactly what viewers will read, then **Copy report link** copies a link that opens the shared game at its report. Anyone with the link can read it and open the game's analysis and map replay without an account. See [Sharing a game](/help/game-page-sharing)." },
     { type: "list", items: [
       "A shared report is written for readers who are not you: it says \"the player\" and \"the opponent\", names no one and leaves out ratings, your build check-in and corrections. The wording can differ slightly from your own copy; the facts are the same.",
-      "When the link is posted in a chat or forum, its preview card shows the result, matchup, the report's headline and the turning point as army-value lines.",
-      "**Save as image** downloads the headline, the first paragraph and two snapshot charts as a picture. It is made in your browser and names no one, whoever saves it.",
+      "When the link is posted in a chat or forum, its preview card shows the result, matchup, the report's headline and the turning point using recorded replay positions when available, with army-value lines as the fallback.",
+      "**Save as image** downloads the headline, the first paragraph and two snapshots as a picture. It is made in your browser and names no one, whoever saves it.",
       "In **Post to Discord**, choose a connected channel to send the preview and report link. The channel must be on with ranked results and replay links enabled in [Settings → Integrations](/settings?tab=integrations#discord). Turning the share link off removes access to the report page. Discord keeps any excerpt it already received.",
       "To stop sharing the report, turn the link off in **Share → Manage share links…**. The shared page and report stop working immediately. Chat apps may keep a preview they already loaded. A saved image or copied text stays with the recipient.",
     ] },

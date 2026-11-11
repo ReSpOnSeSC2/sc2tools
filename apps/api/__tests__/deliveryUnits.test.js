@@ -51,7 +51,7 @@ test("push endpoints are limited to browser push services over https", () => {
     expect(safePushEndpoint(bad)).toBeNull();
   }
   expect(pushGroupFor("review.reply")).toBe("reviews");
-  expect(pushGroupFor("coaching.reminder")).toBe("coaching");
+  expect(pushGroupFor("coaching.reminder")).toBe("coaching-reminders");
   expect(pushGroupFor("report.weekly")).toBe("reports");
   expect(pushGroupFor("import.done")).toBe("other");
   expect(sanitizePushGroups(["reports", "nope", "reports"])).toEqual(["reports"]);

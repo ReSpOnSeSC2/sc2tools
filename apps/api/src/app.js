@@ -585,7 +585,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     logger: deps.logger,
   });
   const replayLibrary = new ReplayLibraryService(deps.db);
-  const pairings = new DevicePairingsService(deps.db, { adminEvents, logger: deps.logger });
+  const pairings = new DevicePairingsService(deps.db, { adminEvents, logger: deps.logger, notifications });
   const overlayTokens = new OverlayTokensService(deps.db, { onRotationStarted: token => {
     deps.io?.to(`overlay:${token}`).emit("overlay:config", { replacedBy: true });
     deps.io?.in(`overlay:${token}`).disconnectSockets(true);

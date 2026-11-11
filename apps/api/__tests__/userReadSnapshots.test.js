@@ -11,7 +11,7 @@ function owner() {
     gameStatsProtocolVersion: 2, gameStatsWriterStatus: "transactional", gameStatsRevision: revision,
     gameStatsMutationEpoch: epoch, gameStats: { total: 4, latest: null },
     gameStatsMaintenance: { version: REQUIRED_MAINTENANCE_VERSION, ownerId: id, revision, epoch, status: "ready" },
-    preferences: { onboarding: { dismissedAt: "2026-10-27" }, replayArchive: { version: 1 } },
+    preferences: { onboarding: { dismissedAt: "2026-10-27" }, replayArchive: { version: 1 }, reports: { timezone: "America/New_York" } },
     battleTag: "First#1", battleTags: [" First#1 ", "Second#2", "First#1", null],
     pulseIds: [" 42 ", "7", "42", null], pulseId: "legacy-unused", region: "eu", preferredRace: "Protoss",
     displayName: "Owner", lastKnownMmr: 4100, lastKnownMmrAt: "2026-10-27", lastKnownMmrRegion: "EU", sessionAnchorAt: "2026-10-28" };
@@ -30,11 +30,12 @@ test("prepared /me envelope gets summary, onboarding and proof from ONE fresh pr
   expect(await service.getMeSnapshot("owner")).toEqual({
     summary: { userId: "owner", clerkUserId: "clerk-owner", email: "owner@example.invalid" },
     statsCandidate: { total: 4, latest: null }, onboarding: { dismissedAt: "2026-10-27" },
+    reportPrefs: { timezone: "America/New_York" },
   });
   expect(users.findOne).toHaveBeenCalledTimes(1);
   expect(users.findOne).toHaveBeenCalledWith({ userId: "owner" }, { readPreference: "primary", projection: expect.objectContaining({
     _id: 1, userId: 1, email: 1, _gdprMutation: 1, gameStatsMaintenance: 1, gameStatsMutationEpoch: 1,
-    gameStatsRevision: 1, "gameStats.total": 1, "gameStats.latest": 1, "preferences.onboarding": 1,
+    gameStatsRevision: 1, "gameStats.total": 1, "gameStats.latest": 1, "preferences.onboarding": 1, "preferences.reports": 1,
   }) });
   expect(users.updateOne).not.toHaveBeenCalled(); expect(users.insertOne).not.toHaveBeenCalled();
   for (const call of Object.values(games)) expect(call).not.toHaveBeenCalled();
@@ -73,7 +74,7 @@ test("existing public getters retain their projection, mapping and metadata-free
 });
 test("missing owner stays the original summary/empty profile with explicit unqualified stats, never a fabricated zero", async () => {
   const { service } = fixture(null);
-  expect(await service.getMeSnapshot("owner")).toEqual({ summary: { userId: "owner", clerkUserId: null, email: null }, statsCandidate: null, onboarding: {} });
+  expect(await service.getMeSnapshot("owner")).toEqual({ summary: { userId: "owner", clerkUserId: null, email: null }, statsCandidate: null, onboarding: {}, reportPrefs: null });
   expect(await service.getDoctorSnapshot("owner")).toEqual({ profile: {}, statsCandidate: null, replayArchivePrefs: {}, ingestStats: null });
   expect(await service.getSummary("owner")).toEqual({ userId: "owner", clerkUserId: null, email: null });
   expect(await service.getProfile("owner")).toEqual({});

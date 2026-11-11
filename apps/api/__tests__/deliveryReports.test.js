@@ -152,3 +152,12 @@ test("stream reports: four quiet hours close a stream, the newest 100 are kept, 
   expect((await h.db.users.findOne({ userId: "u_hal" })).streamSession).toBeUndefined();
   expect(await h.db.streamSessions.countDocuments({ userId: "u_hal" })).toBe(0);
 });
+
+test("Today links the last completed report Monday through Wednesday in the saved time zone", () => {
+  const { todayReportWeek } = require("../src/services/reportPreferences");
+  const wednesdayUtc = Date.parse("2026-11-12T02:00:00.000Z");
+  const newYork = { timezone: "America/New_York" };
+  expect(todayReportWeek(newYork, wednesdayUtc)).toBe("2026-W45");
+  expect(todayReportWeek({ timezone: "UTC" }, wednesdayUtc)).toBeNull();
+  expect(todayReportWeek({ ...newYork, weekly: false }, wednesdayUtc)).toBeNull();
+});
