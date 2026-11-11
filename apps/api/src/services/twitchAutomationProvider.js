@@ -36,8 +36,8 @@ class TwitchAutomationProvider {
   /** @param {{clientId:string,timeoutMs?:number}} deps */
   constructor({ clientId, timeoutMs = 12_000 }) { this.clientId = clientId; this.timeoutMs = timeoutMs; }
 
-  /** @param {Grant} grant @param {string} path @param {'GET'|'POST'|'PATCH'} method @param {object} [body] */
-  async request(grant, path, method, body) {
+  /** @param {Grant} grant @param {string} path @param {'GET'|'POST'|'PATCH'} method @param {object} [body] @param {number} [maxBytes] */
+  async request(grant, path, method, body, maxBytes = MAX_BYTES) {
     const controller = new AbortController(); let dispatched = false;
     /** @type {{reader:ReadableStreamDefaultReader<Uint8Array>|null}} */ const stream = { reader: null };
     /** @type {ReturnType<typeof setTimeout>|undefined} */ let timer;
@@ -52,12 +52,12 @@ class TwitchAutomationProvider {
             void response.body?.cancel().catch(() => {});
             throw new TwitchAutomationProviderError("twitch_automation_rejected", response.status, write && (response.status >= 500 || response.ok));
           }
-          if (Number(response.headers.get("content-length") || 0) > MAX_BYTES || !response.body) throw new TwitchAutomationProviderError("twitch_automation_response_invalid", 502, write);
+          if (Number(response.headers.get("content-length") || 0) > maxBytes || !response.body) throw new TwitchAutomationProviderError("twitch_automation_response_invalid", 502, write);
           const reader = response.body.getReader(); stream.reader = reader; const chunks = []; let bytes = 0;
           while (true) {
             const chunk = await reader.read(); controller.signal.throwIfAborted();
             if (chunk.done) break; bytes += chunk.value.byteLength;
-            if (bytes > MAX_BYTES) throw new TwitchAutomationProviderError("twitch_automation_response_too_large", 502, write);
+            if (bytes > maxBytes) throw new TwitchAutomationProviderError("twitch_automation_response_too_large", 502, write);
             chunks.push(Buffer.from(chunk.value));
           }
           const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")); await grant.assertCurrent(); controller.signal.throwIfAborted(); return parsed;

@@ -1,5 +1,7 @@
 "use strict";
 
+const { rewardError } = require("./twitchRewardPolicy");
+
 const { sanitizeBuildProfile, prepareBuildProfileUpdate } = require("./buildProfile");
 
 /**
@@ -196,6 +198,10 @@ class MultichatStudioService {
     }
   }
 
+  /** Apply a server-admitted redemption under the caller's token write fence.
+   * @param {string} token @param {Record<string,unknown>} patch @param {string} action */
+  applyReward(token, patch, action) { return this._updateUnlocked(token, patch, 0, action); }
+
   /** Undo the mark only if this Dock still owns the replacement it saw.
    * @param {string} token @param {unknown} input */
   async _restoreStreamMark(token, input) {
@@ -218,15 +224,17 @@ class MultichatStudioService {
    * @param {string} token
    * @param {Record<string, unknown>} patch
    * @param {number} [attempt]
+   * @param {string} [rewardAction]
    * @returns {Promise<Record<string, any>>}
    */
-  async _updateUnlocked(token, patch, attempt = 0) {
+  async _updateUnlocked(token, patch, attempt = 0, rewardAction) {
     // B-roll playback metadata is a server-owned timeline. Read the prior
     // anchor before applying a Dock update so volume/mute changes preserve the
     // current reel, while library/shuffle/skip changes create one new anchor
     // that every horizontal and vertical Browser Source receives together.
     const previousDocument = await this._findDocument(token);
     const previousBroll = sanitizeBroll(previousDocument?.broll);
+    patch = studioRewardPatch(rewardAction, previousDocument, previousBroll, patch, this.now());
     const previousWriteRevision = sanitizeBrollWriteRevision(
       previousDocument?.brollWriteRevision,
     );
@@ -296,7 +304,7 @@ class MultichatStudioService {
         token,
         updateDoc,
         revisions,
-        studioDocumentFilter(token, previousDocument),
+        { ...studioDocumentFilter(token, previousDocument), ...(rewardAction === "broll" ? { scene: previousDocument?.scene } : {}) },
       );
       if (!written) {
         if (attempt + 1 >= BROLL_WRITE_MAX_ATTEMPTS) {
@@ -306,7 +314,7 @@ class MultichatStudioService {
           });
           throw error;
         }
-        return this._updateUnlocked(token, patch, attempt + 1);
+        return this._updateUnlocked(token, patch, attempt + 1, rewardAction);
       }
     } else {
       const filter = studioDocumentFilter(token, previousDocument);
@@ -412,6 +420,15 @@ function studioDocumentFilter(token, document) {
 /** @param {unknown} error */
 function isDuplicateKeyError(error) {
   return Number((/** @type {{ code?: unknown }} */ (error))?.code) === 11000;
+}
+
+/** @param {string|undefined} action @param {any} previous @param {{clips:any[],skipNonce:number}} broll
+ * @param {Record<string,unknown>} patch @param {number} now */
+function studioRewardPatch(action, previous, broll, patch, now) {
+  if (action === "buildVote" && pollForRead(previous?.poll, now)?.status === "open") throw rewardError("reward_poll_open", 409);
+  if (action !== "broll") return patch;
+  if (!previous?.scene || !broll.clips.length) throw rewardError("reward_broll_unavailable", 409);
+  return { broll: { skipNonce: broll.skipNonce + 1 } };
 }
 
 /** @param {unknown} raw */

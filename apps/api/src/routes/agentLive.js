@@ -72,6 +72,7 @@ function normalizeName(value) {
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   overlayTokens?: import('../services/types').OverlayTokensService,
  *   buildIntents?: { registerFromEnvelope: (userId: string, envelope: unknown) => Promise<unknown> },
+ *   twitchRewards?: import('../services/twitchRewards').TwitchRewardsService,
  *   twitchAutomation?: import('../services/twitchAutomation').TwitchAutomationService,
  *   logger?: import('pino').Logger,
  * }} deps
@@ -152,6 +153,9 @@ function buildAgentLiveRouter(deps) {
         const buildIntents = deps.buildIntents;
         void Promise.resolve()
           .then(() => buildIntents.registerFromEnvelope(auth.userId, enriched))
+          .then(() => {
+            if (auth.source === "device" && ["match_started", "match_in_progress"].includes(enriched.phase)) return deps.twitchRewards?.onDeviceGame(auth.userId, enriched);
+          })
           .catch((err) => {
             if (log && typeof log.warn === "function") {
               log.warn(

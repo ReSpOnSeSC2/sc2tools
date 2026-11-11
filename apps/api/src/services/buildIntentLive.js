@@ -262,6 +262,12 @@ class BuildIntentLive {
     return nativeRandomizerRoll(this, userId, gameKey, body);
   }
 
+  /** Server-only viewer redemption. Manual callers cannot supply this option.
+   * @param {string} userId @param {string} gameKey @param {string} matchup @param {string} redemptionId */
+  rewardReroll(userId, gameKey, matchup, redemptionId) {
+    return nativeRandomizerRoll(this, userId, gameKey, { matchup, releaseHold: false, revealInWidget: true }, redemptionId);
+  }
+
   /**
    * The overlay payload for the broker's current game, when it has a live
    * record (replayed to overlay sockets on connect / resync).
