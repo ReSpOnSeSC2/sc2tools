@@ -7,6 +7,7 @@
     "fonts": ["default", "condensed", "mono"],
     "styles": ["command-grid", "neon-arcade", "arena-broadcast", "void-nebula", "terran-foundry"]
   },
+  "layout": { "minScale": 0.5, "maxScale": 2, "maxLayer": 31 },
   "widgetDurationMs": {
     "opponent": 15000,
     "match-result": 15000,

@@ -53,9 +53,11 @@ def test_can_use_gui_returns_false_without_pyside6(
 
     # Reload the gui module so its can_use_gui() runs against the
     # patched import hook.
-    import sc2tools_agent.ui.gui as gui_mod
+    from sc2tools_agent.ui import gui as gui_mod, settings_page
+    importlib.reload(settings_page)
     importlib.reload(gui_mod)
 
+    assert callable(settings_page.build_settings_page)
     assert gui_mod.can_use_gui() is False
 
 

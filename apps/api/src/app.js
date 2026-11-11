@@ -86,6 +86,11 @@ const { OverlayTokensService } = require("./services/overlayTokens");
 const { PlatformIntegrationsService } = require("./services/platformIntegrations");
 const { PlatformChatService } = require("./services/platformChat");
 const { StreamingTitlesService } = require("./services/streamingTitles");
+const { TwitchRewardsService } = require("./services/twitchRewards");
+const { TwitchRewardActions } = require("./services/twitchRewardActions");
+const { TwitchRewardReceipts } = require("./services/twitchRewardReceipts");
+const { TwitchRewardProvider } = require("./services/twitchRewardProvider");
+const { buildTwitchRewardsRouter } = require("./routes/twitchRewards");
 const { TwitchAutomationService } = require("./services/twitchAutomation");
 const { TwitchAutomationProvider } = require("./services/twitchAutomationProvider");
 const { TwitchAutomationReceipts } = require("./services/twitchAutomationReceipts");
@@ -412,11 +417,12 @@ function buildProgressServices(deps, notifications, gameDetails) {
  * @param {import('./services/mmrExpectation').MmrExpectationService} mmrExpectation
  * @param {import('./services/gameDetails').GameDetailsService} gameDetails
  * @param {import('./services/presetPolicies').PresetPoliciesService} presetPolicies
+ * @param {Buffer} rosterPepper
  */
-function buildAdminInsightServices(db, pulseDirectory, mmrExpectation, gameDetails, presetPolicies) {
+function buildAdminInsightServices(db, pulseDirectory, mmrExpectation, gameDetails, presetPolicies, rosterPepper) {
   return {
     adminGlobal: new AdminGlobalService({ db, pulseDirectory }),
-    adminGlobalTrends: new AdminGlobalTrendsService({ db, mmrExpectation }),
+    adminGlobalTrends: new AdminGlobalTrendsService({ db, mmrExpectation, rosterPepper }),
     classifierQuality: new ClassifierQualityService({ db, gameDetails, presetPolicies }),
   };
 }
@@ -478,7 +484,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   );
   const playbackArtifacts = replayFiles ? new PlaybackArtifactsService({
     client: replayFiles.client, bucket: replayFiles.bucket, games: deps.db.games,
-    notifications,
+    notifications, keySecret: deps.config.serverPepper,
   }) : null;
   // One read-only Atlas client (and OAuth token) shared by capacity
   // monitoring and backup health; null when the service account is unset.
@@ -831,6 +837,12 @@ function makeServices(deps, clerk, adminClerkIds) {
     perGame,
     logger: deps.logger,
   });
+  const twitchRewards = deps.db.twitchRewardReceipts ? new TwitchRewardsService({
+    users: deps.db.users, integrations: platformIntegrations,
+    receipts: new TwitchRewardReceipts(deps.db.twitchRewardReceipts),
+    provider: new TwitchRewardProvider(new TwitchAutomationProvider({ clientId: deps.config.platformIntegrations?.twitch?.clientId || "" })),
+    actions: new TwitchRewardActions({ users, tokens: overlayTokens, studio: multichatStudio, customBuilds, buildIntents, broker: liveGameBroker, io: deps.io }),
+  }) : null;
   // A saved, renamed or deleted custom build changes the check-in options:
   // drop the cached lists so "Add new build" can confirm the new build at once.
   customBuilds.onDefinitionsChanged = (userId) => {
@@ -949,6 +961,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const guideNotes = new GuideNotesService(deps.db);
   const guides = new GuidesService(deps.db, { guideNotes, guideVideos, logger: deps.logger });
   const gdpr = new GdprService(deps.db, {
+    calendarFeed: delivery.calendarFeed,
     beginDeviceMutation: (userId) => pairings.beginLivenessMutation(userId),
     userRevision,
     siteStats,
@@ -1033,8 +1046,9 @@ function makeServices(deps, clerk, adminClerkIds) {
     adminIds: () => [...adminClerkIds],
     gdpr,
     infrastructureUsage,
+    attentionQueues: { community, playerIdentities, playerChannels, adminEvents },
   });
-  const adminInsights = buildAdminInsightServices(deps.db, pulseDirectory, mmrExpectation, gameDetails, presetPolicies);
+  const adminInsights = buildAdminInsightServices(deps.db, pulseDirectory, mmrExpectation, gameDetails, presetPolicies, deps.config.serverPepper);
   const { adminGlobalTrends } = adminInsights;
   // Atlas Cloud Backup health + in-app snapshot counts for /admin/health;
   // server.js runs the hourly stale-backup alert against the same cache.
@@ -1087,7 +1101,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   } });
   return withOwnerDataServices({
     gameStatsWrites: games.gameStatsWrites,
-    userRevision, userCache, sessionPolicy, sessionHistory, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
+    userRevision, userCache, sessionPolicy, sessionHistory, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, twitchRewards, chatStats, chatCommands,
     privateSearch,
     users,
     activation, notes: /** @type {import('./services/notes').NotesService} */ (opponents.notes),
@@ -1535,6 +1549,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildPlatformIntegrationsRouter({
       integrations: services.platformIntegrations,
+      rewards: services.twitchRewards,
       auth,
       logger: deps.logger,
       returnUrl: deps.config.platformIntegrations?.returnUrl,
@@ -1548,6 +1563,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       deps.db, services.games, userId, () => services.liveGameBroker.latest(userId),
     ),
   }));
+  if (services.twitchRewards) app.use(SERVICE.ROUTE_PREFIX, buildTwitchRewardsRouter({ auth, rewards: services.twitchRewards }));
   if (services.twitchAutomation) app.use(SERVICE.ROUTE_PREFIX, buildTwitchAutomationRouter({
     auth, automation: services.twitchAutomation, tokens: services.overlayTokens,
     status: new TwitchAutomationStatus({ automation: services.twitchAutomation, broker: services.liveGameBroker }),
@@ -1940,6 +1956,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       engagement: services.multichatEngagement,
       overlayTokens: services.overlayTokens,
       buildIntents: services.buildIntents,
+      twitchRewards: services.twitchRewards || undefined,
       twitchAutomation: services.twitchAutomation || undefined,
       logger: deps.logger,
     }),

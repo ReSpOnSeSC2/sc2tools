@@ -182,6 +182,24 @@ test("without an agent the job waits; an old agent asks for an update; a capable
   expect((await db.reanalysisJobs.findOne({ userId: OWNER })).status).toBe("running");
 });
 
+test("camera backfill admits older and unknown engines across matchups and excludes current analysis", async () => {
+  await db.games.insertMany([
+    game(1, { myRace: "Random" }),
+    game(2, { engineVersion: "1.6.13-rc.1" }),
+    game(3, { engineVersion: null }),
+    game(4, { engineVersion: "1.6.13+build" }),
+    game(5, { engineVersion: "1.6.14" }),
+    game(6, { userId: OTHER }),
+    game(7, { isResumedFromReplay: true }),
+  ]);
+  const h = harness();
+  expect((await h.service.overview(OWNER)).cohorts).toContainEqual({ id: "add-camera-data", kind: "camera", count: 3 });
+  const { job } = await h.service.start(OWNER, { cohortId: "add-camera-data" });
+  expect(job).toMatchObject({ total: 3, cohortId: "add-camera-data" });
+  await h.idle();
+  expect(h.deliveries[0].payload.games.map(row => row.gameId)).toEqual(["g-0001", "g-0002", "g-0003"]);
+});
+
 test("the next batch waits for the acknowledgement and every outcome of the current one", async () => {
   await db.games.insertMany(Array.from({ length: 101 }, (_, index) => game(index)));
   const h = harness();

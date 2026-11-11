@@ -1,14 +1,15 @@
 "use strict";
 
 const crypto = require("crypto");
+const { encryptSecret, decryptSecret, parseTokenEncryptionKey } = require("./platformCredentialVault");
 
 /**
  * Private coaching calendar feed: ``GET /v1/calendar/<secret>.ics``.
  *
- * The secret is 32 random bytes shown to its owner once; only its SHA-256
- * is stored (``users.calendarFeed.hash``), so a database read cannot
- * rebuild a working link. Regenerate replaces the hash (the old link stops
- * at once) and revoke removes it. The feed lists bookings only: a coach
+ * The feed looks up the SHA-256 of its 32-byte random secret. When the
+ * credential vault is configured, a separate owner-bound encrypted copy
+ * is available to the authenticated account export. Rotation replaces
+ * both values and revocation removes them. The feed lists bookings only: a coach
  * sees "Coaching session" without student names, a student sees their own
  * sessions with their coach's display name. Request logs redact the path
  * segment (middleware/requestLogging.js).
@@ -22,6 +23,24 @@ const SITE = "https://sc2tools.com";
 
 /** @param {string} secret */
 const hashSecret = (secret) => crypto.createHash("sha256").update(secret).digest("hex");
+
+/** @param {string} userId @param {string} hash */
+const calendarAad = (userId, hash) => JSON.stringify(["calendar-feed", userId, hash]);
+
+/** The vault copy never leaves storage, including for legacy hash-only rows.
+ * @param {{hash?: string, createdAt?: Date, secretBox?: Parameters<typeof decryptSecret>[0]}} record
+ * @param {string} userId @param {Buffer|null} [key]
+ */
+function calendarExportRecord(record, userId, key = null) {
+  const { hash, createdAt, secretBox } = record;
+  if (key && typeof hash === "string" && secretBox) {
+    try {
+      const secret = decryptSecret(secretBox, key, calendarAad(userId, hash));
+      if (SECRET_RE.test(secret) && hashSecret(secret) === hash) return { hash, createdAt, secret };
+    } catch { /* An unavailable old key leaves calendar export metadata readable. */ }
+  }
+  return { hash, createdAt };
+}
 
 /** RFC 5545 TEXT escaping. @param {unknown} value */
 function escapeText(value) {
@@ -70,12 +89,16 @@ function toDate(value) {
 class CalendarFeedService {
   /**
    * @param {{users: import('mongodb').Collection<any>, coaching: import('mongodb').Collection<any>}} db
-   * @param {{now?: () => number}} [opts]
+   * @param {{now?: () => number, encryptionKey?: string|null}} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
     this.now = opts.now || Date.now;
+    this.key = opts.encryptionKey ? parseTokenEncryptionKey(opts.encryptionKey) : null;
   }
+
+  /** @param {string} userId @param {Parameters<typeof calendarExportRecord>[0]} record */
+  exportRecord(userId, record) { return calendarExportRecord(record, userId, this.key); }
 
   /** @param {string} userId */
   async status(userId) {
@@ -84,12 +107,14 @@ class CalendarFeedService {
     return { active: Boolean(createdAt), createdAt: createdAt ? new Date(createdAt).toISOString() : null };
   }
 
-  /** Create or regenerate. The returned path is the only time the secret leaves. @param {string} userId */
+  /** Create or regenerate. Settings only shows the new secret at creation. @param {string} userId */
   async rotate(userId) {
     const secret = crypto.randomBytes(32).toString("base64url");
     const createdAt = new Date(this.now());
-    const res = await this.db.users.updateOne({ userId, _gdprMutation: { $exists: false } },
-      { $set: { calendarFeed: { hash: hashSecret(secret), createdAt } } });
+    const hash = hashSecret(secret);
+    const secretBox = this.key ? encryptSecret(secret, this.key, calendarAad(userId, hash)) : null;
+    const calendarFeed = { hash, createdAt, ...(secretBox ? { secretBox } : {}) };
+    const res = await this.db.users.updateOne({ userId, _gdprMutation: { $exists: false } }, { $set: { calendarFeed } });
     if (!res.matchedCount) throw Object.assign(new Error("gdpr_operation_busy"), { status: 409, code: "gdpr_operation_busy" });
     return { active: true, createdAt: createdAt.toISOString(), path: `/v1/calendar/${secret}.ics` };
   }
@@ -103,10 +128,14 @@ class CalendarFeedService {
   /** @param {unknown} secret @returns {Promise<string|null>} */
   async feed(secret) {
     if (typeof secret !== "string" || !SECRET_RE.test(secret)) return null;
-    const user = await this.db.users.findOne({ "calendarFeed.hash": hashSecret(secret) }, { projection: { _id: 0, userId: 1, _gdprMutation: 1 } });
-    if (!user || user._gdprMutation || typeof user.userId !== "string") return null;
+    const current = { "calendarFeed.hash": hashSecret(secret), _gdprMutation: { $exists: false } };
+    const projection = { _id: 0, userId: 1 };
+    const user = await this.db.users.findOne(current, { projection });
+    if (typeof user?.userId !== "string") return null;
     const now = new Date(this.now());
-    return renderIcs(await this.events(user.userId, now), { name: "SC2 Tools coaching", now });
+    const events = await this.events(user.userId, now);
+    const stillCurrent = await this.db.users.findOne({ ...current, userId: user.userId }, { projection });
+    return stillCurrent ? renderIcs(events, { name: "SC2 Tools coaching", now }) : null;
   }
 
   /** @param {string} userId @param {Date} now */
@@ -137,4 +166,4 @@ class CalendarFeedService {
   }
 }
 
-module.exports = { CalendarFeedService, renderIcs, foldLine, escapeText, hashSecret };
+module.exports = { CalendarFeedService, renderIcs, foldLine, escapeText, hashSecret, calendarExportRecord };

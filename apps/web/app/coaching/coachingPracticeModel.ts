@@ -102,6 +102,8 @@ export type AssignmentGamesPayload = {
   games: PracticeGame[];
 };
 
+export const DIGEST_LABEL_SHARING_VERSION = "practice-digest-catalog-labels-v1";
+
 export type PracticeSharingStatus = "pending" | "accepted" | "rejected" | "revoked";
 
 export type PracticeSharingRelationship = {
@@ -116,6 +118,7 @@ export type PracticeSharingRelationship = {
     practiceAssignments: true;
     qualifyingOneVsOneGameDetails: true;
     archivedOriginalReplays: true;
+    digestCatalogCheckIns?: boolean;
   };
 };
 

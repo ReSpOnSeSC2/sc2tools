@@ -167,19 +167,19 @@ describe("buildScoutingLine", () => {
 });
 
 describe("buildMatchEndLine", () => {
-  it("speaks Victory + MMR delta on a win", () => {
-    const out = buildMatchEndLine({ result: "win", mmrDelta: 22 } as LiveGamePayload);
+  it("labels the comparison separately from a victory", () => {
+    const out = buildMatchEndLine({ result: "win", mmrChangeBetweenStarts: 22 } as LiveGamePayload);
     expect(out).toContain("Victory.");
-    expect(out).toContain("plus 22 MMR.");
+    expect(out).toContain("Between recorded game starts, plus 22 MMR.");
   });
 
-  it("speaks Defeat with negative delta", () => {
+  it("labels the negative comparison separately from a defeat", () => {
     const out = buildMatchEndLine({
       result: "loss",
-      mmrDelta: -18,
+      mmrChangeBetweenStarts: -18,
     } as LiveGamePayload);
     expect(out).toContain("Defeat.");
-    expect(out).toContain("minus 18 MMR.");
+    expect(out).toContain("Between recorded game starts, minus 18 MMR.");
   });
 
   it("omits MMR clause when delta is zero/missing", () => {

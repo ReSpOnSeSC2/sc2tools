@@ -44,7 +44,7 @@ describe("admin Global Trends", () => {
   afterAll(async () => { await db?.close(); await mongo?.stop(); });
   beforeEach(async () => {
     await Promise.all([db.games, db.users, db.opponents, db.pulseAccounts].map((collection) => collection.deleteMany({})));
-    service = new AdminGlobalTrendsService({ db });
+    service = new AdminGlobalTrendsService({ db, rosterPepper: Buffer.alloc(32, 7) });
     app = express();
     app.use("/v1", buildAdminRouter({
       adminGlobalTrends: service,
@@ -83,6 +83,23 @@ describe("admin Global Trends", () => {
       .query({ lo: 4500, hi: 5000, tz: "UTC" }).set("Authorization", "admin-token").expect(200);
     expect(response.headers["cache-control"]).toBe("private, no-store");
     expect(response.body.error).toBeUndefined();
+  });
+
+  test("opaque roster references scope chart and roster reads without exposing private IDs", async () => {
+    const base = "/v1/admin/global-trends";
+    const roster = await request(app).get(`${base}/players`).query({ cohort_refs: 1 }).set("Authorization", "admin-token").expect(200);
+    expect(JSON.stringify(roster.body)).not.toMatch(/1-S2-1-100|2-S2-1-200|user:legacy|toonHandle/);
+    const alpha = roster.body.items.find(row => row.displayName === "AlphaSC2");
+    expect(alpha.playerId).toMatch(/^p_[A-Za-z0-9_-]{22}$/);
+    const scoped = { cohort_refs: 1, player_selection: "include", included_players: alpha.playerId };
+    const selected = await request(app).get(`${base}/players`).query(scoped).set("Authorization", "admin-token").expect(200);
+    expect(selected.body.selectedTotal).toBe(1);
+    const chart = await request(app).get(`${base}/timeseries`).query({ ...scoped, tz: "UTC" }).set("Authorization", "admin-token").expect(200);
+    expect(chart.body.points[0].total).toBe(2);
+    for (const id of [A, `p_${"f".repeat(22)}`]) {
+      const unknown = await request(app).get(`${base}/players`).query({ ...scoped, included_players: id }).set("Authorization", "admin-token").expect(200);
+      expect(unknown.body.selectedTotal).toBe(0);
+    }
   });
 
   test("all-player totals deduplicate repeated own-player uploads without weakening normal user scope", async () => {

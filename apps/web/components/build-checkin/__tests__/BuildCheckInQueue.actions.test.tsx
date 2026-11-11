@@ -209,6 +209,30 @@ describe("Confirm all suggested", () => {
     expect(harness.apiCall.mock.calls.map(gameOf)).toEqual(["g1", "g2", "g2", "g3"]);
   });
 
+  it("retries only the still-pending suggestions admitted in the original order", async () => {
+    const games = [item("g1"), item("g2"), item("g3"), item("g4")];
+    harness.apiCall
+      .mockResolvedValueOnce(confirmed(games[0]))
+      .mockRejectedValueOnce({ status: 429, code: "rate_limited" });
+    const dialog = setup(games);
+    startConfirmAll(dialog, 4);
+
+    const summary = within(dialog).getByTestId("confirm-all-summary");
+    await within(summary).findByRole("button", { name: "Retry remaining (3)" });
+    const changed = item("g3", { suggestion: suggestion("custom:new", "New suggestion") });
+    const refreshed = [item("new-game"), games[3], changed, games[1]];
+    act(() => {
+      harness.responses[QUEUE_PATH] = { data: { items: refreshed, total: refreshed.length, disabled: false } };
+      harness.listeners.forEach((listener) => listener());
+    });
+    expect(within(dialog).getByRole("button", { name: "Confirm all suggested (4)" })).toBeTruthy();
+    confirmEachGame(Object.fromEntries(refreshed.map((game) => [game.gameId, game])));
+
+    fireEvent.click(within(summary).getByRole("button", { name: "Retry remaining (2)" }));
+    await waitFor(() => expect(summary.textContent).toBe("Confirmed 2 of 2."));
+    expect(harness.apiCall.mock.calls.map(gameOf)).toEqual(["g1", "g2", "g2", "g4"]);
+  });
+
   it("reports any other failure on its game, keeps going and offers Retry", async () => {
     const games = [item("g1"), item("g2"), item("g3")];
     const byId = Object.fromEntries(games.map((game) => [game.gameId, game]));

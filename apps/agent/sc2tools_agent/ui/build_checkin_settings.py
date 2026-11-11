@@ -24,6 +24,7 @@ from PySide6 import QtCore, QtWidgets
 
 from . import theme
 from .qt_helpers import build_flow_layout
+from .settings_page import APPLIES_INSTANTLY, settings_timing
 
 HINT_NO_LIVE = (
     "Build check-ins need live game detection, which is turned off for "
@@ -131,6 +132,9 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
             row.addStretch(1)
             layout.addLayout(row)
 
+        layout.addWidget(settings_timing(
+            QtWidgets, APPLIES_INSTANTLY, self.enabled_box, self.loading_box, self.after_box, self.scouting_box,
+        ))
         self.hint = QtWidgets.QLabel("")
         self.hint.setObjectName("muted")
         self.hint.setWordWrap(True)

@@ -204,7 +204,9 @@ describe("build check-in route guards", () => {
       const after = await read();
       expect(after.body.randomizerEnabled).toBe(true);
       expect(after.body.builds.find((b) => b.key === PHOENIX_KEY).inRandomizer).toBe(true);
-      expect(h.io.events("build-intent:changed")).toHaveLength(0);
+      expect(h.io.events("build-intent:changed")).toEqual([
+        { room: `user:${user.userId}`, event: "build-intent:changed", payload: { prefs: true } },
+      ]);
     });
 
     test("a failing ping never fails the save", async () => {

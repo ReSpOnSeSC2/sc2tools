@@ -1,0 +1,9 @@
+{
+  "preferenceType": "adminTrendViews",
+  "maxViews": 20,
+  "maxName": 60,
+  "maxLinkPlayers": 50,
+  "maxSavedPlayers": 400,
+  "playerRefPattern": "^p_[A-Za-z0-9_-]{22}$",
+  "raceCodes": ["P", "T", "Z", "R", "U"]
+}

@@ -18,6 +18,31 @@ const profile = patch => ({ v: 1, theme: {}, widgetOptions: {}, ...patch });
     await collection.insertOne({ userId: "owner", token: "synthetic-token", label: "Synthetic", revokedAt: null, enabledWidgets: ["session"] });
   });
   const put = (body, owner = "owner") => request(app).put("/v1/overlay-tokens/synthetic-token/profile").set("x-fixture-owner", owner).send(body);
+const placement = { anchor: "bottom", xPct: 42, yPct: 7, scale: 1.25, zIndex: 3 };
+describe("owned live overlay layouts", () => {
+  test("keeps each orientation in the same owner CAS and clears only the requested layout", async () => {
+    const initial = profile({ layout: { opponent: placement }, layoutVertical: { scouting: { ...placement, xPct: 70 } },
+      theme: { accent: "#abc" }, widgetOptions: { "match-result": { durationSec: 45 } }, credit: false });
+    await put({ profile: initial, expectedRevision: 0 }).expect(200, { profile: initial, profileRevision: 1 });
+    expect(emit).toHaveBeenCalledWith("overlay:config", { profile: initial, profileRevision: 1 });
+    await put({ profile: { ...initial, layout: {} }, expectedRevision: 0 }).expect(409);
+    await put({ profile: { ...initial, layout: {} }, expectedRevision: 1 }, "other-owner").expect(404);
+    const verticalOnly = { ...initial }; delete verticalOnly.layout;
+    await put({ profile: { ...initial, layout: {} }, expectedRevision: 1 }).expect(200, { profile: verticalOnly, profileRevision: 2 });
+    expect((await service.resolve("synthetic-token")).profile).toEqual(verticalOnly);
+  });
+  test.each([
+    { ghost: placement }, { opponent: { ...placement, xPct: 101 } },
+    { opponent: { ...placement, yPct: "5%" } }, { opponent: { ...placement, anchor: "left" } },
+    { opponent: { ...placement, scale: 0 } }, { opponent: { ...placement, zIndex: 50 } },
+    { opponent: { ...placement, zIndex: 1.5 } }, { opponent: { ...placement, style: "display:none" } },
+    JSON.parse('{"__proto__":{"xPct":1}}'),
+  ])("rejects hostile layout entries before saving: %j", async layout => {
+    await put({ profile: profile({ layout }), expectedRevision: 0 }).expect(400);
+    expect(emit).not.toHaveBeenCalled();
+  });
+});
+
 describe("owned live overlay profiles", () => {
   test("legacy reads supply canonical defaults without writing, then an explicit save publishes only profile fields", async () => {
     expect((await service.list("owner"))[0]).toMatchObject({ profile: profile(), profileRevision: 0 });

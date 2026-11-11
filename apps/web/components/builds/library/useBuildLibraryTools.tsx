@@ -170,7 +170,9 @@ export function useBuildLibraryTools({ items, refresh }: { items: ReadonlyArray<
         toast.info("Nothing to add", { description: "These builds are already in their matchup pools, or no pool fits them." });
         return;
       }
-      await apiCall(getToken, "/v1/me/preferences/randomizer", { method: "PUT", body: JSON.stringify(result.config) });
+      const pool = { ...result.config };
+      delete pool.rollOnDesktop;
+      await apiCall(getToken, "/v1/me/preferences/randomizer", { method: "PUT", body: JSON.stringify(pool) });
       toast.success(`Added to the randomizer: ${result.matchups.join(", ")}`, {
         description: <Link href="/settings?tab=randomizer" className={LINK}>Randomizer settings</Link>,
       });

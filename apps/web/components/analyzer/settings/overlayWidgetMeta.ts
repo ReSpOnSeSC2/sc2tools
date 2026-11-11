@@ -21,7 +21,7 @@ export const WIDGETS: ReadonlyArray<WidgetMeta> = [
   { id: "opponent", label: "Opponent identity", hint: "Pre-game dossier — race, MMR, head-to-head" },
   { id: "match-result", label: "Match result", hint: "Victory / Defeat card after the game" },
   { id: "post-game", label: "Post-game build", hint: "Build summary at end of game" },
-  { id: "mmr-delta", label: "MMR delta", hint: "± MMR change from this game" },
+  { id: "mmr-delta", label: "MMR delta", hint: "MMR change between recorded game starts" },
   { id: "streak", label: "Streak", hint: "Active 3+ win/loss run" },
   { id: "cheese", label: "Cheese alert", hint: "When 40%+ of their recent games vs you opened with cheese" },
   { id: "rematch", label: "Rematch", hint: "Flags when you've played this opponent recently" },
@@ -94,7 +94,7 @@ export const WIDGETS: ReadonlyArray<WidgetMeta> = [
   {
     id: "lower-third",
     label: "Broadcast lower third",
-    hint: "Esports-caster bar after each game: result, MMR delta, opponent head-to-head, session record. Test fires a sample game.",
+    hint: "Esports-caster bar after each game: result, MMR change between game starts, opponent head-to-head, session record. Test fires a sample game.",
   },
   {
     id: "chat-oracle",

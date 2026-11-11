@@ -129,11 +129,11 @@ class PublicPlayerService {
     const key = JSON.stringify([user.userId, slug, settings.updatedAt, settings.revision,
       SECTION_KEYS.map(section => settings[section] === true), settings.replaySharingEnabled, displayName, authorRevision(author)]);
     const cached = this.cache.get(key);
-    if (cached && cached.expires > Date.now()) return withPublishedBuilds(cached.value, author);
+    if (cached && cached.expires > Date.now()) return withPublicBuilds(cached.value, author);
     const value = await this._build(entry);
     if (this.cache.size >= CACHE_MAX) this.cache.delete(this.cache.keys().next().value);
     this.cache.set(key, { expires: Date.now() + CACHE_MS, value });
-    return withPublishedBuilds(value, author);
+    return withPublicBuilds(value, author);
   }
 
   /** @param {any} entry */
@@ -149,7 +149,7 @@ class PublicPlayerService {
     const profile = {
       handle: slug, displayName, mainRace: mainRace || author?.primaryRace || null,
       joinedAt: safeIso(author?.joinedAt), totals: shapeTotals(summary?.totals), matchups: shapeMatchups(summary?.byMatchup),
-      signatureBuilds: shapeSignatureBuilds(builds), featuredBuild: shapeFeaturedBuild(author?.topBuild),
+      signatureBuilds: shapeSignatureBuilds(builds),
       publishedBuildCount: Number.isSafeInteger(author?.totalBuilds) ? author.totalBuilds : 0,
       reviewer: publicReviewer(reviewer),
       sections: Object.fromEntries(SECTION_KEYS.map(key => [key, settings[key] === true])),
@@ -173,11 +173,10 @@ class PublicPlayerService {
   }
 }
 
-/** Fresh browser rows use the author metadata already read for admission.
- * Descriptions stay out of the long-lived aggregate cache.
+/** Use the fresh author metadata for vote counts and published-build descriptions.
  * @param {any} value @param {any} author */
-function withPublishedBuilds(value, author) {
-  return { ...value, profile: { ...value.profile, publishedBuilds: publicBuilds(author?.builds) } };
+function withPublicBuilds(value, author) {
+  return { ...value, profile: { ...value.profile, featuredBuild: shapeFeaturedBuild(author?.topBuild), publishedBuilds: publicBuilds(author?.builds) } };
 }
 
 /** Already-public named builds only, reconstructed without owner ids/snapshots.

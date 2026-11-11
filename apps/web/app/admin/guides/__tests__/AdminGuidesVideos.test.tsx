@@ -12,6 +12,10 @@ import {
   statusFixture,
 } from "./adminGuidesFixtures";
 
+import { guideNavigation } from "./adminGuidesNavigationFixture";
+
+vi.mock("next/navigation", async () => (await import("./adminGuidesNavigationFixture")).guideNavigationHooks);
+
 type Resp = { data?: unknown; error?: { status: number; message: string } };
 
 const harness = vi.hoisted(() => ({
@@ -21,7 +25,7 @@ const harness = vi.hoisted(() => ({
   getToken: vi.fn(async () => "admin-token"),
 }));
 
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: harness.getToken }) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: harness.getToken, userId: "guide-admin" }) }));
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string) => {
     const r = harness.responses.get(path) ?? {};
@@ -54,6 +58,8 @@ function expectNotesPut(videos: { pinned: string[]; hidden: string[] }) {
 }
 
 beforeEach(() => {
+  guideNavigation.setSearch("section=videos");
+  sessionStorage.clear();
   harness.responses.clear();
   harness.apiCall.mockResolvedValue({ note: glaivesNote() });
 });
@@ -213,4 +219,26 @@ describe("admin Guides add video and sync", () => {
     );
     expect((await screen.findByRole("status")).textContent).toBe("Channel synced: 15 videos in the feed, 1 new, 2 updated.");
   });
+});
+
+
+it("searches titles, filters with counts, and loads the next 50 results on demand", () => {
+  serve();
+  const items = Array.from({ length: 55 }, (_, index) => ({ ...ADMIN_VIDEO_GLAIVES,
+    youtubeId: String(index).padStart(11, "0"), title: `Guide ${index}`, hidden: index === 1, isShort: index === 2 }));
+  harness.responses.set("/v1/admin/guides/videos", { data: { items } });
+  render(<AdminGuidesPage />);
+  const list = within(screen.getByRole("list", { name: "Channel videos (55)" }));
+  expect(list.getAllByRole("link")).toHaveLength(50);
+  fireEvent.click(screen.getByRole("button", { name: "Show 50 more" }));
+  expect(list.getAllByRole("link")).toHaveLength(55);
+  const hidden = screen.getByRole("button", { name: "Hidden (1)" });
+  fireEvent.click(hidden);
+  expect(hidden.getAttribute("aria-pressed")).toBe("true");
+  expect(list.getAllByRole("link").map(link => link.textContent)).toEqual(["Guide 1"]);
+  fireEvent.change(screen.getByLabelText("Search video titles"), { target: { value: "Guide 54" } });
+  expect(screen.getByText("No videos match this filter and search")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+  expect(screen.getByRole("button", { name: "All (55)" }).getAttribute("aria-pressed")).toBe("true");
+  expect(within(screen.getByRole("list", { name: "Channel videos (55)" })).getAllByRole("link")).toHaveLength(50);
 });

@@ -14,6 +14,7 @@
 
 const { MATCHUP_RE } = require("./buildIntentShape");
 const { normalizePlayerName } = require("../util/playerName");
+const { randomizerSourceToken } = require("./overlayPresence");
 const { BUILD_INTENT } = require("../config/constants");
 
 class BuildIntentError extends Error {
@@ -226,6 +227,34 @@ class BuildIntentNotifier {
       } catch {
         // One failed room must not stop the rest.
       }
+    }
+  }
+
+  /**
+   * Presence is unknown if Socket.IO or token authorization cannot be read.
+   * Only a known absence permits an automatic desktop roll.
+   * @param {string} userId
+   * @returns {Promise<boolean|null>}
+   */
+  async hasConnectedRandomizerWidget(userId) {
+    if (!this.io) return null;
+    let timer;
+    try {
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("overlay_presence_unavailable")), 1000);
+      });
+      /** @type {Array<{data?:Record<string,any>}>} */
+      const sockets = await Promise.race([this.io.in("user:" + userId).fetchSockets(), timeout]);
+      const tokens = [...new Set(sockets.map((socket) => randomizerSourceToken(socket.data, userId)).filter(Boolean))];
+      if (tokens.length === 0) return false;
+      return Boolean(await this.overlayTokens.findOne(
+        { userId, token: { $in: tokens }, revokedAt: null, enabledWidgets: "randomizer" },
+        { projection: { _id: 1 }, maxTimeMS: 1000 },
+      ));
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 

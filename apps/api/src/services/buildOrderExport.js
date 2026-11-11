@@ -14,8 +14,9 @@ const MAX_ROW_BYTES = 4096;
 /** @type {Array<['me'|'opponent','buildLog'|'oppBuildLog']>} */
 const SIDES = [["me", "buildLog"], ["opponent", "oppBuildLog"]];
 
-/** @typedef {ReturnType<typeof prepareBuildOrderRequest>} ExportRequest */
+/** @typedef {ReturnType<typeof prepareBuildOrderRequest> & {includeExactSupply:boolean}} ExportRequest */
 /** @typedef {{_id:import('mongodb').ObjectId,date:Date|string|number|null,gameId:string}} Metadata */
+/** @typedef {{buildLog:string[],oppBuildLog:string[],buildLogSupply?:unknown}} BuildOrderDetail */
 
 class BuildOrderExportService {
   /** @type {import('crypto').KeyObject} */ #signingKey;
@@ -24,8 +25,11 @@ class BuildOrderExportService {
   constructor(db, opts) { this.db = db; this.gameDetails = opts.gameDetails; this.#signingKey = buildOrderSigningKey(opts.pepper); }
 
   /** Pure validation/signature verification, before reserving work or charging quota.
-   * @param {string} owner @param {Record<string,unknown>} query @param {'csv'|'ndjson'} format */
-  request(owner, query, format) { return prepareBuildOrderRequest(owner, query, format, this.#signingKey); }
+   * @param {string} owner @param {Record<string,unknown>} query @param {'csv'|'ndjson'} format @param {boolean} [acceptsExactSupply] */
+  request(owner, query, format, acceptsExactSupply = false) {
+    return { ...prepareBuildOrderRequest(owner, query, format, this.#signingKey),
+      includeExactSupply: format === "csv" || acceptsExactSupply };
+  }
 
   /** @param {ExportRequest} request @param {AbortSignal} signal */
   async prepare(request, signal) {
@@ -51,13 +55,16 @@ class BuildOrderExportService {
       const batch = page.slice(offset, offset + DETAIL_CONCURRENCY);
       // Each call owns exactly one backend worker. A failure aborts siblings
       // immediately, and no release/next batch can race their actual cleanup.
-      const details = await readBatch(this.gameDetails, request.owner, batch, signal);
+      const details = await readBatch(this.gameDetails, request.owner, batch, request.includeExactSupply, signal);
       for (let index = 0; index < batch.length; index++) {
         const game = batch[index], detail = details[index];
+        const alignedSupply = request.includeExactSupply && Array.isArray(detail.buildLogSupply) && detail.buildLogSupply.length === detail.buildLog.length
+          ? detail.buildLogSupply : [];
         for (const [side, key] of SIDES) {
-          for (const line of detail[key]) {
+          for (const [step, line] of detail[key].entries()) {
             signal.throwIfAborted();
-            const row = { gameId: game.gameId, side, ...parseLogLine(line) };
+            const supply = side === "me" ? alignedSupply[step] : null;
+            const row = { gameId: game.gameId, side, ...parseLogLine(line, supply) };
             yield request.format === "ndjson" ? jsonLine(row)
               : boundedRow(`${[row.gameId, row.side, row.time, row.supply, row.name].map(csvCell).join(",")}\r\n`);
             events++;
@@ -100,8 +107,9 @@ function metadata(row) {
   return { _id: new ObjectId(row._id.toHexString()), gameId: row.gameId, date: date instanceof Date ? new Date(date.getTime()) : date };
 }
 
-/** @param {Pick<import('./gameDetails').GameDetailsService,'findMany'>} service @param {string} owner @param {Metadata[]} batch @param {AbortSignal} signal */
-async function readBatch(service, owner, batch, signal) {
+/** @param {Pick<import('./gameDetails').GameDetailsService,'findMany'>} service @param {string} owner @param {Metadata[]} batch @param {boolean} includeExactSupply @param {AbortSignal} signal */
+async function readBatch(service, owner, batch, includeExactSupply, signal) {
+  const fields = includeExactSupply ? ["buildLog", "oppBuildLog", "buildLogSupply"] : ["buildLog", "oppBuildLog"];
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal.addEventListener("abort", abort, { once: true });
@@ -109,18 +117,18 @@ async function readBatch(service, owner, batch, signal) {
   const tasks = batch.map(async game => {
     try {
       controller.signal.throwIfAborted();
-      const found = await service.findMany(owner, [game.gameId], { fields: ["buildLog", "oppBuildLog"], strict: true, concurrency: 1, signal: controller.signal });
+      const found = await service.findMany(owner, [game.gameId], { fields, strict: true, concurrency: 1, signal: controller.signal });
       controller.signal.throwIfAborted();
       const detail = found.get(game.gameId);
       validateLogs(detail);
-      return /** @type {{buildLog:string[],oppBuildLog:string[]}} */ (detail);
+      return /** @type {BuildOrderDetail} */ (detail);
     } catch { controller.abort(); throw unavailable(); }
   });
   try {
     const outcomes = await Promise.allSettled(tasks);
     signal.throwIfAborted();
     if (outcomes.some(result => result.status === "rejected")) throw unavailable();
-    return outcomes.map(result => /** @type {PromiseFulfilledResult<{buildLog:string[],oppBuildLog:string[]}>} */ (result).value);
+    return outcomes.map(result => /** @type {PromiseFulfilledResult<BuildOrderDetail>} */ (result).value);
   } finally { controller.abort(); signal.removeEventListener("abort", abort); }
 }
 
@@ -133,16 +141,17 @@ function validateLogs(detail) {
   }
 }
 
-/** Persisted strings contain no supply measurement. Preserve names/order/duplicates.
- * @param {unknown} line */
-function parseLogLine(line) {
+/** Preserve names, order and duplicates. Supply is optional and aligned by the caller.
+ * @param {unknown} line @param {unknown} [supply] */
+function parseLogLine(line, supply) {
   if (typeof line !== "string" || line.length > MAX_LOG_LINE_CHARS || /[\u0000-\u001f\u007f]/u.test(line)
     || Buffer.from(line).toString("utf8") !== line) throw unavailable();
   const match = /^\[(\d+):([0-5]\d)\] (.+)$/u.exec(line);
   if (!match || !match[3].trim()) throw unavailable();
   const time = Number(match[1]) * 60 + Number(match[2]);
   if (!Number.isSafeInteger(time) || time < 0) throw unavailable();
-  return { time, supply: null, name: match[3] };
+  const exact = typeof supply === "number" && Number.isFinite(supply) && supply >= 0 && supply <= 2000;
+  return { time, supply: exact ? supply : null, name: match[3] };
 }
 
 /** @param {Record<string,any>} row */

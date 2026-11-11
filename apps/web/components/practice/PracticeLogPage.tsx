@@ -21,6 +21,7 @@ import { LinkButton } from "@/components/ui/Button";
 import { QueryState } from "@/components/ui/QueryState";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+import { RandomizerChallenge } from "./RandomizerChallenge";
 import { PracticeSummaryView } from "./PracticeSummaryView";
 
 export function PracticeLogPage() {
@@ -60,6 +61,7 @@ export function PracticeLogPage() {
           </QueryState>
         </>
       )}
+      {practice.owner ? <RandomizerChallenge /> : null}
     </div>
   );
 }

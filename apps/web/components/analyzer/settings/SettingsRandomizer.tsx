@@ -41,6 +41,7 @@ import { MatchupBuildPicker } from "./randomizer/MatchupBuildPicker";
 import { RandomizerPreview } from "./randomizer/RandomizerPreview";
 import { useSaveSource } from "./SettingsContext";
 import { SettingsLoadError } from "./SettingsLoadError";
+import { RandomizerChallenge } from "@/components/practice/RandomizerChallenge";
 import { SettingsSectionsReady } from "./SettingsSectionNav";
 
 export function SettingsRandomizer() {
@@ -65,10 +66,20 @@ export function SettingsRandomizer() {
     [data],
   );
 
+  const serverPool = useMemo(() => {
+    if (!serverConfig) return undefined;
+    const config = { ...serverConfig };
+    delete config.rollOnDesktop;
+    return config;
+  }, [serverConfig]);
   const { draft, setDraft, dirty, reset, markSaved } =
-    useDirtyForm<RandomizerConfig>(serverConfig, defaultRandomizerConfig());
+    useDirtyForm<RandomizerConfig>(serverPool, defaultRandomizerConfig());
+  const desktop = useDirtyForm(serverConfig?.rollOnDesktop, false);
 
-  useSaveSource("randomizer", { label: "randomizer", dirty, save, reset }, "build-randomizer");
+  useSaveSource("randomizer", {
+    label: "randomizer", dirty: dirty || desktop.dirty, save,
+    reset: () => { reset(); desktop.reset(); },
+  }, "build-randomizer");
 
   // Keep the audio engine in sync with the draft so the live preview
   // reflects the sound toggle / volume immediately.
@@ -78,18 +89,19 @@ export function SettingsRandomizer() {
   }, [draft.sound.enabled, draft.sound.volume]);
 
   async function save(): Promise<boolean> {
-    if (!dirty) return true;
+    if (!dirty && !desktop.dirty) return true;
     if (saving) return false;
     setSaving(true);
     const previous = data;
     try {
-      await mutate(draft as unknown, { revalidate: false });
+      await mutate({ ...draft, rollOnDesktop: desktop.draft }, { revalidate: false });
       await apiCall(getToken, "/v1/me/preferences/randomizer", {
         method: "PUT",
-        body: JSON.stringify(draft),
+        body: JSON.stringify({ ...draft, ...(desktop.dirty ? { rollOnDesktop: desktop.draft } : {}) }),
       });
       await mutate();
       markSaved();
+      desktop.markSaved();
       toast.success("Randomizer saved");
       return true;
     } catch (err) {
@@ -120,8 +132,8 @@ export function SettingsRandomizer() {
         title="Build randomizer"
         description={
           activeCount === 0
-            ? "Pick a matchup, enable the randomizer, and select which builds it can roll. The widget spins a build for you (and your stream) when each new game loads."
-            : `Active on ${activeCount} matchup${activeCount === 1 ? "" : "s"}. The OBS widget spins automatically when the agent reports a new game.`
+            ? "Pick a matchup and choose which builds the randomizer can roll."
+            : `Active on ${activeCount} matchup${activeCount === 1 ? "" : "s"}. Draws use your enabled matchup pool.`
         }
       >
         <Card>
@@ -130,6 +142,17 @@ export function SettingsRandomizer() {
             active={active}
             onSelect={setActive}
           />
+          <label className="mt-4 flex min-h-11 items-start gap-3 border-t border-border pt-4">
+            <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-accent"
+              checked={desktop.draft} disabled={!desktop.hydrated || saving}
+              onChange={(event) => desktop.setDraft(event.target.checked)} />
+            <span className="min-w-0 text-body font-medium text-text">
+              Roll on the desktop card when I&apos;m not streaming
+              <span className="mt-1 block text-caption font-normal text-text-muted">
+                The paired agent can show a build in an eligible 1v1 when no enabled randomizer source is connected.
+              </span>
+            </span>
+          </label>
         </Card>
       </Section>
 
@@ -149,6 +172,7 @@ export function SettingsRandomizer() {
       />
 
       <RandomizerPreview matchup={active} config={matchupConfig} />
+      <RandomizerChallenge />
     </>
   );
 }

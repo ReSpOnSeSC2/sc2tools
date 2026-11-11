@@ -100,7 +100,7 @@ const LOSS_EXPR = { $in: [{ $toLower: { $ifNull: ["$result", ""] } }, ["defeat",
 /** The narrow slim-row projection every facet reads. */
 const FACET_PROJECTION = Object.freeze({
   _id: 1, date: 1, result: 1, myRace: 1, "opponent.race": 1, map: 1, isLadderGame: 1,
-  matchFormat: 1, playerCount: 1, myMmr: 1, myToonHandle: 1, macroScore: 1, apm: 1, spq: 1,
+  matchFormat: 1, playerCount: 1, myMmr: 1, myMmrSource: 1, myToonHandle: 1, macroScore: 1, apm: 1, spq: 1,
   myBuild: 1, _customBuildSlug: 1, "buildIntent.status": 1, "buildIntent.applied": 1,
   "buildIntent.build": 1, "buildIntent.detected": 1,
 });
@@ -132,7 +132,7 @@ function normalizeMatchup(raw) {
 
 /**
  * @param {unknown} raw
- * @returns {{matchup: string | null, map: string | null, ranked: boolean}}
+ * @returns {{matchup: string | null, map: string | null, ranked: boolean, build?: ReturnType<typeof normalizeBuild>}}
  */
 function normalizeFilters(raw) {
   const input = plainObject(raw) ? /** @type {Record<string, unknown>} */ (raw) : {};
@@ -142,7 +142,8 @@ function normalizeFilters(raw) {
   }
   const map = input.map == null || input.map === "" ? null : plainText(input.map, MAP_MAX);
   if (input.map != null && input.map !== "" && !map) throw goalError(400, "invalid_goal", "map must be a map name.");
-  return { matchup, map, ranked: input.ranked !== false };
+  const build = input.build == null ? null : normalizeBuild(input.build);
+  return { matchup, map, ranked: input.ranked !== false, ...(build ? { build } : {}) };
 }
 
 /**
@@ -273,6 +274,8 @@ function normalizeGoalInput(body) {
     throw goalError(400, "invalid_goal", `type must be one of ${Object.keys(GOAL_TYPES).join(", ")}.`);
   }
   const filters = normalizeFilters(input.filters);
+  if (type === "mmr_reach") filters.ranked = true;
+  if (type === "build_reps") delete filters.build;
   const params = normalizeParams(type, input.params, filters);
   const window = normalizeWindow(input.window, type);
   const title = input.title == null || input.title === "" ? null : plainText(input.title, TITLE_MAX);
@@ -310,23 +313,24 @@ function goalLabel(goal) {
   const scope = scopeWords(filters);
   const games = scope ? `${scope} games` : "games";
   const onMap = filters.map ? ` on ${filters.map}` : "";
+  const withBuild = filters.build ? ` with ${filters.build.name}` : "";
   const window = goal.window || {};
   const period = window.recurrence === "season"
     ? ` in Season ${window.season}`
     : /** @type {Record<string, string>} */ (PERIOD_SUFFIX)[window.recurrence] || "";
   switch (goal.type) {
     case "games_played":
-      return `Play ${formatNumber(target)} ${target === 1 ? games.replace(/games$/, "game") : games}${onMap}${period}`;
+      return `Play ${formatNumber(target)} ${target === 1 ? games.replace(/games$/, "game") : games}${withBuild}${onMap}${period}`;
     case "win_rate":
-      return `Win ${formatNumber(target)}% of ${games}${onMap}${period}`;
+      return `Win ${formatNumber(target)}% of ${games}${withBuild}${onMap}${period}`;
     case "mmr_reach":
-      return `Reach ${formatNumber(target)} MMR${period}`;
+      return `Reach ${formatNumber(target)} MMR${withBuild}${onMap}${period}`;
     case "macro_avg":
-      return `Average a ${formatNumber(target)}+ macro score in ${games}${onMap}${period}`;
+      return `Average a ${formatNumber(target)}+ macro score in ${games}${withBuild}${onMap}${period}`;
     case "apm_avg":
-      return `Average ${formatNumber(target)}+ APM in ${games}${onMap}${period}`;
+      return `Average ${formatNumber(target)}+ APM in ${games}${withBuild}${onMap}${period}`;
     case "sq_avg":
-      return `Average ${formatNumber(target)}+ SQ in ${games}${onMap}${period}`;
+      return `Average ${formatNumber(target)}+ SQ in ${games}${withBuild}${onMap}${period}`;
     case "build_reps":
       return `Play ${goal.params?.build?.name || "a build"} ${formatNumber(target)} time${target === 1 ? "" : "s"}${filters.matchup ? ` in ${filters.matchup}` : ""}${onMap}${period}`;
     default:
@@ -347,7 +351,7 @@ function goalMatch(goal) {
   const and = [{ $or: [{ matchFormat: "1v1" }, { matchFormat: { $exists: false }, playerCount: 2 }] }];
   /** @type {Record<string, any>} */
   const match = { date: { $gte: goal.window.startsAt, $lt: goal.window.endsAt }, $and: and };
-  if (goal.filters.ranked) match.isLadderGame = true;
+  if (goal.filters.ranked || goal.type === "mmr_reach") match.isLadderGame = true;
   if (goal.filters.matchup) {
     // Same prefix matchers as the analyzer filter bar (util/parseQuery.js),
     // so the goal's deep link lists the games it counted.
@@ -359,18 +363,16 @@ function goalMatch(goal) {
   if (goal.filters.map) match.map = caseInsensitiveContains(goal.filters.map.toLowerCase());
   if (goal.type === "mmr_reach") {
     match.myMmr = { $type: "number", $gt: 0 };
+    match.myMmrSource = "replay";
     if (goal.params.toon) match.myToonHandle = { $in: accountMatchHandles(goal.params.toon) };
   }
   const averageField = /** @type {Record<string, string>} */ (AVERAGE_FIELD)[goal.type];
   if (averageField) match[averageField] = { $type: "number", $gte: 0 };
-  if (goal.type === "build_reps") {
-    // The effective label: a confirmed check-in is written onto
-    // myBuild/_customBuildSlug (services/buildIntentShape.js), so practice
-    // that was declared counts even where the classifier disagreed.
-    const build = goal.params.build;
-    if (build.source === "custom" && build.slug) match._customBuildSlug = build.slug;
-    else match.myBuild = build.name;
-  }
+  // Match the effective build. Confirmed check-ins write the selected label
+  // and custom slug onto the slim row (services/buildIntentShape.js).
+  const build = goal.type === "build_reps" ? goal.params.build : goal.filters.build;
+  if (build?.source === "custom" && build.slug) match._customBuildSlug = build.slug;
+  else if (build?.name) match.myBuild = build.name;
   return match;
 }
 

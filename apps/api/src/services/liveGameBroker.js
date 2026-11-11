@@ -106,7 +106,7 @@ class LiveGameBroker {
   constructor(deps = {}) {
     /** @type {Map<string, Set<(env: object) => void>>} */
     this._subs = new Map();
-    /** @type {Map<string, {envelope: Record<string, unknown>, ts: number}>} */
+    /** @type {Map<string, {envelope: Record<string, unknown>, ts: number, fromDevice: boolean}>} */
     this._latest = new Map();
     // Per-user cache of the most recent ``overlay:live`` payload
     // (post-game derivation from ``OverlayLiveService.buildFromGame``).
@@ -236,9 +236,10 @@ class LiveGameBroker {
    *
    * @param {string} userId
    * @param {Record<string, unknown>} envelope
+   * @param {boolean} [fromDevice] verified by the live route; never read from the envelope
    * @returns {boolean} true when accepted, false when invalid or stale
    */
-  publish(userId, envelope) {
+  publish(userId, envelope, fromDevice = false) {
     if (!userId || !envelope || typeof envelope !== "object") return false;
     // This field is cloud-reviewed enrichment, never an agent assertion.
     if ("opponentChannels" in envelope) { envelope = { ...envelope }; delete envelope.opponentChannels; }
@@ -302,7 +303,7 @@ class LiveGameBroker {
     // First fan-out: the partial envelope as-is. Streamers see the
     // basic opponent identity (name + race + Pulse MMR) within ms of
     // the agent's POST.
-    this._broadcast(userId, envelope, publishRevision);
+    this._broadcast(userId, envelope, publishRevision, fromDevice);
     // If an enricher is wired, run it asynchronously and fan out the
     // enriched envelope when ready. The first envelope of a new
     // opponent pays one Mongo aggregation (~50 ms cold); every
@@ -389,6 +390,7 @@ class LiveGameBroker {
             userId,
             /** @type {Record<string, unknown>} */ (enriched),
             publishRevision,
+            fromDevice,
           );
           this._emitScoutingBrief(userId, enriched);
         })
@@ -423,9 +425,10 @@ class LiveGameBroker {
    * @param {string} userId
    * @param {Record<string, unknown>} envelope
    * @param {number} publishRevision
+   * @param {boolean} fromDevice
    */
-  _broadcast(userId, envelope, publishRevision) {
-    this._latest.set(userId, { envelope, ts: Date.now() });
+  _broadcast(userId, envelope, publishRevision, fromDevice) {
+    this._latest.set(userId, { envelope, ts: Date.now(), fromDevice });
     const bucket = this._subs.get(userId);
     if (bucket) {
       for (const cb of bucket) {
@@ -551,6 +554,12 @@ class LiveGameBroker {
     const latest = this.latest(userId);
     if (!latest) return null;
     return this._currentGameKey.get(userId) || null;
+  }
+
+  /** Server-owned transport provenance for live operations.
+   * @param {string} userId @param {string} gameKey */
+  isTrustedDeviceGame(userId, gameKey) {
+    return this.latest(userId)?.gameKey === gameKey && this._latest.get(userId)?.fromDevice === true;
   }
 
   /** One automatic scouting reader across Companion and every Browser Source.

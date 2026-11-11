@@ -4,6 +4,8 @@ const express = require("express");
 const { reserveExport, waitForDrain } = require("./exportAdmission");
 const { BuildOrderExportError } = require("../services/buildOrderExportPolicy");
 
+const EXACT_SUPPLY_ACCEPT = "application/x-ndjson; profile=exact-supply";
+
 /** @param {import('../services/buildOrderExport').BuildOrderExportService} service @param {'csv'|'ndjson'} format
  * @returns {import('express').RequestHandler} */
 function buildOrderExportHandler(service, format) {
@@ -11,8 +13,9 @@ function buildOrderExportHandler(service, format) {
     const owner = req.auth?.userId;
     res.setHeader("cache-control", "private, no-store");
     if (typeof owner !== "string" || !owner) { res.status(401).json({ error: { code: "auth_required" } }); return; }
+    if (format === "ndjson") res.vary("Accept");
     let request;
-    try { request = service.request(owner, req.query, format); }
+    try { request = service.request(owner, req.query, format, req.headers?.accept === EXACT_SUPPLY_ACCEPT); }
     catch (error) { sendFailure(res, error); return; }
     if (req.aborted || res.destroyed || res.writableEnded) return;
     const lease = reserveExport(res);

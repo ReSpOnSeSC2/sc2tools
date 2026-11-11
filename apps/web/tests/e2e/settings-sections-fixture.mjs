@@ -57,15 +57,20 @@ export async function closeSettingsSectionsFixtureServer() {
   const receipt = { closed: true, listening: current?.listening ?? false, requests: serverRequests.splice(0), http, drainError }; origin = ""; return receipt;
 }
 
-const PUBLIC_MAP_IMAGE_BYTES = 44558;
-const PUBLIC_MAP_IMAGE_SHA256 = "eec73e40ffb44867a3026f9c555bebd2dc942256723a5126f7ca1fa7feef9d51";
+const ALCYONE = ["alcyone_le.webp", 44558, "eec73e40ffb44867a3026f9c555bebd2dc942256723a5126f7ca1fa7feef9d51"];
+const LAYOUT_SAMPLE_MAPS = new Map([
+  ["?map=10000%20Feet%20LE", ["10000_feet_le.webp", 45630, "56e3c62544c2d188a52cecdf5530dae8476f63b7fb2993f4c6bfe18b3d6370b2"]],
+  ["?map=Goldenaura%20LE", ["goldenaura_le.webp", 63654, "fe797ff040c656b022b72197a18f1ddfa0936f0aac2729aab63a4860caa3a6a8"]],
+  ["?map=Winter%20Madness%20LE", ["winter_madness_le.webp", 47416, "1ed6b565e1089292d3b355d06d7df22cef848ac457541b7e5fe4813367516fbe"]],
+  ["?map=Ruby%20Rock%20LE", ["ruby_rock_le.webp", 34368, "406578158a53fc15aee58fa96bfca72c10d9646729588b37410fc7f2c80110ed"]],
+]);
 
-async function readPublicMapImage(cwd) {
-  const file = await open(path.join(cwd, "../replay-engine/data/map-images/alcyone_le.webp"), "r");
+async function readPublicMapImage(cwd, [filename, bytes, hash]) {
+  const file = await open(path.join(cwd, "../replay-engine/data/map-images", filename), "r");
   try {
     const metadata = await file.stat();
-    if (!metadata.isFile() || metadata.size !== PUBLIC_MAP_IMAGE_BYTES) throw new Error("Pinned public map image size changed");
-    const buffer = Buffer.alloc(PUBLIC_MAP_IMAGE_BYTES + 1);
+    if (!metadata.isFile() || metadata.size !== bytes) throw new Error("Pinned public map image size changed");
+    const buffer = Buffer.alloc(bytes + 1);
     let length = 0;
     while (length < buffer.length) {
       const { bytesRead } = await file.read(buffer, length, buffer.length - length, length);
@@ -73,7 +78,7 @@ async function readPublicMapImage(cwd) {
       length += bytesRead;
     }
     const pixels = buffer.subarray(0, length);
-    if (length !== PUBLIC_MAP_IMAGE_BYTES || createHash("sha256").update(pixels).digest("hex") !== PUBLIC_MAP_IMAGE_SHA256) throw new Error("Pinned public map image content changed");
+    if (length !== bytes || createHash("sha256").update(pixels).digest("hex") !== hash) throw new Error("Pinned public map image content changed");
     return pixels;
   } finally { await file.close(); }
 }
@@ -118,9 +123,10 @@ export async function openSettingsSectionsFixture(page, theme, options = {}) {
     if (url.origin !== origin) { externalAttempts.push(`${method} ${url.origin}${url.pathname}${url.search}`); if (method !== "GET") rejectedWrites.push(`${method} ${url.pathname}${url.search}`); return denied(403); }
     if (method !== "GET") { rejectedWrites.push(`${method} ${url.pathname}${url.search}`); unexpectedRequests.push(`${method} ${url.pathname}${url.search}`); return denied(405); }
     if (url.pathname === "/v1/map-image") {
-      if (url.search !== "?map=Alcyone%20LE" || url.hash || authorization !== undefined || body !== "") { unexpectedRequests.push(`${method} ${url.pathname}${url.search}`); return denied(405); }
-      const pixels = await readPublicMapImage(cwd);
-      publicImages.push({ method, path: url.pathname, query: url.search, anonymous: true, bytes: pixels.length, sha256: PUBLIC_MAP_IMAGE_SHA256 });
+      const map = url.search === "?map=Alcyone%20LE" ? ALCYONE : options.layoutPreview ? LAYOUT_SAMPLE_MAPS.get(url.search) : undefined;
+      if (!map || url.hash || authorization !== undefined || body !== "") { unexpectedRequests.push(`${method} ${url.pathname}${url.search}`); return denied(405); }
+      const pixels = await readPublicMapImage(cwd, map);
+      publicImages.push({ method, path: url.pathname, query: url.search, anonymous: true, bytes: pixels.length, sha256: map[2] });
       return { contentType: "image/webp", body: pixels };
     }
     if (!url.search && !url.hash) {
@@ -150,6 +156,7 @@ export async function openSettingsSectionsFixture(page, theme, options = {}) {
         ["/v1/me/preferences/chatCommands", { v: 1, builtins: {}, custom: [] }],
         ["/v1/me/chatbot", { enabled: false, username: "", channel: "", replyCommands: true, announceOracle: true, announceLevelUps: true, hasToken: false, status: { state: "off", channel: null, lastError: null, lastConnectedAt: null } }],
         ["/v1/me/integrations", { platforms: ["twitch", "kick", "youtube"].map(platform => ({ platform, configured: false, connected: false, ready: false, platformUserName: "", scopes: [], connectedAt: null, lastSyncedAt: null, lastError: null })) }],
+        ["/v1/me/twitch-rewards", { permission: false, available: false, settings: { enabled: false, target: null, mappings: [] }, targets: [], builds: [], activity: [] }],
         ["/v1/me/twitch-automation", { serverEnabled: false, configured: false, connected: false, eligible: false, predictionPermission: false, markerPermission: false, preferences: { predictionsEnabled: false, markersEnabled: false, windowSec: 90, titleTemplate: "{me} vs {opp}" } }],
       ]);
       if (url.pathname === "/v1/overlay-tokens") {

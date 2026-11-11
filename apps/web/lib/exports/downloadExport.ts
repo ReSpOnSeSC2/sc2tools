@@ -1,6 +1,8 @@
 import { boundedBlobSink, ExportDownloadError, writeExportStream, type ExportSink } from "./exportStream";
 import type { ExportFormat } from "./exportNdjson";
 
+const EXACT_SUPPLY_ACCEPT = "application/x-ndjson; profile=exact-supply";
+
 type FileWriter = { write: (chunk: Uint8Array) => Promise<void>; close: () => Promise<void>; abort: () => Promise<void> };
 type FileHandle = { createWritable: () => Promise<FileWriter> };
 type SavePicker = (options: { suggestedName: string }) => Promise<FileHandle>;
@@ -58,7 +60,9 @@ export async function downloadExport(request: DownloadRequest, scope: DownloadSc
     } else { blobSink = boundedBlobSink(request.contentType); sink = blobSink; }
     const token = await scope.token(); assertCurrent();
     if (!token) throw new ExportDownloadError("failed");
-    response = await environment.fetch(request.url, { headers: { authorization: `Bearer ${token}` },
+    const headers = { authorization: `Bearer ${token}`,
+      ...(request.ndjson?.format === "sc2tools-build-order-export" ? { accept: EXACT_SUPPLY_ACCEPT } : {}) };
+    response = await environment.fetch(request.url, { headers,
       signal: scope.signal, cache: "no-store", credentials: "omit", redirect: "error" });
     assertCurrent();
     let continuation: string | null = null;

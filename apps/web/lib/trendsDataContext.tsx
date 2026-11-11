@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import type { SWRConfiguration } from "swr";
 import { useApi, type ClientApiError } from "@/lib/clientApi";
 import { GLOBAL_TRENDS_REQUEST_OPTIONS, GLOBAL_TRENDS_SWR_CONFIG } from "./globalTrendsApi";
@@ -13,6 +13,7 @@ export type TrendsCohort = Record<
 type TrendsDataScope = {
   mode: "personal" | "global";
   cohort: TrendsCohort;
+  onForbidden?: () => void;
 };
 
 const TrendsDataContext = createContext<TrendsDataScope>({
@@ -24,9 +25,10 @@ const TrendsDataContext = createContext<TrendsDataScope>({
 export function TrendsDataProvider({
   mode = "personal",
   cohort = {},
+  onForbidden,
   children,
 }: Partial<TrendsDataScope> & { children: ReactNode }) {
-  const value = useMemo(() => ({ mode, cohort }), [mode, cohort]);
+  const value = useMemo(() => ({ mode, cohort, onForbidden }), [mode, cohort, onForbidden]);
   return <TrendsDataContext.Provider value={value}>{children}</TrendsDataContext.Provider>;
 }
 
@@ -61,7 +63,10 @@ export function useTrendsApi<T>(
   config?: SWRConfiguration<T, ClientApiError>,
 ) {
   const scope = useContext(TrendsDataContext);
-  return useApi<T>(trendsDataPath(path, scope),
+  const request = useApi<T>(trendsDataPath(path, scope),
     scope.mode === "global" ? { ...GLOBAL_TRENDS_SWR_CONFIG, ...config } : config,
     scope.mode === "global" ? GLOBAL_TRENDS_REQUEST_OPTIONS : undefined);
+  const forbidden = scope.mode === "global" && request.error?.status === 403;
+  useEffect(() => { if (forbidden) scope.onForbidden?.(); }, [forbidden, scope.onForbidden]);
+  return request;
 }

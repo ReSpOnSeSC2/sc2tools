@@ -65,7 +65,7 @@ function connectionRevision(data: ConnectionsResponse | undefined) {
 const COPY: Record<OfficialPlatform, { label: string; coverage: string }> = {
   twitch: {
     label: "Twitch",
-    coverage: "Adds signed follows, channel-point rewards, subs, resubs, gift subs, cheers and incoming raids. Live-chat copies are paired automatically, so each action appears once.",
+    coverage: "Adds signed follows, channel-point rewards, subs, resubs, gift subs, cheers and incoming raids. Live-chat copies are paired automatically. To map Channel Points rewards to Studio actions, connect reward actions separately in Twitch automation.",
   },
   kick: {
     label: "Kick",

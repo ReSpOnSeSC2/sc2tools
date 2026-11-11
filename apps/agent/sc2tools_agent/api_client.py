@@ -751,6 +751,10 @@ class ApiClient:
         return self._interactive("POST", _live_intent_path(game_key) + "/randomizer",
             body={"matchup": matchup, "releaseHold": True, "revealInWidget": True})
 
+    def reroll_live_randomizer(self, game_key: str, matchup: str, expected_build_key: str) -> Dict[str, Any]:
+        return self._interactive("POST", _live_intent_path(game_key) + "/randomizer/reroll",
+            body={"matchup": matchup, "expectedBuildKey": expected_build_key})
+
     def get_game_intent(
         self,
         game_id: str,

@@ -25,7 +25,7 @@ const SPOKEN_IDS_CAP = 2000;
 export function useChatTts(
   messages: ReadonlyArray<ChatMessage>,
   rawConfig: unknown,
-): { needsGesture: boolean; onUserGesture: () => void } {
+) {
   const config: ChatTtsConfig = useMemo(
     () => sanitizeTtsConfig(rawConfig),
     [rawConfig],
@@ -81,7 +81,11 @@ export function useChatTts(
     }
   }, [messages, config.enabled]);
 
+  const rewardReady = () => config.enabled && !!speakerRef.current?.rewardReady && document.visibilityState !== "hidden";
   return {
+    rewardReady,
+    speakReward: (message: ChatMessage, signal: AbortSignal, startBy: number) =>
+      speakerRef.current?.speakReward(message, signal, startBy) ?? Promise.resolve(false),
     needsGesture: config.enabled && needsGesture,
     onUserGesture: () => {
       persistUnlock();

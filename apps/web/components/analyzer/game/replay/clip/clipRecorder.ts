@@ -37,7 +37,8 @@ interface ClipRun {
 }
 
 /** Frames rendering ahead of the GIF encoder. */
-export const GIF_IN_FLIGHT = 3;
+// Transfer one full-resolution RGBA frame at a time.
+const GIF_IN_FLIGHT = 1;
 
 const abortable = (signal: AbortSignal, ms: number) => new Promise<void>((resolve, reject) => {
   if (signal.aborted) { reject(new ClipError("cancelled")); return; }

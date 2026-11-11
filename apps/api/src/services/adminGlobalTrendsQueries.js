@@ -79,4 +79,4 @@ function globalTrendsBusy() {
   });
 }
 
-module.exports = { GlobalTrendsQueries, QUERY_MAX_TIME_MS, queryKey };
+module.exports = { GlobalTrendsQueries, QUERY_MAX_TIME_MS, globalTrendsBusy, queryKey };
