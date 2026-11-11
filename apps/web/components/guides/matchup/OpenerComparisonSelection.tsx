@@ -7,10 +7,11 @@ import { GUIDE_PANEL_CLASS, GUIDE_SECONDARY_ACTION_CLASS } from "@/components/gu
 import { compareSelection, MAX_COMPARE_OPENERS, openerCompareHref } from "@/lib/guides/compareSelection";
 import type { GuideOpenerRow } from "@/lib/guides/types";
 
-export function useOpenerComparison(matchupSlug: string, enabled: boolean) {
+export function useOpenerComparison(matchupSlug: string, enabled: boolean, openers: readonly GuideOpenerRow[]) {
   const key = "sc2tools.guides.compare.v1." + matchupSlug;
   const [state, setState] = useState<{ key: string; slugs: string[] }>({ key, slugs: [] });
-  const slugs = enabled && state.key === key ? state.slugs : [];
+  const available = new Set(openers.filter(opener => opener.published).map(opener => opener.buildSlug));
+  const slugs = enabled && state.key === key ? state.slugs.filter(slug => available.has(slug)) : [];
   useEffect(() => {
     if (!enabled) return;
     let stored: string[] = [];
@@ -28,7 +29,7 @@ export function useOpenerComparison(matchupSlug: string, enabled: boolean) {
     clear: () => store([]),
     toggle: (slug: string) => {
       if (slugs.includes(slug)) store(slugs.filter((selected) => selected !== slug));
-      else if (slugs.length < MAX_COMPARE_OPENERS) store([...slugs, slug]);
+      else if (available.has(slug) && slugs.length < MAX_COMPARE_OPENERS) store([...slugs, slug]);
     },
   };
 }
