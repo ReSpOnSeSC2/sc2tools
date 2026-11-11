@@ -25,7 +25,7 @@ const EVENT_LABELS: Array<[keyof Events, string]> = [["result", "Each ranked res
 const OPTION_LABELS: Array<[keyof Options, string, string]> = [
   ["opponentNames", "Show opponent names", "Off by default. Posts say the opponent's race and MMR only."],
   ["mmr", "Show MMR", "Your rating and its change after each game."],
-  ["replayLink", "Link to the public replay", "Only when your replay archive is shared publicly."],
+  ["replayLink", "Include replay links", "Automatic results use your public replay archive. You can also post a shared battle report manually."],
 ];
 const RESULT_TEXT: Record<string, string> = { sent: "Test posted to Discord.", webhook_gone: "Discord says this webhook no longer exists. Paste a new one.", rate_limited: "Discord is rate limiting this webhook. Try again in a minute.", failed: "Discord didn't accept the test. Try again later." };
 
