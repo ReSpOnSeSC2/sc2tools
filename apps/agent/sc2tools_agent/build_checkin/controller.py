@@ -404,6 +404,9 @@ class BuildCheckinController(ScoutingControllerMixin):
     def roll_now(self, game_key: str) -> None:
         self._post(self._handle_roll_now, game_key)
 
+    def reroll(self, game_key: str) -> None:
+        self._post(self._handle_reroll, game_key)
+
     def not_now(self, game_key: str) -> None:
         self._post(self._handle_not_now, game_key)
 
@@ -732,7 +735,21 @@ class BuildCheckinController(ScoutingControllerMixin):
     def _loading_allowed(self) -> bool:
         game = self._current_game()
         scouting_ready = self._show_scouting and game is not None and game.scouting is not None
-        return self._supported is not False and self._prefs.enabled and (self._prefs.ask_at_loading or scouting_ready)
+        checkin = self._prefs.enabled and (self._prefs.ask_at_loading or scouting_ready)
+        return self._supported is not False and (checkin or (game is not None and self._has_desktop_roll(game)))
+
+    def _has_desktop_roll(self, game: LiveGame) -> bool:
+        return bool(self._prefs.roll_on_desktop and game.live and game.live.desktop_randomizer and game.live.randomizer)
+
+    def _maybe_read_desktop_roll(self, game: LiveGame) -> None:
+        if (not self._prefs.roll_on_desktop or self._has_desktop_roll(game)
+                or game.human_1v1() is not True or not game.matchup
+                or game.display_time >= LOADING_CUTOFF_SEC or game.live_read_inflight):
+            return
+        now = self._clock()
+        if game.desktop_roll_read_at is None or now - game.desktop_roll_read_at >= 3:
+            game.desktop_roll_read_at = now
+            self._fetch_live(game)
 
     def _postgame_allowed(self) -> bool:
         return self._supported is not False and self._prefs.postgame_cards
@@ -931,6 +948,7 @@ class BuildCheckinController(ScoutingControllerMixin):
         _log.info("build_checkin_pick_carried loading=%s", game.loading_seen)
 
     def _handle_active(self, game: LiveGame) -> None:
+        self._maybe_read_desktop_roll(game)
         card = game.loading
         if card is not None:
             if card.visible:
@@ -962,7 +980,7 @@ class BuildCheckinController(ScoutingControllerMixin):
         if self._loading_blocker(game) is not None or game.human_1v1() is not True:
             return False
         return game.phase == "match_loading" or (
-            game.phase == "match_started"
+            (game.phase == "match_started" or (game.phase == "match_in_progress" and self._has_desktop_roll(game)))
             and game.display_time < LOADING_CUTOFF_SEC
         )
 
@@ -996,6 +1014,7 @@ class BuildCheckinController(ScoutingControllerMixin):
             options_failed=matchup in self._options_failed,
             declared_elsewhere=self._declared_elsewhere(game),
             show_intro=not self._intro_seen,
+            randomizer_only=self._has_desktop_roll(game) and not self._prefs.loading_cards,
         )
         model = self._with_scouting(model, game)
         if show:
@@ -1084,7 +1103,9 @@ class BuildCheckinController(ScoutingControllerMixin):
         if option is None:
             cached = self._cached_options(game.matchup)
             option = cached.find(build_key) if cached is not None else None
-        if option is None:
+        rolled = game.live.randomizer if game.live is not None else None
+        pick = option.ref if option is not None else rolled if rolled and rolled.key == build_key else None
+        if pick is None or game.randomizer_request_inflight:
             return
         repick = game.loading is not None and game.loading.changing
         if game.loading is not None:
@@ -1093,16 +1114,16 @@ class BuildCheckinController(ScoutingControllerMixin):
         if (
             repick
             and game.declared is not None
-            and game.declared.key == option.key
+            and game.declared.key == pick.key
             and not game.declare_failed
         ):
             # Re-picked the standing pick: nothing to write.
             self._render_loading(game)
             return
-        game.declared = option.ref
+        game.declared = pick
         game.declared_synced = False
         game.declare_failed = False
-        self._enqueue_live_op(game, LiveOp("declare", option.key))
+        self._enqueue_live_op(game, LiveOp("declare", pick.key))
         self._render_loading(game)
 
     def _locked(self, game: LiveGame) -> bool:
@@ -1144,6 +1165,18 @@ class BuildCheckinController(ScoutingControllerMixin):
         if game.loading is not None:
             game.loading.status = ""
         self._enqueue_live_op(game, LiveOp("randomize"))
+        self._render_loading(game)
+
+    def _handle_reroll(self, game_key: Any) -> None:
+        game = self._live_game_for_action(game_key)
+        if (game is None or game.randomizer_request_inflight or not game.matchup or self._locked(game)
+                or game.display_time >= LOADING_CUTOFF_SEC or not self._has_desktop_roll(game)
+                or not game.live or not game.live.randomizer or not game.live.randomizer_can_reroll):
+            return
+        game.randomizer_request_inflight = True
+        if game.loading is not None:
+            game.loading.status = ""
+        self._enqueue_live_op(game, LiveOp("reroll", game.live.randomizer.key))
         self._render_loading(game)
 
     def _handle_not_now(self, game_key: Any) -> None:
@@ -1190,6 +1223,10 @@ class BuildCheckinController(ScoutingControllerMixin):
         self._send_live_op(game, op)
 
     def _send_live_op(self, game: LiveGame, op: LiveOp) -> None:
+        if op.action == "reroll":
+            self._call(self._on_live_write, (game.game_key, game.next_gen(), op),
+                       self._api.reroll_live_randomizer, game.game_key, game.matchup, op.build_key)
+            return
         if op.action == "randomize":
             self._call(self._on_live_write, (game.game_key, game.next_gen(), op),
                        self._api.roll_live_randomizer, game.game_key, game.matchup)
@@ -1231,7 +1268,7 @@ class BuildCheckinController(ScoutingControllerMixin):
             return
         if game.op_inflight is op:
             game.op_inflight = None
-        if op.action == "randomize":
+        if op.action in ("randomize", "reroll"):
             game.randomizer_request_inflight = False
         mine = (
             op.action == "declare"
@@ -1246,6 +1283,13 @@ class BuildCheckinController(ScoutingControllerMixin):
             )
             if failure.code == "already_bound" and failure.game_id:
                 self._bind_game(game, failure.game_id)
+            if op.action == "reroll" and game.loading is not None:
+                game.loading.status = {
+                    "randomizer_already_rerolled": "This game has already used its reroll.",
+                    "randomizer_changed": "The pick changed. Check the latest result.",
+                    "unknown_build": "No other eligible builds are available to reroll.",
+                }.get(failure.code, STATUS_RANDOMIZER_REQUEST_FAILED)
+                self._fetch_live(game)
             if op.action in {"release", "randomize"} and game.game_id is None and not self._locked(game):
                 if game.loading is not None and not (game.live and game.live.randomizer):
                     game.loading.status = {
@@ -1275,7 +1319,7 @@ class BuildCheckinController(ScoutingControllerMixin):
                 game.declare_failed = False
                 _log.info("build_checkin_declared")
             state = parse_live_state(value, key)
-            if op.action == "randomize":
+            if op.action in ("randomize", "reroll"):
                 if state is not None and state.randomizer is not None:
                     game.released = True
                 elif game.loading is not None:
@@ -1347,6 +1391,10 @@ class BuildCheckinController(ScoutingControllerMixin):
             else:
                 game.declared_synced = True
                 game.declare_failed = False
+        if self._has_desktop_roll(game):
+            game.released = True
+            if game.game_key == self._current_key and game.loading is None and self._loading_may_show(game):
+                self._show_loading(game)
         self._render_loading(game)
         card = self._cards.get(game.card_id) if game.card_id else None
         if card is not None and card.undecided:

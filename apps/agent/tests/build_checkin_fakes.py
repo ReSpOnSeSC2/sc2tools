@@ -201,6 +201,8 @@ class FakeCheckinApi:
             "declared": doc.get("declared"),
             "randomizer": doc.get("randomizer"),
             "randomizerEnabled": self.randomizer_enabled,
+            "desktopRandomizer": doc.get("desktopRandomizer") is True,
+            "randomizerCanReroll": doc.get("randomizerCanReroll") is True,
             "holdRemainingMs": 0 if doc.get("released") else 6000,
             "gameId": doc.get("gameId"),
             "prefs": dict(self.prefs),
@@ -271,6 +273,15 @@ class FakeCheckinApi:
                 raise api_error(409, "randomizer_disabled")
             doc["randomizer"] = {field: pool[0].get(field) for field in ("key", "name", "source", "slug")}
             doc["released"] = True
+        return self._live_state(game_key)
+
+    def reroll_live_randomizer(self, game_key: str, matchup: str, expected_build_key: str) -> Dict[str, Any]:
+        self._enter("reroll_live_randomizer", game_key, matchup, expected_build_key)
+        doc = self.live[game_key]
+        assert doc["randomizer"]["key"] == expected_build_key and doc["randomizerCanReroll"]
+        replacement = next(build for build in self.options[matchup]["builds"] if build["key"] != expected_build_key)
+        doc["randomizer"] = {field: replacement.get(field) for field in ("key", "name", "source", "slug")}
+        doc["randomizerCanReroll"] = False
         return self._live_state(game_key)
 
     def get_game_intent(self, game_id: str, *, include_options: bool = False) -> Dict[str, Any]:

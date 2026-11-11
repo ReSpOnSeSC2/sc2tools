@@ -90,7 +90,7 @@ const MMR_LADDER_RACES = new Map([["P", "Protoss"], ["T", "Terran"], ["Z", "Zerg
  *   isAdmin?: (req: import('express').Request) => boolean,
  *   isAdminEmail?: (email: string) => boolean,
  *   onAdminGranted?: (clerkUserId: string) => void,
- *   buildIntents?: { preferencesChanged(userId: string, type: string): void } | null,
+ *   buildIntents?: { preferencesChanged(userId: string, type: string): void, agentCheckinPrefs?: (userId: string) => Promise<object> } | null,
  *   ghostConfig?: import('../services/ghostConfig').GhostConfigService,
  *   onRivalsChanged?: (userId:string) => void,
  *   onScoutingChanged?: (userId:string) => void,
@@ -502,6 +502,10 @@ function buildMeRouter(deps) {
         res.json(await deps.ghostConfig.get(auth.userId));
         return;
       }
+      if (type === CHECKIN_PREF_TYPE && auth.source === "device" && deps.buildIntents?.agentCheckinPrefs) {
+        res.set("Cache-Control", "private, no-store").json(await deps.buildIntents.agentCheckinPrefs(auth.userId));
+        return;
+      }
       const prefs = await deps.users.getPreferences(auth.userId, type);
       res.json(preferenceValue(type, prefs, false));
     } catch (err) {
@@ -563,6 +567,10 @@ function buildMeRouter(deps) {
         } catch {
           // Advisory: clients also refresh on their own.
         }
+      }
+      if (type === CHECKIN_PREF_TYPE && auth.source === "device" && deps.buildIntents?.agentCheckinPrefs) {
+        res.set("Cache-Control", "private, no-store").json(await deps.buildIntents.agentCheckinPrefs(auth.userId));
+        return;
       }
       res.json(saved);
     } catch (err) {

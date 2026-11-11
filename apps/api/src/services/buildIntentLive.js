@@ -20,6 +20,7 @@ const { BUILD_INTENT, COLLECTIONS } = require("../config/constants");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { sanitizeNotes } = require("./buildIntentShape");
 const { randomizerPool, readBuildIntentPrefs } = require("./buildIntentPrefs");
+const { earlyRandomizerEnvelope } = require("./buildIntentAutoRandomizer");
 const { nativeRandomizerRoll } = require("./buildIntentNativeRandomizer");
 const {
   BuildIntentError,
@@ -148,6 +149,11 @@ class BoundedMap {
     return this.map.get(key);
   }
 
+  /** @param {string} key */
+  delete(key) {
+    this.map.delete(key);
+  }
+
   /** @param {string} key @param {any} value */
   set(key, value) {
     this.map.delete(key);
@@ -184,6 +190,7 @@ class BuildIntentLive {
     this.registrations = new BoundedMap(BUILD_INTENT.REGISTRATION_CACHE_MAX_ENTRIES);
     // Accepted randomizer roll reports per user + game key.
     this.rollReports = new BoundedMap(BUILD_INTENT.ROLL_TRACKER_MAX_ENTRIES);
+    this.autoRollAttempts = new BoundedMap(BUILD_INTENT.REGISTRATION_CACHE_MAX_ENTRIES);
   }
 
   /**
@@ -262,10 +269,46 @@ class BuildIntentLive {
     return nativeRandomizerRoll(this, userId, gameKey, body);
   }
 
+  /** @param {string} userId @param {string} gameKey @param {string} matchup @param {string} expectedBuildKey */
+  desktopReroll(userId, gameKey, matchup, expectedBuildKey) {
+    return nativeRandomizerRoll(this, userId, gameKey, { matchup, releaseHold: true, rerollOf: expectedBuildKey });
+  }
+
   /** Server-only viewer redemption. Manual callers cannot supply this option.
    * @param {string} userId @param {string} gameKey @param {string} matchup @param {string} redemptionId */
   rewardReroll(userId, gameKey, matchup, redemptionId) {
     return nativeRandomizerRoll(this, userId, gameKey, { matchup, releaseHold: false, revealInWidget: true }, redemptionId);
+  }
+
+  /** Consider only trusted, current, early one-on-one envelopes. A noisy
+   * live feed must not repeat the preference and presence queries each tick.
+   * @param {string} userId @param {unknown} envelope */
+  async maybeAutoRoll(userId, envelope) {
+    const candidate = earlyRandomizerEnvelope(envelope);
+    if (!candidate || !this.broker?.isTrustedDeviceGame(userId, candidate.gameKey)) return;
+    const now = this.now();
+    const previous = this.autoRollAttempts.get(userId);
+    if (previous?.gameKey === candidate.gameKey && (previous.inFlight || previous.retryAt > now)) return;
+    const attempt = { gameKey: candidate.gameKey, inFlight: true, retryAt: now + 2500 };
+    this.autoRollAttempts.set(userId, attempt);
+    try {
+      await nativeRandomizerRoll(this, userId, candidate.gameKey, {
+        matchup: candidate.matchup, releaseHold: false, automatic: true,
+      });
+      attempt.retryAt = Infinity;
+    } catch (err) {
+      if (!(err instanceof BuildIntentError)) throw err;
+      if (["desktop_roll_disabled", "randomizer_disabled", "unknown_build", "build_declared", "already_bound"].includes(err.code)) {
+        attempt.retryAt = Infinity;
+      }
+    } finally {
+      attempt.inFlight = false;
+    }
+  }
+
+  /** @param {string} userId */
+  resetDesktopAttempt(userId) {
+    this.autoRollAttempts.delete(userId);
   }
 
   /**
@@ -593,6 +636,8 @@ class BuildIntentLive {
   async _state(userId, doc) {
     const prefs = await readBuildIntentPrefs(this.users, userId);
     const matchup = typeof doc.matchup === "string" ? doc.matchup : null;
+    const pool = matchup ? randomizerPool(prefs.randomizer, matchup) : null;
+    const roll = doc.randomizer;
     return {
       gameKey: String(doc.gameKey),
       matchup,
@@ -601,10 +646,13 @@ class BuildIntentLive {
       oppName: doc.oppName || null,
       declared: liveRef(doc.declared, true),
       randomizer: liveRef(doc.randomizer, false),
-      randomizerEnabled: matchup ? randomizerPool(prefs.randomizer, matchup).enabled : false,
+      randomizerEnabled: pool?.enabled === true,
+      ...(roll?.native === true ? { desktopRandomizer: true,
+        randomizerCanReroll: !roll.rerolledAt && roll.rewardRerolled !== true && !doc.declared && !doc.gameId
+          && pool?.enabled === true && pool.ids.length > 1 } : {}),
       holdRemainingMs: holdRemainingMs(doc.hold, this.now()),
       gameId: typeof doc.gameId === "string" ? doc.gameId : null,
-      prefs: prefs.checkin,
+      prefs: { ...prefs.checkin, ...(prefs.randomizer.rollOnDesktop === true ? { rollOnDesktop: true } : {}) },
     };
   }
 }

@@ -486,6 +486,10 @@ async function ensureIndexes(ctx, opts = {}) {
 
   await ctx.games.createIndex({ userId: 1, gameId: 1 }, { unique: true });
   await ctx.games.createIndex({ userId: 1, date: -1 });
+  await ctx.games.createIndex({ userId: 1, date: -1, "buildIntent.randomizer.key": 1 }, {
+    name: "randomizer_challenge_owner_date",
+    partialFilterExpression: { "buildIntent.randomizer.key": { $type: "string" } },
+  });
   // Complete-history analysis is cursor-paged by (date, _id).  The _id
   // tie-breaker prevents replay rows with identical timestamps from being
   // skipped between pages while this compound order avoids a blocking sort.

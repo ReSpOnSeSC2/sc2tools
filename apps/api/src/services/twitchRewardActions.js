@@ -99,7 +99,7 @@ class TwitchRewardActions {
     catch (error) {
       const code = /** @type {any} */ (error)?.code;
       if (["stale_game", "matchup_changed", "unknown_build", "randomizer_disabled", "build_declared", "not_eligible", "randomizer_changed", "randomizer_already_rerolled"].includes(code)) throw unavailable("next_game_unavailable");
-      if (code === "hold_active") throw unavailable("hold_active");
+      if (code === "hold_active" || code === "desktop_roll_local") throw unavailable(code);
       throw error;
     }
   }

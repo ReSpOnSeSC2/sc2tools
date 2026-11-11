@@ -852,6 +852,7 @@ class UsersService {
    */
   async updatePreferences(userId, type, prefs) {
     if (type === ADMIN_TREND_VIEWS) return this.updateAdminTrendViews(userId, prefs);
+    if (type === "randomizer") return this._writeRandomizerPreferences(userId, prefs);
     if (type === "analyzerViews") prefs = sanitizeAnalyzerViews(prefs, true);
     if (type === TWITCH_PREF_TYPE) prefs = sanitizeTwitchAutomation(prefs, true);
     if (type === "multichat" && prefs.alerts && typeof prefs.alerts === "object") {
@@ -898,6 +899,23 @@ class UsersService {
       status: 409, code: "admin_trend_views_changed",
     });
     return next;
+  }
+
+  /** An unrelated pool save must preserve the current desktop opt-in.
+   * @param {string} userId @param {Record<string,unknown>} prefs */
+  async _writeRandomizerPreferences(userId, prefs) {
+    const provided = Object.hasOwn(prefs, "rollOnDesktop");
+    const explicit = provided ? { ...prefs, rollOnDesktop: prefs.rollOnDesktop === true } : prefs;
+    const literal = { $literal: explicit };
+    const config = provided ? literal : {
+      $mergeObjects: [literal, {
+        $cond: [{ $eq: ["$preferences.randomizer.rollOnDesktop", true] }, { rollOnDesktop: true }, {}],
+      }],
+    };
+    const row = await this.db.users.findOneAndUpdate({ userId }, [{ $set: { "preferences.randomizer": config } }], {
+      returnDocument: "after", projection: { _id: 0, "preferences.randomizer": 1 },
+    });
+    return row?.preferences?.randomizer ?? explicit;
   }
 
   /**

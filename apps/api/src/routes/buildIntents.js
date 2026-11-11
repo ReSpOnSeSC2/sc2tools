@@ -137,7 +137,9 @@ function buildBuildIntentsRouter(deps) {
     liveWrites: userLimiter(BUILD_INTENT.RATE_LIVE_WRITES),
   };
   registerQueueRoutes(router, deps, limiters);
+  registerChallengeRoutes(router, deps, limiters);
   registerLiveRoutes(router, deps, limiters);
+  registerDesktopRerollRoute(router, deps, limiters);
   registerGameRoutes(router, deps, limiters);
   return router;
 }
@@ -173,6 +175,32 @@ function registerQueueRoutes(router, deps, limiters) {
   router.post("/build-intents/pending/dismiss", noStore, deps.auth, limiters.writes, handle(async (req, res) => {
     const auth = requireAuth(req);
     res.json(await service.dismissPending(auth.userId, auth));
+  }));
+}
+
+/** @param {import("express").Router} router @param {BuildIntentsRouterDeps} deps @param {Limiters} limiters */
+function registerChallengeRoutes(router, deps, limiters) {
+  const challenge = deps.buildIntents.randomizerChallenge;
+  router.get("/build-intents/randomizer-stats", noStore, deps.auth, limiters.reads, handle(async (req, res) => {
+    res.json(await challenge.stats(requireAuth(req).userId));
+  }));
+  router.post("/build-intents/randomizer-stats", noStore, deps.auth, limiters.writes, handle(async (req, res) => {
+    res.json(await challenge.reset(requireAuth(req).userId));
+  }));
+}
+
+/** @param {import("express").Router} router @param {BuildIntentsRouterDeps} deps @param {Limiters} limiters */
+function registerDesktopRerollRoute(router, deps, limiters) {
+  router.post("/build-intents/live/:gameKey/randomizer/reroll", noStore, deps.auth, limiters.liveWrites, handle(async (req, res) => {
+    const auth = requireAuth(req);
+    if (auth.source !== "device") throw new BuildIntentError(403, "device_required", "Reroll from a paired desktop.");
+    const { gameKey } = req.params;
+    if (!isValidGameKey(gameKey)) throw new BuildIntentError(400, "invalid_game_key", "Invalid live game key.");
+    const { matchup, expectedBuildKey } = req.body ?? {};
+    if (!parseMatchupParam(matchup) || typeof expectedBuildKey !== "string" || !expectedBuildKey || expectedBuildKey.length > 200) {
+      throw new BuildIntentError(400, "invalid_request", "Provide the current matchup and desktop pick.");
+    }
+    res.json(await deps.buildIntents.live.desktopReroll(auth.userId, gameKey, matchup, expectedBuildKey));
   }));
 }
 

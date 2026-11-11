@@ -39,6 +39,13 @@ corresponding GitHub Release.
   canvases. The live overlay profile updates connected sources when you save.
   Dedicated widget sources keep their own OBS positioning.
 
+### Randomizer challenge
+
+- Opt in to a desktop draw for eligible one-on-one games without a connected
+  randomizer source. Declare the saved pick, reroll once, or dismiss the card.
+- See private rolls, matching check-ins and pool completion in Settings and
+  Practice. Reset challenge progress while keeping your replays and builds.
+
 ### Twitch Channel Points rewards
 
 - Map Twitch rewards to Studio actions with per-viewer cooldowns and an activity log. Rewards created through SC2 Tools can opt into automatic fulfillment or refunds.
