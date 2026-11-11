@@ -142,14 +142,23 @@ test("escaped over-budget row is never partially yielded and closes cursor witho
 });
 
 test("details retain one result; strict options and explicit missing status precede complete", async () => {
-  const details = { findMany: jest.fn(async (_owner, [id]) => new Map(id === "one" ? [[id, { buildLog: [{ name: "Probe" }] }]] : [])) };
+  const available = {
+    buildLog: [{ name: "Probe" }],
+    buildLogFull: ["[0:00] Probe", "[0:00] Nexus"],
+    buildLogSupply: [12],
+  };
+  const details = { findMany: jest.fn(async (_owner, [id], { fields }) => {
+    const projected = Object.fromEntries(Object.entries(available).filter(([key]) => fields.includes(key)));
+    return new Map(id === "one" ? [[id, projected]] : []);
+  }) };
   const rows = await records(accountExportStream({ games: finiteCollection([{ gameId: "one" }, { gameId: "gone" }]), users: finiteCollection([]) }, details, "A", { details: true }));
-  expect(details.findMany.mock.calls.map(([owner, ids, options]) => [owner, ids, options.strict, options.concurrency])).toEqual([
-    ["A", ["one"], true, 1], ["A", ["gone"], true, 1],
+  const fields = ["buildLog", "buildLogFull", "buildLogSupply", "oppBuildLog", "macroBreakdown", "apmCurve", "mapPlayback"];
+  expect(details.findMany.mock.calls).toEqual([
+    ["A", ["one"], { fields, strict: true, concurrency: 1, signal: undefined }],
+    ["A", ["gone"], { fields, strict: true, concurrency: 1, signal: undefined }],
   ]);
-  expect(details.findMany.mock.calls[0][2].fields).toEqual(["buildLog", "oppBuildLog", "macroBreakdown", "apmCurve", "mapPlayback"]);
   expect(rows.filter(row => row.collection === "gameDetails").map(row => row.row)).toEqual([
-    { gameId: "one", status: "available", details: { buildLog: [{ name: "Probe" }] } }, { gameId: "gone", status: "missing" },
+    { gameId: "one", status: "available", details: available }, { gameId: "gone", status: "missing" },
   ]);
   expect(rows.at(-1)).toMatchObject({ type: "complete", counts: { games: 2, gameDetails: 2 } });
 });
