@@ -61,7 +61,9 @@ jobs:
   # (CI holds no Clerk test credentials).
   e2e-responsive:
     name: Responsive e2e smoke (public pages)
-    runs-on: ubuntu-latest
+    # setup-python reuses the host tool cache. Match the container's Ubuntu
+    # version so that Python and its OpenSSL dependencies use the same ABI.
+    runs-on: ubuntu-24.04
     # Keep the browser and its system fonts together. The official image avoids
     # fetching OS packages during this job and matches the npm lockfile.
     container:
