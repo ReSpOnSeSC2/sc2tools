@@ -598,6 +598,57 @@ def test_pending_randomize_has_a_choosing_state_without_animating_or_requiring_a
     assert _loading(harness).randomizer.rolled_key == "custom:dt-3-gate"
 
 
+def test_desktop_opt_in_reads_a_saved_roll_without_enabling_regular_checkins():
+    h = Harness()
+    h.api.prefs = {"enabled": False, "askAtLoading": False, "askAfterGame": False, "rollOnDesktop": True}
+    h.boot()
+    key = h.new_key()
+    h.send(envelope("match_loading", key))
+    assert "show_loading" not in h.view.names()
+    assert len(h.api.calls_to("get_live_intent")) == 1
+    h.api.live[key] = {
+        "desktopRandomizer": True,
+        "randomizerCanReroll": True,
+        "randomizer": {"key": "custom:dt-3-gate", "name": "DT into 3 Gate", "source": "custom"},
+    }
+    h.advance(3.1)
+    h.send(envelope("match_in_progress", key, display_time=4))
+    model = _loading(h)
+    assert model.randomizer_only and not model.scouting_only
+    assert model.randomizer.rolled_key == "custom:dt-3-gate"
+    assert model.randomizer.can_reroll and model.randomizer.can_play
+    assert not h.api.calls_to("roll_live_randomizer") and not h.api.live_actions()
+
+    h.ctl.reroll(key)
+    h.pump()
+    model = _loading(h)
+    assert not model.randomizer.can_reroll
+    assert model.randomizer.rolled_key != "custom:dt-3-gate"
+    h.ctl.reroll(key)
+    h.pump()
+    assert h.api.calls_to("reroll_live_randomizer") == [((key, "PvZ", "custom:dt-3-gate"), {})]
+    h.ctl.declare(key, model.randomizer.rolled_key)
+    h.pump()
+    assert h.api.live_actions() == ["declare"]
+    assert h.api.live_bodies()[0]["buildKey"] == model.randomizer.rolled_key
+    assert _loading(h).collapsed and not _loading(h).can_change
+
+
+def test_desktop_only_card_stays_dismissed_after_not_now():
+    h = Harness()
+    h.api.prefs = {"enabled": False, "rollOnDesktop": True}
+    h.boot()
+    key = h.new_key()
+    h.api.live[key] = {"desktopRandomizer": True, "randomizer": {"key": "custom:dt-3-gate", "name": "DT into 3 Gate"}}
+    h.send(envelope("match_loading", key))
+    assert _loading(h).randomizer_only
+    h.ctl.not_now(key)
+    h.pump()
+    h.send(envelope("match_started", key, display_time=1))
+    assert not h.api.live_actions()
+    assert not h.ctl._games[key].loading.visible
+
+
 def test_no_strip_without_randomizer(h: Harness) -> None:
     h.api.randomizer_enabled = False
     h.api.options["PvZ"] = options_payload("PvZ", option("pvz-a"))

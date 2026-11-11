@@ -168,7 +168,7 @@ export async function openSettingsSearchFixture(page, theme, options = {}) {
         ["/v1/me/replay-archive-status", { enabled: false, totalGames: 0, archivedGames: 0, missingGames: 0, archiveComplete: true, backfillVersion: 0, resyncRequestedAt: null, requiresResync: false }],
         ["/v1/games/hidden", { items: [], nextCursor: null }],
         ["/v1/me/reanalysis", { catalogRevision: "0123456789abcdef", agent: "offline", job: null, cohorts: [{ id: "engine-before:1.6.11", kind: "engine", engine: "1.6.11", date: "2026-10-14", summary: "Synthetic label change.", matchups: ["PvT", "TvP"], count: 3, unknown: 1 }, { id: "missing-macro", kind: "macro", count: 0 }, { id: "no-engine-stamp", kind: "engine-unknown", count: 1 }] }],
-        ["/v1/me/preferences/randomizer", {}], ["/v1/me/preferences/voice", {}], ["/v1/me/preferences/misc", {}],
+        ["/v1/me/preferences/randomizer", {}], ["/v1/build-intents/randomizer-stats", { challengeStartedAt: null, pools: [] }], ["/v1/me/preferences/voice", {}], ["/v1/me/preferences/misc", {}],
         ["/v1/me/preferences/appearance", {}],
         ["/v1/me/preferences/notifications", { muted: [] }], ["/v1/me/preferences/buildCheckin", {}],
         ["/v1/me/preferences/reports", { weekly: true, stream: true, timezone: null }],

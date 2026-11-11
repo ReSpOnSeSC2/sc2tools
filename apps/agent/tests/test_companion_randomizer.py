@@ -56,6 +56,8 @@ def panel():
             config = state["config"]["matchups"].setdefault(request["matchup"], {})
             if "enabled" in request:
                 config["enabled"] = request["enabled"]
+            if "rollOnDesktop" in request:
+                state["config"]["rollOnDesktop"] = request["rollOnDesktop"]
             if "buildKeys" in request:
                 config["builds"] = [{"id": key, "name": key} for key in request["buildKeys"]]
             return {"config": deepcopy(state["config"])}
@@ -89,6 +91,16 @@ def test_loads_real_pool_off_thread_and_honors_loading_hold(panel):
     assert "overlay widget" in widget.status.text()
     assert not hasattr(widget, "roll_button")
     assert not state["rolled"]
+
+
+def test_desktop_switch_is_default_off_and_writes_only_when_clicked(panel):
+    widget, state, app = panel
+    assert widget.desktop_roll.isEnabled() and not widget.desktop_roll.isChecked()
+    assert not [call for call in state["calls"] if call["action"] == "randomizer_settings"]
+    widget.desktop_roll.click()
+    wait_until(app, lambda: state["config"].get("rollOnDesktop") is True and not widget._busy)
+    assert widget.desktop_roll.isChecked()
+    assert [call["rollOnDesktop"] for call in state["calls"] if call["action"] == "randomizer_settings"] == [True]
 
 
 def test_only_observes_the_widget_pick_and_cannot_draw_or_redraw(panel):

@@ -270,7 +270,7 @@ class BuildCheckinHost:
 
     def act(self, action: str, *args: Any) -> None:
         """Call a controller action; a missing controller is a no-op."""
-        if action == "roll_now" and not self._randomizer_enabled:
+        if action in {"roll_now", "reroll"} and not self._randomizer_enabled:
             return
         controller = self._controller()
         fn = getattr(controller, action, None) if controller is not None else None

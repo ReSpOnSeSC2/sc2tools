@@ -1,9 +1,10 @@
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import type { ReactNode } from "react";
 import { ToastProvider } from "@/components/ui/Toast";
 import { loadLazyHelpLink } from "@/components/help/__tests__/loadLazyHelpLink";
+import { SettingsSaveScope } from "../SettingsSaveBar";
 import { SettingsContextProvider } from "../SettingsContext";
 import { SETTINGS_SECTIONS } from "@/lib/settingsIndex";
 import { SettingsFoundation } from "../SettingsFoundation";
@@ -12,7 +13,7 @@ import { SettingsRandomizer } from "../SettingsRandomizer";
 import { SettingsPlayerChannels } from "../SettingsPlayerChannels";
 import { SettingsVoice } from "../SettingsVoice";
 
-const fixture = vi.hoisted(() => ({ token: vi.fn(async () => "synthetic"), write: vi.fn(), mutate: vi.fn(), data: {} as Record<string, unknown> }));
+const fixture = vi.hoisted(() => ({ token: vi.fn(async () => "synthetic"), write: vi.fn(), mutate: vi.fn(), allowWrites: false, data: {} as Record<string, unknown> }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "synthetic-owner", isLoaded: true, isSignedIn: true, getToken: fixture.token }) }));
 vi.mock("@/lib/clientApi", async original => ({
   ...await original<typeof import("@/lib/clientApi")>(),
@@ -21,14 +22,14 @@ vi.mock("@/lib/clientApi", async original => ({
     if (path && data === undefined) throw new Error(`Unadmitted target fixture read: ${path}`);
     return { data, isLoading: false, isValidating: false, error: null, mutate: fixture.mutate };
   },
-  apiCall: (...args: unknown[]) => { fixture.write(...args); throw new Error("Target navigation cannot mutate"); },
+  apiCall: (...args: unknown[]) => { fixture.write(...args); if (!fixture.allowWrites) throw new Error("Target navigation cannot mutate"); },
 }));
 vi.mock("@/components/onboarding/useReleaseInfo", () => ({ useReleaseInfo: () => ({ data: { ok: true, latest: "0.24.7" }, isLoading: false, mutate: fixture.mutate }) }));
 
 beforeAll(loadLazyHelpLink, 20_000);
 
 beforeEach(() => {
-  fixture.write.mockReset(); fixture.mutate.mockReset();
+  fixture.write.mockReset(); fixture.mutate.mockReset(); fixture.allowWrites = false;
   fixture.data = {
     "/v1/me": { userId: "synthetic-owner", email: "fixture@example.invalid", agentPaired: false, games: { total: 0, latest: null }, onboarding: { goals: ["play"] } },
     "/v1/me/doctor": { warnings: [] },
@@ -38,6 +39,7 @@ beforeEach(() => {
     "/v1/games/hidden": { items: [], nextCursor: null },
     "/v1/me/reanalysis": { catalogRevision: "0123456789abcdef", cohorts: [], job: null, agent: "offline" },
     "/v1/me/preferences/randomizer": {},
+    "/v1/build-intents/randomizer-stats": { challengeStartedAt: null, pools: [] },
     "/v1/me/preferences/voice": {},
     "/v1/me/player-channels": { identities: [], entries: [] },
     customBuilds: { items: [], total: 0, nextCursor: null },
@@ -96,4 +98,22 @@ describe("actual Settings section owners", () => {
   it("keeps Voice's one actual Section without starting speech or saving", () => {
     mount(<SettingsVoice />); expectTargets(["voice-readout"]);
   });
+});
+
+it("saves the desktop opt-in only after a change to that explicit checkbox", async () => {
+  fixture.allowWrites = true;
+  mount(<SettingsSaveScope tabId="randomizer"><SettingsRandomizer /></SettingsSaveScope>);
+  const desktop = screen.getByRole("checkbox", { name: /Roll on the desktop card/ });
+  expect(desktop).toHaveProperty("checked", false);
+  const matchup = screen.getByRole("switch", { name: /Enable randomizer for this matchup/ });
+  fireEvent.click(matchup);
+  const save = () => fireEvent.click(screen.getByRole("button", { name: "Save randomizer" }));
+  save();
+  await waitFor(() => expect(fixture.write).toHaveBeenCalledTimes(1));
+  expect(JSON.parse(fixture.write.mock.calls[0][2].body)).not.toHaveProperty("rollOnDesktop");
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Save randomizer" })).toBeNull());
+  fireEvent.click(desktop);
+  save();
+  await waitFor(() => expect(fixture.write).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(fixture.write.mock.calls[1][2].body)).toHaveProperty("rollOnDesktop", true);
 });

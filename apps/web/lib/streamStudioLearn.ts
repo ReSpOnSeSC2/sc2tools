@@ -270,7 +270,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     explanation: "Choose a pool for each matchup and the widget draws a build from that pool once per new game. Build weights affect how likely each choice is; the reveal animation presents the selected result. Builds with an enabled Gateway opening-unit draw can follow the build reveal with a second unit reveal.",
     example: { headline: "Build draw · illustrative", lines: ["PvT → Example build", "Optional configured opening-unit reveal follows"] },
     appears: "At a new game's start for an enabled, recognized matchup with eligible builds; hides after the reveal.",
-    needs: [liveAgent, "A saved, enabled matchup pool in Settings → Build randomizer."],
+    needs: [liveAgent, "A saved, enabled matchup pool in Settings → Build randomizer.", "OBS is optional. Use the desktop card for a saved draw or OBS for the animated reveal."],
     setup: [
       "Open Settings → Build randomizer, choose a matchup, enable it, and select the builds it may roll.",
       "Adjust weights and reveal options as desired, then press Save changes.",

@@ -5,6 +5,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 ## Unreleased
 
 ### Added
+- Opt in to desktop randomizer draws without an open OBS source. Play the
+  saved pick, reroll once, or dismiss the loading card.
 - Re-analyze games on request from **Settings → Backups & data** on the website:
   the agent re-reads each requested game with the current analysis engine, from
   the replay on this PC or, when it is gone, a verified copy from your Cloud

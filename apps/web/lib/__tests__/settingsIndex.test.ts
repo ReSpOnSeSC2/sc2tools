@@ -21,7 +21,9 @@ describe("Settings section catalog", () => {
     }
     expect(SETTINGS_SECTIONS.help).toEqual([]);
     expect(SETTINGS_SECTIONS.preferences.map(section => section.id)).toEqual(["app-preferences", "appearance", "setup-privacy", "reports", "notifications", "push"]);
-    expect(SETTINGS_SECTIONS.randomizer).toHaveLength(6);
+    expect(SETTINGS_SECTIONS.randomizer.map(section => section.id)).toEqual([
+      "build-randomizer", "catalog-builds", "custom-builds", "gateway-draw", "sound-effects", "randomizer-preview", "randomizer-challenge",
+    ]);
     expect(SETTINGS_SECTIONS.import.map(section => section.id)).toContain("folder-sync");
   });
   it("indexes only registered tabs and real section destinations with unique field keys", () => {

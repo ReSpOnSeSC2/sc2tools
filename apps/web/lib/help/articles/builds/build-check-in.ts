@@ -56,6 +56,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Use selectors inside Companion", anchor: "companion" },
     { type: "paragraph", text: "Use **Agent 0.24.1 or later** for the latest embedded selectors and Randomize control. Update through **Agent → Check for updates** or the [Windows download](/download). See [Desktop Companion](/help/desktop-companion)." },
     { type: "paragraph", text: "Open **Companion → Build selectors** in the Windows app to handle your build choices in the same workspace as scouting and Ghost. Game-screen assistance starts off. Turn **In-game assistance** on and select the individual features you want, including either build selector. You can turn these on or off whenever you want. The native selector works without an OBS source; [Desktop Companion](/help/desktop-companion) explains the shared workspace." },
+    { type: "paragraph", text: "Want a build picked for you? Enable **Roll on the desktop card when I'm not streaming** in [Randomizer settings](/settings?tab=randomizer). With no connected randomizer source, eligible 1v1s can show the saved roll on the loading card. **Play it** declares the build and **Reroll** uses the game's one alternate draw. See [Roll without OBS](/help/randomizer#desktop-roll)." },
     { type: "heading", text: "Preview and move the cards", anchor: "preview-and-move" },
     {
       type: "steps",
