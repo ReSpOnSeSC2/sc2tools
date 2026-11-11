@@ -75,7 +75,7 @@ describe("admin classifier console", () => {
   });
 
   it("drills into identity-free samples next to the declared rule and copies a test fixture", async () => {
-    const writeText = vi.fn(async () => {});
+    const writeText = vi.fn(async (_text: string) => {});
     vi.stubGlobal("navigator", { clipboard: { writeText } });
     render(<ClassifierPage />);
     fireEvent.click(screen.getByRole("button", { name: `Samples for ${PAIR.detected} → ${PAIR.declared} in PvZ` }));
@@ -88,7 +88,7 @@ describe("admin classifier console", () => {
     expect(within(dialog).getByLabelText("Build log up to 6:00 for sample 1").textContent).toBe("[0:00] Nexus\n[2:05] Stargate\n…");
     await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Copy as test fixture for sample 1" })); });
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
-    const fixture = JSON.parse(writeText.mock.calls[0][0] as string);
+    const fixture = JSON.parse(writeText.mock.calls[0][0]);
     expect(fixture).toMatchObject({ axis: "build", matchup: "PvZ", detected: PAIR.detected, declared: PAIR.declared, engine: "agent", buildLog: ["[0:00] Nexus", "[2:05] Stargate"] });
     expect(Object.keys(fixture)).not.toEqual(expect.arrayContaining(["userId"]));
     expect(JSON.stringify(fixture)).not.toMatch(/userId|gameId|opponentName/);
