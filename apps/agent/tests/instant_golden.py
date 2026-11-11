@@ -250,7 +250,26 @@ def write_goldens(out_dir: Path, view: str, cases: Sequence[Case], results: Dict
         "dataView": view,
         "sc2reader": sc2reader.__version__,
         "cases": index_cases,
+        "headers": header_goldens(cases),
     })
+
+
+def header_goldens(cases: Sequence[Case]) -> List[Dict[str, Any]]:
+    """Read one header per fixture, with a representative toon folder."""
+    from sc2tools_agent.instant_analysis import scan_replay_header
+
+    unique: Dict[Path, Case] = {}
+    for case in cases:
+        unique.setdefault(case.fixture, case)
+    results = []
+    for fixture, case in unique.items():
+        filename = f"Accounts/1/{case.toon}/Replays/Multiplayer/{fixture.name}"
+        results.append({
+            "fixture": fixture.name,
+            "filename": filename,
+            "envelope": scan_replay_header(fixture.read_bytes(), filename=filename),
+        })
+    return results
 
 
 def write_json(path: Path, document: Dict[str, Any]) -> None:

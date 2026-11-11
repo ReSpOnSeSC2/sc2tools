@@ -2,7 +2,7 @@
  * Stop walking a dropped folder tree after this many files, so dropping a
  * whole drive by mistake cannot run away. A full Accounts folder is far below.
  */
-const MAX_DROPPED_FILES = 50_000;
+export const MAX_DROPPED_FILES = 50_000;
 
 export function filesOf(list: FileList | null | undefined): File[] {
   return list ? Array.from(list) : [];

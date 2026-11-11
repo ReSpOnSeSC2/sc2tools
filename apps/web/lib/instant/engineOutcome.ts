@@ -20,6 +20,7 @@ import type {
   ParseOutcome,
   PlayersResult,
   ReplayDigests,
+  ReplayHeaderResult,
   ReplayPlayer,
 } from "./types";
 
@@ -147,6 +148,39 @@ export function toPlayersResult(envelope: unknown): PlayersResult {
     playerCount: typeof envelope.playerCount === "number" ? envelope.playerCount : players.length,
     isAiGame: envelope.isAiGame === true,
     toonFromPath: optionalString(envelope.toonFromPath),
+  };
+}
+
+function finiteOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** Keep the new header fields separate from the pinned list-players envelope. */
+export function toHeaderResult(envelope: unknown): ReplayHeaderResult {
+  const listing = toPlayersResult(envelope);
+  if (!listing.ok) return listing;
+  if (!isRecord(envelope) || !Array.isArray(envelope.players)) {
+    return { ok: false, errorKind: "parse_failed", detail: MALFORMED };
+  }
+  const players: unknown[] = envelope.players;
+  return {
+    ...listing,
+    players: listing.players.map((player, index) => {
+      const raw = players[index];
+      const details = isRecord(raw) ? raw : {};
+      return {
+        ...player,
+        selectedRace: optionalString(details.selectedRace),
+        mmr: finiteOrNull(details.mmr),
+        leagueId: finiteOrNull(details.leagueId),
+      };
+    }),
+    startedAt: optionalString(envelope.startedAt),
+    utcOffsetHours: finiteOrNull(envelope.utcOffsetHours),
+    isLadderGame: typeof envelope.isLadderGame === "boolean" ? envelope.isLadderGame : null,
+    gameVersion: optionalString(envelope.gameVersion),
+    gameBuild: finiteOrNull(envelope.gameBuild),
+    expansion: optionalString(envelope.expansion),
   };
 }
 

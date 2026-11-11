@@ -22,6 +22,7 @@ export interface PlayerChooserProps {
   onChoose: (toon: string) => void;
   onCancel: () => void;
   className?: string;
+  showToon?: boolean;
 }
 
 const UNNAMED = "Unnamed player";
@@ -43,7 +44,7 @@ export function candidateLabel(candidate: MeCandidate): string {
  * Example:
  *   <PlayerChooser candidates={candidates} onChoose={choose} onCancel={cancel} />
  */
-export function PlayerChooser({ candidates, onChoose, onCancel, className = "" }: PlayerChooserProps) {
+export function PlayerChooser({ candidates, onChoose, onCancel, className = "", showToon }: PlayerChooserProps) {
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -76,7 +77,7 @@ export function PlayerChooser({ candidates, onChoose, onCancel, className = "" }
               ].join(" ")}
             >
               <UserRound className="h-4 w-4 flex-shrink-0 text-text-muted" aria-hidden />
-              <span className="min-w-0 break-words">{candidateLabel(candidate)}</span>
+              <span className="min-w-0 break-words">{candidateLabel(candidate)}{showToon ? ` · ${candidate.toon}` : ""}</span>
             </button>
           </li>
         ))}

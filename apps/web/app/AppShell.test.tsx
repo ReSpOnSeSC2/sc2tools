@@ -98,13 +98,14 @@ afterEach(() => {
   window.history.pushState({}, "", "/");
 });
 
-describe("token-auth broadcast routes", () => {
+describe("isolated broadcast and local recap routes", () => {
   it.each([
     "/overlay",
     "/overlay/public-token",
     "/overlay/public-token/scene/starting-soon",
     "/dock",
     "/dock/public-token",
+    "/wrapped",
   ])("renders %s without Clerk or normal site chrome", (pathname) => {
     renderAt(pathname);
 
@@ -294,9 +295,9 @@ describe("analytics page state", () => {
     expect(route.syncAnalyticsPage.mock.calls).toEqual([[pathname, "?tab=games"]]);
   });
 
-  it("follows a client-side move onto an untracked page", () => {
+  it.each(["/admin/users", "/wrapped"])("follows a client-side move onto %s", (pathname) => {
     const view = renderAt("/app");
-    route.pathname = "/admin/users";
+    route.pathname = pathname;
     view.rerender(
       <AppShell>
         <div data-testid="route-content" />
@@ -304,7 +305,7 @@ describe("analytics page state", () => {
     );
 
     expect(screen.queryByTestId("google-analytics")).toBeNull();
-    expect(route.syncAnalyticsPage.mock.calls.map(([pathname]) => pathname)).toEqual(["/app", "/admin/users"]);
+    expect(route.syncAnalyticsPage.mock.calls.map(([path]) => path)).toEqual(["/app", pathname]);
   });
 
   it("waits until the router supplies a pathname", () => {

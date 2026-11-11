@@ -83,6 +83,15 @@ const reply: Script = (worker, request) => {
   if (request.type === "players") {
     const result = { ok: true as const, players: [], date: null, map: null, durationSec: 0, matchFormat: null, playerCount: 0, isAiGame: false, toonFromPath: null };
     worker.emit({ type: "players", id: request.id, result });
+  } else if (request.type === "header") {
+    worker.emit({
+      type: "header", id: request.id, result: {
+        ok: true, players: [], date: "2026-05-08T19:08:12Z", map: null, durationSec: 600,
+        matchFormat: "1v1", playerCount: 2, isAiGame: false, toonFromPath: null,
+        startedAt: null, utcOffsetHours: null, isLadderGame: true, gameVersion: null,
+        gameBuild: null, expansion: null,
+      },
+    });
   } else if (request.type === "parse") {
     const outcome = {
       ok: true as const, fileName: request.fileName, relativePath: request.relativePath, gameId: `g-${request.fileName}`,
@@ -390,6 +399,22 @@ describe("createEngineClient: cancellation", () => {
 });
 
 describe("createEngineClient: zip and players", () => {
+  it("transfers header inputs in sequence on one worker with policy refresh disabled", async () => {
+    const { client, workers } = harness(reply, { refreshPolicy: false });
+    const files = [intakeFile("one.SC2Replay"), intakeFile("two.SC2Replay")];
+    const results = await client.scanHeaders(files);
+    expect(results).toEqual(files.map(() => expect.objectContaining({ ok: true, isLadderGame: true })));
+    expect(workers).toHaveLength(1);
+    const worker = workers[0];
+    expect(worker.received.map((request) => request.type)).toEqual(["boot", "header", "header"]);
+    expect(worker.received[0]).toMatchObject({ refreshPolicy: false });
+    expect(worker.overlaps).toBe(0);
+    const headers = worker.received.filter((request) => request.type === "header");
+    headers.forEach((request, index) => expect(worker.transfers[index + 1]).toEqual([request.bytes]));
+    client.dispose();
+    expect(worker.terminated).toBe(true);
+  });
+
   it("expands a zip into IntakeFiles under the archive path", async () => {
     const { client } = harness(reply);
     const zip = intakeFile("replays.zip");

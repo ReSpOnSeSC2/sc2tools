@@ -22,12 +22,14 @@ describe("sitemap", () => {
   it("lists /try when Instant Analysis is on for everyone", async () => {
     vi.stubEnv("NEXT_PUBLIC_INSTANT_IMPORT", "all");
     expect(await paths()).toContain("/try");
+    expect(await paths()).toContain("/wrapped");
   });
 
   it.each(["admins", "off", ""])("leaves /try out when the flag is %j", async (value) => {
     vi.stubEnv("NEXT_PUBLIC_INSTANT_IMPORT", value);
     const listed = await paths();
     expect(listed).not.toContain("/try");
+    expect(listed).not.toContain("/wrapped");
     expect(listed).toContain("/");
   });
 });

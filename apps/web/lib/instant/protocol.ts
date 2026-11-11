@@ -14,6 +14,7 @@ import type {
   ErrorKind,
   ParseOutcome,
   PlayersResult,
+  ReplayHeaderResult,
 } from "./types";
 
 export interface BootRequest {
@@ -37,6 +38,10 @@ export interface PlayersRequest extends FileEnvelope {
   type: "players";
 }
 
+export interface HeaderRequest extends FileEnvelope {
+  type: "header";
+}
+
 export interface ParseWorkerRequest extends FileEnvelope {
   type: "parse";
   playerToon: string | null;
@@ -51,6 +56,7 @@ export interface UnzipRequest extends FileEnvelope {
 export type WorkerRequest =
   | BootRequest
   | PlayersRequest
+  | HeaderRequest
   | ParseWorkerRequest
   | UnzipRequest;
 
@@ -79,6 +85,12 @@ export interface PlayersEvent {
   type: "players";
   id: number;
   result: PlayersResult;
+}
+
+export interface HeaderEvent {
+  type: "header";
+  id: number;
+  result: ReplayHeaderResult;
 }
 
 export interface ParsedEvent {
@@ -115,6 +127,7 @@ export type WorkerEvent =
   | BootErrorEvent
   | ProgressEvent
   | PlayersEvent
+  | HeaderEvent
   | ParsedEvent
   | UnzippedEvent
   | RequestErrorEvent;

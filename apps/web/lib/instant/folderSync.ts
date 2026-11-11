@@ -64,7 +64,7 @@ export interface DirectoryHandleLike {
 
 /** One replay found by a walk or a directory input. */
 export interface FolderReplay {
-  /** Reads the file fresh (it may have changed since the walk). */
+  /** Reads fresh for sync, or returns the one-shot scan's snapshot when requested. */
   getFile(): Promise<File>;
   name: string;
   /** `/`-separated, starts with the picked folder's name. */
@@ -80,6 +80,9 @@ export interface WalkProgress {
 
 export interface WalkOptions {
   signal?: AbortSignal;
+  maxFiles?: number;
+  /** Retain the File already read during a one-shot scan. */
+  keepSnapshots?: boolean;
   onEntry?: (progress: WalkProgress) => void;
   /** Injected for tests; defaults to a `setTimeout(0)` macrotask. */
   yieldToEventLoop?: () => Promise<void>;
@@ -283,6 +286,7 @@ async function walkDirectory(
 ): Promise<void> {
   for await (const entry of dir.values()) {
     state.options.signal?.throwIfAborted();
+    if (state.results.length >= (state.options.maxFiles ?? Infinity)) return;
     state.scanned += 1;
     const childPath = `${path}/${entry.name}`;
     if (entry.kind === "file") {
@@ -315,7 +319,7 @@ async function collectFile(
   if (!isReplayFileName(entry.name) || !isMultiplayerReplayPath(relativePath)) return;
   const file = await entry.getFile();
   state.results.push({
-    getFile: () => entry.getFile(),
+    getFile: state.options.keepSnapshots ? async () => file : () => entry.getFile(),
     name: entry.name,
     relativePath,
     size: file.size,

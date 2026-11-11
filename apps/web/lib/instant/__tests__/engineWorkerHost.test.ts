@@ -28,6 +28,13 @@ function fakeRuntime(overrides: Partial<EngineRuntime> = {}): EngineRuntime & { 
       calls.push(["players", ...args]);
       return JSON.stringify({ ok: true, players: [], date: null, map: null, durationSec: 0, matchFormat: null, playerCount: 0, isAiGame: false, toonFromPath: null });
     },
+    header: (...args) => {
+      calls.push(["header", ...args]);
+      return JSON.stringify({
+        ok: true, players: [], date: null, map: null, durationSec: 0, matchFormat: null,
+        playerCount: 0, isAiGame: false, toonFromPath: null, isLadderGame: true,
+      });
+    },
     parse: (...args) => {
       calls.push(["parse", ...args]);
       return JSON.stringify({ envelope: OK_ENVELOPE, digests: { sha256: "ab", md5: "cd==", sizeBytes: 3 } });
@@ -54,6 +61,27 @@ function parseRequest(overrides: Partial<ParseWorkerRequest> = {}): ParseWorkerR
     bytes: new Uint8Array([77, 80, 81]).buffer, playerToon: null, playerHandle: "Me", wantDigests: true, ...overrides,
   };
 }
+
+it("routes header scans without refreshing the network policy", async () => {
+  const runtime = fakeRuntime();
+  const post = vi.fn<(event: WorkerEvent) => void>();
+  const refreshPolicy = vi.fn<() => Promise<void>>();
+  const handle = createEngineWorkerHost({ post }, {
+    boot: async () => ({ runtime, info: INFO }),
+    refreshPolicy,
+  });
+  const { id, index, total, fileName, relativePath, bytes } = parseRequest();
+  await handle({ type: "boot", pointerUrl: POINTER_URL });
+  await handle({ type: "header", id, index, total, fileName, relativePath, bytes });
+  expect(runtime.calls).toEqual([["header", new Uint8Array(bytes), relativePath]]);
+  expect(refreshPolicy).not.toHaveBeenCalled();
+  const progress = post.mock.calls.map(([event]) => event)
+    .filter((event) => event.type === "progress" && event.progress.phase === "header");
+  expect(progress).toEqual([{ type: "progress", progress: { phase: "header", index, total, fileName, ms: 0, ok: true } }]);
+  expect(post.mock.calls.map(([event]) => event)).toContainEqual({
+    type: "header", id, result: expect.objectContaining({ ok: true, isLadderGame: true }),
+  });
+});
 
 describe("createEngineWorkerHost: boot", () => {
   it("boots once and answers every boot request with ready", async () => {

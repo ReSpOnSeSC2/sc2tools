@@ -14,6 +14,7 @@
     "/help": 185,
     "/help/[slug]": 200,
     "/try": 240,
+    "/wrapped": 215,
     "/welcome": 245,
     "/guides/[matchup]/[build]": 175,
     "/stream-studio": 130,

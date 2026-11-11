@@ -21,12 +21,17 @@ type Sentry = {
 
 let client: Promise<Sentry | null> | null = null;
 
+function onLocalRecap(): boolean {
+  return globalThis.location?.pathname === "/wrapped";
+}
+
 /**
  * The initialized client SDK, or null when there is no DSN or a chunk fails.
  * The SDK and the request-URL scrubber load together and init runs before
  * anything can report, so no event is captured unscrubbed or before init.
  */
 function clientSentry(): Promise<Sentry | null> {
+  if (onLocalRecap()) return Promise.resolve(null);
   client ??= (async () => {
     if (!DSN) return null;
     try {
@@ -40,9 +45,12 @@ function clientSentry(): Promise<Sentry | null> {
         replaysOnErrorSampleRate: 0.0,
         replaysSessionSampleRate: 0.0,
         environment: process.env.NEXT_PUBLIC_SC2TOOLS_ENV || "production",
-        beforeBreadcrumb: privacy.scrubBreadcrumb,
+        beforeBreadcrumb: (crumb: Parameters<typeof privacy.scrubBreadcrumb>[0]) =>
+          onLocalRecap() ? null : privacy.scrubBreadcrumb(crumb),
+        beforeSend: (event: unknown) => onLocalRecap() ? null : event,
         beforeSendSpan: privacy.scrubSpan,
-        beforeSendTransaction: privacy.scrubTransaction,
+        beforeSendTransaction: (event: Parameters<typeof privacy.scrubTransaction>[0]) =>
+          onLocalRecap() ? null : privacy.scrubTransaction(event),
       });
       return s;
     } catch {
@@ -62,6 +70,7 @@ export async function initClientSentry(): Promise<void> {
  * is off (no DSN) and the error only went to the console.
  */
 export async function captureException(err: unknown): Promise<string | null> {
+  if (onLocalRecap()) return null;
   const s = await clientSentry();
   if (s) {
     const eventId = s.captureException(err);

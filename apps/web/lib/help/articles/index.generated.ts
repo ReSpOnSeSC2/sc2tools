@@ -105,6 +105,7 @@ import gettingStarted_instantAnalysis from "./getting-started/instant-analysis";
 import gettingStarted_keyboardShortcuts from "./getting-started/keyboard-shortcuts";
 import gettingStarted_settingsOverview from "./getting-started/settings-overview";
 import gettingStarted_takeATour from "./getting-started/take-a-tour";
+import gettingStarted_yearInReview from "./getting-started/year-in-review";
 import gettingStarted_yourFirstWeek from "./getting-started/your-first-week";
 import opponents_opponentDossier from "./opponents/opponent-dossier";
 import opponents_opponentNotes from "./opponents/opponent-notes";
@@ -231,6 +232,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_keyboardShortcuts,
   gettingStarted_settingsOverview,
   gettingStarted_takeATour,
+  gettingStarted_yearInReview,
   gettingStarted_yourFirstWeek,
   opponents_opponentDossier,
   opponents_opponentNotes,

@@ -6,6 +6,7 @@
  *   boot can be retried).
  * - `players` / `parse` / `unzip` run strictly one at a time and emit a
  *   progress event before and after each file.
+ * - `header` uses the same serial queue and reports only file completion.
  * - Python exceptions keep the interpreter usable; other errors (a dead
  *   Pyodide, an out-of-memory heap) are reported with a fatal kind so the
  *   client recycles this worker.
@@ -17,10 +18,11 @@
  */
 import { describeBootError } from "./engineBoot";
 import { requestErrorKind, safeDetail } from "./engineErrors";
-import { toDigests, toParseOutcome, toPlayersResult } from "./engineOutcome";
+import { toDigests, toHeaderResult, toParseOutcome, toPlayersResult } from "./engineOutcome";
 import type { EngineRuntime } from "./enginePyGlue";
 import type {
   BootRequest,
+  HeaderRequest,
   ParseWorkerRequest,
   PlayersRequest,
   UnzipRequest,
@@ -45,7 +47,7 @@ export interface EngineHostDeps {
   refreshPolicy?: (runtime: EngineRuntime) => Promise<void>;
 }
 
-type FileRequest = PlayersRequest | ParseWorkerRequest | UnzipRequest;
+type FileRequest = PlayersRequest | HeaderRequest | ParseWorkerRequest | UnzipRequest;
 
 interface StepResult {
   event: WorkerEvent;
@@ -61,6 +63,7 @@ const TOO_LARGE_ZIP_CODES = new Set(["zip_too_many_entries", "zip_entry_too_larg
 /** Fallback kind for a Python exception escaping the glue, per request type. */
 const FALLBACK_KIND: Record<FileRequest["type"], ErrorKind> = {
   players: "parse_failed",
+  header: "parse_failed",
   parse: "analysis_failed",
   unzip: "corrupt_file",
 };
@@ -84,6 +87,13 @@ function runPlayers(runtime: EngineRuntime, request: PlayersRequest): StepResult
   const raw = runtime.players(new Uint8Array(request.bytes), request.relativePath || request.fileName);
   const result = toPlayersResult(JSON.parse(raw));
   const event: WorkerEvent = { type: "players", id: request.id, result };
+  return result.ok ? { event, ok: true } : { event, ok: false, errorKind: result.errorKind };
+}
+
+function runHeader(runtime: EngineRuntime, request: HeaderRequest): StepResult {
+  const raw = runtime.header(new Uint8Array(request.bytes), request.relativePath || request.fileName);
+  const result = toHeaderResult(JSON.parse(raw));
+  const event: WorkerEvent = { type: "header", id: request.id, result };
   return result.ok ? { event, ok: true } : { event, ok: false, errorKind: result.errorKind };
 }
 
@@ -114,6 +124,7 @@ function runUnzip(runtime: EngineRuntime, request: UnzipRequest): StepResult {
 
 function runStep(runtime: EngineRuntime, request: FileRequest, started: number, now: () => number): StepResult {
   if (request.type === "players") return runPlayers(runtime, request);
+  if (request.type === "header") return runHeader(runtime, request);
   if (request.type === "parse") return runParse(runtime, request, started, now);
   return runUnzip(runtime, request);
 }
@@ -181,7 +192,7 @@ class EngineWorkerHost {
     }
     const base = { phase: request.type, index: request.index, total: request.total, fileName: request.fileName };
     const started = this.now();
-    this.progress(base);
+    if (request.type !== "header") this.progress(base);
     // Refresh is advisory: the runtime retains its last validated policy.
     if (request.type === "parse" && this.refreshPolicy) await this.deps.refreshPolicy?.(booted.runtime).catch(() => undefined);
     const result = runSafely(booted.runtime, request, started, this.now);

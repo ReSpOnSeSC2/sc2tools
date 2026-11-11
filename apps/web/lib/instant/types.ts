@@ -92,6 +92,24 @@ export type PlayersResult =
     }
   | { ok: false; errorKind: ErrorKind; detail?: string };
 
+export interface ReplayHeaderPlayer extends ReplayPlayer {
+  selectedRace: string | null;
+  mmr: number | null;
+  leagueId: number | null;
+}
+
+export type ReplayHeader = Omit<Extract<PlayersResult, { ok: true }>, "players"> & {
+  players: ReplayHeaderPlayer[];
+  startedAt: string | null;
+  utcOffsetHours: number | null;
+  isLadderGame: boolean | null;
+  gameVersion: string | null;
+  gameBuild: number | null;
+  expansion: string | null;
+};
+
+export type ReplayHeaderResult = ReplayHeader | Extract<PlayersResult, { ok: false }>;
+
 /** Hashes of the original file, for the optional replay backup. */
 export interface ReplayDigests {
   sha256: string;
@@ -146,7 +164,7 @@ export interface ParseRequest {
   wantDigests?: boolean;
 }
 
-export type EnginePhase = "boot" | "players" | "parse" | "unzip";
+export type EnginePhase = "boot" | "players" | "header" | "parse" | "unzip";
 
 /** Progress event: `{phase, index, total, fileName, ms, ok|error}`. */
 export interface EngineProgress {
@@ -227,6 +245,11 @@ export interface EngineClient {
    * budget measurement. Optional so test doubles need not implement it.
    */
   lastHeapBytes?(): number | null;
+}
+
+/** The same serial worker with the local recap's additional header request. */
+export interface ReplayHeaderEngineClient extends EngineClient {
+  scanHeaders(files: IntakeFile[], options?: ParseOptions): Promise<ReplayHeaderResult[]>;
 }
 
 /** A parsed game ready for upload (from a fresh parse or IndexedDB). */
