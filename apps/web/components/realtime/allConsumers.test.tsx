@@ -33,7 +33,8 @@ vi.mock("@/lib/instant/useInstantImport", () => ({ useInstantImport: () => ({ en
 vi.mock("@/components/analyzer/DoctorBanner", () => ({ DoctorBanner: () => null }));
 vi.mock("@/components/analyzer/FilterBar", () => ({ FilterBar: () => null }));
 vi.mock("@/components/analyzer/ActiveFilterChips", () => ({ ActiveFilterChips: () => null }));
-vi.mock("@/components/onboarding/OnboardingChecklist", () => ({ checklistVisible: () => true, OnboardingChecklist: () => null }));
+vi.mock("@/components/onboarding/checklistState", () => ({ checklistVisible: () => true }));
+vi.mock("@/components/onboarding/OnboardingChecklist", () => ({ OnboardingChecklist: () => null }));
 vi.mock("@/components/imports/ImportProgressCard", () => ({ ImportProgressCard: () => null }));
 vi.mock("@/components/ui/Toast", () => ({ useToastOptional: () => null, useToast: () => ({ toast: h.toast }) }));
 vi.mock("@/app/admin/components/AdminPageHeader", () => ({ AdminPageHeader: ({ title, actions }: { title: string; actions: ReactNode }) => <header>{title}{actions}</header> }));
