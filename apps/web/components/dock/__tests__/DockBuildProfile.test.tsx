@@ -20,6 +20,13 @@ const STUDIO = { ...DEFAULT_STUDIO_STATE, buildProfile: TEST_PROFILE, updatedAt:
 async function drain() {
   await act(async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); });
 }
+
+async function renderBuildProfile() {
+  render(<DockClient token="test-token" />);
+  await act(async () => { await vi.dynamicImportSettled(); });
+  await drain();
+}
+
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("Dock build-profile controls", () => {
@@ -41,8 +48,7 @@ describe("Dock build-profile controls", () => {
       return { ok: true, json: async () => ({}) };
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(<DockClient token="test-token" />);
-    await drain();
+    await renderBuildProfile();
     expect((screen.getByRole("button", { name: "Hide widget" }) as HTMLButtonElement).disabled).toBe(false);
     await act(async () => { vi.advanceTimersByTime(60_000); });
     expect(studioGets).toBe(2);
@@ -61,8 +67,7 @@ describe("Dock build-profile controls", () => {
       if (url.includes("/studio") && init?.method === "POST") return { ok: false, status: 503 };
       return { ok: true, json: async () => url.includes("/studio") ? STUDIO : {} };
     }));
-    render(<DockClient token="test-token" />);
-    await drain();
+    await renderBuildProfile();
     fireEvent.change(screen.getByRole("textbox", { name: "Micro required label" }), { target: { value: "Unit control" } });
     fireEvent.change(screen.getByRole("combobox", { name: "Micro required" }), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Save ratings" }));
