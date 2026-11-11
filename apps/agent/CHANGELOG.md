@@ -41,6 +41,9 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   your own five games and **First meeting** on the opponent's side, never a guess.
 
 ### Changed
+- Refresh Streams, menus and dialogs with the shared Agent theme. Stream setup
+  controls wrap at the smallest size, and the native tray separates status,
+  navigation, help and sync actions. See the [interface gallery](../../docs/images/agent-0.25.0/interface-gallery/README.md).
 - Restyle the floating build check-ins and Scouting report with shared controls,
   readable build and status colors, and the selected skin's accent and race mark.
 - Refresh the Companion console, build selectors and Build Order Ghost with
