@@ -47,6 +47,14 @@ it("requires a reset confirmation, preserves the pool, and clears old challenge 
   expect(screen.getByRole("status").textContent).toBe("Challenge reset.");
 });
 
+it("can set a fresh start for a configured pool before its first roll", () => {
+  fixture.useApi.mockReturnValue({ data: { challengeStartedAt: null, pools: [{
+    ...sample.pools[0], rolled: 0, completed: 0, playedAsRolled: 0, wins: 0, losses: 0, lastPlayed: null,
+  }] }, request: fixture.request, mutate: fixture.mutate });
+  render(<RandomizerChallenge />);
+  expect(screen.getByRole("button", { name: "Reset challenge" })).toBeTruthy();
+});
+
 it("omits challenge requests for a signed-out viewer", () => {
   fixture.userId = null;
   render(<RandomizerChallenge />);
