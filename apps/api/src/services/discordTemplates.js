@@ -130,15 +130,13 @@ function testMessage() {
 }
 
 /**
- * Battle report headline and paragraph (roadmap battle-report-sharing).
- * Not wired to a producer yet: it needs a public battle-report link to
- * point at. Call it from that producer with the public URL.
- * @param {{headline: string, paragraph: string, url: string}} report
+ * Redacted result excerpt from the owner's shared battle report.
+ * @param {{headline: string, paragraph: string, token: string, result: unknown}} report
  */
 function battleReportMessage(report) {
-  const url = typeof report.url === "string" && report.url.startsWith(`${SITE}/`) ? report.url : undefined;
-  return message([{ title: md(report.headline, 240) || "Battle report", description: md(report.paragraph, 1500), color: COLORS.brand,
-    ...(url ? { url } : {}), footer: { text: "SC2 Tools" } }]);
+  const color = report.result === "Victory" ? COLORS.win : report.result === "Defeat" ? COLORS.loss : COLORS.neutral;
+  return message([{ title: md(report.headline, 120), description: md(report.paragraph, 750), color,
+    url: `${SITE}/g/${encodeURIComponent(report.token)}#battle-report`, footer: { text: "SC2 Tools · Battle report" } }]);
 }
 
 module.exports = { resultMessage, sessionMessage, weeklyMessage, milestoneMessage, testMessage, battleReportMessage, hookOptions, md, DEFAULT_OPTIONS };

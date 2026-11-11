@@ -39,12 +39,14 @@ describe("Compare… on the game page", () => {
       { gameId: "w2", result: "Victory", map: "Ruby Rock LE", macroScore: 88 },
     ] });
     api.replies.set("/v1/games/g1/neighbors?scope=opponent", { prev: { gameId: "o1", result: "Victory", map: "Pylon LE" }, next: null });
-    api.replies.set("/v1/games/g1/neighbors?scope=matchup", { prev: null, next: { gameId: "m1", result: "Defeat", map: "Oceanborn" } });
+    api.replies.set("/v1/replays?matchup=PvZ&limit=2&sort=date_desc&enrich=none", { items: [
+      { ...game, date: "2026-11-11" }, { gameId: "m1", result: "Defeat", map: "Oceanborn", date: "2026-11-10" },
+    ] });
     render(<CompareGamesButton game={game} buildLabel="Chargelot" />);
     fireEvent.click(screen.getByRole("button", { name: "Compare…" }));
     await screen.findByTestId("compare-picker");
     expect(window.localStorage.getItem(COMPARE_HINT_KEY)).toBe("true");
-    const best = screen.getByRole("button", { name: /Best win with this build/ });
+    const best = screen.getByRole("button", { name: /Best recent win with this build/ });
     expect(best.textContent).toContain("Ruby Rock LE");
     expect(screen.getByRole("button", { name: /Previous game vs this opponent/ }).textContent).toContain("Pylon LE");
     expect(screen.getByRole("button", { name: /Last game in this matchup/ }).textContent).toContain("Oceanborn");
@@ -56,7 +58,7 @@ describe("Compare… on the game page", () => {
     render(<CompareGamesButton game={{ gameId: "g2" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Compare…" }));
     await screen.findByTestId("compare-picker");
-    expect(screen.getByRole("button", { name: /Best win with this build/ }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: /Best recent win with this build/ }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: /Previous game vs this opponent/ }).hasAttribute("disabled")).toBe(true);
     // No build label and no opponent identity: those reads are never made.
     expect(api.paths.some((path) => path.includes("build="))).toBe(false);

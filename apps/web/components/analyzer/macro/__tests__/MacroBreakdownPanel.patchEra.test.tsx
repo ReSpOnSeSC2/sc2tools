@@ -9,11 +9,15 @@ vi.mock("@/lib/clientApi", () => ({
       ? {
           macro_score: 60,
           race: "Protoss",
-          raw: {},
+          raw: { sq: 82 },
           game_length_sec: 640,
           stats_events: [{ time: 0, food_used: 12 }],
         }
-      : undefined,
+      : path === "/v1/games/g1"
+        ? { gameId: "g1", myRace: "Protoss", opponent: { leagueId: 4, race: "Zerg" } }
+        : path === "/v1/benchmarks?leagueId=4&matchup=PvZ"
+          ? { table: { leagueId: 4, league: "Diamond", matchup: "PvZ", n: 400, metrics: { spq: { n: 400, deciles: [55, 60, 65, 70, 75, 80, 85, 90, 95] } } } }
+          : undefined,
     error: null,
     isLoading: false,
     mutate: vi.fn(),
@@ -56,6 +60,11 @@ describe("MacroBreakdownPanel patch era", () => {
     const recompute = screen.getByRole("button", { name: "Recompute" });
     expect(wins.compareDocumentPosition(changeBuild) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(changeBuild.compareDocumentPosition(recompute) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("uses the game's matchup and league to show the spending percentile", () => {
+    render(<MacroBreakdownPanel open gameId="g1" onClose={vi.fn()} />);
+    expect(screen.getByText("p64 · Diamond PvZ")).toBeTruthy();
   });
 
   it("prices a 5.0.17 game as 12-worker from the row's version, not its date", () => {

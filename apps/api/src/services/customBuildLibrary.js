@@ -109,6 +109,8 @@ class CustomBuildLibraryService {
   constructor(db, opts = {}) {
     this.db = db;
     this.now = opts.now || Date.now;
+    /** @type {Map<string, Promise<void>>} */
+    this.imports = new Map();
   }
 
   /**
@@ -287,6 +289,26 @@ class CustomBuildLibraryService {
    * }} opts
    */
   async importBatch(userId, items, opts = {}) {
+    if (opts.dryRun) return this._importBatch(userId, items, opts);
+    // The single API process serializes an owner's import planning and
+    // writes, so another batch sees the current count and occupied slugs.
+    const previous = this.imports.get(userId) || Promise.resolve();
+    const current = previous.then(() => this._importBatch(userId, items, opts));
+    const tail = current.then(() => {}, () => {});
+    this.imports.set(userId, tail);
+    try {
+      return await current;
+    } finally {
+      if (this.imports.get(userId) === tail) this.imports.delete(userId);
+    }
+  }
+
+  /**
+   * @param {string} userId
+   * @param {Array<{build?: unknown, onConflict?: unknown}>} items
+   * @param {{dryRun?: boolean, save?: (slug: string, value: Record<string, any>, previous: Record<string, any>|null) => Promise<void>}} opts
+   */
+  async _importBatch(userId, items, opts) {
     const planned = items.map((item, index) => this._candidate(item, index));
     const slugs = [...new Set(planned.flatMap((entry) => (entry.slug ? [entry.slug] : [])))];
     const [existing, liveCount, allSlugs] = await Promise.all([
@@ -326,7 +348,8 @@ class CustomBuildLibraryService {
         Object.assign(entry, { status: "failed", errors: [err instanceof Error ? err.message.slice(0, 120) : "save_failed"] });
       }
     }
-    return { results: results.map(publicResult), libraryCount: liveCount + creates };
+    const created = results.filter((entry) => entry.status === "created" || entry.status === "copied").length;
+    return { results: results.map(publicResult), libraryCount: liveCount + created };
   }
 
   /**

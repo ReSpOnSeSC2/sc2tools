@@ -5,7 +5,8 @@
  *   video  ``canvas.captureStream(0)`` + ``MediaRecorder``. With a zero
  *          frame rate the stream only takes a frame when the recorder
  *          asks (``requestFrame``), so every planned frame is captured
- *          exactly once. MediaRecorder timestamps frames by wall clock,
+ *          exactly once. Browsers without requestFrame use a paced
+ *          capture stream. MediaRecorder timestamps frames by wall clock,
  *          so frames are paced at the output rate; a hidden tab pauses
  *          the recorder rather than stretching the video.
  *   GIF    pixels go to a worker (``lib/clip/gifWorker``) a few frames
@@ -46,6 +47,7 @@ const abortable = (signal: AbortSignal, ms: number) => new Promise<void>((resolv
 });
 
 const whenVisible = (signal: AbortSignal) => new Promise<void>((resolve, reject) => {
+  if (signal.aborted) { reject(new ClipError("cancelled")); return; }
   if (!document.hidden) { resolve(); return; }
   const done = () => { document.removeEventListener("visibilitychange", onChange); signal.removeEventListener("abort", onAbort); };
   const onChange = () => { if (!document.hidden) { done(); resolve(); } };
@@ -62,6 +64,24 @@ export function canRecordVideo(canvas: HTMLCanvasElement | null | undefined): bo
   return !!canvas && typeof (canvas as CaptureCanvas).captureStream === "function" && typeof MediaRecorder !== "undefined";
 }
 
+function finishRecording(recorder: MediaRecorder, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) { reject(new ClipError("cancelled")); return; }
+    const finish = (error?: ClipError) => {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", onAbort);
+      recorder.onstop = null;
+      if (error) reject(error);
+      else resolve();
+    };
+    const timeout = setTimeout(() => finish(new ClipError("failed")), 5000);
+    const onAbort = () => finish(new ClipError("cancelled"));
+    recorder.onstop = () => finish();
+    signal.addEventListener("abort", onAbort, { once: true });
+    try { recorder.stop(); } catch { finish(new ClipError("failed")); }
+  });
+}
+
 export async function recordVideoClip(run: ClipRun & {
   canvas: HTMLCanvasElement;
   render: (index: number) => void;
@@ -71,12 +91,21 @@ export async function recordVideoClip(run: ClipRun & {
   const canvas = run.canvas as CaptureCanvas;
   if (!canRecordVideo(canvas)) throw new ClipError("unsupported");
   run.render(0);
-  const stream = canvas.captureStream!(0);
-  const track = stream.getVideoTracks()[0] as FrameTrack | undefined;
-  const release = () => stream.getTracks().forEach((t) => t.stop());
+  let stream: MediaStream | undefined;
+  const release = () => stream?.getTracks().forEach((track) => track.stop());
   let recorder: MediaRecorder;
+  let requestFrame: (() => void) | undefined;
   try {
-    if (!track) throw new ClipError("unsupported");
+    stream = canvas.captureStream!(0);
+    const track = stream.getVideoTracks()[0] as FrameTrack | undefined;
+    if (typeof track?.requestFrame === "function") {
+      requestFrame = track.requestFrame.bind(track);
+    } else {
+      release();
+      stream = undefined;
+      stream = canvas.captureStream!(run.fps);
+      if (!stream.getVideoTracks().length) throw new ClipError("unsupported");
+    }
     recorder = new MediaRecorder(stream, { mimeType: run.mime, videoBitsPerSecond: run.bitsPerSecond });
   } catch (error) {
     release();
@@ -85,7 +114,6 @@ export async function recordVideoClip(run: ClipRun & {
   const chunks: Blob[] = [];
   let bytes = 0;
   let failure: ClipError | null = null;
-  const stopped = new Promise<void>((resolve) => { recorder.onstop = () => resolve(); });
   recorder.ondataavailable = (event) => {
     if (!event.data || event.data.size === 0) return;
     chunks.push(event.data);
@@ -108,22 +136,24 @@ export async function recordVideoClip(run: ClipRun & {
       }
       await abortable(run.signal, base + i * frameMs - performance.now());
       if (i > 0) run.render(i);
-      track!.requestFrame?.();
+      requestFrame?.();
       run.onProgress(i + 1, run.count);
     }
     // The last frame needs its own duration before the file closes.
     await abortable(run.signal, frameMs);
     if (failure) throw failure;
+    await finishRecording(recorder, run.signal);
+    if (failure) throw failure;
+    if (!bytes) throw new ClipError("failed");
+    return new Blob(chunks, { type: run.mime.split(";")[0] });
   } catch (error) {
-    if (recorder.state !== "inactive") recorder.stop();
-    release();
     throw error instanceof ClipError ? error : new ClipError("failed");
+  } finally {
+    recorder.ondataavailable = null;
+    recorder.onerror = null;
+    try { if (recorder.state !== "inactive") recorder.stop(); } catch { /* release tracks below */ }
+    release();
   }
-  recorder.stop();
-  await stopped;
-  release();
-  if (failure) throw failure;
-  return new Blob(chunks, { type: run.mime.split(";")[0] });
 }
 
 

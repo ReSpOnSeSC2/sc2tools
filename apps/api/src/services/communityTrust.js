@@ -89,16 +89,51 @@ function publicationMutation(existing, doc, opts) {
  */
 async function recordCommunitySave(db, userId, slug, now) {
   if (!SLUG_RE.test(slug)) return false;
-  const row = await db.communityBuilds.findOne({ slug, removed: false }, { projection: { _id: 0, ownerUserId: 1 } });
-  if (!row || row.ownerUserId === userId) return false;
+  if (!db.gameStatsTransactions) return recordStandaloneSave(db, userId, slug, now);
+
+  const session = db.client.startSession();
+  try {
+    return await session.withTransaction(async () => {
+      const filter = { slug, removed: false, ownerUserId: { $ne: userId } };
+      const row = await db.communityBuilds.findOne(filter, { session, projection: { _id: 1 } });
+      if (!row) return false;
+      const result = await db.communitySaves.updateOne(
+        { slug, userId },
+        { $setOnInsert: stampVersion({ slug, userId, savedAt: now }, COLLECTIONS.COMMUNITY_SAVES) },
+        { session, upsert: true },
+      );
+      if (!result.upsertedCount) return false;
+      await db.communityBuilds.updateOne({ _id: row._id }, { $inc: { saves: 1 } }, { session });
+      return true;
+    });
+  } catch (err) {
+    // Concurrent upserts of the same receipt may report a duplicate key
+    // instead of a retryable write conflict. Its transaction did the count.
+    if (err && typeof err === "object" && /** @type {any} */ (err).code === 11000) return false;
+    throw err;
+  } finally {
+    await session.endSession();
+  }
+}
+
+/**
+ * Without transactions, refresh the count from durable receipts on each
+ * save, including retries. A stale count read cannot overwrite a newer one.
+ * @param {import('../db/connect').DbContext} db
+ * @param {string} userId @param {string} slug @param {Date} now
+ */
+async function recordStandaloneSave(db, userId, slug, now) {
+  const filter = { slug, removed: false, ownerUserId: { $ne: userId } };
+  const row = await db.communityBuilds.findOne(filter, { projection: { _id: 1 } });
+  if (!row) return false;
   try {
     await db.communitySaves.insertOne(stampVersion({ slug, userId, savedAt: now }, COLLECTIONS.COMMUNITY_SAVES));
   } catch (err) {
-    if (err && typeof err === "object" && /** @type {any} */ (err).code === 11000) return false;
-    throw err;
+    if (!err || typeof err !== "object" || /** @type {any} */ (err).code !== 11000) throw err;
   }
-  await db.communityBuilds.updateOne({ slug }, { $inc: { saves: 1 } });
-  return true;
+  const count = await db.communitySaves.countDocuments({ slug });
+  const result = await db.communityBuilds.updateOne({ _id: row._id, removed: false }, { $max: { saves: count } });
+  return result.modifiedCount > 0;
 }
 
 /**

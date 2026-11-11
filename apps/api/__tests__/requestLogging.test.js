@@ -11,6 +11,7 @@ describe("request log sanitisation", () => {
     ["/v1/search/quick?q=private-name&unknown=private-build#private-map", "/v1/search/quick"],
     ["https://api.example.test/V1/SEARCH/QUICK/?other=private-name", "/v1/search/quick"],
     ["/v1/search/quick/other?limit=5", "/v1/search/quick/other?limit=5"],
+    ["/v1/spatial/battle?opponent=private-id&map=Goldenaura", "/v1/spatial/battle?opponent=%5Bredacted%5D&map=Goldenaura"],
     [
       "/v1/multichat/overlay-secret/youtube/poll?token=query-secret&channel=abc",
       "/v1/multichat/[redacted]/youtube/poll?token=%5Bredacted%5D&channel=abc",
@@ -43,6 +44,9 @@ describe("request log sanitisation", () => {
     expect(sanitiseRequestUrl(input)).toBe(expected);
   });
 
+});
+
+describe("request log header allowlist", () => {
   test("logs only explicitly safe headers", () => {
     const req = {
       id: "request-id",
