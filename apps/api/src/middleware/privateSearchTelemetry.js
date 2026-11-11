@@ -10,17 +10,17 @@ const PRIVATE_SEARCH_TAG = "sc2tools.private_search";
 const HEARTBEAT_PATH = /^\/v1\/devices\/heartbeat\/?$/i;
 const CREDENTIAL_BODY_PATH = /^\/(?:v1\/)?(?:me\/integrations\/discord\/hooks(?:\/[^/]+\/battle-report)?|me\/push\/(?:subscriptions|unsubscribe)|push\/subscription-change|me\/replay-sharing\/reference)\/?$/i;
 
-// The feed URL itself carries a bearer credential, even for a failed lookup.
-const CALENDAR_FEED_PATH = /^\/(?:v1\/)?calendar\/[^/]+\/?$/i;
+// Feed and shared replay paths carry bearer credentials, even for failed lookups.
+const BEARER_PATH = /^\/(?:v1\/)?(?:calendar\/[^/]+\/?$|shares\/[^/]+(?:\/|$))/i;
 
 /** @param {unknown} value */
-function isCalendarFeedPath(value) {
-  return typeof value === "string" && CALENDAR_FEED_PATH.test(value.split(/[?#]/u, 1)[0].replace(/^https?:\/\/[^/]+(?=\/)/i, ""));
+function isBearerPath(value) {
+  return typeof value === "string" && BEARER_PATH.test(value.split(/[?#]/u, 1)[0].replace(/^https?:\/\/[^/]+(?=\/)/i, ""));
 }
 
 /** @param {unknown} value */
 function isPrivateTelemetryPath(value) {
-  return isPrivateSearchPath(value) || isReplayDownloadBatchPath(value) || isCalendarFeedPath(value);
+  return isPrivateSearchPath(value) || isReplayDownloadBatchPath(value) || isBearerPath(value);
 }
 
 /** @param {unknown} value @param {string} key @returns {unknown} */
@@ -128,9 +128,6 @@ function privateSearchSentryCallbacks() {
   return { beforeSend: beforeSendPrivateSearch, beforeSendTransaction: beforeSendPrivateSearch };
 }
 
-// A game share token in the path is the public page's bearer credential.
-const SHARE_TOKEN_PATH = /^\/v1\/shares\//u;
-
 /**
  * Pass to the existing SDK Http integration before app/parser creation.
  * Avoids pre-parser body capture for this route, and incoming server spans for
@@ -143,8 +140,7 @@ function privateSearchHttpOptions() {
     /** @param {string} urlPath */
     ignoreIncomingRequestBody: urlPath => isPrivateTelemetryPath(urlPath) || isPrivateBodyPath(urlPath),
     /** @param {string} urlPath the path and query string */
-    ignoreIncomingRequests: urlPath => isPrivateTelemetryPath(urlPath) || isSearchQueryUrl(urlPath)
-      || SHARE_TOKEN_PATH.test(urlPath),
+    ignoreIncomingRequests: urlPath => isPrivateTelemetryPath(urlPath) || isSearchQueryUrl(urlPath),
   };
 }
 
