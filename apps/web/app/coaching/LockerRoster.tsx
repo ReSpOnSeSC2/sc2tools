@@ -16,7 +16,7 @@ import {
   addRosterCoach, addRosterStudent, removeRosterCoach, removeRosterStudent, rosterCoaches,
   rosterStudents, updateRosterStudent, type LockerCoach, type LockerState, type LockerStudent,
 } from "./lockerRosterModel";
-import { useLockerRoster } from "./useLockerRoster";
+import { useLockerView } from "./useLockerView";
 
 type RosterProps = { viewerRole: "coach" | "admin"; coachId: string | null };
 
@@ -28,7 +28,7 @@ export default function LockerRoster(props: RosterProps) {
 type Editor = { kind: "student" | "coach"; rev: number } | { kind: "edit"; rev: number; student: LockerStudent };
 
 function Roster({ accountId, viewerRole, coachId }: RosterProps & { accountId: string }) {
-  const locker = useLockerRoster(accountId, viewerRole, coachId);
+  const locker = useLockerView(accountId, "roster", viewerRole, coachId);
   const [section, setSection] = useState("students");
   const [editor, setEditor] = useState<Editor | null>(null);
   const [help, setHelp] = useState(false);
