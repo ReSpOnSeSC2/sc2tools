@@ -6,7 +6,7 @@ import { collectDroppedFiles, droppedTreeRoots, filesOf, MAX_DROPPED_FILES } fro
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { isReplayFileName, makeIntakeFile } from "@/lib/instant/fileIntake";
-import { pickReplaysFolder, supportsDirectoryPicker, walkMultiplayerReplays } from "@/lib/instant/folderSync";
+import { pickReplaysFolder, supportsDirectoryPicker, walkReplayFolder } from "@/lib/instant/folderSync";
 import { RECAP_END, RECAP_START } from "@/lib/career/headerRows";
 import type { IntakeFile, IntakeSource } from "@/lib/instant/types";
 import type { useYearRecap } from "./useYearRecap";
@@ -21,7 +21,7 @@ function intakeFiles(files: File[], source: IntakeSource): IntakeFile[] {
 async function readFolder(signal: AbortSignal) {
   const folder = await pickReplaysFolder();
   if (!folder) return null;
-  const found = await walkMultiplayerReplays(folder, { signal, maxFiles: MAX_DROPPED_FILES, keepSnapshots: true });
+  const found = await walkReplayFolder(folder, { signal, maxFiles: MAX_DROPPED_FILES, keepSnapshots: true });
   const files: IntakeFile[] = [];
   for (const entry of found) {
     signal.throwIfAborted();
@@ -39,7 +39,7 @@ export function YearRecapIntake({ start }: { start: Start }) {
     event.preventDefault();
     const roots = droppedTreeRoots(event.dataTransfer);
     const flat = roots ? [] : filesOf(event.dataTransfer.files);
-    void start(async () => intakeFiles(roots ? await collectDroppedFiles(roots) : flat, "drop"));
+    void start(async (signal) => intakeFiles(roots ? await collectDroppedFiles(roots, signal) : flat, "drop"));
   }
 
   function picked(input: HTMLInputElement, source: IntakeSource) {

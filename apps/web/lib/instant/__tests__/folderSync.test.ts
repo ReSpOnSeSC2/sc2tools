@@ -11,6 +11,7 @@ import {
   shouldAutoScan,
   supportsDirectoryPicker,
   walkMultiplayerReplays,
+  walkReplayFolder,
   type DirectoryHandleLike,
   type FileHandleLike,
 } from "../folderSync";
@@ -159,6 +160,15 @@ describe("walkMultiplayerReplays: responsiveness", () => {
     });
     await expect(walk).rejects.toMatchObject({ name: "AbortError" });
   });
+});
+
+it("finds root and nested replays in exported folders without reading unrelated files", async () => {
+  const textFile = fakeFile("notes.txt");
+  const readText = vi.spyOn(textFile, "getFile");
+  const root = fakeDir("Export", [fakeFile("first.SC2Replay"), textFile, fakeDir("Ladder", [fakeFile("second.sc2replay")])]);
+  const found = await walkReplayFolder(root, { keepSnapshots: true });
+  expect(found.map((file) => file.relativePath)).toEqual(["Export/first.SC2Replay", "Export/Ladder/second.sc2replay"]);
+  expect(readText).not.toHaveBeenCalled();
 });
 
 describe("permissions", () => {

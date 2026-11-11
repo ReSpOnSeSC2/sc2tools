@@ -6,7 +6,7 @@
  *   boot can be retried).
  * - `players` / `parse` / `unzip` run strictly one at a time and emit a
  *   progress event before and after each file.
- * - `header` uses the same serial queue and reports only file completion.
+ * - `header` uses the same serial queue and reports completion in the result.
  * - Python exceptions keep the interpreter usable; other errors (a dead
  *   Pyodide, an out-of-memory heap) are reported with a fatal kind so the
  *   client recycles this worker.
@@ -90,10 +90,10 @@ function runPlayers(runtime: EngineRuntime, request: PlayersRequest): StepResult
   return result.ok ? { event, ok: true } : { event, ok: false, errorKind: result.errorKind };
 }
 
-function runHeader(runtime: EngineRuntime, request: HeaderRequest): StepResult {
+function runHeader(runtime: EngineRuntime, request: HeaderRequest, started: number, now: () => number): StepResult {
   const raw = runtime.header(new Uint8Array(request.bytes), request.relativePath || request.fileName);
   const result = toHeaderResult(JSON.parse(raw));
-  const event: WorkerEvent = { type: "header", id: request.id, result };
+  const event: WorkerEvent = { type: "header", id: request.id, ms: Math.round(now() - started), result };
   return result.ok ? { event, ok: true } : { event, ok: false, errorKind: result.errorKind };
 }
 
@@ -124,7 +124,7 @@ function runUnzip(runtime: EngineRuntime, request: UnzipRequest): StepResult {
 
 function runStep(runtime: EngineRuntime, request: FileRequest, started: number, now: () => number): StepResult {
   if (request.type === "players") return runPlayers(runtime, request);
-  if (request.type === "header") return runHeader(runtime, request);
+  if (request.type === "header") return runHeader(runtime, request, started, now);
   if (request.type === "parse") return runParse(runtime, request, started, now);
   return runUnzip(runtime, request);
 }
@@ -196,9 +196,11 @@ class EngineWorkerHost {
     // Refresh is advisory: the runtime retains its last validated policy.
     if (request.type === "parse" && this.refreshPolicy) await this.deps.refreshPolicy?.(booted.runtime).catch(() => undefined);
     const result = runSafely(booted.runtime, request, started, this.now);
-    const done: EngineProgress = { ...base, ms: this.elapsed(started), ok: result.ok };
-    if (result.errorKind) done.errorKind = result.errorKind;
-    this.progress(done);
+    if (request.type !== "header") {
+      const done: EngineProgress = { ...base, ms: this.elapsed(started), ok: result.ok };
+      if (result.errorKind) done.errorKind = result.errorKind;
+      this.progress(done);
+    }
     this.port.post(result.event, result.transfer);
   }
 }

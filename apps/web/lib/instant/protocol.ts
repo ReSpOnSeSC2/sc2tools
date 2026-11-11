@@ -90,6 +90,7 @@ export interface PlayersEvent {
 export interface HeaderEvent {
   type: "header";
   id: number;
+  ms: number;
   result: ReplayHeaderResult;
 }
 

@@ -175,6 +175,16 @@ function emitFailure(job: Job, phase: EnginePhase, base: FilePosition, ms: numbe
   job.onProgress?.({ phase, ...base, ms, ok: false, errorKind });
 }
 
+function emitHeaderResponse(job: Job, base: FilePosition, event: ResponseEvent, elapsed: () => number): void {
+  if (event.type === "header") {
+    const { result, ms } = event;
+    if (result.ok) job.onProgress?.({ phase: "header", ...base, ms, ok: true });
+    else emitFailure(job, "header", base, ms, result.errorKind);
+  } else {
+    emitFailure(job, "header", base, elapsed(), event.type === "request-error" ? event.errorKind : "worker_crashed");
+  }
+}
+
 class QueuedEngineClient implements ReplayHeaderEngineClient {
   private session: EngineSession | null = null;
   private tail: Promise<unknown> = Promise.resolve();
@@ -354,6 +364,7 @@ class QueuedEngineClient implements ReplayHeaderEngineClient {
     try {
       const event = await session.request(message, this.config.perFileTimeoutMs);
       this.afterResponse(session, step, event);
+      if (step.phase === "header") emitHeaderResponse(job, base, event, elapsed);
       return step.fromResponse(item, event, elapsed());
     } catch (error) {
       const failure = asEngineError(error);

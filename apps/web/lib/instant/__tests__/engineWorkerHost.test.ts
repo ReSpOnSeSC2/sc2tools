@@ -77,9 +77,9 @@ it("routes header scans without refreshing the network policy", async () => {
   expect(refreshPolicy).not.toHaveBeenCalled();
   const progress = post.mock.calls.map(([event]) => event)
     .filter((event) => event.type === "progress" && event.progress.phase === "header");
-  expect(progress).toEqual([{ type: "progress", progress: { phase: "header", index, total, fileName, ms: 0, ok: true } }]);
+  expect(progress).toEqual([]);
   expect(post.mock.calls.map(([event]) => event)).toContainEqual({
-    type: "header", id, result: expect.objectContaining({ ok: true, isLadderGame: true }),
+    type: "header", id, ms: expect.any(Number), result: expect.objectContaining({ ok: true, isLadderGame: true }),
   });
 });
 

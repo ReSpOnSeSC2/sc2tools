@@ -3,6 +3,7 @@
  * whole drive by mistake cannot run away. A full Accounts folder is far below.
  */
 export const MAX_DROPPED_FILES = 50_000;
+const FILE_READ_BATCH_SIZE = 32;
 
 export function filesOf(list: FileList | null | undefined): File[] {
   return list ? Array.from(list) : [];
@@ -28,14 +29,19 @@ export function droppedTreeRoots(transfer: DataTransfer | null | undefined): Fil
   return roots.some(isDirectoryEntry) ? roots : null;
 }
 
-async function readDirectory(directory: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
+async function readDirectory(directory: FileSystemDirectoryEntry, signal?: AbortSignal): Promise<FileSystemEntry[]> {
   const reader = directory.createReader();
   const readBatch = (): Promise<FileSystemEntry[]> =>
     new Promise((resolve, reject) => reader.readEntries(resolve, reject));
   const entries: FileSystemEntry[] = [];
   // readEntries returns at most ~100 entries per call; an empty batch ends the listing.
-  for (let batch = await readBatch(); batch.length > 0; batch = await readBatch()) entries.push(...batch);
-  return entries;
+  for (;;) {
+    signal?.throwIfAborted();
+    const batch = await readBatch();
+    signal?.throwIfAborted();
+    if (batch.length === 0) return entries;
+    entries.push(...batch);
+  }
 }
 
 /**
@@ -60,27 +66,41 @@ function readFileEntry(entry: FileSystemFileEntry): Promise<File | null> {
 }
 
 /** A directory's children, or none when it cannot be listed. */
-function readChildren(directory: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
-  return readDirectory(directory).catch(() => []);
+function readChildren(directory: FileSystemDirectoryEntry, signal?: AbortSignal): Promise<FileSystemEntry[]> {
+  return readDirectory(directory, signal).catch(() => {
+    signal?.throwIfAborted();
+    return [];
+  });
+}
+
+async function appendFiles(entries: FileSystemFileEntry[], files: File[], signal?: AbortSignal): Promise<void> {
+  for (let index = 0; index < entries.length && files.length < MAX_DROPPED_FILES; index += FILE_READ_BATCH_SIZE) {
+    signal?.throwIfAborted();
+    const read = await Promise.all(entries.slice(index, index + FILE_READ_BATCH_SIZE).map(readFileEntry));
+    signal?.throwIfAborted();
+    files.push(...read.filter((file): file is File => file !== null));
+  }
 }
 
 /**
  * Every file under the dropped entries, each carrying its folder path as
  * `webkitRelativePath`. Walks one folder level at a time and resolves each
  * level in parallel (one `entry.file()` round-trip per file would crawl on
- * a large Accounts folder). Unreadable entries are skipped; never rejects.
+ * a large Accounts folder). Unreadable entries are skipped; an aborted walk
+ * stops issuing new reads and rejects with the signal's reason.
  *
  * Example:
  *   const files = await collectDroppedFiles([item.webkitGetAsEntry()]);
  *   files[0].webkitRelativePath; // -> "Accounts/1/1-S2-1-267727/Replays/Multiplayer/a.SC2Replay"
  */
-export async function collectDroppedFiles(roots: ReadonlyArray<FileSystemEntry>): Promise<File[]> {
+export async function collectDroppedFiles(roots: ReadonlyArray<FileSystemEntry>, signal?: AbortSignal): Promise<File[]> {
   const files: File[] = [];
   let level: FileSystemEntry[] = [...roots];
   while (level.length > 0 && files.length < MAX_DROPPED_FILES) {
-    const read = await Promise.all(level.filter(isFileEntry).map(readFileEntry));
-    files.push(...read.filter((file): file is File => file !== null));
-    level = (await Promise.all(level.filter(isDirectoryEntry).map(readChildren))).flat();
+    signal?.throwIfAborted();
+    await appendFiles(level.filter(isFileEntry), files, signal);
+    if (files.length >= MAX_DROPPED_FILES) break;
+    level = (await Promise.all(level.filter(isDirectoryEntry).map((entry) => readChildren(entry, signal)))).flat();
   }
   return files.slice(0, MAX_DROPPED_FILES);
 }
