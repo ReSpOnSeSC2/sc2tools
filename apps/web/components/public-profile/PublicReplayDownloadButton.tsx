@@ -4,6 +4,7 @@ import { useId, useState, type MouseEvent } from "react";
 import { AlertCircle, Download, Loader2 } from "lucide-react";
 import { API_BASE } from "@/lib/clientApi";
 import { useToastOptional } from "@/components/ui/Toast";
+import { Button } from "@/components/ui/Button";
 
 type DownloadResponse = {
   url: string;
@@ -24,6 +25,7 @@ export function PublicReplayDownloadButton({
   mobile = false,
   showLabel = false,
   primary = false,
+  appearance,
   contextLabel,
 }: {
   handle: string;
@@ -33,6 +35,7 @@ export function PublicReplayDownloadButton({
   mobile?: boolean;
   showLabel?: boolean;
   primary?: boolean;
+  appearance?: "pill";
   /** Extra replay context for screen-reader action lists. */
   contextLabel?: string;
 }) {
@@ -55,12 +58,12 @@ export function PublicReplayDownloadButton({
       );
       if (!response.ok) throw new Error(await publicDownloadError(response));
       const payload = (await response.json()) as DownloadResponse;
-      const href = safeSignedUrl(payload.url);
+      const href = safePublicDownloadUrl(payload.url);
       if (!href) throw new Error("The replay download link was invalid.");
 
       const anchor = document.createElement("a");
       anchor.href = href;
-      anchor.download = safeFilename(payload.filename, gameId);
+      anchor.download = safeFilename(payload.filename);
       anchor.rel = "noopener noreferrer";
       anchor.referrerPolicy = "no-referrer";
       anchor.style.display = "none";
@@ -94,16 +97,23 @@ export function PublicReplayDownloadButton({
         : "Download replay";
   const label = contextLabel ? `${baseLabel} — ${contextLabel}` : baseLabel;
 
+  const props = {
+    disabled: !canDownload || state === "loading",
+    onClick: download,
+    "aria-label": label,
+    "aria-busy": state === "loading" || undefined,
+    "aria-describedby": statusId,
+    title: label + (size ? " (" + size + ")" : ""),
+  };
+  const icon = state === "loading" ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+    : state === "error" ? <AlertCircle className="h-4 w-4" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />;
+  const text = !canDownload ? "Replay unavailable" : state === "loading" ? "Preparing…" : state === "error"
+    ? "Try download again" : "Download replay" + (size ? " · " + size : "");
   return (
     <>
-      <button
+      {appearance === "pill" ? <Button {...props} variant="secondary" iconLeft={icon}>{text}</Button> : <button
+        {...props}
         type="button"
-        disabled={!canDownload || state === "loading"}
-        onClick={download}
-        aria-label={label}
-        aria-busy={state === "loading" || undefined}
-        aria-describedby={statusId}
-        title={`${label}${size ? ` (${size})` : ""}`}
         className={[
           "inline-flex items-center justify-center rounded-md border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed",
           mobile
@@ -118,17 +128,8 @@ export function PublicReplayDownloadButton({
               : primary ? "border-accent bg-accent text-white hover:bg-accent/85" : `${mobile || showLabel ? "border-border-strong" : "border-border"} bg-bg-elevated/60 text-text-muted hover:border-accent hover:bg-bg-elevated hover:text-accent`,
         ].join(" ")}
       >
-        {state === "loading" ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        ) : state === "error" ? (
-          <AlertCircle className="h-4 w-4" aria-hidden />
-        ) : (
-          <Download className="h-4 w-4" aria-hidden />
-        )}
-        {mobile || showLabel ? (
-          <span>{!canDownload ? "Replay unavailable" : state === "loading" ? "Preparing…" : state === "error" ? "Try download again" : `Download replay${size ? ` · ${size}` : ""}`}</span>
-        ) : null}
-      </button>
+        {icon}{mobile || showLabel ? <span>{text}</span> : null}
+      </button>}
       <span id={statusId} className="sr-only" role={state === "error" ? "alert" : "status"}>
         {!canDownload
           ? "The original replay file is unavailable."
@@ -157,18 +158,13 @@ async function publicDownloadError(response: Response): Promise<string> {
   return "The replay download could not be prepared.";
 }
 
-function safeSignedUrl(value: unknown): string | null {
-  if (typeof value !== "string" || !value.trim()) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
+function safePublicDownloadUrl(value: unknown): string | null {
+  const path = /^\/v1\/public\/replays\/[a-z0-9-]{1,64}\/r-[a-f0-9]{24}\/file\?token=\d{13}\.[A-Za-z0-9_-]{43}$/;
+  return typeof value === "string" && path.test(value) ? API_BASE + value : null;
 }
 
-function safeFilename(value: unknown, gameId: string): string {
-  const raw = typeof value === "string" ? value : `sc2tools-${gameId}`;
+function safeFilename(value: unknown): string {
+  const raw = typeof value === "string" ? value : "sc2tools-replay";
   const clean = raw
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
     .replace(/\.SC2Replay$/i, "")

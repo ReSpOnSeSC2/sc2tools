@@ -41,3 +41,19 @@ test("laptop cards keep the public Analysis action inside the viewport", async (
   }
   if (testInfo.project.name === "desktop-1280") { await page.getByRole("main").getByRole("link", { name: /Open replay analysis for|Timeline, macro breakdown/ }).first().scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath("public-archive-cards-1190.png") }); }
 });
+
+test("an opaque replay link opens a signed-out teaser and a private-data-free image", async ({ page, request }) => {
+  const path = root + "/r-" + "2".padStart(24, "0");
+  const response = await page.goto(path);
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Fixture Player's replay" })).toBeVisible();
+  await expect(page.getByText("Sign in free to open the timeline, macro breakdown and both build orders.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in free" })).toHaveAttribute("href", /redirect_url=/);
+  await expect(page.getByRole("button", { name: "Download replay" })).toBeVisible();
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+  await expect(page.locator('meta[property="og:image"]').first()).toHaveAttribute("content", /opengraph-image/);
+  await expect(page.locator("body")).not.toContainText("Fixture rival");
+  const image = await request.get(path + "/opengraph-image");
+  expect(image.status()).toBe(200);
+  expect(image.headers()["content-type"]).toContain("image/png");
+});

@@ -1683,7 +1683,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       gameVods: services.gameVods,
       perGame: services.perGame,
       replayFiles: services.replayFiles,
-      auth,
+      auth, downloadSecret: deps.config.serverPepper,
     }),
   );
   mountScopedGrants(app, services, { auth, isAdmin, rollout: deps.config.reviewsEnabled || "off" });
