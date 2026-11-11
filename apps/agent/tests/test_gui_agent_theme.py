@@ -1,29 +1,6 @@
 from tests._gui_offscreen import run_gui_check
 
 
-DRAFT_DIALOG_DRIVER = '''
-        def answer_draft_prompt(expected_title, answer, navigate):
-            responses = []
-            def click_answer():
-                prompt = app.activeModalWidget()
-                if not isinstance(prompt, QtWidgets.QMessageBox):
-                    return
-                button = next((item for item in prompt.buttons() if item.text().replace("&", "") == answer), None)
-                responses.append((prompt.windowTitle(), button is not None))
-                if button is None:
-                    prompt.reject()
-                else:
-                    button.click()
-            timer = QtCore.QTimer()
-            timer.setSingleShot(True)
-            timer.timeout.connect(click_answer)
-            timer.start(0)
-            navigate()
-            timer.stop()
-            assert responses == [(expected_title, True)], responses
-'''
-
-
 def test_all_agent_pages_share_console_bezel_and_keep_existing_page_ownership(tmp_path):
     run_gui_check(tmp_path, '''
         app.setStyleSheet(gui._STYLE)
@@ -81,7 +58,7 @@ def test_all_agent_pages_share_console_bezel_and_keep_existing_page_ownership(tm
 
 
 def test_agent_menu_and_companion_button_keep_geometry_and_guard_unsaved_settings(tmp_path):
-    run_gui_check(tmp_path, DRAFT_DIALOG_DRIVER + '''
+    run_gui_check(tmp_path, '''
         app.setStyleSheet(gui._STYLE)
         layouts = []
         ui, win = make_window(window_page="settings", on_window_information_layout=layouts.append)
@@ -141,7 +118,7 @@ def test_agent_menu_and_companion_button_keep_geometry_and_guard_unsaved_setting
 
 
 def test_compact_hides_both_agent_chrome_surfaces_and_expand_restores_same_settings_draft(tmp_path):
-    run_gui_check(tmp_path, DRAFT_DIALOG_DRIVER + '''
+    run_gui_check(tmp_path, '''
         app.setStyleSheet(gui._STYLE)
         ui, win = make_window(window_page="settings")
         win.show()
@@ -182,7 +159,7 @@ def test_compact_hides_both_agent_chrome_surfaces_and_expand_restores_same_setti
 
 
 def test_settings_form_wraps_without_horizontal_clipping_at_minimum_size_and_keeps_drafts(tmp_path):
-    run_gui_check(tmp_path, DRAFT_DIALOG_DRIVER + '''
+    run_gui_check(tmp_path, '''
         from sc2tools_agent.ui import theme
         font = Path("C:/Windows/Fonts/segoeui.ttf")
         if font.is_file():

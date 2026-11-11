@@ -32,6 +32,32 @@ def wait_saved(win):
     while win._settings_save_pending and not deadline.hasExpired():
         QtTest.QTest.qWait(10)
     assert not win._settings_save_pending, "Settings worker did not deliver completion"
+def answer_draft_prompt(expected_title, answer, navigate):
+    responses = []
+    def click_answer():
+        prompt = app.activeModalWidget()
+        if not isinstance(prompt, QtWidgets.QMessageBox):
+            return
+        button = next((item for item in prompt.buttons() if item.text().replace("&", "") == answer), None)
+        responses.append((prompt.windowTitle(), button is not None))
+        if button is None:
+            prompt.reject()
+        else:
+            button.click()
+    timer = QtCore.QTimer()
+    timer.setSingleShot(True)
+    timer.timeout.connect(click_answer)
+    timer.start(0)
+    navigate()
+    timer.stop()
+    assert responses == [(expected_title, True)], responses
+
+def keep_settings_draft_via_help(win):
+    menu = win._agent_menu_button.menu()
+    help_action = next(action for action in menu.actions() if action.text() == "Help and troubleshooting")
+    answer_draft_prompt("Unsaved settings", "Keep draft", help_action.trigger)
+    assert win._stack.currentWidget() is win._help_page
+
 def make_window(**overrides):
     args = dict(
         version="test", dashboard_url="https://example.test/app",
