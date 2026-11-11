@@ -34,17 +34,19 @@ import {
 import { getInstantImportMode } from "@/lib/instant/flag";
 import { PRODUCT_FACTS } from "@/lib/productFacts";
 import { CompanionShowcase } from "@/components/landing/CompanionShowcase";
+import { LiveFromTheLadder } from "@/components/landing/LiveFromTheLadder";
 import { LinkButton } from "@/components/ui/Button";
 
 // A long landing label may grow past one line on a phone.
 const WRAPPING_CTA = "h-auto min-h-12 py-2 text-center";
 
-export function LandingPageContent() {
+export function LandingPageContent({ donationCoverage }: { donationCoverage?: ReactNode } = {}) {
   return (
     <>
       <LandingHero />
       <RealGameShowcase />
       <OutcomeRail />
+      <LiveFromTheLadder />
       <ImprovementChapter />
       <CompanionShowcase />
       <PracticeChapter />
@@ -54,6 +56,7 @@ export function LandingPageContent() {
       <LandingHowItWorks />
       <MobileInstallSection />
       <SupportTeaser />
+      {donationCoverage}
       <LandingFinalCta />
     </>
   );

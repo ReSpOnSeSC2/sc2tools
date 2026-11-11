@@ -81,6 +81,59 @@ describe("ingest-time practice grading", () => {
 
 });
 
+describe("private practice checkpoints and quests", () => {
+  test("checkpoint rules stay private, preserve arm time and affect only later grades", async () => {
+    const initial = { matchup: "PvZ", targetHash: targetHash(GATE), expected: [] };
+    const a = [{ i: 2, toleranceSec: 10 }];
+    await expect(practice.saveCheckpoints("u2", { ...initial, checkpoints: a })).rejects.toMatchObject({ status: 409 });
+    await expect(practice.saveCheckpoints("u1", { ...initial, checkpoints: [...a, ...a] })).rejects.toMatchObject({ status: 400 });
+    await expect(practice.saveCheckpoints("u1", { ...initial, checkpoints: [{ i: 3, toleranceSec: 10 }] })).rejects.toMatchObject({ status: 400 });
+    await expect(practice.saveCheckpoints("u1", { ...initial, checkpoints: [{ i: 0, toleranceSec: 0 }] })).rejects.toMatchObject({ status: 400 });
+    await expect(practice.saveCheckpoints("u1", { ...initial, checkpoints: a })).resolves.toEqual({ checkpoints: a });
+    await expect(practice.saveCheckpoints("u1", { ...initial, checkpoints: [] })).rejects.toMatchObject({ status: 409 });
+    expect((await ghost.get("u1")).slots.PvZ).toEqual(GATE);
+    await ghost.replace("u1", { v: 2, slots: { PvZ: GATE } });
+    await ghost.patch("u1", { matchup: "PvT", target: STARGATE });
+    expect((await db.users.findOne({ userId: "u1" })).preferences.ghostArmedAt.PvZ.at).toEqual(ARMED);
+
+    const hit = await ingest(game("hit", "2026-11-02T00:00:00Z"));
+    const miss = await ingest(game("miss", "2026-11-03T00:00:00Z", { buildLog: LATE_CORE }));
+    expect(hit.checkpoints).toEqual([{ ...a[0], name: "CyberneticsCore", hit: true }]);
+    expect(miss.checkpoints).toEqual([{ ...a[0], name: "CyberneticsCore", hit: false }]);
+    expect((await practice.summary("u1", { matchup: "PvZ" })).checkpoints).toEqual([{ ...a[0], name: "CyberneticsCore", attempts: 2, hits: 1 }]);
+
+    const b = [{ i: 2, toleranceSec: 40 }];
+    await practice.saveCheckpoints("u1", { ...initial, expected: a, checkpoints: b });
+    const later = await ingest(game("later", "2026-11-04T00:00:00Z", { buildLog: LATE_CORE }));
+    expect(later.checkpoints).toEqual([{ ...b[0], name: "CyberneticsCore", hit: true }]);
+    expect((await practice.summary("u1", { matchup: "PvZ" })).checkpoints).toEqual([{ ...b[0], name: "CyberneticsCore", attempts: 1, hits: 1 }]);
+    expect((await practice.game("u1", "miss")).checkpoints).toEqual(miss.checkpoints);
+    await ghost.patch("u1", { matchup: "PvZ", target: STARGATE });
+    expect((await practice.summary("u1", { matchup: "PvZ" })).checkpoints).toEqual([]);
+    await expect(practice.saveCheckpoints("u1", { ...initial, expected: b, checkpoints: [] })).rejects.toMatchObject({ status: 409 });
+  });
+
+  test("daily quest uses owner-only ingested grades and the DST-aware local day", async () => {
+    const day = { day: "2026-11-01", tz: "America/New_York" };
+    const graded = (id, date, practice, extra = {}) => ({ gameId: id, date: new Date(date), practice, ...extra });
+    const b = { grade: "B", via: "ingest" };
+    await insert([
+      graded("before", "2026-11-01T03:59:59Z", b),
+      graded("after", "2026-11-02T05:00:00Z", b),
+      graded("unrelated", "2026-11-01T10:00:00Z", b, { userId: "u2" }),
+      graded("excluded", "2026-11-01T10:00:00Z", b, { excluded: true }),
+      graded("requested", "2026-11-01T10:00:00Z", { grade: "S", via: "request" }),
+      graded("too-low", "2026-11-01T10:00:00Z", { grade: "C", via: "ingest" }),
+    ]);
+    expect(await practice.dailyQuest("u1", day)).toEqual({ eligible: true, done: false });
+    expect(await practice.dailyQuest("u3", day)).toEqual({ eligible: false, done: false });
+    await expect(practice.dailyQuest("u1", { ...day, day: "2026-02-30" })).rejects.toMatchObject({ status: 400 });
+    await insert([graded("pass", "2026-11-02T04:59:59Z", b)]);
+    expect(await practice.dailyQuest("u1", day)).toEqual({ eligible: true, done: true });
+  });
+
+});
+
 describe("arm stamps on the synced Ghost slots", () => {
   test("arming stamps the slot, keeps the stamp for the same build and drops it when cleared", async () => {
     await db.users.updateOne({ userId: "u1" }, { $unset: { "preferences.ghostArmedAt": "" } });
@@ -179,6 +232,13 @@ describe("practice games", () => {
 });
 
 describe("grading the last games on request", () => {
+  test("counts a missing log as considered but not graded", async () => {
+    await insert([game("missing-log", "2026-11-02T00:00:00Z", { buildLog: undefined })]);
+    details.findMany.mockResolvedValue(new Map());
+    expect(await practice.gradeRecent("u1", { matchup: "PvZ" })).toEqual({ matchup: "PvZ", considered: 1, graded: 0 });
+    expect((await db.games.findOne({ gameId: "missing-log" })).practice.status).toBe("no_build_log");
+  });
+
   test("hydrates at most twenty and skips graded ones", async () => {
     const rows = Array.from({ length: REQUEST_GRADE_LIMIT + 5 }, (_, i) => ({ gameId: `r${i}`, myRace: "Protoss", opponent: { race: i % 2 ? "Zerg" : "Z" }, date: new Date(Date.UTC(2026, 9, 1 + i)) }));
     rows.push({ gameId: "graded", myRace: "Protoss", opponent: { race: "Zerg" }, date: new Date("2026-11-30T00:00:00Z"), practice: { v: 1, targetHash: "x", grade: "D" } });

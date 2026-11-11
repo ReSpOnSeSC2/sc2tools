@@ -1,5 +1,7 @@
 "use client";
 
+import { OverlayPanel } from "../OverlayPanel";
+
 /**
  * ChatAlertsWidget — platform events (subs, raids, gifts, superchats,
  * follows…) as an on-stream alert toaster.
@@ -361,7 +363,8 @@ function ActiveChatAlertsWidget({
         motion={alerts.motion}
       />
       {stack.map((e) => (
-        <div key={chatEventIdentity(e)} style={stackRowStyle}>
+        <OverlayPanel key={chatEventIdentity(e)} style={stackRowStyle}
+          contentStyle={{ display: "flex", alignItems: "baseline", gap: 6, padding: "var(--ov-padding, 5px 10px)" }}>
           <span
             style={{
               ...miniChipStyle,
@@ -374,7 +377,7 @@ function ActiveChatAlertsWidget({
           <span style={{ fontWeight: 700 }}>{e.user}</span>
           <span style={{ opacity: 0.7 }}>{EVENT_KIND_LABEL[e.kind]}</span>
           {e.amount ? <span style={{ opacity: 0.7 }}>{e.amount}</span> : null}
-        </div>
+        </OverlayPanel>
       ))}
     </div>
   );
@@ -454,12 +457,8 @@ const miniChipStyle: CSSProperties = {
 };
 
 const stackRowStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "baseline",
-  gap: 6,
   maxWidth: 360,
-  padding: "5px 10px",
-  borderRadius: 8,
+  borderRadius: "8px",
   background: "rgba(11,13,18,0.65)",
   border: "1px solid rgba(255,255,255,0.06)",
   fontSize: 12,

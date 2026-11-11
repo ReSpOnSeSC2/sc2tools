@@ -40,6 +40,7 @@ import {
   type ReplayHudModel,
 } from "@/lib/replayHud";
 import { ReplayIcon } from "./ReplayIcon";
+import { useReducedMotion } from "@/lib/a11y/useReducedMotion";
 import {
   chipClass,
   RAIL_CLASS,
@@ -56,23 +57,6 @@ export type BuildFilter = "both" | "me" | "opp";
  *  and this is also what keeps the DOM bounded early on, when the
  *  derived feed for a maxed-out payload is a couple of thousand rows. */
 const FEED_LOOKAHEAD_ROWS = 10;
-
-/** True while the OS asks for reduced motion. Re-reads on change so a
- *  mid-session preference flip is honoured without a reload. */
-function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    // Older jsdom / Safari expose the query without the listener API.
-    if (typeof mq.addEventListener !== "function") return;
-    const onChange = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return reduced;
-}
 
 function BuildRow({
   entry,
@@ -178,7 +162,7 @@ function BuildOrderRailImpl({
   oppName?: string | null;
   className?: string;
 }) {
-  const reduced = usePrefersReducedMotion();
+  const reduced = useReducedMotion();
   const listRef = useRef<HTMLOListElement | null>(null);
   const currentRef = useRef<HTMLLIElement | null>(null);
 

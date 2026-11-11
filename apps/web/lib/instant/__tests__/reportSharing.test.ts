@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildInstantReport } from "../report";
 import { realWin } from "./fixtures/reportGames";
-import { defaultReportSelection, reportCardModel, reportCardText } from "../reportSharing";
+import { defaultReportSelection, reportCardModel } from "../reportSharing";
+import { reportSummaryText } from "../reportExport";
 import { drawReportCard, reportPng } from "../reportCard";
 
 function report(games = 3) {
@@ -15,14 +16,14 @@ describe("private report sharing projection", () => {
     expect(model.opener?.games).toBe(3);
     expect(model.macro?.score).toBe(72);
     expect(model.matchups).toEqual([{ label: "vs Z", wins: 3, losses: 0 }]);
-    const text = reportCardText(model), json = JSON.stringify(model);
+    const text = reportSummaryText(source, undefined, model), json = JSON.stringify(model);
     for (const privateValue of ["Squirtuoz", "Tourmaline", "267727", "unit-", "toonHandle", "pulseId", "gameId"]) {
       expect(text).not.toContain(privateValue); expect(json).not.toContain(privateValue);
     }
     const hidden = reportCardModel(source, { totals: false, matchups: [], opener: false, macro: false });
     expect(hidden).toEqual({ totals: null, matchups: [], opener: null, macro: null });
-    expect(reportCardText(hidden)).not.toContain("3W");
-    expect(reportCardText(model)).toContain("utm_medium=share");
+    expect(reportSummaryText(source, undefined, hidden)).not.toContain("3 games");
+    expect(text).toContain("utm_medium=share");
   });
 
   it("requires three observed games and omits unknown macro and injected names", () => {
@@ -40,8 +41,9 @@ describe("private report sharing projection", () => {
     const ctx = { createLinearGradient: () => ({ addColorStop: vi.fn() }), fillRect: vi.fn(),
       fillText: (value: string) => calls.push(value), measureText: (value: string) => ({ width: value.length * 10 }) };
     const canvas = { width: 0, height: 0, getContext: () => ctx } as unknown as HTMLCanvasElement;
-    drawReportCard(canvas, reportCardModel(report()));
+    drawReportCard(canvas, reportCardModel(report()), "Filtered: vs Z · last 25 games");
     expect([canvas.width, canvas.height]).toEqual([1200, 630]);
+    expect(calls).toContain("Filtered: vs Z · last 25 games");
     expect(calls).toContain("sc2tools.com/try — analyze yours free");
     expect(calls.join(" ")).not.toMatch(/Squirtuoz|Tourmaline|267727/);
   });

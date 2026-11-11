@@ -60,6 +60,7 @@ import {
   buildPulseContext,
   type PulseContext,
 } from "@/lib/dailyPulseContext";
+import { formatNumber } from "@/lib/i18n/format";
 
 // One import surface for consumers/tests: the context layer's types,
 // constants and helpers are part of this module's public API.
@@ -168,7 +169,7 @@ function pctLabel(rate: number): string {
 }
 
 function signed(n: number): string {
-  return `${n >= 0 ? "+" : ""}${n.toLocaleString()}`;
+  return `${n >= 0 ? "+" : ""}${formatNumber(n)}`;
 }
 
 /* ──────────────── the card pool ──────────────── */
@@ -274,8 +275,8 @@ export const PULSE_POOL: PulseSpec[] = [
           tone: "positive",
           kicker: "Peak watch",
           title: `${a.label} is at its ${PEAK_WINDOW_DAYS}-day peak`,
-          body: `Your last recorded MMR (${a.currentMmr.toLocaleString()}) is the highest of your past ${PEAK_WINDOW_DAYS} days. Every win from here sets a new mark.`,
-          stat: a.currentMmr.toLocaleString(),
+          body: `Your last recorded MMR (${formatNumber(a.currentMmr)}) is the highest of your past ${PEAK_WINDOW_DAYS} days. Every win from here sets a new mark.`,
+          stat: formatNumber(a.currentMmr),
           statLabel: "current MMR",
           targetTab: "trends",
         };
@@ -285,9 +286,9 @@ export const PULSE_POOL: PulseSpec[] = [
         category: "mmr",
         tone: "accent",
         kicker: "Peak watch",
-        title: `${gap.toLocaleString()} MMR from your ${PEAK_WINDOW_DAYS}-day peak`,
-        body: `${a.label} sits at ${a.currentMmr.toLocaleString()}; your ${PEAK_WINDOW_DAYS}-day peak is ${a.peakMmr.toLocaleString()}. One good session closes that.`,
-        stat: gap.toLocaleString(),
+        title: `${formatNumber(gap)} MMR from your ${PEAK_WINDOW_DAYS}-day peak`,
+        body: `${a.label} sits at ${formatNumber(a.currentMmr)}; your ${PEAK_WINDOW_DAYS}-day peak is ${formatNumber(a.peakMmr)}. One good session closes that.`,
+        stat: formatNumber(gap),
         statLabel: "MMR to peak",
         targetTab: "trends",
       };
@@ -315,7 +316,7 @@ export const PULSE_POOL: PulseSpec[] = [
         kicker: "This week",
         title: up
           ? `${signed(net)} MMR over the last ${CLIMB_WINDOW_DAYS} days`
-          : `Down ${Math.abs(net).toLocaleString()} MMR this week — recoverable`,
+          : `Down ${formatNumber(Math.abs(net))} MMR this week — recoverable`,
         body: up
           ? `${a.label} climbed across ${a.climbGames} rated games this week. Keep the same openings — it's working.`
           : `${a.label} dropped across ${a.climbGames} rated games this week. Check which matchup is bleeding before the next queue.`,
@@ -488,11 +489,11 @@ export const PULSE_POOL: PulseSpec[] = [
         category: "milestone",
         tone: "accent",
         kicker: "Milestone watch",
-        title: `${noun} #${m.target.toLocaleString()} is in sight`,
+        title: `${noun} #${formatNumber(m.target)} is in sight`,
         body:
           m.kind === "games"
-            ? `You've logged ${m.current.toLocaleString()} games — ${m.remaining} more and the odometer rolls over.`
-            : `You're on ${m.current.toLocaleString()} wins — ${m.remaining} more takes the round number.`,
+            ? `You've logged ${formatNumber(m.current)} games — ${m.remaining} more and the odometer rolls over.`
+            : `You're on ${formatNumber(m.current)} wins — ${m.remaining} more takes the round number.`,
         stat: String(m.remaining),
         statLabel: m.kind === "games" ? "games to go" : "wins to go",
         targetTab: "trends",
@@ -512,7 +513,7 @@ export const PULSE_POOL: PulseSpec[] = [
       const notableBit = n
         ? ` The one to remember: ${n.won ? "a win over" : "a scrap with"} ${
             n.opponentName ?? "an unnamed opponent"
-          }${n.oppMmr !== null ? ` (${n.oppMmr.toLocaleString()} MMR)` : ""}${
+          }${n.oppMmr !== null ? ` (${formatNumber(n.oppMmr)} MMR)` : ""}${
             n.map ? ` on ${n.map}` : ""
           }.`
         : "";

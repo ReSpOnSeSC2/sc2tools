@@ -102,28 +102,7 @@ export function useChartTheme(): ChartThemeTokens {
   return tokens;
 }
 
-/**
- * Returns true when the user has `prefers-reduced-motion: reduce` set,
- * with live updates on preference change. SSR-safe (returns false until
- * the matchMedia listener attaches client-side).
- */
-export function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState<boolean>(false);
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const onChange = (e: MediaQueryListEvent) => setReduced(e.matches);
-    if (mq.addEventListener) {
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
-    }
-    // Older Safari: addListener fallback.
-    mq.addListener(onChange);
-    return () => mq.removeListener(onChange);
-  }, []);
-  return reduced;
-}
+export { useReducedMotion } from "@/lib/a11y/useReducedMotion";
 
 /**
  * Returns true when `window.matchMedia(query).matches` is true. Used by

@@ -4,6 +4,7 @@ const express = require("express");
 const request = require("supertest");
 const { buildPublicReplaysRouter, publicMacroBreakdown } = require("../src/routes/publicReplays");
 const { reviewMacroBreakdown } = require("../src/services/reviewRedaction");
+const { sanitiseRequestUrl } = require("../src/middleware/requestLogging");
 
 describe.each([publicMacroBreakdown, reviewMacroBreakdown])("shared casualty redaction (%#)", (redact) => {
   const event = { time: 123.45, owner: "opp", killer: "me", category: "workers", name: "Drone" };
@@ -91,13 +92,41 @@ const testErrorHandler = (err, _req, res, _next) => {
   });
 };
 
+const REFERENCE = "r-0123456789abcdef01234567";
+const OLDER = "r-0123456789abcdef01234568";
+
 describe("public replay archive routes", () => {
+  test("serves an opaque card without auth, analysis data, or opponent identity", async () => {
+    const deps = makeDeps();
+    deps.replayLibrary.getDetail.mockResolvedValue({
+      game: {
+        gameId: "legacy|private-rival|Map", publicReference: REFERENCE, result: "Victory", matchup: "TvZ",
+        map: "Alcyone LE", durationSec: 600, myBuild: "2-1-1", date: "2026-09-01T00:00:00Z",
+        opponent: { displayName: "private-rival", pulseId: "private-pulse", strategy: "Roach pressure" },
+      },
+    });
+    const app = makeApp(deps);
+    const base = "/v1/public/replays/owner-1/";
+    const response = await request(app).get(base + REFERENCE + "/card").expect(200);
+    expect(response.headers["cache-control"]).toContain("no-store");
+    expect(response.body).toEqual({ profile: { handle: "owner-1", displayName: "Maru" }, game: {
+      result: "Victory", matchup: "TvZ", map: "Alcyone LE", durationSec: 600,
+      myBuild: "2-1-1", oppStrategy: "Roach pressure", date: "2026-09-01T00:00:00.000Z", replayAvailable: false,
+    } });
+    expect(deps.replayLibrary.getDetail).toHaveBeenCalledWith("owner-1", REFERENCE, { view: "detector", publicReference: true });
+    expect(deps.perGame.macroBreakdown).not.toHaveBeenCalled();
+    await request(app).get(base + "legacy/card").expect(404);
+    deps.replayLibrary.getDetail.mockResolvedValue(null);
+    await request(app).get(base + REFERENCE + "/card").expect(404);
+    deps.users.resolveReplaySharing.mockResolvedValue(null);
+    await request(app).get(base + REFERENCE + "/card").expect(404);
+  });
   test("analysis neighbors contain only shareable game IDs and ignore pagination", async () => {
-    const deps = makeDeps(); deps.replayLibrary.getDetail.mockResolvedValue({ game: { gameId: "g1" }, sourceGame: { gameId: "g1" } });
-    deps.replayLibrary.neighbors.mockResolvedValue({ olderGameId: "older-id", newerGameId: null, userId: "secret", _id: "secret" });
+    const deps = makeDeps(); deps.replayLibrary.getDetail.mockResolvedValue({ game: { gameId: "g1", publicReference: REFERENCE }, sourceGame: { gameId: "g1" } });
+    deps.replayLibrary.neighbors.mockResolvedValue({ olderGameId: OLDER, newerGameId: null, userId: "secret", _id: "secret" });
     const response = await request(makeApp(deps)).get("/v1/public/replays/owner-1/g1?map=Alcyone&result=loss&matchup=PvZ&search=Blink&cursor=ignore&page=3").set("Authorization", "Bearer viewer").expect(200);
-    expect(response.body.neighbors).toEqual({ olderGameId: "older-id", newerGameId: null }); expect(JSON.stringify(response.body)).not.toContain("secret");
-    expect(deps.replayLibrary.neighbors).toHaveBeenCalledWith("owner-1", "g1", { filters: { map: "alcyone" }, result: "loss", matchup: "PvZ", search: "Blink" });
+    expect(response.body.neighbors).toEqual({ olderGameId: OLDER, newerGameId: null }); expect(JSON.stringify(response.body)).not.toContain("secret");
+    expect(deps.replayLibrary.neighbors).toHaveBeenCalledWith("owner-1", "g1", { filters: { map: "alcyone" }, result: "loss", matchup: "PvZ", search: "Blink", publicReferences: true });
   });
   test("summary and facets are strictly allow-listed, numeric and bounded", async () => {
     const deps = makeDeps();
@@ -121,7 +150,7 @@ describe("public replay archive routes", () => {
   test("does not add generic channel buttons to replays without a matching recording", async () => {
     const deps = makeDeps();
     deps.replayLibrary.list.mockResolvedValue({
-      items: [{ gameId: "g1" }], sourceGames: [{ gameId: "g1", myToonHandle: "server-only" }], hasMore: false, nextCursor: null,
+      items: [{ gameId: "g1", publicReference: REFERENCE }], sourceGames: [{ gameId: "g1", myToonHandle: "server-only" }], hasMore: false, nextCursor: null,
     });
     deps.gameVods.resolveForGames.mockResolvedValue({
       linksByGameId: {}, channelsByGameId: { g1: [{
@@ -153,7 +182,7 @@ describe("public replay archive routes", () => {
     deps.replayLibrary.list.mockResolvedValue({
       items: [
         {
-          gameId: "g1",
+          gameId: "g1", publicReference: REFERENCE,
           date: "2026-08-29T14:00:00.000Z",
           result: "Victory",
           map: "Ultralove LE",
@@ -216,10 +245,10 @@ describe("public replay archive routes", () => {
       hasMore: true,
     });
     expect(response.body.items[0]).toMatchObject({
-      gameId: "g1",
+      gameId: REFERENCE,
       playerCount: 4,
       matchFormat: "team",
-      opponent: { displayName: "Dark", race: "Zerg" },
+      opponent: { displayName: "Opponent", race: "Zerg", mmr: 6100 },
       replayAvailable: true,
       replaySizeBytes: 456789,
       streams: [
@@ -243,7 +272,7 @@ describe("public replay archive routes", () => {
     const deps = makeDeps();
     deps.replayLibrary.getDetail.mockResolvedValue({
       game: {
-        gameId: "g1",
+        gameId: "g1", publicReference: REFERENCE,
         result: "Defeat",
         opponent: { displayName: "Serral", race: "Zerg" },
         replayAvailable: true,
@@ -262,7 +291,7 @@ describe("public replay archive routes", () => {
     });
     deps.perGame.buildOrder.mockResolvedValue({
       ok: true,
-      game_id: "g1",
+      game_id: "date|Serral|Map", opponent: "Serral",
       events: [
         {
           time: 45,
@@ -291,7 +320,7 @@ describe("public replay archive routes", () => {
     expect(deps.perGame.macroBreakdown).toHaveBeenCalledWith("owner-1", "g1");
     expect(deps.perGame.buildOrder).toHaveBeenCalledWith("owner-1", "g1");
     expect(response.body.game).toMatchObject({
-      gameId: "g1",
+      gameId: REFERENCE,
       replayAvailable: true,
       replaySizeBytes: 1234,
     });
@@ -302,6 +331,8 @@ describe("public replay archive routes", () => {
       top_3_leaks: [{ name: "Supply block", penalty: 5 }],
       stats_events: [{ time: 60, army_value: 300 }],
     });
+    expect(response.body.buildOrder).toMatchObject({ game_id: REFERENCE, opponent: "Opponent" });
+    expect(JSON.stringify(response.body)).not.toContain("Serral");
     expect(response.body.buildOrder.events[0]).toMatchObject({
       time: 45,
       name: "Barracks",
@@ -315,7 +346,7 @@ describe("public replay archive routes", () => {
   test("issues a short-lived download only while sharing is enabled", async () => {
     const deps = makeDeps();
     deps.replayLibrary.getDetail.mockResolvedValue({
-      game: { gameId: "g1", replayAvailable: true },
+      game: { gameId: "g1", publicReference: REFERENCE, replayAvailable: true },
       sourceGame: { gameId: "g1" },
     });
     deps.replayFiles.prepareDownload.mockResolvedValue({
@@ -324,20 +355,30 @@ describe("public replay archive routes", () => {
       expiresIn: 60,
     });
 
-    const response = await request(makeApp(deps)).get(
-      "/v1/public/replays/owner-1/g1/download",
-    );
+    const app = makeApp(deps);
+    const response = await request(app).get("/v1/public/replays/owner-1/g1/download");
     expect(response.status).toBe(200);
     expect(response.body.expiresIn).toBe(60);
-    expect(deps.replayFiles.prepareDownload).toHaveBeenCalledWith(
-      "owner-1",
-      "g1",
-    );
+    expect(response.body.filename).toBe("sc2tools-replay.SC2Replay");
+    expect(response.body.url).toMatch(/^\/v1\/public\/replays\/owner-1\/r-[a-f0-9]{24}\/file\?token=/);
+    expect(JSON.stringify(response.body)).not.toMatch(/r2\.example|Serral|\/g1\//);
+    expect(deps.replayLibrary.getDetail).toHaveBeenCalledWith("owner-1", "g1", { view: "detector" });
+    expect(deps.replayFiles.prepareDownload).toHaveBeenCalledWith("owner-1", "g1", { filename: "sc2tools-replay.SC2Replay" });
 
-    deps.users.resolveReplaySharing.mockResolvedValue(null);
-    const revoked = await request(makeApp(deps)).get(
-      "/v1/public/replays/owner-1/g1/download",
+    const fetchOriginal = jest.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(Buffer.from("MPQ!"), { headers: { "Content-Length": "4" } }),
     );
-    expect(revoked.status).toBe(404);
+    try {
+      const file = await request(app).get(response.body.url).expect(200);
+      expect(file.headers["content-disposition"]).toBe('attachment; filename="sc2tools-replay.SC2Replay"');
+      expect(file.body.toString()).toBe("MPQ!");
+      expect(fetchOriginal).toHaveBeenCalledTimes(1);
+      await request(app).get(response.body.url.replace("token=", "token=x")).expect(404);
+      deps.users.resolveReplaySharing.mockResolvedValue(null);
+      await request(app).get(response.body.url).expect(404);
+      expect(fetchOriginal).toHaveBeenCalledTimes(1);
+    } finally { fetchOriginal.mockRestore(); }
+    const logged = sanitiseRequestUrl("/v1/public/replays/owner-1/date%7Csecret-opponent%7CMap/download?token=private");
+    expect(logged).not.toMatch(/secret-opponent|private/);
   });
 });

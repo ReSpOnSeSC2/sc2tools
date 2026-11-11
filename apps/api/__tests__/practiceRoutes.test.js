@@ -62,6 +62,8 @@ describe("routes/practice", () => {
       games: jest.fn(async () => ({ items: [], nextCursor: null })),
       game: jest.fn(async () => ({ grade: "B" })),
       gradeRecent: jest.fn(async () => ({ matchup: "PvZ", considered: 0, graded: 0 })),
+      dailyQuest: jest.fn(async () => ({ eligible: true, done: false })),
+      saveCheckpoints: jest.fn(async () => ({ checkpoints: [] })),
     };
     const app = express();
     app.use(express.json());
@@ -82,6 +84,16 @@ describe("routes/practice", () => {
     const graded = await request(app).post("/v1/practice/grade-recent").send({ matchup: "PvZ", userId: "someone-else" });
     expect(graded.status).toBe(200);
     expect(practice.gradeRecent).toHaveBeenCalledWith("u1", { matchup: "PvZ" });
+  });
+
+  test("checkpoint writes and quest reads stay scoped to the signed-in owner", async () => {
+    const { app, practice } = practiceApp();
+    const saved = await request(app).put("/v1/practice/checkpoints").send({ userId: "other", matchup: "PvZ" }).expect(200);
+    expect(saved.headers["cache-control"]).toBe("private, no-store");
+    expect(practice.saveCheckpoints).toHaveBeenCalledWith("u1", expect.objectContaining({ matchup: "PvZ" }));
+    const quest = await request(app).get("/v1/practice/quest?day=2026-11-01&tz=UTC&userId=other").expect(200);
+    expect(quest.headers["cache-control"]).toBe("private, no-store");
+    expect(practice.dailyQuest).toHaveBeenCalledWith("u1", expect.objectContaining({ day: "2026-11-01", tz: "UTC" }));
   });
 
   test("a request without a signed-in owner is refused", async () => {

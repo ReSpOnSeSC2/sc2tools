@@ -41,6 +41,7 @@ export function ReviewReplayPanel({
   seekRequest,
   onTimeChange,
   onPlaybackAvailable,
+  onPlaybackUnavailable,
   mapMarkers,
   onWorldClick,
   onMarkerClick,
@@ -57,6 +58,7 @@ export function ReviewReplayPanel({
   seekRequest: { t: number; seq: number } | null;
   onTimeChange: (t: number) => void;
   onPlaybackAvailable: (available: boolean) => void;
+  onPlaybackUnavailable?: () => void;
   mapMarkers: readonly ReplayMapMarker[];
   onWorldClick?: (x: number, y: number, t: number) => void;
   onMarkerClick: (id: string) => void;
@@ -81,6 +83,11 @@ export function ReviewReplayPanel({
   const manifest = useMemo(() => (manifestReq.data ? sanitizePlaybackManifest(manifestReq.data) : null), [manifestReq.data]);
   const available = !hidden && !closed && Boolean(playback || manifest);
   useEffect(() => onPlaybackAvailable(available), [available, onPlaybackAvailable]);
+  const playbackReadSettled = (mode === "inline" && Boolean(inlineReq.data || inlineReq.error))
+    || (mode === "segmented" && Boolean(manifestReq.data || manifestReq.error));
+  useEffect(() => {
+    if (playbackReadSettled && !available) onPlaybackUnavailable?.();
+  }, [playbackReadSettled, available, onPlaybackUnavailable]);
 
   const segmentPath = useCallback(
     (artifactId: string, index: number) => `/v1/reviews/${enc}/analysis/map-playback/artifacts/${artifactId}/segments/${index}`,

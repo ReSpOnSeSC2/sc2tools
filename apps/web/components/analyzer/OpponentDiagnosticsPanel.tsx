@@ -8,6 +8,7 @@ import { Card, Skeleton } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ChevronDown, ChevronRight, RefreshCcw } from "lucide-react";
 import { requestErrorCopy } from "@/lib/requestErrors";
+import { formatDateTime, formatNumber } from "@/lib/i18n/format";
 
 export type OpponentDiagnosticFinding = {
   code: string;
@@ -50,7 +51,7 @@ function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString();
+  return formatDateTime(d);
 }
 
 /**
@@ -164,7 +165,7 @@ export function OpponentDiagnosticsPanel({
             <div className="mt-3 space-y-3">
               <div className="grid gap-3 sm:grid-cols-3">
                 <DiagField label="SC2Pulse profile" value={data.pulseIdStatus === "resolved" ? "Found" : "Not found yet"} />
-                <DiagField label="Ladder MMR" value={data.mmr !== null ? `${data.mmr.toLocaleString()} ${data.region || ""}` : "Unknown"} />
+                <DiagField label="Ladder MMR" value={data.mmr !== null ? `${formatNumber(data.mmr)} ${data.region || ""}` : "Unknown"} />
                 <DiagField label="Games with in-replay MMR" value={`${data.inReplayMmrCount} of ${data.gameCount}`} />
               </div>
               <details><summary className="min-h-11 cursor-pointer py-3 text-caption">Technical details</summary>
@@ -257,5 +258,5 @@ function SeverityDot({ severity }: { severity: "ok" | "warn" | "info" }) {
 export function pulseRetrySummary(response: OpponentRetryPulseResp): string {
   if (!response.resolvedPulseCharacterId) return "SC2Pulse doesn't list this player yet. Try again after they play a few ranked games.";
   if (response.mmr === null) return "Found their SC2Pulse profile, but they have no current ladder MMR.";
-  return `Found their SC2Pulse profile · MMR ${response.mmr.toLocaleString()}${response.region ? ` (${response.region})` : ""} · Updated ${response.gamesRestamped} past games`;
+  return `Found their SC2Pulse profile · MMR ${formatNumber(response.mmr)}${response.region ? ` (${response.region})` : ""} · Updated ${response.gamesRestamped} past games`;
 }

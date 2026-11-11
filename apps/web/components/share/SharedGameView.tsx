@@ -1,5 +1,6 @@
 "use client";
 
+import { getServerFormatter } from "@/lib/i18n/format";
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { BarChart3 } from "lucide-react";
@@ -37,7 +38,7 @@ export function SharedGameView({ token, data, initialTimeSec = null }: {
   }, []);
   useShareViewBeacon(token);
   const resultTone = game.result === "Win" ? "text-success" : game.result === "Loss" ? "text-danger" : "text-text";
-  const played = game.playedOn ? new Date(`${game.playedOn}T12:00:00Z`).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" }) : null;
+  const played = game.playedOn ? getServerFormatter().date(new Date(`${game.playedOn}T12:00:00Z`), { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" }) : null;
   return (
     <article className="space-y-6">
       <Card variant="feature" padded={false} className="relative overflow-hidden">
@@ -79,7 +80,7 @@ export function SharedGameView({ token, data, initialTimeSec = null }: {
 }
 
 function approx(mmr: number | null): string {
-  return typeof mmr === "number" && Number.isFinite(mmr) ? `~${mmr.toLocaleString("en-US")}` : "—";
+  return typeof mmr === "number" && Number.isFinite(mmr) ? `~${getServerFormatter().number(mmr)}` : "—";
 }
 
 /** Count one view per page load, from the browser (previews are not views). */

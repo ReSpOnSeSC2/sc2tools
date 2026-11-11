@@ -22,6 +22,7 @@ import { coerceRace } from "@/lib/race";
 import { eraShortLabel } from "@/lib/guides/guideCopy";
 import { accountFilter, accountHandles } from "./accountFilter";
 import type { LogicalSeason } from "@/lib/useSeasons";
+import { formatDate } from "@/lib/i18n/format";
 
 /** Matches GAME_TOO_SHORT_THRESHOLD_SECONDS in replay-engine/core/strategy_detector_helpers.py. */
 export const TOO_SHORT_SECONDS = 45;
@@ -534,7 +535,7 @@ function formatChipDate(iso: string | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return formatDate(d, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function mmrRangeLabel(min?: number, max?: number): string | null {

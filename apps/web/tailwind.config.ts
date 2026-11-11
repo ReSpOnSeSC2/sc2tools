@@ -157,21 +157,24 @@ const config: Config = {
         DEFAULT: "var(--dur-base)",
       },
       fontSize: {
+        // rem (16px base), so Settings → Appearance text size scales every
+        // size from <html>: pixel-identical at 100%. Mirrored by the .t-*
+        // utilities in globals.css.
         // Courtside: heavier display weights + tighter tracking for the
         // athletic-editorial voice.
-        "display-xl": ["64px", { lineHeight: "68px", letterSpacing: "-0.03em", fontWeight: "800" }],
-        "display-lg": ["48px", { lineHeight: "52px", letterSpacing: "-0.03em", fontWeight: "800" }],
-        h1: ["36px", { lineHeight: "42px", letterSpacing: "-0.02em", fontWeight: "700" }],
-        h2: ["28px", { lineHeight: "34px", letterSpacing: "-0.02em", fontWeight: "700" }],
-        h3: ["22px", { lineHeight: "28px", letterSpacing: "-0.015em", fontWeight: "700" }],
-        h4: ["18px", { lineHeight: "24px", letterSpacing: "-0.01em", fontWeight: "700" }],
-        "body-lg": ["17px", { lineHeight: "26px" }],
-        body: ["15px", { lineHeight: "24px" }],
-        caption: ["13px", { lineHeight: "20px" }],
+        "display-xl": ["4rem", { lineHeight: "4.25rem", letterSpacing: "-0.03em", fontWeight: "800" }],
+        "display-lg": ["3rem", { lineHeight: "3.25rem", letterSpacing: "-0.03em", fontWeight: "800" }],
+        h1: ["2.25rem", { lineHeight: "2.625rem", letterSpacing: "-0.02em", fontWeight: "700" }],
+        h2: ["1.75rem", { lineHeight: "2.125rem", letterSpacing: "-0.02em", fontWeight: "700" }],
+        h3: ["1.375rem", { lineHeight: "1.75rem", letterSpacing: "-0.015em", fontWeight: "700" }],
+        h4: ["1.125rem", { lineHeight: "1.5rem", letterSpacing: "-0.01em", fontWeight: "700" }],
+        "body-lg": ["1.0625rem", { lineHeight: "1.625rem" }],
+        body: ["0.9375rem", { lineHeight: "1.5rem" }],
+        caption: ["0.8125rem", { lineHeight: "1.25rem" }],
         // Smallest token in the scale — for dense labels/overlines.
         // Nothing should render below this (12px) floor.
-        micro: ["12px", { lineHeight: "16px", letterSpacing: "0.02em" }],
-        mono: ["14px", { lineHeight: "22px" }],
+        micro: ["0.75rem", { lineHeight: "1rem", letterSpacing: "0.02em" }],
+        mono: ["0.875rem", { lineHeight: "1.375rem" }],
       },
     },
   },

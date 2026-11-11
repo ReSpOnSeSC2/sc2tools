@@ -27,6 +27,11 @@
  *                                    own opponents row — drives the
  *                                    "Fix my counters" button on /admin
  *   GET  /admin/health              Mongo ping, uptime, runtime info
+ *   POST /admin/events/mark-read    all unread events read, or one {type}
+ *   POST /admin/events/:eventId/read | /unread
+ *                                    one event's read state (idempotent)
+ *   /admin/classifier/*             check-in correction aggregates
+ *                                    (routes/adminClassifier.js)
  *   /admin/guides/*                 SC2 Tools Guides: coach's notes, stats
  *                                    runs, samples backfill, channel videos
  *                                    (routes/adminGuides.js)
@@ -40,6 +45,9 @@ const { analyticsRange } = require("../services/analytics");
 const { buildAdminGlobalTrendsRouter } = require("./adminGlobalTrends");
 const { buildAdminGuidesRouter } = require("./adminGuides");
 const { buildAdminBuildStudioRouter } = require("./adminBuildStudio");
+const { buildAdminClassifierRouter } = require("./adminClassifier");
+const { EVENT_ID_RE } = require("../services/adminEvents");
+const { parseExactText, parseResultFilter } = require("../util/gameResultClass");
 const {
   ADMIN_STATUS_MAX_AGE_MS,
   browserUploadStatusOf,
@@ -48,6 +56,7 @@ const {
 /**
  * @param {{
  *   buildStudio?: Parameters<typeof buildAdminBuildStudioRouter>[0],
+ *   classifierQuality?: import("../services/classifierQuality").ClassifierQualityService,
  *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   adminAudit?: import("../services/adminAudit").AdminAuditService,
  *   pairings?: import("../services/devicePairings").DevicePairingsService,
@@ -103,6 +112,7 @@ function buildAdminRouter(deps) {
 
   if (deps.jobLedger && deps.adminAudit) router.use("/admin", buildAdminOpsRouter(deps));
   if (deps.buildStudio) router.use("/admin/build-studio", buildAdminBuildStudioRouter(deps.buildStudio));
+  if (deps.classifierQuality) router.use("/admin/classifier", buildAdminClassifierRouter({ classifierQuality: deps.classifierQuality }));
 
   router.use("/admin/global-trends", buildAdminGlobalTrendsRouter(deps.adminGlobalTrends));
   // SC2 Tools Guides admin (notes, runs, backfill, videos). Mounted
@@ -202,6 +212,8 @@ function buildAdminRouter(deps) {
         await deps.adminGlobal.listPlayerGames(String(req.params.pulseId), {
           limit: parseLimit(req.query.limit),
           before: parseDate(req.query.before),
+          ...parseGameFilters(req.query),
+          userId: parseExactText(req.query.userId, "invalid_user_filter", 64),
         }),
       );
     } catch (err) {
@@ -305,7 +317,7 @@ function buildAdminRouter(deps) {
         const result = await deps.admin.listGamesVsOpponent(
           String(req.params.userId),
           String(req.params.pulseId),
-          { limit, before },
+          { limit, before, ...parseGameFilters(req.query) },
         );
         res.json(result);
       } catch (err) {
@@ -592,13 +604,7 @@ function buildAdminRouter(deps) {
     }
   });
 
-  router.post("/admin/events/mark-read", async (_req, res, next) => {
-    try {
-      res.json(await deps.adminEvents.markAllRead());
-    } catch (err) {
-      next(err);
-    }
-  });
+  registerEventReadRoutes(router, deps.adminEvents);
 
   return router;
 }
@@ -622,6 +628,70 @@ function parseNonNegInt(raw) {
   if (raw === undefined) return undefined;
   const n = Number.parseInt(String(raw), 10);
   return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
+/**
+ * ``result`` (win|loss|tie) and exact ``map`` filters shared by both admin
+ * game lists; malformed values are a 400 rather than an unfiltered list.
+ * @param {Record<string, unknown>} query
+ */
+function parseGameFilters(query) {
+  return {
+    result: parseResultFilter(query.result),
+    map: parseExactText(query.map, "invalid_map_filter", 200),
+  };
+}
+
+/** @param {import('express').Router} router
+ * @param {import('../services/adminEvents').AdminEventsService} adminEvents */
+function registerEventReadRoutes(router, adminEvents) {
+  // Mark every unread event read, or only one type's with ``{type}`` (the
+  // Notifications page's active filter chip). An unknown type is a 400, never
+  // a silent mark-everything.
+  router.post("/admin/events/mark-read", async (req, res, next) => {
+    try {
+      const type = parseMarkReadScope(req.body);
+      res.locals.auditAction = "events.mark-read";
+      if (type) res.locals.auditTarget = type;
+      res.json(await adminEvents.markAllRead(type ? { type } : {}));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Per-event read state. Both directions are idempotent; an id that does
+  // not exist is a 404 so a stale row never looks updated.
+  for (const [suffix, read] of /** @type {const} */ ([["read", true], ["unread", false]])) {
+    router.post(`/admin/events/:eventId/${suffix}`, async (req, res, next) => {
+      try {
+        const eventId = String(req.params.eventId);
+        res.locals.auditAction = `event.${suffix}`;
+        if (!EVENT_ID_RE.test(eventId)) {
+          res.status(400).json({ error: { code: "invalid_event_id" } });
+          return;
+        }
+        res.locals.auditTarget = eventId;
+        const event = await adminEvents.setRead(eventId, read);
+        if (!event) {
+          res.status(404).json({ error: { code: "event_not_found" } });
+          return;
+        }
+        res.set("Cache-Control", "private, no-store").json({ event });
+      } catch (err) {
+        next(err);
+      }
+    });
+  }
+}
+
+/** An absent or empty object means all activity. @param {any} body */
+function parseMarkReadScope(body) {
+  if (body === undefined) return undefined;
+  const valid = body && typeof body === "object" && !Array.isArray(body)
+    && Object.keys(body).every((key) => key === "type")
+    && (body.type === undefined || (typeof body.type === "string" && body.type.length > 0));
+  if (!valid) throw Object.assign(new Error("invalid_event_type"), { status: 400, code: "invalid_event_type" });
+  return /** @type {string|undefined} */ (body.type);
 }
 
 /** @param {unknown} raw */

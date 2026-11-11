@@ -24,6 +24,7 @@ import { COLOR_OPP, COLOR_YOU, type HoverState } from "./ActiveArmyChartParts";
 import type { ChartLayout } from "./activeArmyLayout";
 import { LineKey } from "./TimelineControls";
 import { describeMetric, formatSigned, metricLead, timelineMetric, TIMELINE_BANK_VIEWS } from "./timelineMetrics";
+import { formatNumber } from "@/lib/i18n/format";
 
 /** Below this chart width the card drops the margin column. */
 const ROOMY_CHART_PX = 420;
@@ -189,7 +190,7 @@ function SingleMetric({ layout, hover, myName, oppName, myBlocked, oppBlocked }:
 
 function leadSentence(lead: number, myName: string, oppName: string): string {
   if (lead === 0) return "Even";
-  return `${lead > 0 ? myName : oppName} ahead by ${Math.abs(lead).toLocaleString()}`;
+  return `${lead > 0 ? myName : oppName} ahead by ${formatNumber(Math.abs(lead))}`;
 }
 
 function TooltipRow({

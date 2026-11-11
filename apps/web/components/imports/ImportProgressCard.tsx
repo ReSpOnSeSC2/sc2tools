@@ -13,6 +13,7 @@ import {
   isBenignImportSkip,
   type ImportJob,
 } from "./useImportStatus";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * Live progress for a bulk replay import: N/M with ETA, a cyan
@@ -104,7 +105,7 @@ export function ImportProgressCard({
           ) : null}
         </div>
         <span className="tabular-nums text-caption text-text-muted">
-          {handled.toLocaleString()} / {displayTotal.toLocaleString()} replay
+          {formatNumber(handled)} / {formatNumber(displayTotal)} replay
           files checked
         </span>
       </div>
@@ -123,8 +124,8 @@ export function ImportProgressCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-caption text-text-dim">
-        <span>accepted: {acceptedCount.toLocaleString()}</span>
-        <span>remaining: {remaining.toLocaleString()}</span>
+        <span>accepted: {formatNumber(acceptedCount)}</span>
+        <span>remaining: {formatNumber(remaining)}</span>
         {aiGameSkips > 0 ? <span>vs AI skipped: {aiGameSkips}</span> : null}
         {resumedReplaySkips > 0 ? (
           <span>replay-resume sessions skipped: {resumedReplaySkips}</span>
@@ -144,7 +145,7 @@ export function ImportProgressCard({
             ) : (
               <ChevronRight className="h-3 w-3" aria-hidden />
             )}
-            {failureCount.toLocaleString()} file
+            {formatNumber(failureCount)} file
             {failureCount === 1 ? "" : "s"} couldn&apos;t be imported
           </button>
         ) : null}
@@ -197,13 +198,13 @@ export function ImportProgressCard({
 
       {isDone ? (
         <p className="text-caption text-success">
-          {acceptedCount.toLocaleString()} replay files accepted. Live sync
+          {formatNumber(acceptedCount)} replay files accepted. Live sync
           keeps things current from here — just play.
         </p>
       ) : null}
       {isStalled ? (
         <p className="text-caption text-warning">
-          Progress paused after no confirmed outcomes. {remaining.toLocaleString()} replay
+          Progress paused after no confirmed outcomes. {formatNumber(remaining)} replay
           {remaining === 1 ? " file remains" : " files remain"}. Background sync is
           still checking them; waiting or rate-limited files are not counted as accepted.
         </p>

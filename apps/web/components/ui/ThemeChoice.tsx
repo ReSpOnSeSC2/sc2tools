@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { getTheme, getThemeMode, setTheme, subscribeTheme, type Theme, type ThemeMode } from "@/lib/theme";
@@ -27,5 +28,14 @@ export function ThemeChoice({ className = "" }: { className?: string }) {
   </div>;
 }
 export function ThemeDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return <Modal open={open} onClose={onClose} title="Appearance" size="sm" footer={<Button onClick={onClose}>Done</Button>}><ThemeChoice /></Modal>;
+  return <Modal open={open} onClose={onClose} title="Appearance" size="sm" footer={<Button onClick={onClose}>Done</Button>}>
+    <ThemeChoice />
+    {/* Text size, density, clock, week start and formats live in Settings. */}
+    <Link href={MORE_APPEARANCE_HREF} onClick={onClose} className="mt-4 inline-flex min-h-11 items-center text-caption font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      More appearance options
+    </Link>
+  </Modal>;
 }
+
+/** Settings → Preferences → Appearance & region. */
+export const MORE_APPEARANCE_HREF = "/settings?tab=preferences#appearance";

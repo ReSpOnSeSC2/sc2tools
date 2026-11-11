@@ -39,13 +39,14 @@ afterEach(() => {
 
 describe("PublicReplayDownloadButton", () => {
   it("requests a fresh share-scoped URL only after click and starts a sanitized download", async () => {
-    const signedUrl = "https://replays.example.test/private/game?signature=short-lived";
+    const reference = "r-0123456789abcdef01234567";
+    const path = "/v1/public/replays/coach-name/" + reference + "/file?token=1900000000000." + "a".repeat(43);
     mocks.fetch.mockResolvedValue({
       ok: true,
       status: 200,
       json: vi.fn(async () => ({
-        url: signedUrl,
-        filename: "Crimson Court - Rival/Name.SC2Replay",
+        url: path,
+        filename: "sc2tools-replay.SC2Replay",
         expiresIn: 60,
       })),
     });
@@ -58,8 +59,8 @@ describe("PublicReplayDownloadButton", () => {
 
     const { container } = render(
       <PublicReplayDownloadButton
-        handle="coach/name"
-        gameId="game/42"
+        handle="coach-name"
+        gameId={reference}
         available
         sizeBytes={1_572_864}
         showLabel
@@ -74,18 +75,27 @@ describe("PublicReplayDownloadButton", () => {
 
     await waitFor(() => {
       expect(mocks.fetch).toHaveBeenCalledWith(
-        "https://api.example.test/v1/public/replays/coach%2Fname/game%2F42/download",
+        "https://api.example.test/v1/public/replays/coach-name/" + reference + "/download",
         { headers: { accept: "application/json" }, cache: "no-store" },
       );
       expect(clickedAnchors).toHaveLength(1);
     });
     expect(String(mocks.fetch.mock.calls[0]?.[0])).not.toContain("/v1/games/");
-    expect(clickedAnchors[0].href).toBe(signedUrl);
-    expect(clickedAnchors[0].download).toBe(
-      "Crimson Court - Rival-Name.SC2Replay",
-    );
+    expect(clickedAnchors[0].href).toBe("https://api.example.test" + path);
+    expect(clickedAnchors[0].download).toBe("sc2tools-replay.SC2Replay");
     expect(clickedAnchors[0].isConnected).toBe(false);
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Replay download started");
+  });
+
+  it("rejects a stale response that exposes a storage URL", async () => {
+    mocks.fetch.mockResolvedValue({ ok: true, status: 200,
+      json: vi.fn(async () => ({ url: "https://storage.example.test/owner/replay-key" })),
+    });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    render(<PublicReplayDownloadButton handle="coach" gameId="r-0123456789abcdef01234567" available />);
+    fireEvent.click(screen.getByRole("button", { name: "Download replay" }));
+    await screen.findByRole("button", { name: "Retry replay download" });
+    expect(click).not.toHaveBeenCalled();
   });
 
   it("disables the public control when the API row says no replay is archived", () => {

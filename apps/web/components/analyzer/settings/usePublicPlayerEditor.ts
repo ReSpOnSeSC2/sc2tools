@@ -31,8 +31,15 @@ export function usePublicPlayerEditor() {
   const validPrefix = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(prefix) && prefix.length <= 53;
   const availability = usePlayerSlugAvailability(slug, changedSlug && validPrefix);
   const available = !changedSlug || Boolean(!availability.isValidating && !availability.error && availability.data?.slug === slug && availability.data.available);
-  async function save(create = false) {
-    if (!baseline || !draft || pending.current || !lifetime.current.active) return;
+  const dirty = Boolean(baseline && draft && (changedSlug || JSON.stringify(draft) !== JSON.stringify(draftOf(baseline))));
+  function reset() {
+    if (!baseline || pending.current) return;
+    setDraft(draftOf(baseline)); setPrefix(baseline.slug?.slice(0, -11) || ""); setFeedback(null);
+  }
+  /** Resolves true once saved; false keeps the draft with feedback. */
+  async function save(create = false): Promise<boolean> {
+    if (!create && !dirty) return true;
+    if (!baseline || !draft || pending.current || !lifetime.current.active) return false;
     const controller = new AbortController(); pending.current = controller;
     const scope = lifetime.current;
     const current = () => scope.active && lifetime.current === scope && pending.current === controller && !controller.signal.aborted;
@@ -41,14 +48,16 @@ export function usePublicPlayerEditor() {
       : { ...draft, slug, revision: baseline.revision };
     try {
       const next = await request.request<PublicPlayerSettings>({ method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
-      if (!current()) return;
+      if (!current()) return false;
       setBaseline(next); setDraft(draftOf(next)); setPrefix(next.slug?.slice(0, -11) || "");
       setFeedback({ error: false, text: create ? "Player link created. Your profile is still off." : "Public profile settings saved." });
       void request.mutate(next, false);
+      return true;
     } catch (error) {
-      if (!current() || (error instanceof DOMException && error.name === "AbortError")) return;
+      if (!current() || (error instanceof DOMException && error.name === "AbortError")) return false;
       const code = error && typeof error === "object" && "code" in error ? error.code : null;
       setFeedback({ error: true, text: code === "public_profile_conflict" ? "These settings changed elsewhere. Refresh before saving again." : code === "player_slug_unavailable" ? "That player link is unavailable. Choose another prefix." : code === "player_slug_cooldown" ? "Player links can change once every 30 days." : "Couldn't save this profile. Your changes are still here; try again." });
+      return false;
     } finally {
       if (pending.current === controller) { pending.current = null; if (scope.active) setBusy(false); }
     }
@@ -68,5 +77,5 @@ export function usePublicPlayerEditor() {
       if (pending.current === controller) { pending.current = null; if (scope.active) setBusy(false); }
     }
   }
-  return { request, baseline, draft, setDraft, prefix, setPrefix, slug, busy, feedback, validPrefix, changedSlug, availability, available, save, reload };
+  return { request, baseline, draft, setDraft, prefix, setPrefix, slug, busy, feedback, validPrefix, changedSlug, availability, available, dirty, reset, save, reload };
 }

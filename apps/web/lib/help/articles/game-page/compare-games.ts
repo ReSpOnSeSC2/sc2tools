@@ -28,7 +28,7 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "On a game page, press **Compare…** and pick the second game: the best win with this build, the previous game against this opponent, the last game in this matchup, or any recent game you search for.",
+        "On a game page, press **Compare…** and pick the second game: the best recent win with this build, the previous game against this opponent, the last game in this matchup, or any recent game you search for.",
         "Or, in [Replays](/app/replays), press **Select replays**, tick exactly two and press **Compare 2 games**. The first one you ticked is game A.",
         "The page's address reopens the same pair. It only opens for you, signed in to your account.",
       ],

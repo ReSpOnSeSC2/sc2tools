@@ -1,10 +1,11 @@
 import type { CommunityAuthorProfile, CommunityBuildDetail } from "@/components/community/types";
 import { getIconPath } from "@/lib/sc2-icons";
 import { trimDescription } from "@/lib/seo/trimDescription";
+import { formatNumber } from "@/lib/i18n/format";
 
 export type PublicOgCardData = { kind: string; title: string; subtitle: string; badge?: string; stepsLabel?: string; stats: { label: string; value: string }[]; steps: { name: string; time: string; icon: string | null }[] };
 const plain = (value: unknown, max: number) => trimDescription(typeof value === "string" ? value.replace(/<[^>]*>/g, "").replace(/[\p{Cc}]/gu, " ") : "", max);
-const count = (value: unknown, signed = false) => typeof value === "number" && Number.isSafeInteger(value) && (signed || value >= 0) ? value.toLocaleString("en-US") : "—";
+const count = (value: unknown, signed = false) => typeof value === "number" && Number.isSafeInteger(value) && (signed || value >= 0) ? formatNumber(value) : "—";
 const timed = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 1800;
 const positive = (value: unknown) => typeof value === "number" && Number.isInteger(value) && value > 0 && value <= 200;
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds) % 60).padStart(2, "0")}`;

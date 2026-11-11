@@ -22,7 +22,7 @@ export function DockPollCard({ token, poll, messages, busy, studioReady, onPost 
         aria-pressed={mode === id} disabled={busy || !studioReady || Boolean(poll)} onClick={() => setChosen(id)}
         className={`rounded-md border px-2.5 py-1.5 text-caption disabled:opacity-60 ${mode === id ? "border-accent bg-accent/10 text-text" : "border-border text-text-muted"}`}>{label}</DockButton>)}
     </div>
-    {poll || mode === "custom" ? <DockPoll poll={poll} messages={messages} busy={busy} studioReady={studioReady} onPost={onPost} /> : null}
+    {poll || mode === "custom" ? <DockPoll key={token} token={token} chooseBuild={() => setChosen("build")} poll={poll} messages={messages} busy={busy} studioReady={studioReady} onPost={onPost} /> : null}
     {mode === "build" ? <DockLazyPanel loader={loadBuildVote} label="build vote" componentProps={{ token, busy, ready: studioReady, pollActive: Boolean(poll), poll, messages, onPost }} /> : null}
   </div>;
 }

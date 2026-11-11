@@ -3,7 +3,7 @@ import type { HelpArticle } from "@/lib/help/types";
 const article: HelpArticle = {
   slug: "build-guides", title: "Build guides: find an opener for your matchup",
   summary: "Compare openers using ladder results, filter by opponent league or MMR, and switch between matchups and starting-worker eras.",
-  category: "builds", audience: "all", keywords: ["guides", "openers", "band", "league", "mmr", "8 workers"], updated: "2026-10-23",
+  category: "builds", audience: "all", keywords: ["guides", "openers", "band", "league", "mmr", "8 workers"], updated: "2026-11-11",
   body: [
     { type: "paragraph", text: "[Build guides](/guides) use fixed rules and recorded ladder games. A high win rate from a small sample is less reliable; rankings use the low end of the likely win-rate range." },
     { type: "heading", text: "Filtering by opponent", anchor: "opponent-filters" },
@@ -12,6 +12,8 @@ const article: HelpArticle = {
     { type: "heading", text: "Sorting and finding openers", anchor: "find-openers" },
     { type: "paragraph", text: "The initial rank uses the low end of the likely win-rate range. **Find an opener** ignores case and accents. Sort by Win rate, Games, Played in (the share of games using it), or Trend (the weekly win-rate change). On phones, use **Sort by** above the cards. The original rank stays beside every opener when you sort." },
     { type: "paragraph", text: "**Only openers with a full guide** hides rows whose detailed guide has not met the publication floor. This switch is absent on the archived 8-worker view, whose rows never link to current guides. Popularity arrows show a change in how often an opener is played, measured in percentage points." },
+    { type: "heading", text: "Comparing openers", anchor: "compare-openers" },
+    { type: "paragraph", text: "In the 12-worker matchup table or cards, check **Compare** on two or three published openers and follow **Compare openers**. Compare overall and league win rates and their likely ranges, median timings and the middle half of recorded timings, best and toughest maps, and the usual army at 8:00. A dash marks a missing sample. Use **Remove** to drop one opener, or go back to the matchup to pick others." },
     { type: "heading", text: "12 vs 8 starting workers", anchor: "starting-workers" },
     { type: "paragraph", text: "**12 workers** is the current game. **8 workers (patch 5.0.16)** is an archived era. Individual guide pages cover the 12-worker game, so opener names in the archived table are not linked to guides with different numbers." },
     { type: "heading", text: "Switching matchups", anchor: "matchups" },

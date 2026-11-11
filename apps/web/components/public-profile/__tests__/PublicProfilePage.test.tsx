@@ -112,7 +112,7 @@ describe("PublicProfilePage (SSR data flow)", () => {
       params: Promise.resolve({ player: "reaver-0123456789" }),
     });
     render(ui);
-    expect(screen.getByText("Reaver")).toBeTruthy();
+    expect(await screen.findByText("Reaver")).toBeTruthy();
     expect(getJsonWithStatusMock).toHaveBeenCalledWith(
       "/v1/public/players/reaver-0123456789",
       expect.objectContaining({ revalidateSec: 0, signal: expect.any(AbortSignal) }),

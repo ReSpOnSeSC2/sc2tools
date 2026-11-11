@@ -18,6 +18,7 @@ import type { PatchEra } from "@/lib/meta";
 import { coerceRace, type Race } from "@/lib/race";
 import type { BuildOrderEvent } from "@/lib/build-events";
 import { ResultBadge } from "./ResultBadge";
+import { formatDateTime } from "@/lib/i18n/format";
 
 /**
  * Shared admin per-game detail renderer — build order and macro
@@ -72,7 +73,7 @@ export function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString();
+  return formatDateTime(d);
 }
 
 export function AdminGameDetail({

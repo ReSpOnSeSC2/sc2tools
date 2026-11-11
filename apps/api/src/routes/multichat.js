@@ -10,6 +10,7 @@ const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore")
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { registerStreamSeriesRoutes } = require("./streamSeries");
 const { registerDockChatRoutes } = require("./dockChat");
+const { registerDockClipRoutes } = require("./dockClipMoments");
 
 const {
   YoutubeChatError,
@@ -340,22 +341,7 @@ function buildMultichatRouter(deps) {
     },
   );
 
-  router.get(
-    "/multichat/:token/engagement",
-    limiter,
-    tokenAuth,
-    async (req, res, next) => {
-      try {
-        if (!deps.engagement) {
-          res.json({ wall: [], oracles: [], prediction: null, clipMoments: [] });
-          return;
-        }
-        res.json(await deps.engagement.summary(String(req.params.token)));
-      } catch (err) {
-        next(err);
-      }
-    },
-  );
+  registerDockClipRoutes(router, { engagement: deps.engagement, limiter, tokenAuth });
 
   router.get(
     "/multichat/:token/engagement/viewer",

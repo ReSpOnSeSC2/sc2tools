@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { AlertCircle, ArrowUpRight, RefreshCw } from "lucide-react";
+import { formatNumber } from "@/lib/i18n/format";
 
 export const CONTROL_CLASS = "min-h-11 w-full min-w-0 rounded-lg border border-border-strong bg-bg-surface px-3 py-2 text-sm text-text shadow-none outline-none transition focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50";
 export const ACTION_CLASS = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border-strong bg-bg-surface px-3 py-2 text-xs font-semibold text-text transition hover:border-accent hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50";
@@ -41,7 +42,7 @@ export function GamesButton({ onClick, label = "View games", disabled = false }:
   return <button type="button" onClick={onClick} disabled={disabled} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-semibold text-accent transition hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40" aria-label={label}>View games<ArrowUpRight aria-hidden className="h-3.5 w-3.5" /></button>;
 }
 
-export function formatCount(value: number | null | undefined) { return value == null || !Number.isFinite(value) ? "—" : value.toLocaleString(); }
+export function formatCount(value: number | null | undefined) { return value == null || !Number.isFinite(value) ? "—" : formatNumber(value); }
 export function formatRate(value: number | null | undefined) { return value == null || !Number.isFinite(value) ? "—" : `${(value * 100).toFixed(1)}%`; }
 export function formatSeconds(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return "—";

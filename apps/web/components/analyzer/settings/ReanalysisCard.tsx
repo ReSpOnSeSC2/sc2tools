@@ -1,5 +1,6 @@
 "use client";
 
+import { formatNumber } from "@/lib/i18n/format";
 import { useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { RefreshCw } from "lucide-react";
@@ -186,7 +187,7 @@ function CohortPicker({ overview, selected, onSelect, starting, onStart }: {
               <span className="min-w-0 space-y-1">
                 <span className="flex flex-wrap items-baseline gap-x-2">
                   <span className="font-medium text-text">{cohortTitle(cohort)}</span>
-                  <span className="text-caption tabular-nums text-text-muted">{cohort.count.toLocaleString()} game{cohort.count === 1 ? "" : "s"}</span>
+                  <span className="text-caption tabular-nums text-text-muted">{formatNumber(cohort.count)} game{cohort.count === 1 ? "" : "s"}</span>
                 </span>
                 {cohort.kind === "engine" ? (
                   <span className="block text-caption text-text-muted">
@@ -196,7 +197,7 @@ function CohortPicker({ overview, selected, onSelect, starting, onStart }: {
                 <span className="block text-body-sm text-text-muted">What changed: {cohortDetail(cohort)}</span>
                 {cohort.kind === "engine" && cohort.unknown ? (
                   <span className="block text-caption text-text-muted">
-                    {cohort.unknown.toLocaleString()} more in these matchups have no engine version; choose Engine version unknown for those.
+                    {formatNumber(cohort.unknown)} more in these matchups have no engine version; choose Engine version unknown for those.
                   </span>
                 ) : null}
               </span>
@@ -219,8 +220,8 @@ function CohortPicker({ overview, selected, onSelect, starting, onStart }: {
 function LastRun({ job, cohorts }: { job: ReanalysisJob; cohorts: ReanalysisCohort[] }) {
   const title = cohortTitleById(cohorts, job.cohortId);
   const summary = job.status === "completed"
-    ? `${job.updated.toLocaleString()} updated, ${job.unavailable.toLocaleString()} without a replay file, ${job.failed.toLocaleString()} failed.`
-    : `Cancelled after ${job.processed.toLocaleString()} of ${job.total.toLocaleString()} games.`;
+    ? `${formatNumber(job.updated)} updated, ${formatNumber(job.unavailable)} without a replay file, ${formatNumber(job.failed)} failed.`
+    : `Cancelled after ${formatNumber(job.processed)} of ${formatNumber(job.total)} games.`;
   return (
     <p className="rounded-lg border border-border p-3 text-body-sm text-text-muted">
       <span className="font-medium text-text">Last run · {title}:</span> {summary}
@@ -238,12 +239,12 @@ function JobProgress({ job, agent, cohorts, pending, onAction }: {
   const percent = job.total > 0 ? Math.min(100, Math.round((job.processed / job.total) * 100)) : 0;
   const eta = job.status === "running" ? formatEta(job.etaSec) : null;
   const status = job.status === "paused"
-    ? `Paused at ${job.processed.toLocaleString()} of ${job.total.toLocaleString()} games.`
+    ? `Paused at ${formatNumber(job.processed)} of ${formatNumber(job.total)} games.`
     : job.status === "waiting_for_agent"
       ? "Waiting for your desktop agent. Re-analysis continues when it is online."
       : job.status === "update_required"
         ? "Waiting for a desktop agent update."
-        : `Re-analyzing ${job.processed.toLocaleString()} of ${job.total.toLocaleString()} games${eta ? ` · ${eta} left` : ""}.`;
+        : `Re-analyzing ${formatNumber(job.processed)} of ${formatNumber(job.total)} games${eta ? ` · ${eta} left` : ""}.`;
   return (
     <div className="space-y-3">
       <p className="text-body-sm font-medium text-text">{cohortTitleById(cohorts, job.cohortId)}</p>
@@ -260,9 +261,9 @@ function JobProgress({ job, agent, cohorts, pending, onAction }: {
       </div>
       <p className="text-body-sm text-text" role="status" aria-live="polite">{status}</p>
       <dl className="flex flex-wrap gap-x-5 gap-y-1 text-caption text-text-muted">
-        <div className="flex gap-1"><dt>Updated</dt><dd className="tabular-nums text-text">{job.updated.toLocaleString()}</dd></div>
-        <div className="flex gap-1"><dt>No replay file</dt><dd className="tabular-nums text-text">{job.unavailable.toLocaleString()}</dd></div>
-        <div className="flex gap-1"><dt>Failed</dt><dd className="tabular-nums text-text">{job.failed.toLocaleString()}</dd></div>
+        <div className="flex gap-1"><dt>Updated</dt><dd className="tabular-nums text-text">{formatNumber(job.updated)}</dd></div>
+        <div className="flex gap-1"><dt>No replay file</dt><dd className="tabular-nums text-text">{formatNumber(job.unavailable)}</dd></div>
+        <div className="flex gap-1"><dt>Failed</dt><dd className="tabular-nums text-text">{formatNumber(job.failed)}</dd></div>
       </dl>
       <AgentNote agent={agent} running />
       <div className="flex flex-wrap gap-2">

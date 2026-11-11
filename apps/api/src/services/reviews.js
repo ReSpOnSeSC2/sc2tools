@@ -2100,5 +2100,6 @@ module.exports = {
   meetsDesiredLevel,
   segmentCarriesIdentity,
   normalizeRace,
+  cardView,
   _internals: { requestView, cardView, seoView, serializeThread, decodeCursor, encodeCursor },
 };

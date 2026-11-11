@@ -120,6 +120,9 @@ const COLLECTIONS = Object.freeze({
   // shared by everyone. See ``services/pulseCharacterLinks.js``.
   PULSE_CHARACTER_LINKS: "pulse_character_links",
   PLAYER_CHANNELS: "player_channels",
+  // Opt-in, admin-approved public supporter wall on /donate.
+  SUPPORTERS: "supporters",
+  DONATION_MONTHS: "donation_months",
   PLAYER_IDENTITIES: "player_identities",
   PLAYER_IDENTITY_SUBMISSIONS: "player_identity_submissions",
   PLAYER_IDENTITY_DIRECTORY: "player_identity_directory",
@@ -136,6 +139,9 @@ const COLLECTIONS = Object.freeze({
   // admin-only ``admin_events`` feed above.
   NOTIFICATIONS: "notifications",
   JOB_RUNS: "job_runs",
+  // Nightly check-in correction aggregates for the admin classifier console
+  // (services/classifierQuality.js). Counts only: no user or game ids.
+  CLASSIFIER_QUALITY: "classifier_quality",
   ADMIN_AUDIT: "admin_audit",
   // Per-user, per-UTC-day counter of games accepted from browser ingest.
   // Short-lived (TTL) rows; see ``services/browserIngestQuota.js``.

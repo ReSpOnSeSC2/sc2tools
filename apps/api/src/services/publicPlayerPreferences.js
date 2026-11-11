@@ -1,5 +1,6 @@
 "use strict";
 
+const { randomUUID } = require("crypto");
 const { PLAYER_SLUG_RE, validPlayerSlug, allowedPlayerSlug, createPlayerSlug, publicPlayerSettings, SECTION_KEYS, playerError } = require("../util/publicPlayerConfig");
 const { validatePublicPlayer } = require("../validation/publicPlayer");
 const { cleanDisplayName } = require("../util/contentFilter");
@@ -71,7 +72,7 @@ class PublicPlayerPreferencesService {
       ...(renamed ? [{ "replaySharing.enabled": { $ne: true } }] : []),
     ] };
     let result;
-    try { result = await this.db.users.updateOne(filter, { $set: { publicProfile: next, "replaySharing.slug": slug } }, OPTIONS); }
+    try { result = await this.db.users.updateOne(filter, { $set: { publicProfile: next, "replaySharing.slug": slug, ...(!value.enabled ? { streamReportPublicEpoch: randomUUID() } : {}) } }, OPTIONS); }
     catch (error) { if (/** @type {any} */ (error)?.code === 11000) throw playerError(409, "player_slug_unavailable", "That player link is unavailable."); throw error; }
     if (!result.matchedCount) throw playerError(409, "public_profile_conflict", "Profile settings changed elsewhere. Refresh before saving.");
     // The optional existing signed cache purge is best effort. API admission

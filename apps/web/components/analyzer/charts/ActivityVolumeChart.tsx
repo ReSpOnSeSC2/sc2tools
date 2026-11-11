@@ -5,8 +5,10 @@ import { Bar, CartesianGrid, ComposedChart, ResponsiveContainer, Tooltip, XAxis,
 import { Card } from "@/components/ui/Card";
 import { useChartTheme } from "@/lib/useChartTheme";
 import { buildActivityBuckets, type ActivityBucket } from "@/lib/activityBuckets";
+import { useFormat } from "@/lib/i18n/useFormat";
 import { formatTrendDate, type WinRatePeriod } from "@/lib/winRateTrend";
 import { ChartTooltip } from "./ChartTooltip";
+import { formatNumber } from "@/lib/i18n/format";
 
 export function ActivityVolumeChart({ periods, interval, isGlobal = false }: {
   periods: readonly WinRatePeriod[];
@@ -14,7 +16,9 @@ export function ActivityVolumeChart({ periods, interval, isGlobal = false }: {
   isGlobal?: boolean;
 }) {
   const theme = useChartTheme();
-  const { rows, periodsPerBar } = useMemo(() => buildActivityBuckets(periods, interval), [periods, interval]);
+  const format = useFormat();
+  const weekStartDay = format.weekStartDay;
+  const { rows, periodsPerBar } = useMemo(() => buildActivityBuckets(periods, interval, 32, weekStartDay), [periods, interval, weekStartDay]);
   const wins = rows.reduce((sum, row) => sum + row.wins, 0);
   const losses = rows.reduce((sum, row) => sum + row.losses, 0);
   const other = rows.reduce((sum, row) => sum + row.other, 0);
@@ -23,9 +27,9 @@ export function ActivityVolumeChart({ periods, interval, isGlobal = false }: {
       {periodsPerBar > 1 ? "Up to " : ""}{periodsPerBar} {interval}{periodsPerBar === 1 ? "" : "s"} per bar{periodsPerBar > 1 ? " · adjacent periods combined to keep this view readable" : ""}.
     </p>
     <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-caption tabular-nums text-text-muted">
-      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-success" aria-hidden />{wins.toLocaleString()} wins</span>
-      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-danger" aria-hidden />{losses.toLocaleString()} losses</span>
-      {other > 0 && <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-text-dim" aria-hidden />{other.toLocaleString()} other</span>}
+      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-success" aria-hidden />{formatNumber(wins)} wins</span>
+      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-danger" aria-hidden />{formatNumber(losses)} losses</span>
+      {other > 0 && <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-text-dim" aria-hidden />{formatNumber(other)} other</span>}
     </div>
     <div className="h-56 min-w-0 sm:h-64">
       <ResponsiveContainer width="100%" height="100%">

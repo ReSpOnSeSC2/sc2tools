@@ -5,8 +5,9 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { gameReplayHref } from "@/lib/replayLink";
 import { compositionTime, unitLabel, type UnitComparison } from "./UnitCompositionTable";
+import { formatNumber } from "@/lib/i18n/format";
 
-const number = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 1 });
+const number = (value: number) => formatNumber(value, { maximumFractionDigits: 1 });
 
 export function UnitGameComparison({ comparison, snapshot }: { comparison: UnitComparison; snapshot: boolean }) {
   const [showAll, setShowAll] = useState(false);
