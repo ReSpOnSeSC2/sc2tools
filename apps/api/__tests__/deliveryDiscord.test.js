@@ -112,7 +112,11 @@ test("a ranked result is queued once, sent by the drain, and casual games are ig
   expect(await h.db.discordOutbox.countDocuments({ userId: "u_dee", kind: "result" })).toBe(1);
   expect(await discord.drain()).toEqual({ sent: 1, retried: 0, dropped: 0 });
   expect(JSON.stringify(JSON.parse(calls[0].init.body))).not.toContain("SecretOppZed");
-  expect(await h.db.discordOutbox.countDocuments({})).toBe(0);
+  expect(await h.db.discordOutbox.findOne({ userId: "u_dee" })).toMatchObject({ status: "sent" });
+  expect(await h.db.discordOutbox.findOne({ userId: "u_dee", payload: { $exists: true } })).toBeNull();
+  await discord.onFreshGame("u_dee", ranked);
+  expect((await discord.drain()).sent).toBe(0);
+  expect(calls).toHaveLength(1);
   expect((await h.db.discordHooks.findOne({ userId: "u_dee" })).lastPostAt).toBeInstanceOf(Date);
 });
 
@@ -147,12 +151,50 @@ test("three consecutive 401/404 answers disable the hook and tell its owner", as
   expect(await discord.enqueue("u_eve", "result", "after", () => ({}))).toBe(0);
 });
 
-test("the battle report hook queues one post with only an sc2tools.com link", async () => {
-  const report = { gameId: "br-1", headline: "A comeback on Alcyone", paragraph: "Down 20 supply at 8:00, even by 11:00.", url: "https://sc2tools.com/p/me/replays/br-1" };
-  expect(await discord.onBattleReport("u_dee", report)).toBe(1);
-  expect(await discord.onBattleReport("u_dee", report)).toBe(0);
-  const row = await h.db.discordOutbox.findOne({ userId: "u_dee", kind: "result" });
-  expect(row.payload.embeds[0]).toMatchObject({ title: "A comeback on Alcyone", url: report.url });
+const battleReport = { headline: "A comeback on Alcyone", paragraph: "Down 20 supply at 8:00, even by 11:00." };
+
+async function prepareBattleReport(token) {
+  const hook = await h.db.discordHooks.findOne({ userId: "u_dee" });
+  const path = `/v1/me/integrations/discord/hooks/${hook._id}`;
+  const ranked = game("u_dee");
+  await h.db.games.insertOne(ranked);
+  await h.db.gameShares.insertOne({ _id: token, userId: "u_dee", gameId: ranked.gameId, revokedAt: null });
+  return { path, send: `${path}/battle-report` };
+}
+
+test("only an explicitly reviewed, owned report and opted-in channel can queue a canonical link", async () => {
+  const token = "BattleReport1111";
+  const { path, send } = await prepareBattleReport(token);
+  const body = { token, ...battleReport, url: "https://other.example/", gameId: "ignore" };
+  await request(h.app).post(send).send(body).expect(401);
+  await as("bob").post(send, body).expect(404);
+  await as("dee").post(send, body).expect(409);
+  await as("dee").patch(path, { options: { replayLink: true } }).expect(200);
+  await as("dee").post(send, { ...body, paragraph: "x".repeat(751) }).expect(400);
+  await as("dee").post(send, { ...body, token: "BattleReport2222" }).expect(404);
+  expect((await as("dee").post(send, body).expect(200)).body).toEqual({ queued: 1 });
+  expect(calls).toHaveLength(0);
+  expect((await discord.drain()).sent).toBe(1);
+  const message = JSON.parse(calls[0].init.body);
+  expect(message.embeds[0]).toMatchObject({
+    title: battleReport.headline, description: battleReport.paragraph, url: `https://sc2tools.com/g/${token}#battle-report`,
+  });
+  expect(JSON.stringify(message)).not.toMatch(/SecretOppZed|other\.example|ignore/);
+  expect((await as("dee").post(send, body).expect(200)).body).toEqual({ queued: 0 });
+});
+
+test("revoking a share or withdrawing channel consent blocks queued posts and scrubs their payloads", async () => {
+  const token = "BattleReport3333";
+  const { path, send } = await prepareBattleReport(token);
+  await as("dee").patch(path, { options: { replayLink: true, opponentNames: true } }).expect(200);
+  await as("dee").post(send, { token, ...battleReport }).expect(200);
+  await discord.onFreshGame("u_dee", game("u_dee"));
+  await h.db.gameShares.updateOne({ _id: token }, { $set: { revokedAt: new Date() } });
+  expect(await discord.deliverRow(await h.db.discordOutbox.findOne({ shareToken: token }))).toBe("dropped");
+  await as("dee").patch(path, { options: { opponentNames: false } }).expect(200);
+  expect((await discord.drain()).dropped).toBe(1);
+  expect(calls).toHaveLength(0);
+  expect(await h.db.discordOutbox.countDocuments({ userId: "u_dee", status: "dropped", payload: { $exists: false } })).toBe(2);
 });
 
 test("nothing is posted while the account is being erased", async () => {
@@ -171,6 +213,8 @@ test("session summaries post once after the session gap, peaks only above a 20-g
   expect((await discord.sweepSessions()).queued).toBe(0);
   const posted = await h.db.discordOutbox.findOne({ userId: "u_dee", kind: "session" });
   expect(JSON.stringify(posted.payload)).toContain("3–0 in 3 games");
+  expect((await discord.drain()).sent).toBe(1);
+  expect((await discord.sweepSessions()).queued).toBe(0);
   await h.db.games.insertMany(Array.from({ length: 20 }, (_, i) => game("u_dee", { date: new Date(now - (40 + i) * 3600_000), myMmr: 4050 + i })));
   await discord.onFreshGame("u_dee", game("u_dee", { myMmr: 4060 }));
   expect(await h.db.discordOutbox.countDocuments({ userId: "u_dee", kind: "milestone" })).toBe(0);

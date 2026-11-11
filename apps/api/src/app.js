@@ -387,20 +387,17 @@ function buildApp(deps) {
 /**
  * Personal goals (services/playerGoals.js) and the Targets card services:
  * the build-timing deciles per league band (guide_samples only, rebuilt by
- * the nightly league-percentiles job) and the player's own side, whose
- * timings come from their own pseudonymous guide samples.
+ * the nightly league-percentiles job) and private timings from the player's
+ * own recent ranked replays.
  *
  * @param {AppDeps} deps
  * @param {import('./services/notifications').NotificationsService} notifications
- * @param {import('./services/guideSamples').GuideSamplesService} guideSamples
+ * @param {import('./services/gameDetails').GameDetailsService} gameDetails
  */
-function buildProgressServices(deps, notifications, guideSamples) {
+function buildProgressServices(deps, notifications, gameDetails) {
   const playerGoals = new PlayerGoalsService(deps.db, { notifications, logger: deps.logger });
   const leagueTimingPercentiles = new LeagueTimingPercentilesService(deps.db, { logger: deps.logger });
-  const leagueTargets = new LeagueTargetsService(deps.db, {
-    timings: leagueTimingPercentiles,
-    userHash: (userId) => guideSamples.userHash(userId),
-  });
+  const leagueTargets = new LeagueTargetsService(deps.db, gameDetails);
   return { playerGoals, leagueTimingPercentiles, leagueTargets };
 }
 
@@ -879,7 +876,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     logger: deps.logger,
   });
   // Personal goals and the Targets card's timing tables + personal side.
-  const { playerGoals, leagueTimingPercentiles, leagueTargets } = buildProgressServices(deps, notifications, guideSamples);
+  const { playerGoals, leagueTimingPercentiles, leagueTargets } = buildProgressServices(deps, notifications, gameDetails);
   const guideSamplesBackfill = buildGuideSamplesBackfillJob({
     db: deps.db,
     guideSamples,

@@ -4,6 +4,8 @@ const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
+const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
+const { SHARE_TOKEN_RE } = require("./gameShares");
 const { buildJobLock } = require("../util/jobLock");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { encryptSecret, decryptSecret, parseTokenEncryptionKey } = require("./platformCredentialVault");
@@ -79,7 +81,7 @@ function publicHook(hook) {
 
 class DiscordWebhooksService {
   /**
-   * @param {Pick<import('../db/connect').DbContext, 'discordHooks'|'discordOutbox'|'games'|'users'> & {db?: import('mongodb').Db}} db
+   * @param {Pick<import('../db/connect').DbContext, 'discordHooks'|'discordOutbox'|'gameShares'|'games'|'users'> & {db?: import('mongodb').Db}} db
    * @param {{encryptionKey?: string|null, fetchImpl?: typeof fetch, notifications?: import('./notifications').NotificationsService|null,
    *   sessionPolicy?: {resolve: (owner: string) => Promise<{gapMinutes: number}>}|null,
    *   weekly?: {report: (userId: string, query: {week?: unknown, tz?: unknown}) => Promise<any>}|null,
@@ -144,7 +146,7 @@ class DiscordWebhooksService {
       if (patch.enabled) Object.assign(set, { status: "active", disabledReason: null, failureCount: 0, enabledAt: new Date(this.now()) });
     }
     const saved = await this.db.discordHooks.findOneAndUpdate({ _id: hook._id, userId }, { $set: set }, { returnDocument: "after" });
-    if (patch.enabled === false) await this.db.discordOutbox.deleteMany({ hookId: hook._id });
+    if (patch.enabled === false) await this.db.discordOutbox.deleteMany({ hookId: hook._id, status: "queued" });
     return publicHook(saved || hook);
   }
 
@@ -213,17 +215,24 @@ class DiscordWebhooksService {
    * Queue one post for every enabled hook subscribed to ``kind``.
    * @param {string} userId @param {string} kind @param {string} eventKey
    * @param {(options: ReturnType<typeof templates.hookOptions>) => Record<string, unknown>} build
+   * @param {{hookId?: string, shareToken?: string, replaySlug?: string|null, sessionStartAt?: Date}} [delivery]
    */
-  async enqueue(userId, kind, eventKey, build) {
+  async enqueue(userId, kind, eventKey, build, delivery = {}) {
     if (!this.available) return 0;
-    const hooks = await this.db.discordHooks.find({ userId, enabled: true, status: "active", [`events.${kind}`]: true }).limit(MAX_HOOKS).toArray();
+    const hooks = await this.db.discordHooks.find({ userId, enabled: true, status: "active", [`events.${kind}`]: true,
+      ...(delivery.hookId ? { _id: delivery.hookId, "options.replayLink": true } : {}),
+      ...(delivery.sessionStartAt ? { enabledAt: { $lte: delivery.sessionStartAt } } : {}),
+    }).limit(MAX_HOOKS).toArray();
     let queued = 0;
     for (const hook of hooks) {
       const now = this.now();
+      const options = templates.hookOptions(hook.options);
       const row = stampVersion({
         _id: `do_${crypto.randomBytes(12).toString("base64url")}`, userId, hookId: hook._id, kind,
         dedupeKey: crypto.createHash("sha256").update(`${hook._id}:${eventKey}`).digest("base64url"),
-        payload: build(templates.hookOptions(hook.options)), attempts: 0, status: "queued",
+        payload: build(options), options, hookEnabledAt: hook.enabledAt || null, attempts: 0, status: "queued",
+        ...(delivery.shareToken ? { shareToken: delivery.shareToken } : {}),
+        ...(delivery.replaySlug && options.replayLink ? { replaySlug: delivery.replaySlug } : {}),
         nextAttemptAt: new Date(now), createdAt: new Date(now), expiresAt: new Date(now + OUTBOX_TTL_MS),
       }, COLLECTIONS.DISCORD_OUTBOX);
       try { await this.db.discordOutbox.insertOne(row); queued += 1; }
@@ -250,7 +259,7 @@ class DiscordWebhooksService {
     const previous = rated ? await this.db.games.find({ ...gamesMatchStage(userId, { until: new Date(new Date(game.date).getTime() - 1) }), ...sameAccount },
       { projection: { _id: 0, myMmr: 1 } }).sort({ date: -1 }).limit(1).toArray() : [];
     const mmrDelta = previous[0] ? game.myMmr - previous[0].myMmr : null;
-    await this.enqueue(userId, "result", `result:${game.gameId}`, (options) => templates.resultMessage(game, { options, mmrDelta, replaySlug: slug }));
+    await this.enqueue(userId, "result", `result:${game.gameId}`, (options) => templates.resultMessage(game, { options, mmrDelta, replaySlug: slug }), { replaySlug: slug });
     if (!rated) return;
     const higher = await this.db.games.findOne({ ...gamesMatchStage(userId, {}), ...sameAccount, myMmr: { $gte: game.myMmr } }, { projection: { _id: 1 } });
     if (higher) return;
@@ -266,13 +275,35 @@ class DiscordWebhooksService {
   }
 
   /**
-   * Battle report headline and paragraph (roadmap battle-report-sharing),
-   * posted to channels that take results. No producer calls this yet: it
-   * needs the public battle-report link, which does not exist so far.
-   * @param {string} userId @param {{gameId: string, headline: string, paragraph: string, url: string}} report
+   * The browser submits the excerpt it previewed from the shared game. Only
+   * the owner of the live share and enabled channel can queue it. Derive the
+   * link and result from the share rather than accepting URLs or game facts.
+   * @param {string} userId @param {string} hookId
+   * @param {{token?: unknown, headline?: unknown, paragraph?: unknown}} body
    */
-  async onBattleReport(userId, report) {
-    return this.enqueue(userId, "result", `battle-report:${report.gameId}`, () => templates.battleReportMessage(report));
+  async queueBattleReport(userId, hookId, body) {
+    const { token, headline, paragraph } = body;
+    if (typeof token !== "string" || !SHARE_TOKEN_RE.test(token) ||
+      typeof headline !== "string" || !headline.trim() || headline.length > 120 ||
+      typeof paragraph !== "string" || !paragraph.trim() || paragraph.length > 750) {
+      throw discordError(400, "invalid_battle_report", "Open the shared report preview and try again.");
+    }
+    const hook = await this.ownHook(userId, hookId);
+    if (!hook.enabled || hook.status !== "active" || hook.events?.result !== true || hook.options?.replayLink !== true) {
+      throw discordError(409, "discord_report_not_enabled", "Turn on results and replay links for that channel in Settings.");
+    }
+    const game = await this.sharedReportGame(userId, token);
+    if (!game) throw discordError(404, "share_not_found", "This share link doesn't exist or was turned off.");
+    const queued = await this.enqueue(userId, "result", `battle-report:${token}`,
+      () => templates.battleReportMessage({ token, headline, paragraph, result: game.result }), { hookId: hook._id, shareToken: token });
+    return { queued };
+  }
+
+  /** @param {string} userId @param {string} token */
+  async sharedReportGame(userId, token) {
+    const share = await this.db.gameShares.findOne({ _id: token, userId, revokedAt: null }, { projection: { gameId: 1 } });
+    if (!share) return null;
+    return this.db.games.findOne({ userId, gameId: share.gameId, ...LIVE_GAME_MATCH }, { projection: { _id: 0, result: 1 } });
   }
 
   /**
@@ -318,7 +349,7 @@ class DiscordWebhooksService {
       const session = await this.lastSession(userId, 12 * 3600_000);
       if (!session || session.games < 2 || session.startAt.getTime() < enabledAt) continue;
       queued += Number(await this.withLease(userId, () => this.enqueue(userId, "session", `session:${session.firstGameId}`,
-        (options) => templates.sessionMessage(session, { options })))) || 0;
+        (options) => templates.sessionMessage(session, { options }), { sessionStartAt: session.startAt }))) || 0;
     }
     return { queued };
   }
@@ -356,14 +387,40 @@ class DiscordWebhooksService {
     if (claimed.modifiedCount !== 1) return "dropped";
     const [hook, user] = await Promise.all([
       this.db.discordHooks.findOne({ _id: row.hookId, userId: row.userId }),
-      this.db.users.findOne({ userId: row.userId }, { projection: { _id: 0, userId: 1, _gdprMutation: 1 } }),
+      this.db.users.findOne({ userId: row.userId }, { projection: { _id: 0, userId: 1, _gdprMutation: 1, replaySharing: 1 } }),
     ]);
-    if (!hook || hook.enabled !== true || hook.status !== "active" || !user || user._gdprMutation) {
-      await this.db.discordOutbox.deleteOne({ _id: row._id });
+    if (!user || user._gdprMutation || !this.canDeliver(row, hook)) {
+      await this.retireRow(row, "dropped");
       return "dropped";
     }
-    const response = await this.postWithDetails(hook, row.payload);
-    return this.settle(row, hook, response);
+    const response = await this.withLease(row.userId, async () => {
+      if (row.shareToken && !await this.sharedReportGame(row.userId, row.shareToken)) return null;
+      return this.postWithDetails(hook, this.currentPayload(row, user));
+    });
+    if (response) return this.settle(row, hook, response);
+    await this.retireRow(row, "dropped");
+    return "dropped";
+  }
+
+  /** A queued payload uses the privacy choices approved when it was made. @param {any} row @param {any} hook */
+  canDeliver(row, hook) {
+    if (hook?.enabled !== true || hook.status !== "active" || hook.events?.[row.kind] !== true) return false;
+    if (new Date(row.expiresAt).getTime() <= this.now() || !row.options) return false;
+    const options = templates.hookOptions(hook.options);
+    return +new Date(row.hookEnabledAt) === +new Date(hook.enabledAt) &&
+      options.opponentNames === row.options.opponentNames && options.mmr === row.options.mmr && options.replayLink === row.options.replayLink;
+  }
+
+  /** Remove an archive link when archive consent was withdrawn. @param {any} row @param {any} user */
+  currentPayload(row, user) {
+    if (!row.replaySlug || (user.replaySharing?.enabled === true && user.replaySharing.slug === row.replaySlug)) return row.payload;
+    return { ...row.payload, embeds: row.payload.embeds.map((/** @type {any} */ embed) => ({ ...embed, url: undefined })) };
+  }
+
+  /** Keep the dedupe receipt until its existing TTL, without the message. @param {any} row @param {string} status @param {Record<string, unknown>} [details] */
+  async retireRow(row, status, details = {}) {
+    await this.db.discordOutbox.updateOne({ _id: row._id },
+      { $set: { status, ...details }, $unset: { payload: "", options: "", shareToken: "", replaySlug: "" } });
   }
 
   /**
@@ -374,19 +431,19 @@ class DiscordWebhooksService {
     const now = this.now();
     const { status } = response;
     if (status >= 200 && status < 300) {
-      await this.db.discordOutbox.deleteOne({ _id: row._id });
+      await this.retireRow(row, "sent");
       await this.db.discordHooks.updateOne({ _id: hook._id }, { $set: { failureCount: 0, lastPostAt: new Date(now), lastResult: "sent" } });
       return "sent";
     }
     if (status === 401 || status === 404) {
-      await this.db.discordOutbox.deleteOne({ _id: row._id });
+      await this.retireRow(row, "dropped");
       await this.countAuthFailure(hook);
       return "dropped";
     }
     const attempts = (row.attempts || 0) + 1;
     const retryable = status === 429 || status === 0 || status >= 500;
     if (!retryable || attempts >= MAX_ATTEMPTS + (status === 429 ? 3 : 0)) {
-      await this.db.discordOutbox.updateOne({ _id: row._id }, { $set: { status: "failed", attempts, lastStatus: status } });
+      await this.retireRow(row, "failed", { attempts, lastStatus: status });
       await this.db.discordHooks.updateOne({ _id: hook._id }, { $set: { lastResult: "failed" } });
       return "dropped";
     }
@@ -402,7 +459,7 @@ class DiscordWebhooksService {
     const res = await this.db.discordHooks.updateOne({ _id: hook._id, status: "active" },
       { $set: { status: "disabled", enabled: false, disabledReason: "webhook_gone", updatedAt: new Date(this.now()) } });
     if (res.modifiedCount !== 1) return;
-    await this.db.discordOutbox.deleteMany({ hookId: hook._id });
+    await this.db.discordOutbox.deleteMany({ hookId: hook._id, status: "queued" });
     this.logger?.info({ hookId: hook._id }, "discord_hook_disabled");
     await this.notifications?.notify(hook.userId, {
       kind: "integration.discord_disabled", title: `Discord posts stopped for ${hook.label}`,
@@ -445,7 +502,7 @@ class DiscordWebhooksService {
     return res.deletedCount || 0;
   }
 
-  /** Fence a background enqueue against erasure. @param {string} userId @param {() => Promise<unknown>} work */
+  /** Fence a background delivery operation against erasure. @template T @param {string} userId @param {() => Promise<T>} work */
   async withLease(userId, work) {
     let lease;
     try { lease = await claimUserDataLease(this.db.users, userId); } catch { return null; }

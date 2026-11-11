@@ -18,7 +18,7 @@ const ERAS = new Set(["after", "before"]);
  *   GET /benchmarks/timings?leagueId&matchup&era
  *                                             build-timing deciles from
  *                                             guide_samples (same floor)
- *   GET /benchmarks/targets?matchup           the caller's own side of the
+ *   GET /benchmarks/targets?matchup&timings   the caller's own side of the
  *                                             Targets card (private)
  *
  * @param {{
@@ -110,7 +110,7 @@ async function sendTargets(deps, req, res) {
     res.status(400).json({ error: { code: "bad_request", message: "matchup must look like PvZ" } });
     return;
   }
-  res.json(await deps.leagueTargets.personal(auth.userId, raw || null));
+  res.json(await deps.leagueTargets.personal(auth.userId, raw || null, req.query.timings !== "0"));
 }
 
 module.exports = { buildBenchmarksRouter };
