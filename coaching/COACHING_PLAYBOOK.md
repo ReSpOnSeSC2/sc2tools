@@ -117,7 +117,7 @@ Before each roster save, the browser stores the current Locker snapshot on that 
 
 Before each lesson, open **Since last session** on the booking (the next one opens by itself). It is the watch-list from the site plan, built from facts only:
 
-- Coaches see ranked 1v1 counts and W–L by matchup since the student's previous held session. Detected builds and recent replay details come from current practice-sharing assignment evidence. A matchup win percentage appears from five decided games. Use **Download replay** on a digest row to open that exact archived assignment replay.
+- Coaches see ranked 1v1 counts and W–L by matchup since the student's previous held session. Detected builds and recent replay details come from current practice-sharing assignment evidence. A matchup win percentage appears from five decided games. Use **Download replay** on a digest row to open that exact archived assignment replay. Students can separately allow confirmed built-in check-in labels for future assigned games. Custom check-in names and notes stay private.
 - No grades, scores, MMR, notes or practice-log data. The judgement stays yours: use it to pick the two or three replays worth opening together.
 - Only you and that student see it, and only while their practice sharing is accepted. It never reaches back before sharing started, or more than 90 days; with sharing off it says so and lists nothing.
 - The student sees their own eligible games and checked-in builds, with links to their own game pages.

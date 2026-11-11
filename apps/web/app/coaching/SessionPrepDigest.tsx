@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { History } from "lucide-react";
+import { useUserSocket } from "@/lib/useUserSocket";
 import { useApi } from "@/lib/clientApi";
 import { AssignedReplayDownload } from "./AssignedReplayDownload";
 import { Button } from "@/components/ui/Button";
@@ -31,8 +32,11 @@ export function SessionPrepDigest({ bookingId, viewerRole, timeZone, studentName
   const [open, setOpen] = useState(defaultOpen);
   const digest = useApi<unknown>(
     active && open ? `/v1/coaching/calendar/bookings/${encodeURIComponent(bookingId)}/digest` : null,
-    { revalidateOnFocus: true },
+    { revalidateOnFocus: true, refreshInterval: active && open && viewerRole === "coach" ? 30_000 : 0 },
   );
+  useUserSocket(active && open && viewerRole === "coach" ? {
+    "coaching:assignment": () => { void digest.mutate(undefined, { revalidate: true }); },
+  } : null);
   const parsed = active && open ? parsePrepDigest(digest.data) : null;
   const data = parsed?.bookingId === bookingId && parsed.role === viewerRole && !digest.error ? parsed : null;
   return (

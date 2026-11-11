@@ -108,6 +108,14 @@ function mountBookingDigestRoutes(router, withRole, deps, context) {
   const path = "/coaching/calendar/bookings/:bookingId/digest";
   router.get(path, withRole, bookingDigestRoute(deps, context));
   router.post(path + "/replay", withRole, ...bookingDigestReplayRoute(deps, context));
+  router.post("/coaching/practice-sharing/digest-labels", withRole, async (req, res, next) => {
+    res.set("Cache-Control", PRIVATE_NO_STORE);
+    try {
+      const { auth, cr } = context(req);
+      if (auth.source !== "clerk" || cr.role !== "student") { res.status(404).json({ error: "not_found" }); return; }
+      res.json(await deps.coaching.setDigestLabelSharing(auth.userId, cr, req.body || {}));
+    } catch (error) { next(error); }
+  });
 }
 
 module.exports = { calendarRoute, mountBookingDigestRoutes };

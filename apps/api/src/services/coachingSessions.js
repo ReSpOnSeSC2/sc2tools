@@ -17,6 +17,7 @@
 
 const { createHmac } = require("node:crypto");
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+const { catalogCheckinLabels } = require("./buildIntentOptions");
 const { DETECTOR_MY_BUILD_FIELD } = require("./buildIntentReaders");
 const {
   assignmentGameStartExpression,
@@ -127,12 +128,36 @@ function digestGameMatch(userId, since, until) {
   };
 }
 
+const CATALOG_KEYS = catalogCheckinLabels.map(({ key }) => key);
+const CATALOG_NAMES = catalogCheckinLabels.map(({ name }) => name);
+
+/** @param {Date} grantedAt */
+function catalogLabelAfter(grantedAt) {
+  return { $let: {
+    vars: { index: { $indexOfArray: [CATALOG_KEYS, "$buildIntent.build.key"] } },
+    in: { $cond: [
+      { $and: [
+        { $gt: [assignmentGameStartExpression(), grantedAt] },
+        { $eq: ["$buildIntent.status", "confirmed"] },
+        { $eq: ["$buildIntent.applied", true] },
+        { $eq: ["$buildIntent.build.source", "catalog"] },
+        { $gte: ["$$index", 0] },
+      ] },
+      { $arrayElemAt: [CATALOG_NAMES, "$$index"] },
+      DETECTOR_MY_BUILD_FIELD,
+    ] },
+  } };
+}
+
 /** @param {string} userId @param {Date} since @param {Date} until
- * @param {Record<string,any>[]|null} [assignmentMatches] null for the owner's view */
-function digestPipeline(userId, since, until, assignmentMatches = null) {
+ * @param {Record<string,any>[]|null} [assignmentMatches] null for the owner's view
+ * @param {Date|null} [catalogLabelsSince] supplemental sharing start */
+function digestPipeline(userId, since, until, assignmentMatches = null, catalogLabelsSince = null) {
   const own = assignmentMatches === null;
   const recordScope = own ? [] : [{ $match: { isLadderGame: true } }];
   const evidenceScope = own ? [] : [{ $match: assignmentMatches.length ? { $or: assignmentMatches } : { _id: null } }];
+  const sharedLabels = !own && catalogLabelsSince
+    ? [{ $addFields: { _digestBuild: catalogLabelAfter(catalogLabelsSince) } }] : [];
   const build = { $let: {
     vars: { name: { $cond: [{ $eq: [{ $type: "$_digestBuild" }, "string"] }, { $trim: { input: "$_digestBuild" } }, ""] } },
     in: { $cond: [{ $lte: [{ $strLenCP: "$$name" }, 120] }, "$$name", ""] },
@@ -145,7 +170,7 @@ function digestPipeline(userId, since, until, assignmentMatches = null) {
         _digestMyRace: coachingRaceExpr("$myRace"),
         _digestOppRace: coachingRaceExpr("$opponent.race"),
         // Check-ins update the owner's effective myBuild. The coach's
-        // accepted grant covers only the original detected label.
+        // base grant covers only the original detected label.
         _digestBuild: own ? "$myBuild" : DETECTOR_MY_BUILD_FIELD,
       },
     },
@@ -159,7 +184,7 @@ function digestPipeline(userId, since, until, assignmentMatches = null) {
           },
         }],
         builds: [
-          ...evidenceScope,
+          ...evidenceScope, ...sharedLabels,
           { $group: { _id: build, games: { $sum: 1 } } }, { $sort: { games: -1, _id: 1 } },
           { $group: { _id: null, rows: { $firstN: { input: "$$ROOT", n: DIGEST_BUILD_ROWS + 1 } },
             unclassified: { $sum: { $cond: [{ $eq: ["$_id", ""] }, "$games", 0] } },
@@ -171,6 +196,7 @@ function digestPipeline(userId, since, until, assignmentMatches = null) {
           ...evidenceScope,
           { $sort: { date: -1, _id: -1 } },
           { $limit: DIGEST_RECENT_GAMES },
+          ...sharedLabels,
           {
             $project: {
               _id: 0, gameId: 1, date: 1, startedAt: 1, durationSec: 1, map: 1,

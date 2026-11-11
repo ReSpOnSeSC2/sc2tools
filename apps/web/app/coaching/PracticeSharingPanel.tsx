@@ -11,6 +11,7 @@ export function PracticeSharingPanel({
   onRequest,
   onRespond,
   onRevoke,
+  onDigestLabels,
 }: {
   canManage: boolean;
   relationship: PracticeSharingRelationship | null;
@@ -19,6 +20,7 @@ export function PracticeSharingPanel({
   onRequest: () => void;
   onRespond: (decision: "accepted" | "rejected") => void;
   onRevoke: () => void;
+  onDigestLabels: (enabled: boolean) => void;
 }) {
   if (canManage) {
     if (!selectedStudent?.userId) return null;
@@ -98,6 +100,7 @@ export function PracticeSharingPanel({
   }
 
   if (relationship.status === "accepted") {
+    const shareLabels = relationship.scope.digestCatalogCheckIns === true;
     return (
       <Card className="border-success/35 bg-success/5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -112,6 +115,18 @@ export function PracticeSharingPanel({
           </div>
           <Button variant="ghost" size="sm" disabled={busy} onClick={onRevoke}>
             Revoke access
+          </Button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+          <div>
+            <p className="text-caption font-bold text-text">Check-in labels in session digests</p>
+            <p className="mt-1 text-caption text-text-muted">
+              {shareLabels ? "Your coach can see confirmed built-in check-in labels for assigned 1v1 games played since you turned this on." : "Optional. Share confirmed built-in check-in labels with your coach for assigned 1v1 games played after you turn this on."}
+              {" "}Custom check-in names and notes stay private.
+            </p>
+          </div>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => onDigestLabels(!shareLabels)}>
+            {shareLabels ? "Stop sharing check-in labels" : "Share check-in labels"}
           </Button>
         </div>
       </Card>

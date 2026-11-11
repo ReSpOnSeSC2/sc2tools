@@ -272,6 +272,7 @@ corresponding GitHub Release.
   assignment evidence. Students see their own eligible 1v1 games and builds
   with links to their game pages. The digest requires active practice sharing.
 - Coaches can download an archived assigned replay from its exact digest row.
+- Students can separately share built-in check-in labels for future assigned games in session digests.
 - Copy a day's hours to the weekdays or to every day, clear a day, and undo
   either for 10 seconds. Empty days offer evening, afternoon and weekend
   presets, and Add hours now continues after the day's last window.

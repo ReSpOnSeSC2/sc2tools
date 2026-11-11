@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({ paths: [] as Array<string | null>, data: undefined as unknown, error: undefined as unknown, mutate: vi.fn() }));
+const socket = vi.hoisted(() => ({ useUserSocket: vi.fn() }));
+vi.mock("@/lib/useUserSocket", () => socket);
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "coach-user", getToken: async () => "synthetic" }),
 }));
@@ -85,6 +87,13 @@ describe("session prep digest", () => {
       expect(screen.queryByRole("link", { name: /Open game/ })).toBeNull();
       expect(document.body.innerHTML).not.toContain("private-game");
     } finally { click.mockRestore(); vi.unstubAllGlobals(); }
+  });
+
+  it("clears cached coach labels before refreshing on a practice-sharing update", () => {
+    api.data = ready("coach");
+    render(<SessionPrepDigest bookingId="next" viewerRole="coach" timeZone="UTC" defaultOpen />);
+    socket.useUserSocket.mock.calls.at(-1)?.[0]["coaching:assignment"]();
+    expect(api.mutate).toHaveBeenCalledWith(undefined, { revalidate: true });
   });
 
   it("pauses the default-open digest while Sessions is hidden", () => {
