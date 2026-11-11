@@ -463,6 +463,7 @@ class CloudGame:
     # to ``None`` so the dataclass stays backwards-compatible with test
     # fixtures that pre-date the field.
     my_mmr: Optional[int] = None
+    my_league_id: Optional[int] = None
     # The signed-in player's raw sc2reader toon_handle (e.g.
     # ``"2-S2-1-267727"``). Surfaced so the cloud's session-widget MMR
     # fallback can resolve the streamer's CURRENT 1v1 ladder rating via
@@ -575,6 +576,12 @@ class CloudGame:
             # Explicit absence lets a resync repair legacy cloud rows
             # that were incorrectly filled with SC2Pulse's current MMR.
             out["myMmrSource"] = "unavailable"
+        if (
+            self.is_ladder_game is True and self.match_format == "1v1"
+            and not self.is_resumed_from_replay
+            and type(self.my_league_id) is int and 0 <= self.my_league_id <= 6
+        ):
+            out["myLeagueId"] = self.my_league_id
         if self.my_toon_handle:
             out["myToonHandle"] = str(self.my_toon_handle)
         if self.player_count is not None:
@@ -1204,6 +1211,7 @@ def parse_replay_for_cloud_ex(
         apm=_my_average_apm(apm_curve, getattr(me, "pid", None)),
         spq=_my_spending_quotient(macro_breakdown),
         my_mmr=my_mmr,
+        my_league_id=getattr(me, "league_id", None),
         my_toon_handle=my_toon_handle,
         player_count=_player_count(ctx),
         match_format=_match_format(ctx),

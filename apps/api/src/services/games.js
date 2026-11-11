@@ -100,6 +100,7 @@ const GAME_SLIM_FIELDS = new Set([
   "spq",
   "myMmr",
   "myMmrSource",
+  "myLeagueId",
   "myToonHandle",
   "top3Leaks",
   // Small, Mongo-queryable Map Intel samples. Kept inline so heatmaps and
@@ -2033,6 +2034,7 @@ const SLIM_FIELD_NORMALIZER_ENTRIES = [
   ["top3Leaks", sanitizeTopLeakArray],
   ["duration", (value) => boundedNumber(value, 0, 24 * 60 * 60)],
   ["macro_score", (value) => boundedNumber(value, 0, 100)],
+  ["myLeagueId", (value) => boundedInteger(value, 0, 6)],
   ["oppMmr", (value) => boundedInteger(value, 0, 9999)],
   ["oppPulseId", (value) => boundedString(value, 200)],
   ["oppRace", (value) => boundedString(value, 24)],

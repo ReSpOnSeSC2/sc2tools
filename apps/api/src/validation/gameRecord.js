@@ -160,6 +160,8 @@ const GAME_SCHEMA = {
     // surfaces this for ranked replays where sc2reader exposes it. The
     // overlay's session widget reads this to derive an MMR delta.
     myMmr: { type: "integer", minimum: 0, maximum: 9999 },
+    // Replay-observed ladder enum. No league is inferred from an MMR.
+    myLeagueId: { type: "integer", minimum: 0, maximum: 6 },
     // Agent-authored provenance for ``myMmr``. ``replay`` means the
     // rating came from this replay's player record; ``unavailable`` is
     // an explicit instruction that no game-time rating exists. The

@@ -124,6 +124,15 @@ function milestoneMessage(milestone, ctx) {
   return message([{ title: `New ${md(milestone.race, 12) || ""} MMR peak`.replace(/\s+/g, " "), color: COLORS.win, description: value, footer: { text: "SC2 Tools" } }]);
 }
 
+/** @param {{previous:string,current:string,race:string,mmr?:number}} milestone @param {{options?:unknown}} ctx */
+function promotionMessage(milestone, ctx) {
+  const options = hookOptions(ctx.options);
+  const fields = options.mmr && Number.isFinite(milestone.mmr) && Number(milestone.mmr) > 0
+    ? [{ name: "MMR", value: num(Number(milestone.mmr)), inline: true }] : [];
+  return message([{ title: `Promotion · ${md(milestone.current, 24)}`, color: COLORS.win,
+    description: `${md(milestone.previous, 24)} → ${md(milestone.current, 24)} · ${md(milestone.race, 12)}`, fields, footer: { text: "SC2 Tools" } }]);
+}
+
 function testMessage() {
   return message([{ title: "SC2 Tools is connected", color: COLORS.brand,
     description: "This channel will receive the posts you turned on in SC2 Tools. Opponent names stay hidden unless you allow them.", footer: { text: "SC2 Tools" } }]);
@@ -141,4 +150,4 @@ function battleReportMessage(report) {
     ...(url ? { url } : {}), footer: { text: "SC2 Tools" } }]);
 }
 
-module.exports = { resultMessage, sessionMessage, weeklyMessage, milestoneMessage, testMessage, battleReportMessage, hookOptions, md, DEFAULT_OPTIONS };
+module.exports = { resultMessage, sessionMessage, weeklyMessage, milestoneMessage, promotionMessage, testMessage, battleReportMessage, hookOptions, md, DEFAULT_OPTIONS };

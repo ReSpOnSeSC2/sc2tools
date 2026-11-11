@@ -5,6 +5,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 ## Unreleased
 
 ### Added
+- Include your observed league when a ranked 1v1 replay records it, so
+  enabled Discord channels can show verified league changes.
 - Re-analyze games on request from **Settings → Backups & data** on the website:
   the agent re-reads each requested game with the current analysis engine, from
   the replay on this PC or, when it is gone, a verified copy from your Cloud

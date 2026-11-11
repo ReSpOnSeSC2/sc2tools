@@ -119,6 +119,10 @@ corresponding GitHub Release.
 - Add coaching session reminders 24 hours and 1 hour before a session, an
   **Add to calendar** button on each booking and a private calendar link you
   can subscribe to, regenerate or turn off.
+- Weekly delivery retries interrupted reports without duplicating the bell
+  entry or an already delivered Discord recap.
+- Discord milestones include a promotion when two consecutive ranked
+  replays record a higher league on the same ladder account and race.
 - Add **Post to Discord** in Settings → Integrations: ranked results, session
   summaries, the weekly recap and new MMR peaks in your own server's channel.
   Off until you preview the posts and turn a channel on; opponent names stay

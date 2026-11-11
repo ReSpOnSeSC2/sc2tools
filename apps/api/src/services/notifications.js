@@ -91,6 +91,17 @@ class NotificationsService {
     }
     try { return await this._notify(userId, input); } finally { await lease.release(); }
   }
+  /**
+   * A durable bell receipt allows a paired channel to resume after a
+   * partial delivery, while the owner's notification mute still applies.
+   * @param {string} userId @param {string} kind @param {string} eventKey
+   */
+  async canResumeDelivery(userId, kind, eventKey) {
+    const user = await this.db.users.findOne({ userId }, { projection: { "preferences.notifications": 1 } });
+    if (!user || sanitizeNotificationPrefs(user.preferences?.notifications).muted.includes(kind)) return false;
+    return !!await this.db.notifications.findOne({ userId, kind, deliveryKeys: deliveryKey(eventKey) }, { projection: { _id: 1 } });
+  }
+
   /** @param {string} userId @param {Parameters<NotificationsService['notify']>[1]} input */
   async _notify(userId, input) {
     if (!KIND_RE.test(String(input.kind || ""))) throw new Error("invalid_notification_kind");
