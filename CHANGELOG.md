@@ -11,6 +11,24 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Practice targets and reports
+
+- Edit checkpoints for a private Ghost target and count a graded game toward
+  the daily practice quest.
+- Use a saved timezone for the weekly report and share an aggregate image.
+  Notification settings let you choose which events reach each channel.
+- View finished streams and open game moments in the VOD when timestamps are
+  available. Public stream pages require a separate sharing choice.
+
+### Public replay discovery
+
+- The landing page shows recent public activity when data is available.
+  Guide pages can compare openers and Instant Analysis includes more of the
+  replay report.
+- Public player pages show overview, archive and share controls. Shared replay
+  previews show a short card before sign-in, and original replay downloads
+  honor the player's current sharing preference.
+
 ### Replay and account fixes
 
 - Include personal goals in account exports and measure edited goals against
