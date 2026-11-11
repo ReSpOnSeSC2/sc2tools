@@ -17,6 +17,8 @@ const errorCode = error => typeof error?.code === "string" ? error.code : "";
 const mappingKey = (mapping, target, revision) => sha256(JSON.stringify([target, revision, mapping]));
 /** @param {string} reason */
 const refused = reason => ({ state: "skipped", reason });
+/** @param {any} row @param {number} now */
+const deadlinePassed = (row, now) => !(row.deadlineAt instanceof Date && row.deadlineAt.getTime() > now);
 
 class TwitchRewardsService {
   /** @param {{users:import('mongodb').Collection<any>,integrations:Integrations,receipts:Receipts,provider:Provider,actions:Actions,now?:()=>number}} deps */
@@ -25,6 +27,10 @@ class TwitchRewardsService {
     this.now = deps.now || Date.now;
     /** @type {ReturnType<typeof setInterval>|undefined} */ this.timer = undefined;
     /** @type {Promise<void>|null} */ this.sweepPending = null;
+    /** @type {Promise<void>|null} */ this.scrubPending = null;
+    /** @type {string|null} */ this.pendingOwner = null;
+    /** @type {string|null} */ this.deferredOwner = null;
+    this.deferredFirst = false;
     /** @type {Map<string,Promise<void>>} */ this.deviceChecks = new Map();
     this.stopping = false;
   }
@@ -110,13 +116,15 @@ class TwitchRewardsService {
     try {
       // Only actions that use viewer text need it while awaiting dispatch.
       const data = ["pin", "tts"].includes(mapping.action) ? redemption : { ...redemption, input: "", login: "", name: "" };
-      return await this.deps.receipts.accept(userId, data, mappingKey(mapping, settings.target, settings.revision), mapping.action);
+      const refund = mapping.settlement === "refund" || mapping.settlement === "both";
+      return await this.deps.receipts.accept(userId, data, mappingKey(mapping, settings.target, settings.revision), mapping.action, refund);
     } finally { await lease.release(); }
   }
 
   /** @param {any} row @param {Record<string,any>|null} envelope */
   async process(row, envelope = null) {
     const { receipts, integrations, users, actions, provider } = this.deps;
+    const expired = () => deadlinePassed(row, this.now());
     const lease = await claimUserDataLease(users, row.userId);
     try {
       await integrations.withTwitchAutomationGrant(row.userId, { rewards: true }, async grant => {
@@ -127,12 +135,14 @@ class TwitchRewardsService {
           if (await receipts.claim(row)) await receipts.finish(row, "skipped", "mapping_changed");
           return;
         }
-        const token = settings.target ? await actions.token(row.userId, settings.target) : null;
-        const expired = this.now() >= row.deadlineAt.getTime();
-        const live = !expired && token ? await provider.isLive(grant) : false;
-        if (!await receipts.claim(row)) return;
+        const token = row.unavailable !== true && !expired() && settings.target ? await actions.token(row.userId, settings.target) : null;
+        const live = !expired() && token ? await provider.isLive(grant) : false;
+        if (!await receipts.claim(row)) {
+          if (expired()) await this.scrub();
+          return;
+        }
         await lease.assert(); await grant.assertCurrent();
-        const outcome = await this.execute(row, envelope, mapping, token, expired, live);
+        const outcome = await this.execute(row, envelope, mapping, token, expired(), live);
         if (outcome.state === "awaiting_game") return;
         const status = row.providerStatus === "unfulfilled" ? settlementStatus(outcome.state, mapping.settlement) : null;
         let settlement = "none";
@@ -147,7 +157,7 @@ class TwitchRewardsService {
       // Leave transient provider reads pending until their finite deadline.
       const code = errorCode(error);
       if (["streaming_consent_required", "streaming_reconnect_required", "platform_disabled", "streaming_connection_changed"].includes(code)
-          || this.now() >= row.deadlineAt.getTime()) {
+          || expired()) {
         if (await receipts.claim(row)) await receipts.finish(row, "skipped", "connection_unavailable");
       }
     } finally { await lease.release(); }
@@ -156,19 +166,26 @@ class TwitchRewardsService {
   /** @param {any} row @param {Record<string,any>|null} envelope @param {{buildIds:string[],cooldownSec:number}} mapping @param {string|null} token @param {boolean} expired @param {boolean} live */
   async execute(row, envelope, mapping, token, expired, live) {
     const { actions, receipts } = this.deps;
-    if (expired) return refused(row.state === "awaiting_game" ? "next_game_unavailable" : "redemption_expired");
+    if (row.unavailable === true) return refused(row.reason === "queue_full" ? "queue_full" : "redemption_expired");
+    const expiryReason = row.state === "awaiting_game" ? "next_game_unavailable" : "redemption_expired";
+    if (expired) return refused(expiryReason);
+    const assertDispatch = () => {
+      if (deadlinePassed(row, this.now())) throw rewardError("reward_" + expiryReason, 409);
+    };
     if (!token) return refused("overlay_unavailable");
     if (!live) return refused("channel_offline");
     if (row.state === "pending" && !await receipts.admitViewer(row, mapping.cooldownSec)) return refused("viewer_cooldown");
     try {
+      assertDispatch();
       if (row.action === "randomizer" && row.state === "pending") {
         const ready = await actions.canQueueNextGame(row.userId, token);
         if (!ready) return refused("randomizer_unavailable");
         if (await receipts.waiting(row.userId)) return refused("next_game_already_queued");
+        assertDispatch();
         await receipts.waitForGame(row, ready.gameKey);
         return { state: "awaiting_game", reason: "next_game_queued" };
       }
-      await actions.run(row.userId, token, row, mapping, envelope);
+      await actions.run(row.userId, token, { ...row, assertDispatch }, mapping, envelope);
       return { state: "applied", reason: "action_dispatched" };
     } catch (error) {
       const code = errorCode(error);
@@ -184,20 +201,41 @@ class TwitchRewardsService {
   }
 
   start() {
-    if (this.timer || !this.deps.integrations.isConfigured("twitch")) return;
+    if (this.timer) return;
     this.stopping = false;
-    this.timer = setInterval(() => this.wake(), 15_000); this.timer.unref(); this.wake();
+    this.timer = setInterval(() => this.tick(), 15_000);
+    this.timer.unref();
+    this.tick();
+  }
+
+  tick() {
+    // Do not wait for a slow provider batch or a usable provider grant.
+    const privacy = this.scrub().catch(() => {});
+    this.wake();
+    return privacy;
   }
 
   wake() {
-    if (this.timer && !this.stopping) setImmediate(() => { if (!this.stopping) void this.sweep().catch(() => {}); });
+    if (this.timer && !this.stopping && this.deps.integrations.isConfigured("twitch")) {
+      setImmediate(() => { if (!this.stopping) void this.sweep().catch(() => {}); });
+    }
   }
 
   async stop() {
     this.stopping = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
-    await Promise.allSettled([this.sweepPending, ...this.deviceChecks.values()]);
+    await Promise.allSettled([this.scrubPending, this.sweepPending, ...this.deviceChecks.values()]);
+  }
+
+  scrub() {
+    const { receipts } = this.deps;
+    if (!this.scrubPending) {
+      this.scrubPending = Promise.all([receipts.redactExpiredPending(), receipts.recoverUnknown()])
+        .then(() => {})
+        .finally(() => { this.scrubPending = null; });
+    }
+    return this.scrubPending;
   }
 
   sweep() {
@@ -206,17 +244,33 @@ class TwitchRewardsService {
   }
 
   async sweepOnce() {
-    const { receipts } = this.deps;
-    await receipts.recoverUnknown();
-    const waiting = await receipts.expiredWaiting(), pending = await receipts.pending();
-    const selected = [], owners = new Set();
-    for (const row of [...waiting, ...pending]) {
-      if (owners.has(row.userId)) continue;
-      owners.add(row.userId);
-      selected.push(row);
-      if (selected.length === 6) break;
+    await this.scrub();
+    const waiting = await this.deps.receipts.expiredWaiting();
+    /** @type {Map<string,any>} */ const selected = new Map();
+    if (waiting[0]) selected.set(waiting[0].userId, waiting[0]);
+    this.deferredFirst = !this.deferredFirst;
+    // Reserve a turn for either lane even if the same owner continuously
+    // has both live work and redacted, optional refund receipts.
+    if (this.deferredFirst) await this.pickPending(selected, true, 1);
+    await this.pickPending(selected, false, Math.min(4, 6 - selected.size));
+    await this.pickPending(selected, true, 6 - selected.size);
+    await this.pickPending(selected, false, 6 - selected.size);
+    for (const row of waiting) {
+      if (selected.size === 6) break;
+      if (!selected.has(row.userId)) selected.set(row.userId, row);
     }
-    await Promise.allSettled(selected.map(row => this.process(row)));
+    await Promise.allSettled([...selected.values()].map(row => this.process(row)));
+  }
+
+  /** @param {Map<string,any>} selected @param {boolean} deferred @param {number} limit */
+  async pickPending(selected, deferred, limit) {
+    if (limit <= 0) return;
+    const cursor = deferred ? this.deferredOwner : this.pendingOwner;
+    for (const row of await this.deps.receipts.pending(cursor, limit, deferred, [...selected.keys()])) {
+      selected.set(row.userId, row);
+      if (deferred) this.deferredOwner = row.userId;
+      else this.pendingOwner = row.userId;
+    }
   }
 
   /** Called only for server-accepted, paired-device phases.

@@ -220,6 +220,169 @@ test("pins sanitized viewer text and leaves it out of private activity and the t
   expect((await request(app).get(SETTINGS).set("x-owner", OTHER).expect(200)).body.activity).toEqual([]);
 });
 
+test("a concurrent owner burst keeps eight private pending slots and durable redacted overflow receipts", async () => {
+  const redemption = redemptionId => ({ redemptionId, broadcasterId: BROADCASTER, rewardId: "reward-id",
+    viewerId: "900", providerStatus: "unfulfilled", rewardTitle: "Fixture reward",
+    name: "Fixture viewer", login: "fixture-viewer", input: "Private input" });
+  const accept = (id, refund = true) => receipts.accept(OWNER, redemption(id), "settings-key", "pin", refund);
+  expect(await Promise.all(Array.from({ length: 20 }, (_, index) => accept(`burst-${index}`)))).toEqual(Array(20).fill(true));
+  const ready = await db.twitchRewardReceipts.find({ pendingSlot: { $exists: true } }).toArray();
+  const overflow = await db.twitchRewardReceipts.find({ unavailable: true }).toArray();
+  expect(ready).toHaveLength(8);
+  expect(new Set(ready.map(row => row.pendingSlot)).size).toBe(8);
+  expect(overflow).toHaveLength(12);
+  for (const row of overflow) {
+    expect(row).toMatchObject({ state: "pending", reason: "queue_full", settingsKey: "settings-key" });
+    expectNoViewerData(row);
+  }
+  expect(await accept(ready[0].redemptionId)).toBe(false);
+  expect(await accept(overflow[0].redemptionId)).toBe(false);
+  expect(await accept("skip-overflow", false)).toBe(true);
+  const skipped = await db.twitchRewardReceipts.findOne({ redemptionId: "skip-overflow" });
+  expect(skipped).toMatchObject({ state: "skipped", reason: "queue_full", settlement: "none" });
+  expect(skipped).not.toHaveProperty("settingsKey");
+  expectNoViewerData(skipped);
+});
+
+test("a legacy owner burst cannot hide other owners or make the scheduler repeat its first batch", async () => {
+  const owners = ["a-burst", "b-owner", "c-owner", "d-owner", "e-owner", "f-owner", "g-owner", "h-owner"];
+  const pending = (userId, index) => ({ _id: `${userId}-${index}`, userId, kind: "redemption", state: "pending",
+    receivedAt: new Date(now + index), deadlineAt: new Date(now + 60_000) });
+  await db.twitchRewardReceipts.insertMany([
+    ...Array.from({ length: 16 }, (_, index) => pending(owners[0], index)),
+    ...owners.slice(1).map(owner => pending(owner, 20)),
+  ]);
+  const process = jest.spyOn(service, "process").mockResolvedValue();
+  await service.sweep();
+  expect(process.mock.calls.map(([row]) => row.userId)).toEqual(owners.slice(0, 6));
+  expect(process.mock.calls[0][0]._id).toBe("a-burst-0");
+  process.mockClear();
+  await service.sweep();
+  expect(process.mock.calls.map(([row]) => row.userId)).toEqual([...owners.slice(6), ...owners.slice(0, 4)]);
+});
+
+test("an expired pending reward loses viewer data before its optional refund and keeps its receipt", async () => {
+  await save("pin", "refund");
+  await webhook("delivery-1").expect(204);
+  const pending = await db.twitchRewardReceipts.findOne({ kind: "redemption" });
+  now = pending.deadlineAt.getTime();
+  await service.tick();
+  const redacted = await db.twitchRewardReceipts.findOne({ _id: pending._id });
+  expect(redacted).toMatchObject({ state: "pending", unavailable: true, reason: "redemption_expired", expiresAt: pending.expiresAt });
+  expectNoViewerData(redacted);
+  expect(patchCalls()).toHaveLength(0);
+  await service.sweep();
+  expect((await recent())[0]).toMatchObject({ state: "skipped", reason: "redemption_expired", settlement: "refunded" });
+  expect((await studio.get(token)).highlight).toBeNull();
+  expect(patchCalls()).toHaveLength(1);
+  await webhook("delivery-2").expect(204);
+  await service.sweep();
+  expect(await db.twitchRewardReceipts.countDocuments({ kind: "redemption" })).toBe(1);
+  expect(patchCalls()).toHaveLength(1);
+});
+
+test("the privacy pass removes queued speech while an action batch remains held", async () => {
+  await save("tts");
+  await webhook("delivery-1").expect(204);
+  await webhook("delivery-2", payload("redeem-2")).expect(204);
+  let entered, release;
+  const waiting = new Promise(resolve => { entered = resolve; });
+  const held = new Promise(resolve => { release = resolve; });
+  jest.spyOn(service, "process").mockImplementation(async () => { entered(); await held; });
+  const sweeping = service.sweep();
+  try {
+    await waiting;
+    now += 120_000;
+    await service.tick();
+    const rows = await db.twitchRewardReceipts.find({ kind: "redemption" }).toArray();
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row).toMatchObject({ state: "skipped", reason: "redemption_expired", settlement: "none" });
+      expectNoViewerData(row);
+    }
+    expect(speech).not.toHaveBeenCalled();
+  } finally { release(); await sweeping; }
+});
+
+test("a liveness read crossing the deadline cannot claim a private action for dispatch", async () => {
+  await save("pin", "refund");
+  await webhook("delivery-1").expect(204);
+  jest.spyOn(service.deps.provider, "isLive").mockImplementation(async () => { now += 120_000; return true; });
+  const execute = jest.spyOn(service, "execute");
+  await service.sweep();
+  const row = await db.twitchRewardReceipts.findOne({ kind: "redemption" });
+  expectNoViewerData(row);
+  expect(row).toMatchObject({ state: "pending", unavailable: true, reason: "redemption_expired" });
+  expect(execute).not.toHaveBeenCalled();
+  expect((await studio.get(token)).highlight).toBeNull();
+  expect(patchCalls()).toHaveLength(0);
+});
+
+test("the claim redacts immediately and an expired viewer cooldown cannot dispatch a pin", async () => {
+  await save("pin");
+  await webhook("delivery-1").expect(204);
+  let dispatching;
+  const cooldown = jest.spyOn(receipts, "admitViewer").mockImplementationOnce(async row => {
+    dispatching = await db.twitchRewardReceipts.findOne({ _id: row._id });
+    now = row.deadlineAt.getTime();
+    return true;
+  });
+  await service.sweep();
+  expect(cooldown).toHaveBeenCalledTimes(1);
+  expect(dispatching).toMatchObject({ state: "dispatching" });
+  expectNoViewerData(dispatching);
+  expect((await studio.get(token)).highlight).toBeNull();
+  expect((await recent())[0]).toMatchObject({ state: "skipped", reason: "redemption_expired" });
+});
+
+test("a grant assertion crossing the deadline cannot dispatch a claimed redemption", async () => {
+  await save("pin");
+  await webhook("delivery-1").expect(204);
+  jest.spyOn(service.deps.provider, "isLive").mockResolvedValue(true);
+  const runWithGrant = integrations.withTwitchAutomationGrant.bind(integrations);
+  jest.spyOn(integrations, "withTwitchAutomationGrant").mockImplementation((userId, purpose, action) =>
+    runWithGrant(userId, purpose, grant => action({ ...grant, assertCurrent: async () => {
+      await grant.assertCurrent();
+      now += 120_000;
+    } })));
+  const run = jest.spyOn(service.deps.actions, "run");
+  const cooldown = jest.spyOn(receipts, "admitViewer");
+  await service.sweep();
+  expect(cooldown).not.toHaveBeenCalled();
+  expect(run).not.toHaveBeenCalled();
+  expect((await recent())[0]).toMatchObject({ state: "skipped", reason: "redemption_expired" });
+});
+
+test("the adapter can recheck the live deadline immediately before its side effect", async () => {
+  await save("pin");
+  await webhook("delivery-1").expect(204);
+  const sideEffect = jest.fn();
+  jest.spyOn(service.deps.actions, "run").mockImplementation(async (_owner, _token, row) => {
+    now = row.deadlineAt.getTime();
+    row.assertDispatch();
+    sideEffect(row.input);
+  });
+  await service.sweep();
+  expect(sideEffect).not.toHaveBeenCalled();
+  expect((await recent())[0]).toMatchObject({ state: "skipped", reason: "redemption_expired" });
+});
+
+test("a randomizer readiness check cannot queue a redemption past the initial deadline", async () => {
+  await save("randomizer");
+  await webhook("delivery-1").expect(204);
+  jest.spyOn(service.deps.actions, "canQueueNextGame").mockImplementation(async () => {
+    now += 120_000;
+    return { gameKey: "ready-game" };
+  });
+  await service.sweep();
+  expect(await receipts.waiting(OWNER)).toBeNull();
+  expect((await recent())[0]).toMatchObject({ state: "skipped", reason: "redemption_expired" });
+});
+
+function expectNoViewerData(row) {
+  for (const key of ["input", "name", "login", "viewerId", "pendingSlot"]) expect(row).not.toHaveProperty(key);
+}
+
 test("build vote uses saved owner builds and preserves an already open poll", async () => {
   await save("buildVote");
   await studio.update(token, { poll: { question: "Owner poll", options: ["Yes", "No"], status: "open" } });
