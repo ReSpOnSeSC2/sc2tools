@@ -58,6 +58,15 @@ describe("CoachingBookingAlert", () => {
     expect(link.textContent).toContain("2");
   });
 
+  it("refreshes the private badge after a shared notification read", () => {
+    harness.data = { eligible: true, unreadCount: 1, alert: null };
+    render(<CoachingBookingAlert />);
+    harness.socketHandlers?.["notifications:changed"]({ kind: "read" });
+    expect(harness.mutate).toHaveBeenCalledTimes(1);
+    harness.socketHandlers?.["notifications:changed"]({ kind: "review.comment" });
+    expect(harness.mutate).toHaveBeenCalledTimes(1);
+  });
+
   it("refreshes durable state after a realtime booking event", () => {
     harness.data = { eligible: true, unreadCount: 0, alert: null };
     render(<CoachingBookingAlert />);

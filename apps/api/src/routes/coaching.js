@@ -128,6 +128,7 @@ function buildCoachingRouter(deps) {
   });
 
   router.get("/coaching/alerts", withRole, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store, max-age=0");
     try {
       const { auth, cr } = ctx(req);
       res.json(await deps.coaching.alertSummary(auth.userId, cr));
@@ -137,6 +138,7 @@ function buildCoachingRouter(deps) {
   });
 
   router.post("/coaching/alerts/read", withRole, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store, max-age=0");
     try {
       const { auth, cr } = ctx(req);
       if (cr.role === "none") {

@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Coaching notifications
+
+- Read booking notices in Sessions or the shared notifications inbox to clear
+  the same alert. A newer cancellation remains unread until you see it.
+
 ### Replay camera and mechanics
 
 - Follow either player's recorded camera and open Camera attention to see
@@ -5697,7 +5702,12 @@ Released as `agent-v0.4.0` on GitHub. Installer:
   `(+N more)` when more than one folder is being watched. The watcher
   picks up new entries on its next sweep without a restart.
 
-## [Unreleased] - 2026-05-04
+## [Unreleased]
+
+### Coaching notifications
+
+- Read booking notices in Sessions or the shared notifications inbox to clear
+  the same alert. A newer cancellation remains unread until you see it. - 2026-05-04
 
 ### Added
 

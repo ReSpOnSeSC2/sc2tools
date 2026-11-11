@@ -138,3 +138,12 @@ You don't need funnels; you need proof. Post one anonymized before/after report 
 - Medians come from *your* MMR context; a 4.2k student hitting +15s across the board is fine early — grade the *trend*, and consider a per-student grace multiplier at intake.
 - "Game Too Short" and cheese losses shouldn't tank a week's average — exclude sub-4-minute games from trend stats.
 - Blizzard IP: keep branding "independent, not affiliated" (already on the site).
+
+
+## Coaching notifications
+
+Booking and cancellation notices appear under **Coaching** in the shared
+notifications inbox. Opening Sessions acknowledges the notices for the
+bookings you just saw. Reading the same notices in the inbox clears the
+Sessions badge. Assignment and practice-sharing notifications also appear
+in the Coaching inbox.
