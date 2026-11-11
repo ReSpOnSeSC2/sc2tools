@@ -183,6 +183,9 @@ describe("personal targets", () => {
     expect(findMany).not.toHaveBeenCalled();
   });
 
+});
+
+describe("season estimate", () => {
   test("net MMR per game follows the Trends pairing rules", () => {
     const rows = [
       { myToonHandle: "1-S2-1-1", myRace: "Protoss", myMmr: 4010, myMmrSource: "replay", result: "Victory" },

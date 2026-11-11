@@ -206,7 +206,6 @@ describe("notifications and settlement", () => {
     expect(await db.notifications.countDocuments({ userId: OWNER, kind: "goal_met" })).toBe(2);
     expect((await svc.list(OWNER)).goals[0].status).toBe("active");
   });
-
 });
 
 describe("editing criteria while goals are active", () => {
@@ -253,6 +252,9 @@ describe("editing criteria while goals are active", () => {
     expect(await db.notifications.countDocuments({ userId: OWNER, kind: "goal_met" })).toBe(0);
   });
 
+});
+
+describe("muted and expired goals", () => {
   test("a muted kind sends nothing but the claim still holds", async () => {
     await db.users.updateOne({ userId: OWNER }, { $set: { "preferences.notifications": { muted: ["goal_met"] } } });
     await svc.create(OWNER, goal({ params: { target: 1 } }));

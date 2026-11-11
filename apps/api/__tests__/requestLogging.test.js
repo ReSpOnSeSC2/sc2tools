@@ -44,6 +44,9 @@ describe("request log sanitisation", () => {
     expect(sanitiseRequestUrl(input)).toBe(expected);
   });
 
+});
+
+describe("request log header allowlist", () => {
   test("logs only explicitly safe headers", () => {
     const req = {
       id: "request-id",
