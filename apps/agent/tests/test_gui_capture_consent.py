@@ -78,20 +78,21 @@ def test_capture_checkbox_requires_consent_and_applies_immediately(tmp_path: Pat
         assert saved[-1].replay_capture_enabled is True
         assert saved[-1].obs_scene_switch_enabled is None
         assert not fresh._replay_capture_notice.isHidden()
-        assert "capture on" in fresh._settings_status.text()
+        assert "capture on" in fresh._replay_capture_feedback.text()
 
         # Turning off does not ask for another confirmation or need Save.
         prompt_count = len(prompts)
         fresh._replay_capture_check.setChecked(False)
         assert saved[-1].replay_capture_enabled is False
         assert len(prompts) == prompt_count
+        assert "capture off" in fresh._replay_capture_feedback.text()
         assert fresh._replay_capture_notice.isHidden()
 
         fail_save = True
         fresh._replay_capture_check.setChecked(True)
         assert not fresh._replay_capture_check.isChecked()
         assert fresh._replay_capture_last_saved is False
-        assert "Could not save" in fresh._settings_status.text()
+        assert "Couldn't save replay capture" in fresh._replay_capture_feedback.text()
         assert fresh._replay_capture_notice.isHidden()
         fail_save = False
 
