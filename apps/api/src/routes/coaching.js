@@ -116,35 +116,12 @@ function buildCoachingRouter(deps) {
   });
 
   router.get("/coaching/state", withRole, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store, max-age=0");
     try {
-      const { role, studentId, coachId } = ctx(req).cr;
-      if (role === "none") { res.status(404).json({ error: "not_found" }); return; }
+      const { auth, cr } = ctx(req);
+      if (cr.role === "none" || !lockerRosterAllowed(req, auth, cr)) { coachingNotFound(res); return; }
       const { state, rev } = await deps.coaching.getDoc();
-      if (role === "student") {
-        const students = /** @type {any[]} */ (state.students || []);
-        const student = students.find((s) => s.id === studentId);
-        res.json({
-          rev,
-          scoped: true,
-          state: {
-            coach: state.coach,
-            coaches: /** @type {any[]} */ (state.coaches || []).map((c) => ({ id: c.id, name: c.name })),
-            students: student ? [publicStudentState(student)] : [],
-            customBuilds: state.customBuilds || [],
-            assets: pickAssets(state, student),
-          },
-        });
-        return;
-      }
-      if (role === "coach") {
-        res.json({
-          rev,
-          scoped: true,
-          state: scopeCoachState(state, coachId),
-        });
-        return;
-      }
-      res.json({ rev, scoped: false, state });
+      res.json({ rev, scoped: cr.role !== "admin", state: scopeLockerState(state, cr) });
     } catch (err) {
       next(err);
     }
@@ -237,13 +214,14 @@ function buildCoachingRouter(deps) {
   );
 
   router.put("/coaching/state", withRole, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store, max-age=0");
     try {
       const { auth, cr } = ctx(req);
       const { role } = cr;
       // Students write too — worksheet answers, intake, submissions all
       // mutate state. Scoped-write safety for students is enforced by the
       // merge below; coaches/admin write the full document.
-      if (role === "none") { res.status(404).json({ error: "not_found" }); return; }
+      if (role === "none" || !lockerRosterAllowed(req, auth, cr)) { coachingNotFound(res); return; }
       const body = req.body || {};
       const incoming = body.state;
       const rev = Number(body.rev) || 0;
@@ -258,6 +236,10 @@ function buildCoachingRouter(deps) {
       } else if (role === "coach") {
         toWrite = mergeCoachWrite(current.state, incoming, cr.coachId);
         if (!toWrite) { res.status(403).json({ error: "not_writer" }); return; }
+        if (req.query.roster === "1" && !acceptedRosterWrite(incoming, toWrite, cr.coachId)) {
+          res.status(409).json({ error: "account_unavailable", message: "That account cannot be added to this roster." });
+          return;
+        }
       }
       const out = await deps.coaching.putStateWithRosterGuard(
         toWrite,
@@ -265,7 +247,7 @@ function buildCoachingRouter(deps) {
         [auth.userId],
       );
       if (!out.ok) {
-        res.status(409).json({ error: "conflict", rev: out.rev, state: out.state });
+        res.status(409).json({ error: "conflict", rev: out.rev, state: scopeLockerState(out.state, cr) });
         return;
       }
       res.json({ ok: true, rev: out.rev });
@@ -282,6 +264,25 @@ function buildCoachingRouter(deps) {
       }
       const q = typeof req.query.q === "string" ? req.query.q : "";
       res.json({ users: await deps.coaching.listUsers(q) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post("/coaching/users", withRole, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store, max-age=0");
+    try {
+      const { auth, cr } = ctx(req);
+      if (auth.source !== "clerk" || (cr.role !== "admin" && cr.role !== "coach")) {
+        coachingNotFound(res);
+        return;
+      }
+      const query = typeof req.body?.q === "string" ? req.body.q.trim() : "";
+      if (query.length < 3 || query.length > 254) {
+        res.status(400).json({ error: "bad_query", message: "Enter at least three characters of the email address." });
+        return;
+      }
+      res.json({ users: await deps.coaching.listUsers(query) });
     } catch (err) {
       next(err);
     }
@@ -659,6 +660,18 @@ function buildCoachingRouter(deps) {
   return router;
 }
 
+/** @param {import('express').Request} req @param {{source:string}} auth @param {{role:string}} cr */
+function lockerRosterAllowed(req, auth, cr) {
+  return req.query.roster !== "1" || (auth.source === "clerk" && (cr.role === "coach" || cr.role === "admin"));
+}
+
+/** @param {Record<string, any>} incoming @param {Record<string, any>} merged @param {string|undefined} coachId */
+function acceptedRosterWrite(incoming, merged, coachId) {
+  const students = /** @type {any[]} */ (merged.students);
+  const accepted = new Set(students.filter((row) => row?.coachId === coachId).map((row) => row.id));
+  return Array.isArray(incoming.students) && incoming.students.every((row) => accepted.has(row?.id));
+}
+
 /**
  * A student's write may only change THEIR OWN student record — and not
  * its coach assignment. Everything else comes from the server's copy.
@@ -695,13 +708,13 @@ function mergeCoachWrite(serverState, incoming, coachId) {
   const current = Array.isArray(serverState.students) ? serverState.students : [];
   const currentById = new Map(current.filter(Boolean).map((student) => [student.id, student]));
   const assignedUsers = new Set(current.map((student) => student && student.userId).filter(Boolean));
-  const own = [];
+  const own = new Map();
   for (const candidate of Array.isArray(incoming.students) ? incoming.students : []) {
-    if (!candidate || typeof candidate.id !== "string" || candidate.id.length === 0) continue;
+    if (!candidate || typeof candidate.id !== "string" || !candidate.id || own.has(candidate.id)) continue;
     const existing = currentById.get(candidate.id);
     if (existing) {
       if (existing.coachId !== coachId) continue;
-      own.push({
+      own.set(candidate.id, {
         ...candidate,
         id: existing.id,
         userId: existing.userId,
@@ -712,15 +725,37 @@ function mergeCoachWrite(serverState, incoming, coachId) {
     const userId = typeof candidate.userId === "string" ? candidate.userId : null;
     if (userId && assignedUsers.has(userId)) continue;
     if (userId) assignedUsers.add(userId);
-    own.push({ ...candidate, coachId });
+    own.set(candidate.id, { ...candidate, coachId });
   }
-  const others = current.filter((student) => student && student.coachId !== coachId);
+  const existingRows = current.flatMap((student) => {
+    if (!student || student.coachId !== coachId) return [student];
+    return own.has(student.id) ? [own.get(student.id)] : [];
+  });
+  const addedRows = [...own.values()].filter((student) => !currentById.has(student.id));
   return {
     ...serverState,
     ...incoming,
     coaches: serverState.coaches || [],
-    students: [...others, ...own],
+    students: [...existingRows, ...addedRows],
     assets: { ...(incoming.assets || {}), ...(serverState.assets || {}) },
+  };
+}
+
+/**
+ * Send the same role-scoped snapshot on both reads and CAS conflicts.
+ * @param {Record<string, any>} state
+ * @param {{role:string,studentId?:string,coachId?:string}} actor
+ */
+function scopeLockerState(state, actor) {
+  if (actor.role === "coach") return scopeCoachState(state, actor.coachId);
+  if (actor.role !== "student") return state;
+  const student = /** @type {any[]} */ (state.students || []).find((row) => row?.id === actor.studentId);
+  return {
+    coach: state.coach,
+    coaches: /** @type {any[]} */ (state.coaches || []).map((coach) => ({ id: coach.id, name: coach.name })),
+    students: student ? [publicStudentState(student)] : [],
+    customBuilds: state.customBuilds || [],
+    assets: pickAssets(state, student),
   };
 }
 

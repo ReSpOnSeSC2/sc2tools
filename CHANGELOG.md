@@ -177,6 +177,12 @@ corresponding GitHub Release.
   page or its definition.
 - Give the header's check-in chip a 44px touch target without changing its look.
 
+### Coaching Locker roster
+
+- Coaches and admins can open the Locker roster to manage linked accounts,
+  display names and focus notes. Roster saves create a local JSON backup
+  with a revision-checked restore action.
+
 ### Coaching sessions and prep digest
 
 - Add "Since last session" to each upcoming coaching session. Coaches see the

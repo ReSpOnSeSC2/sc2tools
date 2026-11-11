@@ -107,6 +107,12 @@ Near term (manual, zero build cost): run the pipeline by hand, deliver cards as 
 Mid term: a `coaching/` watch-folder so submitted replays auto-grade; student packet page hosted on sc2tools.com behind their login; adherence trend chart from the accumulated `.grade.json` files.
 Long term: "Coach mode" as a product feature — coaches upload reference builds, students link accounts, grading + longitudinal analytics in-app. Your coaching practice becomes the design lab for a SaaS feature no competitor (human or AI-analyzer) currently ships.
 
+### Locker roster
+
+Coaches and admins can choose **Open Locker roster** above the classic Locker. Link a student by searching for their account email, edit their display name or focus note, or remove their Locker profile. Admins can reassign students and manage linked coaches. **Roster help** opens in the coaching workspace.
+
+Before each roster save, the browser stores the current Locker snapshot on that device. **Restore previous version** is available after a successful roster save while that revision is still current. **Download backup** saves that snapshot as Locker JSON. An intervening edit prevents automatic restore. Use **Classic Locker** for weekly focus, shelves, worksheets and content studio.
+
 ### Session prep digest (shipped in the Sessions tab)
 
 Before each lesson, open **Since last session** on the booking (the next one opens by itself). It is the watch-list from the site plan, built from facts only:
