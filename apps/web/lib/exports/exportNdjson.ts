@@ -90,7 +90,9 @@ export class ExportNdjson {
     }
     if (Object.keys(row).sort().join(",") !== [...FIELDS].sort().join(",")) invalid();
     if (typeof row.gameId !== "string" || !row.gameId || row.gameId.length > 200 || /[\u0000-\u001f\u007f]/u.test(row.gameId) || !["me", "opponent"].includes(row.side as string)) invalid();
-    if (!count(row.time) || row.supply !== null) invalid();
+    const supply = row.supply;
+    const exactOwnerSupply = row.side === "me" && typeof supply === "number" && Number.isFinite(supply) && supply >= 0 && supply <= 2000;
+    if (!count(row.time) || (supply !== null && !exactOwnerSupply)) invalid();
     if (typeof row.name !== "string" || !row.name.trim() || row.name.length > 256 || /[\u0000-\u001f\u007f]/u.test(row.name)) invalid();
     this.events++;
   }
