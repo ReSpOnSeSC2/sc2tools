@@ -48,7 +48,6 @@ const PERSONAL_LIMIT = 20;
 const PERSONAL_MIN_SAMPLE = 3;
 const RACE_LETTERS = Object.freeze(["P", "T", "Z"]);
 const MATCHUPS = Object.freeze(RACE_LETTERS.flatMap((me) => RACE_LETTERS.map((them) => `${me}v${them}`)));
-const QUERY_MAX_TIME_MS = 5000;
 
 /** Milestone keys behind each timing, per race (earliest wins). */
 const TIMING_MILESTONES = Object.freeze({
@@ -261,6 +260,24 @@ function median(values) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+/** Personal medians use the same milestone definitions as the cohort. Only
+ * include readable build logs from the selected patch era.
+ * @param {string} matchup @param {string|null} era
+ * @param {Record<string,number>[]} milestones
+ */
+function personalTimingSummary(matchup, era, milestones) {
+  /** @type {Record<string, {n: number, median: number | null}>} */
+  const timings = {};
+  for (const timing of TIMING_KEYS) {
+    const values = milestones.map((row) => sampleTiming({ matchup, milestones: row }, timing)).filter((value) => value !== null);
+    timings[timing] = {
+      n: values.length,
+      median: values.length >= PERSONAL_MIN_SAMPLE ? Math.round(median(/** @type {number[]} */ (values))) : null,
+    };
+  }
+  return { era, n: milestones.length, limit: PERSONAL_LIMIT, timings };
+}
+
 class LeagueTimingPercentilesService {
   /**
    * @param {{ guideSamples: import('mongodb').Collection, db: import('mongodb').Db }} db
@@ -316,37 +333,6 @@ class LeagueTimingPercentilesService {
       timings, updatedAt: row.updatedAt };
   }
 
-  /**
-   * The player's own medians from their own guide samples (looked up by
-   * their pseudonymous hash), in the era of their latest sample for the
-   * matchup, so a comparison never mixes 8- and 12-worker games.
-   *
-   * @param {string} userHash
-   * @param {string} matchup
-   */
-  async personal(userHash, matchup) {
-    const mu = normalizeMatchup(matchup);
-    /** @type {Record<string, {n: number, median: number | null}>} */
-    const empty = Object.fromEntries(TIMING_KEYS.map((timing) => [timing, { n: 0, median: null }]));
-    if (!mu || typeof userHash !== "string" || !userHash) return { era: null, n: 0, limit: PERSONAL_LIMIT, timings: empty };
-    const rows = await this.samples.find(
-      { userHash, matchup: mu, eraRule: PATCH_ERA_RULE, era: { $in: [...PATCH_ERAS] } },
-      { projection: { _id: 0, era: 1, matchup: 1, milestones: 1, playedOn: 1 }, maxTimeMS: QUERY_MAX_TIME_MS },
-    ).sort({ playedOn: -1, createdAt: -1 }).limit(PERSONAL_LIMIT * 4).toArray();
-    if (rows.length === 0) return { era: null, n: 0, limit: PERSONAL_LIMIT, timings: empty };
-    const era = rows[0].era;
-    const sample = rows.filter((row) => row.era === era).slice(0, PERSONAL_LIMIT);
-    /** @type {Record<string, {n: number, median: number | null}>} */
-    const timings = {};
-    for (const timing of TIMING_KEYS) {
-      const values = sample.map((row) => sampleTiming(row, timing)).filter((value) => value !== null);
-      timings[timing] = {
-        n: values.length,
-        median: values.length >= PERSONAL_MIN_SAMPLE ? Math.round(median(/** @type {number[]} */ (values))) : null,
-      };
-    }
-    return { era, n: sample.length, limit: PERSONAL_LIMIT, timings };
-  }
 }
 
 module.exports = {
@@ -358,4 +344,5 @@ module.exports = {
   PERSONAL_MIN_SAMPLE,
   buildRecomputePipeline,
   sampleTiming,
+  personalTimingSummary,
 };

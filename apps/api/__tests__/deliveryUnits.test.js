@@ -87,7 +87,7 @@ test("Discord posts hide opponent names by default, never ping, and escape user 
   expect(JSON.stringify(shown)).toContain("SecretOppZed");
   expect(JSON.stringify(shown)).not.toContain("4,100");
   expect(shown.embeds[0].url).toBe("https://sc2tools.com/p/me/replays/g1");
-  expect(templates.battleReportMessage({ headline: "H", paragraph: "P", url: "https://evil.test/x" }).embeds[0].url).toBeUndefined();
+  expect(templates.battleReportMessage({ headline: "H", paragraph: "P", token: "AbCdEfGhIjKlMnOp", url: "https://evil.test/x" }).embeds[0].url).toBe("https://sc2tools.com/g/AbCdEfGhIjKlMnOp#battle-report");
 });
 
 test("ICS feed lines use CRLF, escape text and fold at 75 octets", () => {
@@ -148,6 +148,7 @@ test("delivery credentials stay out of request logs and Sentry bodies", () => {
   const secret = "A".repeat(43);
   expect(sanitiseRequestForLog({ method: "GET", originalUrl: `/v1/calendar/${secret}.ics`, headers: {}, socket: {} }).url).toBe("/v1/calendar/[redacted]");
   expect(isCredentialBodyPath("/v1/me/integrations/discord/hooks")).toBe(true);
+  expect(isCredentialBodyPath("/v1/me/integrations/discord/hooks/dh_test/battle-report")).toBe(true);
   expect(isCredentialBodyPath("https://api.sc2tools.com/v1/me/push/subscriptions")).toBe(true);
   expect(isCredentialBodyPath("/v1/push/subscription-change")).toBe(true);
   expect(isCredentialBodyPath("/v1/me/push/test")).toBe(false);

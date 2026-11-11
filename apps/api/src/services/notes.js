@@ -167,6 +167,8 @@ class NotesService {
     this.logger = opts.logger || null;
     /** @type {Map<string, Promise<number>>} */
     this._migrations = new Map();
+    /** @type {Map<string, Promise<void>>} */
+    this._gameNoteWrites = new Map();
   }
 
   /* ------------------------------------------------------------------
@@ -464,9 +466,38 @@ class NotesService {
    * Game notes
    * ------------------------------------------------------------------ */
 
-  /** @param {string} userId @param {string} gameId */
-  async _liveGame(userId, gameId) {
-    return this.db.games.findOne({ userId, gameId, ...LIVE_GAME }, { projection: { _id: 0, gameId: 1, durationSec: 1, noteCount: 1 } });
+  /**
+   * Keep the note and its counter in one transaction where supported.
+   * Standalone Mongo serializes the writes and count repair for each game in this process.
+   * @template T
+   * @param {string} userId @param {string} gameId
+   * @param {(opts: {session?: import('mongodb').ClientSession}) => Promise<T>} write
+   * @returns {Promise<T>}
+   */
+  async _withGameNoteWrite(userId, gameId, write) {
+    if (this.db.gameStatsTransactions && this.db.client) {
+      const session = this.db.client.startSession();
+      try {
+        return await session.withTransaction(() => write({ session }), { readConcern: { level: "snapshot" } });
+      } finally {
+        await session.endSession();
+      }
+    }
+    const key = JSON.stringify([userId, gameId]);
+    const previous = this._gameNoteWrites.get(key) || Promise.resolve();
+    const current = previous.then(() => write({}));
+    const tail = current.then(() => {}, () => {});
+    this._gameNoteWrites.set(key, tail);
+    try {
+      return await current;
+    } finally {
+      if (this._gameNoteWrites.get(key) === tail) this._gameNoteWrites.delete(key);
+    }
+  }
+
+  /** @param {string} userId @param {string} gameId @param {{session?: import('mongodb').ClientSession}} [opts] */
+  async _liveGame(userId, gameId, opts = {}) {
+    return this.db.games.findOne({ userId, gameId, ...LIVE_GAME }, { ...opts, projection: { _id: 0, gameId: 1, durationSec: 1, noteCount: 1 } });
   }
 
   /**
@@ -486,13 +517,20 @@ class NotesService {
       .toArray();
     rows.sort((a, b) => (a.gameTimeSec ?? Infinity) - (b.gameTimeSec ?? Infinity)
       || (a.createdAt?.getTime?.() || 0) - (b.createdAt?.getTime?.() || 0));
-    if ((Number(game.noteCount) || 0) !== rows.length) await this._setNoteCount(userId, id, rows.length);
+    if ((Number(game.noteCount) || 0) !== rows.length) await this._repairNoteCount(userId, id);
     return { items: rows.map((row) => serializeNote(/** @type {NoteDoc} */ (row))), limit: LIMITS.GAME_NOTES_MAX };
   }
 
-  /** @param {string} userId @param {string} gameId @param {number} count */
-  async _setNoteCount(userId, gameId, count) {
-    await this.db.games.updateOne({ userId, gameId, ...LIVE_GAME }, count > 0 ? { $set: { noteCount: count } } : { $unset: { noteCount: "" } });
+  /** @param {string} userId @param {string} gameId */
+  async _repairNoteCount(userId, gameId) {
+    await this._withGameNoteWrite(userId, gameId, async (opts) => {
+      const game = await this._liveGame(userId, gameId, opts);
+      if (!game) return;
+      const count = await this.db.notes.countDocuments({ userId, "target.kind": "game", "target.id": gameId }, opts);
+      if ((Number(game.noteCount) || 0) === count) return;
+      await this.db.games.updateOne({ userId, gameId, ...LIVE_GAME },
+        count > 0 ? { $set: { noteCount: count } } : { $unset: { noteCount: "" } }, opts);
+    });
   }
 
   /**
@@ -533,17 +571,25 @@ class NotesService {
    */
   async createGameNote(userId, gameId, body) {
     const id = cleanId(gameId);
-    const game = id ? await this._liveGame(userId, id) : null;
+    return id ? this._withGameNoteWrite(userId, id, (opts) => this._createGameNote(userId, id, body, opts)) : null;
+  }
+
+  /**
+   * @param {string} userId @param {string} id @param {Record<string, unknown>} body
+   * @param {{session?: import('mongodb').ClientSession}} opts
+   */
+  async _createGameNote(userId, id, body, opts) {
+    const game = await this._liveGame(userId, id, opts);
     if (!game) return null;
     const fields = this._gameNoteFields(body, { durationSec: game.durationSec });
     // The row's counter is the atomic cap: a slot is reserved before the
     // insert and released if the insert fails.
     const reserved = await this.db.games.updateOne(
       { userId, gameId: id, ...LIVE_GAME, noteCount: { $not: { $gte: LIMITS.GAME_NOTES_MAX } } },
-      { $inc: { noteCount: 1 } },
+      { $inc: { noteCount: 1 } }, opts,
     );
     if (!reserved.matchedCount) {
-      if (!await this._liveGame(userId, id)) return null;
+      if (!await this._liveGame(userId, id, opts)) return null;
       throw failure("game_notes_limit", 409, `A game can hold at most ${LIMITS.GAME_NOTES_MAX} notes.`);
     }
     const now = new Date();
@@ -558,10 +604,10 @@ class NotesService {
       updatedAt: now,
     }, COLLECTIONS.NOTES);
     try {
-      const { insertedId } = await this.db.notes.insertOne(doc);
+      const { insertedId } = await this.db.notes.insertOne(doc, opts);
       return serializeNote(/** @type {NoteDoc} */ ({ ...doc, _id: insertedId }));
     } catch (err) {
-      await this.db.games.updateOne({ userId, gameId: id, noteCount: { $gt: 0 } }, { $inc: { noteCount: -1 } }).catch(() => {});
+      if (!opts.session) await this.db.games.updateOne({ userId, gameId: id, noteCount: { $gt: 0 } }, { $inc: { noteCount: -1 } }).catch(() => {});
       throw err;
     }
   }
@@ -605,13 +651,15 @@ class NotesService {
   async deleteGameNote(userId, gameId, noteId) {
     const id = cleanId(gameId);
     if (!id || typeof noteId !== "string" || !NOTE_ID.test(noteId)) return null;
-    const deleted = await this.db.notes.findOneAndDelete(
-      { _id: new ObjectId(noteId), userId, "target.kind": "game", "target.id": id },
-      { projection: NOTE_PROJECTION, includeResultMetadata: false },
-    );
-    if (!deleted) return null;
-    await this.db.games.updateOne({ userId, gameId: id, noteCount: { $gt: 0 } }, { $inc: { noteCount: -1 } });
-    return serializeNote(/** @type {NoteDoc} */ (deleted));
+    return this._withGameNoteWrite(userId, id, async (opts) => {
+      const deleted = await this.db.notes.findOneAndDelete(
+        { _id: new ObjectId(noteId), userId, "target.kind": "game", "target.id": id },
+        { ...opts, projection: NOTE_PROJECTION, includeResultMetadata: false },
+      );
+      if (!deleted) return null;
+      await this.db.games.updateOne({ userId, gameId: id, noteCount: { $gt: 0 } }, { $inc: { noteCount: -1 } }, opts);
+      return serializeNote(/** @type {NoteDoc} */ (deleted));
+    });
   }
 
   /**
