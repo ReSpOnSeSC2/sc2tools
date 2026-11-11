@@ -36,6 +36,23 @@ describe("admitted browser export", () => {
     expect(env.saveBlob).not.toHaveBeenCalled();
   });
 
+  it.each([null, 17.5])("negotiates exact build supply and accepts legacy or updated API rows: %s", async supply => {
+    vi.stubGlobal("Blob", NodeBlob);
+    const text = [
+      { type: "metadata", format: "sc2tools-build-order-export", version: 1, games: 1, fields: ["gameId", "side", "time", "supply", "name"] },
+      { gameId: "one", side: "me", time: 1, supply, name: "Worker" },
+      { type: "complete", games: 1, events: 1, continuation: null },
+    ].map(row => JSON.stringify(row) + "\n").join("");
+    const env = environment(response(text, { "content-type": "application/x-ndjson", "x-export-has-more": "false" }));
+    const buildPage = { url: request.url.replace(".csv", ".ndjson"), filename: "safe.ndjson", contentType: "application/x-ndjson" as const,
+      paged: true, ndjson: { format: "sc2tools-build-order-export" as const } };
+    expect(await downloadExport(buildPage, scope(), env)).toEqual({ bytes: encode.encode(text).byteLength, continuation: null });
+    expect(env.fetch).toHaveBeenCalledWith(buildPage.url, expect.objectContaining({
+      headers: { authorization: "Bearer synthetic-token", accept: "application/x-ndjson; profile=exact-supply" },
+    }));
+    expect(await vi.mocked(env.saveBlob).mock.calls[0][0].text()).toBe(text);
+  });
+
   it("keeps admission through a held createWritable and actual abort cleanup after cancellation", async () => {
     const entered = deferred(), opened = deferred<ReturnType<typeof writer>>(), cleaned = deferred();
     const output = writer(), abort = new AbortController(), auth = { ...scope(), signal: abort.signal };
