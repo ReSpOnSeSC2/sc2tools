@@ -248,7 +248,7 @@ class PracticeLogService {
       const ownLog = Array.isArray(buildLog) ? buildLog : details.get(gameId)?.buildLog;
       const record = practiceRecord({ target: slot.target, hash: slot.hash, matchup, buildLog: ownLog, via: "request", gradedAt, checkpoints: slot.checkpoints });
       const stored = await this._store(userId, gameId, record);
-      if (stored && record.grade) graded += 1;
+      if (stored && "grade" in record && record.grade) graded += 1;
     }
     return { matchup, considered: selected.length, graded };
   }
