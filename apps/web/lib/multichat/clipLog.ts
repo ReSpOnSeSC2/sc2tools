@@ -1,3 +1,4 @@
+import { formatTime } from "@/lib/i18n/format";
 import { csvCell } from "@/lib/csvExport";
 import { formatOffset } from "@/lib/vodLinks";
 import type { ClipMoment } from "./useEngagementState";
@@ -15,7 +16,7 @@ export const momentKey = (moment: ClipMoment) => JSON.stringify([moment.atMs, mo
 export function clipTimestampText(moments: ReadonlyArray<ClipMoment>, start: number | null): string {
   return [...moments].sort((a, b) => a.atMs - b.atMs).flatMap((moment) => {
     if (start !== null && moment.atMs < start) return [];
-    const stamp = start === null ? new Date(moment.atMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    const stamp = start === null ? formatTime(moment.atMs, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
       : formatOffset(moment.atMs - start);
     return [`${stamp} — ${moment.reason}`];
   }).join("\n");
