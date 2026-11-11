@@ -1,17 +1,17 @@
 import type { StatsEvent } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
-import { battleReportFacts } from "@/lib/battleReport/facts";
+import { battleReportFacts, type SnapshotMoment } from "@/lib/battleReport/facts";
 import { planBattleReport, type BattleReport } from "@/lib/battleReport/plan";
 import { sharedReportInput, type SharedGameAnalysis } from "@/lib/sharedGame";
 
 /**
  * The link-preview version of a shared game's battle report: the same
  * headline the share page shows (same share-safe input, same seed) and the
- * turning point as two army-value polylines, ready for an SVG in a Satori
- * card. Server-side only in the sense of where it runs: no endpoint,
- * model or extra request; it reads the payload the card already loaded.
+ * turning point. The army-value polylines are the fallback when there
+ * is no recorded map playback for the selected moment.
  */
 export interface ReportPreview {
   headline: string;
+  moment: Pick<SnapshotMoment, "time" | "caption" | "point"> | null;
   turningPoint: { time: number; caption: string; mine: string; opponent: string; marker: number } | null;
 }
 
@@ -20,14 +20,17 @@ export const SNAPSHOT_BOX = { width: 360, height: 150 } as const;
 
 export function reportPreview(data: SharedGameAnalysis, token: string): ReportPreview {
   const report = planBattleReport(battleReportFacts(sharedReportInput(data, `share-${token}`)), "battle");
-  return { headline: report.headline, turningPoint: turningPointSnapshot(report, data) };
+  const moment = turningPointMoment(report);
+  return { headline: report.headline, moment, turningPoint: moment ? armySnapshot(moment, data) : null };
 }
 
-function turningPointSnapshot(report: BattleReport, data: SharedGameAnalysis): ReportPreview["turningPoint"] {
+function turningPointMoment(report: BattleReport): ReportPreview["moment"] {
   const swing = report.facts.story.turningPoints.slice().sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || a.time - b.time)[0];
-  const moment = swing ? { time: swing.time, caption: "Turning point" }
-    : report.facts.moments.find((row) => row.id === "largest-fight" || row.id === "first-clash");
-  if (!moment) return null;
+  return swing ? { time: swing.time, caption: "Turning point" }
+    : report.facts.moments.find((row) => row.id === "largest-fight" || row.id === "first-clash") ?? null;
+}
+
+function armySnapshot(moment: NonNullable<ReportPreview["moment"]>, data: SharedGameAnalysis): ReportPreview["turningPoint"] {
   const from = Math.max(0, moment.time - 90), until = Math.max(from + 1, moment.time + 90);
   const pick = (rows: readonly StatsEvent[] | null | undefined) => (rows ?? [])
     .filter((row) => known(row.time) && row.time >= from && row.time <= until && known(row.army_value))
