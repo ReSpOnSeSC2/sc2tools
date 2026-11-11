@@ -2138,9 +2138,10 @@
         "agent-calm-sync",
         "realtime-one-connection"
       ],
-      "implemented": "Coarse native status model, recent-game/import facts, web setup-health and simple metadata heartbeat exist. PR861 (merged as 92f26806) adds the shared HealthMonitor, ordered rules, coalesced snapshots and classified boot failures. PR862 (merged as db1474d1) validates bounded heartbeat sync reports, counts upload rejections and serves owner-only sync health with specific Doctor reasons. PR863 (merged as 2c04d849) renders the actionable health card, keeps row buttons stable, restarts only after releasing the instance lock with the window visible, shares snapshot tray colours and clears the archive row only for a running full resync. PR864 (merged as f58eed0c) adds the lazy Settings sync-health card, count-only Devices and pill details, specific Doctor help and an old-agent state; unresolved player names stay in the owner Settings card and Report carries only codes and counts. PR865 (merged as da77a84b) produces the bounded agent heartbeat sync payload and wires the remaining runtime health facts, including unresolved-name capture without changing replay parser arity. PR866 (merged as 0c53a7c8) adds owner-scoped identity repair and reason-scoped retry actions across the API, socket, agent and web surfaces. These merged slices are contained in delivered main 0c53a7c8. No signed release or installed-agent acceptance is claimed.",
+      "implemented": "Coarse native status model, recent-game/import facts, web setup-health and simple metadata heartbeat exist. PR861 (merged as 92f26806) adds the shared HealthMonitor, ordered rules, coalesced snapshots and classified boot failures. PR862 (merged as db1474d1) validates bounded heartbeat sync reports, counts upload rejections and serves owner-only sync health with specific Doctor reasons. PR863 (merged as 2c04d849) renders the actionable health card, keeps row buttons stable, restarts only after releasing the instance lock with the window visible, shares snapshot tray colours and clears the archive row only for a running full resync. PR864 (merged as f58eed0c) adds the lazy Settings sync-health card, count-only Devices and pill details, specific Doctor help and an old-agent state; unresolved player names stay in the owner Settings card and Report carries only codes and counts. PR865 (merged as da77a84b) produces the bounded agent heartbeat sync payload and wires the remaining runtime health facts, including unresolved-name capture without changing replay parser arity. PR866 (merged as 0c53a7c8) adds owner-scoped identity repair and reason-scoped retry actions across the API, socket, agent and web surfaces. These merged slices are contained in delivered main 0c53a7c8. No signed release or installed-agent acceptance is claimed. Unified native health, tray status and actionable website/device diagnostics are verified offscreen.",
       "remainingRequirements": [
-        "Coordinate signed native release and installed-agent acceptance; source merge does not update desktops. Agent 0.24.8 remains unpublished and owner-gated."
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing.",
+        "Verify the installed health heartbeat and recovery checklist on a paired Windows machine."
       ],
       "evidence": [
         "apps/agent/sc2tools_agent/heartbeat.py",
@@ -2161,7 +2162,8 @@
         "apps/agent/sc2tools_agent/ui/tray.py",
         "apps/web/lib/syncHealth.ts",
         "apps/web/components/analyzer/settings/SyncHealthCard.tsx",
-        "apps/web/components/SyncHealthSummary.tsx"
+        "apps/web/components/SyncHealthSummary.tsx",
+        "PR #901 Windows aggregate"
       ],
       "mergedPrs": [
         861,
@@ -2169,7 +2171,8 @@
         863,
         864,
         865,
-        866
+        866,
+        901
       ],
       "requirementSha256": "676ea89f33ea04480f7d76ff36a64cb7c110b0c208eb00d6a2bd84d54104ba84"
     },
@@ -2182,9 +2185,10 @@
       "dependsOn": [
         "agent-health-and-sync-health"
       ],
-      "implemented": "PR868 (4475faaf) adds bounded whitelisted diagnostics, fail-closed redaction and immutable reviewed export plans. PR869 (aadda26f) adds owner-fenced native Help checks, an isolated fixed replay fixture, Copy support info and reviewed selected-log ZIP saving with pinned Windows handles and matching help. PR870 (2dea9489) adds CurrentUser DPAPI storage for device tokens and OBS passwords, immutable encrypted credential generations and full-state pointer-last commits, read-only loads, explicit post-instance-lock migration, KEEP/SET/CLEAR revisions and authenticated/OBS/support retirement with backup/downgrade documentation. PR871 (0d72e117) bounds OBS repair lock waiting to 15 seconds despite floating rounding while preserving retry/deadline/owner checks. These source slices are contained in delivered main 0d72e117. No signed native release or installed-agent acceptance is claimed.",
+      "implemented": "PR868 (4475faaf) adds bounded whitelisted diagnostics, fail-closed redaction and immutable reviewed export plans. PR869 (aadda26f) adds owner-fenced native Help checks, an isolated fixed replay fixture, Copy support info and reviewed selected-log ZIP saving with pinned Windows handles and matching help. PR870 (2dea9489) adds CurrentUser DPAPI storage for device tokens and OBS passwords, immutable encrypted credential generations and full-state pointer-last commits, read-only loads, explicit post-instance-lock migration, KEEP/SET/CLEAR revisions and authenticated/OBS/support retirement with backup/downgrade documentation. PR871 (0d72e117) bounds OBS repair lock waiting to 15 seconds despite floating rounding while preserving retry/deadline/owner checks. These source slices are contained in delivered main 0d72e117. No signed native release or installed-agent acceptance is claimed. Native diagnostics and contextual help were reconciled with the current settings and health UI.",
       "remainingRequirements": [
-        "Coordinate a signed native release and installed-agent upgrade, credential migration and support-tool acceptance after the health dependency; source merges and CI do not update desktops. Agent 0.24.8 remains unpublished and owner-gated."
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing.",
+        "Verify upgrades, credential migration and the redacted support bundle on the installed agent."
       ],
       "evidence": [
         "apps/agent/sc2tools_agent/crash_reporter.py",
@@ -2204,13 +2208,15 @@
         "apps/agent/sc2tools_agent/agent_credentials.py",
         "apps/agent/sc2tools_agent/agent_credentials_windows.py",
         "apps/agent/sc2tools_agent/runner.py",
-        "apps/agent/sc2tools_agent/live/obs_token_rotation.py"
+        "apps/agent/sc2tools_agent/live/obs_token_rotation.py",
+        "PR #901 Windows aggregate"
       ],
       "mergedPrs": [
         868,
         869,
         870,
-        871
+        871,
+        901
       ],
       "requirementSha256": "1634de3b31d1acda2662a36075be1cf18f01b4f1bbd9313b260d64c626cd8cc7"
     },
@@ -2223,9 +2229,9 @@
       "dependsOn": [
         "replay-library-control"
       ],
-      "implemented": "PR#873 delivers bounded full-account NDJSON, paged/throttled build-order CSV/NDJSON and bounded private replay-batch signing. PR#874 supplies owner-fenced browser downloads, store ZIP32/CRC32 in a lazy worker, actual-settlement admission and cleanup, exclusive selection of up to100 replays, descriptive result-aware templates, progress/cancel/partial results, Settings export cards and help. Individual JSON export and upload behavior remain available. Actual containing-main revision is bound only after successful UI delivery. The UI PR also contains a reviewed test-only Settings search rail correction; local implementation validation remains bound to106, with exact237 hosted acceptance required separately. Verified source slices are contained in delivered main 4256903f5b391058f0b4c5650aa7628675c4005d.",
+      "implemented": "PR#873 delivers bounded full-account NDJSON, paged/throttled build-order CSV/NDJSON and bounded private replay-batch signing. PR#874 supplies owner-fenced browser downloads, store ZIP32/CRC32 in a lazy worker, actual-settlement admission and cleanup, exclusive selection of up to100 replays, descriptive result-aware templates, progress/cancel/partial results, Settings export cards and help. Individual JSON export and upload behavior remain available. Actual containing-main revision is bound only after successful UI delivery. The UI PR also contains a reviewed test-only Settings search rail correction; local implementation validation remains bound to106, with exact237 hosted acceptance required separately. Verified source slices are contained in delivered main 4256903f5b391058f0b4c5650aa7628675c4005d. Original replay exports retain a verified API fallback and bounded direct storage path when available.",
       "remainingRequirements": [
-        "Owner-approved bucket GET CORS configuration and real-browser original replay fetch/ZIP acceptance remain unverified. Dormant pure GET policy and upload readiness do not prove these external gates."
+        "Apply the optional R2 GET CORS rule for approved web origins. Verify original replay and ZIP fetch in a signed-in production browser."
       ],
       "evidence": [
         "apps/api/src/routes/me.js",
@@ -2236,11 +2242,15 @@
         "docs/handoff/replay-pack-api-checkpoint.md",
         "docs/handoff/export-center-ui-checkpoint.md",
         "apps/api/src/services/replayDownloadBatch.js",
-        "apps/web/lib/exports/replayPacks/downloadReplayPack.ts"
+        "apps/web/lib/exports/replayPacks/downloadReplayPack.ts",
+        "gameShares.test.js",
+        "docs/SETUP_GUIDE.md"
       ],
       "mergedPrs": [
         873,
-        874
+        874,
+        885,
+        907
       ],
       "requirementSha256": "1297f27ad3ec39eeb84dfa9bddc2744890e3130973b01e94ac53908ded325731"
     },
@@ -2248,22 +2258,26 @@
       "ordinal": 79,
       "id": "reanalysis-center",
       "wave": 5,
-      "status": "open",
+      "status": "partial",
       "title": "Re-analysis center: bring games analyzed by an older engine up to date in managed batches",
       "dependsOn": [
         "notification-center"
       ],
-      "implemented": "Existing resync/detail-repair primitives are distinct from managed reanalysis.",
+      "implemented": "Existing resync/detail-repair primitives are distinct from managed reanalysis. Preserved parser provenance and added managed milestone cohorts, paced replay re-analysis, owner and device fences, and legacy update guidance.",
       "remainingRequirements": [
-        "Preserve validated agent/engine provenance; gamesIngestPolicy currently drops engineVersion for non-browser sources.",
-        "Implement milestones/cohort counts, ACK-paced100-game jobs with pause/cancel/waiting-for-agent, original replay download/reparse and Settings/game provenance UI."
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing.",
+        "Run a disposable paired cohort through download, reparse and recorded completion before historical backfill."
       ],
       "evidence": [
         "apps/api/src/routes/gamesIngestPolicy.js",
         "apps/api/src/services/games.js",
-        "apps/web/components/analyzer/settings/ReplayArchiveStatusCard.tsx"
+        "apps/web/components/analyzer/settings/ReplayArchiveStatusCard.tsx",
+        "PR #901 Windows and Engine parity"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        901
+      ],
       "requirementSha256": "449f86fd18a0d9fb4a91ee36ea8d1c7241ca1724da229aa9a24ec7bd1afc03a9"
     },
     {
@@ -2295,129 +2309,145 @@
       "ordinal": 81,
       "id": "personal-goals",
       "wave": 6,
-      "status": "open",
+      "status": "completed",
       "title": "Personal goals with automatic progress: games, win rate, MMR, macro and build practice",
       "dependsOn": [
         "notification-center"
       ],
-      "implemented": "Dock stream goals are a separate existing feature; no player_goals service or /app/goals route found in scoped source search.",
-      "remainingRequirements": [
-        "Implement recurrence/parity, max8 player goals, rev-aware progress/minimum samples, notify-once claim and Today/full goals UI."
-      ],
+      "implemented": "Dock stream goals are a separate existing feature; no player_goals service or /app/goals route found in scoped source search. Goals have owner-scoped exports, trusted-replay rating progress, general build filters, recurrence and revision-safe achievement claims.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/dock/DockGoals.tsx",
         "apps/api/src/services",
-        "apps/web/app/app"
+        "apps/web/app/app",
+        "goals API and Today/Goals targeted tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        887,
+        899,
+        900,
+        907
+      ],
       "requirementSha256": "1ac0bd8c3ff70c229bd88becd9eca0918bfb4126a200a7498f6dfe15a3ed8613"
     },
     {
       "ordinal": 82,
       "id": "next-league-targets",
       "wave": 6,
-      "status": "partial",
+      "status": "completed",
       "title": "Next-league targets: where you stand vs your league and the next one, timing gaps, and a season goal estimate",
       "dependsOn": [
         "game-page-benchmarks",
         "chart-kit"
       ],
-      "implemented": "Game benchmarks and mechanics charts supply existing statistical foundations.",
-      "remainingRequirements": [
-        "Implement Targets/Today bars, next-league timing-percentile aggregate with k-floor, explicit league override, season estimate and below-target drilldowns."
-      ],
+      "implemented": "Game benchmarks and mechanics charts supply existing statistical foundations. Added season pace, minimum-sample timing and next-league comparisons, restored private rating provenance and corrected the breakdown entry point.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/api/src/routes/benchmarks.js",
         "apps/web/components/analyzer/MechanicsTrendCard.tsx",
-        "docs/handoff/game-page-benchmarks-checkpoint.md"
+        "docs/handoff/game-page-benchmarks-checkpoint.md",
+        "leagueTargets API and Targets web regressions"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        887,
+        900,
+        901
+      ],
       "requirementSha256": "fe5d3b408a014c8116c89ba4d2650efe269565f8fed2a70f5bf5dacc634a8dc8"
     },
     {
       "ordinal": 83,
       "id": "notes-and-review-queue",
       "wave": 6,
-      "status": "partial",
+      "status": "completed",
       "title": "One notes system: opponent notes v2 (tags, stream/private, alt-aware) and private timestamped game notes with a review queue",
       "dependsOn": [
         "dossier-upgrade",
         "one-game-clock"
       ],
-      "implemented": "Private opponent notes and check-in notes exist; Review Exchange is a distinct dataset.",
-      "remainingRequirements": [
-        "Implement unified note targets/tags/visibility/account-player scope and migration.",
-        "Implement private timestamp/map game notes and todo/done/tagged review queue with allowlisted share/review responses; retain distinct check-in notes."
-      ],
+      "implemented": "Private opponent notes and check-in notes exist; Review Exchange is a distinct dataset. Unified opponent and private timestamped game notes with migration, review queue, owner scoping and public allowlists.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/api/src/services/opponents.js",
         "apps/api/src/services/gameControls.js",
-        "apps/web/components/analyzer/game/GameDetailPage.tsx"
+        "apps/web/components/analyzer/game/GameDetailPage.tsx",
+        "notesSystem.test.js"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        899
+      ],
       "requirementSha256": "2ccffafdabdc4f704ef6cf93647bf5665658bd5272a39cc6da6cd97de257f31f"
     },
     {
       "ordinal": 84,
       "id": "per-game-share-link",
       "wave": 6,
-      "status": "partial",
+      "status": "completed",
       "title": "Share one game by link, with the map replay, no account needed, revocable",
       "dependsOn": [
         "accurate-playback-smooth"
       ],
-      "implemented": "Battle-card image sharing and separately consented public replay archives/allowlist shapers exist.",
-      "remainingRequirements": [
-        "Implement bounded revocable game_shares tokens, owner management, redacted public analysis/playback route /g/[token], short-TTL direct-R2 segments and noindex/social metadata.",
-        "Do not equate image export or account-wide replay consent with a revocable single-game share."
-      ],
+      "implemented": "Battle-card image sharing and separately consented public replay archives/allowlist shapers exist. Single-game links are revocable and owner-scoped. Analysis and verified fallback playback support old recordings. New v2 R2 paths use opaque owner/game directories with exact upload-generation checks.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/api/src/routes/publicReplays.js",
-        "apps/web/components/analyzer/game/ShareGameButton.tsx"
+        "apps/web/components/analyzer/game/ShareGameButton.tsx",
+        "gameShares.test.js",
+        "R2 upload-generation race tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        885,
+        900,
+        907
+      ],
       "requirementSha256": "3471edb57f53719c57144fc5002289193d73ecf9dc7d67377b3f6f556e365f7c"
     },
     {
       "ordinal": 85,
       "id": "replayer-studio",
       "wave": 6,
-      "status": "partial",
+      "status": "completed",
       "title": "Replayer studio: vision modes, click-to-inspect units, and WebM/GIF clip export",
       "dependsOn": [
         "game-nav-and-replay-controls"
       ],
-      "implemented": "Map replay/HUD/shared-clock framework exists; ReplaySettings explicitly leaves vision and camera modes unwired.",
-      "remainingRequirements": [
-        "Implement owner-filtered fog/last-seen ghosts and persisted vision cycle.",
-        "Implement unit hit testing/inspection/follow and browser-only bounded WebM/GIF clip encoding with progress/cancel."
-      ],
+      "implemented": "Map replay/HUD/shared-clock framework exists; ReplaySettings explicitly leaves vision and camera modes unwired. Added bounded replayer inspection, follow/vision, retained observed earlier sightings across loaded sections, and browser export of WebM, MP4 and GIF at the chosen dimensions. Vision is labeled approximate when earlier replay data is absent.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/analyzer/game/replay/ReplaySettings.tsx",
-        "apps/web/components/analyzer/game/MapReplayer.tsx"
+        "apps/web/components/analyzer/game/MapReplayer.tsx",
+        "Actual repository replay encoded in Chromium",
+        "Clip dialog and worker tests at both output sizes"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        901,
+        907
+      ],
       "requirementSha256": "e138302633932b4819a1780bfd5304e7633d4b8b0333fa01f98ed7ae99861e29"
     },
     {
       "ordinal": 86,
       "id": "game-compare",
       "wave": 6,
-      "status": "open",
+      "status": "completed",
       "title": "Compare two games side by side: timelines, build diff and mechanics",
       "dependsOn": [
         "chart-kit"
       ],
-      "implemented": "Existing timelines and Ghost alignment can support a client-only comparison; no /app/compare surface found.",
-      "remainingRequirements": [
-        "Implement two-game entry/picker, independent missing states, synced metrics/build diff/mechanics and responsive comparison tests."
-      ],
+      "implemented": "Existing timelines and Ghost alignment can support a client-only comparison; no /app/compare surface found. Compare supports independent A/B state, bounded account-scoped selection, synchronized cursor and repeated-step-aware build alignment.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/lib/ghostGrade.ts",
         "apps/web/app/app",
-        "apps/web/components/analyzer/game"
+        "apps/web/components/analyzer/game",
+        "Real Chromium comparisons at 375, 768 and 1280 px"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        901
+      ],
       "requirementSha256": "d7c3c3da90831e016ba1ca661bdef5260ae3fc7eabd596a05bf969a618514dc6"
     },
     {
@@ -2430,59 +2460,70 @@
         "build-order-supply-export",
         "reanalysis-center"
       ],
-      "implemented": "Existing casualty/approximate supply/build-log playback payloads are foundations.",
+      "implemented": "Existing casualty/approximate supply/build-log playback payloads are foundations. Engine 1.6.13 supplies credited killers, born-at times, bounded full owner build logs, global casts and a Units trade/lifespan view. Exact same-frame tracker supply is shown per game and included in private owner CSV and NDJSON exports.",
       "remainingRequirements": [
-        "Add killerUnit/bornAt, exact aligned buildLogSupply, bounded full logs and casts timeline in one coordinated engine+agent release.",
-        "Implement additive API/sanitizer/Units-card trade/lifespan/unattributed UI and tests.",
-        "Historical backfill depends on reanalysis-center; no new coordinated payload found in scoped search."
+        "Replay events lack authoritative reservation and fractional supply between tracked frames. Exact values require a tracked frame. Other steps show an estimate where available or an empty value.",
+        "Opponent recorded build counts use the available filtered build log.",
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing.",
+        "Re-analyze historical replays with the updated engine."
       ],
       "evidence": [
         "apps/replay-engine",
         "apps/agent/sc2tools_agent",
-        "docs/handoff/build-exports-checkpoint.md"
+        "docs/handoff/build-exports-checkpoint.md",
+        "Four-fixture replay tracker audit",
+        "Engine parity and regenerated strict samples",
+        "Private multi-game export alignment and legacy tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        901,
+        907
+      ],
       "requirementSha256": "e3d01757de8bfebc2b4fec9e2b2cb0fc4386330281ca219c5efc7e7c7b6eb04d"
     },
     {
       "ordinal": 88,
       "id": "map-intel-heatmaps",
       "wave": 6,
-      "status": "open",
+      "status": "completed",
       "title": "Map Intel (lean): opponent proxy, fight and unit-loss heatmaps from spatial data already uploaded",
       "dependsOn": [
         "dossier-upgrade"
       ],
-      "implemented": "Spatial replay data exists; the planned opponent proxy/fight/unit-loss heatmap feature was not found.",
-      "remainingRequirements": [
-        "Implement bounded private spatial aggregation/projection, sample semantics, map controls and dossier UI from the original item."
-      ],
+      "implemented": "Spatial replay data exists; the planned opponent proxy/fight/unit-loss heatmap feature was not found. Map Intel uses bounded private spatial projections, merge-aware identities, map bounds and accessible opponent/loss heatmaps.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/analyzer/game/MapReplayer.tsx",
-        "apps/api/src/services/opponents.js"
+        "apps/api/src/services/opponents.js",
+        "spatial API and Map Intel web regressions"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        899
+      ],
       "requirementSha256": "eb7dc55ffb55a1fd3c3e381d4f468b874323666b6d30ad9df9b38dd6e5401182"
     },
     {
       "ordinal": 89,
       "id": "practice-log",
       "wave": 6,
-      "status": "partial",
+      "status": "completed",
       "title": "Private practice log: every game in your practised matchup graded automatically, with your progress",
       "dependsOn": [
         "ghost-synced-practice"
       ],
-      "implemented": "Synced Ghost targets and private per-game grading exist.",
-      "remainingRequirements": [
-        "Persist ingest-time practice grades/coverage and add bounded private summary/progress/page; avoid creating a second target system."
-      ],
+      "implemented": "Synced Ghost targets and private per-game grading exist. Added private practice grades, weekly and daily progress, editable checkpoints and a qualifying-game daily quest.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/api/src/services/ghostConfig.js",
         "apps/web/lib/ghostGrade.ts",
-        "docs/handoff/ghost-practice-checkpoint.md"
+        "docs/handoff/ghost-practice-checkpoint.md",
+        "Practice grade and checkpoint tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        900
+      ],
       "requirementSha256": "566e2e2c98955e1985e4ff60e2ed9d304c91d2b83aaf5ad1e13e1f8db4df6da5"
     },
     {
@@ -2495,120 +2536,146 @@
         "ghost-synced-practice",
         "reference-build-order"
       ],
-      "implemented": "Native Companion Ghost provides an always-on-top clock-following schedule.",
+      "implemented": "Native Companion Ghost provides an always-on-top clock-following schedule. The Practice HUD follows scheduled build steps from the live clock, supports timing and voice, and has explicit positioning and capture-safe interaction.",
       "remainingRequirements": [
-        "Reconcile the full step/checkpoint/voice/parity/capture-safe Practice HUD contract; existing panel does not verify built steps.",
-        "Coordinate signed desktop delivery."
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing."
       ],
       "evidence": [
         "apps/agent/sc2tools_agent/companion_ghost.py",
         "apps/agent/sc2tools_agent/ui/companion_ghost.py",
-        "docs/handoff/agent-0.24.7-release-checkpoint.md"
+        "docs/handoff/agent-0.24.7-release-checkpoint.md",
+        "Offscreen native HUD controls at 125% and 150%"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        901
+      ],
       "requirementSha256": "484dbae30a1cfe161c78e0d0aed1641914517d4ac4a35b1ddf28357e3ce889ec"
     },
     {
       "ordinal": 91,
       "id": "build-library-safety",
       "wave": 6,
-      "status": "partial",
+      "status": "completed",
       "title": "Build library safety and tools: undo, version history, recently deleted, duplicate, pin, tags, bulk actions, share codes",
       "dependsOn": [
         "unified-build-editor"
       ],
-      "implemented": "Duplicate, exports and basic editor safety are merged.",
-      "remainingRequirements": [
-        "Implement undo/version history/recently deleted restore, pin/tags/bulk actions and share-code contracts; no custom_build_revisions/trash feature found in scoped source search."
-      ],
+      "implemented": "Duplicate, exports and basic editor safety are merged. Build library adds revision snapshots, safe undo/restore, trash, copy/pin/tag/bulk actions and share codes. Full build export streams beyond the import cap.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/api/src/routes/customBuilds.js",
         "apps/web/components/builds/BuildsLibrary.tsx",
-        "apps/web/components/builds/BuildDetailView.tsx"
+        "apps/web/components/builds/BuildDetailView.tsx",
+        "501-build export real-Mongo regression"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        899,
+        900,
+        907
+      ],
       "requirementSha256": "b85eb724fb456ed4dcbb821c95c6413714c37598bb6bd9b5b9b68ace7078075c"
     },
     {
       "ordinal": 92,
       "id": "community-forks-and-trust",
       "wave": 6,
-      "status": "partial",
+      "status": "completed",
       "title": "Community builds: author updates reach savers, saves count, opt-in author record, 'Most saved' sort",
       "dependsOn": [
         "builds-correctness-fixes"
       ],
-      "implemented": "Save provenance/version and public build author infrastructure exist.",
-      "remainingRequirements": [
-        "Implement durable saves counts, author-update propagation, opt-in author record and Most saved sort; no community_saves feature found in scoped source search."
-      ],
+      "implemented": "Save provenance/version and public build author infrastructure exist. Community builds have save totals, author opt-in and exact review-version fencing before adopting changed rules.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/community/SaveToLibraryButton.tsx",
-        "apps/api/src/services/community.js"
+        "apps/api/src/services/community.js",
+        "Public build trust and CAS regressions"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        899,
+        907
+      ],
       "requirementSha256": "4e1c44f67b367af163e20efef4c69283ce00af9d7fb3507ad7e1d530175bd7d5"
     },
     {
       "ordinal": 93,
       "id": "reports-weekly-and-stream",
       "wave": 6,
-      "status": "open",
+      "status": "partial",
       "title": "Weekly report and post-stream report, delivered through the bell (and push when enabled)",
       "dependsOn": [
         "sessions",
         "notification-center",
         "dock-game-desk"
       ],
-      "implemented": "Unified Sessions and in-app notifications are now available foundations.",
+      "implemented": "Unified Sessions and in-app notifications are now available foundations. Weekly and stream reports use bounded claims, timezone and played-week attribution, fresh consent, VOD links and image sharing.",
       "remainingRequirements": [
-        "Implement weekly/post-stream report assembly, schedules/idempotent notification delivery and optional push integration; source presence of sessions is not this report feature."
+        "Configure VAPID and subscribe a test device to verify optional push delivery. Verify reports in a disposable production account."
       ],
       "evidence": [
         "apps/api/src/services/sessionHistory.js",
-        "apps/api/src/services/notifications.js"
+        "apps/api/src/services/notifications.js",
+        "Report delivery, late upload and claim tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        900,
+        901
+      ],
       "requirementSha256": "595171b76a8bc1180cef4d3f57c66b76a03074da13f21cecd3920fa394bde26b"
     },
     {
       "ordinal": 94,
       "id": "discord-posts",
       "wave": 6,
-      "status": "open",
+      "status": "partial",
       "title": "Post results, session summaries and milestones to Discord through channel webhooks",
       "dependsOn": [
         "sessions"
       ],
-      "implemented": "No Discord outbox/result/session webhook feature found in scoped source search.",
+      "implemented": "No Discord outbox/result/session webhook feature found in scoped source search. Discord uses encrypted webhook settings, consent-fenced outbox delivery and observed same-account/race promotion. Stream rating change uses comparable recorded starts.",
       "remainingRequirements": [
-        "Implement user-reviewed webhook settings, bounded/idempotent delivery and result/session/milestone templates after sessions; actual external sends require direct authorization."
+        "The available replay, live and Pulse sources cannot bind the exact final MMR to this result.",
+        "Activate a disposable Discord channel and verify posting, revocation and a trusted installed-agent promotion."
       ],
       "evidence": [
         "apps/api/src/services/sessionHistory.js",
-        "apps/api/src/services/notifications.js"
+        "apps/api/src/services/notifications.js",
+        "Discord opt-in/outbox and verified-rating ingest regressions"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        901,
+        907
+      ],
       "requirementSha256": "980ca4b2b4c812def0d2997c45f464ab2a2c6349ccc891f99c115950569ed1a3"
     },
     {
       "ordinal": 95,
       "id": "push-notifications-calendar",
       "wave": 6,
-      "status": "open",
+      "status": "partial",
       "title": "Notifications away from the site (browser and phone push) and a calendar feed for coaching sessions",
       "dependsOn": [
         "notification-center"
       ],
-      "implemented": "In-app notification delivery and coaching bookings exist; service _push is an internal socket producer.",
+      "implemented": "In-app notification delivery and coaching bookings exist; service _push is an internal socket producer. Added push opt-in and reminders, revocable calendar feeds, and owner-and-hash-bound recovery for calendar links created with the existing encryption key.",
       "remainingRequirements": [
-        "Implement VAPID/subscription lifecycle/service-worker delivery and secret calendar feed/reminders with privacy/revocation tests; no such feature found in scoped source search."
+        "Set WEB_PUSH_VAPID_PUBLIC_KEY, WEB_PUSH_VAPID_PRIVATE_KEY and WEB_PUSH_VAPID_SUBJECT, then verify subscribe, delivery and revoke. Verify private calendar export on a production account."
       ],
       "evidence": [
         "apps/api/src/services/notifications.js",
-        "apps/api/src/services/coaching.js"
+        "apps/api/src/services/coaching.js",
+        "Push, calendar revocation and private account export tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        900,
+        901,
+        907
+      ],
       "requirementSha256": "b5e73330f136a2b10525fde7ca430cc4aee4003730a24cc6a570e9537f83f943"
     },
     {
@@ -2621,79 +2688,89 @@
         "agent-pairing-recovery",
         "agent-window-tray-folders"
       ],
-      "implemented": "Accessible themes/Companion and runtime/settings recovery have shipped source foundations. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
+      "implemented": "Accessible themes/Companion and runtime/settings recovery have shipped source foundations. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate. First-run gating, restored settings, honest save feedback, shortcut help, an operable section index and compact Jump are implemented.",
       "remainingRequirements": [
-        "Reconcile grouped settings, dirty/save/restart/theme/shortcut and first-run migration/gating augments; installed/released acceptance is not established by publication."
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing."
       ],
       "evidence": [
         "docs/handoff/agent-runtime-checkpoint.md",
         "apps/agent/sc2tools_agent/ui/gui.py",
         "docs/handoff/agent-0.24.7-release-checkpoint.md",
-        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json",
+        "Native offscreen Settings and setup tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        901,
+        907
+      ],
       "requirementSha256": "8c9baba40de3b3143401cfbcd2edcc4c4e8004c836709809b69e06b36f22b88a"
     },
     {
       "ordinal": 97,
       "id": "classifier-console",
       "wave": 6,
-      "status": "open",
+      "status": "partial",
       "title": "Classifier accuracy console: learn from every check-in correction which detector rules mislabel builds",
       "dependsOn": [
         "ops-console"
       ],
-      "implemented": "Admin Build Studio edits detector policies; that is distinct from a correction-derived accuracy console.",
+      "implemented": "Admin Build Studio edits detector policies; that is distinct from a correction-derived accuracy console. Classifier correction cohorts, bounded drill-down and admin quality views use recorded corrections and sample floors.",
       "remainingRequirements": [
-        "Implement correction provenance/cohorts/confusion views and specified console actions/guardrails from the original item."
+        "Run the production quality job against qualifying corrections and verify the populated console."
       ],
       "evidence": [
         "apps/web/app/admin/build-studio/page.tsx",
-        "docs/handoff/admin-build-studio-checkpoint.md"
+        "docs/handoff/admin-build-studio-checkpoint.md",
+        "Classifier quality job and console tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900
+      ],
       "requirementSha256": "c79805b57a72e373d1e3056ee43483978950e39a8ba0b4b68ac2ef2a948ef5fa"
     },
     {
       "ordinal": 98,
       "id": "coaching-prep-digest",
       "wave": 6,
-      "status": "open",
+      "status": "completed",
       "title": "Coaching: a 'Since last session' prep digest on each booking (facts only, no grading)",
       "dependsOn": [
         "notification-center"
       ],
-      "implemented": "Coaching booking/practice/Locker data exists; no Since last session prep digest found in scoped source search.",
-      "remainingRequirements": [
-        "Implement bounded facts-only booking digest and its privacy/sample/state requirements before the Locker React port dependency."
-      ],
+      "implemented": "Coaching booking/practice/Locker data exists; no Since last session prep digest found in scoped source search. Booking prep is facts-only and grant-gated. Coaches can open exact assigned replay evidence with repeated authorization. Students can opt in to future qualifying canonical build labels.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/api/src/services/coaching.js",
-        "apps/web/app/coaching/CoachingWorkspace.tsx"
+        "apps/web/app/coaching/CoachingWorkspace.tsx",
+        "Assigned replay, booking digest and consent regressions"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900,
+        907,
+        910
+      ],
       "requirementSha256": "93bbb95605a6138679836b07dc08afa09cf2b2c9251842fd494d3cdbc515ab9c"
     },
     {
       "ordinal": 99,
       "id": "appearance-and-formats",
       "wave": 6,
-      "status": "partial",
+      "status": "completed",
       "title": "Appearance & region preferences: reduce motion, text size, density, 12/24h, week start, locale-aware formatting",
       "dependsOn": [
         "contrast-tokens-and-a11y-gate"
       ],
-      "implemented": "System/Light/Dark and device reduced-motion behavior are merged.",
-      "remainingRequirements": [
-        "Implement/reconcile account-level text size,density,12/24h,week start,locale formatting and propagation; existing per-chat density is not a global preference."
-      ],
+      "implemented": "System/Light/Dark and device reduced-motion behavior are merged. Added account-wide appearance and time/date preferences, locale formatting and a no-flash cascade.",
+      "remainingRequirements": [],
       "evidence": [
         "docs/handoff/contrast-accessibility-checkpoint.md",
         "apps/web/components/analyzer/settings/SettingsMisc.tsx",
-        "apps/web/lib/help/articles/account-data/appearance.ts"
+        "apps/web/lib/help/articles/account-data/appearance.ts",
+        "Settings and appearance browser coverage"
       ],
       "mergedPrs": [
-        752
+        752,
+        900
       ],
       "requirementSha256": "9d0d87ced5d2494b9e6dc43694b4a83279225df19720299189d819544fe758e3"
     },
@@ -2706,15 +2783,18 @@
       "dependsOn": [
         "public-pages-seo-and-cache"
       ],
-      "implemented": "Donate page shows provider measurements/planning and one-time tips.",
+      "implemented": "Donate page shows provider measurements/planning and one-time tips. Coverage meter, supporter opt-in, moderated wall and optional recurring support URL use existing setup.",
       "remainingRequirements": [
-        "Implement coverage meter, recurring option and opt-in supporter wall. Current Donate FAQ explicitly says recurring tier is not yet available."
+        "Enter verified recurring support URL and coverage amounts in the existing owner configuration and donation ledger."
       ],
       "evidence": [
         "apps/web/app/donate/page.tsx",
-        "docs/handoff/download-donate-checkpoint.md"
+        "docs/handoff/download-donate-checkpoint.md",
+        "Donate and supporter wall tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900
+      ],
       "requirementSha256": "7c9781eb4aca31f883b592b94d810b6c317b31efd25d3dd5252086eb79d5ef31"
     },
     {
@@ -2938,26 +3018,25 @@
       "ordinal": 110,
       "id": "game-page-expansion-1",
       "wave": 3,
-      "status": "partial",
+      "status": "completed",
       "title": "Share menu on the game page: public link, owner links, link at the current moment, battle-card image",
       "dependsOn": [],
-      "implemented": "Existing battle-card image ShareGameButton and separate shared-clock moment-link helpers are delivered. Header still imports the image-only ShareGameButton; no unified ShareMenu or useReplaySharing abstraction is present.",
-      "remainingRequirements": [
-        "Implement the specified keyboard/viewport-safe ShareMenuItem array: owner game link, current shared-clock moment link, consent-aware public link or enable-sharing confirmation and battle-card image.",
-        "Extract/reuse replay-sharing state with library controls, preserve resumed-game exclusion and failure/401 hiding, clipboard recovery and in-flight state.",
-        "Add source tests for menu/consent/keyboard/image/moment contracts and game-page#sharing Help with the current public-analysis sign-in/notes privacy wording."
-      ],
+      "implemented": "Existing battle-card image ShareGameButton and separate shared-clock moment-link helpers are delivered. Header still imports the image-only ShareGameButton; no unified ShareMenu or useReplaySharing abstraction is present. Game share menu has safe owner references, current replay time, consent-aware public link and actual battle-card export.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/analyzer/game/ShareGameButton.tsx",
         "apps/web/components/analyzer/game/GameDetailShell.tsx",
         "apps/web/components/analyzer/replays/ReplayLibrary.tsx",
         "apps/web/components/analyzer/game/GameDetailPage.tsx",
-        "apps/web/lib/help/articles/game-page/game-page.ts"
+        "apps/web/lib/help/articles/game-page/game-page.ts",
+        "Owner ShareMenu, archive disclosure and Sentry redaction regressions"
       ],
       "mergedPrs": [
         690,
         693,
-        704
+        704,
+        896,
+        900
       ],
       "requirementSha256": "b659583f6fcd6f4092a456105e7331738cc986e924b05a51fd244d7a28436d42"
     },
@@ -3238,18 +3317,11 @@
       "ordinal": 120,
       "id": "builds-polish-6",
       "wave": 3,
-      "status": "partial",
+      "status": "completed",
       "title": "Build check-in queue: Confirm all suggested, Undo, a real opponent picker, linked build names and a 44px header chip",
       "dependsOn": [],
-      "implemented": "Existing queue provides individual confirm/change/skip, opponent readout/add-new and definition-linked detected names. Full requested queue batch/undo/picker pack is absent in current source.",
-      "remainingRequirements": [
-        "Add sequential Confirm all suggested with per-item results, stop on401/429, remaining retry/summary and close-after-in-flight behavior.",
-        "Use Pick build… without a suggestion and Confirm <name> with one; normalize raw queue result through resultLabel.",
-        "Extract/embed opponent build picker in queue while retaining Add new build beside Replay classified as and owner placement corrections.",
-        "Implement reopen validation/service action with pending/reset override+kept notes, Undo for own/opponent decisions and not_reopenable guards.",
-        "Add buildOptionHref and linked planned/suggested names across queue/card; retain close-on-navigation.",
-        "Raise header chip's actual32px hit area to44px without shifting compact layout; add the original regression tests and build-check-in Help."
-      ],
+      "implemented": "Existing queue provides individual confirm/change/skip, opponent readout/add-new and definition-linked detected names. Full requested queue batch/undo/picker pack is absent in current source. Sequential confirmation supports per-item status, bounded retry of originally admitted unchanged suggestions, undo and linked build/opponent choices.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/build-checkin/BuildCheckInQueue.tsx",
         "apps/web/components/build-checkin/BuildCheckInCard.tsx",
@@ -3259,7 +3331,8 @@
         "apps/web/lib/buildIntent.ts",
         "apps/api/src/validation/buildIntent.js",
         "apps/api/src/services/buildIntentGameState.js",
-        "apps/web/lib/help/articles/builds/build-check-in.ts"
+        "apps/web/lib/help/articles/builds/build-check-in.ts",
+        "Build check-in queue and CAS regressions"
       ],
       "mergedPrs": [
         664,
@@ -3267,7 +3340,10 @@
         699,
         746,
         764,
-        790
+        790,
+        884,
+        899,
+        907
       ],
       "requirementSha256": "de8c7fdd80345c6734672e4e8d353562a659e6537bde513e54bee4d9a0c20911"
     },
@@ -3675,18 +3751,20 @@
       "ordinal": 136,
       "id": "guides-expansion-5",
       "wave": 5,
-      "status": "open",
+      "status": "completed",
       "title": "Compare two or three openers side by side",
       "dependsOn": [],
-      "implemented": "Published guide tables and personal comparison foundations exist; no two/three opener comparison surface found in scoped inspection.",
-      "remainingRequirements": [
-        "Implement canonical guide comparison selection/URL, aligned metrics/sample guards and responsive output described by the original item."
-      ],
+      "implemented": "Published guide tables and personal comparison foundations exist; no two/three opener comparison surface found in scoped inspection. Guide openers compare with shareable selection, aligned samples, accessible tables and stale-selection recovery.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/lib/guides",
-        "docs/handoff/guides-expansion-checkpoint.md"
+        "docs/handoff/guides-expansion-checkpoint.md",
+        "Responsive Guide comparison checks"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900,
+        901
+      ],
       "requirementSha256": "23fa70c21a14dcd2be93a6100d2eece2234d29e83535f331c71facd022af9389"
     },
     {
@@ -3826,17 +3904,11 @@
       "ordinal": 141,
       "id": "profiles-replays-expansion-2",
       "wave": 5,
-      "status": "partial",
+      "status": "completed",
       "title": "Player page overview and sharing: clean hero and KPIs, drill into matching replays, one Share button, real per-game link previews",
       "dependsOn": [],
-      "implemented": "Consent-controlled canonical player Overview, optional replay archive and section privacy are merged. Existing archive Share and analysis copy controls provide related foundations.",
-      "remainingRequirements": [
-        "Replace repeated hero record/main-race KPI with identity/month-year and sample-qualified Best matchup/Most played; mirror the loading skeleton.",
-        "Add eligible full-row matchup/signature-build replay drilldowns, count-scope hint and accessible featured-build vote icons.",
-        "Create the shared ShareButton with native/copy/manual fallback; migrate profile/archive/analysis/community consumers, archive buttons and GlowHalo, and pill download appearance. PublicReplayShareButton still exists and PublicReplayAnalysis uses PlayerCopyButton.",
-        "Implement the privacy-allowlisted public per-game card endpoint, signed-out analysis teaser, auth-appropriate metadata and 1200x630 per-replay OG route with sharing eligibility/no-opponent checks. Current detail route remains protected rather than serving the proposed teaser.",
-        "Deliver the corresponding public-profile sharing/drilldown/teaser Help and privacy/preview regressions."
-      ],
+      "implemented": "Consent-controlled canonical player Overview, optional replay archive and section privacy are merged. Existing archive Share and analysis copy controls provide related foundations. Public player pages have an overview, share controls, archive drill-downs, opaque replay preview and consent-gated originals.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/public-profile/PublicProfile.tsx",
         "apps/web/components/public-profile/PublicPlayerPage.tsx",
@@ -3845,10 +3917,13 @@
         "apps/web/components/public-profile/PublicReplayShareButton.tsx",
         "apps/web/middleware.ts",
         "apps/api/src/routes/publicReplays.js",
-        "docs/handoff/public-player-checkpoint.md"
+        "docs/handoff/public-player-checkpoint.md",
+        "Actual public archive Chromium suite"
       ],
       "mergedPrs": [
-        758
+        758,
+        900,
+        907
       ],
       "requirementSha256": "8f71ffcaff42d25299d4d99025356555fbf3c8627271a272fdce756eacd560fd"
     },
@@ -4020,26 +4095,23 @@
       "ordinal": 148,
       "id": "reviews-coaching-expansion-1",
       "wave": 3,
-      "status": "open",
+      "status": "completed",
       "title": "Review navigation: working #comment and ?t= links, copy links to a comment or moment, step through comments, filters and shortcuts",
       "dependsOn": [],
-      "implemented": "Existing ReviewPage click-to-comment seeking and timed comments are prerequisites; the proposed deep-link/navigation expansion is absent.",
-      "remainingRequirements": [
-        "Admit #comment-ID and ?t= on load/hashchange, await playback readiness, clamp time and report missing/deleted IDs without a spurious scroll.",
-        "Replace the current unconditional smooth scrollToComment with reduced-motion-aware behavior.",
-        "Add explicit comment/moment/current-time copy actions without rewriting URLs during inspection.",
-        "Build the timed-comment stepper, polite position announcements, AND-combined focus-range/pins/replies filters and persisted Top/Timeline order.",
-        "Add the exported N/P/C/? shortcut descriptors with field/modifier/replay/dialog exclusions and the sharing/keyboard Help sections plus regressions."
-      ],
+      "implemented": "Existing ReviewPage click-to-comment seeking and timed comments are prerequisites; the proposed deep-link/navigation expansion is absent. Review navigation adds time/comment deep links, focus-aware stepping and keyboard filters.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/reviews/ReviewPage.tsx",
         "apps/web/components/reviews/ReviewThread.tsx",
         "apps/web/components/reviews/ReviewComposer.tsx",
         "apps/web/components/reviews/ReviewShareMenu.tsx",
         "apps/web/lib/reviews.ts",
-        "apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts"
+        "apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts",
+        "Review playback and navigation tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900
+      ],
       "requirementSha256": "95cc779d7cf2e4de451f5607412eb4017a174851e1e0acf55fc16151c3d83bea"
     },
     {
@@ -4100,19 +4172,20 @@
       "ordinal": 152,
       "id": "reviews-coaching-expansion-4",
       "wave": 6,
-      "status": "partial",
+      "status": "completed",
       "title": "Availability editor and session history: copy hours across days, presets, a Google Calendar link, past sessions",
       "dependsOn": [],
-      "implemented": "React CoachingSchedule and practice period history exist; coaching-forms checkpoint explicitly leaves presets/copy-to-days outside its scope.",
-      "remainingRequirements": [
-        "Implement/reconcile availability copy-hours/presets and Google Calendar link plus complete past-session contracts; existing practice period history is not the full scheduling feature."
-      ],
+      "implemented": "React CoachingSchedule and practice period history exist; coaching-forms checkpoint explicitly leaves presets/copy-to-days outside its scope. Availability has copy/presets, inline validation and undo, plus past sessions and calendar actions.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/app/coaching/CoachingSchedule.tsx",
         "docs/handoff/coaching-forms-checkpoint.md",
-        "docs/handoff/coaching-practice-checkpoint.md"
+        "docs/handoff/coaching-practice-checkpoint.md",
+        "CoachSchedule tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900
+      ],
       "requirementSha256": "7513d3de07235a52f99905a18580666b93e22113f6b8a3f30eb6722cab978501"
     },
     {
@@ -4227,17 +4300,11 @@
       "ordinal": 157,
       "id": "streamer-expansion-1",
       "wave": 4,
-      "status": "open",
+      "status": "completed",
       "title": "Dock live tools: timed polls with presets and one vote syntax, YouTube-chapter and CSV clip exports, and manual moment flags",
       "dependsOn": [],
-      "implemented": "Existing untimed poll/build-vote and copyable clip log are predecessors. The planned duration/export/manual-flag expansion is absent.",
-      "remainingRequirements": [
-        "Implement server-stamped allowlisted 30/60/120/300-second poll deadlines, authoritative read expiry and idempotent close, widget/Dock countdown and skew handling.",
-        "Add bounded per-token Run again form persistence, presets and one parser-tested POLL_VOTE_HINT across Dock/widget/guide surfaces.",
-        "Add pure chapter generation with start/10-second/three-entry rules, formula-safe CSV, consistent offset-or-wall-clock copy, kind filters and 100-item paging.",
-        "Add token-authenticated 5-second-cooldown manual moment endpoint/kind, optional bounded note and Undo for clearing/overwriting stream-start marks.",
-        "Deliver API/UI/helpers/widget tests and the specified Stream Dock/learn documentation."
-      ],
+      "implemented": "Existing untimed poll/build-vote and copyable clip log are predecessors. The planned duration/export/manual-flag expansion is absent. Dock supports timed polls, shared vote syntax, chapters/CSV and manually logged moments.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/dock/DockPoll.tsx",
         "apps/web/components/dock/DockClips.tsx",
@@ -4246,57 +4313,57 @@
         "apps/api/src/services/multichatStudio.js",
         "apps/api/src/services/multichatEngagement.js",
         "apps/api/src/routes/multichat.js",
-        "apps/web/lib/help/articles/stream-studio/stream-dock.ts"
+        "apps/web/lib/help/articles/stream-studio/stream-dock.ts",
+        "Dock and overlay timer tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900
+      ],
       "requirementSha256": "a016df853ebad4553634f3aeb4587289637958bb78d2ff26f36a910f826de084"
     },
     {
       "ordinal": 158,
       "id": "streamer-polish-5",
       "wave": 4,
-      "status": "open",
+      "status": "completed",
       "title": "Overlay visual consistency: every widget honours the theme's size and frame, with one race palette",
       "dependsOn": [],
-      "implemented": "WidgetShell already has scale/frame rendering, but the proposed shared OverlayPanel and canonical overlay race-color module are absent.",
-      "remainingRequirements": [
-        "Extract OverlayPanel from WidgetShell and migrate every listed color/font-only card; explicitly apply scale/frame exclusions for full-canvas, strips and MultiChat.",
-        "Create one overlay race palette used by WidgetShell/raceToAccent/RaceIcon/backdrops, preserving intentional dark overlay colors and the design-system note.",
-        "Add global-token parity and themed large/frame consumer tests; document recommended dimensions at Normal scale and the expanded size coverage in troubleshooting."
-      ],
+      "implemented": "WidgetShell already has scale/frame rendering, but the proposed shared OverlayPanel and canonical overlay race-color module are absent. Theme, scale and shared race palette apply to documented overlay consumers and preserve full-canvas sizing.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/overlay/WidgetShell.tsx",
         "apps/web/components/overlay/widgets/ChatPollWidget.tsx",
         "apps/web/components/overlay/widgets/StreamGoalsWidget.tsx",
         "apps/web/components/overlay/scenes/SC2BackdropScene.tsx",
         "apps/web/components/stream-studio/LearnTroubleshooting.tsx",
-        "docs/design-system.md"
+        "docs/design-system.md",
+        "Overlay widget/theme regressions"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900
+      ],
       "requirementSha256": "2920fc899d43709bb84d1b2069d424e54c407e409a0b81c351d5538b7893712a"
     },
     {
       "ordinal": 159,
       "id": "streamer-expansion-2",
       "wave": 4,
-      "status": "open",
+      "status": "completed",
       "title": "Crash course knows your setup: live 'Your setup' checks and a real finish summary",
       "dependsOn": [],
-      "implemented": "Crash course still uses local self-reported checkboxes and the interim nice-work link. Presence/Settings health and playground are available prerequisites.",
-      "remainingRequirements": [
-        "Build the shared readiness function and signed-in-only Your setup island with independent truthful error/Retry rows for paired device, source presence, chat configuration and Dock presence.",
-        "Poll only while visible; add account-safe additive automatic lesson ticks without undoing manual progress.",
-        "Replace interim completion text with actual completed-lesson/starter-widget status and next-step links; keep signed-out summary free of account statuses.",
-        "Add parity/visibility/error/automatic-progress regressions and the promised course/getting-started copy."
-      ],
+      "implemented": "Crash course still uses local self-reported checkboxes and the interim nice-work link. Presence/Settings health and playground are available prerequisites. Crash course has signed-in setup checks, independent retries and honest completion progress.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/stream-studio/CrashCourse.tsx",
         "apps/web/components/stream-studio/CrashCourse.test.tsx",
         "apps/web/components/stream-studio/LearnPage.tsx",
         "apps/web/components/stream-studio/LearnTroubleshooting.tsx",
-        "docs/handoff/widget-playground-checkpoint.md"
+        "docs/handoff/widget-playground-checkpoint.md",
+        "Stream readiness and course tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900
+      ],
       "requirementSha256": "fb5c38b01d9b13d0af02b46676675418748766b45d40b9b5918abe766d20f4f0"
     },
     {
@@ -4391,16 +4458,11 @@
       "ordinal": 163,
       "id": "settings-onboarding-polish-4",
       "wave": 4,
-      "status": "partial",
+      "status": "completed",
       "title": "One save model across Settings: honest header copy, one Save bar per tab, Profile saves everything, overlay choices follow your account",
       "dependsOn": [],
-      "implemented": "Per-source dirty state, guarded Chat token lifetime, named Settings sections and some source-local SaveBars are merged.",
-      "remainingRequirements": [
-        "Implement the per-tab save/reset registry and one shell-owned SaveBar that serializes all dirty sources, reports partial failures and retains failed drafts.",
-        "Register Profile plus channels together and remove the still-present Save channels button; register MultiChat, ChatBot and theme without stacked bars.",
-        "Audit save-on-change controls and add the promised Instant markers/header explanation.",
-        "Persist boolean credit/ghostVoice in the validated token profile, admit old local cache only for one-time migration and preserve existing URL overrides; add migration/type rejection tests and corresponding Help."
-      ],
+      "implemented": "Per-source dirty state, guarded Chat token lifetime, named Settings sections and some source-local SaveBars are merged. Settings shares per-tab save ownership, partial failure retry, Instant actions and migrated profile booleans.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/components/analyzer/settings/SettingsContext.tsx",
         "apps/web/components/analyzer/settings/SettingsShell.tsx",
@@ -4408,11 +4470,13 @@
         "apps/web/components/analyzer/settings/OverlayCreditToggle.tsx",
         "apps/web/components/analyzer/settings/SettingsOverlay.tsx",
         "docs/handoff/settings-chat-checkpoint.md",
-        "apps/web/lib/help/articles/getting-started/settings-overview.ts"
+        "apps/web/lib/help/articles/getting-started/settings-overview.ts",
+        "Settings component and real Chromium matrix"
       ],
       "mergedPrs": [
         777,
-        780
+        780,
+        900
       ],
       "requirementSha256": "2b23fe85cacdd8daf48a69bdcc8631a7c0d82522986f51c32535a963dc09b70c"
     },
@@ -4582,25 +4646,23 @@
       "ordinal": 169,
       "id": "landing-try-expand-1",
       "wave": 5,
-      "status": "open",
+      "status": "completed",
       "title": "/try report expansion: highlights, record by map and game length, filters, and CSV and summary export",
       "dependsOn": [],
-      "implemented": "Current /try report has totals/matchups/openers/MMR/macro/game views and privacy-filtered PNG/text sharing; the proposed local report slicing/export expansion is absent.",
-      "remainingRequirements": [
-        "Map existing recap highlights with sample floors; add record-by-map with Unknown last/disclosure and exact game-length boundary buckets plus missing-duration count.",
-        "Add one local matchup/result/newest10/newest25/90day filter pipeline, sessionStorage preference, filtered totals/game list/status/empty/Clear and matchup-row drilldowns, without reparsing files.",
-        "Add filtered RFC4180/formula-safe/BOM CSV downloads and one opponent-free reportSummaryText reused by sharing; ensure share images exclude opponent-named highlights.",
-        "Deliver boundary/filter/export/interaction/browser regressions and TryExplainer/instant-analysis Help/changelog coverage."
-      ],
+      "implemented": "Current /try report has totals/matchups/openers/MMR/macro/game views and privacy-filtered PNG/text sharing; the proposed local report slicing/export expansion is absent. Instant Analysis summarizes highlights and map/length records, keeps local filters and exports safe CSV and anonymous share copy.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/lib/instant/report.ts",
         "apps/web/components/instant/InstantReport.tsx",
         "apps/web/components/instant/TryPage.tsx",
         "apps/web/components/instant/report/RecordByMatchupCard.tsx",
         "apps/web/lib/help/articles/getting-started/instant-analysis.ts",
-        "docs/handoff/try-conversion-checkpoint.md"
+        "docs/handoff/try-conversion-checkpoint.md",
+        "Real replay and Try report coverage"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900
+      ],
       "requirementSha256": "812fde785630e0fe5d948920e93f202205c233f4532470b2682ad469f06aa472"
     },
     {
@@ -4853,25 +4915,22 @@
       "ordinal": 178,
       "id": "admin-polish-5",
       "wave": 2,
-      "status": "partial",
+      "status": "completed",
       "title": "Opponent and global player games: correct tie results, head-to-head summary, filters and keyboard navigation",
       "dependsOn": [],
-      "implemented": "Prior URL-state work retains game/owner/cursor selection and off-page detail access; unrelated newer user detail uses a correct ResultBadge.",
-      "remainingRequirements": [
-        "Replace AdminGameDetail.isWin and both scoped game-list ternaries with explicit win/loss/tie/unknown classification. Currently tie and Undecided truthy strings still render Loss.",
-        "Extract shared AdminGamesMasterDetail with current selection, guarded j/k/arrow/Enter navigation and polite selection announcements.",
-        "Add the complete opponent-cohort summary aggregate (W/L/T/unknown, decided-only rate, average length, top maps and last10) with small-sample copy.",
-        "Add URL result/map filters to both game pages and user filter to global player games; retain cursor reset and existing selection semantics. Add API/UI regressions for ties/unknowns and cohort summary/filter correctness."
-      ],
+      "implemented": "Prior URL-state work retains game/owner/cursor selection and off-page detail access; unrelated newer user detail uses a correct ResultBadge. Admin game views share keyboard navigation, explicit results and opponent cohort metrics.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/app/admin/components/AdminGameDetail.tsx",
         "apps/web/app/admin/global/players/[pulseId]/page.tsx",
         "apps/web/app/admin/users/[userId]/opponents/[pulseId]/page.tsx",
         "apps/web/app/admin/components/AdminSelectedGame.tsx",
-        "apps/api/src/routes/admin.js"
+        "apps/api/src/routes/admin.js",
+        "Admin result and navigation tests"
       ],
       "mergedPrs": [
-        692
+        692,
+        900
       ],
       "requirementSha256": "56099e154cb1d236e3d4bd86299b88bad6534ee7957757d67bec592580dbb483"
     },
@@ -4879,27 +4938,24 @@
       "ordinal": 179,
       "id": "admin-polish-6",
       "wave": 2,
-      "status": "partial",
+      "status": "completed",
       "title": "Notifications: mark single items read, unread counts per type, Open user, visible errors",
       "dependsOn": [],
-      "implemented": "Notification URL filters/retained rows, empty and debug states, support Reply/status and linked account detail destinations exist. Opening detail deliberately does not mark an event read.",
-      "remainingRequirements": [
-        "Implement authenticated idempotent per-event read/unread routes with ID validation/404 and typed mark-all; compute unreadByType in one aggregate.",
-        "Add accessible per-row optimistic read/unread controls with rollback, Retry and shared count revalidation; expose Open user directly when eligible.",
-        "Add per-type unread counts/pressed state and scoped mark-all labels; catch mark-all failure and show an alert/Retry instead of the current try/finally-only flow.",
-        "Extend API/UI regressions and Notifications/support documentation to distinguish per-item, per-type and all-event read operations."
-      ],
+      "implemented": "Notification URL filters/retained rows, empty and debug states, support Reply/status and linked account detail destinations exist. Opening detail deliberately does not mark an event read. Admin events have optimistic per-item read/unread, scoped counts, typed mark-all and visible retry.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/api/src/routes/admin.js",
         "apps/api/src/services/adminEvents.js",
         "apps/web/app/admin/notifications/page.tsx",
         "apps/web/app/admin/components/AdminEventRow.tsx",
         "docs/admin-console.md",
-        "docs/handoff/admin-inbox-tap-checkpoint.md"
+        "docs/handoff/admin-inbox-tap-checkpoint.md",
+        "Admin notifications API and view tests"
       ],
       "mergedPrs": [
         692,
-        730
+        730,
+        900
       ],
       "requirementSha256": "d05dc8f959c8edb919259e5315d5f5666b0b8f58c163da99cf0500d402aef583"
     },
@@ -4907,17 +4963,11 @@
       "ordinal": 180,
       "id": "admin-polish-7",
       "wave": 2,
-      "status": "open",
+      "status": "completed",
       "title": "Dashboard triage: 'Needs attention' inbox, queue badges in the nav, clickable KPIs, 30-day trend",
       "dependsOn": [],
-      "implemented": "Existing dashboard counts/recent activity/storage and durable backup/job alerts are prerequisites; the proposed attention/daily triage expansion is absent.",
-      "remainingRequirements": [
-        "Add cheap indexed attention counts and cached-advisory read without provider refresh, plus zero-filled 7..90-day event aggregation.",
-        "Share a 60-second/socket-invalidated attention hook between shell badges and Needs attention rows, with bounded labels, all-clear/loading/error and exact queue deep links.",
-        "Wire identity/channel filter deep links, clickable defined KPI counters and valid week-over-week deltas; build the themed daily chart with table alternative.",
-        "Move collection storage from Dashboard into collapsed sortable Infrastructure storage and leave only the dashboard destination summary.",
-        "Add exact counts/missing-type/index/delta/queue/chart/storage regressions and the daily-triage/counter-definition documentation."
-      ],
+      "implemented": "Existing dashboard counts/recent activity/storage and durable backup/job alerts are prerequisites; the proposed attention/daily triage expansion is absent. Admin dashboard shows scoped attention counts, exact queue links, daily event trends, cached advisory and sortable storage.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/api/src/routes/admin.js",
         "apps/api/src/services/admin.js",
@@ -4925,9 +4975,12 @@
         "apps/web/app/admin/page.tsx",
         "apps/web/app/admin/components/AdminFragments.tsx",
         "apps/web/app/admin/health/page.tsx",
-        "docs/admin-console.md"
+        "docs/admin-console.md",
+        "48 API, 73 web, both typechecks, 5 of 5 mutations"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        907
+      ],
       "requirementSha256": "e09a0ce8e51c3840de05a548c4c3451037dcca9ff3c6f4bb70a24a4f0d492852"
     },
     {
@@ -4952,50 +5005,44 @@
       "ordinal": 182,
       "id": "admin-polish-9",
       "wave": 3,
-      "status": "open",
+      "status": "completed",
       "title": "Global Trends: shareable and saved cohorts, one Apply model, active-filter chips",
       "dependsOn": [],
-      "implemented": "Global Trends has local game/population state and existing expensive-request boundaries. The proposed unified URL/saved/apply model is absent; /v1/me access probe still exists.",
-      "remainingRequirements": [
-        "Serialize/validate game plus bounded population filters, honor URL precedence and report invalid/too-large shared cohorts.",
-        "Add bounded adminTrendViews preference validation, protected built-in presets and create/apply/rename/delete with duplicate-name errors.",
-        "Use one pending draft context and Apply/Reset/Enter model across all controls; chips remove/apply immediately and Reset all clears both contexts.",
-        "Remove the /v1/me probe in favor of authoritative resource403, use shared Cards and move explanatory text into About these numbers.",
-        "Add URL/prefs/apply/privacy/access regressions and Global Trends documentation explaining population versus game scope."
-      ],
+      "implemented": "Global Trends has local game/population state and existing expensive-request boundaries. The proposed unified URL/saved/apply model is absent; /v1/me access probe still exists. Global Trends has a unified draft/Apply model and role-gated saved cohorts with opaque shareable selection.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/app/admin/global-trends/page.tsx",
         "apps/web/app/admin/global-trends/globalTrendsState.ts",
         "apps/web/app/admin/global-trends/GlobalTrends.test.tsx",
-        "docs/admin-console.md"
+        "docs/admin-console.md",
+        "92 API, 29 web, both typechecks, 2 of 2 mutations"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        907
+      ],
       "requirementSha256": "988eff21d680394b7e1ef3cdf4fd8a5e01fc4a9522615fefeeae5669c1fe322d"
     },
     {
       "ordinal": 183,
       "id": "admin-polish-10",
       "wave": 3,
-      "status": "open",
+      "status": "completed",
       "title": "Guides admin: never lose unsaved notes, section tabs, notes-coverage table, video search and filters",
       "dependsOn": [],
-      "implemented": "Guide notes/videos/stats currently render in one long page with state-only selection and editor-local drafts. Existing note discard and video maintenance are prerequisites, not the requested protection expansion.",
-      "remainingRequirements": [
-        "Add dirty-only beforeunload/same-origin navigation confirmation and account-safe bounded session draft restore/clear behavior; show restored-note notice.",
-        "Add one Save all/Discard all bar with ordered per-note failures/Retry, confirmed discard and Ctrl/Cmd+S for the selected note.",
-        "Move Notes/Videos/Stats to accessible URL-backed tabs and persist selected matchup/build; add expandable coverage/updated/unsaved status navigation.",
-        "Add title search and counted All/Matched/Unmatched/Hidden/8-worker/Shorts video filters with50-at-a-time and clearable empties.",
-        "Add navigation/storage/partial-save/shortcut/coverage/filter regressions and the specified admin workflow section in guides documentation."
-      ],
+      "implemented": "Guide notes/videos/stats currently render in one long page with state-only selection and editor-local drafts. Existing note discard and video maintenance are prerequisites, not the requested protection expansion. Guide admin preserves owner-scoped drafts and provides deep-linked views, per-note save recovery and bounded video filters.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/app/admin/guides/page.tsx",
         "apps/web/app/admin/guides/components/GuideNotesEditor.tsx",
         "apps/web/app/admin/guides/components/GuideVideosPanel.tsx",
         "apps/web/app/admin/guides/components/useGuidesAdmin.ts",
         "docs/guides.md",
-        "docs/admin-console.md"
+        "docs/admin-console.md",
+        "57 web, typecheck, 2 of 2 mutations"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        907
+      ],
       "requirementSha256": "471d8450ba10989aaefc5dae9e2f1370d554ed185c15c863eddc45c58cf8ef7e"
     },
     {
@@ -5005,20 +5052,23 @@
       "status": "partial",
       "title": "Settings you can trust: wheel guard, honest Save message, resettable API address, remembered window",
       "dependsOn": [],
-      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
+      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate. Native settings guard scroll and save, expose safe reset and remember window state.",
       "remainingRequirements": [
-        "Reconcile original wheel/save/API-reset/window-state augments against released code and installed/native acceptance."
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing."
       ],
       "evidence": [
         "docs/handoff/agent-runtime-checkpoint.md",
         "docs/handoff/card-preview-checkpoint.md",
         "docs/handoff/agent-0.24.7-release-checkpoint.md",
-        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json",
+        "Windows Qt offscreen and main matrix"
       ],
       "mergedPrs": [
         658,
         687,
-        694
+        694,
+        901,
+        907
       ],
       "requirementSha256": "fc2d1bfc878eedd283624ca5de5cf6050932e5e025bc636cf8c51b7f79a876a3"
     },
@@ -5029,20 +5079,23 @@
       "status": "partial",
       "title": "Help one click away and an Activity log you can copy errors from during a sync",
       "dependsOn": [],
-      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
+      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate. Help and copyable Activity history work during sync, with a persistent section index.",
       "remainingRequirements": [
-        "Reconcile original contextual Help/copyable-log/search/incremental-history augments against released code and native acceptance."
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing."
       ],
       "evidence": [
         "docs/handoff/agent-runtime-checkpoint.md",
         "docs/handoff/card-preview-checkpoint.md",
         "docs/handoff/agent-0.24.7-release-checkpoint.md",
-        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json",
+        "Windows Qt offscreen and main matrix"
       ],
       "mergedPrs": [
         658,
         687,
-        694
+        694,
+        901,
+        907
       ],
       "requirementSha256": "34f945920c22f830db0c1a625a0a9f782d242b80b9b993682737c67c6bbbd42a"
     },
@@ -5053,20 +5106,23 @@
       "status": "partial",
       "title": "One honest status: the card, sidebar and tray icon say what the agent is really doing",
       "dependsOn": [],
-      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
+      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate. Status card, sidebar and tray share health state and expose appropriate unpaired controls.",
       "remainingRequirements": [
-        "Reconcile original unified status/tray/activity and unpaired-control augments against released code and native acceptance."
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing."
       ],
       "evidence": [
         "docs/handoff/agent-runtime-checkpoint.md",
         "docs/handoff/card-preview-checkpoint.md",
         "docs/handoff/agent-0.24.7-release-checkpoint.md",
-        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json",
+        "Windows Qt offscreen and main matrix"
       ],
       "mergedPrs": [
         658,
         687,
-        694
+        694,
+        901,
+        907
       ],
       "requirementSha256": "bd746a5ff11cd04651159d0417ea93e207aa044c0eb2a4b9d513199170cf25d3"
     },
@@ -5077,20 +5133,23 @@
       "status": "partial",
       "title": "Build check-in cards: preview them, reset their position, and type, Enter, Ctrl+Enter to check in",
       "dependsOn": [],
-      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate.",
+      "implemented": "Native settings/activity/status/card-preview corrections are merged and have historical Windows regression evidence. Owner-approved unsigned Agent0.24.7 is now published/latest with exact installer/checksum provenance. This clears artifact publication availability only; installed/update-feed/native-session acceptance and original augments remain separate. Build check-in supports native preview, reset, typing and Enter/Ctrl+Enter.",
       "remainingRequirements": [
-        "Reconcile original preview/position reset/typing/Enter/Ctrl+Enter augments against released code and native acceptance."
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing."
       ],
       "evidence": [
         "docs/handoff/agent-runtime-checkpoint.md",
         "docs/handoff/card-preview-checkpoint.md",
         "docs/handoff/agent-0.24.7-release-checkpoint.md",
-        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json"
+        "docs/handoff/validation/agent-0.24.7/publication-2026-10-29.json",
+        "Windows Qt offscreen and main matrix"
       ],
       "mergedPrs": [
         658,
         687,
-        694
+        694,
+        901,
+        907
       ],
       "requirementSha256": "fcf3b08a3a027fa91ab7b9282c53eae18a1ae0043e74b553b4a14ec612b9f7ef"
     },
@@ -5128,39 +5187,45 @@
       "dependsOn": [
         "twitch-predictions-markers"
       ],
-      "implemented": "Existing EventSub redemption subscriptions/decoding support engagement alerts.",
+      "implemented": "Existing EventSub redemption subscriptions/decoding support engagement alerts. Six Twitch reward actions use explicit incremental consent, authenticated durable redemption handling, cooldowns, a fair owner queue, redacted expiry and managed-reward settlement. Speech is acknowledged when a compatible Browser Source starts it.",
       "remainingRequirements": [
-        "Implement consented reward-to-action mappings, idempotent bounded redemption dispatch and Settings/Dock controls; event decoding alone is not the requested reward actions.",
-        "Preserve default-off automation and actual provider-activation boundary."
+        "Activate Twitch Channel Points in the owning account, refresh the OBS Multichat Browser Source, and verify controlled live redemptions, busy and idle speech, cooldowns and settlement."
       ],
       "evidence": [
         "apps/api/src/services/twitchEventSubscriptions.js",
         "apps/api/src/services/platformWebhooks.js",
-        "docs/handoff/twitch-automation-checkpoint.md"
+        "docs/handoff/twitch-automation-checkpoint.md",
+        "Source and compatibility suites",
+        "8 of 8 queue/privacy and 6 of 6 speech mutations"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        907
+      ],
       "requirementSha256": "75aed47b6578902e8f02dd688be7550a2b95aa929ed14ae11ad58df02ed6c31f"
     },
     {
       "ordinal": 190,
       "id": "layout-editor",
       "wave": 5,
-      "status": "partial",
+      "status": "completed",
       "title": "Visual layout editor for the All-in-one overlay (landscape and vertical)",
       "dependsOn": [
         "overlay-profile-sync",
         "widget-playground",
         "widget-manager-redesign"
       ],
-      "implemented": "Saved live overlay profile and inert playground are delivered prerequisites.",
-      "remainingRequirements": [
-        "Implement draggable/keyboard landscape+vertical placement, snap/scale/z-order/reset, layout/layoutVertical persistence and WidgetShell placement overrides; no layoutVertical feature found in scoped search."
-      ],
+      "implemented": "Saved live overlay profile and inert playground are delivered prerequisites. Landscape and vertical layouts have pointer and keyboard placement, HUD safe zones, snap, scale, layering, reset and live profile CAS.",
+      "remainingRequirements": [],
       "evidence": [
         "apps/web/lib/overlayProfile.ts",
-        "apps/web/components/stream-studio/WidgetPlayground.tsx"
+        "apps/web/components/stream-studio/WidgetPlayground.tsx",
+        "390 and 1280 px real Chromium",
+        "Protected production budgets",
+        "3 of 3 mutations"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        907
+      ],
       "requirementSha256": "4406c9bf1c1e13c1cf2f86979e519db4bdddd9e9cbed1062ea66307f5786ff7b"
     },
     {
@@ -5170,38 +5235,42 @@
       "status": "partial",
       "title": "Build randomizer for everyone (no OBS needed), plus a randomizer challenge scoreboard",
       "dependsOn": [],
-      "implemented": "Native/server seeded randomizer and existing first-roll/hold/check-in paths are implemented foundations.",
+      "implemented": "Native/server seeded randomizer and existing first-roll/hold/check-in paths are implemented foundations. The desktop Randomizer is opt-in, uses trusted current-game admission, permits one alternate, and reports private challenge outcomes.",
       "remainingRequirements": [
-        "Reconcile original opt-in/no-connected-widget automatic fallback and JS/TS parity.",
-        "Implement randomizer-stats aggregate, per-pool played-as-rolled/W-L/completion table, reset watermark and /practice Challenge surface.",
-        "Coordinate signed native delivery; current native shared-pool settings must remain distinct from widget animation/sound."
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing.",
+        "Verify opt-in prompt, overlay presence, Play it, Re-roll, Not now and scoreboard with an off-air paired installation."
       ],
       "evidence": [
         "apps/api/src/services/buildIntentNativeRandomizer.js",
         "apps/agent/sc2tools_agent/build_checkin/controller.py",
-        "apps/web/components/analyzer/settings/SettingsRandomizer.tsx"
+        "apps/web/components/analyzer/settings/SettingsRandomizer.tsx",
+        "68 API, 47 web and 180 offscreen native targeted tests",
+        "6 of 6 source mutations"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        907
+      ],
       "requirementSha256": "24774f93baee876c4c4774a9c7ac8200b9d475b8b6178a74040bad430be49d27"
     },
     {
       "ordinal": 192,
       "id": "landing-live-proof",
       "wave": 6,
-      "status": "open",
+      "status": "completed",
       "title": "Real-data social proof on the landing page: live counts, what's winning, fresh community builds, latest answered review",
       "dependsOn": [
         "public-pages-seo-and-cache"
       ],
-      "implemented": "Existing landing/Try source does not implement the planned LiveFromTheLadder/totals/minimum-threshold section in scoped search.",
-      "remainingRequirements": [
-        "Implement cached independent Suspense blocks for totals/trending guides/community/latest answered review with thresholds and honest missing-data behavior."
-      ],
+      "implemented": "Existing landing/Try source does not implement the planned LiveFromTheLadder/totals/minimum-threshold section in scoped search. Public landing data uses independent cached sections and hides feeds without enough recent evidence.",
+      "remainingRequirements": [],
       "evidence": [
         "docs/handoff/landing-try-checkpoint.md",
-        "apps/web/components/landing"
+        "apps/web/components/landing",
+        "Landing responsive and public stats tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900
+      ],
       "requirementSha256": "80d266556ff0599bfd85b1fb58147a9f44028e1c437c96e4b2ca682637d8d58b"
     },
     {
@@ -5215,16 +5284,22 @@
         "unit-trades-and-exact-supply",
         "reanalysis-center"
       ],
-      "implemented": "Camera signatures/playback view framework are existing primitives; no planned additive camera/AttentionCard payload found.",
+      "implemented": "Camera signatures/playback view framework are existing primitives; no planned additive camera/AttentionCard payload found. Engine captures 1 Hz camera tracks and supports follow and attention. The Add camera data cohort covers older and unknown engine stamps. Whole-replay attention reads verified sections within the encoded-size budget, even if the current section lacks camera samples.",
       "remainingRequirements": [
-        "Implement1Hz camera tracks and additive sanitize/slice passthrough, follow controls and attention/heatmap facts.",
-        "Ship together with unit trades/hotkey payload in one engine+agent release after replayer-studio and reanalysis-center."
+        "Oversized recordings remain limited to loaded replay sections.",
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing.",
+        "Re-analyze older recordings using Add camera data."
       ],
       "evidence": [
         "apps/agent/sc2tools_agent/camera_signature.py",
-        "apps/web/components/analyzer/game/replay/ReplaySettings.tsx"
+        "apps/web/components/analyzer/game/replay/ReplaySettings.tsx",
+        "Engine parity and bounded camera loader tests",
+        "Real Mongo cohort selection and camera-free section tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        901,
+        907
+      ],
       "requirementSha256": "1953e5f6600958cded46ccf8b397fc273ef5a6a53880f20bc6d6658c755656ef"
     },
     {
@@ -5237,37 +5312,46 @@
         "unit-trades-and-exact-supply",
         "mechanics-progress"
       ],
-      "implemented": "Opponent behavior/camera signatures are existing primitives.",
+      "implemented": "Opponent behavior/camera signatures are existing primitives. Private action/camera phase counts, Hotkey habits and macro trends use own-side payloads and show missing legacy data honestly.",
       "remainingRequirements": [
-        "Extract own-side myMechanics logical replay actions and slim benchmark fields; implement Hotkeys strips/callouts/trend.",
-        "Ship in the coordinated engine+agent payload release with reanalysis support; no myMechanics feature found in scoped source search."
+        "Coordinate the reserved agent-v0.25.0 with the growth release owner, then verify the installed Windows flow and signing.",
+        "Re-analyze old recordings to populate own-side mechanics."
       ],
       "evidence": [
         "apps/agent/sc2tools_agent/camera_signature.py",
-        "apps/web/components/analyzer/game/MechanicsPanel.tsx"
+        "apps/web/components/analyzer/game/MechanicsPanel.tsx",
+        "Engine mechanics and private benchmark tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        901
+      ],
       "requirementSha256": "f64cfa2b800632901b3e83b57bae567665896b8f02c4f4389401cdeaa53fcd9d"
     },
     {
       "ordinal": 195,
       "id": "coaching-locker-react-port",
       "wave": 6,
-      "status": "open",
+      "status": "partial",
       "title": "Coaching Locker on the main app stack, one view at a time, with no data loss",
       "dependsOn": [
         "coaching-prep-digest"
       ],
-      "implemented": "CoachingWorkspace still imports/renders LockerHost; React practice/schedule do not port Locker views.",
+      "implemented": "CoachingWorkspace still imports/renders LockerHost; React practice/schedule do not port Locker views. The staged React Roster and Shelf, Worksheets, Content Studio, shared alert receipts retain the Locker CAS document and backup format.",
       "remainingRequirements": [
-        "After prep digest, port Roster then Shelf then Worksheets then Content studio, one flag/PR at a time.",
-        "Preserve CAS document/backup format and require automatic pre-write backup, restore and lossless round-trip tests; remove HTML/LockerHost only after staged acceptance."
+        "Record one week of real use and backup/restore acceptance per React view before removing that view’s Classic HTML. Remove LockerHost once every Classic view is retired."
       ],
       "evidence": [
         "apps/web/app/coaching/CoachingWorkspace.tsx",
-        "apps/web/app/coaching/LockerHost.tsx"
+        "apps/web/app/coaching/LockerHost.tsx",
+        "Per-view backup, restore and exact round-trip tests"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        900,
+        906,
+        908,
+        912,
+        910
+      ],
       "requirementSha256": "cfe76dade5303840b732cac2c7d4f6d16f079a7ae14e447972390aabc4b1dae8"
     },
     {
@@ -5303,17 +5387,22 @@
         "battle-report",
         "per-game-share-link"
       ],
-      "implemented": "Owner battle reports and battle-card image sharing exist.",
+      "implemented": "Owner battle reports and battle-card image sharing exist. Battle reports have a revocable public page, generated headline and map image, PNG export and explicitly opted-in Discord delivery.",
       "remainingRequirements": [
-        "Implement revocable public report on per-game-share-link, headline/snapshot OG and composed report PNG; account archive sharing/image card is not this token-scoped feature.",
-        "Discord headline/paragraph delivery remains dependent on discord-posts."
+        "Verify live unfurl, Discord delivery and revocation in a disposable owner channel."
       ],
       "evidence": [
         "docs/handoff/battle-report-checkpoint.md",
         "apps/web/components/analyzer/game/ShareGameButton.tsx",
-        "apps/api/src/routes/publicReplays.js"
+        "apps/api/src/routes/publicReplays.js",
+        "Satori and browser report image tests",
+        "Discord outbox regressions"
       ],
-      "mergedPrs": [],
+      "mergedPrs": [
+        896,
+        900,
+        901
+      ],
       "requirementSha256": "2d03f925d6502774ebf7602c198809804097f591538b1e7ea31e225dd78fe80f"
     }
   ],
@@ -5338,8 +5427,8 @@
     "validation/roadmap-audit/unknown-a.json",
     "validation/roadmap-audit/unknown-b.json"
   ],
-  "remainingCount": 69,
-  "remainingMeaning": "49 partial and20 open original roadmap items remain (69 total). Sizes vary; these are not69 equal releases. Only landing-demo-in-browser closes in this scoped delivery reconciliation; reader/cutover, native/provider/operational and all other delivery requirements remain explicit. glossary-and-infotip closed later, with PR852. find-anything closed with PR859, ui-primitives-and-dialogs with PR856, and analysis-corpus-local-cache on reconciliation of its delivered slices.",
+  "remainingCount": 39,
+  "remainingMeaning": "39 partial, 0 open and 0 unknown requirements remain across the original 197 items. Current totals are recorded in currentProgress.",
   "historicalProductionEvidenceUpdates": [
     {
       "supersededByAcceptedRevision": "263a0805abb4084ea70460a02a3a217d5f16a76e",
@@ -8207,7 +8296,366 @@
         "bytes": 30973,
         "sha256": "920f7f31e84c448314367a08d7edfb620ba52d3aa8043b08f60b3f4302b8d4bf"
       }
+    },
+    "roadmapDelivery20261111": {
+      "date": "2026-11-11",
+      "pullRequests": [
+        {
+          "number": 884,
+          "head": "817bab9a9beec43d3e49e43befb4130337109433",
+          "merge": "21a4af882c844a946d207f3332f4b5fd96f9e328",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": "success",
+            "Lint + typecheck + test (apps/web)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        },
+        {
+          "number": 885,
+          "head": "71cfefbb58d2531e3030e765c1dd9ea34152a800",
+          "merge": "1cf3d1c30cfa4bfb14127d3d1dee3b1033f8ad59",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": "success",
+            "Lint + typecheck + test (apps/web)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        },
+        {
+          "number": 887,
+          "head": "e73199c2fe7733236bb02708759296eb47f9c46c",
+          "merge": "ce733ee21f3d95cdad0fb8e4533629949d52c194",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": "success",
+            "Lint + typecheck + test (apps/web)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        },
+        {
+          "number": 896,
+          "head": "c81820c12cf1f34ae9fd804c47957751fb4d8c50",
+          "merge": "2b16bd1fa5b4a1c4d3cb2665f490e1fc3f289e81",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": "success",
+            "Pytest (apps/replay-engine)": "success",
+            "Versions agree": "success",
+            "Lint + typecheck + test (apps/web)": "success",
+            "Agent core tests (Windows)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Agent ui tests (Windows)": "success",
+            "Instant Analysis parity (CPython + Pyodide)": "success",
+            "Pytest (apps/agent, Windows)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        },
+        {
+          "number": 899,
+          "head": "b51bb83311cc9547c5a8b190fb41748fb5b4c14f",
+          "merge": "fa36f1b40ea09fdc3c840530576833860f7708e3",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": "success",
+            "Lint + typecheck + test (apps/web)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        },
+        {
+          "number": 900,
+          "head": "8c1deaf58224899a20d0ce4671f476f1ce55bfe2",
+          "merge": "141df79198a7051e707b0cf74e7f82e747ad776f",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": "success",
+            "Pytest (apps/replay-engine)": "success",
+            "Lint + typecheck + test (apps/web)": "success",
+            "Agent core tests (Windows)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Agent ui-companion tests (Windows)": "success",
+            "Agent ui-companion-layout tests (Windows)": "success",
+            "Agent ui-gui tests (Windows)": "success",
+            "Agent ui-gui-layout tests (Windows)": "success",
+            "Instant Analysis parity (CPython + Pyodide)": "success",
+            "Pytest (apps/agent, Windows)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        },
+        {
+          "number": 901,
+          "head": "feb217d9a838c3f0b29a1164ebe93c55e53258f1",
+          "merge": "56c40576b88e80b42888c09a1afcb98f0325c81f",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": "success",
+            "Lint -- atomic-fs invariants": "success",
+            "Pytest (apps/replay-engine)": "success",
+            "Versions agree": "success",
+            "Lint + typecheck + test (apps/web)": "success",
+            "Agent core tests (Windows)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Agent ui-companion tests (Windows)": "success",
+            "Agent ui-companion-layout tests (Windows)": "success",
+            "Agent ui-gui tests (Windows)": "success",
+            "Agent ui-gui-layout tests (Windows)": "success",
+            "Instant Analysis parity (CPython + Pyodide)": "success",
+            "Pytest (apps/agent, Windows)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        },
+        {
+          "number": 907,
+          "head": "e739b67e07c05466c5f5b588ebfc3adbb7cc8ce2",
+          "merge": "eb4f1ed817cf9c267028a9a63e6267614c0cc4c0",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": "success",
+            "Pytest (apps/replay-engine)": "success",
+            "Versions agree": "success",
+            "Lint + typecheck + test (apps/web)": "success",
+            "Agent core tests (Windows)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Agent ui-companion tests (Windows)": "success",
+            "Agent ui-companion-layout tests (Windows)": "success",
+            "Agent ui-gui tests (Windows)": "success",
+            "Agent ui-gui-layout tests (Windows)": "success",
+            "Instant Analysis parity (CPython + Pyodide)": "success",
+            "Pytest (apps/agent, Windows)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        },
+        {
+          "number": 906,
+          "head": "91d2359c13c3f39f41a12c282b6d4004f3984bec",
+          "merge": "a7588bf23534f7a3f2847c2e9733164e1974d029",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": "success",
+            "Lint + typecheck + test (apps/web)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        },
+        {
+          "number": 908,
+          "head": "f40245ebf675b42cc2968de516d88f435a735606",
+          "merge": "efd176059a81a02339a58c735a20db0f687a7e04",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": "success",
+            "Lint + typecheck + test (apps/web)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        },
+        {
+          "number": 912,
+          "head": "e8efd121523020108fe564b9b434366878a96faa",
+          "merge": "f4c1983f9753025628002e1e7b2437288453b741",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/web)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        },
+        {
+          "number": 910,
+          "head": "482bf83bad7d1b911d94e6b82a3c0fd7e0767e31",
+          "merge": "f001dec0568eb5b883c4daff3217b5f3e1c40eb6",
+          "exactHeadChecks": {
+            "Lint + typecheck + test (apps/api)": "success",
+            "Lint + typecheck + test (apps/web)": "success",
+            "Responsive e2e smoke (public pages)": "success",
+            "Vercel": "success",
+            "Vercel Preview Comments": "success"
+          }
+        }
+      ],
+      "reviews": {
+        "method": "Three independent source-area reviews and a manual API/web merge-integrity pass. The four-lens Workflow runtime with separate skeptic passes was unavailable.",
+        "areas": [
+          "goals and practice",
+          "re-analysis and build library",
+          "sharing and delivery",
+          "admin and overlay integration",
+          "Locker per-view role and data preservation"
+        ],
+        "locker": "Worksheets and Shelf regressions exercise membership revision changes during GET and PUT, post-write role changes, exact replay attachment provenance and draft preservation during temporary read failures.",
+        "native": "Qt offscreen plus the exact Windows matrix. No installed client, installer, game or live provider account was used.",
+        "browser": "Chromium exercised real replay export, responsive Compare, public replay archives, Settings, and landscape/vertical overlay placement with isolated fixtures.",
+        "integratedChecks": "The exact final product PR passed 9,252 API tests, 11,525 web tests and 614 responsive browser tests, plus the Windows matrix and engine parity. All protected route budgets passed. The serial API CI job uses the measured 30-minute cap and a 6 GiB Jest heap."
+      },
+      "mutations": {
+        "adminAttention": "5/5",
+        "adminCohorts": "2/2",
+        "guideDrafts": "2/2",
+        "twitchRewards": "5/5",
+        "twitchRewardQueueAndPrivacy": "8/8",
+        "twitchRewardSpeechAcknowledgement": "6/6",
+        "overlayLayout": "3/3",
+        "lockerShelf": "3/3",
+        "lockerWorksheets": "2/2",
+        "lockerStudio": "7/7",
+        "coachingReplayConsent": "7/7",
+        "enginePayload": "5/5",
+        "desktopGui": "5/5",
+        "deliveryAndPromotion": "5/5",
+        "overlayClip": "5/5"
+      },
+      "desktop": {
+        "status": "coordinated",
+        "tag": "agent-v0.25.0",
+        "latestPublishedTag": "agent-v0.24.11",
+        "coordination": "Growth owns the reserved 0.25.0 tag and G7 release. Tag a main revision that contains the final native follow-up and include the native Unreleased entries in the release notes.",
+        "source": "docs/handoff/growth/R1.md",
+        "requiredNativeRevision": "eb4f1ed817cf9c267028a9a63e6267614c0cc4c0"
+      },
+      "documentRevision": "83acef624bb3783bf0955c7539abc8f6ff31cc11",
+      "documentSha256": {
+        "docs/SETUP_GUIDE.md": "bdc48063b4441bd16b3402eb737bc390c8fa497e89d05c13eb0907e4618e2d1b",
+        "docs/admin-console.md": "78fabc4e34c1f190e9136971db2a6e57c4ed27fe99d5037e1e677ec8247ed2d9",
+        "coaching/COACHING_PLAYBOOK.md": "04299aaf216f539e1a928bf6931aa836d29636fd9ffdf0f451283f8247c74cbc",
+        "CHANGELOG.md": "407798d6a61f1e6fe7713cc66eb8b168fc8af978bf019a4ed453894870ddb006",
+        "apps/agent/CHANGELOG.md": "24c7d3863d76c300e0701d1787abe696dacf46343e73a561646789ab9636f3b3"
+      },
+      "delivery": {
+        "mainRevision": "eb4f1ed817cf9c267028a9a63e6267614c0cc4c0",
+        "runs": [
+          {
+            "conclusion": "success",
+            "databaseId": 43103484582,
+            "event": "push",
+            "status": "completed",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/43103484582",
+            "workflowName": "community-builds-ci"
+          },
+          {
+            "conclusion": "success",
+            "databaseId": 43103484283,
+            "event": "push",
+            "status": "completed",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/43103484283",
+            "workflowName": "version-check"
+          },
+          {
+            "conclusion": "success",
+            "databaseId": 43103484154,
+            "event": "push",
+            "status": "completed",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/43103484154",
+            "workflowName": "data-integrity"
+          },
+          {
+            "conclusion": "success",
+            "databaseId": 43103484401,
+            "event": "push",
+            "status": "completed",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/43103484401",
+            "workflowName": "python-tests"
+          },
+          {
+            "conclusion": "success",
+            "databaseId": 43103484200,
+            "event": "push",
+            "status": "completed",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/43103484200",
+            "workflowName": "api-ci"
+          },
+          {
+            "conclusion": "success",
+            "databaseId": 43103484300,
+            "event": "push",
+            "status": "completed",
+            "url": "https://github.com/ReSpOnSeSC2/sc2tools/actions/runs/43103484300",
+            "workflowName": "web-ci"
+          }
+        ],
+        "deployments": {
+          "Production": {
+            "id": 7721695224,
+            "state": "success",
+            "url": "https://sc2tools-1ljnn7jvy-jonathan-laymans-projects.vercel.app"
+          },
+          "main - sc2tools-api": {
+            "id": 7721569644,
+            "state": "success",
+            "url": "https://sc2tools-api.onrender.com"
+          }
+        }
+      },
+      "reconciledItems": [
+        76,
+        77,
+        78,
+        79,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        110,
+        120,
+        136,
+        141,
+        148,
+        152,
+        157,
+        158,
+        159,
+        163,
+        169,
+        178,
+        179,
+        180,
+        182,
+        183,
+        184,
+        185,
+        186,
+        187,
+        189,
+        190,
+        191,
+        192,
+        193,
+        194,
+        195,
+        197
+      ],
+      "remainingCount": 39
     }
   },
-  "latestImplementationRevisionQualification": "PR848/main 1fe7dc8a history-on-this-device UI delivery (AC5, tested 7e5c390a) is verified by local web types and lint, 10308 web cases, 25/25 mutations and two review workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR844/main 1d2353cc device copy clearing delivery (AC4, tested 3c36f05d) is verified by local web types and lint, 10245 web cases, 59/59 mutations and five verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR842/main 1c7c1974 device-kept analysis corpus delivery (AC3, tested 208598af) is verified by local API and web types and lint, 2213 API and 10191 web cases, 51/51 mutations, an independent review and two verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR841/main d496e3ea analysis-corpus changed-since reads delivery (AC2, tested 8be5c842) is verified by local types, configured lint, 1623 API cases, 15/15 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR840/main 901be460 analysis-corpus updatedAt stamps and index delivery (AC1, tested 7c0fc2a6) is verified by local types, configured lint, 1603 API cases, 10/10 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR837/main 55378835 owner activation-review runbook delivery (R1, docs only, citations checked at 9802bc8a) made no production read and changed no flag; both production deployments succeeded for that exact commit. The latest implementation revision stays C5's c7b5ef93. PR836/main c6e7110b opponent-MMR cache source delivery (C5, tested c7b5ef93) is verified by local types, configured lint, 1025 API and 109 web cases, 14/14 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR834/main d7b925d5 default-off chart-cache overlap guard delivery (G1, tested cc8e358c) is verified by local types, configured lint, 589 API cases, 9/9 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR833/main 261fa04d owner-run durable device-auth disable primitive (never invoked) delivery (DA4, tested 90126ee2) is verified by local types, configured lint, 180 device-auth cases, 11/11 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR832/main fe6b3d1f separate-process device-auth revocation regression (no application source) delivery (DA3, tested 6df0f447) is verified by local types, configured lint, 174 device-auth cases, 3/3 mutations, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR831/main 619d8f7f matchup time-series cache source delivery (C4, tested 000734b6) is verified by local types, configured lint, 539 API and 156 web cases, 15/15 mutations, an independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR829/main 2fabe343 random-summary cache source delivery (C3, tested 10cdb0fd) is verified by local types, configured lint, 449 API and 129 web cases, 12/12 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343 with public health checks; signed-in read-only acceptance was not performed. PR828/main d20bce90 net-MMR pair cache source delivery (C2, tested f9cc5ccc) is verified by local types, configured lint, 433 API and 119 web cases, 11/11 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR826/main 294c24ab uninjected device-auth lease probe hold-off delivery (DA2, tested 1dde734b) is verified by local types, lint, 231 device-auth cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR825/main 4a4df22f streak and Macro report cache source delivery (C1, tested 1fecfca0) is verified by local types, configured lint, 293 API and 117 web cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR824/main c790de3e serving-cohort contract (ADR 0072) delivery changes no runtime behavior and is verified by exact-head API CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks. PR822/main 27b9aeb0 opponent region/identity delivery is verified by local 3056/214 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. PR821/main de2031ad custom-build definition delivery is verified by its own local 1393/71 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. Agent0.24.7 GitHub publication is complete under the approved unsigned exception; actual API and website update availability are verified, with installed0.24.6 showing update available. No installed0.24.7 uptake, signing, cache/auth activation, full writer/fleet proof, savings or fresh all197 audit is claimed."
+  "latestImplementationRevisionQualification": "PR848/main 1fe7dc8a history-on-this-device UI delivery (AC5, tested 7e5c390a) is verified by local web types and lint, 10308 web cases, 25/25 mutations and two review workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR844/main 1d2353cc device copy clearing delivery (AC4, tested 3c36f05d) is verified by local web types and lint, 10245 web cases, 59/59 mutations and five verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR842/main 1c7c1974 device-kept analysis corpus delivery (AC3, tested 208598af) is verified by local API and web types and lint, 2213 API and 10191 web cases, 51/51 mutations, an independent review and two verification workflows, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR841/main d496e3ea analysis-corpus changed-since reads delivery (AC2, tested 8be5c842) is verified by local types, configured lint, 1623 API cases, 15/15 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR840/main 901be460 analysis-corpus updatedAt stamps and index delivery (AC1, tested 7c0fc2a6) is verified by local types, configured lint, 1603 API cases, 10/10 mutations and an addressed independent review, exact-head CI and the API/web production deployments of main 4bfa0daa, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR837/main 55378835 owner activation-review runbook delivery (R1, docs only, citations checked at 9802bc8a) made no production read and changed no flag; both production deployments succeeded for that exact commit. The latest implementation revision stays C5's c7b5ef93. PR836/main c6e7110b opponent-MMR cache source delivery (C5, tested c7b5ef93) is verified by local types, configured lint, 1025 API and 109 web cases, 14/14 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR834/main d7b925d5 default-off chart-cache overlap guard delivery (G1, tested cc8e358c) is verified by local types, configured lint, 589 API cases, 9/9 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR833/main 261fa04d owner-run durable device-auth disable primitive (never invoked) delivery (DA4, tested 90126ee2) is verified by local types, configured lint, 180 device-auth cases, 11/11 mutations, an addressed independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR832/main fe6b3d1f separate-process device-auth revocation regression (no application source) delivery (DA3, tested 6df0f447) is verified by local types, configured lint, 174 device-auth cases, 3/3 mutations, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR831/main 619d8f7f matchup time-series cache source delivery (C4, tested 000734b6) is verified by local types, configured lint, 539 API and 156 web cases, 15/15 mutations, an independent review, exact-head CI and the API/web production deployments of main 55378835, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR829/main 2fabe343 random-summary cache source delivery (C3, tested 10cdb0fd) is verified by local types, configured lint, 449 API and 129 web cases, 12/12 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343 with public health checks; signed-in read-only acceptance was not performed. PR828/main d20bce90 net-MMR pair cache source delivery (C2, tested f9cc5ccc) is verified by local types, configured lint, 433 API and 119 web cases, 11/11 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR826/main 294c24ab uninjected device-auth lease probe hold-off delivery (DA2, tested 1dde734b) is verified by local types, lint, 231 device-auth cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR825/main 4a4df22f streak and Macro report cache source delivery (C1, tested 1fecfca0) is verified by local types, configured lint, 293 API and 117 web cases, 7/7 mutations, an independent review, exact-head CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks; signed-in read-only acceptance was not performed. PR824/main c790de3e serving-cohort contract (ADR 0072) delivery changes no runtime behavior and is verified by exact-head API CI and the API/web production deployments of main 2fabe343, which contains it, with public health checks. PR822/main 27b9aeb0 opponent region/identity delivery is verified by local 3056/214 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. PR821/main de2031ad custom-build definition delivery is verified by its own local 1393/71 types/configured lint, exact-head API CI and exact-source API/web production deployments with public health checks; signed-in read-only acceptance was not performed. Agent0.24.7 GitHub publication is complete under the approved unsigned exception; actual API and website update availability are verified, with installed0.24.6 showing update available. No installed0.24.7 uptake, signing, cache/auth activation, full writer/fleet proof, savings or fresh all197 audit is claimed.",
+  "currentProgress": {
+    "date": "2026-11-11",
+    "counts": {
+      "completed": 158,
+      "partial": 39,
+      "open": 0,
+      "unknown": 0
+    },
+    "completionPercentage": 80.2,
+    "remainingCount": 39
+  }
 }
