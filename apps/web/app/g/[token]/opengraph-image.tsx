@@ -13,8 +13,7 @@ import { sharedResultWord, type SharedGameAnalysis } from "@/lib/sharedGame";
  * macro score, with the map art when no snapshot can be drawn. Built from
  * the same redacted payload and share-safe report as the page (no names,
  * no ratings). A missing or turned-off link renders a
- * neutral card, so the image never reveals whether a link exists. Cached
- * for a minute at most, so a turned-off link stops previewing soon.
+ * neutral card. Shared caches can retain a live preview for up to a minute.
  *
  * Satori: inline colours, ``display:flex`` on every multi-child div.
  */
@@ -22,6 +21,8 @@ import { sharedResultWord, type SharedGameAnalysis } from "@/lib/sharedGame";
 export const alt = "A StarCraft II game shared on SC2 Tools";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const BG = "rgb(6, 9, 14)";
 const SURFACE = "rgb(12, 16, 23)";
@@ -55,7 +56,7 @@ export default async function SharedGameOpenGraphImage({ params }: { params: Pro
   return new ImageResponse(
     (
       <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between",
-        background: `radial-gradient(1000px 500px at 100% 0%, rgba(21, 125, 140, 0.3) 0%, ${BG} 55%), ${BG}`, padding: "56px 72px", fontFamily: "sans-serif", position: "relative" }}>
+        backgroundColor: BG, backgroundImage: `radial-gradient(ellipse 1000px 500px at 100% 0%, rgba(21, 125, 140, 0.3) 0%, ${BG} 55%)`, padding: "56px 72px", fontFamily: "sans-serif", position: "relative" }}>
         {thumb && (snapshot || mapFrame) ? (
           // Satori draws plain <img> elements only; next/image does not apply.
           // eslint-disable-next-line @next/next/no-img-element
@@ -114,7 +115,7 @@ export default async function SharedGameOpenGraphImage({ params }: { params: Pro
         </div>
       </div>
     ),
-    { ...size },
+    { ...size, headers: { "Cache-Control": game ? "public, max-age=0, s-maxage=60, must-revalidate, no-transform" : "no-store" } },
   );
 }
 
@@ -156,7 +157,7 @@ async function load(token: string): Promise<SharedGameAnalysis | null> {
   try {
     const res = await fetch(`${API_BASE}/v1/shares/${encodeURIComponent(token)}`, {
       headers: { accept: "application/json" },
-      next: { revalidate: 60 },
+      cache: "no-store",
     });
     if (!res.ok) return null;
     return (await res.json()) as SharedGameAnalysis;
