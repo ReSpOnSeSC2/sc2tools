@@ -22,6 +22,7 @@ import { useApi } from "@/lib/clientApi";
 import type { PublicPlayerSettings } from "@/components/public-profile/types";
 import { getMapLayoutUrl } from "@/lib/map-images";
 import type { MapPlayback } from "@/lib/mapReplay";
+import type { ReplayCanvas, ReplayCanvasContext } from "@/lib/replayCanvas";
 import { formatClock } from "@/lib/replayHud";
 import type { ReplayVision } from "@/lib/replayVision";
 import { spriteAssetsVersion } from "@/lib/spriteSheets";
@@ -33,6 +34,7 @@ import {
 } from "@/lib/clip/clipPlan";
 import type { MapReplayerHandle } from "../../MapReplayer";
 import { clipCamera, renderClipFrame, type ClipFrameOptions } from "./clipRender";
+import { createClipSurface, type ClipSurface } from "./clipSurface";
 import { ClipError, canRecordVideo, recordGifClip, recordVideoClip, type ClipFailure } from "./clipRecorder";
 
 type Status =
@@ -80,15 +82,25 @@ function clipSupport(): { video: string | null; gif: boolean } {
   return { video, gif: typeof Worker !== "undefined" };
 }
 
-function loadLayout(mapName: string): Promise<HTMLImageElement | null> {
+function loadLayout(mapName: string, signal: AbortSignal): Promise<HTMLImageElement | null> {
+  if (signal.aborted) return Promise.reject(new ClipError("cancelled"));
   const url = getMapLayoutUrl(mapName);
   if (!url || typeof Image === "undefined") return Promise.resolve(null);
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const image = new Image();
-    const timer = setTimeout(() => resolve(null), 6000);
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", cancel);
+      image.onload = null;
+      image.onerror = null;
+    };
+    const cancel = () => { cleanup(); image.removeAttribute("src"); reject(new ClipError("cancelled")); };
+    const finish = (result: HTMLImageElement | null) => { cleanup(); resolve(result); };
+    const timer = setTimeout(() => finish(null), 6000);
+    signal.addEventListener("abort", cancel, { once: true });
     image.crossOrigin = "anonymous";
-    image.onload = () => { clearTimeout(timer); resolve(image); };
-    image.onerror = () => { clearTimeout(timer); resolve(null); };
+    image.onload = () => finish(image);
+    image.onerror = () => finish(null);
     image.src = url;
   });
 }
@@ -102,7 +114,8 @@ const pause = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, r
 
 /** Ask for every sprite the range needs, then wait (≤ 2 s) until the
  *  atlases stop arriving, so early frames don't show placeholder dots. */
-async function warmUp(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, options: ClipFrameOptions, range: ClipRange, signal: AbortSignal) {
+async function warmUp(ctx: ReplayCanvasContext, canvas: ReplayCanvas, options: ClipFrameOptions, range: ClipRange, signal: AbortSignal) {
+  if (signal.aborted) throw new ClipError("cancelled");
   const view = options.view;
   const sample = () => {
     for (let k = 0; k <= 5; k += 1) renderClipFrame(ctx, canvas, range.start + ((range.end - range.start) * k) / 6, options);
@@ -155,7 +168,8 @@ export default function ClipDialog({
   playback: MapPlayback;
   time: number;
   vision: ReplayVision;
-  /** The loaded section of a segmented recording; clips stay inside it. */
+  /** The renderer gets one decoded segment. Spanning sections needs a
+   * range loader and stable follow/vision identities across segment seams. */
   playbackWindow?: PlaybackWindow | null;
   races: { me?: string | null; opp?: string | null };
   /** The owner may brand with their public player page. */
@@ -184,7 +198,9 @@ export default function ClipDialog({
   const playerPage = usePlayerPage(owner);
 
   useEffect(() => () => {
-    abortRef.current?.abort();
+    const controller = abortRef.current;
+    abortRef.current = null;
+    controller?.abort();
     if (urlRef.current) URL.revokeObjectURL(urlRef.current);
   }, []);
 
@@ -206,7 +222,7 @@ export default function ClipDialog({
   const setRange = (next: ClipRange) => { const [from, to] = rangeTexts(next); setStartText(from); setEndText(to); };
 
   const make = async () => {
-    if (!range || !canMake) return;
+    if (!range || !canMake || abortRef.current) return;
     onStart();
     if (urlRef.current) { URL.revokeObjectURL(urlRef.current); urlRef.current = null; }
     const controller = new AbortController();
@@ -215,16 +231,11 @@ export default function ClipDialog({
     const gif = format === "gif";
     const width = Math.round(CLIP_SIZES[size].width * (gif ? GIF_SCALE : 1));
     const height = Math.round(CLIP_SIZES[size].height * (gif ? GIF_SCALE : 1));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    canvas.setAttribute("aria-hidden", "true");
-    Object.assign(canvas.style, { position: "fixed", left: "0", top: "0", width: "1px", height: "1px", opacity: "0", pointerEvents: "none" });
-    document.body.appendChild(canvas);
+    let surface: ClipSurface | undefined;
     try {
-      const ctx = canvas.getContext("2d", gif ? { willReadFrequently: true } : undefined);
-      if (!ctx) throw new ClipError("unsupported");
-      const layout = await loadLayout(playback.mapName);
+      surface = createClipSurface(width, height, format);
+      const { canvas, ctx, captureCanvas, present } = surface;
+      const layout = await loadLayout(playback.mapName, controller.signal);
       const screen = replayer.current?.snapshot();
       const options: ClipFrameOptions = {
         playback, layout, vision, hud, watermark: watermarkText, races,
@@ -233,22 +244,23 @@ export default function ClipDialog({
       };
       await warmUp(ctx, canvas, options, range, controller.signal);
       const count = clipFrameCount(range, speed, fps);
-      const at = (index: number) => clipFrameTime(range, speed, fps, index);
+      const render = (index: number) => renderClipFrame(ctx, canvas, clipFrameTime(range, speed, fps, index), options);
       const onProgress = (done: number, total: number) => setStatus({ kind: "recording", done, total });
       setStatus({ kind: "recording", done: 0, total: count });
-      const blob = gif
-        ? await recordGifClip({ count, fps, signal: controller.signal, onProgress, maxBytes: GIF_MAX_BYTES, width, height,
-          frame: (index) => { renderClipFrame(ctx, canvas, at(index), options); return ctx.getImageData(0, 0, width, height).data.buffer as ArrayBuffer; } })
-        : await recordVideoClip({ count, fps, signal: controller.signal, onProgress, maxBytes: VIDEO_MAX_BYTES, canvas,
-          render: (index) => renderClipFrame(ctx, canvas, at(index), options), mime: support.video!, bitsPerSecond: VIDEO_BITS_PER_SECOND });
+      const blob = captureCanvas
+        ? await recordVideoClip({ count, fps, signal: controller.signal, onProgress, maxBytes: VIDEO_MAX_BYTES, canvas: captureCanvas,
+          render: (index) => { render(index); present(); }, mime: support.video!, bitsPerSecond: VIDEO_BITS_PER_SECOND })
+        : await recordGifClip({ count, fps, signal: controller.signal, onProgress, maxBytes: GIF_MAX_BYTES, width, height,
+          frame: (index) => { render(index); return ctx.getImageData(0, 0, width, height).data.buffer as ArrayBuffer; } });
+      if (controller.signal.aborted) throw new ClipError("cancelled");
       const url = URL.createObjectURL(blob);
       urlRef.current = url;
       setStatus({ kind: "done", url, name: clipFileName(range, format, support.video), bytes: blob.size });
     } catch (error) {
       const reason: ClipFailure = error instanceof ClipError ? error.reason : "failed";
-      setStatus(reason === "cancelled" ? { kind: "idle", note: "Clip cancelled." } : { kind: "error", message: FAILURES[reason] });
+      if (abortRef.current === controller) setStatus(reason === "cancelled" ? { kind: "idle", note: "Clip cancelled." } : { kind: "error", message: FAILURES[reason] });
     } finally {
-      canvas.remove();
+      surface?.dispose();
       if (abortRef.current === controller) abortRef.current = null;
     }
   };

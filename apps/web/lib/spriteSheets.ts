@@ -43,6 +43,7 @@
  * per frame so a new unit type appearing never stalls a frame.
  */
 
+import type { ReplayCanvasContext } from "./replayCanvas";
 import {
   SPRITE_MANIFEST,
   type SpriteAnimMeta,
@@ -731,7 +732,7 @@ export function spriteDrawRect(
  * caller can fall back to the flat icon for this frame.
  */
 export function drawSprite(
-  ctx: CanvasRenderingContext2D,
+  ctx: ReplayCanvasContext,
   handle: SpriteAnimHandle,
   color: SpriteColor,
   facing: number,

@@ -117,9 +117,9 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "Press **Clip** under the replay's game clock.",
+        "Press **Clip** under the replay's game clock on your game or a shared game with map playback.",
         "Check the range. It starts on the fight nearest the replay clock with 10 seconds either side, up to 60 seconds of game time. Edit the start and end as m:ss, or choose **Around** the current time.",
-        "Pick the format, speed (1×, 2× or 4×), size (1280×720 or 1080×1080), whether to show the scoreboard, and the watermark: sc2tools.com, or your public player page when you have turned it on.",
+        "Pick the format, speed (1×, 2× or 4×), size (1280×720 or 1080×1080), whether to show the scoreboard, and the watermark. Use sc2tools.com for any clip, or your public player page for a clip from your own game when your page is enabled.",
         "Press **Make clip**, then **Download** when it finishes. **Cancel clip** stops at any point.",
       ],
     },

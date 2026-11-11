@@ -1,3 +1,4 @@
+import type { ReplayCanvasContext } from "./replayCanvas";
 import { projectX, projectY, type PlaybackBounds, type ReplayCreep } from "./mapReplay";
 
 /** Last observed mask, never a mask from the future. Works for reverse seeks. */
@@ -16,7 +17,7 @@ const masks = new WeakMap<ReplayCreep, MaskCache>();
 
 /** Cached at map-cell resolution. Only rebuild when the observed mask changes. */
 export function drawObservedCreep(
-  ctx: CanvasRenderingContext2D,
+  ctx: ReplayCanvasContext,
   bounds: PlaybackBounds,
   projection: { k: number; ox: number; oy: number },
   creep: ReplayCreep,

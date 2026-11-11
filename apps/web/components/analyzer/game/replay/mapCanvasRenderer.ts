@@ -1,3 +1,4 @@
+import type { ReplayCanvas, ReplayCanvasContext } from "@/lib/replayCanvas";
 import { buildingVisibleAt, buildingPositionAt, gasTappedAt, isWorkerUnit, resourceAliveAt, projectX, projectY, unitNameAt, unitVisibleAt, unitMaxSpeed, worldProjection, type MapPlayback } from "@/lib/mapReplay";
 import { animFrameIndex, motionSample, sampleTrack, type MotionSample } from "@/lib/replayMotion";
 import { beginSpriteFrame, drawSprite, endSpriteFrame, hasWalk, resolveSprite, spriteAnim, type SpriteAnimHandle, type SpriteColor } from "@/lib/spriteSheets";
@@ -20,7 +21,7 @@ import { ME_ARMY, ME_WORKER, OPP_ARMY, OPP_WORKER, ME_SHEET, OPP_SHEET, BATTLE_W
 /** One fog buffer per target canvas: the live stage and an off-screen
  * clip render alternate frames, and sharing one buffer would resize
  * (and reallocate) it on every call. */
-const fogCanvases = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+const fogCanvases = new WeakMap<ReplayCanvas, HTMLCanvasElement>();
 
 /** "Last seen" enemy structures draw at this opacity in single-side vision. */
 const GHOST_ALPHA = 0.4;
@@ -103,8 +104,8 @@ export interface RenderFrameOptions {
 }
 
 export function renderFrame(
-  ctx: CanvasRenderingContext2D,
-  canvas: HTMLCanvasElement,
+  ctx: ReplayCanvasContext,
+  canvas: ReplayCanvas,
   playback: MapPlayback,
   t: number,
   layout: HTMLImageElement | null,
@@ -568,7 +569,7 @@ function recordHits(hits: ReplayHitBuffer | null | undefined, view: ViewTransfor
 }
 
 /** A thin ring around the inspected entity, drawn over the sprites. */
-function drawSelection(ctx: CanvasRenderingContext2D, selected: ReplayEntityRef, z: number): void {
+function drawSelection(ctx: ReplayCanvasContext, selected: ReplayEntityRef, z: number): void {
   for (let i = 0; i < entityCount; i += 1) {
     const e = entityPool[i];
     if (e.ghost || e.index !== selected.index || (e.iconKind === "building") !== (selected.kind === "building")) continue;
@@ -584,14 +585,14 @@ function drawSelection(ctx: CanvasRenderingContext2D, selected: ReplayEntityRef,
 /** Cached vignette gradient, per context — rebuilt only when the
  * stage resizes, so the per-frame cost is one fillRect. */
 const vignetteCache = new WeakMap<
-  CanvasRenderingContext2D,
+  ReplayCanvasContext,
   { w: number; h: number; grad: CanvasGradient }
 >();
 
 function vignetteFor(
   w: number,
   h: number,
-  ctx: CanvasRenderingContext2D,
+  ctx: ReplayCanvasContext,
 ): CanvasGradient | null {
   const hit = vignetteCache.get(ctx);
   if (hit && hit.w === w && hit.h === h) return hit.grad;
