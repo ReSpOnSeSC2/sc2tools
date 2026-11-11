@@ -133,6 +133,8 @@ beforeEach(() => {
     if (route === "/v1/custom-builds?view=summary&limit=100") return reply({ items: [], nextCursor: null });
     if (route === "/v1/community/arcade-universe?perMatchup=12") return reply({ items: [] });
     if (route === "/v1/seasons") return reply({ mapPool: [] });
+    const questQuery = new URLSearchParams({ day: todayKey(new Date(), tz), tz });
+    if (route === `/v1/practice/quest?${questQuery}`) return reply({ eligible: false, done: false });
     if (route === "/v1/arcade/unit-stats") return reply({ scannedGames: 0, builtByUnit: {}, totalUnitsLost: 0, lostGames: 0 });
     return reject();
   }));
