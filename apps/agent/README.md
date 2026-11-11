@@ -181,7 +181,7 @@ installed agent through the existing update flow; a second installation or
 pairing is not needed. OBS browser sources and Build check-in remain available.
 
 The **Agent** dropdown is shared by Companion and every Agent page. It includes
-navigation, **Border and animations…**, **Help and support**, **Check for updates** and
+navigation, **Border and animations…**, **Help and troubleshooting**, **Check for updates** and
 **Quit SC2 Tools**. Update checks open the Dashboard so progress and results are visible.
 
 The **Build selectors** screen contains the pre-game plan and post-game check-in.

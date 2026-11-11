@@ -156,7 +156,7 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             super().__init__(parent)
             self.model = GamesModel()
             self.unknown_skipped = 0
-            layout = QtWidgets.QVBoxLayout(scrolling_page(self, QtWidgets=QtWidgets))
+            layout = scrolling_page(self, QtWidgets=QtWidgets)
             layout.setContentsMargins(theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y, theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y)
             title = QtWidgets.QLabel("Recent games")
             title.setObjectName("h1")

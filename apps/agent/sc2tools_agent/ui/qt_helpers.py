@@ -178,7 +178,7 @@ def build_flow_layout(parent=None, *, QtCore, QtWidgets, spacing=8):
 
 
 def scrolling_page(scroll, *, QtWidgets):
-    """Make ``scroll`` a page that scrolls instead of squeezing its content; returns the content widget.
+    """Make ``scroll`` a page that scrolls instead of squeezing its content; return its layout.
 
     The content keeps its own minimum height, so at the smallest window the
     page scrolls where a plain page would overlap its controls.
@@ -186,8 +186,9 @@ def scrolling_page(scroll, *, QtWidgets):
     scroll.setWidgetResizable(True)
     scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
     content = QtWidgets.QWidget()
+    layout = QtWidgets.QVBoxLayout(content)
     scroll.setWidget(content)
-    return content
+    return layout
 
 
 def install_responsive_forms(scroll, *, QtCore, QtWidgets, breakpoint=640):

@@ -15,6 +15,7 @@ from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
 from sc2tools_agent.ui import theme
 from sc2tools_agent.ui.activity_log import build_activity_log
+from sc2tools_agent.ui.qt_helpers import scrolling_page
 from sc2tools_agent.ui.recent_games import build_recent_games
 
 # The display of the smallest window (480 x 360) less the shell around it.
@@ -54,6 +55,17 @@ def stacked_widgets(page):
                   key=lambda widget: widget.geometry().top())
 
 
+def test_the_scroll_area_receives_content_with_its_layout_already_installed(app):
+    class ScrollArea(QtWidgets.QScrollArea):
+        def setWidget(self, widget):
+            assert isinstance(widget.layout(), QtWidgets.QVBoxLayout)
+            super().setWidget(widget)
+
+    scroll = ScrollArea()
+    layout = scrolling_page(scroll, QtWidgets=QtWidgets)
+    assert scroll.widget().layout() is layout
+
+
 @pytest.mark.parametrize("kind", ["recent", "log"])
 def test_a_page_scrolls_at_the_smallest_window_and_never_overlaps_its_controls(app, tmp_path, kind):
     page = build_page(kind, tmp_path)
@@ -74,6 +86,62 @@ def test_a_page_scrolls_at_the_smallest_window_and_never_overlaps_its_controls(a
         page.close()
         page.deleteLater()
         settle(app)
+
+
+@pytest.mark.parametrize("scale", ["1.25", "1.5"])
+def test_log_and_recent_controls_fit_the_smallest_window_at_display_scale(tmp_path, monkeypatch, scale):
+    monkeypatch.setenv("QT_SCALE_FACTOR", scale)
+    run_gui_check(tmp_path, THEMED_SETUP.replace("FONT_SIZE", "10") + dedent('''
+        def check_controls(panel, *controls):
+            for index, control in enumerate(controls):
+                assert control.isVisible() and control.parentWidget() is panel
+                assert panel.rect().contains(control.geometry()), control
+                minimum = control.minimumSizeHint().boundedTo(control.maximumSize())
+                assert control.width() >= minimum.width(), control
+                assert control.height() >= minimum.height(), control
+                assert all(not control.geometry().intersects(other.geometry()) for other in controls[:index])
+
+        (base / "agent.log").write_text("".join(
+            f"2026-11-10T12:00:00 INFO search target {index}\\n" for index in range(50)
+        ), encoding="utf-8")
+        ui, win = make_window(window_page="recent", window_animations=False)
+        win.show()
+        win.resize(480, 360)
+        QtTest.QTest.qWait(50)
+        recent = win._recent_widget
+        recent.set_rows([{"gameId": "fixture", "status": "uploaded"}])
+        app.processEvents()
+        assert (win.width(), win.height()) == (480, 360)
+        assert recent.horizontalScrollBar().maximum() == 0
+        check_controls(recent.controls_panel, *recent.filters.values(), recent.date)
+
+        win._go_to_page("log")
+        QtTest.QTest.qWait(50)
+        log = win._activity_log
+        assert log.horizontalScrollBar().maximum() == 0
+        check_controls(log.header_panel, log.header_title, log.header_help, log.filter_combo, log.open_folder_button)
+        check_controls(log.toolbar_panel, log.search, log.match_count, log.follow, log.copy_button, log.support_copy_button)
+
+        win.activateWindow()
+        log.search.setFocus()
+        app.processEvents()
+        outer_scroll = log.verticalScrollBar()
+        outer_scroll.setValue(0)
+        log.search.setText("search target")
+        assert log.match_count.text() == "1 of 50"
+        assert outer_scroll.value() == 0
+        QtTest.QTest.keyClick(log.search, QtCore.Qt.Key_F3)
+        assert log.match_count.text() == "2 of 50"
+        cursor = log.view.cursorRect()
+        top_left = log.view.viewport().mapTo(log.viewport(), cursor.topLeft())
+        assert outer_scroll.value() > 0
+        assert log.viewport().rect().contains(QtCore.QRect(top_left, cursor.size()))
+        assert log.search.hasFocus()
+        win._companion_page.shutdown()
+        win._race_effects.shutdown()
+        win._really_quit = True
+        win.close()
+    '''), timeout=45)
 
 
 @pytest.mark.parametrize("kind", ["recent", "log"])

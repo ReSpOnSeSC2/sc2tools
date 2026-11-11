@@ -24,7 +24,7 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
             self.new_lines = 0
             self.search_hits = []
             self.search_index = 0
-            layout = QtWidgets.QVBoxLayout(scrolling_page(self, QtWidgets=QtWidgets))
+            layout = scrolling_page(self, QtWidgets=QtWidgets)
             layout.setContentsMargins(theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y, theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y)
             self.header_panel = QtWidgets.QWidget()
             self.header_panel.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
@@ -283,6 +283,10 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
             self.view.setTextCursor(cursor)
             self.view.ensureCursorVisible()
             self.highlight_search()
+            if delta:
+                match = self.view.cursorRect()
+                position = self.view.viewport().mapTo(self.widget(), match.center())
+                self.ensureVisible(position.x(), position.y(), 0, match.height())
 
         def _copied(self):
             self.copy_button.setText("Copied ✓")
