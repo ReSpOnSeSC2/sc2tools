@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GuideAdminNote } from "@/lib/guides/types";
@@ -256,7 +257,7 @@ describe("admin Guides draft recovery and bulk writes", () => {
 
   it("guards only dirty navigation, supports Stay and Leave, and keeps the session draft", () => {
     serve();
-    render(<><a href="/admin/users" onClick={event => { if (event.ctrlKey) event.preventDefault(); }}>Other admin page</a><AdminGuidesPage /></>);
+    render(<><Link href="/admin/users" prefetch={false} onClick={event => { if (event.ctrlKey) event.preventDefault(); }}>Other admin page</Link><AdminGuidesPage /></>);
     const unload = () => window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
     expect(unload()).toBe(true);
     fireEvent.change(pickGlaives(), { target: { value: "Unsaved plan" } });
