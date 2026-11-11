@@ -11,7 +11,7 @@ import { OverlayPanel } from "../OverlayPanel";
  * Stream Dock's Clip moments panel.
  */
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useEngagementState } from "@/lib/multichat/useEngagementState";
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
 import type { LiveGamePayload } from "../types";
@@ -32,12 +32,15 @@ export function ClipFlagWidget({
   const testActive = useTestFireFlag(live, "clip-flag");
 
   const [reason, setReason] = useState<string | null>(null);
+  const hide = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(hide.current), []);
   useEffect(() => {
     if (!lastEvent || lastEvent.type !== "clip-moment") return;
     const moment = (lastEvent.moment ?? {}) as Record<string, unknown>;
+    if (moment.kind === "manual") return;
     setReason(String(moment.reason ?? "Chat is going off"));
-    const t = setTimeout(() => setReason(null), SHOW_MS);
-    return () => clearTimeout(t);
+    clearTimeout(hide.current);
+    hide.current = setTimeout(() => setReason(null), SHOW_MS);
   }, [lastEvent]);
 
   const shown = testActive
