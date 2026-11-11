@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GuideAdminStatusPayload } from "@/lib/guides/types";
 import { ADMIN_VIDEOS, glaivesNote, statusFixture } from "./adminGuidesFixtures";
 
+import { guideNavigation } from "./adminGuidesNavigationFixture";
+
+vi.mock("next/navigation", async () => (await import("./adminGuidesNavigationFixture")).guideNavigationHooks);
+
 type Resp = { data?: unknown; error?: { status: number; message: string } };
 
 const harness = vi.hoisted(() => ({
@@ -12,7 +16,7 @@ const harness = vi.hoisted(() => ({
   getToken: vi.fn(async () => "admin-token"),
 }));
 
-vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: harness.getToken }) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: harness.getToken, userId: "guide-admin" }) }));
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string) => {
     const r = harness.responses.get(path) ?? {};
@@ -35,6 +39,8 @@ function expectPost(path: string, body?: object) {
 }
 
 beforeEach(() => {
+  guideNavigation.setSearch("section=stats");
+  sessionStorage.clear();
   harness.responses.clear();
   harness.apiCall.mockResolvedValue({ started: true });
 });

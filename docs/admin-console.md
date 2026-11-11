@@ -275,7 +275,7 @@ views. Read the sample size alongside a rate; a small cohort can move sharply.
 
 ## Guides
 
-Follow the publishing and maintenance instructions in [Guides](guides.md).
+Follow the [Guides admin workflow](guides.md#admin-workflow) for draft protection, video controls and statistics runs.
 
 ## Sharing views
 

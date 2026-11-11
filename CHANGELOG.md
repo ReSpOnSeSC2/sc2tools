@@ -238,6 +238,9 @@ corresponding GitHub Release.
 
 ### Admin console
 
+- Guides separates Notes, Videos and Stats runs, restores unsaved notes in the
+  browser tab, and shows per-note retry after a partial save. The Notes tab has
+  a matchup coverage table and Videos can search and filter the channel list.
 - Notifications: mark a single item read or unread from its row, see unread
   counts on each filter chip, mark only the selected type read, and open the
   linked user straight from a signup, install or message. A failed save shows
