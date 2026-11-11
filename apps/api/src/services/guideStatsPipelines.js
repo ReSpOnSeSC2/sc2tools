@@ -264,6 +264,7 @@ function gamesFacets() {
   return {
     overall: cellGroupStages(byBuild),
     matchupTotals: cellGroupStages({ era: "era" }),
+    corpus: [{ $count: "games" }],
     leagueBands: [notNull("leagueBand"), ...cellGroupStages({ ...byBuild, value: "leagueBand" })],
     mmrBands: [notNull("mmrBand"), ...cellGroupStages({ ...byBuild, value: "mmrBand" })],
     maps: [notNull("map"), ...cellGroupStages({ ...byBuild, map: "map" })],

@@ -34,6 +34,7 @@ import {
 import { getInstantImportMode } from "@/lib/instant/flag";
 import { PRODUCT_FACTS } from "@/lib/productFacts";
 import { CompanionShowcase } from "@/components/landing/CompanionShowcase";
+import { LiveFromTheLadder } from "@/components/landing/LiveFromTheLadder";
 import { LinkButton } from "@/components/ui/Button";
 
 // A long landing label may grow past one line on a phone.
@@ -45,6 +46,7 @@ export function LandingPageContent() {
       <LandingHero />
       <RealGameShowcase />
       <OutcomeRail />
+      <LiveFromTheLadder />
       <ImprovementChapter />
       <CompanionShowcase />
       <PracticeChapter />

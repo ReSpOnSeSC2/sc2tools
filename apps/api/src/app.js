@@ -867,8 +867,8 @@ function makeServices(deps, clerk, adminClerkIds) {
   const jobLedger = new JobLedger({ db: deps.db, adminEvents });
   const adminAudit = new AdminAuditService({ db: deps.db });
   const siteStats = new SiteStatsService(deps.db, {
-    secret: deps.config.serverPepper,
-    logger: deps.logger,
+    secret: deps.config.serverPepper, logger: deps.logger,
+    guidesEnabled: deps.config.guidesEnabled, reviewsEnabled: deps.config.reviewsEnabled === "on",
   });
   // SC2 Tools Guides: compact pseudonymous per-game guide inputs, captured
   // fire-and-forget by POST /v1/games (routes/games.js). The backfill job
