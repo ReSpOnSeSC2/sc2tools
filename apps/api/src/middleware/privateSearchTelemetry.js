@@ -1,7 +1,7 @@
 "use strict";
 
 const {
-  isPrivateSearchPath, isPrivateSearchRequest, isPrivateSearchFailure,
+  isPrivateSearchPath, isPrivateSearchFailure,
 } = require("./privateSearchBoundary");
 const { isSearchQueryUrl, requestCarriesSearchQuery } = require("./searchQueryPrivacy");
 const { isSyncActionPath } = require("./syncActionJson");
@@ -9,6 +9,19 @@ const { isReplayDownloadBatchPath, isReplayDownloadBatchFailure } = require("./r
 const PRIVATE_SEARCH_TAG = "sc2tools.private_search";
 const HEARTBEAT_PATH = /^\/v1\/devices\/heartbeat\/?$/i;
 const CREDENTIAL_BODY_PATH = /^\/(?:v1\/)?(?:me\/integrations\/discord\/hooks(?:\/[^/]+\/battle-report)?|me\/push\/(?:subscriptions|unsubscribe)|push\/subscription-change|me\/replay-sharing\/reference)\/?$/i;
+
+// The feed URL itself carries a bearer credential, even for a failed lookup.
+const CALENDAR_FEED_PATH = /^\/(?:v1\/)?calendar\/[^/]+\/?$/i;
+
+/** @param {unknown} value */
+function isCalendarFeedPath(value) {
+  return typeof value === "string" && CALENDAR_FEED_PATH.test(value.split(/[?#]/u, 1)[0].replace(/^https?:\/\/[^/]+(?=\/)/i, ""));
+}
+
+/** @param {unknown} value */
+function isPrivateTelemetryPath(value) {
+  return isPrivateSearchPath(value) || isReplayDownloadBatchPath(value) || isCalendarFeedPath(value);
+}
 
 /** @param {unknown} value @param {string} key @returns {unknown} */
 function ownData(value, key) {
@@ -23,7 +36,7 @@ function ownData(value, key) {
 function privateTransaction(value) {
   if (typeof value !== "string") return false;
   const path = value.replace(/^(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+/i, "");
-  return isPrivateSearchPath(path) || isReplayDownloadBatchPath(path);
+  return isPrivateTelemetryPath(path);
 }
 
 /** The device heartbeat body carries the agent's sync report, whose unresolved names
@@ -76,7 +89,7 @@ function stripPrivateBody(event) {
  * @param {unknown} request @returns {boolean} */
 function privateRequest(request) {
   const url = ownData(request, "url");
-  return isPrivateSearchPath(url) || isReplayDownloadBatchPath(url) || requestCarriesSearchQuery(url, ownData(request, "query_string"));
+  return isPrivateTelemetryPath(url) || requestCarriesSearchQuery(url, ownData(request, "query_string"));
 }
 
 /**
@@ -122,15 +135,15 @@ const SHARE_TOKEN_PATH = /^\/v1\/shares\//u;
  * Pass to the existing SDK Http integration before app/parser creation.
  * Avoids pre-parser body capture for this route, and incoming server spans for
  * it, for request URLs whose query carries typed search text and for game
- * share URLs (their path carries the share token).
+ * share and calendar feed URLs that carry bearer credentials.
  * Example: sdk.httpIntegration(privateSearchHttpOptions()) during optional init.
  */
 function privateSearchHttpOptions() {
   return {
     /** @param {string} urlPath */
-    ignoreIncomingRequestBody: urlPath => isPrivateSearchPath(urlPath) || isPrivateBodyPath(urlPath),
+    ignoreIncomingRequestBody: urlPath => isPrivateTelemetryPath(urlPath) || isPrivateBodyPath(urlPath),
     /** @param {string} urlPath the path and query string */
-    ignoreIncomingRequests: urlPath => isPrivateSearchPath(urlPath) || isReplayDownloadBatchPath(urlPath) || isSearchQueryUrl(urlPath)
+    ignoreIncomingRequests: urlPath => isPrivateTelemetryPath(urlPath) || isSearchQueryUrl(urlPath)
       || SHARE_TOKEN_PATH.test(urlPath),
   };
 }
@@ -143,7 +156,8 @@ function privateSearchHttpOptions() {
  * @param {Pick<typeof import('@sentry/node'), 'withIsolationScope'|'suppressTracing'>|false} sdk
  */
 function runPrivateSearchScope(req, next, sdk) {
-  if (!sdk || !(isPrivateSearchRequest(req) || isReplayDownloadBatchPath(req.originalUrl || req.url) || isSearchQueryUrl(req.originalUrl || req.url))) { next(); return; }
+  const path = req.originalUrl || req.url;
+  if (!sdk || !(isPrivateTelemetryPath(path) || isSearchQueryUrl(path))) { next(); return; }
   sdk.withIsolationScope(scope => {
     scope.setTag(PRIVATE_SEARCH_TAG, "1");
     sdk.suppressTracing(next);
