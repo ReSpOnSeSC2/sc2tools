@@ -588,7 +588,7 @@ async function ensureIndexes(ctx, opts = {}) {
     { unique: true },
   );
   await ctx.multichatPredictions.createIndex({ token: 1, openedAt: -1 });
-  await ctx.multichatClipMoments.createIndex({ token: 1, atMs: -1 });
+  await ctx.multichatClipMoments.createIndex({ token: 1, atMs: -1, _id: -1 });
   await ctx.multichatClipMoments.createIndex(
     { atDate: 1 },
     { expireAfterSeconds: 7 * 24 * 60 * 60 },

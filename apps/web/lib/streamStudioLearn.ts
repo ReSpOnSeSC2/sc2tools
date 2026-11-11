@@ -503,7 +503,7 @@ const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
     example: { headline: "CLIP THAT! · illustrative", lines: ["Chat is going off", "Find the timestamp in Stream Dock → Clips"] },
     appears: "Briefly after a clip-moment event; transparent between moments.",
     needs: ["Reported engagement or a qualifying game event.", "For chat spikes, configured chat and an active engagement-reporting surface."],
-    setup: dockSetup("Clip-moment flag", "Use Clips to review Clip moments. After the stream, paste the VOD URL and press Save to make supported timestamps clickable."),
+    setup: dockSetup("Clip-moment flag", "Open Clips to review or flag moments. Use Copy YouTube chapters or Download CSV to save the log. After the stream, paste the VOD URL and press Save to make supported timestamps clickable."),
     check: "Test shows a sample pulse. A real detected moment should also appear in the dock's Clip moments log.",
     troubleshooting: "The flag does not automatically record or publish a clip. If the log is empty, check engagement reporting and game events; use Test only to check the graphic's placement.",
     placement: "Put the small pulse near your webcam where it can be noticed without hiding the moment itself.",

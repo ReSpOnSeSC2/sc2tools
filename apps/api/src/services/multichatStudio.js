@@ -102,6 +102,22 @@ class MultichatStudioService {
     return doc;
   }
 
+  /** @param {string} token @param {number} now @param {number} cooldownMs */
+  async claimManualMoment(token, now, cooldownMs) {
+    await this.ensureCanonical(token);
+    const result = await this.col.updateOne({ studioKey: token, $or: [
+      { manualMomentAt: { $exists: false } }, { manualMomentAt: { $lte: now - cooldownMs } },
+    ] }, { $set: { manualMomentAt: now } });
+    if (result.matchedCount) return null;
+    const current = await this.col.findOne({ studioKey: token }, { projection: { manualMomentAt: 1 } });
+    return Math.max(1, Math.min(cooldownMs, (Number(current?.manualMomentAt) || now) + cooldownMs - now));
+  }
+
+  /** @param {string} token @param {number} now */
+  releaseManualMoment(token, now) {
+    return this.col.updateOne({ studioKey: token, manualMomentAt: now }, { $unset: { manualMomentAt: "" } });
+  }
+
   /** Manual session resets only move the mark forward; normal explicit clip
    * edits retain their existing clear/replace behavior. @param {string} token @param {number} at */
   async advanceStreamStart(token, at) {
@@ -160,6 +176,7 @@ class MultichatStudioService {
 
   /** @param {string} token @param {Record<string, unknown>} patch */
   async _updateAdmitted(token, patch) {
+    if ("streamMarkUndo" in patch) return this._restoreStreamMark(token, patch.streamMarkUndo);
     if (!("broll" in patch)) return this._updateUnlocked(token, patch);
 
     // Dock controls send small b-roll patches. Serializing them prevents a
@@ -177,6 +194,24 @@ class MultichatStudioService {
         this.brollUpdateQueues.delete(token);
       }
     }
+  }
+
+  /** Undo the mark only if this Dock still owns the replacement it saw.
+   * @param {string} token @param {unknown} input */
+  async _restoreStreamMark(token, input) {
+    const undo = /** @type {{expected?: unknown, previous?: unknown}|null} */ (input && typeof input === "object" ? input : null);
+    const previous = sanitizeStreamStartMs(undo?.previous);
+    const expected = undo?.expected === null ? null : sanitizeStreamStartMs(undo?.expected);
+    if (previous === null || (expected === null && undo?.expected !== null)) {
+      throw Object.assign(new Error("invalid stream mark"), { status: 400, code: "invalid_stream_mark" });
+    }
+    await this.ensureCanonical(token);
+    const result = await this.col.updateOne({ studioKey: token, streamStartMs: expected },
+      { $set: { streamStartMs: previous, updatedAt: new Date() } });
+    if (!result.matchedCount) throw Object.assign(new Error("Stream start changed in another Dock."), { status: 409, code: "stream_mark_changed" });
+    const state = await this.get(token);
+    this.io?.to(`overlay:${token}`).emit("overlay:multichat", state);
+    return state;
   }
 
   /**

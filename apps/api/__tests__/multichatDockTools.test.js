@@ -128,8 +128,7 @@ afterAll(async () => {
 beforeEach(async () => {
   nowMs = T0;
   emitted = [];
-  // Each test starts with a fresh per-token cooldown.
-  engagement._lastManualAt.clear();
+  await db.multichatStudio.updateMany({}, { $unset: { manualMomentAt: "" } });
   await db.multichatClipMoments.deleteMany({});
 });
 
@@ -197,6 +196,18 @@ test("pages the clip log newest first with before and limit", async () => {
   expect((await request(app).get(`/v1/multichat/not-a-token/moments`)).status).toBe(401);
 });
 
+test("paging from the full cursor retains moments at the same timestamp", async () => {
+  await db.multichatClipMoments.insertMany(["Game", "Manual", "Chat"].map((reason) => ({ token, atMs: T0, reason })));
+  const path = `/v1/multichat/${token}/moments?limit=2`;
+  const first = await request(app).get(path).expect(200);
+  expect(first.body.moments.map((moment) => moment.reason)).toEqual(["Chat", "Manual"]);
+  expect(first.body.moments[0]._id).toBeUndefined();
+  const { atMs, id } = first.body.next;
+  const last = await request(app).get(`${path}&before=${atMs}&beforeId=${id}`).expect(200);
+  expect(last.body.moments.map((moment) => moment.reason)).toEqual(["Game"]);
+  expect(last.body.next).toBeUndefined();
+});
+
 test("a timed poll is stamped on open, reported closed after its deadline and closes idempotently", async () => {
   const opened = await request(app).post(`/v1/multichat/${token}/studio`).send({
     poll: { question: "Win or lose this game?", options: ["Win", "Lose"], status: "open", durationSec: 30, endsAtMs: T0 + 1 },
@@ -216,4 +227,23 @@ test("a timed poll is stamped on open, reported closed after its deadline and cl
 
   const cleared = await request(app).post(`/v1/multichat/${token}/studio`).send({ poll: null });
   expect(cleared.body.poll).toBeNull();
+});
+
+test("two API workers share the same manual-flag cooldown", async () => {
+  const secondWorker = new MultichatEngagementService(db, { now: () => nowMs });
+  const [first, second] = await Promise.all([engagement.flagMoment(token, "first"), secondWorker.flagMoment(token, "second")]);
+  expect([first.ok, second.ok].sort()).toEqual([false, true]);
+  expect(await db.multichatClipMoments.countDocuments({ token, kind: "manual" })).toBe(1);
+});
+
+test("restores a cleared or replaced mark only while the expected mark is current", async () => {
+  const path = `/v1/multichat/${token}/studio`;
+  const first = Date.now() - 60_000;
+  const replacement = first + 30_000;
+  await request(app).post(path).send({ streamStartMs: first }).expect(200);
+  await request(app).post(path).send({ streamStartMs: null }).expect(200);
+  expect((await request(app).post(path).send({ streamMarkUndo: { previous: first, expected: null } }).expect(200)).body.streamStartMs).toBe(first);
+  await request(app).post(path).send({ streamStartMs: replacement }).expect(200);
+  await request(app).post(path).send({ streamMarkUndo: { previous: first, expected: null } }).expect(409);
+  expect((await request(app).post(path).send({ streamMarkUndo: { previous: first, expected: replacement } }).expect(200)).body.streamStartMs).toBe(first);
 });

@@ -22,6 +22,7 @@
  * "prediction-settled" | "level-up" | "clip-moment" | "wall"}).
  */
 
+const { ObjectId } = require("mongodb");
 const { MultichatStudioService } = require("./multichatStudio");
 const { VerifiedPredictionSettlement } = require("./verifiedPredictionSettlement");
 
@@ -68,8 +69,6 @@ const CLIP_MOMENT_KINDS = Object.freeze(["chat-spike", "game-event", "manual"]);
 const MANUAL_MOMENT_COOLDOWN_MS = 5_000;
 const MANUAL_MOMENT_NOTE_MAX = 80;
 const MANUAL_MOMENT_DEFAULT_REASON = "Flagged from Dock";
-/** Bounds the in-memory cooldown map; stale entries are pruned first. */
-const MANUAL_COOLDOWN_TOKENS_MAX = 2_048;
 /** Dock clip-log pages ("Show older"). */
 const CLIP_PAGE_MAX = 100;
 
@@ -146,8 +145,9 @@ class MultichatEngagementService {
     this.overlayTokens = deps.overlayTokens || null;
     this.users = deps.users || null;
     this.now = deps.now || (() => Date.now());
+    this.studio = new MultichatStudioService(db);
     this.verifiedSettlement = new VerifiedPredictionSettlement({ predictions: this.predictions, viewers: this.viewers,
-      studio: new MultichatStudioService(db), now: this.now, points: ORACLE_POINTS, tally: tallyPicks,
+      studio: this.studio, now: this.now, points: ORACLE_POINTS, tally: tallyPicks,
       topOracles: token => this.topOracles(token, 3), emit: (token, event) => this._emit(token, event) });
     /** @type {Map<string, number[]>} token → per-bucket message counts */
     this._buckets = new Map();
@@ -155,8 +155,6 @@ class MultichatEngagementService {
     this._lastClipAt = new Map();
     /** @type {Map<string, number>} token → last tally broadcast ms */
     this._lastTallyAt = new Map();
-    /** @type {Map<string, number>} token → last manual Dock flag ms */
-    this._lastManualAt = new Map();
   }
 
   /** @template T @param {string} token @param {()=>Promise<T>} work */
@@ -411,56 +409,49 @@ class MultichatEngagementService {
    * @returns {Promise<{ok: true, moment: Record<string, any>} | {ok: false, retryAfterMs: number}>}
    */
   async flagMoment(token, note) {
-    const now = this.now();
-    const elapsed = now - (this._lastManualAt.get(token) ?? Number.NEGATIVE_INFINITY);
-    if (elapsed < MANUAL_MOMENT_COOLDOWN_MS) {
-      return { ok: false, retryAfterMs: MANUAL_MOMENT_COOLDOWN_MS - elapsed };
-    }
-    // Claim the slot before awaiting so a double tap cannot record twice.
-    this._lastManualAt.set(token, now);
-    if (this._lastManualAt.size > MANUAL_COOLDOWN_TOKENS_MAX) {
-      for (const [key, at] of this._lastManualAt) {
-        if (now - at >= MANUAL_MOMENT_COOLDOWN_MS) this._lastManualAt.delete(key);
+    return this._withWrite(token, async () => {
+      const now = this.now();
+      const retryAfterMs = await this.studio.claimManualMoment(token, now, MANUAL_MOMENT_COOLDOWN_MS);
+      if (retryAfterMs !== null) return { ok: /** @type {const} */ (false), retryAfterMs };
+      try {
+        const moment = await this._recordMomentAdmitted(token, { kind: "manual", reason: note || MANUAL_MOMENT_DEFAULT_REASON });
+        return { ok: /** @type {const} */ (true), moment };
+      } catch (error) {
+        await this.studio.releaseManualMoment(token, now).catch(() => {});
+        throw error;
       }
-      while (this._lastManualAt.size > MANUAL_COOLDOWN_TOKENS_MAX) {
-        const oldest = this._lastManualAt.keys().next().value;
-        if (oldest === undefined) break;
-        this._lastManualAt.delete(oldest);
-      }
-    }
-    try {
-      const moment = await this.recordMoment(token, {
-        kind: "manual",
-        reason: note || MANUAL_MOMENT_DEFAULT_REASON,
-      });
-      return { ok: true, moment };
-    } catch (error) {
-      // A failed write must not spend the streamer's next attempt.
-      if (this._lastManualAt.get(token) === now) this._lastManualAt.delete(token);
-      throw error;
-    }
+    });
   }
 
   /**
    * One page of a token's clip-moment log, newest first. ``before`` pages
-   * back from an earlier page's oldest atMs ("Show older").
+   * back from the previous page, with beforeId breaking equal-time ties.
    *
    * @param {string} token
-   * @param {{before?: number | null, limit?: number}} [opts]
-   * @returns {Promise<{moments: Record<string, any>[], hasMore: boolean}>}
+   * @param {{before?: number | null, beforeId?: string | null, limit?: number}} [opts]
+   * @returns {Promise<{moments: Record<string, any>[], hasMore: boolean, next?: {atMs: number, id: string}}>}
    */
   async listMoments(token, opts = {}) {
     const limit = Math.min(CLIP_PAGE_MAX, Math.max(1, Math.trunc(Number(opts.limit) || CLIP_PAGE_MAX)));
     const before = Number(opts.before);
     /** @type {Record<string, any>} */
     const query = { token };
-    if (opts.before !== null && opts.before !== undefined && Number.isFinite(before)) query.atMs = { $lt: before };
+    if (opts.before !== null && opts.before !== undefined && Number.isFinite(before)) {
+      if (opts.beforeId) query.$or = [{ atMs: { $lt: before } }, { atMs: before, _id: { $lt: new ObjectId(opts.beforeId) } }];
+      else query.atMs = { $lt: before };
+    }
     const rows = await this._withWrite(token, () => this.clips
-      .find(query, { projection: { _id: 0, token: 0, atDate: 0 } })
-      .sort({ atMs: -1 })
+      .find(query, { projection: { token: 0, atDate: 0 } })
+      .sort({ atMs: -1, _id: -1 })
       .limit(limit + 1)
       .toArray());
-    return { moments: rows.slice(0, limit), hasMore: rows.length > limit };
+    const hasMore = rows.length > limit;
+    const last = rows[limit - 1];
+    return {
+      moments: rows.slice(0, limit).map(({ _id, ...moment }) => moment),
+      hasMore,
+      ...(hasMore ? { next: { atMs: last.atMs, id: String(last._id) } } : {}),
+    };
   }
 
   /**

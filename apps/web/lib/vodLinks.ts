@@ -9,6 +9,21 @@ export function formatOffset(ms: number): string {
     : `${min}:${String(s).padStart(2, "0")}`;
 }
 
+/** Only marked moments at least ten seconds apart qualify for YouTube chapters. */
+export function toYouTubeChapters(moments: ReadonlyArray<{ atMs: number; reason: string }>, streamStartMs: number | null): string[] {
+  if (streamStartMs === null || !Number.isFinite(streamStartMs)) return [];
+  const chapters = ["0:00 Stream start"];
+  let previousMs = 0;
+  for (const moment of [...moments].sort((a, b) => a.atMs - b.atMs)) {
+    const offset = moment.atMs - streamStartMs;
+    if (!Number.isFinite(offset) || offset < previousMs + 10_000) continue;
+    const title = moment.reason.replace(/[\r\n\u2028\u2029]+/gu, " ").trim().slice(0, 100) || "Clip moment";
+    chapters.push(`${formatOffset(offset)} ${title}`);
+    previousMs = offset;
+  }
+  return chapters;
+}
+
 /**
  * Deep-link a VOD at an offset. Twitch uses an h/m/s value while
  * YouTube accepts seconds. Unknown hosts remain ordinary links.

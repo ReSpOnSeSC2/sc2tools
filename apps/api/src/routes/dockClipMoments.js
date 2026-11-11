@@ -35,12 +35,14 @@ function registerDockClipRoutes(router, { engagement, limiter, tokenAuth }) {
     try {
       if (!engagement) { res.json({ moments: [], hasMore: false }); return; }
       const before = req.query.before === undefined ? null : Number(req.query.before);
+      const beforeId = req.query.beforeId ?? null;
       const limit = req.query.limit === undefined ? CLIP_PAGE_MAX : Number(req.query.limit);
-      if ((before !== null && (!Number.isSafeInteger(before) || before <= 0)) || !Number.isSafeInteger(limit) || limit < 1 || limit > CLIP_PAGE_MAX) {
+      if ((before !== null && (!Number.isSafeInteger(before) || before <= 0)) || !Number.isSafeInteger(limit) || limit < 1 || limit > CLIP_PAGE_MAX
+          || (beforeId !== null && (before === null || typeof beforeId !== "string" || !/^[a-f0-9]{24}$/i.test(beforeId)))) {
         res.status(400).json({ error: { code: "invalid_moment_page" } });
         return;
       }
-      res.json(await engagement.listMoments(String(req.params.token), { before, limit }));
+      res.json(await engagement.listMoments(String(req.params.token), { before, beforeId, limit }));
     } catch (error) { next(error); }
   });
 
