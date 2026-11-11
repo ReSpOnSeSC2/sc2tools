@@ -12,9 +12,7 @@
  *   frames  frame i shows game time ``start + i * speed / fps``; a
  *           range of D game seconds at speed s is D / s seconds of
  *           video, so ``round(D / s * fps)`` frames (at least one)
- *   caps    video ≤ 96 MB; a GIF is at most 20 s of video at half size
- *           and ≤ 48 MB, because a full-size minute of GIF is hundreds
- *           of megabytes
+ *   caps    video ≤ 96 MB; GIF ≤ 20 s of output and ≤ 48 MB
  *
  * Clips are rendered and encoded in the browser only: no upload, no
  * server encoder, no per-use cost.
@@ -42,8 +40,6 @@ export const GIF_FPS = 12;
 export const VIDEO_BITS_PER_SECOND = 6_000_000;
 export const VIDEO_MAX_BYTES = 96 * 1024 * 1024;
 export const GIF_MAX_VIDEO_SECONDS = 20;
-/** GIF frames are rendered at this fraction of the chosen size. */
-export const GIF_SCALE = 0.5;
 export const GIF_MAX_BYTES = 48 * 1024 * 1024;
 
 export interface ClipRange { start: number; end: number }

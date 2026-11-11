@@ -11,11 +11,16 @@ const auth = vi.hoisted(() => ({ userId: "owner-a", isLoaded: true, isSignedIn: 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
 const token = (over: Partial<OverlayToken> = {}): OverlayToken => ({ token: "synthetic-token", label: "Main", createdAt: "2026-10-25", ...over });
 const saved = vi.fn(), dirties = vi.fn();
+const placement = { anchor: "top", xPct: 35, yPct: 20, scale: 1, zIndex: 2 } as const;
 function Fixture({ value = token() }: { value?: OverlayToken }) {
-  return <SettingsContextProvider onDirtyChange={dirties}><OverlayProfileEditor key={`${auth.userId}:${value.token}`} token={value} onSaved={saved}>{({ profile, setTheme, setDuration, saving }) => <>
+  return <SettingsContextProvider onDirtyChange={dirties}><OverlayProfileEditor key={`${auth.userId}:${value.token}`} token={value} onSaved={saved}>{({ profile, setTheme, setDuration, setLayout, saving }) => <>
     <OverlayThemeSection theme={profile.theme} onChange={setTheme} />
     <OverlayWidgetDisplay id="scouting" name="Scouting" durationSec={profile.widgetOptions.scouting?.durationSec} onChange={seconds => setDuration("scouting", seconds)} disabled={saving} />
     <OverlayWidgetDisplay id="session" name="Session" onChange={seconds => setDuration("session", seconds)} disabled={saving} />
+    <button onClick={() => {
+      setLayout("landscape", current => ({ ...current, opponent: placement }));
+      setLayout("vertical", current => ({ ...current, session: { ...placement, xPct: 70 } }));
+    }}>Move both canvases</button>
     <output data-testid="draft">{JSON.stringify(profile)}</output>
   </>}</OverlayProfileEditor><SettingsSaveBar tabId="overlay" /></SettingsContextProvider>;
 }
@@ -37,11 +42,12 @@ describe("saved overlay display draft", () => {
     expect((screen.getByLabelText("Accent hex value") as HTMLInputElement).value).toBe("#123456"); expect(fetchMock).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("Accent hex value"), { target: { value: "#abcdef" } });
     changeDuration("45");
+    fireEvent.click(screen.getByRole("button", { name: "Move both canvases" }));
     expect(dirties).toHaveBeenLastCalledWith({ overlay: true }); expect(fetchMock).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Save overlay display" }));
     await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
     const [url, init] = fetchMock.mock.calls[0]; expect(url).toContain("/v1/overlay-tokens/synthetic-token/profile");
-    expect(JSON.parse(init.body as string)).toEqual({ expectedRevision: 7, profile: { v: 1, theme: { accent: "#abcdef" }, widgetOptions: { scouting: { durationSec: 45 } } } });
+    expect(JSON.parse(init.body as string)).toEqual({ expectedRevision: 7, profile: { v: 1, theme: { accent: "#abcdef" }, widgetOptions: { scouting: { durationSec: 45 } }, layout: { opponent: placement }, layoutVertical: { session: { ...placement, xPct: 70 } } } });
     await waitFor(() => expect(screen.queryByRole("region", { name: "Unsaved changes" })).toBeNull());
     expect(localStorage.getItem("sc2tools:overlay-theme:synthetic-token")).toBeNull();
     expect(screen.getByText("Default (15s)")).toBeTruthy();

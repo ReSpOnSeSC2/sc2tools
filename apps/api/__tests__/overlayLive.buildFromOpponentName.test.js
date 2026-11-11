@@ -156,7 +156,7 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
     // Result-specific fields are absent — they only land post-game.
     expect(p.result).toBeUndefined();
     expect(p.durationSec).toBeUndefined();
-    expect(p.mmrDelta).toBeUndefined();
+    expect(p.mmrChangeBetweenStarts).toBeUndefined();
     expect(p.map).toBeUndefined();
   });
 

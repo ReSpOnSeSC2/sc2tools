@@ -6,6 +6,8 @@ import { API_BASE } from "./clientApi";
 import { decodePlaybackSegment, decodedPlaybackBytes, PLAYBACK_CACHE_BYTES, PlaybackSegmentCache, readBoundedSegment, segmentAt, type PlaybackManifest, type PlaybackSegmentEntry } from "./segmentedPlayback";
 import { CLIP_MAX_SECONDS, type ClipRange } from "./clip/clipPlan";
 import type { MapPlayback } from "./mapReplay";
+import { ReplaySightHistory } from "./replayVision";
+import type { ReadAttentionSections } from "./replayAttention";
 import { replayCastMarkers, mergeMarkers, type TimelineMarker } from "./replayHud";
 
 export type ClipPlaybackSection = { start: number; end: number; playback: MapPlayback };
@@ -26,8 +28,8 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
 }) {
   const { getToken, userId } = useAuth();
   const scope = `${anonymous ? "public" : userId ?? ""}:${gameId}:${manifest.artifactId}`;
-  const store = useRef({ scope, cache: new PlaybackSegmentCache(), casts: new Map<number, TimelineMarker[]>() });
-  if (store.current.scope !== scope) store.current = { scope, cache: new PlaybackSegmentCache(), casts: new Map() };
+  const store = useRef({ scope, cache: new PlaybackSegmentCache(), casts: new Map<number, TimelineMarker[]>(), sight: null as ReplaySightHistory | null });
+  if (store.current.scope !== scope) store.current = { scope, cache: new PlaybackSegmentCache(), casts: new Map(), sight: null };
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [failure, setFailure] = useState({ scope: "", index: -1, message: "" });
   const [attempt, setAttempt] = useState(0);
@@ -68,6 +70,7 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
     const playback = await decodePlaybackSegment(bytes, manifest, entry);
     signal.throwIfAborted();
     if (store.current.scope !== scope) throw new DOMException("Replay changed", "AbortError");
+    (store.current.sight ??= new ReplaySightHistory()).addWindow(playback, entry.start, entry.end);
     store.current.cache.set(`${manifest.artifactId}:${entry.index}`, playback);
     // The existing marker merger caps each segment's presentation index. Keep
     // only these small cast markers when a heavy segment is evicted.
@@ -124,12 +127,20 @@ export function usePlaybackSegments({ manifest, gameId, time, speed, backwards, 
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [scope, manifest, prefetchIndex, load]);
 
+  const readAttention: ReadAttentionSections = useCallback(async function* (signal) {
+    for (const entry of manifest.segments) {
+      const playback = await load(entry, signal);
+      yield { start: entry.start, end: entry.end, playback };
+    }
+  }, [manifest, load]);
+  const canReadAttention = useMemo(() => manifest.segments.reduce((bytes, entry) => bytes + entry.sizeBytes, 0) <= PLAYBACK_CACHE_BYTES, [manifest]);
+
   const casts = useRef({ scope: "", revision: -1, value: [] as TimelineMarker[] });
   if (casts.current.scope !== scope || casts.current.revision !== revision) {
     casts.current = { scope, revision, value: mergeMarkers([...store.current.casts.values()].flat().sort((a, b) => a.t - b.t)) };
   }
   const completeCasts = useMemo(() => manifest.timeline ? replayCastMarkers(manifest.timeline.casts) : null, [manifest.timeline]);
-  return { scope, current, buffering, loadClipSections, castMarkers: completeCasts ?? casts.current.value,
+  return { scope, current, buffering, loadClipSections, readAttention: canReadAttention ? readAttention : undefined, castMarkers: completeCasts ?? casts.current.value,
     error: failure.scope === scope && failure.index === desired.index ? failure.message : "",
     retry: () => setAttempt(value => value + 1) };
 }

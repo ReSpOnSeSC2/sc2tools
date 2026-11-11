@@ -4,7 +4,7 @@ import { OverlayPanel } from "../OverlayPanel";
 
 /**
  * LowerThirdWidget — an esports-broadcast lower third that slides in
- * after each game: result chip, map + matchup, MMR delta, opponent
+ * after each game: result chip, map + matchup, rating history, opponent
  * with head-to-head record, and the session line. Payload-driven
  * like the classic widgets (standard visibility timer hides it), so
  * a Settings Test fire renders it exactly like a real post-game.
@@ -20,7 +20,7 @@ import type { LiveGamePayload } from "../types";
 export function LowerThirdWidget({ live }: { live: LiveGamePayload | null }) {
   if (!live || !live.result) return <div style={{ background: "transparent" }} />;
   const win = live.result === "win";
-  const delta = Number(live.mmrDelta);
+  const delta = Number(live.mmrChangeBetweenStarts);
   const hasDelta = Number.isFinite(delta) && delta !== 0;
   const h2h = live.headToHead;
   const session = live.session;
@@ -47,16 +47,17 @@ export function LowerThirdWidget({ live }: { live: LiveGamePayload | null }) {
           }}
         >
           {win ? "VICTORY" : "DEFEAT"}
-          {hasDelta ? (
-            <span style={{ marginLeft: 8, fontVariantNumeric: "tabular-nums" }}>
-              {delta > 0 ? "▲" : "▼"} {Math.abs(delta)} MMR
-            </span>
-          ) : null}
         </div>
         <div className="lt-stage lt-d1" style={blockStyle}>
           <div style={labelStyle}>{live.matchup ?? "Match"}</div>
           <div style={valueStyle}>{live.map ?? "—"}</div>
         </div>
+        {hasDelta ? (
+          <div className="lt-stage lt-d2" style={blockStyle}>
+            <div style={labelStyle}>MMR between game starts</div>
+            <div style={valueStyle}>{delta > 0 ? "+" : "−"}{Math.abs(delta)}</div>
+          </div>
+        ) : null}
         {live.oppName ? (
           <div className="lt-stage lt-d2" style={blockStyle}>
             <div style={labelStyle}>vs {live.oppName}</div>

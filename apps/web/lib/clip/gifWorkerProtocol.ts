@@ -51,7 +51,8 @@ export function createGifWorkerProtocol(post: (message: GifWorkerOutput, transfe
         if (message?.type === "frame" && writer && message.index === expected && message.rgba instanceof ArrayBuffer) {
           writer.addFrame(new Uint8Array(message.rgba));
           expected += 1;
-          if (writer.byteLength > maxBytes) { fail("too_large"); return; }
+          // Leave space for the GIF trailer added by finish().
+          if (writer.byteLength + 1 > maxBytes) { fail("too_large"); return; }
           post({ type: "frame-done", index: message.index, bytes: writer.byteLength }, []);
           return;
         }

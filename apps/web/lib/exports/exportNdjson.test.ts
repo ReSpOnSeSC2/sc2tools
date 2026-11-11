@@ -40,8 +40,9 @@ describe("completed private export streams", () => {
     const parser = new ExportNdjson({ format: "sc2tools-build-order-export" });
     parser.push(lines({ type: "metadata", format: "sc2tools-build-order-export", version: 1,
       games: 1, fields: ["gameId", "side", "time", "supply", "name"] },
-    { gameId: "game-a", side: "me", time: 63, supply: null, name: "Marine" },
-    { type: "complete", games: 1, events: 1, continuation: "opaque-cursor" }));
+    { gameId: "game-a", side: "me", time: 63, supply: 17.5, name: "Marine" },
+    { gameId: "game-a", side: "opponent", time: 63, supply: null, name: "Worker" },
+    { type: "complete", games: 1, events: 2, continuation: "opaque-cursor" }));
     parser.finish();
     expect(parser.continuation).toBe("opaque-cursor");
     const invalid = new ExportNdjson({ format: "sc2tools-build-order-export" });

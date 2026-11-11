@@ -23,7 +23,7 @@ const article: HelpArticle = {
     ] },
     { type: "paragraph", text: "The Share menu on the game page also copies links only you can open, one at the replay's current moment, and your public replay page's link; see [the game page](/help/game-page#sharing). To share the battle report, see [Share a report](/help/battle-reports#share)." },
     { type: "heading", text: "Turn a link off", anchor: "turn-off" },
-    { type: "paragraph", text: "Choose **Manage share links…** in the Share menu to copy the link, see how many times it was opened, or **Turn off link**. Turning it off ends access at once; the link then shows a not-available page. Copying a link again afterwards creates a new address. Deleting the game or your account turns its links off too. You can have up to 200 live links." },
+    { type: "paragraph", text: "Choose **Manage share links…** in the Share menu to copy the link, see how many times it was opened, or **Turn off link**. Turning it off blocks new playback requests and the link shows a not-available page. A short-lived direct segment URL already issued can work for up to 60 seconds. Copying a link again afterwards creates a new address. Deleting the game or your account turns its links off too. You can have up to 200 live links." },
     { type: "heading", text: "A battle card image", anchor: "image" },
     { type: "paragraph", text: "**Save battle card image** makes a picture of the result for posts and chats. It shows your MMR and whether your opponent was higher or lower, rounded to the nearest 100, never their name or exact rating. An image cannot be turned off once it is posted." },
     { type: "heading", text: "Your public replay page", anchor: "public-replays" },

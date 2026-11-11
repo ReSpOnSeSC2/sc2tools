@@ -15,6 +15,7 @@ import { GetYourOwnCTA } from "./GetYourOwnCTA";
 import { PlayerProfileHero, profileRace } from "./PlayerProfileHero";
 import type {
   PublicPlayerProfile,
+  PublicProfileFeaturedBuild,
   PublicProfileMatchupSplit,
   PublicProfileSignatureBuild,
   PublicReviewerSection,
@@ -118,7 +119,7 @@ export function PublicProfile({ profile, showHero = true, showReviewer = true }:
                 <span aria-hidden className="text-text-dim">
                   ·
                 </span>
-                <FeaturedVotes votes={profile.featuredBuild.votes} />
+                <FeaturedVotes build={profile.featuredBuild} />
               </span>
             </Link>
           </div>
@@ -185,7 +186,20 @@ function MatchupHighlight({ rows, games }: { rows: PublicProfileMatchupSplit[]; 
     ? "vs " + profileRace(most.matchup) + " · " + pct(most.games / games) + " of games" : "—"} />;
 }
 
-function FeaturedVotes({ votes }: { votes: number }) {
+function FeaturedVotes({ build }: { build: PublicProfileFeaturedBuild }) {
+  const { votes, voteCounts } = build;
+  if (voteCounts) {
+    const { upvotes, downvotes } = voteCounts;
+    return <span className="inline-flex items-center gap-2 tabular-nums">
+      <span className="inline-flex items-center gap-1" aria-hidden>
+        <ArrowBigUp className="h-4 w-4" />{formatNumber(upvotes)}
+      </span>
+      <span className="inline-flex items-center gap-1" aria-hidden>
+        <ArrowBigDown className="h-4 w-4" />{formatNumber(downvotes)}
+      </span>
+      <span className="sr-only">{formatNumber(upvotes)} upvote{upvotes === 1 ? "" : "s"}, {formatNumber(downvotes)} downvote{downvotes === 1 ? "" : "s"}</span>
+    </span>;
+  }
   const Icon = votes < 0 ? ArrowBigDown : ArrowBigUp;
   return <span className="inline-flex items-center gap-1 tabular-nums">
     <Icon className="h-4 w-4" aria-hidden />

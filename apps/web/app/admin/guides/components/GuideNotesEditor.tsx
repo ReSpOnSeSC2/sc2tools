@@ -1,19 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
-import { apiCall } from "@/lib/clientApi";
 import { fmtDate } from "@/lib/format";
 import { guidesEnabled } from "@/lib/guides/flags";
 import { GUIDE_MARKDOWN_MAX_CHARS, GuideMarkdown } from "@/lib/guides/markdown";
 import { GUIDE_MATCHUPS, guideBuildOptions, guideBuildPath, guideDisplayName, isGuideMatchup } from "@/lib/guides/slugs";
-import type {
-  GuideAdminNote,
-  GuideAdminNoteSaveBody,
-  GuideAdminNoteSaveResponse,
-  GuideAdminNotesPayload,
-} from "@/lib/guides/types";
+import type { GuideAdminNote } from "@/lib/guides/types";
 import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS } from "@/components/guides/guideUi";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -22,17 +15,13 @@ import { Select } from "@/components/ui/Select";
 import { ConfirmInline } from "../../components/AdminFragments";
 import {
   ADMIN_TEXTAREA_CLASS,
-  AdminNotice,
   AdminSectionHeader,
-  adminErrorText,
   guideNoteApiPath,
   guideNoteKey,
   selectionFor,
-  withDraft,
-  type AdminNoticeValue,
-  type AdminResource,
   type GuideSelection,
 } from "./guidesAdminShared";
+import type { useGuideDrafts } from "./useGuideDrafts";
 import { formatNumber } from "@/lib/i18n/format";
 
 const HEADING_ID = "guide-notes-heading";
@@ -45,79 +34,20 @@ const MARKDOWN_HELP =
 type Busy = "save" | "delete" | null;
 
 export interface GuideNotesEditorProps {
-  notes: AdminResource<GuideAdminNotesPayload>;
+  editor: ReturnType<typeof useGuideDrafts>;
+  error?: string;
   selection: GuideSelection;
   onSelect: (next: GuideSelection) => void;
 }
 
-function useNotesEditor(notes: AdminResource<GuideAdminNotesPayload>, selection: GuideSelection) {
-  const { getToken } = useAuth();
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<Busy>(null);
+/** Edit one guide while the page owns all drafts and pending writes. */
+export function GuideNotesEditor({ editor, error, selection, onSelect }: GuideNotesEditorProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [notice, setNotice] = useState<AdminNoticeValue | null>(null);
-  const noteByKey = useMemo(() => {
-    const map = new Map<string, GuideAdminNote>();
-    for (const note of notes.data?.items ?? []) map.set(guideNoteKey(note.matchup, note.buildKey), note);
-    return map;
-  }, [notes.data]);
-
   const key = guideNoteKey(selection.matchup, selection.buildKey);
-  const stored = noteByKey.get(key) ?? null;
-  const draft = drafts[key] ?? stored?.body ?? "";
-  const apiPath = guideNoteApiPath(selection.matchup, selection.buildKey);
+  const stored = editor.noteByKey.get(key) ?? null;
+  const draft = editor.drafts[key] ?? stored?.body ?? "";
   const name = guideDisplayName(selection.buildKey);
-
-  function forgetDraft() {
-    setDrafts((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  }
-
-  async function run(kind: Exclude<Busy, null>, init: RequestInit, done: string, lead: string) {
-    if (!apiPath || busy) return;
-    setBusy(kind);
-    setNotice(null);
-    try {
-      await apiCall<GuideAdminNoteSaveResponse | null>(getToken, apiPath, init);
-      await notes.mutate();
-      forgetDraft();
-      setConfirmDelete(false);
-      setNotice({ tone: "success", text: done });
-    } catch (err) {
-      setNotice({ tone: "error", text: adminErrorText(lead, err) });
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  return {
-    drafts, busy, confirmDelete, notice, noteByKey, stored, draft, apiPath, name,
-    dirty: draft !== (stored?.body ?? ""),
-    setDraft: (value: string) => setDrafts((prev) => withDraft(prev, key, value, stored?.body ?? "")),
-    discard: forgetDraft,
-    askDelete: (open: boolean) => { setNotice(null); setConfirmDelete(open); },
-    resetForSelection: () => { setConfirmDelete(false); setNotice(null); },
-    save: () => run("save", { method: "PUT", body: JSON.stringify({ body: draft } satisfies GuideAdminNoteSaveBody) }, `Saved the coach's notes for ${name}.`, "Couldn't save the notes."),
-    remove: () => run("delete", { method: "DELETE" }, `Deleted the coach's notes for ${name}.`, "Couldn't delete the notes."),
-  };
-}
-
-/**
- * Coach's notes editor: pick a matchup + build from the web catalog,
- * edit the markdown with a live preview rendered by the SAME renderer
- * the public build page uses (so the preview is exact), then save or
- * delete through the admin notes API. Unsaved drafts are kept per guide
- * while switching between builds.
- */
-export function GuideNotesEditor({ notes, selection, onSelect }: GuideNotesEditorProps) {
-  const editor = useNotesEditor(notes, selection);
-  const { draft, apiPath, name } = editor;
-  // Editable only once the saved notes are loaded, so a save can never
-  // overwrite a stored note the page hasn't shown yet.
-  const ready = Boolean(notes.data) && !notes.error && Boolean(apiPath);
+  const ready = editor.ready && Boolean(guideNoteApiPath(selection.matchup, selection.buildKey));
   return (
     <section aria-labelledby={HEADING_ID} className="space-y-4">
       <AdminSectionHeader id={HEADING_ID} title="Coach's notes" description={MARKDOWN_HELP} />
@@ -127,9 +57,9 @@ export function GuideNotesEditor({ notes, selection, onSelect }: GuideNotesEdito
             selection={selection}
             noteByKey={editor.noteByKey}
             drafts={editor.drafts}
-            onSelect={(next) => { editor.resetForSelection(); onSelect(next); }}
+            onSelect={onSelect}
           />
-          {notes.error ? <p role="alert" className="text-body text-danger">Couldn&apos;t load saved notes. {notes.error.message}</p> : null}
+          {error ? <p role="alert" className="text-body text-danger">Couldn&apos;t load saved notes. {error}</p> : null}
           <div className="grid gap-4 lg:grid-cols-2">
             <Field label={`Notes for ${name || "this build"} (markdown)`} hint={`${formatNumber(draft.length)} / ${formatNumber(GUIDE_MARKDOWN_MAX_CHARS)} characters`}>
               <textarea
@@ -137,40 +67,39 @@ export function GuideNotesEditor({ notes, selection, onSelect }: GuideNotesEdito
                 className={ADMIN_TEXTAREA_CLASS}
                 maxLength={GUIDE_MARKDOWN_MAX_CHARS}
                 value={draft}
-                disabled={!ready}
+                disabled={!ready || !!editor.busy}
                 placeholder={NOTES_PLACEHOLDER}
-                onChange={(event) => editor.setDraft(event.target.value)}
+                onChange={(event) => editor.edit(key, event.target.value)}
               />
             </Field>
             <NotesPreview source={draft} />
           </div>
           <NotesActions
-            stored={editor.stored}
-            dirty={editor.dirty}
+            stored={stored}
+            dirty={editor.dirtyKeys.includes(key)}
             busy={editor.busy}
             canSave={ready && draft.length <= GUIDE_MARKDOWN_MAX_CHARS}
             publicPath={guidesEnabled() ? guideBuildPath(selection.matchup, selection.buildKey) : null}
-            onSave={() => void editor.save()}
-            onDiscard={editor.discard}
-            onDelete={() => editor.askDelete(true)}
+            onSave={() => void editor.save([key])}
+            onDiscard={() => editor.discard([key])}
+            onDelete={() => setConfirmDelete(true)}
           />
-          {editor.confirmDelete ? (
+          {confirmDelete ? (
             <ConfirmInline
               prompt={`Delete the coach's notes for ${name}? This guide's video pins and hides are deleted with them.`}
               confirmLabel="Yes, delete notes"
               busy={editor.busy === "delete"}
-              onConfirm={() => void editor.remove()}
-              onCancel={() => editor.askDelete(false)}
+              onConfirm={() => void editor.remove(selection).then(removed => { if (removed) setConfirmDelete(false); })}
+              onCancel={() => setConfirmDelete(false)}
             />
           ) : null}
-          <AdminNotice notice={editor.notice} />
         </div>
       </Card>
     </section>
   );
 }
 
-function GuidePicker({
+export function GuidePicker({
   selection,
   noteByKey,
   drafts,

@@ -36,7 +36,7 @@ function buildNotificationServices(deps) {
     notifications,
     delivery: {
       pushNotifications, streamReports, weeklyReports, discordWebhooks,
-      calendarFeed: new CalendarFeedService(deps.db),
+      calendarFeed: new CalendarFeedService(deps.db, { encryptionKey: deps.config.delivery?.discordEncryptionKey }),
       coachingReminders: new CoachingRemindersService(deps.db, { notifications, logger }),
     },
     /** @param {{resolve: (owner: string) => Promise<{gapMinutes: number}>}} policy */

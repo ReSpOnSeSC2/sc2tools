@@ -8,7 +8,7 @@ export const NOW = 1_800_000_000_000;
 export const LIVE: LiveGamePayload = {
   isTest: true, testNonce: "learning-example", myRace: "Protoss", oppRace: "Zerg",
   oppName: "TestOpponent", map: "Goldenaura LE", matchup: "PvZ", result: "win", durationSec: 612,
-  oppMmr: 4250, myMmr: 4310, mmrDelta: 22, headToHead: { wins: 4, losses: 2 },
+  oppMmr: 4250, myMmr: 4310, mmrChangeBetweenStarts: 22, headToHead: { wins: 4, losses: 2 },
   streak: { kind: "win", count: 3 }, cheeseProbability: 0.65, cheeseHistory: { samples: 12, of: 20 },
   predictedStrategies: [{ name: "Pool first", weight: 0.45 }, { name: "Hatch first", weight: 0.35 }],
   topBuilds: [{ name: "P - Stargate", total: 14, winRate: 0.71 }, { name: "P - 4 Gate", total: 9, winRate: 0.55 }],

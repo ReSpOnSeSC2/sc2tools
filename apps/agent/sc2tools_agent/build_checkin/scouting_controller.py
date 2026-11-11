@@ -105,10 +105,10 @@ class ScoutingControllerMixin:
             self._receive_scouting(value)
 
     def _with_scouting(self, model: Any, game: Any) -> Any:
-        only = not self._prefs.loading_cards
+        only = not self._prefs.loading_cards and not model.randomizer_only
         scouting = scouting_model(game.scouting, self._wall_clock()) if self._show_scouting and game.scouting is not None else None
         return replace(model, scouting=scouting, scouting_only=only,
-                       heading="Private scouting" if only else model.heading,
+                       heading="Private scouting" if only else ("Desktop randomizer" if model.randomizer_only else model.heading),
                        collapsed=False if only else model.collapsed,
                        show_intro=False if only else model.show_intro)
 

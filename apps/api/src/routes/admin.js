@@ -604,9 +604,27 @@ function buildAdminRouter(deps) {
     }
   });
 
+  registerAdminTriageRoutes(router, deps);
   registerEventReadRoutes(router, deps.adminEvents);
 
   return router;
+}
+
+/** @param {import("express").Router} router
+ * @param {Pick<Parameters<typeof buildAdminRouter>[0],"admin"|"adminEvents">} deps */
+function registerAdminTriageRoutes(router, deps) {
+  /** @type {Record<string,(req:import("express").Request)=>Promise<unknown>>} */
+  const reads = {
+    "/admin/attention": () => deps.admin.attention(),
+    "/admin/events/daily": (req) => deps.adminEvents.daily(req.query.days),
+    "/admin/storage-summary": () => deps.admin.storageSummary(),
+  };
+  for (const [path, read] of Object.entries(reads)) {
+    router.get(path, async (req, res, next) => {
+      res.set("Cache-Control", "private, no-store");
+      try { res.json(await read(req)); } catch (error) { next(error); }
+    });
+  }
 }
 
 /** @param {unknown} raw */

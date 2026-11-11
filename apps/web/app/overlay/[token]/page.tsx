@@ -33,5 +33,5 @@ export default async function OverlayPage({
   const themeParam = overlayThemeParamFromSearch(sp);
   // ``?credit=0`` hides the "Overlay by sc2tools.com" credit (lib/overlayCredit).
   const showCredit = !isOverlayCreditHidden(sp[OVERLAY_CREDIT_PARAM]);
-  return <OverlayClient demo={sp.demo === "1" ? localOverlaySample() : undefined} token={token} themeParam={themeParam} showCredit={showCredit} />;
+  return <OverlayClient demo={sp.demo === "1" ? localOverlaySample() : undefined} token={token} themeParam={themeParam} showCredit={showCredit} canvas={sp.canvas === "vertical" ? "vertical" : "landscape"} />;
 }

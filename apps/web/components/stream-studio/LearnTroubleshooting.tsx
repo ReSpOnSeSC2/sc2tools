@@ -25,8 +25,8 @@ const PROBLEMS = [
   },
   {
     title: "The widget is cut off or far too large",
-    body: "Browser Source width and height set the page's drawing area. Change those in source properties before resizing the source on your scene. Start a landscape All-in-one source at your canvas size, for example 1920 × 1080. For individual sources, leave enough room around the card; Build profile uses 720 × 900. Recommended dimensions are for Normal scale. The Size preset also scales chat, poll, goal, timer and lower-third cards. Adjust it in Overlay appearance and choose Save overlay display to update connected sources. Older URLs with a ?theme= override keep that look; remove the override once to follow saved changes.",
-    href: "/settings?tab=overlay", action: "Adjust appearance",
+    body: "Browser Source width and height set the page's drawing area. Change those in source properties before resizing the source on your scene. Use 1920 × 1080 for landscape or 1080 × 1920 with the vertical All-in-one URL. Move or scale crowded All-in-one widgets in Theme → Layout. For individual sources, leave enough room around the card; Build profile uses 720 × 900. Recommended dimensions are for Normal scale. The Size preset also scales chat, poll, goal, timer and lower-third cards. Adjust it in Overlay appearance and choose Save overlay display to update connected sources. Older URLs with a ?theme= override keep that look; remove the override once to follow saved changes.",
+    href: "/settings?tab=overlay#layout", action: "Open the layout editor",
   },
   {
     title: "I hear the same voice or alert twice",

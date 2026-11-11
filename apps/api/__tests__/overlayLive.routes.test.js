@@ -235,6 +235,7 @@ describe("POST /v1/games triggers overlay:live broadcast", () => {
   let db;
   let app;
   let captured;
+  let engagement;
 
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
@@ -278,6 +279,7 @@ describe("POST /v1/games triggers overlay:live broadcast", () => {
       io: fakeIo,
     });
     app = built.app;
+    engagement = built.services.multichatEngagement;
     await request(app)
       .get("/v1/me")
       .set("authorization", "Bearer user-overlay-live");
@@ -366,6 +368,39 @@ describe("POST /v1/games triggers overlay:live broadcast", () => {
       expect(e.payload.rank).toEqual({ league: "Diamond", tier: 1, mmr: 4310, source: "estimate" });
       // Cheese alert because the opponent's strategy is "Pool first".
       expect(e.payload.cheeseProbability).toBeGreaterThanOrEqual(0.4);
+    }
+  });
+
+  test.each([700, 1300])("keeps replay-start changes out of result clips (%s seconds)", async durationSec => {
+    const auth = "Bearer user-overlay-live";
+    const token = await request(app).post("/v1/overlay-tokens").set("authorization", auth).send({ label: "Main" });
+    expect(token.status).toBe(201);
+    const settle = jest.spyOn(engagement, "settlePrediction").mockResolvedValue(undefined);
+    const moment = jest.spyOn(engagement, "recordMoment").mockResolvedValue(undefined);
+    try {
+      const now = Date.now();
+      const game = { gameId: "current", date: new Date(now).toISOString(), result: "Victory",
+        myRace: "Protoss", map: "Goldenaura", durationSec, myMmr: 4310, myMmrSource: "replay",
+        myToonHandle: "1-S2-1-100", isLadderGame: true, playerCount: 2, matchFormat: "1v1" };
+      const earlier = { ...game, gameId: "earlier", date: new Date(now - 30 * 60 * 1000).toISOString(), myMmr: 4270 };
+      const post = await request(app).post("/v1/games").set("authorization", auth).send({ games: [earlier, game] });
+      expect(post.status).toBe(202);
+      expect(post.body.accepted).toHaveLength(2);
+      await waitFor(() => settle.mock.calls.length > 0);
+      const payload = captured.liveEmits[0].payload;
+      expect(payload).toMatchObject({ result: "win", myMmr: 4310, mmrChangeBetweenStarts: 40 });
+      expect(payload).not.toHaveProperty("mmrDelta");
+      expect(payload).not.toHaveProperty("myMmrSource");
+      expect(settle).toHaveBeenCalledWith([token.body.token], { result: "win", gameKey: payload.gameKey });
+      if (durationSec === 1300) {
+        expect(moment).toHaveBeenCalledTimes(1);
+        expect(moment).toHaveBeenCalledWith(token.body.token, expect.objectContaining({ reason: "Victory vs opponent — marathon game" }));
+      } else {
+        expect(moment).not.toHaveBeenCalled();
+      }
+    } finally {
+      settle.mockRestore();
+      moment.mockRestore();
     }
   });
 

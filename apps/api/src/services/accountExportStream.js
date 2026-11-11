@@ -35,7 +35,7 @@ async function detailRecord(details, userId, game, signal) {
  * Only the authenticated entry-point owner is retained through asynchronous work.
  * @param {any} db @param {import('./gameDetails').GameDetailsService|null} details
  * @param {string} userId
- * @param {{details?:boolean,reviews?:boolean,signal?:AbortSignal}} [options]
+ * @param {Parameters<typeof accountExportRecords>[2] & {details?:boolean}} [options]
  */
 async function* accountExportStream(db, details, userId, options = {}) {
   const { signal } = options;

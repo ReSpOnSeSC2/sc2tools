@@ -3,16 +3,16 @@
 const { reserveExport, waitForDrain } = require("./exportAdmission");
 
 /** @param {import('express').Request} req @param {import('express').Response} res
- * @param {import('../services/gdpr').GdprService} gdpr @param {string} userId
+ * @param {import('../services/gdpr').GdprService} gdpr @param {string} userId @param {boolean} includeCalendarSecret
  */
-async function streamAccount(req, res, gdpr, userId) {
+async function streamAccount(req, res, gdpr, userId, includeCalendarSecret) {
   const controller = new AbortController();
   const disconnected = () => controller.abort();
   req.once("aborted", disconnected);
   res.once("close", disconnected); res.once("finish", disconnected); res.once("error", disconnected);
   try {
     if (req.aborted || res.destroyed) controller.abort();
-    const stream = gdpr.exportStream(userId, { details: req.query.details === "1", signal: controller.signal });
+    const stream = gdpr.exportStream(userId, { details: req.query.details === "1", signal: controller.signal, includeCalendarSecret });
     res.setHeader("content-type", "application/x-ndjson; charset=utf-8");
     res.setHeader("content-disposition", `attachment; filename="sc2tools-account-export-${Date.now()}.ndjson"`);
     for await (const chunk of stream) {
@@ -45,6 +45,7 @@ function accountExportHandler(gdpr) {
   return async (req, res, next) => {
     // Copy once; neither later req.auth mutation nor awaits can retarget work.
     const userId = req.auth?.userId;
+    const includeCalendarSecret = req.auth?.source === "clerk";
     if (typeof userId !== "string" || !userId) { res.status(401).json({ error: { code: "auth_required" } }); return; }
     res.setHeader("cache-control", "private, no-store");
     const { format, details } = req.query;
@@ -56,8 +57,8 @@ function accountExportHandler(gdpr) {
     const lease = reserveExport(res);
     if (!lease) { res.status(503).json({ error: { code: "export_busy" } }); return; }
     try {
-      if (format === "ndjson") { await streamAccount(req, res, gdpr, userId); return; }
-      const data = await gdpr.export(userId);
+      if (format === "ndjson") { await streamAccount(req, res, gdpr, userId, includeCalendarSecret); return; }
+      const data = await gdpr.export(userId, { includeCalendarSecret });
       if (lease.closed() || req.aborted) return;
       res.setHeader("content-type", "application/json; charset=utf-8");
       res.setHeader("content-disposition", `attachment; filename="sc2tools-export-${Date.now()}.json"`);

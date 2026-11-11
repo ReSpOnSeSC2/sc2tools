@@ -13,7 +13,7 @@ import { type IconKind } from "@/lib/sc2-icons";
 
 import { replayCameraAt, type ReplayCameraMode } from "@/lib/replayCamera";
 import { drawMarkers, type ReplayMapMarker } from "@/lib/replayMarkers";
-import { buildingFirstSeen, VISION_EDGE, VisionGrid, visionViewer, type ReplayVision, type SightRadii } from "@/lib/replayVision";
+import { buildingFirstSeen, structureSeenAt, VISION_EDGE, VisionGrid, visionViewer, type ReplayVision, type SightRadii } from "@/lib/replayVision";
 import { pushHit, type ReplayEntityRef, type ReplayHitBuffer } from "@/lib/replayInspect";
 
 import { ME_ARMY, ME_WORKER, OPP_ARMY, OPP_WORKER, ME_SHEET, OPP_SHEET, BATTLE_WINDOW_SEC, RESOURCE_GLYPH_WORLD, ROCKS_GLYPH_WORLD, SPAWN_RING_WORLD, BATTLE_RING_MIN_WORLD, BATTLE_RING_GROW_WORLD, MIN_FURNITURE_SCREEN_PX, STAGE_PAD_PX, SPRITE_WORLD_GAIN, MIN_SPRITE_SCREEN_PX, FALLBACK_UNIT_WORLD, FALLBACK_WORKER_WORLD, FALLBACK_BUILDING_WORLD, WALK_SPEED_THRESHOLD, FOG_ALPHA, SIGHT_UNIT, SIGHT_WORKER, SIGHT_HALL, SIGHT_BUILDING, FOG_RENDER_SCALE, FOG_MAX_DPR, CULL_MARGIN_WORLD, FOG_DEDUPE_RADIUS_FRACTION, VIGNETTE_ALPHA, VIGNETTE_INNER, iconToken, resourceGlyph, derivedOf, fogMask, ViewTransform } from "./mapCanvasAssets";
@@ -542,7 +542,17 @@ function hideUnseenEnemies(playback: MapPlayback, viewer: "me" | "opp", t: numbe
   for (let i = 0; i < entityCount; i += 1) {
     const e = entityPool[i];
     if (e.side !== viewer && !visionGrid.seen(e.wx, e.wy)) {
-      if (e.iconKind !== "building" || !(firstSeen[e.index] <= t)) continue;
+      if (e.iconKind !== "building") continue;
+      const building = playback.buildings[e.index];
+      const seen = structureSeenAt(playback, viewer, e.index, firstSeen);
+      if (!(seen <= t) || building.moves.length) continue;
+      // Keep the known form in fog. A live morph can change an unseen model.
+      const knownName = unitNameAt(building, seen);
+      if (knownName !== e.name) {
+        e.name = knownName;
+        const sprite = resolveSprite(knownName, "building");
+        e.handle = sprite ? spriteAnim(sprite, "Stand") : null;
+      }
       e.ghost = true;
       e.alpha = GHOST_ALPHA;
       e.frame = 0;

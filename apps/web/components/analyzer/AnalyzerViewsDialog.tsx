@@ -10,6 +10,7 @@ import { useApi, apiCall } from "@/lib/clientApi";
 import { useFilters } from "@/lib/filterContext";
 import { ANALYZER_VIEW_LIMIT, analyzerViewHref, sanitizeAnalyzerViews, sanitizeViewFilters, type AnalyzerView, type AnalyzerViewPrefs } from "@/lib/analyzerViews";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+import { SavedViewList } from "./SavedViewList";
 
 export function AnalyzerViewsDialog({ onClose }: { onClose: () => void }) {
   const { userId } = useAuth();
@@ -56,13 +57,12 @@ function ViewsEditor({ owner, onClose }: { owner: { current: string | null | und
     </form>
     {error ? <p role="alert" className="text-caption text-danger">{error}</p> : null}
     {announcement ? <p role="status" className="text-caption text-success">{announcement}</p> : null}
-    {prefs.views.length ? <ul className="space-y-3" aria-label="Saved analyzer views">{prefs.views.map(view => <li key={view.id} className="space-y-2 rounded-lg border border-border p-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2"><strong className="min-w-0 break-words text-caption">{view.name}</strong><span className="text-micro text-text-muted">{view.section ?? "today"}{prefs.defaultViewId === view.id ? " · Default view" : ""}</span></div>
-      <div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={pending} onClick={() => { router.replace(analyzerViewHref(view), { scroll: false }); onClose(); }}>Apply {view.name}</Button>
+    {prefs.views.length ? <SavedViewList views={prefs.views} label="Saved analyzer views"
+      details={view => `${view.section ?? "today"}${prefs.defaultViewId === view.id ? " · Default view" : ""}`}
+      actions={view => <><Button variant="secondary" disabled={pending} onClick={() => { router.replace(analyzerViewHref(view), { scroll: false }); onClose(); }}>Apply {view.name}</Button>
         <Button variant="ghost" disabled={pending} onClick={() => { setEditing(view.id); setName(view.name); field.current?.focus(); }}>Rename {view.name}</Button>
         <Button variant="ghost" disabled={pending} onClick={() => { void persist({ ...prefs, defaultViewId: prefs.defaultViewId === view.id ? null : view.id }, prefs.defaultViewId === view.id ? "Default view cleared." : "Default view set."); }}>{prefs.defaultViewId === view.id ? "Clear default view" : `Set ${view.name} as default`}</Button>
-        <Button variant="ghost" disabled={pending} onClick={() => { void persist({ views: prefs.views.filter(row => row.id !== view.id), defaultViewId: prefs.defaultViewId === view.id ? null : prefs.defaultViewId }, "View deleted."); }}>Delete {view.name}</Button></div>
-    </li>)}</ul> : <p className="text-caption text-text-muted">No saved views yet. Save the current filters to reopen them later.</p>}
+        <Button variant="ghost" disabled={pending} onClick={() => { void persist({ views: prefs.views.filter(row => row.id !== view.id), defaultViewId: prefs.defaultViewId === view.id ? null : prefs.defaultViewId }, "View deleted."); }}>Delete {view.name}</Button></>} /> : <p className="text-caption text-text-muted">No saved views yet. Save the current filters to reopen them later.</p>}
     <LazyHelpLink slug="analyzer-filters" anchor="save-and-share-a-view">Save and share a view</LazyHelpLink>
   </div>;
 }

@@ -293,6 +293,8 @@ class PlayerIdentitiesService {
     return this.context(userId, pulseId, true);
   }
 
+  countPending() { return this.submissions.countDocuments({ status: "pending" }, { maxTimeMS: 5000 }); }
+
   /** @param {any} opts */
   async list(opts = {}) {
     const status = ["pending", "approved", "rejected", "removed"].includes(opts.status) ? opts.status : "pending";
@@ -305,9 +307,14 @@ class PlayerIdentitiesService {
         after = { id: decoded.id, date: new Date(decoded.date) };
       } catch { throw identityError(400, "Invalid page. Refresh the submission list."); }
     }
-    const rows = await this.submissions.find({ status, ...(after ? { $or: [{ createdAt: { $gt: after.date } }, { createdAt: after.date, id: { $gt: after.id } }] } : {}) }).sort({ createdAt: 1, id: 1 }).limit(31).toArray();
+    const filter = { status, ...(after ? { $or: [{ createdAt: { $gt: after.date } }, { createdAt: after.date, id: { $gt: after.id } }] } : {}) };
+    const [rows, total] = await Promise.all([
+      this.submissions.find(filter).sort({ createdAt: 1, id: 1 }).limit(31).toArray(),
+      status === "pending" ? this.countPending() : this.submissions.countDocuments({ status }, { maxTimeMS: 5000 }),
+    ]);
     const last = rows[29];
-    return { items: rows.slice(0, 30).map((row) => submissionDto(row, true)), nextCursor: rows.length > 30 ? Buffer.from(JSON.stringify({ date: last.createdAt.toISOString(), id: last.id })).toString("base64url") : null };
+    return { items: rows.slice(0, 30).map((row) => submissionDto(row, true)), total,
+      nextCursor: rows.length > 30 ? Buffer.from(JSON.stringify({ date: last.createdAt.toISOString(), id: last.id })).toString("base64url") : null };
   }
 
   /** @param {string} id @param {any} cursor */

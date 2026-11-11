@@ -25,6 +25,9 @@ corresponding GitHub Release.
 
 ### Replay camera and mechanics
 
+- Choose Add camera data in Re-analysis to backfill older games, and open
+  whole-replay attention from a section without camera samples.
+
 - Follow either player's recorded camera and open Camera attention to see
   where that player looked in the loaded replay section.
 - Open Units for recorded losses, credited kills, trades and lifespans. The
@@ -33,12 +36,43 @@ corresponding GitHub Release.
   Re-analyze older games from Settings → Backups & data after updating the
   desktop app.
 
+### Admin dashboard triage
+
+- See queues that need attention, open the relevant review or activity page,
+  and compare recent signups, download clicks and first agent connections.
+  Inspect sortable database storage details in Infrastructure.
+
+### Admin analysis
+
+- Apply Global Trends game and player filters together, remove individual
+  filters from the chart header, and save private cohorts or copy a link
+  for another administrator.
+
+### Overlay layout
+
+- Arrange, scale and layer All-in-one widgets on separate landscape and vertical
+  canvases. The live overlay profile updates connected sources when you save.
+  Dedicated widget sources keep their own OBS positioning.
+
+### Randomizer challenge
+
+- Opt in to a desktop draw for eligible one-on-one games without a connected
+  randomizer source. Declare the saved pick, reroll once, or dismiss the card.
+- See private rolls, matching check-ins and pool completion in Settings and
+  Practice. Reset challenge progress while keeping your replays and builds.
+
+### Twitch Channel Points rewards
+
+- Map Twitch rewards to Studio actions with per-viewer cooldowns and an activity log. Rewards created through SC2 Tools can opt into automatic fulfillment or refunds.
+
 ### Practice targets and reports
 
 - Edit checkpoints for a private Ghost target and count a graded game toward
   the daily practice quest.
 - Use a saved timezone for the weekly report and share an aggregate image.
   Notification settings let you choose which events reach each channel.
+- Account exports can include the active coaching calendar secret after you
+  sign in and create a link with encrypted recovery available.
 - View finished streams and open game moments in the VOD when timestamps are
   available. Public stream pages require a separate sharing choice.
 
@@ -50,6 +84,8 @@ corresponding GitHub Release.
 - Public player pages show overview, archive and share controls. Shared replay
   previews show a short card before sign-in, and original replay downloads
   honor the player's current sharing preference.
+- Shared replay segments keep private storage identifiers out of their URLs
+  and recheck access before a segment is returned.
 
 ### Replay and account fixes
 
@@ -255,6 +291,9 @@ corresponding GitHub Release.
 
 ### Admin console
 
+- Guides separates Notes, Videos and Stats runs, restores unsaved notes in the
+  browser tab, and shows per-note retry after a partial save. The Notes tab has
+  a matchup coverage table and Videos can search and filter the channel list.
 - Notifications: mark a single item read or unread from its row, see unread
   counts on each filter chip, mark only the selected type read, and open the
   linked user straight from a signup, install or message. A failed save shows
@@ -292,6 +331,8 @@ corresponding GitHub Release.
   student's ranked 1v1 record and replay details already shared in practice
   assignment evidence. Students see their own eligible 1v1 games and builds
   with links to their game pages. The digest requires active practice sharing.
+- Coaches can download an archived assigned replay from its exact digest row.
+- Students can separately share built-in check-in labels for future assigned games in session digests.
 - Copy a day's hours to the weekdays or to every day, clear a day, and undo
   either for 10 seconds. Empty days offer evening, afternoon and weekend
   presets, and Add hours now continues after the day's last window.
@@ -4666,6 +4707,10 @@ release preparation, not a signed or published 0.24.9 installer.
 ### 2026 year in review
 
 - Drop your StarCraft II replay folder at `/wrapped` to see a 2026 ladder recap and make a share card. The browser reads the files locally. The share card contains aggregate results and a link to the tool.
+
+### Browser-first home page
+
+- Start with browser replay analysis when it is publicly available, or download the Windows Agent. Public marketing pages skip live activity requests for signed-out visitors.
 
 ## [agent-v0.5.13] - 2026-05-09
 

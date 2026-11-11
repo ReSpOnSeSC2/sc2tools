@@ -11,10 +11,11 @@ const article: HelpArticle = {
   related: ["desktop-app-first-run", "desktop-app-shortcuts", "desktop-app-overview"],
   updated: "2026-11-11",
   body: [
+    { type: "paragraph", text: "Use the section index on wider windows or **Jump to a section** on smaller windows. Choose **Advanced** to show connection and performance controls." },
     { type: "list", items: [
-      "**Applies instantly:** upload concurrency, the OBS scene-switching master switch, automatic map replay capture, and Build check-in toggles.",
-      "**Saved with Save:** sync date range, start with Windows, start minimized, desktop notifications, close behavior, automatic updates, upload batch size, and OBS connection details and scene mappings.",
-      "**Needs restart:** API address, log level, and import worker count. After saving one of these, use **Restart agent now** to apply it.",
+      "**Applies instantly:** replay folder changes, upload concurrency, the OBS scene-switching master switch, automatic map replay capture, and Build check-in toggles.",
+      "**Saved with Save:** sync date range, player handle, start with Windows, start minimized, desktop notifications, close behavior, automatic updates, upload batch size, import pause options, and OBS connection details and scene mappings.",
+      "**Needs restart:** API address, log level, and background import speed. After saving one of these, use **Restart agent now** to apply it.",
     ] },
     { type: "paragraph", text: "Use **Off**, **Important**, or **Every game** for desktop notifications. Choose whether closing the window keeps syncing in the tray or quits SC2 Tools." },
     { type: "paragraph", text: "The unsaved-change count appears when you edit a setting that needs Save. Choose **Revert** to restore the saved values or press **Ctrl+S** to save. Leaving the page prompts you before it discards changes." },

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { sanitizeMapPlayback, type MapPlayback } from "@/lib/mapReplay";
 import {
-  buildingFirstSeen, isReplayVision, nextReplayVision, REPLAY_VISIONS, VisionGrid, visionIsObserved, visionLabel, visionViewer,
+  buildingFirstSeen, isReplayVision, nextReplayVision, REPLAY_VISIONS, ReplaySightHistory, structureSeenAt, VisionGrid, visionIsObserved, visionLabel, visionViewer,
 } from "@/lib/replayVision";
 
 const SIGHT = { unit: 11, worker: 9, hall: 13, building: 10 };
@@ -93,6 +93,30 @@ describe("buildingFirstSeen", () => {
     // Cached per payload and side.
     expect(buildingFirstSeen(p, "me", SIGHT)).toBe(seen);
     expect(buildingFirstSeen(p, "opp", SIGHT)[1]).toBe(0);
+  });
+
+  it("carries a verified earlier sighting by building ID without inventing it for an isolated section", () => {
+    const structures = [
+      { id: "41", owner: "opp", name: "Pylon", t: 0, x: 100, y: 100, moves: [], died: null },
+      { id: "42", owner: "opp", name: "Pylon", t: 0, x: 170, y: 170, moves: [], died: null },
+    ];
+    const scout = { owner: "me", name: "Zergling", born: 0, died: 40, wp: [0, 10, 10, 30, 100, 100] };
+    const early = playback({ buildings: structures, units: [scout] });
+    const late = playback({ buildings: [...structures].reverse(), units: [{ ...scout, wp: [0, 100, 100] }] });
+    const history = new ReplaySightHistory();
+    history.addWindow(early, 0, 60);
+    history.addWindow(late, 60, 120);
+    const lateLocal = buildingFirstSeen(late, "me", SIGHT);
+    expect(lateLocal[1]).toBe(Infinity); // No sightings guessed from omitted paths.
+    expect(structureSeenAt(late, "me", 1, lateLocal)).toBe(Infinity);
+    expect(buildingFirstSeen(early, "me", SIGHT)[0]).toBe(30);
+    expect(structureSeenAt(late, "me", 1, lateLocal)).toBe(30);
+    expect(structureSeenAt(late, "me", 0, lateLocal)).toBe(Infinity);
+
+    const otherReplay = playback({ buildings: structures });
+    new ReplaySightHistory().addWindow(otherReplay, 60, 120);
+    const isolated = buildingFirstSeen(otherReplay, "me", SIGHT);
+    expect(structureSeenAt(otherReplay, "me", 0, isolated)).toBe(Infinity);
   });
 
   it("ignores sightings after a structure died and scouts that died first", () => {

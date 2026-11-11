@@ -424,8 +424,9 @@ export type ActiveFilter = {
  */
 export function describeActiveFilters(
   filters: AnalyzerFilters,
-  options: { seasons?: LogicalSeason[] } = {},
+  options: { seasons?: LogicalSeason[]; defaults?: AnalyzerFilters } = {},
 ): ActiveFilter[] {
+  const defaults = options.defaults ?? defaultAnalyzerFilters(options.seasons);
   const out: ActiveFilter[] = [];
   const add = (
     key: ActiveFilterKey,
@@ -437,10 +438,9 @@ export function describeActiveFilters(
   };
 
   const preset = filters.preset || "all";
-  if (preset !== DEFAULT_PRESET) {
-    const defaults = defaultAnalyzerFilters(options.seasons);
+  if (preset !== defaults.preset) {
     add("preset", presetValue(preset, filters, options.seasons), {
-      preset: DEFAULT_PRESET,
+      preset: defaults.preset,
       since: defaults.since,
       until: defaults.until,
     });
@@ -459,23 +459,19 @@ export function describeActiveFilters(
 
   if (filters.accounts) add("accounts", accountHandles(filters.accounts).join(", "), { accounts: undefined });
 
-  if (filters.map_pool === "nonladder" || filters.map_pool === "all") {
-    add("map_pool", filters.map_pool === "all" ? "Both" : "Custom games", {
-      map_pool: DEFAULT_ANALYZER_FILTERS.map_pool,
-    });
+  if (filters.map_pool && filters.map_pool !== defaults.map_pool) {
+    add("map_pool", { all: "Both", ladder: "Ranked", nonladder: "Custom games" }[filters.map_pool], { map_pool: defaults.map_pool });
   }
 
-  if (filters.game_size === "team" || filters.game_size === "all") {
-    add("game_size", filters.game_size === "all" ? "All" : "Team", {
-      game_size: DEFAULT_ANALYZER_FILTERS.game_size,
-    });
+  if (filters.game_size && filters.game_size !== defaults.game_size) {
+    add("game_size", { all: "All", "1v1": "1v1", team: "Team" }[filters.game_size], { game_size: defaults.game_size });
   }
 
   const length = gameLengthLabel(filters.min_minutes, filters.max_minutes);
   if (length) add("length", length, { min_minutes: undefined, max_minutes: undefined });
 
-  if (filters.exclude_too_short === false) {
-    add("exclude_too_short", "Shown", { exclude_too_short: true });
+  if (filters.exclude_too_short !== undefined && filters.exclude_too_short !== defaults.exclude_too_short) {
+    add("exclude_too_short", filters.exclude_too_short ? "Hidden" : "Shown", { exclude_too_short: defaults.exclude_too_short });
   }
 
   const race = normalizeRaceCode(filters.race);

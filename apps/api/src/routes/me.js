@@ -13,6 +13,7 @@ const {
 } = require("../middleware/replayIngestAdmission");
 const { browserUploadStatusOf } = require("../services/replayFilesCors");
 const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
+const { ADMIN_TREND_VIEWS, sanitizeAdminTrendViews } = require("../util/adminTrendViews");
 const { sanitizeRivals } = require("../util/rivalsPreferences");
 const { OPPONENT_SCOUTING_PREF_TYPE, sanitizeOpponentScouting } = require("../util/opponentScoutingPreferences");
 const { LEAGUE_TARGETS_PREF_TYPE, sanitizeLeagueTargets } = require("../util/leagueTargetsPreferences");
@@ -89,7 +90,7 @@ const MMR_LADDER_RACES = new Map([["P", "Protoss"], ["T", "Terran"], ["Z", "Zerg
  *   isAdmin?: (req: import('express').Request) => boolean,
  *   isAdminEmail?: (email: string) => boolean,
  *   onAdminGranted?: (clerkUserId: string) => void,
- *   buildIntents?: { preferencesChanged(userId: string, type: string): void } | null,
+ *   buildIntents?: { preferencesChanged(userId: string, type: string): void, agentCheckinPrefs?: (userId: string) => Promise<object> } | null,
  *   ghostConfig?: import('../services/ghostConfig').GhostConfigService,
  *   onRivalsChanged?: (userId:string) => void,
  *   onScoutingChanged?: (userId:string) => void,
@@ -465,7 +466,7 @@ function buildMeRouter(deps) {
     "onboarding",
     "multichat",
     "chatCommands",
-    "analyzerViews",
+    "analyzerViews", ADMIN_TREND_VIEWS,
     "rivals",
     OPPONENT_SCOUTING_PREF_TYPE,
     TWITCH_PREF_TYPE,
@@ -487,6 +488,10 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
+      if (type === ADMIN_TREND_VIEWS) {
+        res.set("Cache-Control", "private, no-store");
+        if (auth.source !== "clerk" || !isAdmin(req)) { res.status(403).json({ error: { code: "admin_only" } }); return; }
+      }
       if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE || type === APPEARANCE_PREF_TYPE) res.set("Cache-Control", "private, no-store");
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
@@ -495,6 +500,10 @@ function buildMeRouter(deps) {
       if (type === "ghost") {
         if (!deps.ghostConfig) { res.sendStatus(503); return; }
         res.json(await deps.ghostConfig.get(auth.userId));
+        return;
+      }
+      if (type === CHECKIN_PREF_TYPE && auth.source === "device" && deps.buildIntents?.agentCheckinPrefs) {
+        res.set("Cache-Control", "private, no-store").json(await deps.buildIntents.agentCheckinPrefs(auth.userId));
         return;
       }
       const prefs = await deps.users.getPreferences(auth.userId, type);
@@ -509,6 +518,10 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
+      if (type === ADMIN_TREND_VIEWS) {
+        res.set("Cache-Control", "private, no-store");
+        if (auth.source !== "clerk" || !isAdmin(req)) { res.status(403).json({ error: { code: "admin_only" } }); return; }
+      }
       if (type === "onboarding" || type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE || type === "ghost" || type === "chatCommands" || type === OPPONENT_SCOUTING_PREF_TYPE || type === APPEARANCE_PREF_TYPE) res.set("Cache-Control", "private, no-store");
       if (type === TWITCH_PREF_TYPE && auth.source !== "clerk") { res.status(403).json({ error: { code: "clerk_required" } }); return; }
       if (!PREF_TYPES.has(type)) {
@@ -548,12 +561,15 @@ function buildMeRouter(deps) {
       }
       if (deps.buildIntents) {
         try {
-          // Build check-in switches reach the agent as a user-room ping;
-          // randomizer pools change which builds are check-in options.
-            await deps.buildIntents.preferencesChanged(auth.userId, type);
+          // The owner-room ping refreshes desktop build check-in and Randomizer preferences.
+          await deps.buildIntents.preferencesChanged(auth.userId, type);
         } catch {
           // Advisory: clients also refresh on their own.
         }
+      }
+      if (type === CHECKIN_PREF_TYPE && auth.source === "device" && deps.buildIntents?.agentCheckinPrefs) {
+        res.set("Cache-Control", "private, no-store").json(await deps.buildIntents.agentCheckinPrefs(auth.userId));
+        return;
       }
       res.json(saved);
     } catch (err) {
@@ -1068,6 +1084,7 @@ function preferenceValue(type, value, strict) {
     case NOTIFICATIONS_PREF_TYPE: return sanitizeNotificationPrefs(value);
     case REPORTS_PREF_TYPE: return sanitizeReportPrefs(value);
     case "analyzerViews": return sanitizeAnalyzerViews(value, strict);
+    case ADMIN_TREND_VIEWS: return sanitizeAdminTrendViews(value, strict);
     case "rivals": return sanitizeRivals(value, strict);
     case TWITCH_PREF_TYPE: return sanitizeTwitchAutomation(value, strict);
     case "chatCommands": return sanitizeChatCommands(value, strict);

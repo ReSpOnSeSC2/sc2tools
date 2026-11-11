@@ -268,12 +268,17 @@ function shapeSignatureBuilds(rows) {
  * safe to surface — but we narrow it so the build snapshot / owner id
  * never ride along on the profile payload.
  *
- * @param {{slug?: string, title?: string, matchup?: string, votes?: number} | null | undefined} topBuild
+ * @param {{slug?: string, title?: string, matchup?: string, votes?: number,
+ *   voteCounts?: {upvotes: number, downvotes: number} | null} | null | undefined} topBuild
  */
 function shapeFeaturedBuild(topBuild) {
   if (!topBuild || typeof topBuild.slug !== "string" || !topBuild.slug) {
     return null;
   }
+  const { upvotes, downvotes } = topBuild.voteCounts ?? {};
+  const counts = typeof upvotes === "number" && Number.isSafeInteger(upvotes) && upvotes >= 0
+    && typeof downvotes === "number" && Number.isSafeInteger(downvotes) && downvotes >= 0
+    ? { voteCounts: { upvotes, downvotes } } : {};
   return {
     slug: topBuild.slug,
     title: typeof topBuild.title === "string" ? topBuild.title : topBuild.slug,
@@ -282,6 +287,7 @@ function shapeFeaturedBuild(topBuild) {
         ? topBuild.matchup
         : null,
     votes: intOf(topBuild.votes),
+    ...counts,
   };
 }
 

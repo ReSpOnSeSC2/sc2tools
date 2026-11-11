@@ -24,7 +24,7 @@ const backupsIds = ["replay-archive", "snapshots", "repair-data", "reanalyze", "
 // Client-only (ssr: false) Backups modules wait for the synthetic client boundary.
 const backupsClientIds = ["reanalyze", "hidden-games"];
 const preferencesIds = ["app-preferences", "appearance", "setup-privacy", "reports", "notifications", "push"];
-const randomizerIds = ["build-randomizer", "catalog-builds", "custom-builds", "gateway-draw", "sound-effects", "randomizer-preview"];
+const randomizerIds = ["build-randomizer", "catalog-builds", "custom-builds", "gateway-draw", "sound-effects", "randomizer-preview", "randomizer-challenge"];
 
 async function choose(page: Page, query: string) {
   await search(page).fill(query); await search(page).press("ArrowDown"); await search(page).press("Enter");

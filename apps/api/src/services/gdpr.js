@@ -31,6 +31,7 @@ const GDPR_CLASSIFICATION = Object.freeze({
   PLATFORM_CONNECTIONS: "purge_only", PUBLIC_YOUTUBE_ARCHIVES: "global", PLATFORM_OAUTH_STATES: "ttl_ephemeral",
   YOUTUBE_CREATE_OPERATIONS: "purge_only", PLATFORM_WEBHOOK_RECEIPTS: "ttl_ephemeral", PLATFORM_EVENTS: "purge_only",
   TWITCH_AUTOMATION_RECEIPTS: "purge_only",
+  TWITCH_REWARD_RECEIPTS: "purge_only",
   IMPORT_JOBS: "user_scoped", MACRO_JOBS: "user_scoped", REANALYSIS_JOBS: "purge_only", AGENT_RELEASES: "global", COMMUNITY_BUILDS: "purge_only",
   COMMUNITY_REPORTS: "purge_only", USER_BACKUPS: "user_scoped", BACKUP_RESTORE_STAGING: "ttl_ephemeral",
   PENDING_IDENTITY_DELETIONS: "ttl_ephemeral", ARCADE_LEADERBOARD: "purge_only", ADMIN_EVENTS: "purge_only",
@@ -105,6 +106,7 @@ const PURGE_ONLY_COLLECTIONS = [
   ["youtubeCreateOperations", "userId"],
   // Provider insertion/settlement receipts must never replay from a snapshot.
   ["twitchAutomationReceipts", "userId"],
+  ["twitchRewardReceipts", "userId"],
   ["platformEvents", "userId"],
   // Public self-submitted links are deleted with their owner; never restore public claims from a backup.
   ["playerChannels", "ownerUserId"],
@@ -147,6 +149,7 @@ class GdprService {
    *   replayFiles?: import('./replayFiles').ReplayFilesService|null,
    *   playbackArtifacts?: import('./playbackArtifacts').PlaybackArtifactsService|null,
    *   customBuilds?: import('./types').CustomBuildsService,
+   *   calendarFeed?: import('./calendarFeed').CalendarFeedService,
    *   reviews?: import('./reviews').ReviewsService | null,
    *   guideSamples?: import('./guideSamples').GuideSamplesService|null,
    *   identityDeletions?: import('./identityDeletions').IdentityDeletionsService|null,
@@ -171,6 +174,7 @@ class GdprService {
     this.beginDeviceMutation = opts.beginDeviceMutation || null;
     this.credentialWrites = opts.credentialWrites || (db.deviceTokens ? deviceCredentialWritesFor(db, opts.logger) : null);
     this.db = db;
+    this.calendarFeed = opts.calendarFeed || null;
     /** @type {import("./userBackups").UserBackupsService|null} */
     this.backups = null;
     this.identityDeletions = opts.identityDeletions || null;
@@ -232,19 +236,23 @@ class GdprService {
    * keyed by collection — caller serializes / streams as needed.
    *
    * @param {string} userId
-   * @param {{includeSharedCoaching?: boolean}} [options]
+   * @param {{includeSharedCoaching?: boolean, includeCalendarSecret?: boolean}} [options]
    * @returns {Promise<{userId: string, exportedAt: string, data: Record<string, object[]>, user: object|null}>}
    */
   async export(userId, options = {}) {
-    return collectAccountExport(this.db, userId, { ...options, reviews: Boolean(this.reviews) });
+    const { includeCalendarSecret, ...readOptions } = options;
+    return collectAccountExport(this.db, userId, { ...readOptions, reviews: Boolean(this.reviews),
+      calendarFeed: includeCalendarSecret ? this.calendarFeed : null });
   }
 
   /** Full account transport; deliberately distinct from restorable snapshots.
    * @param {string} userId
-   * @param {{details?:boolean, signal?:AbortSignal}} [options]
+   * @param {{details?:boolean, signal?:AbortSignal, includeCalendarSecret?:boolean}} [options]
    */
   exportStream(userId, options = {}) {
-    return accountExportStream(this.db, this.gameDetails, userId, { ...options, reviews: Boolean(this.reviews) });
+    const { includeCalendarSecret, ...readOptions } = options;
+    return accountExportStream(this.db, this.gameDetails, userId, { ...readOptions, reviews: Boolean(this.reviews),
+      calendarFeed: includeCalendarSecret ? this.calendarFeed : null });
   }
 
   /** @param {string} userId */

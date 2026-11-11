@@ -6,12 +6,13 @@ import { LayoutDashboard, ClipboardList, Bell, Users, Fingerprint, Tv, ShieldAle
 import { useApi } from "@/lib/clientApi";
 import { useReducedMotion } from "@/lib/useChartTheme";
 import { useAdminEventsSocket } from "./useAdminEventsSocket";
-import type { AdminEventCountsResp, AdminInfrastructureResp } from "./adminTypes";
+import { useAdminAttention } from "./useAdminAttention";
+import type { AdminAttentionResp, AdminEventCountsResp } from "./adminTypes";
 
 type NavItem = { href: string; label: string; description: string; icon: LucideIcon };
 const item = (href: string, label: string, description: string, icon: LucideIcon): NavItem => ({ href, label, description, icon });
 export const NAV_GROUPS = [
-  { label: "Overview", items: [item("/admin", "Dashboard", "Storage stats and totals", LayoutDashboard), item("/admin/notifications", "Notifications", "Activity and support inbox", Bell)] },
+  { label: "Overview", items: [item("/admin", "Dashboard", "Triage and activity", LayoutDashboard), item("/admin/notifications", "Notifications", "Activity and support inbox", Bell)] },
   { label: "Community", items: [item("/admin/users", "Users", "Accounts and data tools", Users), item("/admin/player-identities", "Player identities", "Review identity submissions", Fingerprint), item("/admin/player-channels", "Player channels", "Shared channel directory", Tv), item("/admin/moderation", "Moderation", "Open community reports", ShieldAlert)] },
   { label: "Insights", items: [item("/admin/global", "Global players", "Platform-wide players", Globe), item("/admin/global-trends", "Global trends", "All-player trends", TrendingUp), item("/admin/classifier", "Classifier", "Check-in label disagreements", ScanSearch), item("/admin/analytics", "Web analytics", "Google Analytics traffic", BarChart3)] },
   { label: "Operations", items: [item("/admin/audit", "Audit log", "Administrator actions", ClipboardList), item("/admin/tools", "Tools", "Repair account data", Wrench), item("/admin/health", "Infrastructure", "Costs, capacity and health", Server), item("/admin/design", "Design gallery", "Shared controls and keyboard examples", Wrench)] },
@@ -23,7 +24,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const active = pickActive(NAV, pathname || "/admin");
   const unread = useUnreadCount();
-  const notice = useInfrastructureNotice();
+  const attention = useAdminAttention(true);
+  const queues = attention.error ? undefined : attention.data;
+  const notice = queues?.advisories.level ?? null;
   const reducedMotion = useReducedMotion();
   const mobile = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -31,7 +34,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     mobile.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView?.({ inline: "center", block: "nearest", behavior: reduce ? "auto" : "smooth" });
   }, [pathname, reducedMotion]);
   const navLink = (entry: NavItem, desktop: boolean) => <AdminNavLink key={entry.href} item={entry} desktop={desktop}
-    active={entry.href === active?.href} unread={entry.href === "/admin/notifications" ? unread : 0} notice={entry.href === "/admin/health" ? notice : null} />;
+    active={entry.href === active?.href} badge={badgeFor(entry.href, unread, queues)} notice={entry.href === "/admin/health" ? notice : null} />;
   return <div className="flex flex-col gap-4 md:flex-row md:gap-6">
     <nav ref={mobile} aria-label="Admin sections" className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 md:hidden">
       {NAV_GROUPS.map((group, index) => <div key={group.label} className={"flex shrink-0 items-center gap-1.5 " + (index ? "border-l border-border pl-2" : "")}>
@@ -48,13 +51,13 @@ export function AdminShell({ children }: { children: ReactNode }) {
   </div>;
 }
 
-function AdminNavLink({ item, active, desktop, unread, notice }: { item: NavItem; active: boolean; desktop: boolean; unread: number; notice: "watch" | "upgrade" | null }) {
+function AdminNavLink({ item, active, desktop, badge, notice }: { item: NavItem; active: boolean; desktop: boolean; badge: QueueBadge | null; notice: "watch" | "upgrade" | null }) {
   const Icon = item.icon;
   return <Link href={item.href} aria-current={active ? "page" : undefined}
     className={[(desktop ? "flex items-start rounded-lg px-3 py-2.5" : "inline-flex min-h-11 flex-none items-center whitespace-nowrap rounded-full border px-3.5"), "gap-2 text-caption transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent", active ? "bg-accent/15 text-text ring-1 ring-inset ring-accent/35" : "border-border text-text-muted hover:bg-bg-elevated"].join(" ")}>
     <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
     <span><span className="font-semibold">{item.label}</span>{desktop && active ? <span className="block text-caption text-text-dim">{item.description}</span> : null}</span>
-    {unread > 0 ? <span className="rounded-full bg-accent-cyan px-1.5 text-micro text-white" aria-label={unread + " unread"}>{unread > 99 ? "99+" : unread}</span> : null}
+    {badge ? <span className="rounded-full bg-accent/15 px-1.5 text-micro tabular-nums text-text" role="img" aria-label={badge.label}>{badge.count > 99 ? "99+" : badge.count}</span> : null}
     {notice ? <span className={"h-2.5 w-2.5 rounded-full " + (notice === "upgrade" ? "bg-danger" : "bg-warning")} role="img" aria-label={"Infrastructure status: " + notice} /> : null}
   </Link>;
 }
@@ -80,19 +83,20 @@ function useUnreadCount(): number {
   return swr.data?.unreadCount ?? 0;
 }
 
-/**
- * Keep a quiet capacity signal in the persistent admin navigation. SWR shares
- * this request with the Infrastructure page, so opening that tab does not
- * duplicate provider polling.
- */
-function useInfrastructureNotice(): "watch" | "upgrade" | null {
-  const { data } = useApi<AdminInfrastructureResp>(
-    "/v1/admin/infrastructure",
-    { refreshInterval: 5 * 60_000 },
-  );
-  return data?.overallStatus === "watch" || data?.overallStatus === "upgrade"
-    ? data.overallStatus
-    : null;
+type QueueBadge = { count: number; label: string };
+
+function queueBadge(count: number | undefined, noun: string): QueueBadge | null {
+  return count ? { count, label: count + " " + noun + (count === 1 ? "" : "s") } : null;
+}
+
+function badgeFor(href: string, unread: number, queues?: AdminAttentionResp): QueueBadge | null {
+  switch (href) {
+    case "/admin/notifications": return unread ? { count: unread, label: unread + " unread" } : null;
+    case "/admin/moderation": return queueBadge(queues?.openReports, "open report");
+    case "/admin/player-identities": return queueBadge(queues?.pendingIdentities, "pending identity submission");
+    case "/admin/player-channels": return queueBadge(queues?.pendingChannels, "pending channel submission");
+    default: return null;
+  }
 }
 
 function pickActive(items: ReadonlyArray<NavItem>, pathname: string) {

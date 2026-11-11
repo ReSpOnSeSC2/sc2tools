@@ -219,7 +219,7 @@ function ConnectedOverlayWidgetClient({
   // Build check-in state only matters to the randomizer source.
   const [buildIntents, onBuildIntent] = useOverlayBuildIntents(token);
 
-  const socketRef = useOverlayWidgetSocket(
+  const { socketRef, rewardSocket } = useOverlayWidgetSocket(
     token,
     widget,
     setLive,
@@ -389,6 +389,7 @@ function ConnectedOverlayWidgetClient({
         randomizerIntent={randomizerCheckin.intent}
         onRandomizerSpin={randomizerCheckin.onSpin}
         visible={visible && !pausedHere}
+        rewardSocket={showingTest ? undefined : rewardSocket}
         ghostParam={effectiveGhostParam}
         ghostConfig={ghostConfig}
         studioEvent={studioEvent}
@@ -466,6 +467,7 @@ export function WidgetRenderer({
   engagementEvent,
   momentEvent,
   voicePrefs,
+  rewardSocket,
   series,
 }: {
   widget: WidgetId;
@@ -482,6 +484,7 @@ export function WidgetRenderer({
   studioEvent: unknown;
   engagementEvent: unknown;
   momentEvent?: unknown;
+  rewardSocket?: Socket | null;
   /** Socket-delivered voice prefs, so spoken widgets use the streamer's
    *  chosen voice instead of the engine default (Microsoft David on
    *  Windows). */
@@ -560,6 +563,7 @@ export function WidgetRenderer({
           live={live}
           session={session}
           studioEvent={studioEvent}
+          rewardSocket={rewardSocket}
         />
       );
     case "chat-highlight":
@@ -670,8 +674,9 @@ function useOverlayWidgetSocket(
   resetPause: () => void,
   receiveMoment: (payload: unknown) => void,
   receiveSeries: (payload: unknown) => void,
-): RefObject<Socket | null> {
+) {
   const socketRef = useRef<Socket | null>(null);
+  const [rewardSocket, setRewardSocket] = useState<Socket | null>(null);
   // The latest gameKey we've observed in either ``live`` or
   // ``liveGame``. Used by the heartbeat reply handler to decide
   // whether the cloud's view has drifted from ours and a resync is
@@ -699,6 +704,7 @@ function useOverlayWidgetSocket(
     const connection = createOverlaySocket(token, { surface: "widget", widget, onStatus: setConnectionStatus });
     const socket = connection.socket;
     socketRef.current = socket;
+    if (widget === "multichat") setRewardSocket(socket);
     socket.on("overlay:series", receiveSeries);
     socket.on("overlay:live", (msg: LiveGamePayload) => {
       // A token's Browser Sources all share this room. Per-widget Test
@@ -824,6 +830,7 @@ function useOverlayWidgetSocket(
       detachResilience();
       connection.dispose();
       if (socketRef.current === socket) socketRef.current = null;
+      if (widget === "multichat") setRewardSocket(current => current === socket ? null : current);
     };
   }, [
     token,
@@ -847,7 +854,7 @@ function useOverlayWidgetSocket(
     receiveMoment,
     receiveSeries,
   ]);
-  return socketRef;
+  return { socketRef, rewardSocket };
 }
 
 // Re-export the shared stale-clear hook so existing test imports from

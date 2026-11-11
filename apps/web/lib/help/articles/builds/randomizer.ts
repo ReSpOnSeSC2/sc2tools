@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "randomizer",
   title: "Build randomizer: let a draw pick your build",
   summary:
-    "Configure a shared pool, then Randomize from check-in even without an open widget. Every display uses one saved result; animation, sounds and speech stay in the widget.",
+    "Set a pool for each matchup, roll from the desktop card without OBS, and track your private Randomizer challenge.",
   category: "builds",
   audience: "player",
   signedInOnly: true,
@@ -25,7 +25,7 @@ const article: HelpArticle = {
     "live preview",
     "roll now",
   ],
-  updated: "2026-10-28",
+  updated: "2026-11-11",
   body: [
     { type: "callout", tone: "info", title: "Agent 0.24.1 and later", text: "Update the [Windows agent](/download) for the check-in Randomize control. The separate widget handles animated reveals and audio. See [Desktop Companion](/help/desktop-companion)." },
     {
@@ -48,6 +48,17 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "Terran and Zerg matchups need your own builds: the catalog covers Protoss for now. Make them in your [build library](/builds) (**Build library** in the menu) with the right race and opponent race.",
     },
+    { type: "heading", text: "Roll without OBS", anchor: "desktop-roll" },
+    {
+      type: "steps",
+      items: [
+        "Turn on **Roll on the desktop card when I'm not streaming** in Companion → Randomizer or [Settings → Randomizer](/settings?tab=randomizer). Leave the Companion's loading card and randomizer assistance enabled.",
+        "In a current human 1v1 with an enabled pool and no connected randomizer source, the desktop card shows the saved draw. If you have a loading check-in to answer, your declaration takes priority and the automatic draw waits until play starts.",
+        "Choose **Play it** to declare the build, **Reroll** to use the game's one alternate draw, or **Not now** to dismiss the card.",
+      ],
+    },
+    { type: "heading", text: "Randomizer challenge", anchor: "challenge" },
+    { type: "paragraph", text: "Open [Practice](/practice#randomizer-challenge) or Settings → Randomizer for each pool's rolls, matching confirmed check-ins, record and progress. **Reset challenge** starts counting from that time and keeps your replays and pools. See [Randomize your practice](/builds/learn#randomize-your-practice)." },
     { type: "heading", text: "Opening Gateway draw (Protoss)", anchor: "gateway-draw" },
     {
       type: "paragraph",

@@ -9,6 +9,8 @@ jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 const { createHarness } = require("./helpers/reviewsHarness");
 const { generateVapidKeys } = require("../src/services/webPushCrypto");
 const { PushNotificationsService } = require("../src/services/pushNotifications");
+const { CalendarFeedService } = require("../src/services/calendarFeed");
+const CALENDAR_KEY = "a1".repeat(32);
 
 const vapid = generateVapidKeys();
 let h;
@@ -28,7 +30,7 @@ const as = (name) => ({
 });
 
 beforeAll(async () => {
-  h = await createHarness({ config: { delivery: { webPush: { ...vapid, subject: "mailto:owner@example.com" }, discordEncryptionKey: null } } });
+  h = await createHarness({ config: { delivery: { webPush: { ...vapid, subject: "mailto:owner@example.com" }, discordEncryptionKey: CALENDAR_KEY } } });
   for (const name of ["ann", "bob", "coach", "student", "other"]) await h.seedUser(name);
   h.services.pushNotifications.fetchImpl = jest.fn(async (url, init) => {
     sends.push({ url, init });
@@ -172,6 +174,58 @@ test("calendar feed: secret link shown once, bookings only, no student names, re
   await as("student").del("/v1/me/calendar-feed").expect(200);
   expect((await request(h.app).get(rotated.body.path)).status).toBe(404);
   expect((await request(h.app).get("/v1/calendar/not-a-secret.ics")).status).toBe(404);
+});
+
+test("account export recovers only the caller's active encrypted calendar secret", async () => {
+  const { body } = await as("ann").post("/v1/me/calendar-feed", {}).expect(200);
+  const secret = body.path.split("/").at(-1).slice(0, -4);
+  const stored = (await h.db.users.findOne({ userId: "u_ann" })).calendarFeed;
+  expect(stored.secretBox).toMatchObject({ data: expect.any(String), tag: expect.any(String) });
+  expect(JSON.stringify(stored)).not.toContain(secret);
+
+  const legacy = await as("ann").get("/v1/me/export").expect(200);
+  expect(legacy.headers["cache-control"]).toBe("private, no-store");
+  expect(legacy.body.user.calendarFeed).toEqual({ hash: stored.hash, createdAt: stored.createdAt.toISOString(), secret });
+  const ndjson = await as("ann").get("/v1/me/export?format=ndjson").expect(200);
+  const user = ndjson.text.trim().split("\n").map(JSON.parse).find((record) => record.type === "user");
+  expect(user.row.calendarFeed).toEqual(legacy.body.user.calendarFeed);
+  expect((await as("bob").get("/v1/me/export").expect(200)).text).not.toContain(secret);
+
+  const deviceToken = `sc2d_${"r".repeat(43)}`;
+  await h.db.deviceTokens.insertOne({ userId: "u_ann", tokenHash: crypto.createHash("sha256").update(deviceToken).digest("hex"), revokedAt: null });
+  const deviceExport = (path) => request(h.app).get(path).set("authorization", `Bearer ${deviceToken}`).expect(200);
+  const deviceJson = await deviceExport("/v1/me/export");
+  expect(deviceJson.body.user.calendarFeed).toEqual({ hash: stored.hash, createdAt: stored.createdAt.toISOString() });
+  const deviceNdjson = await deviceExport("/v1/me/export?format=ndjson");
+  const deviceUser = deviceNdjson.text.trim().split("\n").map(JSON.parse).find((record) => record.type === "user");
+  expect(deviceUser.row.calendarFeed).toEqual(deviceJson.body.user.calendarFeed);
+
+  const { calendarFeed } = h.services;
+  expect(calendarFeed.exportRecord("u_bob", stored)).toEqual({ hash: stored.hash, createdAt: stored.createdAt });
+  expect(calendarFeed.exportRecord("u_ann", { ...stored, hash: "bad" })).toEqual({ hash: "bad", createdAt: stored.createdAt });
+  expect(new CalendarFeedService(h.db).exportRecord("u_ann", stored)).not.toHaveProperty("secretBox");
+
+  const rotated = await as("ann").post("/v1/me/calendar-feed", {}).expect(200);
+  const current = await as("ann").get("/v1/me/export").expect(200);
+  expect(rotated.body.path).toContain(current.body.user.calendarFeed.secret);
+  expect(current.text).not.toContain(secret);
+  await as("ann").del("/v1/me/calendar-feed").expect(200);
+  expect((await as("ann").get("/v1/me/export").expect(200)).body.user).not.toHaveProperty("calendarFeed");
+});
+
+test("a hash-only feed keeps working and revocation fences a read already loading bookings", async () => {
+  const legacy = new CalendarFeedService(h.db);
+  const { path } = await legacy.rotate("u_ann");
+  const secret = path.split("/").at(-1).slice(0, -4);
+  expect((await as("ann").get("/v1/me/export").expect(200)).body.user.calendarFeed)
+    .toEqual({ hash: expect.any(String), createdAt: expect.any(String) });
+  expect(await legacy.feed(secret)).toContain("BEGIN:VCALENDAR");
+  const loaded = jest.spyOn(legacy, "events").mockImplementationOnce(async () => {
+    await legacy.revoke("u_ann");
+    return [];
+  });
+  expect(await legacy.feed(secret)).toBeNull();
+  expect(loaded).toHaveBeenCalledTimes(1);
 });
 
 test("coaching reminders reach coach and student once per window", async () => {

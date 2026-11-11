@@ -21,3 +21,22 @@ describe("native and OBS seeded build selection", () => {
     }
   });
 });
+
+it("preserves zero weights and shares the uniform all-zero fallback", () => {
+  const sample = (weights: number[]) => {
+    const raw = { enabled: true, useCustomWeights: true, builds: weights.map((weight, index) => ({
+      id: String(index), name: "Build " + index, race: "Protoss", weight,
+    })) };
+    const config = sanitizeRandomizerConfig({ matchups: { PvZ: raw } }).matchups.PvZ;
+    expect(config.builds.map((build) => build.weight)).toEqual(weights);
+    return Array.from({ length: 100 }, (_, index) => {
+      const seed = "fixture:" + index;
+      const web = spinResult("PvZ", config, mulberry32(seedFromString(seed)))?.winner.id;
+      const server = selectedBuildId(raw, seed);
+      expect(server).toBe(web);
+      return server;
+    });
+  };
+  expect(new Set(sample([0, 9, 0]))).toEqual(new Set(["1"]));
+  expect(new Set(sample([0, 0, 0]))).toEqual(new Set(["0", "1", "2"]));
+});

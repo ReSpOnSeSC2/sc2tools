@@ -28,7 +28,7 @@ import { formatClock } from "@/lib/replayHud";
 import type { ReplayVision } from "@/lib/replayVision";
 import { spriteAssetsVersion } from "@/lib/spriteSheets";
 import {
-  CLIP_MAX_SECONDS, CLIP_SIZES, CLIP_SPEEDS, GIF_FPS, GIF_MAX_BYTES, GIF_MAX_VIDEO_SECONDS, GIF_SCALE, VIDEO_BITS_PER_SECOND,
+  CLIP_MAX_SECONDS, CLIP_SIZES, CLIP_SPEEDS, GIF_FPS, GIF_MAX_BYTES, GIF_MAX_VIDEO_SECONDS, VIDEO_BITS_PER_SECOND,
   VIDEO_FPS, VIDEO_MAX_BYTES, clampClipRange, clipFileName, clipFrameCount, clipFrameTime, clipVideoSeconds,
   defaultClipRange, gifFits, parseClipClock, pickVideoMime, type ClipFormat, type ClipRange, type ClipSize, type ClipSpeed,
   type PlaybackWindow,
@@ -229,9 +229,7 @@ export default function ClipDialog({
     const controller = new AbortController();
     abortRef.current = controller;
     setStatus({ kind: "preparing" });
-    const gif = format === "gif";
-    const width = Math.round(CLIP_SIZES[size].width * (gif ? GIF_SCALE : 1));
-    const height = Math.round(CLIP_SIZES[size].height * (gif ? GIF_SCALE : 1));
+    const { width, height } = CLIP_SIZES[size];
     let surface: ClipSurface | undefined;
     try {
       const screen = replayer.current?.snapshot();
@@ -328,7 +326,7 @@ export default function ClipDialog({
           <p className="text-text-dim">
             {!support.video && !support.gif ? "This browser can't make clips."
               : !support.video ? "This browser can't record video, so clips are saved as GIF."
-                : `GIFs are saved at half size, ${GIF_FPS} frames a second, and up to ${GIF_MAX_VIDEO_SECONDS} seconds long.`}
+                : `GIFs use the selected size, at ${GIF_FPS} frames a second for up to ${GIF_MAX_VIDEO_SECONDS} seconds.`}
           </p>
         </fieldset>
 

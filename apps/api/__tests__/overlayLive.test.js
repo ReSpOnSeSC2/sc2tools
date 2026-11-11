@@ -426,113 +426,57 @@ describe("services/overlayLive.buildFromGame", () => {
     expect(p.streak).toBeUndefined();
   });
 
-  test("computes mmrDelta from the previous comparable game's myMmr", async () => {
-    await db.games.insertOne({
-      userId: "u1",
-      gameId: "earlier",
-      result: "Victory",
-      myMmr: 4280,
-      myMmrSource: "replay",
-      myToonHandle: "1-S2-1-100",
-      myRace: "Protoss",
-      date: new Date(Date.now() - 10 * 60 * 1000),
-    });
-    const p = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
-    expect(p.mmrDelta).toBe(30);
-  });
+  describe("MMR change between game starts", () => {
+    const rated = { isLadderGame: true, playerCount: 2, matchFormat: "1v1" };
+    function earlier(overrides = {}) {
+      return game({ ...rated, gameId: "earlier", myMmr: 4345, result: "Defeat",
+        date: new Date(Date.now() - 10 * 60 * 1000), ...overrides });
+    }
 
-  test("omits mmrDelta when no prior game carries myMmr", async () => {
-    const p = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
-    expect(p.mmrDelta).toBeUndefined();
-  });
-
-  test("suppresses a delta whose sign contradicts the verified result", async () => {
-    // Replay myMmr is the game-START rating, so prev→this measures
-    // the PREVIOUS game's outcome. A win can never lose rating —
-    // "Victory — -35 MMR swing" must not reach the overlay/clip log.
-    await db.games.insertOne({
-      userId: "u1",
-      gameId: "earlier",
-      result: "Victory",
-      myMmr: 4345,
-      myMmrSource: "replay",
-      myToonHandle: "1-S2-1-100",
-      myRace: "Protoss",
-      date: new Date(Date.now() - 10 * 60 * 1000),
+    test.each(["Victory", "Defeat"])("preserves a negative comparison beside a %s", async result => {
+      await db.games.insertOne(earlier());
+      const payload = await svc.buildFromGame("u1", game({ ...rated, result }));
+      expect(payload.mmrChangeBetweenStarts).toBe(-35);
+      expect(payload.mmrDelta).toBeUndefined();
     });
-    const win = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
-    expect(win.result).toBe("win");
-    expect(win.mmrDelta).toBeUndefined();
-  });
 
-  test("keeps a loss's negative delta (signs agree)", async () => {
-    await db.games.insertOne({
-      userId: "u1",
-      gameId: "earlier",
-      result: "Victory",
-      myMmr: 4345,
-      myMmrSource: "replay",
-      myToonHandle: "1-S2-1-100",
-      myRace: "Protoss",
-      date: new Date(Date.now() - 10 * 60 * 1000),
+    test("compares Random queue ratings across different spawned races", async () => {
+      await db.games.insertOne(earlier({ myRace: "Zerg", myLadderRace: "Random" }));
+      const payload = await svc.buildFromGame("u1", game({ ...rated, myLadderRace: "Random" }));
+      expect(payload.mmrChangeBetweenStarts).toBe(-35);
     });
-    const loss = await svc.buildFromGame(
-      "u1",
-      game({ myMmr: 4310, result: "Defeat" }),
-    );
-    expect(loss.result).toBe("loss");
-    expect(loss.mmrDelta).toBe(-35);
-  });
 
-  test("never chains mmrDelta across Battle.net accounts", async () => {
-    // A 3000-MMR NA-smurf game right before a 4310 main game must NOT
-    // paint a fake "+1310" (or "−1310") swing on stream.
-    await db.games.insertOne({
-      userId: "u1",
-      gameId: "smurf",
-      result: "Victory",
-      myMmr: 3000,
-      myMmrSource: "replay",
-      myToonHandle: "1-S2-1-999",
-      myRace: "Protoss",
-      date: new Date(Date.now() - 10 * 60 * 1000),
+    test("omits the comparison when no previous replay has a verified rating", async () => {
+      const payload = await svc.buildFromGame("u1", game(rated));
+      expect(payload.mmrChangeBetweenStarts).toBeUndefined();
     });
-    const p = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
-    expect(p.mmrDelta).toBeUndefined();
-  });
 
-  test("never chains mmrDelta across ladder races on one account", async () => {
-    // Zerg-ladder 3600 followed by a Protoss-ladder 4310 is two
-    // different ratings, not a +710 session.
-    await db.games.insertOne({
-      userId: "u1",
-      gameId: "zerg-ladder",
-      result: "Victory",
-      myMmr: 3600,
-      myMmrSource: "replay",
-      myToonHandle: "1-S2-1-100",
-      myRace: "Zerg",
-      myLadderRace: "Zerg",
-      date: new Date(Date.now() - 10 * 60 * 1000),
+    test.each([
+      ["another owner", { userId: "u2" }],
+      ["another Battle.net account", { myToonHandle: "1-S2-1-999" }],
+      ["another ladder race", { myLadderRace: "Random" }],
+      ["an unverified rating", { myMmrSource: undefined }],
+      ["an invalid rating", { myMmr: 0 }],
+      ["an unranked game", { isLadderGame: false }],
+      ["a team game", { playerCount: 4, matchFormat: "2v2" }],
+      ["a hidden game", { excluded: true }],
+      ["a resumed replay", { isResumedFromReplay: true }],
+    ])("skips a previous replay for %s", async (_label, override) => {
+      await db.games.insertOne(earlier(override));
+      const payload = await svc.buildFromGame("u1", game(rated));
+      expect(payload.mmrChangeBetweenStarts).toBeUndefined();
     });
-    const p = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
-    expect(p.mmrDelta).toBeUndefined();
-  });
 
-  test("ignores unverified legacy myMmr rows when anchoring mmrDelta", async () => {
-    // Quarantined legacy numerics (no replay provenance) may not
-    // anchor a delta — same trust bar as the analyzer's MMR charts.
-    await db.games.insertOne({
-      userId: "u1",
-      gameId: "legacy",
-      result: "Victory",
-      myMmr: 5400,
-      myToonHandle: "1-S2-1-100",
-      myRace: "Protoss",
-      date: new Date(Date.now() - 10 * 60 * 1000),
+    test.each([
+      ["unknown account", { myToonHandle: undefined }],
+      ["unknown race", { myRace: undefined }],
+      ["unknown ranked status", { isLadderGame: undefined }],
+      ["unverified rating", { myMmrSource: undefined }],
+    ])("does not use a current replay with %s", async (_label, override) => {
+      await db.games.insertOne(earlier());
+      const payload = await svc.buildFromGame("u1", game({ ...rated, ...override }));
+      expect(payload.mmrChangeBetweenStarts).toBeUndefined();
     });
-    const p = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
-    expect(p.mmrDelta).toBeUndefined();
   });
 
   test("ranks topBuilds and bestAnswer from the user's matchup history", async () => {
