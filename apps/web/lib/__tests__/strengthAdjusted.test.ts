@@ -32,6 +32,24 @@ describe("game-ordered rating geometry", () => {
   });
   it("keeps a single measured point visible and omits wholly unbounded/nonfinite windows", () => {
     expect(ratingSparkline([point(null), point(4000)]).markers).toHaveLength(1);
-    expect(ratingSparkline([point(null), point(NaN)])).toMatchObject({ paths: [], markers: [], low: null, high: null });
+    expect(ratingSparkline([point(null), point(NaN)])).toMatchObject({ paths: [], markers: [], ticks: [], low: null, high: null });
+  });
+  it("places the maximum rating and its axis label above the minimum", () => {
+    const plot = ratingSparkline([point(5373), point(5632), point(5400)]);
+    expect(plot.low).toBe(5373); expect(plot.high).toBe(5632);
+    const maximum = plot.ticks.find(tick => tick.value === 5632)!;
+    const minimum = plot.ticks.find(tick => tick.value === 5373)!;
+    expect(maximum.y).toBeLessThan(minimum.y);
+    expect(plot.markers[1].y).toBe(maximum.y);
+    expect(plot.markers[0].y).toBe(minimum.y);
+  });
+  it("labels the padded domain honestly for constant and narrow rating ranges", () => {
+    const constant = ratingSparkline([point(4200.1), point(4200.1)]);
+    expect(constant.ticks.map(tick => tick.value)).toEqual([4250.1, 4200.1, 4150.1]);
+    expect(constant.markers.every(marker => marker.y === constant.ticks[1].y)).toBe(true);
+    const narrow = ratingSparkline([point(4000), point(4020)]);
+    expect(narrow.ticks.map(tick => tick.value)).toEqual([4060, 4010, 3960]);
+    // Both observations sit inside, rather than at the endpoints of, the 100-point scale.
+    expect(narrow.markers.every(marker => marker.y > narrow.ticks[0].y && marker.y < narrow.ticks[2].y)).toBe(true);
   });
 });

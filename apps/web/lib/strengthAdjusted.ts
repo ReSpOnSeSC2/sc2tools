@@ -50,7 +50,7 @@ export function sumStrength(rows: readonly StrengthFields[]): StrengthFields {
  * unbounded (0%/100%) performance estimate. */
 export function ratingSparkline(points: MatchupRatingSeries["points"]) {
   const measured = points.flatMap(point => point.perfRating != null && Number.isFinite(point.perfRating) ? [point.perfRating] : []);
-  if (!measured.length) return { paths: [] as string[], markers: [] as { x: number; y: number; index: number }[], low: null, high: null };
+  if (!measured.length) return { paths: [] as string[], markers: [] as { x: number; y: number; index: number }[], ticks: [] as { value: number; y: number }[], low: null, high: null };
   const low = Math.min(...measured), high = Math.max(...measured), span = Math.max(100, high - low);
   const center = (low + high) / 2;
   const paths: string[] = [], markers: { x: number; y: number; index: number }[] = []; let path = "";
@@ -62,5 +62,7 @@ export function ratingSparkline(points: MatchupRatingSeries["points"]) {
     path += `${path ? " L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`;
   });
   if (path) paths.push(path);
-  return { paths, markers, low, high };
+  // Label the actual plotted domain, including the padding for narrow ranges.
+  const ticks = [{ value: center + span / 2, y: 10 }, { value: center, y: 30 }, { value: center - span / 2, y: 50 }];
+  return { paths, markers, ticks, low, high };
 }

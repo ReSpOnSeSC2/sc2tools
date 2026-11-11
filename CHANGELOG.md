@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Trends and arcade fixes
+
+- Put performance ratings on the matchup chart's vertical scale, label game order horizontally, and inspect rolling windows by mouse, touch or keyboard.
+- Start each newly generated arcade question with fresh answer state, including Streak Hunter and Closer's Eye. Hide old answers while the next question loads, prevent sticky touch hover colors, and improve Next round button contrast.
+
 ### Re-analysis
 
 - Add **Re-analyze games** to Settings → Backups & data. It lists the games an
