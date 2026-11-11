@@ -31,7 +31,7 @@ default** and save to restore the stock widget positions for that orientation.
 
 ## Twitch Channel Points rewards
 
-In Chat & alerts, open Twitch automation and connect Channel Points reward actions separately. Grant the incremental reward scope in the broadcaster’s account, choose the OBS source and save an enabled mapping. Verify one controlled redemption for each action you use, plus cooldown, unavailable-action handling and manual or automatic settlement. Automatic settlement requires an app-managed Twitch reward. Disable the mappings or disconnect reward permission to stop actions.
+In Chat & alerts, open Twitch automation and connect Channel Points reward actions separately. Grant the incremental reward scope in the broadcaster’s account, choose the OBS source and save an enabled mapping. Verify one controlled redemption for each action you use, plus cooldown, unavailable-action handling and manual or automatic settlement. Automatic settlement requires an app-managed Twitch reward. For text-to-speech, refresh the Multichat Browser Source in OBS before testing. Redeem once while speech is idle and once while it is busy. Confirm the idle reward speaks once and the busy reward remains unfulfilled or is refunded according to the mapping. Disable the mappings or disconnect reward permission to stop actions.
 
 ## Desktop Randomizer
 
