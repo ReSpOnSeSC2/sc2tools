@@ -27,7 +27,7 @@ const article: HelpArticle = {
     { type: "heading", text: "A battle card image", anchor: "image" },
     { type: "paragraph", text: "**Save battle card image** makes a picture of the result for posts and chats. It shows your MMR and whether your opponent was higher or lower, rounded to the nearest 100, never their name or exact rating. An image cannot be turned off once it is posted." },
     { type: "heading", text: "Your public replay page", anchor: "public-replays" },
-    { type: "paragraph", text: "Public replays share your whole replay archive on your player page, with opponent names, and visitors need to sign in to open a game's analysis. It is a separate setting from share links; see [Public profile](/help/public-profile). A share link works whether or not that page is on." },
+    { type: "paragraph", text: "Public replays share your whole replay archive on your player page. The archive and analysis keep opponent names private. Visitors can open a replay preview without an account and sign in for analysis. Original replay downloads contain the names and chat recorded by StarCraft II. It is a separate setting from share links; see [Public profile](/help/public-profile). A share link works whether or not that page is on." },
   ],
   related: ["game-page", "battle-reports", "public-profile"],
 };
