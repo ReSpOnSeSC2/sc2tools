@@ -1197,24 +1197,10 @@ function desiredShareState(body) {
  */
 async function persistCustomBuild(ctx, req, userId, slug, value, opts) {
   const { deps, phaseCacheBust } = ctx;
-  const library = deps.customBuildLibrary;
-  /** @type {Record<string, any>|null} */
-  let previousDefinition = null;
-  if (library) {
-    try {
-      previousDefinition = await library.readDefinition(userId, slug);
-    } catch (e) {
-      if (req.log) req.log.warn({ err: e, slug, userId }, "custom_build_revision_read_failed");
-    }
-  }
-  await deps.customBuilds.upsert(userId, /** @type {any} */ (value));
-  // History is a convenience: a failure never fails the durable save.
-  if (library && previousDefinition) {
-    try {
-      await library.recordRevision(userId, slug, previousDefinition, value);
-    } catch (e) {
-      if (req.log) req.log.warn({ err: e, slug, userId }, "custom_build_revision_record_failed");
-    }
+  if (deps.customBuildLibrary) {
+    await deps.customBuilds.upsert(userId, /** @type {any} */ (value), { recordLibraryHistory: true });
+  } else {
+    await deps.customBuilds.upsert(userId, /** @type {any} */ (value));
   }
   // The key tracks replay freshness, not build edits. Invalidate now so a
   // rule/name change cannot serve the prior phase analysis for 60 seconds.

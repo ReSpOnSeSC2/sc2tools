@@ -130,7 +130,8 @@ corresponding GitHub Release.
   days. Restored builds come back private; a nightly cleanup removes builds
   deleted more than 30 days ago.
 - Keep the last 20 versions of each build. **History** on a build's page
-  compares a version with the current one and restores it.
+  compares a version with the current one and restores it. Concurrent saves
+  and imports record the version each write actually replaced.
 - Pin builds to the top, tag them, and filter the library by Mine or Opponent
   captures, Published, race and tags.
 - Select many builds to tag, add to the randomizer, publish, unpublish, export

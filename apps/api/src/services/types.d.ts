@@ -566,7 +566,7 @@ export interface CustomBuildsService {
     truncated: boolean;
   }>;
   get(userId: string, slug: string): Promise<object | null>;
-  upsert(userId: string, build: object & { slug: string }): Promise<void>;
+  upsert(userId: string, build: object & { slug: string }, options?: { recordLibraryHistory?: boolean }): Promise<void>;
   softDelete(userId: string, slug: string): Promise<void>;
   evaluateBuild(
     userId: string,
