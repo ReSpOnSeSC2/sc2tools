@@ -522,9 +522,6 @@ QWidget#companionDesk[textOverlay="true"], QWidget#companionPanel[textOverlay="t
     background: transparent; border: none;
 }}
 QFrame#companionCard {{ background: {ELEVATED}; border: none; border-radius: {RADIUS_L}px; }}
-QLabel#companionTitle {{
-    font-family: {FONT_FAMILY_DISPLAY}; font-size: {TYPE_HEADLINE}px; font-weight: {WEIGHT_SEMIBOLD};
-}}
 QLabel#companionHeading {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
 QLabel#companionMuted {{ color: {TEXT_MUTED}; font-size: {TYPE_SMALL}px; }}
 QLabel#companionAccent {{ color: {skin.accent}; font-size: {TYPE_SMALL}px; font-weight: {WEIGHT_SEMIBOLD}; }}

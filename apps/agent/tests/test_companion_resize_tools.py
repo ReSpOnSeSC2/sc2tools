@@ -177,6 +177,16 @@ def test_ghost_replay_library_actions_wrap_and_history_remains_reachable(themed_
 def test_companion_tools_fit_the_minimum_window_at_display_scale(tmp_path, monkeypatch, scale):
     monkeypatch.setenv("QT_SCALE_FACTOR", scale)
     run_gui_check(tmp_path, THEMED_SETUP.replace("FONT_SIZE", "10") + dedent('''
+        def assert_fits(scroll, controls):
+            content = scroll.widget()
+            assert content.width() <= scroll.viewport().width()
+            assert scroll.horizontalScrollBar().maximum() == 0
+            for control in controls:
+                assert control.isVisible()
+                position = control.mapTo(content, QtCore.QPoint())
+                assert content.rect().contains(QtCore.QRect(position, control.size())), control.objectName()
+                assert control.width() >= control.minimumSizeHint().width(), control.objectName()
+
         _ui, window = make_window(window_page="companion", window_animations=False)
         window.setUpdatesEnabled(False)
         window.show()
@@ -191,14 +201,21 @@ def test_companion_tools_fit_the_minimum_window_at_display_scale(tmp_path, monke
                 page.console.navigate(route)
                 QtTest.QTest.qWait(25)
                 assert window.size() == QtCore.QSize(480, 360)
-                content = scroll.widget()
-                assert content.width() <= scroll.viewport().width(), route
-                assert scroll.horizontalScrollBar().maximum() == 0, route
-                for control in controls:
-                    x = control.mapTo(content, QtCore.QPoint()).x()
-                    assert 0 <= x <= content.width() - control.width(), (route, control.objectName())
-                    assert control.width() >= control.minimumSizeHint().width(), (route, control.objectName())
+                assert_fits(scroll, controls)
                 assert scroll.verticalScrollBar().maximum() > 0, route
+
+            ghost.sources.setCurrentIndex(1)
+            QtTest.QTest.qWait(25)
+            library = ghost.sources.currentWidget()
+            filters = (ghost.matchup_filter, ghost.build_filter, ghost.map_filter, ghost.result_filter,
+                       ghost.starred_filter, ghost.clear_filters_button)
+            reference_actions = (ghost.reference_button, ghost.reference_side, ghost.compare_button)
+            assert_fits(library, (*filters, *reference_actions))
+            assert all(ghost.filters_widget.rect().contains(control.geometry()) for control in filters)
+            for control in (*filters, *reference_actions):
+                library.ensureWidgetVisible(control)
+                position = control.mapTo(library.viewport(), QtCore.QPoint())
+                assert library.viewport().rect().contains(QtCore.QRect(position, control.size()))
         finally:
             page.shutdown()
             window._race_effects.shutdown()
