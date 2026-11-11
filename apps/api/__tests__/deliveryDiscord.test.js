@@ -223,3 +223,84 @@ test("session summaries post once after the session gap, peaks only above a 20-g
   await discord.onFreshGame("u_dee", peak);
   expect(await h.db.discordOutbox.countDocuments({ userId: "u_dee", kind: "milestone" })).toBe(1);
 });
+
+
+async function promotionRecipient(name) {
+  await h.seedUser(name);
+  await connected(name);
+  return "u_" + name;
+}
+
+test("promotion uses observed ranks from the same ladder queue and respects hook privacy", async () => {
+  const userId = await promotionRecipient("rankup");
+  const date = Date.now() - 60_000;
+  const ranked = { matchFormat: "1v1", myLadderRace: "Random", myMmr: 4700, date: new Date(date) };
+  await h.db.discordHooks.updateOne({ userId }, { $set: { "options.mmr": false, "options.replayLink": true, "options.opponentNames": true } });
+  await h.db.games.insertMany([
+    game(userId, { ...ranked, date: new Date(date - 120_000), myRace: "Terran", myLeagueId: 4 }),
+    game(userId, { ...ranked, date: new Date(date - 60_000), myLadderRace: "Protoss", myLeagueId: 6 }),
+  ]);
+  const current = game(userId, { ...ranked, myLeagueId: 5 });
+  await discord.onFreshGame(userId, current);
+  const filter = { userId, kind: "milestone" };
+  const row = await h.db.discordOutbox.findOne(filter);
+  expect(row.payload.embeds[0]).toMatchObject({ title: "Promotion · Master", description: "Diamond → Master · Random", fields: [] });
+  expect(row.payload.allowed_mentions).toEqual({ parse: [] });
+  expect(JSON.stringify(row.payload)).not.toMatch(/SecretOppZed|4700|https:/);
+  await discord.drain();
+  expect(await h.db.discordOutbox.findOne(filter)).toMatchObject({ status: "sent" });
+  expect((await h.db.discordOutbox.findOne(filter)).payload).toBeUndefined();
+  await discord.onFreshGame(userId, current);
+  expect(await h.db.discordOutbox.countDocuments(filter)).toBe(1);
+  expect(await h.db.discordOutbox.countDocuments({ ...filter, status: "queued" })).toBe(0);
+});
+
+test("promotion is skipped for an unrated observation gap, another account, or a downward change", async () => {
+  const userId = await promotionRecipient("ranksame");
+  const date = Date.now() - 60_000;
+  const ranked = { matchFormat: "1v1", date: new Date(date), myMmr: 6000 };
+  await h.db.games.insertMany([
+    game(userId, { ...ranked, date: new Date(date - 120_000), myLeagueId: 3 }),
+    game(userId, { ...ranked, date: new Date(date - 60_000) }),
+    game(userId, { ...ranked, date: new Date(date - 60_000), myLeagueId: 6, myToonHandle: "1-S2-1-2" }),
+  ]);
+  await discord.onFreshGame(userId, game(userId, { ...ranked, myLeagueId: 5 }));
+  await discord.onFreshGame(userId, game(userId, { ...ranked, myLeagueId: 5, myToonHandle: "1-S2-1-2" }));
+  await discord.onFreshGame(userId, game(userId, { ...ranked, myLeagueId: 5, myToonHandle: "1-S2-1-3" }));
+  expect(await h.db.discordOutbox.countDocuments({ userId, kind: "milestone" })).toBe(0);
+});
+
+test("weekly Discord receipts prevent replay after the first post was drained", async () => {
+  const userId = await promotionRecipient("weeklyreceipt");
+  const report = { week: "2026-W46", totals: { games: 5, wins: 3, losses: 2, hours: 2, sessions: 1 } };
+  await discord.onWeekly(userId, report);
+  expect((await discord.drain()).sent).toBe(1);
+  await discord.onWeekly(userId, report);
+  expect((await discord.drain()).sent).toBe(0);
+  const receipt = await h.db.discordOutbox.findOne({ userId, kind: "weekly" });
+  expect(receipt.status).toBe("sent");
+  expect(receipt.payload).toBeUndefined();
+  expect(receipt.expiresAt).toBeInstanceOf(Date);
+});
+
+
+test("ranked ingest stores and queues the replay-observed own league", async () => {
+  const userId = await promotionRecipient("rankupload");
+  const date = Date.now() - 30_000;
+  const prior = game(userId, { date: new Date(date - 60_000), matchFormat: "1v1", myLeagueId: 4 });
+  await h.db.games.insertOne(prior);
+  const incoming = game(userId, { date: new Date(date), matchFormat: "1v1", myLeagueId: 5, myMmrSource: "replay" });
+  delete incoming.userId;
+  delete incoming.createdAt;
+  const enqueue = jest.spyOn(discord, "onFreshGame");
+  try {
+    const response = await as("rankupload").post("/v1/games", { games: [incoming] });
+    expect(response.status).toBe(202);
+    expect(enqueue).toHaveBeenCalledWith(userId, expect.objectContaining({ myLeagueId: 5 }));
+    await enqueue.mock.results[0].value;
+    expect(await h.db.games.findOne({ userId, gameId: incoming.gameId })).toMatchObject({ myLeagueId: 5 });
+    expect(await h.db.discordOutbox.findOne({ userId, kind: "milestone" })).toMatchObject({
+      payload: { embeds: [expect.objectContaining({ title: "Promotion · Master" })] },
+    });
+  } finally { enqueue.mockRestore(); }
+});

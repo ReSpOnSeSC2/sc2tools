@@ -6,6 +6,7 @@ const { stampVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 const { SHARE_TOKEN_RE } = require("./gameShares");
+const { bandFromId } = require("../util/leagueBands");
 const { buildJobLock } = require("../util/jobLock");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { encryptSecret, decryptSecret, parseTokenEncryptionKey } = require("./platformCredentialVault");
@@ -260,13 +261,36 @@ class DiscordWebhooksService {
       { projection: { _id: 0, myMmr: 1 } }).sort({ date: -1 }).limit(1).toArray() : [];
     const mmrDelta = previous[0] ? game.myMmr - previous[0].myMmr : null;
     await this.enqueue(userId, "result", `result:${game.gameId}`, (options) => templates.resultMessage(game, { options, mmrDelta, replaySlug: slug }), { replaySlug: slug });
-    if (!rated) return;
+    if (await this.queuePromotion(userId, game) || !rated) return;
     const higher = await this.db.games.findOne({ ...gamesMatchStage(userId, {}), ...sameAccount, myMmr: { $gte: game.myMmr } }, { projection: { _id: 1 } });
     if (higher) return;
     const history = await this.db.games.find({ ...gamesMatchStage(userId, {}), ...sameAccount }, { projection: { _id: 0, myMmr: 1 } }).sort({ myMmr: -1 }).limit(PEAK_MIN_HISTORY).toArray();
     if (history.length < PEAK_MIN_HISTORY) return;
     const milestone = { mmr: game.myMmr, previousPeak: history[0].myMmr, race: String(game.myRace || "") };
     await this.enqueue(userId, "milestone", `peak:${game.myToonHandle}:${game.myRace}:${game.myMmr}`, (options) => templates.milestoneMessage(milestone, { options }));
+  }
+
+  /** Use consecutive observed ladder ranks for the same account and queue. @param {string} userId @param {any} game */
+  async queuePromotion(userId, game) {
+    const current = Number.isInteger(game.myLeagueId) ? bandFromId(game.myLeagueId) : null;
+    const queueRace = game.myLadderRace || game.myRace;
+    const oneVsOne = game.matchFormat === "1v1" || (game.matchFormat === undefined && game.playerCount === 2);
+    if (!current || !oneVsOne || typeof game.myToonHandle !== "string" || !game.myToonHandle.trim() || !queueRace
+      || game.isResumedFromReplay === true || game.excluded === true) return false;
+    const prior = await this.db.games.find({
+      ...gamesMatchStage(userId, {}), excluded: { $ne: true }, gameId: { $ne: game.gameId },
+      date: { $lt: new Date(game.date) }, myToonHandle: game.myToonHandle, isLadderGame: true,
+      $and: [
+        { $or: [{ matchFormat: "1v1" }, { matchFormat: { $exists: false }, playerCount: 2 }] },
+        { $or: [{ myLadderRace: queueRace }, { myLadderRace: { $exists: false }, myRace: queueRace }] },
+      ],
+    }, { projection: { _id: 0, myLeagueId: 1 } }).sort({ date: -1, _id: -1 }).limit(1).next();
+    const priorId = prior?.myLeagueId;
+    const previous = Number.isInteger(priorId) ? bandFromId(priorId) : null;
+    if (!previous || current.id <= previous.id) return false;
+    const milestone = { previous: previous.label, current: current.label, race: queueRace, mmr: game.myMmr };
+    await this.enqueue(userId, "milestone", `promotion:${game.gameId}`, (options) => templates.promotionMessage(milestone, { options }));
+    return true;
   }
 
   /** From the weekly report delivery. @param {string} userId @param {any} report */

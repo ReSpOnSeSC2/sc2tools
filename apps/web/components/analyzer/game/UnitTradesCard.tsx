@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { formatNumber } from "@/lib/i18n/format";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import type { CasualtySide, MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
@@ -9,7 +10,7 @@ import { unitTrades } from "@/lib/unitTrades";
 import type { GameBuildOrderResponse } from "./types";
 
 type Props = { data?: MacroBreakdownData | null; orders?: GameBuildOrderResponse | null; era?: Parameters<typeof unitTrades>[3]; loading?: boolean };
-const fixed = (value: number) => new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
+const fixed = (value: number) => formatNumber(value, { maximumFractionDigits: 1 });
 
 export function UnitTradesCard({ data, orders, era, loading }: Props) {
   const [side, setSide] = useState<CasualtySide>("me");

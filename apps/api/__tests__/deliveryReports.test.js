@@ -105,6 +105,63 @@ test("a failed weekly build gives the week back for the next tick", async () => 
   expect(await h.db.notifications.countDocuments({ userId: "u_gus", kind: "report.weekly" })).toBe(1);
 });
 
+async function weeklyRecipient(name) {
+  await h.seedUser(name);
+  const userId = "u_" + name;
+  const reportDate = Date.parse("2026-11-11T10:00:00Z");
+  await h.db.games.insertMany(Array.from({ length: 5 }, (_, i) => game(userId, reportDate + i * HOUR)));
+  return userId;
+}
+
+test("an expired weekly claim is recovered by only one worker", async () => {
+  const weekly = h.services.weeklyReports;
+  const userId = await weeklyRecipient("weeklylease");
+  const now = MONDAY_W47_BERLIN_10 + HOUR;
+  weekly.now = () => now;
+  await h.db.users.updateOne({ userId }, { $set: {
+    "reports.weeklyClaim": { week: "2026-W46", token: "lost-worker", expiresAt: new Date(now + 1) },
+  } });
+  expect(await weekly.deliverIfDue(userId, now)).toBe("skipped");
+  weekly.now = () => now + 1000;
+  const outcomes = await Promise.all([weekly.deliverIfDue(userId, now), weekly.deliverIfDue(userId, now)]);
+  expect(outcomes.sort()).toEqual(["sent", "skipped"]);
+  expect((await h.db.users.findOne({ userId })).reports).toEqual({ weeklyWeek: "2026-W46" });
+  expect(await h.db.notifications.countDocuments({ userId, kind: "report.weekly" })).toBe(1);
+});
+
+test("a failed bell delivery releases its claim for the next weekly attempt", async () => {
+  const weekly = h.services.weeklyReports;
+  const userId = await weeklyRecipient("weeklybell");
+  const now = MONDAY_W47_BERLIN_10 + HOUR;
+  weekly.now = () => now;
+  const notify = jest.spyOn(weekly.notifications, "notify").mockRejectedValueOnce(new Error("temporary bell write failure"));
+  try {
+    await expect(weekly.deliverIfDue(userId, now)).rejects.toThrow("temporary bell write failure");
+    expect((await h.db.users.findOne({ userId })).reports).toEqual({});
+    expect(await weekly.deliverIfDue(userId, now)).toBe("sent");
+    expect(await h.db.notifications.countDocuments({ userId, kind: "report.weekly" })).toBe(1);
+  } finally { notify.mockRestore(); }
+});
+
+test("Discord can resume after the weekly bell exists without duplicating it", async () => {
+  const weekly = h.services.weeklyReports;
+  const userId = await weeklyRecipient("weeklydiscord");
+  const now = MONDAY_W47_BERLIN_10 + HOUR;
+  weekly.now = () => now;
+  const original = weekly.onWeekly;
+  const onWeekly = jest.fn(async () => {}).mockRejectedValueOnce(new Error("temporary outbox write failure"));
+  weekly.onWeekly = onWeekly;
+  try {
+    await expect(weekly.deliverIfDue(userId, now)).rejects.toThrow("temporary outbox write failure");
+    expect((await h.db.users.findOne({ userId })).reports).toEqual({});
+    expect(await weekly.deliverIfDue(userId, now)).toBe("quiet");
+    expect(await weekly.deliverIfDue(userId, now)).toBe("skipped");
+    expect(onWeekly).toHaveBeenCalledTimes(2);
+    expect(await h.db.notifications.countDocuments({ userId, kind: "report.weekly" })).toBe(1);
+    expect((await h.db.users.findOne({ userId })).reports).toEqual({ weeklyWeek: "2026-W46" });
+  } finally { weekly.onWeekly = original; }
+});
+
 test("stream report: computed once per stream, stored without opponent names, listed and readable only by its owner", async () => {
   const streams = h.services.streamReports;
   const start = Date.now() - 3 * HOUR;

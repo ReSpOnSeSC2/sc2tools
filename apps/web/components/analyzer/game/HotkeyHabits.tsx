@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { formatNumber } from "@/lib/i18n/format";
 import { useState } from "react";
 import { formatGameClock } from "@/lib/macro";
 import type { ReplayMechanics } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 
-const rate = (value: number) => new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
+const rate = (value: number) => formatNumber(value, { maximumFractionDigits: 1 });
 
 export function HotkeyHabits({ data }: { data?: ReplayMechanics }) {
   const [phase, setPhase] = useState(-1);

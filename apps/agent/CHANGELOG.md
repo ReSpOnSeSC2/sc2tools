@@ -10,6 +10,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 - Follow a build in the native Practice HUD with a countdown, optional voice, and a capture-hidden preview you can reposition.
 - Choose replay folders, history and Windows start-up on first setup before syncing begins. Existing linked devices keep their settings.
 - Use keyboard shortcuts, save or revert pending settings, and choose a rolling Last 30 days replay sync range.
+- Include your observed league when a ranked 1v1 replay records it, so
+  enabled Discord channels can show verified league changes.
 - Re-analyze games on request from **Settings → Backups & data** on the website:
   the agent re-reads each requested game with the current analysis engine, from
   the replay on this PC or, when it is gone, a verified copy from your Cloud

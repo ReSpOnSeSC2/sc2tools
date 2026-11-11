@@ -74,6 +74,11 @@ amount and currency before verification. See the
    [latest published agent](https://github.com/ReSpOnSeSC2/sc2tools/releases)
    against the release under test before starting installed acceptance.
 
+Agent 0.25.0 belongs to the growth release. Check the latest published release
+and available tag before building a roadmap installer. If 0.25.0 ships before
+these native changes reach main, use the next unused agent version after that
+release. Installed acceptance and signed delivery are owner steps.
+
 For a source regression, revert the affected change through a checked PR.
 Roll the web back before removing an API contract it uses. Follow the
 restore runbook for data recovery. Preserve released tags and assets.
@@ -117,6 +122,10 @@ See the [database restore runbook](runbooks/restore-database.md),
 | 79 | After the native release, pair the updated desktop agent and try a small re-analysis cohort. Check a replay on disk and one fetched from the archive, pause/resume, and verify the new engine stamp. |
 | 85 | Record, cancel and download a short clip in a supported desktop browser. Check the final file duration, replay frames, scoreboard and watermark. Repeat with GIF where available. |
 | 93–95 | Supply the matching VAPID key pair and subject on Render to enable push. Subscribe on a test device and verify opt-in categories, notification delivery and unsubscribe. Use a disposable Discord channel to verify opt-in delivery and revocation. Keep private calendar subscription links out of logs and shared screenshots. |
+| 90, 96, 184–187 | On the released agent, try a fresh link and an existing link, replay folder and history choices, Save and Revert, shortcuts, restart-required changes, tray status and Practice HUD placement. Check voice, countdown and capture exclusion off-air. |
+| 157–159 | On an off-air OBS scene, verify the timed poll, clip log, Large overlay scale and starter widget connections. Source presence is checked by connection; confirm visibility and audio directly in OBS. |
+| 193, 194 | After updating and re-analyzing a replay, follow both cameras, verify the attention heatmap and compare the recorded control-group and camera phases. |
+| 195 | Test the React Locker roster with a disposable linked account, including local backup and revision-checked restore. Keep Classic available through the staged acceptance. |
 
 Use the [roadmap ledger](handoff/roadmap-progress-2026-10-28.json) for
 requirement-level status and the [Windows release runbook](runbooks/agent-wave2-release.md)

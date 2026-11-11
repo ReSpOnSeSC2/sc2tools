@@ -1,5 +1,6 @@
 "use strict";
 
+const { randomUUID } = require("crypto");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { sanitizeReportPrefs } = require("./reportPreferences");
@@ -14,16 +15,15 @@ const facts = require("./reportFacts");
  * Delivery: jobs/deliveryJobs.js calls ``sweep`` hourly on the existing
  * in-process timer. A user is due from Monday 09:00 to the end of
  * Wednesday in their report time zone (Settings > Preferences > Reports;
- * UTC until saved). ``reports.weeklyWeek`` on the user row is claimed with
- * a conditional update and the notification carries the delivery key
- * ``report.weekly:<week>``, so a restart, catch-up after downtime or two
- * overlapping instances deliver each week once. Weeks with fewer than
- * five games are claimed and skipped.
+ * UTC until saved). A short-lived claim coordinates workers. The
+ * completed week is recorded after delivery, including quiet weeks.
+ * Bell and Discord delivery keys make a retry safe after a partial write.
  */
 
 const MIN_GAMES = 5;
 const ROW_LIMIT = 3000;
 const SEND_HOUR = 9;
+const DELIVERY_CLAIM_MS = 15 * 60_000;
 const CANDIDATE_TTL_MS = 6 * 60 * 60 * 1000;
 const ROW_PROJECTION = {
   _id: 0, gameId: 1, date: 1, result: 1, myRace: 1, "opponent.race": 1, "opponent.strategy": 1, map: 1, myBuild: 1,
@@ -156,22 +156,46 @@ class WeeklyReportService {
     let lease;
     try { lease = await claimUserDataLease(this.db.users, userId); } catch { return "skipped"; }
     try {
-      const claim = await this.db.users.updateOne({ userId, "reports.weeklyWeek": { $ne: week } }, { $set: { "reports.weeklyWeek": week } });
-      if (claim.modifiedCount !== 1) return "skipped";
-      let report;
-      try { report = await this.build(userId, week, tz); }
-      catch (err) {
-        // Give the week back so the next hourly tick can try again.
-        await this.db.users.updateOne({ userId, "reports.weeklyWeek": week }, { $unset: { "reports.weeklyWeek": "" } }).catch(() => {});
-        throw err;
+      const token = randomUUID();
+      if (!await this.claimWeek(userId, week, token)) return "skipped";
+      const owner = { userId, "reports.weeklyClaim.token": token };
+      try {
+        const report = await this.build(userId, week, tz);
+        await lease.assert();
+        const alive = await this.db.users.updateOne({ ...owner, "reports.weeklyClaim.expiresAt": { $gt: new Date(this.now()) } },
+          { $set: { "reports.weeklyClaim.expiresAt": new Date(this.now() + DELIVERY_CLAIM_MS) } });
+        if (!alive.matchedCount) return "skipped";
+        const sent = report.totals.games >= MIN_GAMES && await this.sendWeekly(userId, week, report);
+        await this.db.users.updateOne(owner, { $set: { "reports.weeklyWeek": week }, $unset: { "reports.weeklyClaim": "" } });
+        return sent ? "sent" : "quiet";
+      } finally {
+        // A stale worker cannot release a replacement worker's claim.
+        await this.db.users.updateOne(owner, { $unset: { "reports.weeklyClaim": "" } }).catch(() => {});
       }
-      if (report.totals.games < MIN_GAMES) return "quiet";
-      const row = await this.notifications.notify(userId, { kind: "report.weekly", ...weeklyNotice(report), href: `/app/reports/weekly/${week}`, eventKey: `report.weekly:${week}` });
-      // Already delivered (the key is idempotent) or muted: nothing more to send.
-      if (!row) return "quiet";
-      if (this.onWeekly) await this.onWeekly(userId, report).catch(() => {});
-      return "sent";
     } finally { await lease.release(); }
+  }
+
+  /** @param {string} userId @param {string} week @param {string} token */
+  async claimWeek(userId, week, token) {
+    const now = this.now();
+    const claim = await this.db.users.updateOne({
+      userId, "reports.weeklyWeek": { $ne: week }, _gdprMutation: { $exists: false },
+      $or: [
+        { "reports.weeklyClaim.expiresAt": { $exists: false } },
+        { "reports.weeklyClaim.expiresAt": { $lte: new Date(now) } },
+      ],
+    }, { $set: { "reports.weeklyClaim": { week, token, expiresAt: new Date(now + DELIVERY_CLAIM_MS) } } });
+    return claim.modifiedCount === 1;
+  }
+
+  /** @param {string} userId @param {string} week @param {Awaited<ReturnType<WeeklyReportService['build']>>} report */
+  async sendWeekly(userId, week, report) {
+    const kind = "report.weekly", eventKey = `report.weekly:${week}`;
+    const row = await this.notifications.notify(userId, { kind, ...weeklyNotice(report), href: `/app/reports/weekly/${week}`, eventKey });
+    if (this.onWeekly && (row || await this.notifications.canResumeDelivery(userId, kind, eventKey))) {
+      await this.onWeekly(userId, report);
+    }
+    return !!row;
   }
 }
 

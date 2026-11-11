@@ -1375,7 +1375,11 @@ function compactGameForRealtime(game) {
     myRace: game.myRace,
     myLadderRace: game.myLadderRace,
     myMmr: game.myMmr,
+    myLeagueId: game.myLeagueId,
     myToonHandle: game.myToonHandle,
+    isLadderGame: game.isLadderGame,
+    matchFormat: game.matchFormat,
+    playerCount: game.playerCount,
     map: game.map,
     durationSec: game.durationSec,
     opponent: opponent && typeof opponent === "object"
