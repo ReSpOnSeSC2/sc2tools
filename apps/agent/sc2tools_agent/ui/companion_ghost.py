@@ -161,8 +161,9 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
                 return
             self._move_mode = enabled
             position = self.pos()
-            self.setWindowFlag(QtCore.Qt.WindowTransparentForInput, not enabled)
+            # Qt derives window flags from the mouse transparency attribute.
             self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, not enabled)
+            self.setWindowFlag(QtCore.Qt.WindowTransparentForInput, not enabled)
             self.window_controls.setVisible(enabled)
             self.move(position)
             self._capture = None
@@ -594,13 +595,15 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets, open_hel
             self._hud_move_button.toggle()
 
         def _move_hud(self, moving):
-            if moving and not self.panel.isVisible() and self._session.game_key:
+            # Changing native window flags can temporarily hide a visible HUD.
+            needs_preview = moving and not self.panel.isVisible()
+            if needs_preview and self._session.game_key:
                 self._hud_move_button.setChecked(False)
                 self._hud_notice.setText("A Practice HUD target is needed to move it during a game.")
                 return
             self.panel.set_move_mode(moving)
             self._hud_move_button.setText("Finish moving" if moving else "Move Practice HUD")
-            if moving and not self.panel.isVisible() and not self._hud_preview:
+            if needs_preview and not self._hud_preview:
                 self._toggle_hud_preview()
             else:
                 self._render()

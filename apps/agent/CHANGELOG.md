@@ -19,6 +19,9 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   game. One game at a time, 100 per batch; never a full Re-sync or a recording.
 - Record the engine and agent versions that analyzed each uploaded game.
 
+### Fixed
+- Make Practice HUD drag, resize and window controls respond in Move mode.
+
 ## 0.25.0
 
 ### Added
