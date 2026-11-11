@@ -380,6 +380,7 @@ async function ensureBuildIntentIndexes(ctx) {
 async function ensureAdminEventIndexes(ctx) {
   await ctx.adminEvents.createIndex({ readAt: 1, createdAt: -1, eventId: -1 });
   await ctx.adminEvents.createIndex({ type: 1, readAt: 1, createdAt: -1, eventId: -1 });
+  await ctx.adminEvents.createIndex({ type: 1, readAt: 1, "report.status": 1 }, { partialFilterExpression: { type: "user_message" } });
   // Per-event read/unread (POST /v1/admin/events/:eventId/read|unread)
   // looks a row up by id alone; the keyset indexes above lead with
   // createdAt/type. Not unique: a legacy duplicate must never fail boot.
@@ -985,6 +986,7 @@ async function ensureDirectoryIndexes(ctx) {
   await ctx.playerChannels.createIndex({ identityKeys: 1 }, { unique: true });
   await ctx.playerChannels.createIndex({ ownerUserId: 1 }, { sparse: true });
   await ctx.playerChannels.createIndex({ removed: 1, displayName: 1, id: 1 });
+  await ctx.playerChannels.createIndex({ pending: 1, removed: 1 });
   await ctx.supporters.createIndex({ userId: 1 }, { unique: true });
   await ctx.supporters.createIndex({ status: 1, month: -1, reviewedAt: -1 });
 }

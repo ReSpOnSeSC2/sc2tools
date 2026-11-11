@@ -86,6 +86,94 @@ function asAdmin(req) {
   return req.set("authorization", "Bearer admin-token");
 }
 
+describe("admin dashboard triage", () => {
+  test("counts only unresolved work, with no provider refresh or event contents", async () => {
+    await Promise.all([
+      db.communityReports.insertMany([{ id: "open", resolvedAt: null }, { id: "resolved", resolvedAt: new Date() }]),
+      db.playerIdentitySubmissions.insertMany([{ id: "pending", status: "pending" }, { id: "closed", status: "approved" }]),
+      db.playerChannels.insertMany([
+        { id: "pending", identityKeys: ["pending"], pending: true },
+        { id: "removed", identityKeys: ["removed"], pending: true, removed: true },
+        { id: "resolved", identityKeys: ["resolved"], pending: false },
+      ]),
+      db.adminEvents.insertMany([
+        { eventId: "legacy-new", type: "user_message", readAt: null, payload: { body: "private message fixture" } },
+        { eventId: "explicit-new", type: "user_message", readAt: null, report: { status: "new" } },
+        { eventId: "reviewed", type: "user_message", readAt: null, report: { status: "resolved" } },
+        { eventId: "already-read", type: "user_message", readAt: new Date(), report: { status: "new" } },
+        { eventId: "download", type: "agent_download", readAt: null },
+      ]),
+    ]);
+    const warm = jest.spyOn(services.admin.infrastructureUsage, "cachedAdvisoryLevel").mockReturnValue("watch");
+    const provider = jest.spyOn(services.admin.infrastructureUsage, "adminSnapshot");
+    try {
+      const route = "/v1/admin/attention";
+      await request(app).get(route).set("Authorization", "Bearer user-token").expect(403);
+      const reply = await asAdmin(request(app).get(route)).expect("Cache-Control", "private, no-store").expect(200);
+      expect(reply.body).toEqual({
+        openReports: 1, pendingIdentities: 1, pendingChannels: 1, unreadMessages: 2, alerts: 0,
+        advisories: { level: "watch" }, generatedAt: expect.any(String),
+      });
+      expect(provider).not.toHaveBeenCalled();
+      await db.adminEvents.insertMany([
+        { eventId: "job-open", type: "job_overdue", readAt: null },
+        { eventId: "backup-open", type: "backup_stale", readAt: null },
+        { eventId: "backup-read", type: "backup_stale", readAt: new Date() },
+      ]);
+      const current = await asAdmin(request(app).get(route)).expect(200);
+      expect(current.body.alerts).toBe(2);
+    } finally {
+      warm.mockRestore();
+      provider.mockRestore();
+      await Promise.all([
+        db.communityReports.deleteMany({}), db.playerIdentitySubmissions.deleteMany({}), db.playerChannels.deleteMany({}),
+      ]);
+    }
+  });
+
+  test("groups the three recorded event types by UTC date, fills gaps, and clamps the range", async () => {
+    const at = (value) => new Date(value);
+    const now = at("2026-10-20T12:00:00Z");
+    const event = (eventId, type, createdAt) => ({ eventId, type, createdAt: at(createdAt), readAt: null });
+    await db.adminEvents.insertMany([
+      event("too-old", "user_signup", "2026-10-13T23:59:59Z"),
+      event("boundary", "user_signup", "2026-10-14T00:00:00Z"),
+      event("click", "agent_download", "2026-10-15T23:59:59Z"),
+      event("new-pair", "agent_connected", "2026-10-16T00:00:00Z"),
+      event("current-day", "agent_connected", "2026-10-20T11:59:59Z"),
+      event("future", "agent_connected", "2026-10-20T12:00:01Z"),
+      event("support", "user_message", "2026-10-17T10:00:00Z"),
+    ]);
+    const { days } = await services.adminEvents.daily(3, now);
+    expect(days).toHaveLength(7);
+    expect(days[0]).toEqual({ date: "2026-10-14", user_signup: 1, agent_download: 0, agent_connected: 0 });
+    expect(days[1]).toEqual({ date: "2026-10-15", user_signup: 0, agent_download: 1, agent_connected: 0 });
+    expect(days[2]).toEqual({ date: "2026-10-16", user_signup: 0, agent_download: 0, agent_connected: 1 });
+    expect(days[3]).toEqual({ date: "2026-10-17", user_signup: 0, agent_download: 0, agent_connected: 0 });
+    expect(days[6]).toEqual({ date: "2026-10-20", user_signup: 0, agent_download: 0, agent_connected: 1 });
+    expect((await services.adminEvents.daily("bad", now)).days).toHaveLength(30);
+    expect((await services.adminEvents.daily(400, now)).days).toHaveLength(90);
+    const route = "/v1/admin/events/daily?days=7";
+    await request(app).get(route).set("Authorization", "Bearer user-token").expect(403);
+    expect((await asAdmin(request(app).get(route)).expect("Cache-Control", "private, no-store").expect(200)).body.days).toHaveLength(7);
+  });
+
+  test("retains indexed queue reads and serves a database-only storage summary", async () => {
+    const keys = async (collection) => (await collection.indexes()).map(({ key }) => Object.keys(key));
+    expect(await keys(db.communityReports)).toContainEqual(["resolvedAt", "createdAt"]);
+    expect(await keys(db.playerIdentitySubmissions)).toContainEqual(["status", "createdAt", "id"]);
+    expect(await keys(db.playerChannels)).toContainEqual(["pending", "removed"]);
+    expect(await keys(db.adminEvents)).toContainEqual(["type", "readAt", "report.status"]);
+    expect(await keys(db.adminEvents)).toContainEqual(["type", "createdAt", "eventId"]);
+    const full = jest.spyOn(services.admin, "storageStats");
+    try {
+      const result = await asAdmin(request(app).get("/v1/admin/storage-summary")).expect("Cache-Control", "private, no-store").expect(200);
+      expect(result.body).toEqual({ dataBytes: expect.any(Number), indexBytes: expect.any(Number), collectionCount: expect.any(Number) });
+      expect(full).not.toHaveBeenCalled();
+    } finally { full.mockRestore(); }
+  });
+});
+
 describe("admin notification events", () => {
   test("first-touch ensureFromClerk persists its signup before resolving", async () => {
     await services.users.ensureFromClerk("clerk_new_one");

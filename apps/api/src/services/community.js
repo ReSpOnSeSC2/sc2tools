@@ -1760,6 +1760,10 @@ class CommunityService {
     return { alreadyReported: false };
   }
 
+  countOpenReports() {
+    return this.db.communityReports.countDocuments({ resolvedAt: null }, { maxTimeMS: 5000 });
+  }
+
   /** @returns {Promise<{items: object[], total: number, capped: boolean}>} */
   async listReports() {
     const items = await this.db.communityReports
@@ -1778,7 +1782,7 @@ class CommunityService {
       }
     }
     await this._describeBuiltinReportTargets(items);
-    const total = await this.db.communityReports.countDocuments({ resolvedAt: null });
+    const total = await this.countOpenReports();
     return { items, total, capped: total > 100 };
   }
 

@@ -204,6 +204,8 @@ class InfrastructureUsageService {
 
     /** @type {Record<string, any> | null} */
     this._lastGood = null;
+    /** @type {"watch"|"upgrade"|null} */
+    this._lastAdminAdvisory = null;
     this._freshUntil = 0;
     this._retryAfter = 0;
     /** @type {Promise<Record<string, any>> | null} */
@@ -338,7 +340,7 @@ class InfrastructureUsageService {
           this.render ? "render_admin_unavailable" : "not_configured",
         ),
       };
-    return buildInfrastructureAdminSnapshot({
+    const snapshot = buildInfrastructureAdminSnapshot({
       asOf: this._now().toISOString(),
       cloudflare: {
         status: status.cloudflareAnalytics,
@@ -349,7 +351,13 @@ class InfrastructureUsageService {
       mongo: status.mongo,
       render: status.render,
     });
+    const level = snapshot.overallStatus;
+    this._lastAdminAdvisory = level === "watch" || level === "upgrade" ? level : null;
+    return snapshot;
   }
+
+  /** A cheap consumer can read the last operator snapshot without refreshing providers. */
+  cachedAdvisoryLevel() { return this._lastAdminAdvisory; }
 
   async _refreshWithFallback() {
     if (!this.config) throw unavailableError();
