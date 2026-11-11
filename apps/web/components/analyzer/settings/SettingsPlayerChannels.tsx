@@ -18,15 +18,20 @@ import { Input } from "@/components/ui/Input";
 import { Section } from "@/components/ui/Section";
 import { Select } from "@/components/ui/Select";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
+import { useSaveSource } from "./SettingsContext";
 
 const EMPTY_CHANNELS = { twitch: "", youtube: "" };
 
+/**
+ * Your Twitch/YouTube channels on Settings → Profile. A second save
+ * source on the Profile tab: the tab's one SaveBar saves the profile
+ * fields first, then these channels, and Discard resets both.
+ */
 export function SettingsPlayerChannels({
-  savedPulseIds, profileDirty, onDirtyChange,
+  savedPulseIds, profileDirty,
 }: {
   savedPulseIds: string[];
   profileDirty: boolean;
-  onDirtyChange: (dirty: boolean) => void;
 }) {
   const { getToken } = useAuth();
   const { data, error, isLoading, mutate } = useApi<MyPlayerChannelsResponse>("/v1/me/player-channels");
@@ -65,13 +70,15 @@ export function SettingsPlayerChannels({
   const multipleRecords = entries.length > 1;
   const canEdit = Boolean(data?.canConnect && selectedIdentities.length && !protectedEntries.length && !multipleRecords);
 
-  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
-  useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
+  const discard = () => { reset(); setSaveError(null); };
+  const { requestSave } = useSaveSource("profile", { label: "channels", dirty, save, reset: discard, order: 1 }, "player-channels");
 
-  async function save() {
-    if (saving || !canEdit || !dirty) return;
+  async function save(): Promise<boolean> {
+    if (!dirty) return true;
+    if (saving) return false;
+    if (!canEdit) { setSaveError("Select one identity you can edit, or discard these channel changes."); return false; }
     const validation = channelValidation(draft);
-    if (validation) { setSaveError(validation); return; }
+    if (validation) { setSaveError(validation); return false; }
     setSaving(true);
     setSaveError(null);
     setNotice(null);
@@ -85,8 +92,10 @@ export function SettingsPlayerChannels({
       setNotice(draft.twitch.trim() || draft.youtube.trim()
         ? "Channels submitted for admin review. Once approved, everyone can find them alongside your player identity."
         : "Your connected channels have been removed.");
+      return true;
     } catch (err) {
       setSaveError(directoryError(err));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -162,7 +171,7 @@ export function SettingsPlayerChannels({
                 ) : !data?.canConnect ? (
                   <p className="text-body text-text-muted">Your saved identities could not be resolved yet. Check your Pulse IDs and try again.</p>
                 ) : (
-                  <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+                  <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); requestSave(); }}>
                     {mixed ? <p className="text-caption text-text-muted">Your identities currently have different channels. Choose one identity to edit it, or enter channels below to update every selected identity.</p> : null}
                     <fieldset disabled={saving} className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
                       <Field label={<span className="inline-flex items-center gap-1.5"><Twitch className="h-4 w-4" aria-hidden />Twitch channel URL</span>} hint="Use your channel page. Leave blank to remove your Twitch link.">
@@ -172,11 +181,7 @@ export function SettingsPlayerChannels({
                         <Input type="url" autoComplete="url" value={draft.youtube} placeholder="https://www.youtube.com/@yourname" onChange={(event) => { setDraft((current) => ({ ...current, youtube: event.target.value })); setSaveError(null); setNotice(null); }} />
                       </Field>
                     </fieldset>
-                    <p className="text-caption text-text-muted">Only connect channels that belong to you. An administrator reviews new links and edits before publishing them. Changes apply to every identity on this channel record. Clear both fields to disconnect immediately.</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button type="submit" loading={saving && !disconnectTarget} disabled={!dirty || !canEdit || saving}>Save channels</Button>
-                      {dirty ? <Button variant="ghost" disabled={saving} onClick={() => { reset(); setSaveError(null); }}>Discard changes</Button> : null}
-                    </div>
+                    <p className="text-caption text-text-muted">Only connect channels that belong to you. An administrator reviews new links and edits before publishing them. Changes apply to every identity on this channel record. Clear both fields and press Save to disconnect. Save at the bottom of the page saves your profile and these channels together.</p>
                   </form>
                 )}
               </>

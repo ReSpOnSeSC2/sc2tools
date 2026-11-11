@@ -1,5 +1,6 @@
 "use client";
 
+import { formatNumber } from "@/lib/i18n/format";
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Card, Skeleton } from "@/components/ui/Card";
@@ -96,7 +97,7 @@ export function TargetsCard({ onDrill }: { onDrill: (drill: ReportDrill) => void
                 {LEAGUES.map((name, id) => <option key={name} value={id}>{name}</option>)}
               </Select>
             </label>
-            {bands ? <p className="text-caption text-text-muted">{league} {matchup}, {SOURCE_TEXT[bands.source]}{bands.mmr ? ` (${bands.mmr.toLocaleString()} MMR)` : ""}</p> : null}
+            {bands ? <p className="text-caption text-text-muted">{league} {matchup}, {SOURCE_TEXT[bands.source]}{bands.mmr ? ` (${formatNumber(bands.mmr)} MMR)` : ""}</p> : null}
           </div>
           {saveError ? <RequestError title="Couldn't save your league choice" error={saveError} /> : null}
           {!bands ? (

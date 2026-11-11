@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDate } from "@/lib/i18n/format";
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
@@ -81,7 +82,7 @@ function TargetCard({ summary, matchup, onSelectTarget, onGraded }: Parameters<t
         <p className="text-body font-medium text-text">{target?.name ?? "Unnamed target"}</p>
         <p className="text-caption text-text-muted">
           {target?.current
-            ? target.armedAt ? `Armed ${new Date(target.armedAt).toLocaleDateString()}. Games you play in ${matchup} from then on are graded against it.` : `Games you play in ${matchup} are graded against it.`
+            ? target.armedAt ? `Armed ${formatDate(new Date(target.armedAt))}. Games you play in ${matchup} from then on are graded against it.` : `Games you play in ${matchup} are graded against it.`
             : "No longer armed. Its graded games stay in your log."}
           {" "}{summary.sample.graded} graded{summary.sample.ungraded ? `, ${summary.sample.ungraded} without a build log` : ""}{summary.sample.capped ? ` (latest ${summary.sample.limit})` : ""}.
         </p>
@@ -136,7 +137,7 @@ function GradeTrend({ summary }: { summary: PracticeSummary }) {
           return (
             <circle key={point.row.gameId} cx={p.cx} cy={p.cy} r={4} aria-hidden
               className={point.row.via === "request" ? "fill-bg-surface stroke-accent" : "fill-accent stroke-bg-surface"} strokeWidth={2}>
-              <title>{`${new Date(point.row.date).toLocaleDateString()}: ${point.row.grade}, ${point.row.matched}/${point.row.total} steps, ${point.row.avgDrift}s average drift${point.row.via === "request" ? " (graded on request)" : ""}`}</title>
+              <title>{`${formatDate(new Date(point.row.date))}: ${point.row.grade}, ${point.row.matched}/${point.row.total} steps, ${point.row.avgDrift}s average drift${point.row.via === "request" ? " (graded on request)" : ""}`}</title>
             </circle>
           );
         })}

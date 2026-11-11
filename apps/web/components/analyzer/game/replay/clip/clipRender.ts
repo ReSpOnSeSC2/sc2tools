@@ -9,6 +9,7 @@
  * clip is made to be shared.
  */
 
+import { getServerFormatter } from "@/lib/i18n/format";
 import { statsAt, worldProjection, type MapPlayback } from "@/lib/mapReplay";
 import { statsHaveWorkers, workerCountAt } from "@/lib/mapReplayLosses";
 import { formatClock } from "@/lib/replayHud";
@@ -88,7 +89,7 @@ const FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 function sideLine(playback: MapPlayback, side: "me" | "opp", t: number): string {
   const stats = statsAt(playback.stats[side], t);
   const workers = statsHaveWorkers(playback.stats[side]) ? stats.workers : workerCountAt(playback.units, side, t);
-  return `Supply ${Math.round(stats.supply)} · Workers ${Math.round(workers)} · Army ${Math.round(stats.army).toLocaleString("en-US")}`;
+  return `Supply ${Math.round(stats.supply)} · Workers ${Math.round(workers)} · Army ${getServerFormatter().number(Math.round(stats.army))}`;
 }
 
 function drawScoreboard(ctx: CanvasRenderingContext2D, options: ClipFrameOptions, t: number, width: number, scale: number): void {

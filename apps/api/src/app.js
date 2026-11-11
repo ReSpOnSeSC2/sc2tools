@@ -198,6 +198,8 @@ const { buildPulseResolver } = require("./services/pulseResolver");
 const { PulseDirectoryService } = require("./services/pulseDirectory");
 const { PlayerChannelsService } = require("./services/playerChannels");
 const { buildPlayerChannelsRouter } = require("./routes/playerChannels");
+const { SupporterWallService } = require("./services/supporterWall");
+const { buildSupporterWallRouter } = require("./routes/supporterWall");
 const { PlayerIdentitiesService } = require("./services/playerIdentities");
 const { buildPlayerIdentitiesRouter } = require("./routes/playerIdentities");
 const { SupportMessagesService } = require("./services/supportMessages");
@@ -1082,7 +1084,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     invalidatePrivateGameCaches(userId); community.invalidateForUser(userId);
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
-  return withBuildOrderExport({
+  return withOwnerDataServices({
     gameStatsWrites: games.gameStatsWrites,
     userRevision, userCache, sessionPolicy, sessionHistory, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, chatStats, chatCommands,
     privateSearch,
@@ -1188,8 +1190,12 @@ function makeServices(deps, clerk, adminClerkIds) {
  * @param {T} services @param {AppDeps} deps
  * @param {import('./services/gameDetails').GameDetailsService} gameDetails
  */
-function withBuildOrderExport(services, deps, gameDetails) {
-  return { ...services, buildOrderExport: new BuildOrderExportService(deps.db, { gameDetails, pepper: deps.config.serverPepper }) };
+function withOwnerDataServices(services, deps, gameDetails) {
+  return {
+    ...services,
+    buildOrderExport: new BuildOrderExportService(deps.db, { gameDetails, pepper: deps.config.serverPepper }),
+    supporterWall: new SupporterWallService(deps.db),
+  };
 }
 
 /**
@@ -1585,12 +1591,8 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   const onAdminGranted = (clerkUserId) => {
     if (clerkUserId) adminIds.add(clerkUserId);
   };
+  mountPlayerDirectoryRoutes(app, services, auth, isAdmin);
   // Coaching Locker — quiet, role-gated; see routes/coaching.js.
-  app.use(
-    SERVICE.ROUTE_PREFIX,
-    buildPlayerChannelsRouter({ playerChannels: services.playerChannels, auth, isAdmin }),
-  );
-  app.use(SERVICE.ROUTE_PREFIX, buildPlayerIdentitiesRouter({ playerIdentities: services.playerIdentities, auth, isAdmin }));
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildCoachingRouter({
@@ -1979,3 +1981,15 @@ module.exports = {
   // Focused middleware tests only; production callers use buildApp.
   _internals: { isLargeAuthenticatedJson, registerRuntimeCapacityProviders },
 };
+
+/**
+ * @param {import("express").Express} app
+ * @param {Pick<ReturnType<typeof makeServices>, "playerChannels" | "supporterWall" | "playerIdentities">} services
+ * @param {import("express").RequestHandler} auth
+ * @param {(req: import("express").Request) => boolean} isAdmin
+ */
+function mountPlayerDirectoryRoutes(app, services, auth, isAdmin) {
+  app.use(SERVICE.ROUTE_PREFIX, buildPlayerChannelsRouter({ playerChannels: services.playerChannels, auth, isAdmin }));
+  app.use(SERVICE.ROUTE_PREFIX, buildSupporterWallRouter({ supporterWall: services.supporterWall, auth, isAdmin }));
+  app.use(SERVICE.ROUTE_PREFIX, buildPlayerIdentitiesRouter({ playerIdentities: services.playerIdentities, auth, isAdmin }));
+}

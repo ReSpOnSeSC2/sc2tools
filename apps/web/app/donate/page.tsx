@@ -11,10 +11,18 @@ import {
   ShieldCheck,
   Wallet,
   HelpCircle,
+  Repeat,
   Tv,
 } from "lucide-react";
 import { CostBar } from "@/components/donate/CostBar";
 import { CopyPaypalEmail } from "@/components/donate/CopyPaypalEmail";
+import { CoverageMeter } from "@/components/donate/CoverageMeter";
+import { SupporterWall } from "@/components/donate/SupporterWall";
+import { recurringDonationUrl, type Coverage } from "@/lib/donationCoverage";
+import { getDonationCoverage } from "@/lib/donationCoverageServer";
+import { serializeJsonLd } from "@/lib/reviewJsonLd";
+import { getSupporterWall } from "@/lib/supporterWallServer";
+import { SUPPORTER_WALL_SETTINGS_HREF } from "@/lib/supporterWall";
 import type { LucideIcon } from "lucide-react";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { Badge, Card, GlowHalo, Section } from "@/components/ui";
@@ -36,7 +44,7 @@ export const metadata = pageMetadata({
   canonical: "/donate",
   title: "Donate",
   description:
-    "SC2 Tools is free for everyone. If it's helping your ladder grind, you can chip in via Streamlabs or PayPal.",
+    "SC2 Tools is free for everyone. If it's helping your ladder grind, you can chip in to cover the site’s hosting costs.",
 });
 
 const STREAMLABS_URL = "https://streamlabs.com/responsesc2/tip";
@@ -86,31 +94,44 @@ const CHANNELS: ReadonlyArray<DonationChannel> = [
   },
 ];
 
+const CHANNEL_ICONS: Record<string, LucideIcon> = { streamlabs: Tv, paypal: Wallet, monthly: Repeat };
+
 export default async function DonatePage() {
-  const infrastructureCosts = await getInfrastructureCosts();
+  const [infrastructureCosts, wall] = await Promise.all([getInfrastructureCosts(), getSupporterWall()]);
+  const summary = infrastructureCosts ? monthlyCostSummary(infrastructureCosts) : null;
+  const coverage = await getDonationCoverage(summary?.totalUsd ?? FIXED_MONTHLY_FALLBACK_USD);
+  const monthlyUrl = recurringDonationUrl(process.env.DONATIONS_RECURRING_URL);
+  const channels = monthlyUrl ? [...CHANNELS, {
+    id: "monthly", name: "Monthly support", href: monthlyUrl,
+    blurb: "Set up a recurring contribution through the linked provider.",
+    detail: "Manage your schedule or cancel from your account with the provider.",
+    cta: "Give monthly",
+  }] : CHANNELS;
   return (
     <div className="space-y-16 pb-4 md:space-y-24 md:pb-8">
-      <HeroBlock costs={infrastructureCosts} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(faqJsonLd(Boolean(monthlyUrl))) }} />
+      <HeroBlock costs={infrastructureCosts} coverage={coverage} />
       <Section
-        title="Two ways to chip in"
-        description="Either channel goes to the same person. Pick whichever is easier."
+        title="Ways to chip in"
+        description="Every option goes to the same person. Pick whichever is easier."
         className="mx-auto max-w-5xl"
       >
-        <ul className="grid gap-4 md:grid-cols-2">
-          {CHANNELS.map((c) => (
+        <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {channels.map((c) => (
             <li key={c.id} className="h-full">
               <DonationCard channel={c} />
             </li>
           ))}
         </ul>
       </Section>
+      <SupporterWall wall={wall} />
       <CostBreakdown costs={infrastructureCosts} />
-      <FaqBlock />
+      <FaqBlock recurring={Boolean(monthlyUrl)} />
     </div>
   );
 }
 
-function HeroBlock({ costs }: { costs: InfrastructureCosts | null }) {
+function HeroBlock({ costs, coverage }: { costs: InfrastructureCosts | null; coverage: Coverage | null }) {
   const summary = costs ? monthlyCostSummary(costs) : null;
   return (
     <section className="relative mx-auto max-w-3xl text-center">
@@ -132,6 +153,11 @@ function HeroBlock({ costs }: { costs: InfrastructureCosts | null }) {
       <p className="mx-auto mt-4 max-w-2xl text-body-lg text-text-muted">
         Donations pay for the servers, database and storage.
       </p>
+      {coverage ? (
+        <div className="mx-auto mt-6 max-w-xl rounded-xl border-2 border-line bg-bg-surface p-4 text-left shadow-hard">
+          <CoverageMeter coverage={coverage} />
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -145,11 +171,7 @@ function DonationCard({ channel }: { channel: DonationChannel }) {
             aria-hidden
             className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
           >
-            {channel.id === "streamlabs" ? (
-              <Tv className="h-5 w-5" />
-            ) : (
-              <Wallet className="h-5 w-5" />
-            )}
+            <ChannelIcon id={channel.id} />
           </span>
           <div>
             <h3 className="text-h4 font-semibold text-text">{channel.name}</h3>
@@ -580,26 +602,62 @@ function CostRow({ line }: { line: CostLine }) {
   );
 }
 
-function FaqBlock() {
+function ChannelIcon({ id }: { id: string }) {
+  const Icon = CHANNEL_ICONS[id] ?? Wallet;
+  return <Icon className="h-5 w-5" />;
+}
+
+/** One source for the visible FAQ and its FAQPage structured data. */
+const DONATE_FAQ: ReadonlyArray<{ q: string; a: string }> = [
+  {
+    q: "Do donors get extra features?",
+    a: "No. Every feature is free for every player. Donations are voluntary and don't unlock anything — they keep the API and the cloud database paid for.",
+  },
+  {
+    q: "Are donations refundable?",
+    a: "They're processed by Streamlabs / PayPal as personal payments. If something went wrong, ping me on the relevant channel and I'll sort it out.",
+  },
+  {
+    q: "Can I give monthly?",
+    a: "Use the Monthly support link to manage a recurring contribution through the linked provider. Every SC2 Tools feature is free for all players.",
+  },
+  {
+    q: "How does the meter work?",
+    a: "The meter compares what donors gave in the month shown with the site's monthly running cost from the cost breakdown below. Totals are entered by hand from Streamlabs and PayPal receipts, so they can lag a few days, and no payment provider is connected to the site. The meter hides itself if it hasn't been updated for 45 days.",
+  },
+  {
+    q: "How do I appear on the supporter wall?",
+    a: "Sign in, open Settings → Profile → Supporter wall, choose a display name and an optional short message, and agree to be listed. Entries appear after a quick review. Giving never adds you automatically, amounts are never shown, and you can remove yourself at any time.",
+  },
+];
+
+function donationFaq(recurring: boolean) {
+  return recurring ? DONATE_FAQ : DONATE_FAQ.filter(({ q }) => q !== "Can I give monthly?");
+}
+
+function faqJsonLd(recurring: boolean) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: donationFaq(recurring).map(({ q, a }) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
+  };
+}
+
+function FaqBlock({ recurring }: { recurring: boolean }) {
   return (
     <section className="mx-auto max-w-3xl space-y-5">
       <header className="text-center">
         <h2 className="text-h2 font-semibold">Frequently asked</h2>
       </header>
       <ul className="space-y-3">
-        <FaqItem
-          q="Do donors get extra features?"
-          a="No. Every feature is free for every player. Donations are voluntary and don't unlock anything — they keep the API and the cloud database paid for."
-        />
-        <FaqItem
-          q="Are donations refundable?"
-          a="They're processed by Streamlabs / PayPal as personal payments. If something went wrong, ping me on the relevant channel and I'll sort it out."
-        />
-        <FaqItem
-          q="Is there a recurring tier?"
-          a="Not yet. One-time tips only. If a small recurring tier would be useful let me know on GitHub."
-        />
+        {donationFaq(recurring).map((item) => <FaqItem key={item.q} q={item.q} a={item.a} />)}
       </ul>
+      <p className="text-center text-caption text-text-muted">
+        Want to be listed?{" "}
+        <Link href={SUPPORTER_WALL_SETTINGS_HREF} className="font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          Add yourself to the supporter wall
+        </Link>
+      </p>
       <p className="pt-4 text-center text-caption text-text-muted">
         Prefer to help with code or bug reports?{" "}
         <Link

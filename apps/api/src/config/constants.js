@@ -120,6 +120,9 @@ const COLLECTIONS = Object.freeze({
   // shared by everyone. See ``services/pulseCharacterLinks.js``.
   PULSE_CHARACTER_LINKS: "pulse_character_links",
   PLAYER_CHANNELS: "player_channels",
+  // Opt-in, admin-approved public supporter wall on /donate.
+  SUPPORTERS: "supporters",
+  DONATION_MONTHS: "donation_months",
   PLAYER_IDENTITIES: "player_identities",
   PLAYER_IDENTITY_SUBMISSIONS: "player_identity_submissions",
   PLAYER_IDENTITY_DIRECTORY: "player_identity_directory",

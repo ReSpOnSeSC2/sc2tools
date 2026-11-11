@@ -3,6 +3,7 @@
 import { ChevronRight, TrendingDown, TrendingUp } from "lucide-react";
 import { Card, EmptyState } from "@/components/ui/Card";
 import type { LeakRow, ReportDrill } from "./types";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * Leak ledger — every leak category the agent has flagged across the
@@ -45,7 +46,7 @@ function TrendCell({ row }: { row: LeakRow }) {
     >
       <Icon className="h-3.5 w-3.5" aria-hidden />
       {delta > 0 ? "+" : ""}
-      {Math.round(delta).toLocaleString()}
+      {formatNumber(Math.round(delta))}
     </span>
   );
 }
@@ -73,7 +74,7 @@ export function LeakLedgerCard({
   return (
     <Card title="Leak ledger" padded={false}>
       <p className="px-4 pt-3 text-caption text-text-dim sm:px-5">
-        Each leak priced across {gamesScored.toLocaleString()} scored games ·
+        Each leak priced across {formatNumber(gamesScored)} scored games ·
         click a row for the games behind it.
       </p>
       <div className="overflow-x-auto p-2 sm:p-3">
@@ -106,9 +107,9 @@ export function LeakLedgerCard({
                   onClick={() =>
                     onDrill({
                       title: `Games with “${row.name}”`,
-                      description: `${row.games.toLocaleString()} game${
+                      description: `${formatNumber(row.games)} game${
                         row.games === 1 ? "" : "s"
-                      } · ~${row.mineralsPerGame.toLocaleString()} minerals lost per game`,
+                      } · ~${formatNumber(row.mineralsPerGame)} minerals lost per game`,
                       params: { leak: row.name },
                     })
                   }
@@ -118,14 +119,14 @@ export function LeakLedgerCard({
                     {row.name}
                   </td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-text-muted">
-                    {row.games.toLocaleString()}
+                    {formatNumber(row.games)}
                     <span className="text-text-dim"> ({pct(row.share)})</span>
                   </td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-text">
-                    ~{row.mineralsPerGame.toLocaleString()}
+                    ~{formatNumber(row.mineralsPerGame)}
                   </td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-text-muted">
-                    ~{row.totalMinerals.toLocaleString()}
+                    ~{formatNumber(row.totalMinerals)}
                   </td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-text-muted">
                     {pct(row.winRateWith)}

@@ -30,6 +30,7 @@ import type {
   AdminEventSignupPayload,
   AdminEventUserMessagePayload,
 } from "./adminTypes";
+import { formatDateTime } from "@/lib/i18n/format";
 
 /**
  * Single notification row. Used by both the dashboard's "Recent
@@ -122,7 +123,7 @@ export function AdminEventRow({
         title={<span className="[overflow-wrap:anywhere]">{meta.title}</span>}>
         <div className="space-y-4">
           {meta.subtitle ? <p className="text-caption text-text-muted [overflow-wrap:anywhere]">{meta.subtitle}</p> : null}
-          <time className="block text-caption text-text-dim" dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString()}</time>
+          <time className="block text-caption text-text-dim" dateTime={event.createdAt}>{formatDateTime(new Date(event.createdAt))}</time>
           {report?.type ? <ReportTypeBadge type={report.type} /> : null}
           {meta.body ? <p className="whitespace-pre-wrap text-body [overflow-wrap:anywhere]">{meta.body}</p> : null}
           {report?.context ? <ReportContextLines payload={report} /> : null}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Bell, CalendarClock, Download, MessageSquareText, ThumbsUp, MonitorUp } from "lucide-react";
 import { fmtAgo, notificationFocus, type NotificationRow } from "./notificationModel";
+import { formatDateTime } from "@/lib/i18n/format";
 
 export function NotificationItem({ row, isNew = false, onOpen }: { row: NotificationRow; isNew?: boolean; onOpen?: () => void }) {
   const Icon = row.kind.startsWith("coaching.") ? CalendarClock : row.kind === "import.done" ? Download
@@ -14,7 +15,7 @@ export function NotificationItem({ row, isNew = false, onOpen }: { row: Notifica
     <span className="min-w-0 flex-1"><span className="block break-words text-caption font-semibold text-text">{row.title}
       {isNew ? <span className="ml-2 inline-flex items-center gap-1 text-micro text-accent-cyan"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent-cyan" />New</span> : null}</span>
       {row.body ? <span className="block break-words text-micro text-text-muted">{row.body}</span> : null}
-      <time className="block text-micro text-text-dim" dateTime={row.createdAt} title={new Date(row.createdAt).toLocaleString()}>{fmtAgo(row.createdAt)}</time>
+      <time className="block text-micro text-text-dim" dateTime={row.createdAt} title={formatDateTime(new Date(row.createdAt))}>{fmtAgo(row.createdAt)}</time>
     </span>
   </Link>;
 }

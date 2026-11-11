@@ -5,6 +5,7 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { scoreToneTextClass } from "@/lib/macro";
 import { wrColor } from "@/lib/format";
 import type { MacroReportData, ReportDrill, SegmentRow } from "./types";
+import { formatNumber } from "@/lib/i18n/format";
 
 /**
  * "Where macro collapses" — average macro score and win rate sliced by
@@ -124,7 +125,7 @@ export function SegmentsCard({
                 </div>
                 <div className="flex shrink-0 items-baseline gap-4 tabular-nums">
                   <span className="text-caption text-text-dim">
-                    {row.games.toLocaleString()} games
+                    {formatNumber(row.games)} games
                   </span>
                   <span
                     className="w-12 text-right text-sm font-semibold"

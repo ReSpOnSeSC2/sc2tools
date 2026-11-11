@@ -8,6 +8,7 @@ import { clientTimezone } from "@/lib/timeseries";
 import { ratingSparkline, type MatchupRatingSeries } from "@/lib/strengthAdjusted";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { TrendsRequestError } from "./TrendsRequestError";
+import { formatDate, formatNumber } from "@/lib/i18n/format";
 
 type Response = { ratingSeries?: MatchupRatingSeries[] };
 
@@ -36,16 +37,16 @@ function RatingPanel({ row }: { row: MatchupRatingSeries }) {
   return <section aria-label={`${row.matchup} performance rating`} className="min-w-0 rounded-lg border border-border bg-bg-elevated/30 p-3">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <h4 className="font-semibold text-text">{row.matchup}</h4>
-      <div className="text-right tabular-nums"><strong className="text-text">{row.perfRating == null ? "—" : Math.round(row.perfRating).toLocaleString()}</strong><span className="ml-1 text-micro text-text-muted">{row.sampleGames}-game estimate</span></div>
+      <div className="text-right tabular-nums"><strong className="text-text">{row.perfRating == null ? "—" : formatNumber(Math.round(row.perfRating))}</strong><span className="ml-1 text-micro text-text-muted">{row.sampleGames}-game estimate</span></div>
     </div>
     <div className="mt-1 text-micro text-text-muted">{row.ratedGames ?? 0}/{row.sampleGames} paired replay ratings · {row.excludedNoMmr ?? 0} missing{(row.ratedGames ?? 0) < 10 ? " · thin sample" : ""}</div>
     <RatingPlot row={row} plot={plot} index={index} onChoose={setChosen} describedBy={`${id}-help ${id}-selection`} />
     {selected && <div className="mt-3 space-y-1">
       <label className="text-micro text-text-muted" htmlFor={`${id}-window`}>Inspect window</label>
-      <select id={`${id}-window`} aria-label={label} aria-describedby={`${id}-help ${id}-selection`} className="min-h-11 w-full rounded border border-border bg-bg-surface px-2 text-caption text-text" value={index} onChange={event => setChosen(Number(event.target.value))}>{row.points.map((point, i) => <option key={i} value={i}>Game {i + 1} · {new Date(point.date).toLocaleDateString()}</option>)}</select>
+      <select id={`${id}-window`} aria-label={label} aria-describedby={`${id}-help ${id}-selection`} className="min-h-11 w-full rounded border border-border bg-bg-surface px-2 text-caption text-text" value={index} onChange={event => setChosen(Number(event.target.value))}>{row.points.map((point, i) => <option key={i} value={i}>Game {i + 1} · {formatDate(new Date(point.date))}</option>)}</select>
       <div id={`${id}-selection`} role="status" aria-live="polite" aria-atomic="true" className="space-y-1 tabular-nums">
-        <p className="text-caption font-semibold text-text">Games {Math.max(1, index - selected.games + 2)}–{index + 1} · ending {new Date(selected.date).toLocaleDateString()}</p>
-        <p className="text-caption text-text">{selected.perfRating == null ? "No finite rating" : `${Math.round(selected.perfRating).toLocaleString()} performance rating`} · {selected.ratedGames}/{selected.games} rated · {selected.excludedNoMmr} missing</p>
+        <p className="text-caption font-semibold text-text">Games {Math.max(1, index - selected.games + 2)}–{index + 1} · ending {formatDate(new Date(selected.date))}</p>
+        <p className="text-caption text-text">{selected.perfRating == null ? "No finite rating" : `${formatNumber(Math.round(selected.perfRating))} performance rating`} · {selected.ratedGames}/{selected.games} rated · {selected.excludedNoMmr} missing</p>
       </div>
       <p id={`${id}-help`} className="text-micro text-text-muted">{plot.markers.length ? "Tap or click the chart, use its arrow keys, or choose a window to inspect it." : "Choose a window to inspect it."} The {row.sampleGames}-game estimate above stays the same.</p>
     </div>}
@@ -74,9 +75,9 @@ function RatingPlot({ row, plot, index, onChoose, describedBy }: {
       <p className="text-micro text-text-muted">Performance rating</p>
       <div className="mt-1 grid min-w-0 grid-cols-[3.5rem_minmax(0,1fr)] gap-x-2">
         <div aria-hidden="true" className="relative h-36 text-micro tabular-nums text-text-muted">
-          {plot.ticks.map(tick => <span key={tick.y} data-rating-tick={tick.value} className="absolute right-0 -translate-y-1/2" style={{ top: `${tick.y / 60 * 100}%` }}>{Math.round(tick.value).toLocaleString()}</span>)}
+          {plot.ticks.map(tick => <span key={tick.y} data-rating-tick={tick.value} className="absolute right-0 -translate-y-1/2" style={{ top: `${tick.y / 60 * 100}%` }}>{formatNumber(Math.round(tick.value))}</span>)}
         </div>
-        <div role="slider" tabIndex={0} aria-label={`${row.matchup} rating chart, select a game window`} aria-orientation="horizontal" aria-valuemin={1} aria-valuemax={row.points.length} aria-valuenow={index + 1} aria-valuetext={`Game ${index + 1} of ${row.points.length}${selected ? `, ${new Date(selected.date).toLocaleDateString()}, ${selected.perfRating == null ? "no finite rating" : `${Math.round(selected.perfRating).toLocaleString()} performance rating`}` : ""}`} aria-describedby={describedBy} onClick={selectOnChart} onKeyDown={selectWithKeyboard} className="relative h-36 min-w-0 cursor-pointer rounded text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <div role="slider" tabIndex={0} aria-label={`${row.matchup} rating chart, select a game window`} aria-orientation="horizontal" aria-valuemin={1} aria-valuemax={row.points.length} aria-valuenow={index + 1} aria-valuetext={`Game ${index + 1} of ${row.points.length}${selected ? `, ${formatDate(new Date(selected.date))}, ${selected.perfRating == null ? "no finite rating" : `${formatNumber(Math.round(selected.perfRating))} performance rating`}` : ""}`} aria-describedby={describedBy} onClick={selectOnChart} onKeyDown={selectWithKeyboard} className="relative h-36 min-w-0 cursor-pointer rounded text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           <svg viewBox="0 0 240 60" preserveAspectRatio="none" className="pointer-events-none absolute h-full w-full" aria-hidden="true" focusable="false">
             {plot.ticks.map(tick => <line key={tick.y} x1="5" x2="235" y1={tick.y} y2={tick.y} className="text-border" stroke="currentColor" vectorEffect="non-scaling-stroke" />)}
             <line data-rating-cursor={index} x1={cursorX} x2={cursorX} y1="4" y2="56" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />

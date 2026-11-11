@@ -35,6 +35,7 @@ import {
   type AdminResource,
   type GuideSelection,
 } from "./guidesAdminShared";
+import { formatNumber } from "@/lib/i18n/format";
 
 const HEADING_ID = "guide-videos-heading";
 const LIST_HEADING_ID = "guide-videos-list-heading";
@@ -166,7 +167,7 @@ function ChannelVideoList({
 }) {
   return (
     <Card>
-      <h3 id={LIST_HEADING_ID} className="text-body font-semibold text-text">Channel videos ({items.length.toLocaleString()})</h3>
+      <h3 id={LIST_HEADING_ID} className="text-body font-semibold text-text">Channel videos ({formatNumber(items.length)})</h3>
       {items.length === 0 ? (
         <p className="mt-2 text-caption text-text-dim">No videos stored yet. Sync the channel or add one by URL.</p>
       ) : (

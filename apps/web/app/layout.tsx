@@ -5,6 +5,7 @@ import { AppShell } from "@/app/AppShell";
 import { siteVerification } from "@/lib/siteVerification";
 import { SITE_TITLE_TEMPLATE } from "@/lib/siteTitle";
 import { NO_FLASH_THEME_SCRIPT, THEME_COLORS } from "@/lib/theme";
+import { NO_FLASH_APPEARANCE_SCRIPT } from "@/lib/appearance";
 import { ThemeSync } from "@/components/ui/ThemeSync";
 import "./globals.css";
 
@@ -142,7 +143,7 @@ export default function RootLayout({
       <head>
         <script
           // Synchronous theme bootstrap — must run before paint.
-          dangerouslySetInnerHTML={{ __html: NO_FLASH_THEME_SCRIPT + RAIL_BOOTSTRAP }}
+          dangerouslySetInnerHTML={{ __html: NO_FLASH_THEME_SCRIPT + NO_FLASH_APPEARANCE_SCRIPT + RAIL_BOOTSTRAP }}
         />
       </head>
       <body className="flex min-h-dvh flex-col overflow-x-clip">

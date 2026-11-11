@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDate, formatDateTime, formatTime } from "@/lib/i18n/format";
 import { useApi } from "@/lib/clientApi";
 import { plural, record, signed, streamDiscordSummary, type NamedRecord, type StreamReport } from "@/lib/reports";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -18,9 +19,9 @@ const ENDED = { manual: "You ended this stream in the Dock.", idle: "Closed afte
 export function StreamReportView({ id }: { id: string }) {
   const query = useApi<StreamReport>(`/v1/reports/streams/${encodeURIComponent(id)}`);
   const report = query.data;
-  const dateLabel = report ? new Date(report.startAt).toLocaleDateString(undefined, { dateStyle: "medium" }) : "";
+  const dateLabel = report ? formatDate(new Date(report.startAt), { dateStyle: "medium" }) : "";
   return <div className="space-y-5">
-    <PageHeader title="Stream report" description={report ? `${new Date(report.startAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} to ${new Date(report.endAt).toLocaleTimeString(undefined, { timeStyle: "short" })}` : "One stream in numbers."}
+    <PageHeader title="Stream report" description={report ? `${formatDateTime(new Date(report.startAt), { dateStyle: "medium", timeStyle: "short" })} to ${formatTime(new Date(report.endAt), { timeStyle: "short" })}` : "One stream in numbers."}
       actions={<LazyHelpLink slug="stream-reports" />} />
     {query.error && !report ? <RequestError error={query.error} onRetry={() => query.mutate()} /> : !report ? <Skeleton rows={6} /> : <>
       <div className="flex flex-wrap gap-2">

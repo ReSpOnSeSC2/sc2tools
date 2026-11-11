@@ -51,6 +51,7 @@ import type { PracticeSource } from "@/lib/practiceAssignment";
 import { measuredPlanHeldRate, PlanHeldBadge } from "./PlanHeldBadge";
 import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 import type { KebabExtra } from "./library/useBuildLibraryTools";
+import { formatDateTime } from "@/lib/i18n/format";
 
 export interface BuildCardProps {
   build: DecoratedBuild;
@@ -297,7 +298,7 @@ function BuildStatsRow({
       {!statsPending && !statsUnavailable && build.perspective !== "opponent" && measuredPlanHeldRate(stats?.planHeldRate) ? <dl><dt className="sr-only">Plan held</dt><dd><PlanHeldBadge rate={stats?.planHeldRate} /></dd></dl> : null}
       <div className="text-right">
         {latest ? (
-          <div title={new Date(latest).toLocaleString()} className="mt-1 text-micro text-text-dim">
+          <div title={formatDateTime(new Date(latest))} className="mt-1 text-micro text-text-dim">
             {played ? "Played" : "Edited"} {fmtAgo(latest)}
           </div>
         ) : null}

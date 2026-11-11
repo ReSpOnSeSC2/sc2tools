@@ -19,6 +19,7 @@ import type {
   PublicProfileSignatureBuild,
   PublicReviewerSection,
 } from "./types";
+import { formatNumber } from "@/lib/i18n/format";
 
 export interface PublicProfileProps {
   profile: PublicPlayerProfile;
@@ -68,7 +69,7 @@ export function PublicProfile({ profile, showHero = true, showReviewer = true }:
       {showHero ? <PlayerProfileHero profile={profile} /> : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Games" value={games.toLocaleString()} />
+        <StatCard label="Games" value={formatNumber(games)} />
         <StatCard
           label="Record"
           value={

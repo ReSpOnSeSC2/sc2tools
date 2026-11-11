@@ -20,6 +20,15 @@ test("local useConfirm result, parameters, imports and lexical shadowing stay va
   assert.equal(rules(`function nested() { var prompt = action; prompt(); } prompt();`).length, 1);
 });
 
+test("bare toLocale* calls are banned outside lib/i18n, including optional and chained calls", () => {
+  const source = `const a = games.toLocaleString(); const b = new Date(iso).toLocaleDateString(undefined, { month: 'short' });
+    const c = row?.at?.toLocaleTimeString(); const d = (x + y).toLocaleString('en-US');`;
+  assert.equal(rules(source).filter((rule) => rule === "bare-tolocale").length, 4);
+  assert.deepEqual(rules(source, "lib/i18n/format.ts"), []);
+  // Shared formatters, prose and unrelated members stay valid.
+  assert.deepEqual(rules(`formatNumber(games); formatDate(iso, { month: 'short' }); const note = "use toLocaleString()"; value.toString();`), []);
+});
+
 test("comments and prose mentioning native dialogs are not calls", () => {
   assert.deepEqual(rules(`// window.confirm('x')
     const documentation = "Use confirm('x') in this example";`), []);

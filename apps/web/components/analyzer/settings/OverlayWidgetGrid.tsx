@@ -7,7 +7,9 @@ import { useSearchParams } from "next/navigation";
 import { WIDGET_GUIDES, WIDGET_GROUPS } from "@/lib/streamStudioLearn";
 import { type OverlayTheme } from "@/lib/overlayTheme";
 import { type GhostBuildConfig } from "@/lib/ghostBuild";
-import { appendGhostVoiceToUrl, GHOST_VOICE_STORAGE_KEY } from "@/lib/ghostVoice";
+import { appendGhostVoiceToUrl } from "@/lib/ghostVoice";
+import { InstantBadge } from "@/components/ui/InstantBadge";
+import { useOverlayFlags } from "./overlayFlags";
 import { Toggle } from "@/components/ui/Toggle";
 import { Badge } from "@/components/ui/Badge";
 import { InfoTip } from "@/components/ui/InfoTip";
@@ -34,12 +36,12 @@ export function WidgetList({ token, origin, theme, ghostConfig, busy, onToggleWi
   onToggleWidget: (widget: string, enabled: boolean) => void; onTestWidget: (widget: string) => void; testingWidget: string | null;
 }) {
   void theme;
-  const [search, setSearch] = useState(""), [enabledOnly, setEnabledOnly] = useState(false), [ghostVoice, setGhostVoice] = useState(false);
+  const [search, setSearch] = useState(""), [enabledOnly, setEnabledOnly] = useState(false);
+  const { ghostVoice, setGhostVoice, busy: flagsBusy } = useOverlayFlags();
   const [highlight, setHighlight] = useState<string | null>(null), host = useRef<HTMLDivElement>(null);
   const requested = useSearchParams().get("widget");
   const obs = useObsAddSource();
   const enabled = useMemo(() => new Set(token.enabledWidgets ?? WIDGETS.map(widget => widget.id)), [token.enabledWidgets]);
-  useEffect(() => { try { setGhostVoice(localStorage.getItem(GHOST_VOICE_STORAGE_KEY) === "1"); } catch { /* Optional device preference. */ } }, []);
   useEffect(() => {
     if (!requested || !WIDGETS.some(widget => widget.id === requested)) return;
     setSearch(""); setEnabledOnly(false); setHighlight(requested);
@@ -73,10 +75,10 @@ export function WidgetList({ token, origin, theme, ghostConfig, busy, onToggleWi
         const { width, height } = guide.recommendedSize, dropUrl = obsWidgetDropUrl(url, guide.name, width, height);
         return <article key={guide.id} data-widget-id={guide.id} className={`min-w-0 rounded-xl border bg-bg-surface p-3 ${highlight === guide.id ? "border-accent ring-2 ring-accent" : "border-border"}`}>
           <Image src={`/images/widget-examples/${guide.id}.webp`} alt={`${guide.name} illustrative example`} width={1400} height={900} sizes="(min-width:1280px) 40vw, 85vw" className="mb-3 aspect-[14/9] w-full rounded-lg object-cover" />
-          <div className="flex flex-wrap items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-1"><h4 className="text-body font-semibold">{guide.name}</h4>{guide.id === "best-answer" ? <InfoTip termId="best-answer" label={guide.name} /> : guide.id === "session" ? <InfoTip termId="overlay-session" label={guide.name} /> : null}</div>{metadata.urlArmed ? <Badge variant="cyan">Practice enabled</Badge> : <Toggle checked={isOn} disabled={busy} onChange={on => onToggleWidget(guide.id, on)} label={`Enable ${guide.name}`} />}</div>
+          <div className="flex flex-wrap items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-1"><h4 className="text-body font-semibold">{guide.name}</h4>{guide.id === "best-answer" ? <InfoTip termId="best-answer" label={guide.name} /> : guide.id === "session" ? <InfoTip termId="overlay-session" label={guide.name} /> : null}</div>{metadata.urlArmed ? <Badge variant="cyan">Practice enabled</Badge> : <span className="inline-flex items-center gap-2"><InstantBadge /><Toggle checked={isOn} disabled={busy} onChange={on => onToggleWidget(guide.id, on)} label={`Enable ${guide.name}`} /></span>}</div>
           <p className="mt-2 break-words text-caption text-text-muted">{guide.summary}</p><div className="my-2 flex flex-wrap items-center justify-between gap-2"><p className="font-mono text-caption tabular-nums">Recommended {width} × {height}</p>{onDurationChange ? <OverlayWidgetDisplay id={guide.id} name={guide.name} durationSec={profile?.widgetOptions[guide.id]?.durationSec} disabled={profileSaving} onChange={seconds => onDurationChange(guide.id, seconds)} /> : null}</div>
           <WidgetPresenceBadge widget={guide.id} enabled={isOn} />
-          {guide.id === "ghost-build" ? <div className="my-3 space-y-2 text-caption text-text-muted"><p>{Object.keys(ghostConfig.slots).length}/9 matchups assigned. Account assignments update this permanent URL automatically.</p><label className="flex items-center gap-2"><input type="checkbox" checked={ghostVoice} onChange={event => { const on = event.target.checked; setGhostVoice(on); try { localStorage.setItem(GHOST_VOICE_STORAGE_KEY, on ? "1" : "0"); } catch { /* Still works this visit. */ } }} />Voice coach (copy again after changing)</label></div> : null}
+          {guide.id === "ghost-build" ? <div className="my-3 space-y-2 text-caption text-text-muted"><p>{Object.keys(ghostConfig.slots).length}/9 matchups assigned. Account assignments update this permanent URL automatically.</p><label className="flex min-h-11 flex-wrap items-center gap-2"><input type="checkbox" checked={ghostVoice} disabled={flagsBusy} onChange={event => setGhostVoice(event.target.checked)} />Voice coach (copy again after changing)<InstantBadge /></label></div> : null}
           <UrlRow url={url} compact onTest={metadata.noTest ? undefined : () => onTestWidget(guide.id)} testing={isTesting} testDisabled={(testingWidget !== null && !isTesting) || !isOn} testTitle={isTesting ? "Stop this test" : isOn ? "Preview this widget, with confirmation before a live test" : "Enable this widget first"} />
           <div className="mt-3 flex flex-wrap gap-3 text-caption"><a href={dropUrl} draggable onClick={event => event.preventDefault()} onDragStart={event => { event.dataTransfer.setData("text/uri-list", dropUrl); event.dataTransfer.setData("text/plain", dropUrl); }} className="inline-flex min-h-11 items-center rounded border border-border px-3 font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Drag into OBS</a><button type="button" disabled={!!obs.reason || !isOn || guide.id === "ghost-build"} title={guide.id === "ghost-build" ? "Use Copy or Drag for this permanent Ghost URL" : isOn ? obs.reason || "Confirm in the desktop agent before adding" : "Enable this widget first"} onClick={() => void obs.add(guide.id)} className="min-h-11 rounded border border-border px-3 font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50">{obs.busy === guide.id ? "Waiting for desktop…" : "Add to OBS"}</button><Link href={`/stream-studio/learn?widget=${encodeURIComponent(guide.id)}#widget-library`} target="_blank" rel="noopener noreferrer" aria-label={`${guide.name}: how it works (opens in a new tab)`} className="inline-flex min-h-11 items-center text-accent underline">How it works</Link><WidgetPreviewButton widget={guide.id} name={guide.name} /></div>
         </article>;

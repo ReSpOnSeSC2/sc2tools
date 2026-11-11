@@ -41,7 +41,7 @@ const GDPR_CLASSIFICATION = Object.freeze({
   BROWSER_INGEST_DAILY: "ttl_ephemeral", GUIDE_SAMPLES: "purge_only", GUIDE_STATS: "global", GUIDE_NOTES: "global",
   JOB_RUNS: "global", ADMIN_AUDIT: "purge_only", CLASSIFIER_QUALITY: "global",
   GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
-  GHOST_EXAMPLES: "purge_only", PLAYER_GOALS: "purge_only",
+  GHOST_EXAMPLES: "purge_only", PLAYER_GOALS: "purge_only", SUPPORTERS: "purge_only", DONATION_MONTHS: "global",
   // Reports and delivery channels: exported explicitly (Discord URLs
   // redacted, push endpoints/keys included) and purged with the owner.
   STREAM_SESSIONS: "purge_only", DISCORD_HOOKS: "purge_only", DISCORD_OUTBOX: "purge_only",
@@ -108,6 +108,8 @@ const PURGE_ONLY_COLLECTIONS = [
   ["platformEvents", "userId"],
   // Public self-submitted links are deleted with their owner; never restore public claims from a backup.
   ["playerChannels", "ownerUserId"],
+  // A public supporter-wall listing needs fresh consent: deleted with its owner, never restored.
+  ["supporters", "userId"],
   // Moderation state must not be restored from a client backup.
   ["playerIdentitySubmissions", "userId"],
   // Short-lived browser-ingest quota counters: operational state, never

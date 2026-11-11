@@ -69,7 +69,7 @@ export function Card({
       {...rest}
     >
       {hasInlineHeader ? (
-        <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <header data-density-pad="card-header" className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           {title ? (
             <Heading className="text-caption font-semibold text-text">{title}</Heading>
           ) : (
@@ -79,7 +79,7 @@ export function Card({
         </header>
       ) : null}
       {hasInlineHeader || padded ? (
-        <div className={hasInlineHeader ? "p-4" : padded ? "p-4" : ""}>
+        <div data-density-pad="card" className={hasInlineHeader ? "p-4" : padded ? "p-4" : ""}>
           {children}
         </div>
       ) : (
@@ -96,6 +96,7 @@ Card.Header = function CardHeader({
 }: HTMLAttributes<HTMLElement>) {
   return (
     <header
+      data-density-pad="card-header"
       className={[
         "flex items-center justify-between gap-3 border-b border-border px-4 py-3",
         className,
@@ -115,7 +116,7 @@ Card.Body = function CardBody({
   ...rest
 }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={["p-4", className].filter(Boolean).join(" ")} {...rest}>
+    <div data-density-pad="card" className={["p-4", className].filter(Boolean).join(" ")} {...rest}>
       {children}
     </div>
   );
@@ -128,6 +129,7 @@ Card.Footer = function CardFooter({
 }: HTMLAttributes<HTMLElement>) {
   return (
     <footer
+      data-density-pad="card-header"
       className={[
         "flex items-center justify-end gap-2 border-t border-border px-4 py-3",
         className,

@@ -5,6 +5,7 @@ import { widgetPresence } from "@/lib/overlayPresence";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { WIDGET_GUIDES } from "@/lib/streamStudioLearn";
+import { formatTime } from "@/lib/i18n/format";
 
 export function OverlayHealthBoard() {
   const health = useOverlayHealth(); if (!health) return null;
@@ -24,7 +25,7 @@ export function OverlayHealthBoard() {
     <p className="text-caption text-text-muted">Connections include source pages opened in a browser. A connection does not confirm that a source is visible or audible in OBS.</p>
     {error ? <p role="status" className="text-caption text-warning">Couldn’t refresh source connections. Retry in a few seconds; any counts below are from the previous check.</p> : !snapshot ? <p role="status" className="text-caption text-text-muted">{loading ? "Checking source connections…" : "Source connections have not been checked."}</p> : null}
     <ul className="grid min-w-0 gap-2 sm:grid-cols-2">{checks.map(check => <li key={check.label} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3 text-caption"><span className="font-semibold">{check.label}</span><Badge variant={!stale && check.ready ? "success" : "neutral"}>{snapshot ? check.value : "Unknown"}</Badge></li>)}</ul>
-    {snapshot ? <p className="text-caption text-text-muted">Checked <time dateTime={snapshot.sampledAt}>{new Date(snapshot.sampledAt).toLocaleTimeString()}</time>. {stale ? "Refresh to confirm current status. " : ""}{count("unknown") ? `${count("unknown")} unknown source${count("unknown") === 1 ? "" : "s"}; refresh older Browser Sources to identify them. ` : ""}{snapshot.lastLiveAt ? <>Recent game update: <time dateTime={snapshot.lastLiveAt}>{new Date(snapshot.lastLiveAt).toLocaleTimeString()}</time>.</> : "No recent game update is retained. This can be expected before a replay arrives or after the API restarts."}</p> : null}
+    {snapshot ? <p className="text-caption text-text-muted">Checked <time dateTime={snapshot.sampledAt}>{formatTime(new Date(snapshot.sampledAt))}</time>. {stale ? "Refresh to confirm current status. " : ""}{count("unknown") ? `${count("unknown")} unknown source${count("unknown") === 1 ? "" : "s"}; refresh older Browser Sources to identify them. ` : ""}{snapshot.lastLiveAt ? <>Recent game update: <time dateTime={snapshot.lastLiveAt}>{formatTime(new Date(snapshot.lastLiveAt))}</time>.</> : "No recent game update is retained. This can be expected before a replay arrives or after the API restarts."}</p> : null}
     <Link href="/help/overlay-health" className="inline-flex min-h-11 items-center text-caption text-accent underline">Check my overlay setup</Link>
   </section>;
 }

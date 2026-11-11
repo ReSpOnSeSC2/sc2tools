@@ -50,12 +50,15 @@ export function useTwitchAutomationSettings() {
     void refresh();
     return () => { scope.active = false; scope.controller?.abort(); const popup = scope.popup; scope.popup = null; popup?.close(); };
   }, [owner, refresh]);
-  const save = async (preferences: TwitchAutomationPreferences) => {
-    const scope = scopeRef.current; if (!scope?.active || ownerRef.current !== scope.owner || state?.busy || !state?.status) return;
+  /** Resolves true once saved; false leaves the draft with an error. */
+  const save = async (preferences: TwitchAutomationPreferences): Promise<boolean> => {
+    const scope = scopeRef.current; if (!scope?.active || ownerRef.current !== scope.owner || state?.busy || !state?.status) return false;
     try {
       const { result, controller } = await request(scope, "/v1/me/preferences/twitchAutomation", { method: "PUT", body: JSON.stringify(preferences) });
-      if (current(scope, controller)) setState(previous => ({ scope, status: previous?.status ? { ...previous.status, preferences: twitchPreferences(result) } : null, busy: false, error: "", message: "Twitch automation preferences saved." }));
-    } catch (error) { failure(scope, error); }
+      if (!current(scope, controller)) return false;
+      setState(previous => ({ scope, status: previous?.status ? { ...previous.status, preferences: twitchPreferences(result) } : null, busy: false, error: "", message: "Twitch automation preferences saved." }));
+      return true;
+    } catch (error) { failure(scope, error); return false; }
   };
   const connect = async (purpose: "predictions" | "streaming") => {
     const scope = scopeRef.current; if (!scope?.active || ownerRef.current !== scope.owner || state?.busy || !state?.status?.serverEnabled) return;

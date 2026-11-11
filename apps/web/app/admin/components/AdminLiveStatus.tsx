@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRealtimeStatus } from "@/components/realtime/RealtimeProvider";
 import { Button } from "@/components/ui/Button";
+import { formatDateTime } from "@/lib/i18n/format";
 
 /** REST remains authoritative, including while the shared socket is offline. */
 export function AdminLiveStatus({ onRefresh, data }: { onRefresh: () => unknown; data: unknown }) {
@@ -16,7 +17,7 @@ export function AdminLiveStatus({ onRefresh, data }: { onRefresh: () => unknown;
     : status === "connecting" || status === "reconnecting" ? "↻ Reconnecting…"
       : `Offline · ${age == null ? "not updated yet" : `updated ${Math.max(0, Math.floor((now - age) / 1000))}s ago`}`;
   return <span className="inline-flex flex-wrap items-center gap-2 text-caption text-text-muted">
-    <span role="status" aria-live="polite" title={age == null ? undefined : new Date(age).toLocaleString()}>{label}</span>
+    <span role="status" aria-live="polite" title={age == null ? undefined : formatDateTime(new Date(age))}>{label}</span>
     {status !== "connected" ? <Button variant="secondary" size="sm" onClick={onRefresh}>Refresh</Button> : null}
   </span>;
 }

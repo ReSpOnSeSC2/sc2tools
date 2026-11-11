@@ -30,6 +30,7 @@ import type {
   AdminEventsListResp,
   StorageStatsResp,
 } from "./components/adminTypes";
+import { formatNumber } from "@/lib/i18n/format";
 
 const RECENT_FEED_SIZE = 8;
 
@@ -351,7 +352,7 @@ function StorageSection({
                 <tr key={row.name} className="hover:bg-bg-elevated/30">
                   <td className="px-4 py-2 font-mono text-text">{row.name}</td>
                   <td className="px-4 py-2 text-right tabular-nums text-text">
-                    {row.count.toLocaleString()}
+                    {formatNumber(row.count)}
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums text-text-muted">
                     {row.avgObjSize > 0 ? formatBytes(row.avgObjSize) : "—"}

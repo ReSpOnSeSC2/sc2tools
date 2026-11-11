@@ -12,6 +12,7 @@ import type {
   ScoreResult,
   ShareSummary,
 } from "../../types";
+import { formatNumber } from "@/lib/i18n/format";
 
 const ID = "unit-profile";
 registerMode(ID, "hidden-derivation");
@@ -267,13 +268,13 @@ function score(q: Q, a: A): ScoreResult {
   const correct = a === q.truth;
   let note: string;
   if (q.variant === "built") {
-    note = `Top-built: ${q.truth} (${q.truthValue.toLocaleString()} entries across your last ${q.scannedGames} games).`;
+    note = `Top-built: ${q.truth} (${formatNumber(q.truthValue)} entries across your last ${q.scannedGames} games).`;
   } else if (q.variant === "lost") {
-    note = `Total units lost: ${q.truthValue.toLocaleString()} across ${q.lostGames} games.`;
+    note = `Total units lost: ${formatNumber(q.truthValue)} across ${q.lostGames} games.`;
   } else if (q.variant === "lost-per-game") {
-    note = `Avg units lost per game: ${q.truthValue.toFixed(1)} across ${q.lostGames} games (${q.totalUnitsLost.toLocaleString()} total).`;
+    note = `Avg units lost per game: ${q.truthValue.toFixed(1)} across ${q.lostGames} games (${formatNumber(q.totalUnitsLost)} total).`;
   } else {
-    note = `Distinct units built: ${q.truthValue.toLocaleString()} across your last ${q.scannedGames} games.`;
+    note = `Distinct units built: ${formatNumber(q.truthValue)} across your last ${q.scannedGames} games.`;
   }
   return {
     raw: correct ? 1 : 0,
@@ -300,26 +301,26 @@ function share(q: Q, _a: A | null, _s: ScoreResult): ShareSummary {
   const answer: string[] = [`Answer: ${q.truth}`];
   if (q.variant === "built") {
     answer.push(
-      `Top-built: ${q.truth} · ${q.truthValue.toLocaleString()} entries across last ${q.scannedGames} games.`,
+      `Top-built: ${q.truth} · ${formatNumber(q.truthValue)} entries across last ${q.scannedGames} games.`,
     );
     for (const o of q.options) {
       const star = o === q.truth ? " ★" : "";
-      answer.push(`${o} · ${(q.countsByOption[o] || 0).toLocaleString()}${star}`);
+      answer.push(`${o} · ${formatNumber(q.countsByOption[o] || 0)}${star}`);
     }
   } else if (q.variant === "lost") {
     answer.push(
-      `${q.truthValue.toLocaleString()} units lost across ${q.lostGames} games with macro data.`,
+      `${formatNumber(q.truthValue)} units lost across ${q.lostGames} games with macro data.`,
     );
   } else if (q.variant === "lost-per-game") {
     answer.push(
-      `Avg ${q.truthValue.toFixed(1)} units/game · ${q.totalUnitsLost.toLocaleString()} lost across ${q.lostGames} games.`,
+      `Avg ${q.truthValue.toFixed(1)} units/game · ${formatNumber(q.totalUnitsLost)} lost across ${q.lostGames} games.`,
     );
   } else {
     answer.push(
-      `${q.truthValue.toLocaleString()} distinct unit types across last ${q.scannedGames} games.`,
+      `${formatNumber(q.truthValue)} distinct unit types across last ${q.scannedGames} games.`,
     );
     for (const u of q.topUnits) {
-      answer.push(`${u.name} · ${u.count.toLocaleString()}`);
+      answer.push(`${u.name} · ${formatNumber(u.count)}`);
     }
   }
   return {
@@ -489,7 +490,7 @@ function BuiltDetail({ q }: { q: BuiltQ }) {
         >
           <span className={o === q.truth ? "text-text" : "text-text-muted"}>{o}</span>
           <span className="font-mono tabular-nums text-text-dim">
-            {(q.countsByOption[o] || 0).toLocaleString()}
+            {formatNumber(q.countsByOption[o] || 0)}
           </span>
         </li>
       ))}
@@ -503,7 +504,7 @@ function LostDetail({ q }: { q: LostQ }) {
       Total over <span className="font-mono tabular-nums">{q.lostGames}</span>{" "}
       games with macro data:{" "}
       <span className="font-mono tabular-nums text-text">
-        {q.truthValue.toLocaleString()}
+        {formatNumber(q.truthValue)}
       </span>{" "}
       units.
     </p>
@@ -518,7 +519,7 @@ function LostPerGameDetail({ q }: { q: LostPerGameQ }) {
         {q.truthValue.toFixed(1)}
       </span>{" "}
       units per game —{" "}
-      <span className="font-mono tabular-nums">{q.totalUnitsLost.toLocaleString()}</span>{" "}
+      <span className="font-mono tabular-nums">{formatNumber(q.totalUnitsLost)}</span>{" "}
       lost across{" "}
       <span className="font-mono tabular-nums">{q.lostGames}</span> games with
       macro data.
@@ -532,7 +533,7 @@ function DiversityDetail({ q }: { q: DiversityQ }) {
       <p>
         You've built{" "}
         <span className="font-mono tabular-nums text-text">
-          {q.truthValue.toLocaleString()}
+          {formatNumber(q.truthValue)}
         </span>{" "}
         distinct unit types across your last{" "}
         <span className="font-mono tabular-nums">{q.scannedGames}</span> games.
@@ -546,7 +547,7 @@ function DiversityDetail({ q }: { q: DiversityQ }) {
             >
               <span className="truncate">{u.name}</span>
               <span className="font-mono tabular-nums text-text-dim">
-                {u.count.toLocaleString()}
+                {formatNumber(u.count)}
               </span>
             </li>
           ))}

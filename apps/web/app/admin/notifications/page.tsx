@@ -24,6 +24,7 @@ import type {
   AdminEventsListResp,
   AdminEventType,
 } from "../components/adminTypes";
+import { formatDateTime } from "@/lib/i18n/format";
 
 const PAGE_SIZE = 50;
 type Filter = "all" | AdminEventType;
@@ -176,7 +177,7 @@ function NotificationsBody() {
             : counts.data.supportEmail.errorCode
               ? `Support email import failed (${counts.data.supportEmail.errorCode}). The next poll will retry.`
               : counts.data.supportEmail.lastSuccessAt
-                ? `Support email import is enabled. Last checked ${new Date(counts.data.supportEmail.lastSuccessAt).toLocaleString()}.`
+                ? `Support email import is enabled. Last checked ${formatDateTime(new Date(counts.data.supportEmail.lastSuccessAt))}.`
                 : "Support email import is enabled. Waiting for the first successful check."}
           {counts.data.supportEmail.configured ? (
             <> Only email labeled <strong>{counts.data.supportEmail.labelName || "SC2Tools Support"}</strong> is imported.</>
