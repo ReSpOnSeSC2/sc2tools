@@ -81,6 +81,8 @@ test("offers manual card-link copy when the browser denies clipboard access", { 
     expect(link.search).toBe("");
     expect(link.hash).toMatch(/^#[A-Za-z0-9_-]{1,59}$/);
     await assertNoOverflow(page);
+    await dialog.getByRole("button", { name: "Done" }).scrollIntoViewIfNeeded();
+    await expect(field).toBeFocused();
     await captureAccessibility(page, info, `report-card-copy-fallback-${theme}`);
     await field.press("Escape");
     await expect(copy).toBeFocused();
