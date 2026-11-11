@@ -30,6 +30,11 @@ describe("PlayerChooser", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
+  it("can distinguish same-name accounts in a private picker", () => {
+    render(<PlayerChooser candidates={CANDIDATES} onChoose={vi.fn()} onCancel={vi.fn()} showToon />);
+    expect(screen.getByRole("button", { name: "Rex · Zerg · 4 games · 1-S2-1-111" })).toBeTruthy();
+  });
+
   it("focuses the question inside a polite live region", () => {
     render(<PlayerChooser candidates={CANDIDATES} onChoose={vi.fn()} onCancel={vi.fn()} />);
     const heading = screen.getByRole("heading", { name: "Which player are you?" });

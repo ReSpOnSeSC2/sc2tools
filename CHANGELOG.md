@@ -4704,6 +4704,10 @@ release preparation, not a signed or published 0.24.9 installer.
   read time, so existing walls fix themselves immediately; `!rank`
   still answers the streamer's own stats).
 
+### 2026 year in review
+
+- Drop your StarCraft II replay folder at `/wrapped` to see a 2026 ladder recap and make a share card. The browser reads the files locally. The share card contains aggregate results and a link to the tool.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

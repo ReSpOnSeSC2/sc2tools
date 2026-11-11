@@ -29,7 +29,6 @@ import { failedParse, zipEntryFile } from "./engineOutcome";
 import { EngineSession, type FileRequestMessage, type ResponseEvent } from "./engineSession";
 import type { WorkerLike } from "./protocol";
 import type {
-  EngineClient,
   EngineInfo,
   EnginePhase,
   EngineProgress,
@@ -39,6 +38,8 @@ import type {
   ParseOutcome,
   ParseRequest,
   PlayersResult,
+  ReplayHeaderEngineClient,
+  ReplayHeaderResult,
 } from "./types";
 
 export interface EngineClientOptions {
@@ -139,6 +140,19 @@ const playersStep: FileStep<IntakeFile, PlayersResult> = {
   failure: (_file, kind, detail) => (detail ? { ok: false, errorKind: kind, detail } : { ok: false, errorKind: kind }),
 };
 
+const headerStep: FileStep<IntakeFile, ReplayHeaderResult> = {
+  phase: "header",
+  file: (file) => file,
+  message: (_file, base) => ({ ...base, type: "header" }),
+  fromResponse: (_file, event) => {
+    if (event.type === "header") return event.result;
+    return event.type === "request-error"
+      ? { ok: false, errorKind: event.errorKind, detail: event.detail }
+      : { ok: false, errorKind: "worker_crashed", detail: UNEXPECTED };
+  },
+  failure: (_file, kind, detail) => ({ ok: false, errorKind: kind, detail }),
+};
+
 const unzipStep: FileStep<IntakeFile, UnzipResult> = {
   phase: "unzip",
   file: (file) => file,
@@ -161,7 +175,17 @@ function emitFailure(job: Job, phase: EnginePhase, base: FilePosition, ms: numbe
   job.onProgress?.({ phase, ...base, ms, ok: false, errorKind });
 }
 
-class QueuedEngineClient implements EngineClient {
+function emitHeaderResponse(job: Job, base: FilePosition, event: ResponseEvent, elapsed: () => number): void {
+  if (event.type === "header") {
+    const { result, ms } = event;
+    if (result.ok) job.onProgress?.({ phase: "header", ...base, ms, ok: true });
+    else emitFailure(job, "header", base, ms, result.errorKind);
+  } else {
+    emitFailure(job, "header", base, elapsed(), event.type === "request-error" ? event.errorKind : "worker_crashed");
+  }
+}
+
+class QueuedEngineClient implements ReplayHeaderEngineClient {
   private session: EngineSession | null = null;
   private tail: Promise<unknown> = Promise.resolve();
   private generation = 0;
@@ -186,6 +210,10 @@ class QueuedEngineClient implements EngineClient {
 
   listPlayers(files: IntakeFile[], options?: ParseOptions): Promise<PlayersResult[]> {
     return this.enqueue(options, (job) => this.runFiles(job, files, playersStep));
+  }
+
+  scanHeaders(files: IntakeFile[], options?: ParseOptions): Promise<ReplayHeaderResult[]> {
+    return this.enqueue(options, (job) => this.runFiles(job, files, headerStep));
   }
 
   parseFiles(requests: ParseRequest[], options?: ParseOptions): Promise<ParseOutcome[]> {
@@ -336,6 +364,7 @@ class QueuedEngineClient implements EngineClient {
     try {
       const event = await session.request(message, this.config.perFileTimeoutMs);
       this.afterResponse(session, step, event);
+      if (step.phase === "header") emitHeaderResponse(job, base, event, elapsed);
       return step.fromResponse(item, event, elapsed());
     } catch (error) {
       const failure = asEngineError(error);
@@ -379,7 +408,7 @@ function withAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
  *   const engine = createEngineClient({ perFileTimeoutMs: 90_000 });
  *   const [players] = await engine.listPlayers([file]);
  */
-export function createEngineClient(options: EngineClientOptions = {}): EngineClient {
+export function createEngineClient(options: EngineClientOptions = {}): ReplayHeaderEngineClient {
   return new QueuedEngineClient({
     workerFactory: options.workerFactory ?? defaultWorkerFactory,
     perFileTimeoutMs: options.perFileTimeoutMs ?? DEFAULT_PER_FILE_TIMEOUT_MS,

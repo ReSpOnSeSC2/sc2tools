@@ -63,9 +63,11 @@ const authenticatedMiddleware = clerkMiddleware(async (auth, req) => {
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const statusRedirect = statusHostRedirect(req.url);
   if (statusRedirect) return NextResponse.redirect(statusRedirect, PERMANENT_REDIRECT);
-  // Only the status page and the no-database website ping bypass Clerk.
-  // Existing private surfaces and replay-detail guards still use the wrapper.
-  if (isPublicStatusRequest(req.nextUrl.pathname)) return NextResponse.next();
+  const pathname = req.nextUrl.pathname;
+  // Keep the local recap independent of Clerk's session handshakes.
+  if (isPublicStatusRequest(pathname) || pathname === "/wrapped" || pathname === "/wrapped/opengraph-image") {
+    return NextResponse.next();
+  }
   return authenticatedMiddleware(req, event);
 }
 

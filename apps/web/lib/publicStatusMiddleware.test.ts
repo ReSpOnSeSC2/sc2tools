@@ -117,8 +117,23 @@ describe("existing private request protection", () => {
   });
 });
 
+describe("local recap middleware auth independence", () => {
+  it.each(["/wrapped", "/wrapped/opengraph-image"])("serves %s without a Clerk handshake", async pathname => {
+    authBoundary.unavailable = true;
+    const response = await request(pathname, undefined, { cookie: "__session=synthetic-expired" });
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("location")).toBeNull();
+    expect(authBoundary.wrapped).not.toHaveBeenCalled();
+  });
+
+  it.each(["/wrapped-other", "/wrapped/private", "/wrapped/opengraph-image/private"])("keeps %s inside Clerk", async pathname => {
+    await request(pathname);
+    expect(authBoundary.wrapped).toHaveBeenCalledOnce();
+  });
+});
+
 describe("dedicated status alias", () => {
-  it.each(["/", "/status?token=private", "/app/game/private-game?owner=private&next=https://evil.test/"])("redirects %s permanently to one clean destination before auth", async pathname => {
+  it.each(["/", "/wrapped", "/status?token=private", "/app/game/private-game?owner=private&next=https://evil.test/"])("redirects %s permanently to one clean destination before auth", async pathname => {
     authBoundary.unavailable = true;
     const response = await request(pathname, "https://status.sc2tools.com");
     expect(response.status).toBe(308);

@@ -903,6 +903,12 @@ links use the cached published sitemap, exact catalog paths and actual replay
 matchups. Only an explicit validated `/try?focus=<matchup>/<build>` link may
 scroll to a matching own-opener row.
 
+## Local year recap
+
+`/wrapped` is a static signed-out route when Instant Analysis is enabled for everyone. It scans local replay headers through the serial browser worker. `scan_replay_header` adds ranked-ladder, queue, timing and version facts alongside the pinned `list_replay_players` response. Header scans collect Python garbage every 50 files.
+
+The recap pre-filters by file modification time, then counts replay-authored 2026 UTC dates for human 1v1 ladder games. It does not store the selected files or results. The public card renderer receives only aggregate numbers and a fixed link. See [ADR 0079](adr/0079-local-year-replay-recap.md).
+
 ## Known limitations
 
 - **Firefox and Safari are untested.** The classic worker imports its

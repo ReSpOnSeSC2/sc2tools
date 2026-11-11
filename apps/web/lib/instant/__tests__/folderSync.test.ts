@@ -11,6 +11,7 @@ import {
   shouldAutoScan,
   supportsDirectoryPicker,
   walkMultiplayerReplays,
+  walkReplayFolder,
   type DirectoryHandleLike,
   type FileHandleLike,
 } from "../folderSync";
@@ -100,6 +101,26 @@ describe("walkMultiplayerReplays", () => {
 });
 
 describe("walkMultiplayerReplays: responsiveness", () => {
+  it("reuses the captured File only for a requested one-shot snapshot", async () => {
+    const handle = fakeFile("a.SC2Replay");
+    const read = vi.spyOn(handle, "getFile");
+    const root = fakeDir("Multiplayer", [handle]);
+    const [snapshot] = await walkMultiplayerReplays(root, { keepSnapshots: true });
+    expect(await snapshot.getFile()).toBe(await snapshot.getFile());
+    expect(read).toHaveBeenCalledOnce();
+    const [sync] = await walkMultiplayerReplays(root);
+    expect(await sync.getFile()).not.toBe(await sync.getFile());
+    expect(read).toHaveBeenCalledTimes(4);
+  });
+
+  it("stops reading more files when a caller supplies a scan limit", async () => {
+    const first = fakeFile("a.SC2Replay");
+    const second = fakeFile("b.SC2Replay");
+    const root = fakeDir("Multiplayer", [first, second]);
+    const found = await walkMultiplayerReplays(root, { maxFiles: 1 });
+    expect(found.map((file) => file.name)).toEqual(["a.SC2Replay"]);
+  });
+
   it("yields to the event loop regularly and reports progress", async () => {
     const files = Array.from({ length: 100 }, (_, i) => fakeFile(`g${i}.SC2Replay`));
     const root = fakeDir("Multiplayer", files);
@@ -139,6 +160,15 @@ describe("walkMultiplayerReplays: responsiveness", () => {
     });
     await expect(walk).rejects.toMatchObject({ name: "AbortError" });
   });
+});
+
+it("finds root and nested replays in exported folders without reading unrelated files", async () => {
+  const textFile = fakeFile("notes.txt");
+  const readText = vi.spyOn(textFile, "getFile");
+  const root = fakeDir("Export", [fakeFile("first.SC2Replay"), textFile, fakeDir("Ladder", [fakeFile("second.sc2replay")])]);
+  const found = await walkReplayFolder(root, { keepSnapshots: true });
+  expect(found.map((file) => file.relativePath)).toEqual(["Export/first.SC2Replay", "Export/Ladder/second.sc2replay"]);
+  expect(readText).not.toHaveBeenCalled();
 });
 
 describe("permissions", () => {

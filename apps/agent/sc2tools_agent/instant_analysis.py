@@ -67,7 +67,7 @@ log = logging.getLogger(__name__)
 
 #: Version of the Python <-> worker message shapes defined here. Must match
 #: ``ENGINE_PROTOCOL`` in ``apps/web/lib/instant/engineVersion.ts``.
-ENGINE_PROTOCOL = 1
+ENGINE_PROTOCOL = 2
 
 # Error kinds emitted by this module. Wire contract with the ``ErrorKind``
 # union in ``apps/web/lib/instant/types.ts``.
@@ -280,6 +280,16 @@ def list_replay_players(data: BytesLike, *, filename: str) -> Envelope:
         result = _run_staged(blob, filename, _list_staged)
     _log_outcome("instant_players_done", result, started, len(blob))
     return result
+
+
+def scan_replay_header(data: BytesLike, *, filename: str) -> Envelope:
+    """Read ladder and player facts for a local year recap at load level 2."""
+    blob = as_bytes(data)
+    if not _looks_like_mpq(blob):
+        return _players_failure(
+            _failure(ERROR_NOT_A_REPLAY, ERROR_NOT_A_REPLAY, _TEXT_NOT_A_REPLAY),
+        )
+    return _run_staged(blob, filename, _scan_header_staged)
 
 
 # ---------------------------------------------------------------------------
@@ -584,9 +594,13 @@ def _list_staged(path: Path, relative: Path) -> Envelope:
     ctx, failure = _parse_live(path)
     if failure is not None:
         return _players_failure(failure)
+    return _header_facts(ctx, relative, [_player_entry(player) for player in _listed_players(ctx)])
+
+
+def _header_facts(ctx: Any, relative: Path, players: List[Envelope]) -> Envelope:
     return {
         "ok": True,
-        "players": [_player_entry(player) for player in _listed_players(ctx)],
+        "players": players,
         "date": _replay_date_or_none(getattr(ctx, "date_iso", None)),
         "map": getattr(ctx, "map_name", "") or None,
         "durationSec": int(getattr(ctx, "length_seconds", 0) or 0),
@@ -595,6 +609,32 @@ def _list_staged(path: Path, relative: Path) -> Envelope:
         "isAiGame": bool(getattr(ctx, "is_ai_game", False)),
         # Relative path only: the temp root must never masquerade as a toon.
         "toonFromPath": replay_pipeline._toon_handle_from_path(relative),
+    }
+
+
+def _scan_header_staged(path: Path, relative: Path) -> Envelope:
+    ctx, failure = _parse_live(path)
+    if failure is not None:
+        return _players_failure(failure)
+    raw = getattr(ctx, "raw", None)
+    offset = getattr(raw, "time_zone", None)
+    return {
+        **_header_facts(ctx, relative, [_header_player_entry(player) for player in _listed_players(ctx)]),
+        "startedAt": _replay_date_or_none(getattr(ctx, "started_at_iso", None)),
+        "utcOffsetHours": offset if isinstance(offset, (int, float)) and -24 < offset < 24 else None,
+        "isLadderGame": replay_pipeline._is_ladder_game(ctx),
+        "gameVersion": getattr(ctx, "game_version", None),
+        "gameBuild": getattr(ctx, "game_build", None),
+        "expansion": getattr(raw, "expansion", None),
+    }
+
+
+def _header_player_entry(player: Any) -> Envelope:
+    return {
+        **_player_entry(player),
+        "selectedRace": getattr(player, "selected_race", None),
+        "mmr": getattr(player, "mmr", None),
+        "leagueId": getattr(player, "league_id", None),
     }
 
 

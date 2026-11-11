@@ -20,9 +20,26 @@ function hoursLabel(hours: number | null): string | null {
   return `${hours.toFixed(1)} hours on the ladder`;
 }
 
+interface YearSlides {
+  year: number;
+  busiestMonth: { month: string; games: number } | null;
+}
+
+function yearDetailSlides(recap: SeasonRecapResult, year: YearSlides): RecapSlide[] {
+  const slides: RecapSlide[] = [];
+  const hours = hoursLabel(recap.totals.hoursPlayed);
+  if (hours) slides.push({ key: "hours", eyebrow: "Time played", headline: hours });
+  if (year.busiestMonth) {
+    const { month, games } = year.busiestMonth;
+    slides.push({ key: "month", eyebrow: "Busiest month", headline: month, sub: `${games} ladder ${games === 1 ? "game" : "games"}` });
+  }
+  return slides;
+}
+
 export function buildRecapSlides(
   recap: SeasonRecapResult,
-  window: RecapWindow,
+  window: Pick<RecapWindow, "label">,
+  year?: YearSlides,
 ): RecapSlide[] {
   const slides: RecapSlide[] = [];
 
@@ -30,8 +47,9 @@ export function buildRecapSlides(
   slides.push({
     key: "intro",
     eyebrow: window.label,
-    headline: "Your season, wrapped",
-    sub: "Here's how your ladder journey went. Swipe through — the last slide is yours to share.",
+    headline: year ? `Your ${year.year} in StarCraft II` : "Your season, wrapped",
+    sub: year ? "A recap of the ladder games you selected. The last slide has your share card."
+      : "Here's how your ladder journey went. Swipe through — the last slide is yours to share.",
   });
 
   // 2. Totals.
@@ -42,21 +60,22 @@ export function buildRecapSlides(
     eyebrow: "By the numbers",
     big: String(totals.games),
     headline: `games played · ${totals.wins}-${totals.losses}`,
-    sub: [wr ? `${wr} win rate` : null, hoursLabel(totals.hoursPlayed)]
+    sub: [wr ? `${wr} win rate` : null, year ? null : hoursLabel(totals.hoursPlayed)]
       .filter(Boolean)
       .join(" · ") || undefined,
   });
+  if (year) slides.push(...yearDetailSlides(recap, year));
 
   // 3. One MMR journey per Battle.net account. Deltas must never be
   // sequenced or summed across independent regional ladders.
   for (const j of recap.mmrJourneys) {
     const climbed = j.delta >= 0;
     slides.push({
-      key: `mmr:${j.toonHandle}`,
-      eyebrow: `MMR journey · ${j.accountLabel}`,
+      key: `mmr:${j.toonHandle}${j.race ? `:${j.race}` : ""}`,
+      eyebrow: `MMR journey · ${j.accountLabel}${j.race ? ` · ${j.race}` : ""}`,
       big: `${climbed ? "+" : ""}${j.delta}`,
-      headline: climbed ? "MMR gained" : "MMR this season",
-      sub: `From ${j.start} to ${j.end}, peaking at ${j.peak}.`,
+      headline: climbed ? "MMR gained" : year ? `MMR in ${year.year}` : "MMR this season",
+      sub: `From ${j.start} to ${j.end}, peaking at ${j.peak}.${year ? " Uses the rating recorded before each game." : ""}`,
     });
   }
 
@@ -67,7 +86,7 @@ export function buildRecapSlides(
       key: "opener",
       eyebrow: "Signature opener",
       headline: o.name,
-      sub: `${o.games} games · ${Math.round(o.winrate * 100)}% win rate. Your go-to this season.`,
+      sub: `${o.games} games · ${Math.round(o.winrate * 100)}% win rate. Your go-to ${year ? `in ${year.year}` : "this season"}.`,
     });
   }
 
@@ -114,7 +133,7 @@ export function buildRecapSlides(
       eyebrow: "Hot streak",
       big: String(recap.longestWinStreak),
       headline: "wins in a row",
-      sub: "Your longest unbeaten run this season.",
+      sub: year ? `Your longest unbeaten run in ${year.year}.` : "Your longest unbeaten run this season.",
     });
   }
 
@@ -132,9 +151,10 @@ export function buildRecapSlides(
   // Final share slide.
   slides.push({
     key: "share",
-    eyebrow: "That's a wrap",
-    headline: "Share your season",
-    sub: "Post your recap card — link back included so friends can get theirs.",
+    eyebrow: year ? "Year in review" : "That's a wrap",
+    headline: year ? "Share your year" : "Share your season",
+    sub: year ? "Your card contains aggregate stats and a link to this tool."
+      : "Post your recap card — link back included so friends can get theirs.",
   });
 
   return slides;

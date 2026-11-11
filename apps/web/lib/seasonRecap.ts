@@ -55,6 +55,8 @@ export interface RecapMmrJourney {
   region: string | null;
   /** Compact display label, e.g. "NA 267727". */
   accountLabel: string;
+  /** Ladder queue when the caller asks to keep race ratings separate. */
+  race?: string;
   start: number;
   end: number;
   peak: number;
@@ -191,7 +193,7 @@ function recapSeasonStart(
 
 export function computeSeasonRecap(
   games: ReadonlyArray<ArcadeGame>,
-  opts: { since: Date; until?: Date },
+  opts: { since: Date; until?: Date; separateRaceQueues?: boolean },
 ): SeasonRecapResult {
   const sinceT = opts.since.getTime();
   const untilT = opts.until ? opts.until.getTime() : Number.POSITIVE_INFINITY;
@@ -207,7 +209,7 @@ export function computeSeasonRecap(
 
   return {
     totals: computeTotals(rows),
-    mmrJourneys: computeMmrJourneys(rows),
+    mmrJourneys: computeMmrJourneys(rows, opts.separateRaceQueues),
     topOpener: computeTopOpener(rows),
     ...computeRivals(rows),
     longestWinStreak: longestWinStreak(rows),
@@ -248,8 +250,8 @@ function computeTotals(rows: ArcadeGame[]): SeasonRecapTotals {
   };
 }
 
-function computeMmrJourneys(rows: ArcadeGame[]): RecapMmrJourney[] {
-  const byAccount = new Map<string, number[]>();
+function computeMmrJourneys(rows: ArcadeGame[], separateRaceQueues = false): RecapMmrJourney[] {
+  const byQueue = new Map<string, { toonHandle: string; race?: string; ratings: number[] }>();
   for (const g of rows) {
     const toonHandle = cleanToonHandle(g.myToonHandle);
     // Handle-less rows cannot be assigned safely to a region/account;
@@ -259,15 +261,18 @@ function computeMmrJourneys(rows: ArcadeGame[]): RecapMmrJourney[] {
     // into the player's absolute rating.
     const mmr = knownMmr(g.myMmr);
     if (!toonHandle || mmr === null) continue;
-    const series = byAccount.get(toonHandle) ?? [];
-    series.push(mmr);
-    byAccount.set(toonHandle, series);
+    const race = separateRaceQueues ? g.myLadderRace?.trim() : undefined;
+    if (separateRaceQueues && !race) continue;
+    const key = JSON.stringify([toonHandle, race]);
+    const series = byQueue.get(key) ?? { toonHandle, race, ratings: [] };
+    series.ratings.push(mmr);
+    byQueue.set(key, series);
   }
   // A single data point isn't a journey — require two so start/end/
   // delta all mean something within that account. Applying this floor
   // per handle prevents one NA point and one EU point becoming a pair.
   const journeys: RecapMmrJourney[] = [];
-  for (const [toonHandle, series] of byAccount) {
+  for (const { toonHandle, race, ratings: series } of byQueue.values()) {
     if (series.length < 2) continue;
     const region = regionFromToonHandle(toonHandle);
     const start = series[0];
@@ -276,6 +281,7 @@ function computeMmrJourneys(rows: ArcadeGame[]): RecapMmrJourney[] {
       toonHandle,
       region,
       accountLabel: accountLabel(toonHandle, region),
+      ...(race ? { race } : {}),
       start,
       end,
       peak: Math.max(...series),

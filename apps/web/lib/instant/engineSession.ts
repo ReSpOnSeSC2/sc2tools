@@ -16,6 +16,8 @@
  */
 import { EngineError, isOutOfMemory } from "./engineErrors";
 import type {
+  HeaderEvent,
+  HeaderRequest,
   ParseWorkerRequest,
   ParsedEvent,
   PlayersEvent,
@@ -29,8 +31,8 @@ import type {
 } from "./protocol";
 import type { EngineInfo, EngineProgress } from "./types";
 
-export type FileRequestMessage = PlayersRequest | ParseWorkerRequest | UnzipRequest;
-export type ResponseEvent = PlayersEvent | ParsedEvent | UnzippedEvent | RequestErrorEvent;
+export type FileRequestMessage = PlayersRequest | HeaderRequest | ParseWorkerRequest | UnzipRequest;
+export type ResponseEvent = PlayersEvent | HeaderEvent | ParsedEvent | UnzippedEvent | RequestErrorEvent;
 
 export interface SessionOptions {
   factory: () => WorkerLike;

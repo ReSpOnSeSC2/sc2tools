@@ -4,8 +4,8 @@
  *
  * Bytes cross into Python as a `Uint8Array` (a JsProxy with `to_bytes()`),
  * results come back as JSON strings (no PyProxy is ever returned to JS, so
- * nothing leaks), and every call ends with `gc.collect()`, which keeps the
- * WASM heap flat across hundreds of parses. The only proxies held are the
+ * nothing leaks). Deep parses collect Python garbage after each call and
+ * recap header scans collect every 50 files. The only proxies held are the
  * glue functions themselves, destroyed by `dispose()`.
  *
  * Example:
@@ -23,6 +23,7 @@ import json as _sc2t_json
 from sc2tools_agent import instant_analysis as _sc2t_ia
 
 _sc2t_pending = []
+_sc2t_header_count = 0
 
 
 def _sc2t_bytes(data):
@@ -39,6 +40,16 @@ def _sc2t_players(data, filename):
         return _sc2t_json.dumps(_sc2t_ia.list_replay_players(_sc2t_bytes(data), filename=filename))
     finally:
         _sc2t_gc.collect()
+
+
+def _sc2t_header(data, filename):
+    global _sc2t_header_count
+    try:
+        return _sc2t_json.dumps(_sc2t_ia.scan_replay_header(_sc2t_bytes(data), filename=filename))
+    finally:
+        _sc2t_header_count += 1
+        if _sc2t_header_count % 50 == 0:
+            _sc2t_gc.collect()
 
 
 def _sc2t_parse(data, filename, toon, handle, want_digests):
@@ -83,7 +94,9 @@ def _sc2t_unzip_done():
     _sc2t_gc.collect()
 `;
 
-const GLUE_FUNCTIONS = ["_sc2t_policy", "_sc2t_players", "_sc2t_parse", "_sc2t_unzip", "_sc2t_unzip_take", "_sc2t_unzip_done"] as const;
+const GLUE_FUNCTIONS = [
+  "_sc2t_policy", "_sc2t_players", "_sc2t_header", "_sc2t_parse", "_sc2t_unzip", "_sc2t_unzip_take", "_sc2t_unzip_done",
+] as const;
 type GlueName = (typeof GLUE_FUNCTIONS)[number];
 
 /** One unpacked entry; `lastModified` is its stored zip time (epoch ms) when valid. */
@@ -107,6 +120,7 @@ interface UnzipHeader {
 export interface EngineRuntime {
   installPolicy?(raw: string): string;
   players(bytes: Uint8Array, filename: string): string;
+  header(bytes: Uint8Array, filename: string): string;
   parse(bytes: Uint8Array, filename: string, toon: string, handle: string, wantDigests: boolean): string;
   unzip(bytes: Uint8Array): UnzipResult;
   heapBytes(): number;
@@ -188,6 +202,7 @@ export function createEngineRuntime(pyodide: PyodideLike): EngineRuntime {
   return {
     installPolicy: (raw) => asString(call("_sc2t_policy", raw), "policy"),
     players: (bytes, filename) => asString(call("_sc2t_players", bytes, filename), "players"),
+    header: (bytes, filename) => asString(call("_sc2t_header", bytes, filename), "header"),
     parse: (bytes, filename, toon, handle, wantDigests) =>
       asString(call("_sc2t_parse", bytes, filename, toon, handle, wantDigests), "parse"),
     unzip,

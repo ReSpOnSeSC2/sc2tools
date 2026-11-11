@@ -64,7 +64,7 @@ export interface DirectoryHandleLike {
 
 /** One replay found by a walk or a directory input. */
 export interface FolderReplay {
-  /** Reads the file fresh (it may have changed since the walk). */
+  /** Reads fresh for sync, or returns the one-shot scan's snapshot when requested. */
   getFile(): Promise<File>;
   name: string;
   /** `/`-separated, starts with the picked folder's name. */
@@ -80,6 +80,9 @@ export interface WalkProgress {
 
 export interface WalkOptions {
   signal?: AbortSignal;
+  maxFiles?: number;
+  /** Retain the File already read during a one-shot scan. */
+  keepSnapshots?: boolean;
   onEntry?: (progress: WalkProgress) => void;
   /** Injected for tests; defaults to a `setTimeout(0)` macrotask. */
   yieldToEventLoop?: () => Promise<void>;
@@ -237,6 +240,7 @@ function defaultNow(): number {
 
 interface WalkState {
   options: WalkOptions;
+  multiplayerOnly: boolean;
   results: FolderReplay[];
   scanned: number;
   sinceYield: number;
@@ -257,13 +261,23 @@ interface WalkState {
  *     signal, onEntry: ({ found }) => setFound(found),
  *   });
  */
-export async function walkMultiplayerReplays(
+export function walkMultiplayerReplays(
   root: DirectoryHandleLike,
   options: WalkOptions = {},
 ): Promise<FolderReplay[]> {
+  return walkReplayFiles(root, options, true);
+}
+
+/** Walk exported folders too. The recap checks ladder status from each replay header. */
+export function walkReplayFolder(root: DirectoryHandleLike, options: WalkOptions = {}): Promise<FolderReplay[]> {
+  return walkReplayFiles(root, options, false);
+}
+
+async function walkReplayFiles(root: DirectoryHandleLike, options: WalkOptions, multiplayerOnly: boolean): Promise<FolderReplay[]> {
   const nowFn = options.now ?? defaultNow;
   const state: WalkState = {
     options,
+    multiplayerOnly,
     results: [],
     scanned: 0,
     sinceYield: 0,
@@ -281,13 +295,15 @@ async function walkDirectory(
   depth: number,
   state: WalkState,
 ): Promise<void> {
+  state.options.signal?.throwIfAborted();
   for await (const entry of dir.values()) {
     state.options.signal?.throwIfAborted();
+    if (state.results.length >= (state.options.maxFiles ?? Infinity)) return;
     state.scanned += 1;
     const childPath = `${path}/${entry.name}`;
     if (entry.kind === "file") {
       await skipUnreadable(() => collectFile(entry, childPath, state), state);
-    } else if (depth < MAX_WALK_DEPTH && childDirAllowed(dir.name, entry.name)) {
+    } else if (!state.multiplayerOnly || (depth < MAX_WALK_DEPTH && childDirAllowed(dir.name, entry.name))) {
       await skipUnreadable(() => walkDirectory(entry, childPath, depth + 1, state), state);
     }
     await maybeYield(state);
@@ -312,10 +328,10 @@ async function collectFile(
   relativePath: string,
   state: WalkState,
 ): Promise<void> {
-  if (!isReplayFileName(entry.name) || !isMultiplayerReplayPath(relativePath)) return;
+  if (!isReplayFileName(entry.name) || (state.multiplayerOnly && !isMultiplayerReplayPath(relativePath))) return;
   const file = await entry.getFile();
   state.results.push({
-    getFile: () => entry.getFile(),
+    getFile: state.options.keepSnapshots ? async () => file : () => entry.getFile(),
     name: entry.name,
     relativePath,
     size: file.size,

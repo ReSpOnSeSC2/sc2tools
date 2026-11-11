@@ -341,6 +341,25 @@ def test_list_replay_players_team_fixture_returns_four_players_team_format() -> 
     ]
 
 
+def test_scan_replay_header_preserves_listed_facts_and_adds_ladder_facts() -> None:
+    name = f"Accounts/1/{RESPONSE_TOON}/Replays/{WARPGATE.name}"
+    blob = WARPGATE.read_bytes()
+    listed = ia.list_replay_players(blob, filename=name)
+    header = ia.scan_replay_header(blob, filename=name)
+    assert header["ok"] is True
+    assert {key: header[key] for key in listed if key != "players"} == {
+        key: value for key, value in listed.items() if key != "players"
+    }
+    assert header["toonFromPath"] == RESPONSE_TOON
+    assert header["startedAt"] < header["date"]
+    assert header["expansion"] == "LotV"
+    assert header["gameBuild"] > 0
+    for player, original in zip(header["players"], listed["players"], strict=True):
+        assert {key: player[key] for key in original} == original
+        assert set(player) - set(original) == {"selectedRace", "mmr", "leagueId"}
+    assert ia.scan_replay_header(b"text", filename=name) == ia.list_replay_players(b"text", filename=name)
+
+
 def test_list_replay_players_toon_folder_uses_relative_path_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

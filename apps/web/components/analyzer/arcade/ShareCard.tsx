@@ -55,6 +55,7 @@ const PAD_R = CARD_PAD;
 const CONTENT_W = W - PAD_L - PAD_R;
 
 export const FONT_STACK = "system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+export const CARD_PALETTE = { accent: "#7DC8FF", ink: "#ffffff", muted: "#8a96a8" } as const;
 
 /**
  * Link-back for every share payload. The share TEXT carries the full
@@ -99,7 +100,7 @@ export async function shareCard(input: ShareCardInput): Promise<ShareDelivery> {
   drawCardBackground(ctx, accent);
 
   // Title
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = CARD_PALETTE.ink;
   ctx.font = `700 56px ${FONT_STACK}`;
   ctx.textBaseline = "top";
   const titleBottom = wrapText(ctx, input.title, PAD_L, 56, CONTENT_W, 64, 1);
@@ -211,18 +212,18 @@ export function drawCardBackground(
  */
 export function drawCardFooter(
   ctx: CanvasRenderingContext2D,
-  opts: { brand?: string; tag?: string } = {},
+  opts: { brand?: string; tag?: string; linkLabel?: string } = {},
 ): void {
   const brand = opts.brand ?? "SC2 Tools · Arcade";
   ctx.textBaseline = "top";
-  ctx.fillStyle = "#7DC8FF";
+  ctx.fillStyle = CARD_PALETTE.accent;
   ctx.font = `600 24px ${FONT_STACK}`;
   ctx.fillText(brand, CARD_PAD, CARD_H - 50);
   const brandW = ctx.measureText(brand).width;
 
-  ctx.fillStyle = "#8a96a8";
+  ctx.fillStyle = CARD_PALETTE.muted;
   ctx.font = `400 20px ${FONT_STACK}`;
-  ctx.fillText(SHARE_LINK_LABEL, CARD_PAD + brandW + 18, CARD_H - 46);
+  ctx.fillText(opts.linkLabel ?? SHARE_LINK_LABEL, CARD_PAD + brandW + 18, CARD_H - 46);
 
   if (opts.tag) {
     ctx.fillStyle = "#8a96a8";

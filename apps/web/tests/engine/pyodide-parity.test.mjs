@@ -116,12 +116,14 @@ async function bootFromBuiltAssets({ manifest, assets }) {
   pyodide.runPython(await workerGlueSource());
   const glueParse = pyodide.globals.get("_sc2t_parse");
   const gluePlayers = pyodide.globals.get("_sc2t_players");
+  const glueHeader = pyodide.globals.get("_sc2t_header");
   return {
     pyodide,
     bootMs: performance.now() - started,
     /** Exactly the worker's call: (bytes, filename, toon or "", handle or "", wantDigests). */
     parse: (bytes, filename, toon) => JSON.parse(glueParse(u8(bytes), filename, toon ?? "", NO_HANDLE, WANT_DIGESTS)),
     players: (bytes, filename) => JSON.parse(gluePlayers(u8(bytes), filename)),
+    header: (bytes, filename) => JSON.parse(glueHeader(u8(bytes), filename)),
   };
 }
 
@@ -172,6 +174,24 @@ const ZIP_FIXTURE_PY = [
   "    _sc2t_zip.writestr('notes.txt', b'junk')",
   "_sc2t_zip_buffer.getvalue()",
 ].join("\n");
+
+test("built bundle: header scans batch garbage collection", { timeout: SLOW_TIMEOUT_MS }, async () => {
+  const { pyodide } = await engine();
+  const counts = pyodide.runPython([
+    "_saved_gc, _saved_count = _sc2t_gc, _sc2t_header_count",
+    "_collections = []",
+    "from types import SimpleNamespace",
+    "try:",
+    "    _sc2t_gc = SimpleNamespace(collect=lambda: _collections.append(_sc2t_header_count))",
+    "    _sc2t_header_count = 0",
+    "    for _index in range(101):",
+    "        _sc2t_header(b'not a replay', 'fixture.SC2Replay')",
+    "finally:",
+    "    _sc2t_gc, _sc2t_header_count = _saved_gc, _saved_count",
+    "_sc2t_json.dumps(_collections)",
+  ].join("\n"));
+  assert.deepEqual(JSON.parse(counts), [50, 100]);
+});
 /** calendar.timegm of the two entry times above, in ms. */
 const ZIP_FIXTURE_TIMES = [1577934246000, 1788264000000];
 
@@ -258,7 +278,7 @@ test(
   },
   async (t) => {
     const index = await readJson(path.join(GOLDEN_DIR, "index.json"));
-    const { parse, bundle } = await engine();
+    const { parse, bundle, header } = await engine();
     assert.equal(index.dataView, INSTALLED_DATA_VIEW, "goldens must use the installed data view (the bundle's)");
     assert.equal(index.engineProtocol, bundle.manifest.protocol, "golden engine protocol differs from the bundle");
     assert.ok(index.cases.length > 0, "golden index lists no cases");
@@ -276,6 +296,11 @@ test(
       assert.equal(actual.errorKind, expected.errorKind, `${entry.file}: errorKind`);
       assert.deepEqual(actual, expected, `${entry.file}: envelope`);
       t.diagnostic(`${entry.file}: identical (${ms} ms)`);
+    }
+    assert.ok(index.headers.length > 0, "golden index lists no headers");
+    for (const entry of index.headers) {
+      const bytes = await readFile(path.join(FIXTURE_DIR, entry.fixture));
+      assert.deepEqual(header(bytes, entry.filename), entry.envelope, `${entry.fixture}: header`);
     }
   },
 );

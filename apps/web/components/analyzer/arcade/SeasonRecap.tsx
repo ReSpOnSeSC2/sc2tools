@@ -10,18 +10,15 @@
  * Arcade tab; it opens a full-screen slide Modal.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CalendarRange,
-  ChevronLeft,
-  ChevronRight,
   Share2,
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
-import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { trackCardShared } from "@/lib/analytics/shareEvents";
@@ -48,7 +45,8 @@ import {
   shareOutcome,
   wrapText,
 } from "./ShareCard";
-import { buildRecapSlides, type RecapSlide } from "./seasonRecapSlides";
+import { buildRecapSlides } from "./seasonRecapSlides";
+import { RecapSlidesModal } from "./RecapSlidesModal";
 
 function signedMmr(delta: number): string {
   return `${delta >= 0 ? "+" : ""}${delta}`;
@@ -228,113 +226,15 @@ function SeasonRecapModal({
   window: RecapWindow;
   onClose: () => void;
 }) {
-  const slides = useMemo<RecapSlide[]>(
-    () => buildRecapSlides(recap, recapWindow),
-    [recap, recapWindow],
-  );
-  const [idx, setIdx] = useState(0);
-  const last = slides.length - 1;
-  const clampedIdx = Math.min(idx, last);
-
-  const go = useCallback(
-    (delta: number) => setIdx((i) => Math.max(0, Math.min(last, i + delta))),
-    [last],
-  );
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") go(1);
-      else if (e.key === "ArrowLeft") go(-1);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [go]);
-
-  const slide = slides[clampedIdx];
-
+  const slides = useMemo(() => buildRecapSlides(recap, recapWindow), [recap, recapWindow]);
   return (
-    <Modal
-      open
-      onClose={onClose}
+    <RecapSlidesModal
       title="Season Recap"
       description={recapWindow.label}
-      size="lg"
-    >
-      <div className="flex flex-col gap-4">
-        <div
-          className="relative flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-line bg-bg-elevated px-5 py-8 text-center motion-safe:transition-opacity"
-          role="group"
-          aria-roledescription="slide"
-          aria-label={`${clampedIdx + 1} of ${slides.length}: ${slide.headline}`}
-        >
-          <RecapSlideView slide={slide} />
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <Button
-            variant="ghost"
-            onClick={() => go(-1)}
-            disabled={clampedIdx === 0}
-            iconLeft={<ChevronLeft className="h-4 w-4" aria-hidden />}
-          >
-            Back
-          </Button>
-
-          <div
-            className="flex items-center gap-1.5"
-            role="tablist"
-            aria-label="Recap slides"
-          >
-            {slides.map((s, i) => (
-              <button
-                key={s.key}
-                type="button"
-                role="tab"
-                aria-selected={i === clampedIdx}
-                aria-label={`Slide ${i + 1}: ${s.headline}`}
-                onClick={() => setIdx(i)}
-                className={`h-2.5 w-2.5 rounded-full transition-colors ${
-                  i === clampedIdx ? "bg-accent-cyan" : "bg-line hover:bg-border-strong"
-                }`}
-              />
-            ))}
-          </div>
-
-          {clampedIdx < last ? (
-            <Button
-              variant="primary"
-              onClick={() => go(1)}
-              iconRight={<ChevronRight className="h-4 w-4" aria-hidden />}
-            >
-              Next
-            </Button>
-          ) : (
-            <ShareRecapButton recap={recap} window={recapWindow} />
-          )}
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function RecapSlideView({ slide }: { slide: RecapSlide }) {
-  return (
-    <div className="space-y-2">
-      {slide.eyebrow ? (
-        <p className="text-caption font-semibold uppercase tracking-wider text-accent-cyan">
-          {slide.eyebrow}
-        </p>
-      ) : null}
-      {slide.big ? (
-        <p className="font-display text-display-lg font-bold tabular-nums text-text">
-          {slide.big}
-        </p>
-      ) : null}
-      <p className="text-h3 font-semibold text-text">{slide.headline}</p>
-      {slide.sub ? (
-        <p className="mx-auto max-w-md text-body text-text-muted">{slide.sub}</p>
-      ) : null}
-    </div>
+      slides={slides}
+      onClose={onClose}
+      shareAction={<ShareRecapButton recap={recap} window={recapWindow} />}
+    />
   );
 }
 

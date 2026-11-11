@@ -21,7 +21,7 @@ export const PYODIDE_VERSION = "314.0.7";
  * Wire contract between `engineWorker.ts` and the Python entry points in
  * `sc2tools_agent.instant_analysis`. Bump both sides together.
  */
-export const ENGINE_PROTOCOL = 1;
+export const ENGINE_PROTOCOL = 2;
 
 /**
  * Tiny, revalidated pointer to the current immutable manifest. Everything

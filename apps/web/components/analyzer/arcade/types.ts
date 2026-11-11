@@ -207,6 +207,7 @@ export interface ArcadeGame {
   /** Replay-authored Battle.net character identity (region-S2-realm-id). */
   myToonHandle?: string | null;
   myRace?: string;
+  myLadderRace?: string;
   oppRace?: string;
   myMmr?: number;
   oppMmr?: number;

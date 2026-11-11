@@ -53,9 +53,10 @@ const ROUTES: Route[] = [
 // /try (in-browser replay analysis) is public only once Instant Analysis
 // is rolled out to everyone; in "admins"/"off" mode it is not listed.
 const TRY_ROUTE: Route = { path: "/try", priority: 0.8, changeFrequency: "monthly", lastModified: "2026-09-29" };
+const YEAR_RECAP_ROUTE: Route = { path: "/wrapped", priority: 0.7, changeFrequency: "monthly", lastModified: "2026-11-11" };
 
 function staticRoutes(): Route[] {
-  return getInstantImportMode() === "all" ? [...ROUTES, TRY_ROUTE] : ROUTES;
+  return getInstantImportMode() === "all" ? [...ROUTES, TRY_ROUTE, YEAR_RECAP_ROUTE] : ROUTES;
 }
 
 const REVIEW_ID_RE = /^[A-Za-z0-9_-]{16}$/;
