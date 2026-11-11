@@ -158,6 +158,7 @@ test("calendar feed: secret link shown once, bookings only, no student names, re
   const feed = await request(h.app).get(created.body.path);
   expect(feed.status).toBe(200);
   expect(feed.headers["content-type"]).toMatch(/^text\/calendar/);
+  expect(feed.headers["cache-control"]).toBe("private, no-store");
   expect(feed.text).toContain("UID:b-own@sc2tools.com");
   expect(feed.text).toContain("SUMMARY:Coaching session with Coach Kim");
   expect(feed.text).not.toMatch(/b-other|Secret Student|Other Student/);

@@ -6,6 +6,7 @@ const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
 const { sanitizeReportPrefs } = require("./reportPreferences");
+const { StreamReportPublication } = require("./streamReportPublication");
 const facts = require("./reportFacts");
 
 /**
@@ -54,6 +55,7 @@ class StreamReportsService {
     this.db = db;
     this.notifications = opts.notifications;
     this.logger = opts.logger || null;
+    this.publication = new StreamReportPublication(db);
     this.now = opts.now || Date.now;
   }
 
@@ -258,7 +260,10 @@ class StreamReportsService {
   async get(userId, streamId) {
     if (typeof streamId !== "string" || !/^[0-9a-z]{6,12}$/.test(streamId)) return null;
     const doc = await this.db.streamSessions.findOne({ userId, streamId, ...VISIBLE_REPORT }, { projection: { _id: 0, userId: 0, _schemaVersion: 0, reportState: 0 } });
-    return doc ? { ...doc, startAt: new Date(doc.startAt).toISOString(), endAt: new Date(doc.endAt).toISOString(), createdAt: new Date(doc.createdAt).toISOString() } : null;
+    if (!doc) return null;
+    const { publicId, publicEpoch, ...report } = doc;
+    return { ...report, startAt: new Date(doc.startAt).toISOString(), endAt: new Date(doc.endAt).toISOString(),
+      createdAt: new Date(doc.createdAt).toISOString(), publication: await this.publication.status(userId, { publicId, publicEpoch }) };
   }
 }
 

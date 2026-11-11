@@ -185,6 +185,62 @@ test("stream closure survives a failed build and a failed notification without c
   }
 });
 
+test("publishes only an opted-in aggregate report and invalidates the old address after opt-out or deletion", async () => {
+  const name = "publicstream";
+  const userId = "u_publicstream";
+  const slug = "stream-player-0123456789";
+  const streamId = "sample01";
+  await h.seedUser(name, { displayName: "Stream Player" });
+  await h.db.streamSessions.insertOne({
+    userId, streamId, games: 3, wins: 2, losses: 1, hours: 1.5, startAt: new Date("2026-11-10T22:42:31.000Z"),
+    endAt: new Date("2026-11-11T00:12:31.000Z"), createdAt: new Date(), bestWin: { gameId: "private-game-id", opponentMmr: 4242 },
+    matchups: [{ name: "PvZ", games: 3, wins: 2, losses: 1 }, { name: "SecretOppZed", games: 1 }],
+    mmr: { delta: 22, account: "Private account" }, clips: [{ minute: 5, reason: "Viewer private message" }],
+  });
+  const publishPath = `/v1/reports/streams/${streamId}/sharing`;
+  const publish = (enabled, actor = name) => request(h.app).patch(publishPath).set("authorization", h.bearer(actor)).send({ enabled });
+  const pref = (stream) => request(h.app).put("/v1/me/preferences/reports").set("authorization", h.bearer(name)).send({ stream });
+  await request(h.app).patch(publishPath).send({ enabled: true }).expect(401);
+  await publish(true, "bob").expect(404);
+  await publish(true).expect(409);
+  await h.db.users.updateOne({ userId }, { $set: { publicProfile: { enabled: true }, replaySharing: { slug, enabled: false } } });
+  const [first, repeated] = await Promise.all([publish(true).expect(200), publish(true).expect(200)]);
+  expect(first.body).toEqual(repeated.body);
+  expect(first.body.href).toMatch(/^\/players\/stream-player-0123456789\/streams\/[\w-]{16}$/);
+  expect(first.body.href).not.toContain(streamId);
+  const address = `/v1/public${first.body.href}`;
+  const shared = await request(h.app).get(address).expect(200);
+  expect(shared.headers["cache-control"]).toBe("private, no-store");
+  expect(shared.body).toEqual({ player: "Stream Player", slug, date: "2026-11-10", games: 3, wins: 2, losses: 1, hours: 1.5, mmrDelta: 22,
+    matchups: [{ name: "PvZ", games: 3, wins: 2, losses: 1 }] });
+  expect(shared.text).not.toMatch(/private-game-id|Private account|Viewer private message|SecretOppZed|22:42:31|4242/);
+
+  await pref(false).expect(200);
+  await request(h.app).get(address).expect(404);
+  await pref(true).expect(200);
+  await request(h.app).get(address).expect(404);
+  const again = await publish(true).expect(200);
+  expect(again.body.href).not.toBe(first.body.href);
+  const next = `/v1/public${again.body.href}`;
+  await request(h.app).get(next).expect(200);
+  const { SECTION_KEYS } = require("../src/util/publicPlayerConfig");
+  const sections = Object.fromEntries(SECTION_KEYS.map((key) => [key, false]));
+  const profile = (enabled, revision) => request(h.app).put("/v1/me/public-profile").set("authorization", h.bearer(name)).send({ enabled, revision, slug, ...sections });
+  await profile(false, 0).expect(200);
+  await request(h.app).get(next).expect(404);
+  await profile(true, 1).expect(200);
+  await request(h.app).get(next).expect(404);
+  const renewed = `/v1/public${(await publish(true).expect(200)).body.href}`;
+  await request(h.app).get(renewed).expect(200);
+  await publish(false).expect(200);
+  await request(h.app).get(renewed).expect(404);
+  const deletion = `/v1/public${(await publish(true).expect(200)).body.href}`;
+  await h.db.users.updateOne({ userId }, { $set: { _gdprMutation: { id: "deleting" } } });
+  await request(h.app).get(deletion).expect(404);
+  await h.db.users.deleteOne({ userId });
+  await request(h.app).get(deletion).expect(404);
+});
+
 test("Today links the last completed report Monday through Wednesday in the saved time zone", () => {
   const { todayReportWeek } = require("../src/services/reportPreferences");
   const wednesdayUtc = Date.parse("2026-11-12T02:00:00.000Z");

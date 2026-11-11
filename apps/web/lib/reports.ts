@@ -22,8 +22,12 @@ export type WeeklyReport = {
   navigation: { previous: string | null; next: string | null; current: string };
 };
 
+export type StreamPublication = { eligible: boolean; enabled: boolean; href: string | null };
+export type PublicStreamReport = WinLoss & { player: string; slug: string; date: string; hours: number; mmrDelta: number | null; matchups: NamedRecord[] };
+
 export type StreamSummary = { id: string; startAt: string; endAt: string; games: number; wins: number; losses: number; hours: number; mmrDelta: number | null; endedBy: string };
 export type StreamReport = WinLoss & {
+  publication?: StreamPublication;
   streamId: string; startAt: string; endAt: string; endedBy: "manual" | "idle" | "restart"; hours: number;
   matchups: NamedRecord[]; maps: NamedRecord[]; builds: NamedRecord[];
   mmr: (MmrRow & { points: number[] }) | null;

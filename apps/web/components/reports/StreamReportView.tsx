@@ -8,6 +8,7 @@ import { Card, Skeleton } from "@/components/ui/Card";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { RequestError } from "@/components/ui/RequestError";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+import { StreamReportSharing } from "./StreamReportSharing";
 
 const ENDED = { manual: "You ended this stream in the Dock.", idle: "Closed after four hours without a game.", restart: "Closed when a new session started in the Dock." };
 
@@ -37,6 +38,7 @@ export function StreamReportView({ id }: { id: string }) {
         <Records title="Builds" rows={report.builds} />
       </div>
       <StreamExtras report={report} />
+      {report.publication ? <StreamReportSharing id={id} publication={report.publication} onSave={(publication) => void query.mutate({ ...report, publication }, { revalidate: false })} /> : null}
       <p className="text-caption text-text-muted">{ENDED[report.endedBy] || ""}</p>
     </>}
   </div>;

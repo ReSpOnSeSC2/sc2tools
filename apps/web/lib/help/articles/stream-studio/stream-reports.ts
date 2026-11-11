@@ -24,6 +24,7 @@ const article: HelpArticle = {
     ] },
     { type: "heading", text: "Share it", anchor: "share" },
     { type: "paragraph", text: "**Copy Discord summary** copies a short text recap with your record, MMR, matchups, best win and builds. It never includes opponent or viewer names. To post automatically instead, see [Post your games to Discord](/help/discord)." },
+    { type: "paragraph", text: "If your public player page is enabled, **Share report** creates a public link with your record, time played, matchup records and MMR change. The link omits opponent and viewer information. **Turn off sharing** ends access. Turning off the public player page or stream reports also revokes the link." },
     { type: "heading", text: "Turn it off", anchor: "settings" },
     { type: "paragraph", text: "Switch off **Stream reports** in [Settings → Preferences → Reports](/settings?tab=preferences#reports). **End stream** still closes the session, but no report is saved." },
   ],
