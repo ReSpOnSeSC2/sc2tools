@@ -29,6 +29,14 @@ scene, copy the separate private vertical URL from Layout and set the OBS
 Browser Source to 1080 × 1920. Verify both scenes off-air. Use **Reset layout to
 default** and save to restore the stock widget positions for that orientation.
 
+## Twitch Channel Points rewards
+
+In Chat & alerts, open Twitch automation and connect Channel Points reward actions separately. Grant the incremental reward scope in the broadcaster’s account, choose the OBS source and save an enabled mapping. Verify one controlled redemption for each action you use, plus cooldown, unavailable-action handling and manual or automatic settlement. Automatic settlement requires an app-managed Twitch reward. Disable the mappings or disconnect reward permission to stop actions.
+
+## Desktop Randomizer
+
+Pair a released Windows agent, enable the desktop roll in Settings → Randomizer and load an eligible human 1v1. Verify Play it, one Reroll, Not now and the private Challenge totals. Repeat with an active Randomizer source to confirm the browser handles the roll. Check that resetting the Challenge keeps the replay and build library.
+
 ## Environment variables
 
 Keep secrets in the relevant platform's environment store or a gitignored local
@@ -151,8 +159,6 @@ See the [database restore runbook](runbooks/restore-database.md),
 | 90, 96, 184–187 | On the released agent, try a fresh link and an existing link, replay folder and history choices, Save and Revert, shortcuts, restart-required changes, tray status and Practice HUD placement. Check voice, countdown and capture exclusion off-air. |
 | 157–159 | On an off-air OBS scene, verify the timed poll, clip log, Large overlay scale and starter widget connections. Source presence is checked by connection; confirm visibility and audio directly in OBS. |
 | 87, 193, 194 | After updating and re-analyzing a replay, follow both cameras, check the attention heatmap, compare recorded control-group and camera phases, and verify unit trades, lifespans and build-supply labels. |
-| 189 | In Chat & alerts, open Twitch automation and connect Channel Points reward actions separately. Grant the incremental reward scope in the broadcaster’s account, choose the OBS source and save an enabled mapping. Verify one controlled redemption for each action you use, plus cooldown, unavailable-action handling and manual or automatic settlement. Automatic settlement requires an app-managed Twitch reward. Disable the mappings or disconnect reward permission to stop actions. |
-| 191 | Pair a released Windows agent, enable the desktop roll in Settings → Randomizer and load an eligible human 1v1. Verify Play it, one Reroll, Not now and the private Challenge totals. Repeat with an active Randomizer source to confirm the browser handles the roll. Check that resetting the Challenge keeps the replay and build library. |
 | 195 | Test the React Locker roster and Shelf separately with disposable linked accounts. Check role scoping, legacy media, local backup and revision-checked restore. Keep Classic available until the owner has recorded one week of real use for each view. |
 
 Use the [roadmap ledger](handoff/roadmap-progress-2026-10-28.json) for
