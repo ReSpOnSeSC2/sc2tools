@@ -44,7 +44,7 @@ export function OverlayLayoutEditor({ profile, onChange, token, origin, disabled
       <Button type="button" variant={canvas === "landscape" ? "primary" : "secondary"} aria-pressed={canvas === "landscape"} onClick={() => setCanvas("landscape")}>Landscape</Button>
       <Button type="button" variant={canvas === "vertical" ? "primary" : "secondary"} aria-pressed={canvas === "vertical"} onClick={() => setCanvas("vertical")}>Vertical</Button>
     </div>
-    <p id="layout-move-help" className="text-caption text-text-muted">Drag a widget, or focus it and use the arrow keys to move 1 pixel. Hold Shift to move 10 pixels. The shaded areas mark the StarCraft II HUD.</p>
+    <p id="layout-move-help" className="text-caption text-text-muted">Drag a widget, or focus it and use the arrow keys to move 1 pixel. Hold Shift to move 10 pixels. The shaded areas mark the minimap, command card, and resources and supply.</p>
     <div className={canvas === "vertical" ? "mx-auto w-full max-w-[340px]" : "w-full"}>
       <OverlayLayoutCanvas key={canvas} size={size} layout={layout} theme={profile.theme} selected={selected} boxes={boxes}
         snap={snap} names={NAMES} onSelect={setSelected} onMeasure={measure} onPlace={place} />

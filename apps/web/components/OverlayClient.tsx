@@ -263,7 +263,7 @@ function ConnectedOverlayClient({
 
   return (
     <div
-      className="relative h-screen w-screen"
+      className="relative h-screen w-screen overflow-hidden"
       style={{ background: "transparent", ...themeVars } as CSSProperties}
     >
       <OverlayCheckBadge status={connectionStatus} live={hasActiveOverlayGame(liveGame)} />
