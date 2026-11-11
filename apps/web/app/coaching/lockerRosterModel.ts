@@ -1,3 +1,11 @@
+import type { ClientApiError } from "@/lib/clientApi";
+
+/** Permission refusals and uncertain actor revisions never retain a prior snapshot. */
+export function retryableLockerRead(error: ClientApiError | undefined): boolean {
+  return error instanceof TypeError || Boolean(error &&
+    (error.status === 0 || error.status === 429 || error.status >= 500));
+}
+
 export type LockerCoach = {
   id: string;
   name: string;

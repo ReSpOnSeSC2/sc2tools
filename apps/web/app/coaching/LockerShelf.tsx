@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -14,6 +14,8 @@ import { rosterStudents } from "./lockerRosterModel";
 import { LockerShelfEditor } from "./LockerShelfEditor";
 import { LockerShelfItem } from "./LockerShelfItem";
 import { changeShelf, cloneShelfItem, hasShelfId, reusableShelfItem, shelfItems, shelfTitle, type ShelfAsset, type ShelfItem } from "./lockerShelfModel";
+import { LockerReadRetry } from "./LockerReadRetry";
+import { LockerViewScope } from "./LockerViewScope";
 import { useLockerView } from "./useLockerView";
 
 type ShelfProps = { viewerRole: "coach" | "admin" | "student"; memberId: string | null };
@@ -21,19 +23,32 @@ type AddTarget = { studentId: string | null; rev: number };
 
 export default function LockerShelf(props: ShelfProps) {
   const { userId } = useAuth();
-  return userId ? <Shelf key={userId + "/" + props.viewerRole + "/" + props.memberId} accountId={userId} {...props} /> : null;
+  return userId ? <LockerViewScope key={JSON.stringify([userId, props.viewerRole, props.memberId])}>
+    <Shelf accountId={userId} {...props} />
+  </LockerViewScope> : null;
 }
 
 function Shelf({ accountId, viewerRole, memberId }: ShelfProps & { accountId: string }) {
   const locker = useLockerView(accountId, "shelf", viewerRole, memberId);
-  const confirmation = useConfirm(accountId);
-  const [view, setView] = useState("shelf"), [selected, setSelected] = useState("");
-  const [editor, setEditor] = useState<AddTarget | null>(null), [help, setHelp] = useState(false);
-  const doc = locker.document;
-  if (!doc) return <Card>
+  if (!locker.document) return <Card>
     <h2 className="text-h4 font-semibold text-text">{locker.loading ? "Loading the Locker shelf…" : "The Locker shelf could not load"}</h2>
     {!locker.loading ? <Button className="mt-3" onClick={() => void locker.retry()}>Try again</Button> : null}
   </Card>;
+  return <ShelfDocument accountId={accountId} viewerRole={viewerRole} memberId={memberId} locker={locker} doc={locker.document} />;
+}
+
+function ShelfDocument({ accountId, viewerRole, memberId, locker, doc }: ShelfProps & {
+  accountId: string; locker: ReturnType<typeof useLockerView>; doc: NonNullable<ReturnType<typeof useLockerView>["document"]>;
+}) {
+  const confirmation = useConfirm(accountId);
+  const cancelConfirmation = confirmation.cancel;
+  const [view, setView] = useState("shelf"), [selected, setSelected] = useState("");
+  const [editor, setEditor] = useState<AddTarget | null>(null), [help, setHelp] = useState(false);
+  const writeBlocked = locker.busy || locker.refreshRequired;
+  const retryNotice = locker.refreshRequired ? <LockerReadRetry retry={locker.retry} retrying={locker.retrying} /> : null;
+  useEffect(() => {
+    if (locker.refreshRequired) cancelConfirmation();
+  }, [locker.refreshRequired, cancelConfirmation]);
 
   const staff = viewerRole !== "student";
   const students = rosterStudents(doc.state).filter(student => staff || student.id === memberId);
@@ -83,17 +98,17 @@ function Shelf({ accountId, viewerRole, memberId }: ShelfProps & { accountId: st
         {students.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
       </Select>
     </Field></div> : null}
-    {staff && target !== undefined ? <Button disabled={locker.busy} onClick={() => setEditor({ studentId: target, rev: doc.rev })}>
+    {staff && target !== undefined ? <Button disabled={writeBlocked} onClick={() => setEditor({ studentId: target, rev: doc.rev })}>
       {library ? "Add library item" : "Add shelf item"}
     </Button> : null}
     {cards.length ? <ul className="space-y-2" aria-label={library ? "Library items" : "Shelf items"}>
       {cards.map(item => <LockerShelfItem key={item.id} state={doc.state} item={item}>
         {staff ? <>
-          {student && (library || reusableShelfItem(item)) ? <Button size="sm" variant="secondary" disabled={locker.busy}
+          {student && (library || reusableShelfItem(item)) ? <Button size="sm" variant="secondary" disabled={writeBlocked}
             aria-label={(library ? "Copy to shelf: " : "Save to library: ") + shelfTitle(item)} onClick={() => void copy(item)}>
             {library ? "Copy to shelf" : "Save to library"}
           </Button> : null}
-          <Button size="sm" variant="ghost" aria-label={"Remove " + shelfTitle(item)} disabled={locker.busy} onClick={() => void remove(item)}>Remove</Button>
+          <Button size="sm" variant="ghost" aria-label={"Remove " + shelfTitle(item)} disabled={writeBlocked} onClick={() => void remove(item)}>Remove</Button>
         </> : null}
       </LockerShelfItem>)}
     </ul> : <p className="text-caption text-text-muted">{library ? "The shared library is empty." : "No feedback on this shelf yet."}</p>}
@@ -104,10 +119,11 @@ function Shelf({ accountId, viewerRole, memberId }: ShelfProps & { accountId: st
       <h2 className="text-h4 font-semibold text-text">{staff ? "Locker shelf" : "Your shelf"}</h2>
       <div className="flex flex-wrap gap-2">
         <Button variant="ghost" onClick={() => setHelp(true)}>Shelf help</Button>
-        {staff ? <Button variant="secondary" disabled={!backup || locker.busy} onClick={() => void restore()}>Restore previous version</Button> : null}
+        {staff ? <Button variant="secondary" disabled={!backup || writeBlocked} onClick={() => void restore()}>Restore previous version</Button> : null}
         {staff && backup ? <Button variant="ghost" onClick={() => downloadLockerBackup(backup)}>Download backup</Button> : null}
       </div>
     </Card.Header>
+    {editor || help ? null : retryNotice}
     {staff ? <Tabs value={view} onValueChange={setView}>
       <Tabs.List ariaLabel="Locker shelf sections">
         <Tabs.Trigger value="shelf">Student shelves</Tabs.Trigger>
@@ -116,8 +132,9 @@ function Shelf({ accountId, viewerRole, memberId }: ShelfProps & { accountId: st
       <Tabs.Content value="shelf">{!library ? content : null}</Tabs.Content>
       <Tabs.Content value="library">{library ? content : null}</Tabs.Content>
     </Tabs> : content}
-    {editor ? <LockerShelfEditor library={editor.studentId === null} onClose={() => setEditor(null)} onAdd={add} busy={locker.busy} /> : null}
+    {editor ? <LockerShelfEditor library={editor.studentId === null} onClose={() => setEditor(null)} onAdd={add} busy={locker.busy} retryNotice={retryNotice} /> : null}
     {help ? <Modal open title="Shelf help" onClose={() => setHelp(false)}>
+      {retryNotice}
       <div className="space-y-3 text-body text-text">
         <p>Student shelves hold notes, media, replays and practice PDFs from coaching sessions.</p>
         {staff ? <>

@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Coaching Content Studio
+
+- Create guided notes, voice memos, videos, annotated screenshots, replay
+  feedback, and practice PDFs on student shelves. Content Studio keeps its
+  own revision-checked backup and restore history.
+
 ### Coaching Locker shelf
 
 - Open the React Locker Shelf to review student feedback, manage reusable
@@ -69,6 +75,11 @@ corresponding GitHub Release.
   successfully saved changes. Instant controls apply when you change them.
 - Compare recent donation totals with the site's monthly running costs.
   Supporters can choose to appear publicly after review.
+
+### Coaching notifications
+
+- Read booking notices in Sessions or the shared notifications inbox to clear
+  the same alert. A newer cancellation remains unread until you see it.
 
 ### Trends and arcade fixes
 
@@ -268,6 +279,12 @@ corresponding GitHub Release.
 - Coaches and admins can open the Locker roster to manage linked accounts,
   display names and focus notes. Roster saves create a local JSON backup
   with a revision-checked restore action.
+
+### Coaching Locker Worksheets
+
+- Open Worksheets from the Locker to create and send drafts, reuse templates,
+  annotate screenshots, or submit answers and replay files. Worksheets keeps a
+  local backup for revision-checked restore. Classic Locker remains available.
 
 ### Coaching sessions and prep digest
 
@@ -5707,7 +5724,12 @@ Released as `agent-v0.4.0` on GitHub. Installer:
   `(+N more)` when more than one folder is being watched. The watcher
   picks up new entries on its next sweep without a restart.
 
-## [Unreleased] - 2026-05-04
+## [Unreleased]
+
+### Coaching notifications
+
+- Read booking notices in Sessions or the shared notifications inbox to clear
+  the same alert. A newer cancellation remains unread until you see it. - 2026-05-04
 
 ### Added
 

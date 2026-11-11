@@ -1,0 +1,562 @@
+{
+  "guidance": {
+    "id": "guide-worksheet",
+    "label": "Worksheet",
+    "prompts": [
+      "What should the student notice before you explain it?",
+      "Which plausible wrong answer would reveal a real misconception?",
+      "What tradeoff should they explain in their own words?",
+      "What replay evidence would prove the lesson transferred into play?"
+    ],
+    "structure": "Observe → Explain → Decide → Prove"
+  },
+  "templates": [
+    {
+      "id": "core-session-prep",
+      "category": "core",
+      "title": "Session prep — bring one useful problem",
+      "description": "Helps the student arrive with evidence, context, and one question worth solving.",
+      "coachPrompts": [
+        "Which recurring decision is worth spending session time on?",
+        "Which replays show the ordinary pattern rather than an extreme result?",
+        "What should the student be able to do without you after this session?"
+      ],
+      "blocks": [
+        {
+          "ty": "scale",
+          "q": "How clear is the main problem you want help with? 1 = “I only know the result was bad.” 10 = “I can name the moment, cue, and decision.”"
+        },
+        {
+          "ty": "long",
+          "q": "Describe one situation that kept repeating. What did you expect to happen, and what happened instead?"
+        },
+        {
+          "ty": "long",
+          "q": "What information did you have before the decision? Separate what you saw from what you assumed."
+        },
+        {
+          "ty": "replay",
+          "q": "Attach up to three representative replays. Include an ordinary game—not only your cleanest win or worst loss."
+        },
+        {
+          "ty": "long",
+          "q": "What would make this session feel useful when you return to ladder?"
+        }
+      ],
+      "matchup": null
+    },
+    {
+      "id": "core-weekly-check-in",
+      "category": "core",
+      "title": "Weekly check-in — signal, not diary",
+      "description": "A short check-in that surfaces transfer, confusion, and the next useful coaching decision.",
+      "coachPrompts": [
+        "What evidence would show last week’s focus transferring into play?",
+        "Does the current difficulty need a clearer cue, a tighter rule, or more repetition?",
+        "What should remain unchanged while the next skill develops?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "What single focus did you practice, and roughly how many games did you give it?"
+        },
+        {
+          "ty": "long",
+          "q": "Name one cue you noticed earlier than you would have last week."
+        },
+        {
+          "ty": "long",
+          "q": "Where did your plan become unclear? Describe the first uncertain moment, not only the final loss."
+        },
+        {
+          "ty": "mc",
+          "q": "What does this focus need next?",
+          "opts": [
+            "More repetition with no change",
+            "A tighter decision rule",
+            "A different practice drill",
+            "Replay review before deciding",
+            "I am not sure yet"
+          ]
+        },
+        {
+          "ty": "replay",
+          "q": "Attach one replay that best represents the week. Representative matters more than impressive."
+        }
+      ],
+      "matchup": null
+    },
+    {
+      "id": "core-build-understanding",
+      "category": "core",
+      "title": "Build understanding — explain the branches",
+      "description": "Checks whether the student understands the build as a decision system, not a memorized list.",
+      "coachPrompts": [
+        "Which branch is the student memorizing without understanding?",
+        "What visible cue makes that branch necessary?",
+        "What recovery is both safe and realistic when execution breaks?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "What position is this build trying to create, and what makes that position useful?"
+        },
+        {
+          "ty": "long",
+          "q": "Where is the first scouting-dependent branch? Name the cue and the response."
+        },
+        {
+          "ty": "long",
+          "q": "Which benchmark tells you the build is healthy? What usually caused it to miss?"
+        },
+        {
+          "ty": "long",
+          "q": "What part of the build is flexible, and what part should remain stable?"
+        },
+        {
+          "ty": "long",
+          "q": "If the opening is disrupted, what is the safest playable recovery?"
+        },
+        {
+          "ty": "replay",
+          "q": "Attach one clean execution and one disrupted execution of this build."
+        }
+      ],
+      "matchup": null
+    },
+    {
+      "id": "core-replay-review",
+      "category": "core",
+      "title": "Replay review — evidence before verdict",
+      "description": "Moves the student from “I lost because…” toward observable cause and a reusable rule.",
+      "coachPrompts": [
+        "What is the earliest actionable cause rather than the final symptom?",
+        "Which belief can the replay confirm or disprove?",
+        "What one reusable if/then rule should emerge from the review?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "Before opening the replay, what do you currently believe decided the game?"
+        },
+        {
+          "ty": "long",
+          "q": "Find the first moment the game became harder. What changed, and what evidence was visible just before it?"
+        },
+        {
+          "ty": "long",
+          "q": "What were your realistic options at that moment?"
+        },
+        {
+          "ty": "long",
+          "q": "Which option did you choose, and what tradeoff came with it?"
+        },
+        {
+          "ty": "long",
+          "q": "After reviewing the evidence, what part of your original explanation changed?"
+        },
+        {
+          "ty": "long",
+          "q": "Finish this rule: “Next time, if I see ___, I will ___ because ___.”"
+        }
+      ],
+      "matchup": null
+    },
+    {
+      "id": "matchup-pvp-decision-lab",
+      "title": "PvP decision lab — information before commitment",
+      "description": "A build-neutral decision worksheet. It teaches the student to separate observed information from assumptions and submit representative evidence.",
+      "coachPrompts": [
+        "Which commitment happened before the student had enough information?",
+        "What was the smallest safe response supported by the known facts?",
+        "Which cue should trigger the correct branch next game?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "Before your first irreversible commitment—extra Gateways, tech, or a Nexus—what information did you have, and what were you still assuming?"
+        },
+        {
+          "ty": "mc",
+          "q": "Which cue most changed your plan?",
+          "opts": [
+            "Opponent’s natural timing",
+            "Gateway or unit count at the front",
+            "A missing probe or possible proxy path",
+            "The first tech or specialist-unit reveal",
+            "I changed course without a clear cue"
+          ]
+        },
+        {
+          "ty": "long",
+          "q": "Write a one-sentence response rule for each branch: one-base pressure, early expansion, and hidden tech."
+        },
+        {
+          "ty": "long",
+          "q": "Choose one engagement or defense. What space did you need to control, which unit could not be lost, and what would make you disengage?"
+        },
+        {
+          "ty": "scale",
+          "q": "How confidently can you distinguish pressure from greed before committing? 1 = guessing; 10 = I can name the cues and my response."
+        },
+        {
+          "ty": "replay",
+          "q": "Attach 2–3 PvP replays using the same opening: one clean win, one loss, and—if available—one game where you felt uncertain. Do not cherry-pick."
+        }
+      ],
+      "matchup": "PvP"
+    },
+    {
+      "id": "matchup-pvt-decision-lab",
+      "title": "PvT decision lab — economy, production, movement",
+      "description": "A build-neutral decision worksheet. It teaches the student to separate observed information from assumptions and submit representative evidence.",
+      "coachPrompts": [
+        "Which read was missing: economy, production, or movement?",
+        "Did the response match the visible threat or the fear of one?",
+        "What preparation would make the next commitment reversible?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "At your first reliable scouting moment, what did Terran show in three categories: economy, production, and movement? Separate visible facts from inference."
+        },
+        {
+          "ty": "mc",
+          "q": "Which cue most changed your plan?",
+          "opts": [
+            "Natural Command Center timing",
+            "Missing or delayed expansion",
+            "Factory, add-on, or production count",
+            "Units leaving the Terran side of the map",
+            "My scout was denied and I filled the gap with an assumption"
+          ]
+        },
+        {
+          "ty": "long",
+          "q": "Write your response rule for early pressure, a standard bio setup, and economic or tech greed."
+        },
+        {
+          "ty": "long",
+          "q": "Before your first major move-out or defense, what provided vision, what was your retreat route, and where would reinforcements enter?"
+        },
+        {
+          "ty": "scale",
+          "q": "How confidently can you identify Terran’s plan before its first committed move-out? 1 = reacting after contact; 10 = reading the setup from evidence."
+        },
+        {
+          "ty": "replay",
+          "q": "Attach 2–3 PvT replays with the same opening. Include one game where your first read was correct and one where your read or response broke down."
+        }
+      ],
+      "matchup": "PvT"
+    },
+    {
+      "id": "matchup-pvz-decision-lab",
+      "title": "PvZ decision lab — pressure without losing the map",
+      "description": "A build-neutral decision worksheet. It teaches the student to separate observed information from assumptions and submit representative evidence.",
+      "coachPrompts": [
+        "What specific result was the pressure meant to buy?",
+        "Which Zerg cues best separated worker production from units?",
+        "What cost at home made the pressure unprofitable?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "At your first reliable read, record what you actually saw about the Zerg third, gas mining, visible Queens or lings, and drone saturation. What remained unknown?"
+        },
+        {
+          "ty": "mc",
+          "q": "Which cue most changed your plan?",
+          "opts": [
+            "A missing or delayed third",
+            "An unusual ling count",
+            "Continued gas mining",
+            "Queen or Spore positioning",
+            "My scouting unit was denied before confirming anything"
+          ]
+        },
+        {
+          "ty": "long",
+          "q": "Write your response rule for an early all-in, low-drone pressure, and normal macro or greed."
+        },
+        {
+          "ty": "long",
+          "q": "What result makes your pressure worthwhile? If it deals no direct damage, which economy, tech, and defensive coverage must remain safe?"
+        },
+        {
+          "ty": "scale",
+          "q": "How confidently can you tell when Zerg is building workers versus units? 1 = judging after the attack arrives; 10 = using several confirmed cues."
+        },
+        {
+          "ty": "replay",
+          "q": "Attach 2–3 PvZ replays with the same opening. Include one game where pressure created value and one where the pressure cost too much at home."
+        }
+      ],
+      "matchup": "PvZ"
+    },
+    {
+      "id": "matchup-zvp-decision-lab",
+      "title": "ZvP decision lab — drone with evidence",
+      "description": "A build-neutral decision worksheet. It teaches the student to separate observed information from assumptions and submit representative evidence.",
+      "coachPrompts": [
+        "Which confirmed cue should stop drones, and which should restart them?",
+        "Where can follow-up scouting reliably confirm the Protoss branch?",
+        "Was the response based on visible tech or an untested fear?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "From your Overlord and follow-up scouting, what did you confirm about the Nexus, Gateway pressure, gas usage, tech path, and possible proxy space?"
+        },
+        {
+          "ty": "mc",
+          "q": "Which cue most changed your plan?",
+          "opts": [
+            "Missing or delayed natural",
+            "Gateway-unit or Adept count",
+            "A second gas or early tech clue",
+            "Stargate or first air-unit reveal",
+            "Scouting was denied before I confirmed a branch"
+          ]
+        },
+        {
+          "ty": "long",
+          "q": "Write your response rule for early Gateway pressure, Oracle or Adept pressure, and a greedy third or tech setup."
+        },
+        {
+          "ty": "long",
+          "q": "At what evidence did you stop droning and make units? Was that trigger visible in the replay, or was it based on fear?"
+        },
+        {
+          "ty": "scale",
+          "q": "How confidently can you choose a drone ceiling from scouting information? 1 = mostly instinct; 10 = I can name the cue and production response."
+        },
+        {
+          "ty": "replay",
+          "q": "Attach 2–3 ZvP replays. Include one where your drone-to-unit decision felt correct and one where you were too greedy or too defensive."
+        }
+      ],
+      "matchup": "ZvP"
+    },
+    {
+      "id": "matchup-zvt-decision-lab",
+      "title": "ZvT decision lab — connect production to drone safety",
+      "description": "A build-neutral decision worksheet. It teaches the student to separate observed information from assumptions and submit representative evidence.",
+      "coachPrompts": [
+        "Which Terran production cue defines the safe drone window?",
+        "How can Queens, creep, and vision buy more decision time?",
+        "Did the defense preserve the macro engine or interrupt it?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "What did the first Reaper, Overlord path, or follow-up scout confirm about Terran’s expansion, Factory add-on, reactor production, Starport, and Hellion count?"
+        },
+        {
+          "ty": "mc",
+          "q": "Which cue most changed your plan?",
+          "opts": [
+            "Missing or delayed Command Center",
+            "Factory add-on or reactor production",
+            "Hellion count and movement",
+            "Starport unit or timing",
+            "Scouting was denied and I guessed"
+          ]
+        },
+        {
+          "ty": "long",
+          "q": "Write your response rule for one-base pressure, Hellion-based pressure into air or bio, and a fast third or mech setup."
+        },
+        {
+          "ty": "long",
+          "q": "Pick one defensive cycle. How did Queens, creep, vision, and unit positioning protect drones without overproducing defense?"
+        },
+        {
+          "ty": "scale",
+          "q": "How confidently can you connect Terran production to a safe drone window? 1 = reacting on arrival; 10 = adjusting from confirmed production."
+        },
+        {
+          "ty": "replay",
+          "q": "Attach 2–3 ZvT replays. Include one where your drone window was correct and one where your economy or defense became unbalanced."
+        }
+      ],
+      "matchup": "ZvT"
+    },
+    {
+      "id": "matchup-zvz-decision-lab",
+      "title": "ZvZ decision lab — set the drone ceiling deliberately",
+      "description": "A build-neutral decision worksheet. It teaches the student to separate observed information from assumptions and submit representative evidence.",
+      "coachPrompts": [
+        "Which evidence supports the student’s chosen drone ceiling?",
+        "What cue should make units, and what cue should allow drones again?",
+        "Did the opponent truly commit or only threaten aggression?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "What did you confirm about the opponent’s natural, gas, pool timing, ling count, Baneling Nest, and drone count before choosing your own drone ceiling?"
+        },
+        {
+          "ty": "mc",
+          "q": "Which cue most changed your plan?",
+          "opts": [
+            "Missing or delayed natural",
+            "Early ling count",
+            "Continued gas mining",
+            "Visible drone or Queen count",
+            "I had no reliable read"
+          ]
+        },
+        {
+          "ty": "long",
+          "q": "Write your response rule for a ling flood, ling-bane pressure, and a fast third or economic opening."
+        },
+        {
+          "ty": "long",
+          "q": "Name the exact cue that allowed you to drone again. If there was no cue, what information should you seek next time?"
+        },
+        {
+          "ty": "scale",
+          "q": "How confidently can you distinguish real aggression from pressure that only threatens aggression? 1 = always guessing; 10 = using economy, gas, and unit evidence together."
+        },
+        {
+          "ty": "replay",
+          "q": "Attach 2–3 ZvZ replays with the same opening. Include one stable early game and one where your drone or unit decision became unclear."
+        }
+      ],
+      "matchup": "ZvZ"
+    },
+    {
+      "id": "matchup-tvp-decision-lab",
+      "title": "TvP decision lab — move out with a complete picture",
+      "description": "A build-neutral decision worksheet. It teaches the student to separate observed information from assumptions and submit representative evidence.",
+      "coachPrompts": [
+        "Which move-out checklist item was missing before commitment?",
+        "Which Protoss branch did the available evidence support?",
+        "What retreat or counterattack condition needed an answer?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "From the SCV, Reaper, scan, or first contact, what did you confirm about Protoss economy, Gateway units, gas usage, tech clues, and possible proxy space?"
+        },
+        {
+          "ty": "mc",
+          "q": "Which cue most changed your plan?",
+          "opts": [
+            "Nexus timing",
+            "Gateway-unit count",
+            "Missing Pylon or possible proxy",
+            "First tech or specialist-unit reveal",
+            "I moved out without enough information"
+          ]
+        },
+        {
+          "ty": "long",
+          "q": "Write your response rule for one-base or proxy pressure, fast tech pressure, and a standard expansion or greedy setup."
+        },
+        {
+          "ty": "long",
+          "q": "Before your move-out, what was your detection plan, reinforcement path, retreat condition, and answer to a counterattack or warp-in?"
+        },
+        {
+          "ty": "scale",
+          "q": "How confidently can you distinguish Protoss pressure from tech or economy before committing units? 1 = learning on contact; 10 = acting from confirmed clues."
+        },
+        {
+          "ty": "replay",
+          "q": "Attach 2–3 TvP replays with the same opening. Include one move-out that had a clear purpose and one where information or preparation was missing."
+        }
+      ],
+      "matchup": "TvP"
+    },
+    {
+      "id": "matchup-tvt-decision-lab",
+      "title": "TvT decision lab — vision creates the siege advantage",
+      "description": "A build-neutral decision worksheet. It teaches the student to separate observed information from assumptions and submit representative evidence.",
+      "coachPrompts": [
+        "What source of vision supported the siege decision?",
+        "Which zone and reinforcement timing mattered most?",
+        "What exit condition would have prevented overextension?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "What did your Reaper, scan, or early units confirm about gas count, expansion timing, Factory or Starport setup, and mobile-unit count?"
+        },
+        {
+          "ty": "mc",
+          "q": "Which cue most changed your plan?",
+          "opts": [
+            "Expansion timing",
+            "Reaper or Hellion count",
+            "Factory or Starport production",
+            "Viking, Raven, or Tank count",
+            "I committed without a reliable read"
+          ]
+        },
+        {
+          "ty": "long",
+          "q": "Write your response rule for proxy or one-base air pressure, a fast expansion, and a Tank-based push or greedy setup."
+        },
+        {
+          "ty": "long",
+          "q": "Choose one siege sequence. What gave vision, which zone had to remain controlled, and what was the exit condition before you advanced?"
+        },
+        {
+          "ty": "scale",
+          "q": "How confidently can you judge when to advance, hold, or reposition a siege line? 1 = deciding after contact; 10 = using vision and reinforcement timing."
+        },
+        {
+          "ty": "replay",
+          "q": "Attach 2–3 TvT replays. Include one game where vision supported your positioning and one where you moved or sieged with incomplete information."
+        }
+      ],
+      "matchup": "TvT"
+    },
+    {
+      "id": "matchup-tvz-decision-lab",
+      "title": "TvZ decision lab — give every move-out a purpose",
+      "description": "A build-neutral decision worksheet. It teaches the student to separate observed information from assumptions and submit representative evidence.",
+      "coachPrompts": [
+        "What single purpose was the move-out meant to serve?",
+        "Which Zerg economy or unit cues justified that purpose?",
+        "When did the purpose stop being safely achievable?"
+      ],
+      "blocks": [
+        {
+          "ty": "long",
+          "q": "What did the first Reaper, scan, or pressure unit confirm about Hatchery timing, gas, pool, third base, ling count, and early creep spread?"
+        },
+        {
+          "ty": "mc",
+          "q": "Which cue most changed your plan?",
+          "opts": [
+            "Third-base timing",
+            "Ling or Roach count",
+            "Continued gas mining",
+            "Creep and Queen positioning",
+            "I followed my build without updating the read"
+          ]
+        },
+        {
+          "ty": "long",
+          "q": "Write your response rule for early ling or Roach pressure, a normal macro setup, and an unusually greedy economy or fast tech."
+        },
+        {
+          "ty": "long",
+          "q": "Give your next move-out one primary purpose: clear creep, force units, deny economy, threaten tech, or finish the game. What makes you leave safely if that purpose is no longer achievable?"
+        },
+        {
+          "ty": "scale",
+          "q": "How confidently can you tell whether pressure is creating value without forcing direct damage? 1 = measuring only kills; 10 = tracking creep, units, economy, and map access."
+        },
+        {
+          "ty": "replay",
+          "q": "Attach 2–3 TvZ replays. Include one purposeful move-out and one where pressure stayed too long or had no clear objective."
+        }
+      ],
+      "matchup": "TvZ"
+    }
+  ]
+}

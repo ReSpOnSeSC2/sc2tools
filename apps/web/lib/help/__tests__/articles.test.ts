@@ -315,6 +315,7 @@ describe("reviews and coaching articles", () => {
     expect(helpArticleAnchors(article!)).toEqual([
       "roles-and-linking",
       "locker",
+      "worksheets",
       "practice-sharing",
       "practice-plans",
       "how-progress-is-counted",

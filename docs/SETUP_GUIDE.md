@@ -125,7 +125,7 @@ See the [database restore runbook](runbooks/restore-database.md),
 | 90, 96, 184–187 | On the released agent, try a fresh link and an existing link, replay folder and history choices, Save and Revert, shortcuts, restart-required changes, tray status and Practice HUD placement. Check voice, countdown and capture exclusion off-air. |
 | 157–159 | On an off-air OBS scene, verify the timed poll, clip log, Large overlay scale and starter widget connections. Source presence is checked by connection; confirm visibility and audio directly in OBS. |
 | 87, 193, 194 | After updating and re-analyzing a replay, follow both cameras, check the attention heatmap, compare recorded control-group and camera phases, and verify unit trades, lifespans and build-supply labels. |
-| 195 | Test the React Locker roster and Shelf separately with disposable linked accounts. Check role scoping, legacy media, local backup and revision-checked restore. Keep Classic available until the owner has recorded one week of real use for each view. |
+| 195 | Test the React Locker roster, Shelf, Worksheets and Content Studio separately with disposable linked accounts. Check role scoping, legacy media, student worksheet submission, Content Studio authoring and sharing, local backup and revision-checked restore. Keep Classic available until the owner has recorded one week of real use for each view. |
 
 Use the [roadmap ledger](handoff/roadmap-progress-2026-10-28.json) for
 requirement-level status and the [Windows release runbook](runbooks/agent-wave2-release.md)

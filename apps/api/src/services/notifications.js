@@ -7,6 +7,7 @@ const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 
 const LIST_DEFAULT = 20;
 const LIST_MAX = 50;
+const DELIVERY_BATCH_MAX = 120;
 const TITLE_MAX = 140;
 const BODY_MAX = 280;
 const HREF_MAX = 300;
@@ -235,6 +236,35 @@ class NotificationsService {
     return { count };
   }
 
+  /** Resolve the shared read receipt for a bounded set of producer events.
+   * @param {string} userId @param {string[]} events */
+  async readDeliveryEvents(userId, events) {
+    const ids = new Map(events.slice(0, DELIVERY_BATCH_MAX).map(event => [deliveryKey(event), event]));
+    const read = new Set();
+    if (!ids.size) return read;
+    const rows = await this.db.notifications.find({
+      userId, readAt: { $type: "date" }, deliveryKeys: { $in: [...ids.keys()] },
+    }, { projection: { deliveryKeys: 1 } }).toArray();
+    for (const row of rows) {
+      for (const key of row.deliveryKeys || []) {
+        const event = ids.get(key);
+        if (event) read.add(event);
+      }
+    }
+    return read;
+  }
+
+  /** Mark events already authorized by their producer, using the shared inbox.
+   * @param {string} userId @param {string[]} events */
+  async markDeliveryEventsRead(userId, events) {
+    const keys = events.slice(0, DELIVERY_BATCH_MAX).map(deliveryKey).filter(Boolean);
+    if (!keys.length) return;
+    const result = await this.db.notifications.updateMany(
+      { userId, readAt: null, deliveryKeys: { $in: keys } }, { $set: { readAt: new Date() } },
+    );
+    if (result.modifiedCount) this._push(userId, { kind: "read" });
+  }
+
   /**
    * @param {string} userId
    * @param {{ids?: unknown, all?: unknown}} input
@@ -246,6 +276,7 @@ class NotificationsService {
         { userId, readAt: null },
         { $set: { readAt: now } },
       );
+      if (res.modifiedCount) this._push(userId, { kind: "read" });
       return { updated: res.modifiedCount || 0 };
     }
     const ids = Array.isArray(input?.ids)
@@ -256,6 +287,7 @@ class NotificationsService {
       { userId, _id: { $in: ids }, readAt: null },
       { $set: { readAt: now } },
     );
+    if (res.modifiedCount) this._push(userId, { kind: "read" });
     return { updated: res.modifiedCount || 0 };
   }
 
