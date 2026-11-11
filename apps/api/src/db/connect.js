@@ -376,15 +376,15 @@ async function ensureBuildIntentIndexes(ctx) {
   );
 }
 
-/** @param {DbContext['adminEvents']} events */
-async function ensureAdminEventIndexes(events) {
-  await events.createIndex({ readAt: 1, createdAt: -1, eventId: -1 });
-  await events.createIndex({ type: 1, readAt: 1, createdAt: -1, eventId: -1 });
+/** @param {DbContext} ctx */
+async function ensureAdminEventIndexes(ctx) {
+  await ctx.adminEvents.createIndex({ readAt: 1, createdAt: -1, eventId: -1 });
+  await ctx.adminEvents.createIndex({ type: 1, readAt: 1, createdAt: -1, eventId: -1 });
   // Per-event read/unread (POST /v1/admin/events/:eventId/read|unread)
   // looks a row up by id alone; the keyset indexes above lead with
   // createdAt/type. Not unique: a legacy duplicate must never fail boot.
-  await events.createIndex({ eventId: 1 }, { name: "admin_events_event_id" });
-  await events.createIndex(
+  await ctx.adminEvents.createIndex({ eventId: 1 }, { name: "admin_events_event_id" });
+  await ctx.adminEvents.createIndex(
     { ingestionKey: 1 },
     {
       unique: true,
@@ -788,7 +788,7 @@ async function ensureIndexes(ctx, opts = {}) {
       if (code !== 27 && codeName !== "IndexNotFound") throw err;
     }
   }
-  await ensureAdminEventIndexes(ctx.adminEvents);
+  await ensureAdminEventIndexes(ctx);
 
   // Global, cross-user SC2Pulse cache (services/pulseDirectory.js).
   // ``toonHandle`` is the natural key — one row per real SC2 account,
