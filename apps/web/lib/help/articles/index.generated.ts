@@ -93,6 +93,7 @@ import gettingStarted_aPageAskedMeToSignIn from "./getting-started/a-page-asked-
 import gettingStarted_browserImport from "./getting-started/browser-import";
 import gettingStarted_gettingStarted from "./getting-started/getting-started";
 import gettingStarted_howToUseHelp from "./getting-started/how-to-use-help";
+import gettingStarted_howWeCount from "./getting-started/how-we-count";
 import gettingStarted_importingReplayHistory from "./getting-started/importing-replay-history";
 import gettingStarted_installAndPair from "./getting-started/install-and-pair";
 import gettingStarted_installApp from "./getting-started/install-app";
@@ -214,6 +215,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_browserImport,
   gettingStarted_gettingStarted,
   gettingStarted_howToUseHelp,
+  gettingStarted_howWeCount,
   gettingStarted_importingReplayHistory,
   gettingStarted_installAndPair,
   gettingStarted_installApp,

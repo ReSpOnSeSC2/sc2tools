@@ -16,6 +16,7 @@
 
 import { Keyboard, Wallet, type LucideIcon } from "lucide-react";
 import type { SeriesPoint } from "./activeArmyLayout";
+import { formatNumber } from "@/lib/i18n/format";
 
 export type TimelineMetric = "army" | "workers" | "supply" | "income" | "bank" | "apm";
 export type TimelineBankView = "total" | "minerals" | "gas";
@@ -168,7 +169,7 @@ export function metricIcon(
 /** Full-precision number for the tooltip and summary: "8,025". */
 export function formatMetricValue(v: number | null | undefined): string {
   if (typeof v !== "number" || !Number.isFinite(v)) return "—";
-  return Math.round(v).toLocaleString();
+  return formatNumber(Math.round(v));
 }
 
 /** One player's number for ``metric``, "—" when the sample lacks it. */
@@ -213,5 +214,5 @@ export function formatAxisValue(v: number): string {
 export function formatSigned(v: number): string {
   const r = Math.round(v);
   if (r === 0) return "0";
-  return `${r > 0 ? "+" : "-"}${Math.abs(r).toLocaleString()}`;
+  return `${r > 0 ? "+" : "-"}${formatNumber(Math.abs(r))}`;
 }

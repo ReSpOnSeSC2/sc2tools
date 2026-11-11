@@ -16,6 +16,7 @@ import { type Opp, type OpenOpponent, notePreview } from "./types";
 import type { OpponentColumns } from "@/lib/opponentPresentation";
 import { opponentRegion } from "@/lib/opponentPresentation";
 import { OpponentRace } from "./OpponentRace";
+import { formatDateTime } from "@/lib/i18n/format";
 
 function rowCanOpen(event: MouseEvent<HTMLTableRowElement>) {
   return event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey
@@ -92,7 +93,7 @@ export const OpponentRow = memo(function OpponentRow({ row: o, expanded, onToggl
                       <MmrImpactCells opponent={o} columns={columns} />
                       <OpponentDetailCells row={o} columns={columns} />
                       <td className="px-2 py-1 text-right text-xs text-text-dim">
-                        {o.lastPlayed ? <time dateTime={o.lastPlayed} title={new Date(o.lastPlayed).toLocaleString()}>{fmtAgo(o.lastPlayed)}</time> : "—"}
+                        {o.lastPlayed ? <time dateTime={o.lastPlayed} title={formatDateTime(new Date(o.lastPlayed))}>{fmtAgo(o.lastPlayed)}</time> : "—"}
                       </td>
                       <td className="px-1 py-1 text-right text-text-dim group-hover:text-accent">
                         <OpponentOpenButton opponent={o} onOpen={onOpen} />
@@ -212,7 +213,7 @@ export function IdentityRow({
       <MmrImpactCells opponent={identity} columns={columns} />
       <OpponentDetailCells row={identity} columns={columns} />
       <td className="px-2 py-1 text-right text-xs text-text-dim">
-        {identity.lastPlayed ? <time dateTime={identity.lastPlayed} title={new Date(identity.lastPlayed).toLocaleString()}>{fmtAgo(identity.lastPlayed)}</time> : "—"}
+        {identity.lastPlayed ? <time dateTime={identity.lastPlayed} title={formatDateTime(new Date(identity.lastPlayed))}>{fmtAgo(identity.lastPlayed)}</time> : "—"}
       </td>
       <td className="px-1 py-1 text-right text-text-dim group-hover:text-accent">
         <OpponentOpenButton opponent={identity} onOpen={onOpen} />

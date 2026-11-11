@@ -27,6 +27,7 @@ import {
 import { EmptyState, Skeleton } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { QueryState, hasQueryData } from "@/components/ui/QueryState";
+import { formatNumber } from "@/lib/i18n/format";
 
 const PAGE_SIZE = 25;
 
@@ -210,14 +211,14 @@ export function NetMmrRaceOpponentsModal({
       <div className="mt-3 flex min-h-5 items-center justify-between gap-3 text-micro text-text-dim" aria-live="polite">
         <span>
           {loaded
-            ? `${totalOpponents.toLocaleString()} opponent${totalOpponents === 1 ? "" : "s"}`
+            ? `${formatNumber(totalOpponents)} opponent${totalOpponents === 1 ? "" : "s"}`
             : opponentsApi.error
               ? null
               : "Loading opponents…"}
         </span>
         {totalOpponents > PAGE_SIZE ? (
           <span className="tabular-nums">
-            {firstShown.toLocaleString()}–{lastShown.toLocaleString()} shown
+            {formatNumber(firstShown)}–{formatNumber(lastShown)} shown
           </span>
         ) : null}
       </div>
@@ -290,10 +291,10 @@ function ImpactSummary({
         <div className="mt-2 flex items-end justify-between gap-3">
           <div>
             <p className="text-lg font-semibold tabular-nums text-text">
-              {summary.opponents.toLocaleString()}
+              {formatNumber(summary.opponents)}
             </p>
             <p className="text-micro text-text-dim">
-              opponent{summary.opponents === 1 ? "" : "s"} · {summary.pairs.toLocaleString()} pairs
+              opponent{summary.opponents === 1 ? "" : "s"} · {formatNumber(summary.pairs)} pairs
             </p>
           </div>
           <SignedMmr value={summary.netMmr} className="text-base font-semibold" />
@@ -329,7 +330,7 @@ function HighlightCard({
               <OpponentLink pulseId={opponent.pulseId} name={opponentName(opponent)} />
             </p>
             <p className="text-micro tabular-nums text-text-dim">
-              {opponent.pairs.toLocaleString()} pair{opponent.pairs === 1 ? "" : "s"}
+              {formatNumber(opponent.pairs)} pair{opponent.pairs === 1 ? "" : "s"}
             </p>
           </div>
           <SignedMmr value={value} className="text-base font-semibold" />
@@ -380,9 +381,9 @@ function OpponentImpactTable({ items }: { items: NetMmrOpponentRow[] }) {
                 <span className="text-danger">{opponent.losses}L</span>
                 <span className="ml-1 text-micro text-text-dim">({pct1(opponent.winRate)})</span>
               </td>
-              <td className="px-2 py-2 text-right tabular-nums text-text-muted">{opponent.pairs.toLocaleString()}</td>
-              <td className="px-2 py-2 text-right font-medium tabular-nums text-success">+{opponent.mmrWon.toLocaleString()}</td>
-              <td className="px-2 py-2 text-right font-medium tabular-nums text-danger">−{opponent.mmrLost.toLocaleString()}</td>
+              <td className="px-2 py-2 text-right tabular-nums text-text-muted">{formatNumber(opponent.pairs)}</td>
+              <td className="px-2 py-2 text-right font-medium tabular-nums text-success">+{formatNumber(opponent.mmrWon)}</td>
+              <td className="px-2 py-2 text-right font-medium tabular-nums text-danger">−{formatNumber(opponent.mmrLost)}</td>
               <td className="px-2 py-2 text-right"><SignedMmr value={opponent.netMmr} className="font-semibold" /></td>
             </tr>
           ))}
@@ -396,7 +397,7 @@ function SignedMmr({ value, className = "" }: { value: number; className?: strin
   const tone = value > 0 ? "text-success" : value < 0 ? "text-danger" : "text-text-muted";
   return (
     <span className={`whitespace-nowrap tabular-nums ${tone} ${className}`}>
-      {value > 0 ? "+" : value < 0 ? "−" : ""}{Math.abs(value).toLocaleString()}
+      {value > 0 ? "+" : value < 0 ? "−" : ""}{formatNumber(Math.abs(value))}
     </span>
   );
 }

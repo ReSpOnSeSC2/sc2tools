@@ -5,13 +5,12 @@ import { useAuth } from "@clerk/nextjs";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
-import { SaveBar } from "@/components/ui/SaveBar";
 import { Section } from "@/components/ui/Section";
 import { Toggle } from "@/components/ui/Toggle";
 import { useToastOptional } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { useApi } from "@/lib/clientApi";
-import { usePublishDirty } from "@/components/analyzer/settings/SettingsContext";
+import { useSaveSource } from "@/components/analyzer/settings/SettingsContext";
 import {
   BUILD_CHECKIN_PREFS_PATH,
   DEFAULT_CHECKIN_PREFS,
@@ -49,10 +48,11 @@ export function BuildCheckInSettings() {
     DEFAULT_CHECKIN_PREFS,
   );
   const [saving, setSaving] = useState(false);
-  usePublishDirty("checkin", dirty);
+  useSaveSource("checkin", { label: "build check-in settings", dirty, save, reset }, "build-checkin");
 
-  async function save() {
-    if (saving) return;
+  async function save(): Promise<boolean> {
+    if (!dirty) return true;
+    if (saving) return false;
     setSaving(true);
     try {
       const saved = await putCheckinPrefs(getToken, draft);
@@ -61,10 +61,12 @@ export function BuildCheckInSettings() {
       // The header chip hides or reappears with the master switch.
       bump();
       toastContext?.toast.success("Build check-in settings saved");
+      return true;
     } catch (err) {
       toastContext?.toast.error("Couldn't save build check-in settings", {
         description: buildIntentErrorMessage(err),
       });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -144,7 +146,6 @@ export function BuildCheckInSettings() {
         </Card>
       </Section>
 
-      <SaveBar visible={dirty} saving={saving} onSave={() => void save()} onReset={reset} />
     </>
   );
 }

@@ -18,6 +18,8 @@ const EVENT_TYPES = Object.freeze({
 
 /** @type {Set<string>} */
 const VALID_TYPES = new Set(Object.values(EVENT_TYPES));
+/** Every real id is a UUID; fixtures and legacy rows use short slugs. */
+const EVENT_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const VALID_PLATFORMS = new Set(["windows", "macos", "linux"]);
 const BACKUP_SNAPSHOT_STATUSES = new Set([
   "queued", "inProgress", "completed", "failed", "unknown",
@@ -315,7 +317,8 @@ class AdminEventsService {
    *   - totalUsers / signupsToday / signupsThisWeek
    *   - totalDownloads / downloadsToday / downloadsThisWeek
    *   - downloads by platform (windows / macos / linux)
-   *   - unreadCount across all types
+   *   - unreadCount across all types, and unreadByType for the
+   *     notification filter chips (one grouped read; see _unreadByType)
    *
    * Total user count reads from the ``users`` collection (the
    * authoritative source) rather than the event stream so backfilled
@@ -332,7 +335,7 @@ class AdminEventsService {
       signupRange,
       downloadRange,
       downloadPlatforms,
-      unreadCount,
+      unread,
       agents,
       supportEmail,
     ] = await Promise.all([
@@ -340,7 +343,7 @@ class AdminEventsService {
       this._rangeCount(EVENT_TYPES.USER_SIGNUP, dayAgo, weekAgo),
       this._rangeCount(EVENT_TYPES.AGENT_DOWNLOAD, dayAgo, weekAgo),
       this._platformBreakdown(),
-      this.db.adminEvents.countDocuments({ readAt: null }),
+      this._unreadByType(),
       this._agentCounts(dayAgo, weekAgo),
       this.supportEmailStatus(),
     ]);
@@ -353,7 +356,8 @@ class AdminEventsService {
       downloadsToday: downloadRange.day,
       downloadsThisWeek: downloadRange.week,
       downloadsByPlatform: downloadPlatforms,
-      unreadCount,
+      unreadCount: unread.total,
+      unreadByType: unread.byType,
       agents,
       supportEmail,
       generatedAt: now.toISOString(),
@@ -438,17 +442,74 @@ class AdminEventsService {
   }
 
   /**
-   * Mark every unread event as read. Returns the number of rows
-   * touched so the SPA can clear the badge state confidently.
+   * Mark every unread event as read, or only one type's when ``type`` is
+   * given (the notifications page's active filter chip). Returns the number
+   * of rows touched so the SPA can clear the badge state confidently.
    *
-   * @returns {Promise<{ markedRead: number }>}
+   * @param {{ type?: string }} [opts]
+   * @returns {Promise<{ markedRead: number, type: string | null }>}
    */
-  async markAllRead() {
+  async markAllRead(opts = {}) {
+    const type = opts.type === undefined ? null : opts.type;
+    if (type !== null && !VALID_TYPES.has(type)) throw invalidEventType();
     const res = await this.db.adminEvents.updateMany(
-      { readAt: null },
+      type === null ? { readAt: null } : { readAt: null, type },
       { $set: { readAt: new Date() } },
     );
-    return { markedRead: res.modifiedCount || 0 };
+    return { markedRead: res.modifiedCount || 0, type };
+  }
+
+  /**
+   * Mark one event read (``readAt`` = now) or unread (``readAt`` = null).
+   * Idempotent: marking a read event read again keeps its first readAt, and
+   * repeating unread changes nothing. Returns the event as list() shows it,
+   * or null when no event has this id.
+   *
+   * @param {string} eventId
+   * @param {boolean} read
+   * @returns {Promise<AdminEventDoc | null>}
+   */
+  async setRead(eventId, read) {
+    if (typeof eventId !== "string" || !EVENT_ID_RE.test(eventId)) {
+      throw Object.assign(new Error("invalid_event_id"), { status: 400, code: "invalid_event_id" });
+    }
+    const updated = /** @type {AdminEventDoc | null} */ (
+      await this.db.adminEvents.findOneAndUpdate(
+        { eventId },
+        read
+          ? [{ $set: { readAt: { $ifNull: ["$readAt", new Date()] } } }]
+          : { $set: { readAt: null } },
+        { returnDocument: "after", projection: { _id: 0 } },
+      )
+    );
+    if (!updated) return null;
+    const [visible] = await this._hydrateIdentityEmails([updated]);
+    return visible;
+  }
+
+  /**
+   * Unread rows grouped by type in one aggregate over the readAt index. The
+   * total covers every unread row, including types this build no longer
+   * shows, exactly like the former countDocuments({readAt: null}).
+   *
+   * @returns {Promise<{ total: number, byType: Record<string, number> }>}
+   */
+  async _unreadByType() {
+    const rows = await this.db.adminEvents
+      .aggregate([
+        { $match: { readAt: null } },
+        { $group: { _id: "$type", count: { $sum: 1 } } },
+      ])
+      .toArray();
+    /** @type {Record<string, number>} */
+    const byType = Object.fromEntries(Object.values(EVENT_TYPES).map((type) => [type, 0]));
+    let total = 0;
+    for (const row of rows) {
+      const count = Number(row.count) || 0;
+      total += count;
+      if (typeof row._id === "string" && VALID_TYPES.has(row._id)) byType[row._id] = count;
+    }
+    return { total, byType };
   }
 
   /**
@@ -518,6 +579,10 @@ class AdminEventsService {
       }
     }
   }
+}
+
+function invalidEventType() {
+  return Object.assign(new Error("invalid_event_type"), { status: 400, code: "invalid_event_type" });
 }
 
 /** @param {AdminEventDoc} item */
@@ -759,6 +824,7 @@ function clampLimit(raw, fallback) {
  *   downloadsThisWeek: number,
  *   downloadsByPlatform: Record<string, number>,
  *   unreadCount: number,
+ *   unreadByType: Record<string, number>,
  *   agents: { total: number, active24h: number, active7d: number },
  *   supportEmail: {
    *     configured: boolean, labelName: string | null, lastSuccessAt: string | null,
@@ -771,6 +837,7 @@ function clampLimit(raw, fallback) {
 module.exports = {
   AdminEventsService,
   EVENT_TYPES,
+  EVENT_ID_RE,
   SOCKET_ADMIN_ROOM,
   MESSAGE_SUBJECT_MAX,
   MESSAGE_BODY_MAX,

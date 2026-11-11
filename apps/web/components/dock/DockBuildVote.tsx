@@ -14,10 +14,12 @@ import { Vote } from "lucide-react";
 
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
+import { POLL_VOTE_HINT, type PollDurationSec } from "@/lib/multichat/poll";
+import { PollDurationSelect } from "./PollDurationSelect";
 
 import type { StudioPoll } from "@/lib/multichat/useStudioState";
 import type { ChatMessage } from "@/lib/multichat/types";
-import { usePollTally } from "./usePollTally";
+import { usePollTally } from "@/lib/multichat/usePollTally";
 import type { DockPost } from "./dockActions";
 import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
@@ -55,6 +57,7 @@ export function DockBuildVote({
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [matchup, setMatchup] = useState("All");
+  const [durationSec, setDurationSec] = useState<PollDurationSec | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +99,7 @@ export function DockBuildVote({
       if (pollActive || chosen.length < 2) return null;
       const winRates: Record<string, number> = {};
       for (const b of chosen) if (b.winRate !== null) winRates[b.name] = Math.round(b.winRate * 100);
-      return { patch: { poll: { question: "Chat picks the build!", options: chosen.map((b) => b.name), status: "open", meta: { kind: "build", winRates } } }, message: "Build vote started", after: () => setPicked([]) };
+      return { patch: { poll: { question: "Chat picks the build!", options: chosen.map((b) => b.name), status: "open", ...(durationSec ? { durationSec } : {}), meta: { kind: "build", winRates } } }, message: "Build vote started", after: () => setPicked([]) };
     },
   });
   if (!ready) return <DockSnapshotState />;
@@ -130,9 +133,9 @@ export function DockBuildVote({
       <DockActionNotice message={notice} />
       <div role="group" aria-label="Build matchups" className="flex flex-wrap gap-1">{matchups.map((m) => <DockButton key={m} type="button" aria-pressed={matchup === m} onClick={() => setMatchup(m)} className={`rounded border px-2 py-1 text-caption ${matchup === m ? "border-accent bg-accent/10 text-accent" : "border-border text-text-muted"}`}>{m}</DockButton>)}</div>
       <p className="text-caption text-text-dim">
-        Pick 2–3 builds; chat votes with <b>!1</b>/<b>!2</b>/<b>!3</b> on
-        the Chat poll widget.
+        Pick 2–3 builds. {POLL_VOTE_HINT}
       </p>
+      <PollDurationSelect value={durationSec} onChange={setDurationSec} />
       <ul className="max-h-44 space-y-1 overflow-y-auto pr-1">
         {shown.map((b) => {
           const on = picked.includes(b.slug);

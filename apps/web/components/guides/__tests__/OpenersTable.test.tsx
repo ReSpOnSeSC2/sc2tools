@@ -45,3 +45,26 @@ it("filters unpublished openers and renders the same ranks as mobile cards", () 
 it("shows popularity movement only beyond the flat threshold", () => {
   render(<OpenersTable {...props} />); expect(within(table()).getByText("↑ 2.1 pp more popular")).toBeTruthy(); expect(within(table()).getByText("↓ 1.3 pp less popular")).toBeTruthy(); expect(within(table()).queryByText(/0.4 pp/)).toBeNull();
 });
+
+it("limits comparison to three published openers and restores selection for the matchup", () => {
+  const openers = ["Alpha", "Bravo", "Charlie", "Delta", "Unpublished"].map((name, index) => ({
+    ...rows[0], name, buildSlug: name.toLowerCase(), buildKey: name, published: index < 4,
+  }));
+  const options = { ...props, openers };
+  const view = render(<OpenersTable {...options} />);
+  for (const name of ["Alpha", "Bravo", "Charlie"]) {
+    fireEvent.click(within(table()).getByRole("checkbox", { name: "Compare " + name }));
+  }
+  const fourth = within(table()).getByRole<HTMLInputElement>("checkbox", { name: "Compare Delta" });
+  expect(fourth.disabled).toBe(true);
+  expect(within(table()).queryByRole("checkbox", { name: "Compare Unpublished" })).toBeNull();
+  expect(screen.getByRole("link", { name: /Compare 3 openers/ }).getAttribute("href")).toBe("/guides/pvz/compare?builds=alpha,bravo,charlie");
+  const mobile = within(screen.getByRole("list", { name: "Opener cards" }));
+  expect(mobile.getByRole<HTMLInputElement>("checkbox", { name: "Compare Alpha" }).checked).toBe(true);
+  view.unmount();
+  render(<OpenersTable {...options} />);
+  expect(screen.getByRole("link", { name: /Compare 3 openers/ })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /^Clear$/ }));
+  expect(screen.queryByRole("link", { name: /Compare 3 openers/ })).toBeNull();
+  expect(within(table()).getByRole<HTMLInputElement>("checkbox", { name: "Compare Delta" }).disabled).toBe(false);
+});

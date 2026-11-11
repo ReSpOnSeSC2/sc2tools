@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ListFilter, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
 /** A native GET form first; hydration adds automatic submission and clearing. */
 export function ArchiveFilterEnhancer({ action, search = "", build, children }: { action: string; search?: string; build?: string; children: ReactNode }) {
@@ -26,11 +27,11 @@ export function ArchiveFilterEnhancer({ action, search = "", build, children }: 
       <label className="relative min-w-0 sm:col-span-2 xl:col-span-2">
         <span className="mb-1 block text-micro font-semibold uppercase tracking-wider text-text-muted">Search replays</span>
         <Search className="pointer-events-none absolute bottom-3 left-3 h-4 w-4 text-text-dim" aria-hidden />
-        <Input ref={searchRef} type="search" name="search" value={value} onChange={(event) => changeSearch(event.target.value)} placeholder="Player, map, build or strategy" className="pl-9 pr-11" maxLength={100} />
+        <Input ref={searchRef} type="search" name="search" value={value} onChange={(event) => changeSearch(event.target.value)} placeholder="Map, build or strategy" className="pl-9 pr-11" maxLength={100} />
         {enhanced && value ? <button type="button" aria-label="Clear search" onClick={() => { setValue(""); if (searchRef.current) searchRef.current.value = ""; submit(); }} className="absolute bottom-0 right-0 inline-flex h-11 w-11 items-center justify-center rounded-md text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><X className="h-4 w-4" aria-hidden /></button> : null}
       </label>
       {children}
-      <button type="submit" hidden={enhanced} className={`${enhanced ? "hidden" : "inline-flex"} hard-press h-11 min-w-[44px] items-center justify-center gap-2 rounded-full border-2 border-line bg-accent px-5 font-display text-body font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}><ListFilter className="h-4 w-4" aria-hidden /> Apply</button>
+      <Button type="submit" hidden={enhanced} className={enhanced ? "hidden" : ""} iconLeft={<ListFilter className="h-4 w-4" aria-hidden />}>Apply</Button>
     </div>
   </form>;
 }

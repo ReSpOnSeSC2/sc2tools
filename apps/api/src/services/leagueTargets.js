@@ -126,7 +126,7 @@ async function personalTimings(rows, matchup, userId, details) {
   const ids = selected.filter((row) => !Array.isArray(row.buildLog)).map((row) => row.gameId);
   const logs = ids.length ? await details.findMany(userId, ids, { fields: ["buildLog"], concurrency: 2 }) : new Map();
   const milestones = selected.flatMap((row) => {
-    const ownLog = row.buildLog ?? logs.get(row.gameId)?.buildLog;
+    const ownLog = Array.isArray(row.buildLog) ? row.buildLog : logs.get(row.gameId)?.buildLog;
     const extracted = extractMilestones(ownLog, /** @type {"P"|"T"|"Z"} */ (matchup[0]));
     return extracted ? [extracted] : [];
   });

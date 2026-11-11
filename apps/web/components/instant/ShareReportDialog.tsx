@@ -4,14 +4,21 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { drawReportCard, reportPng } from "@/lib/instant/reportCard";
-import { defaultReportSelection, reportCardModel, reportCardText, type ReportSelection } from "@/lib/instant/reportSharing";
+import { defaultReportSelection, reportCardModel, type ReportSelection } from "@/lib/instant/reportSharing";
+import { reportSummaryText } from "@/lib/instant/reportExport";
+import { DEFAULT_REPORT_FILTERS, reportFilterLabel, type ReportFilters } from "@/lib/instant/reportFilters";
 import { trackInstantReportShared } from "@/lib/instant/analytics";
 import type { InstantReport } from "@/lib/instant/report";
 import { useCopy } from "@/lib/useCopy";
 
-export interface ShareReportDialogProps { report: InstantReport; onClose(): void }
+export interface ShareReportDialogProps {
+  /** The report on screen: the filtered one when report filters are active. */
+  report: InstantReport;
+  filters?: ReportFilters;
+  onClose(): void;
+}
 
-export function ShareReportDialog({ report, onClose }: ShareReportDialogProps) {
+export function ShareReportDialog({ report, filters = DEFAULT_REPORT_FILTERS, onClose }: ShareReportDialogProps) {
   const available = useMemo(() => reportCardModel(report), [report]);
   const [selection, setSelection] = useState<ReportSelection>(() => defaultReportSelection(available));
   const model = useMemo(() => reportCardModel(report, selection), [report, selection]);
@@ -35,8 +42,9 @@ export function ShareReportDialog({ report, onClose }: ShareReportDialogProps) {
   const dismissCopyFallback = () => { clipboard.clear(); setStatus(""); copyButton.current?.focus(); };
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   useEffect(() => { setImageBusy(false); }, [scope]);
-  useEffect(() => { try { if (canvas.current) drawReportCard(canvas.current, model); setStatus(""); } catch { setStatus("PNG previews are unavailable in this browser. You can still copy the text."); } }, [model]);
-  const text = reportCardText(model);
+  const filterNote = reportFilterLabel(filters);
+  useEffect(() => { try { if (canvas.current) drawReportCard(canvas.current, model, filterNote ? `Filtered: ${filterNote}` : null); setStatus(""); } catch { setStatus("PNG previews are unavailable in this browser. You can still copy the text."); } }, [model, filterNote]);
+  const text = reportSummaryText(report, filters, model);
   const empty = !model.totals && !model.matchups.length && !model.opener && !model.macro;
   async function deliver(method: "web_share" | "download") {
     if (busy || empty) return;

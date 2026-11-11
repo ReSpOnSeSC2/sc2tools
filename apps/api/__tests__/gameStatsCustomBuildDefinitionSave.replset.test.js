@@ -4,6 +4,10 @@ const { MongoMemoryReplSet, MongoMemoryServer } = require("mongodb-memory-server
 const { MongoClient, MongoServerError, MongoNetworkError, ObjectId } = require("mongodb");
 const { randomUUID: uuid } = require("crypto");
 const pino = require("pino");
+const express = require("express");
+const request = require("supertest");
+const { buildCustomBuildsRouter } = require("../src/routes/customBuilds");
+const { CustomBuildLibraryService } = require("../src/services/customBuildLibrary");
 const { connect } = require("../src/db/connect");
 const { CustomBuildsService } = require("../src/services/customBuilds");
 const { GamesService } = require("../src/services/games");
@@ -50,7 +54,8 @@ async function openContext() {
   db = await connect({ uri: mongo.getUri(), dbName: databaseName, awaitBackgroundIndexes: true }, { logger });
   clientB = new MongoClient(mongo.getUri(), { monitorCommands: true }); await clientB.connect();
   const database = clientB.db(databaseName);
-  dbB = { ...db, client: clientB, db: database, users: database.collection("users"), games: database.collection("games"), customBuilds: database.collection(buildCollection) };
+  dbB = { ...db, client: clientB, db: database, users: database.collection("users"), games: database.collection("games"),
+    customBuilds: database.collection(buildCollection), customBuildRevisions: database.collection(COLLECTIONS.CUSTOM_BUILD_REVISIONS) };
   writer = gameStatsWritesFor(db); writerB = gameStatsWritesFor(dbB); games = new GamesService(db);
   for (const [name, client] of [["A", db.client], ["B", clientB]]) {
     client.on("commandStarted", event => commands.push({ client: name, ...event.command }));
@@ -85,7 +90,7 @@ beforeAll(async () => {
 afterAll(closeContext);
 beforeEach(async () => {
   jest.restoreAllMocks();
-  for (const collection of [db.users, db.games, db.customBuilds]) await collection.deleteMany({});
+  for (const collection of [db.users, db.games, db.customBuilds, db.customBuildRevisions]) await collection.deleteMany({});
   commands.length = 0; failedCommands.length = 0;
 });
 afterEach(() => jest.restoreAllMocks());
@@ -342,6 +347,63 @@ test("legacy late code20 after an actual successful transactional read never fal
   await expect(applyCustomBuildDefinitionSave(db, owner, immutableCustomBuildDefinitionSave(data()), undefined, logger)).rejects.toBe(failure);
   expect(initialReads).toBe(1); expect(renames).toBe(1); expect(save).not.toHaveBeenCalled();
   expect((await db.customBuilds.findOne({ userId })).name).toBe("Old"); expect((await db.games.findOne({ userId, gameId: "you" })).myBuild).toBe("Old");
+});
+
+function libraryApp(customBuilds) {
+  const app = express();
+  app.use(express.json());
+  app.use("/v1", buildCustomBuildsRouter({
+    customBuilds,
+    auth(req, _res, next) { req.auth = { userId, source: "clerk" }; next(); },
+  }));
+  return request(app);
+}
+
+test.each(["PUT", "import"])("%s captures the durable predecessor after another editor saves", async (kind) => {
+  await seed();
+  const { custom } = service();
+  const first = libraryApp(custom), second = libraryApp(service({}, dbB).custom);
+  const admitted = held(), resume = held(), original = custom.upsert.bind(custom);
+  jest.spyOn(custom, "upsert").mockImplementationOnce(async (...args) => {
+    admitted.resolve();
+    await resume.promise;
+    return original(...args);
+  });
+  const values = definition({ name: "Final", notes: "Final private notes" });
+  const requestA = kind === "PUT" ? first.put("/v1/custom-builds/saved").send(values)
+    : first.post("/v1/custom-builds/import").send({ items: [{ build: values, onConflict: "overwrite" }] });
+  const pending = requestA.expect(200).then((result) => result, (error) => { admitted.resolve(); throw error; });
+  try {
+    await admitted.promise;
+    await second.put("/v1/custom-builds/saved").send(definition({ name: "Intermediate", notes: "Intermediate private notes" })).expect(200);
+  } finally { resume.resolve(); }
+  const result = await pending;
+  if (kind === "import") expect(result.body.results[0].status).toBe("overwritten");
+  const history = await new CustomBuildLibraryService(db).listRevisions(userId, "saved");
+  expect(history.map((row) => [row.build.name, row.build.notes])).toEqual([
+    ["Intermediate", "Intermediate private notes"],
+    ["Old", "Previous private notes"],
+  ]);
+  const write = commands.filter((entry) => entry.findAndModify === buildCollection).at(-1);
+  const historyInsert = commands.filter((entry) => entry.insert === COLLECTIONS.CUSTOM_BUILD_REVISIONS).at(-1);
+  expect(historyInsert.lsid).toEqual(write.lsid);
+  expect(historyInsert.txnNumber).toEqual(write.txnNumber);
+});
+
+test("aborts the definition and replay rename if its library predecessor cannot be stored", async () => {
+  await seed();
+  jest.spyOn(db.customBuildRevisions, "insertOne").mockRejectedValueOnce(new Error("fixture history write failed"));
+  await expect(service().custom.upsert(userId, definition(), { recordLibraryHistory: true })).rejects.toThrow("fixture history write failed");
+  expect(await db.customBuilds.findOne({ userId, slug: "saved" })).toMatchObject({ name: "Old", definitionRevision: 0 });
+  expect(await db.games.findOne({ userId, gameId: "you" })).toMatchObject({ myBuild: "Old" });
+  expect(await db.customBuildRevisions.countDocuments({ userId })).toBe(0);
+});
+
+test("a save that revives a trashed build skips its deleted preimage", async () => {
+  await seed(played, { deletedAt: played });
+  await service().custom.upsert(userId, definition(), { recordLibraryHistory: true });
+  expect(await db.customBuilds.findOne({ userId, slug: "saved" })).not.toHaveProperty("deletedAt");
+  expect(await db.customBuildRevisions.countDocuments({ userId })).toBe(0);
 });
 
 test("real standalone ordinary save observes exact early code20 and retains acknowledged legacy availability", async () => {

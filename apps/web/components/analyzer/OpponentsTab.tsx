@@ -44,6 +44,7 @@ import {
 } from "./OpponentMmrImpact";
 
 import { type Opp, type OpenOpponent, type OpponentExportAction, notePreview } from "./opponents/types";
+import { formatNumber } from "@/lib/i18n/format";
 
 const LS_MIN_OPP = "analyzer.opponents.minGames";
 type QuickOpponentView = "all" | "regulars" | "week" | "rivals";
@@ -355,7 +356,7 @@ export function OpponentsTab({
       <RivalriesStrip rows={items} onOpen={open} incomplete={isLoading || isLoadingMore || hitMaxPages || !!error} recentAvailable={summary.data?.recentComplete === true} />
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick opponent views">
         <OpponentQuickViews quick={quick} onChange={setQuick} sort={sort} rivalCount={rivals.keys.length} />
-        {!onExportAction ? <Button variant="secondary" disabled={exportDisabled} title={`Export all ${items.length.toLocaleString()} matching ${groupByPlayer ? "players" : "accounts"}, including rows outside the render window`} onClick={exportRows}>Export CSV</Button> : null}
+        {!onExportAction ? <Button variant="secondary" disabled={exportDisabled} title={`Export all ${formatNumber(items.length)} matching ${groupByPlayer ? "players" : "accounts"}, including rows outside the render window`} onClick={exportRows}>Export CSV</Button> : null}
         <div className="ml-auto"><OpponentColumnPicker columns={columns} onChange={(key, checked) => setColumnOverrides({ ...columnOverrides, [key]: checked })} onReset={() => setColumnOverrides({})} /></div>
       </div>
       {rivals.error || rivals.unavailable ? <div role="alert" className="flex flex-wrap items-center gap-2 text-caption text-warning"><p>{rivals.error || "Rival preferences are temporarily unavailable."}</p>{rivals.unavailable ? <Button variant="ghost" size="sm" onClick={rivals.retry}>Retry rival preferences</Button> : null}</div> : null}
@@ -399,10 +400,10 @@ export function OpponentsTab({
         <GroupingPreference preference={grouping} />
         <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
           <span aria-live="polite" className="text-xs text-text-dim">
-            {isRefreshing ? "Updating… · " : isLoadingMore ? `Loading more opponents… (${rawItems.length.toLocaleString()} so far) · ` : ""}
-            {items.length.toLocaleString()} {showPlayerGroups ? "players" : "accounts"}
+            {isRefreshing ? "Updating… · " : isLoadingMore ? `Loading more opponents… (${formatNumber(rawItems.length)} so far) · ` : ""}
+            {formatNumber(items.length)} {showPlayerGroups ? "players" : "accounts"}
             {groupByPlayer && mergedNameCount > 0
-              ? ` · ${mergedNameCount.toLocaleString()} accounts merged`
+              ? ` · ${formatNumber(mergedNameCount)} accounts merged`
               : null}
             {hitMaxPages ? " · Showing your most recent 8,000 opponents" : null}
           </span>

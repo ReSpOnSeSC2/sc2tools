@@ -57,6 +57,8 @@ public editorial layouts a separate accent.
 | `--race-terran` | `#ff6b6b` | `#b8333a` | Terran series |
 | `--race-zerg` | `#a78bfa` | `#7154d7` | Zerg series |
 | `--race-random` | `#96a4b0` | `#546072` | Random series |
+
+Overlay race colours use the dark tokens in the table for every OBS theme. The overlay cards, race icons and StarCraft backdrop share those colours.
 | `--border` | `#5c697c` | `#7c879b` | Control boundary |
 | `--border-strong` | `#75849b` | `#65738a` | Stronger boundary |
 | `--line` | `#5c697c` | `#0d121a` | Structural outline |

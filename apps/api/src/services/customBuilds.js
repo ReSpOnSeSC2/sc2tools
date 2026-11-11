@@ -600,12 +600,12 @@ class CustomBuildsService {
    *
    * @param {string} userId
    * @param {{slug: string} & Record<string, unknown>} build
-   * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean}} [options]
+   * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean, recordLibraryHistory?:boolean}} [options]
    */
   async upsert(userId, build, options = {}) {
     const ticket = reserveCustomDefinitionSave(this.gameStatsWrites, userId, {
       kind: "customBuildDefinitionSave", definition: build, expectedRevision: options.expectedRevision,
-      expectedId: options.expectedId, recordHistory: options.recordHistory,
+      expectedId: options.expectedId, recordHistory: options.recordHistory, recordLibraryHistory: options.recordLibraryHistory,
     });
     let queued;
     try {

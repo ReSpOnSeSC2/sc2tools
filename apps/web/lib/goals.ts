@@ -7,6 +7,7 @@
  * the period, the deep link to the analyzer section that lists the counted
  * games, and the default windows the New goal modal offers.
  */
+import { createFormatter, formatDate, formatNumber, getServerFormatter, SSR_FORMAT_PREFS } from "@/lib/i18n/format";
 import { analyzerViewHref } from "@/lib/analyzerViews";
 import type { AnalyzerFilters } from "@/lib/filterContext";
 import { todayKeyIn } from "@/lib/timeseries";
@@ -150,7 +151,7 @@ export function seasonWindow(start: string, end: string | null, tz: string): { s
 
 function fmt(value: number | null | undefined, digits = 0): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "—";
-  return value.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits });
+  return formatNumber(value, { maximumFractionDigits: digits, minimumFractionDigits: digits });
 }
 
 const AVERAGE_UNIT: Partial<Record<GoalType, string>> = { macro_avg: "macro score", apm_avg: "APM", sq_avg: "SQ" };
@@ -203,7 +204,8 @@ export function periodLabel(goal: Pick<Goal, "window" | "progress">, locale?: st
 
 /** A local date as "Nov 9". */
 export function formatDay(key: string, locale?: string): string {
-  return new Date(serial(key)).toLocaleDateString(locale, { month: "short", day: "numeric", timeZone: "UTC" });
+  const options = { month: "short", day: "numeric", timeZone: "UTC" } as const;
+  return locale ? createFormatter({ ...SSR_FORMAT_PREFS, locale }).date(new Date(serial(key)), options) : formatDate(new Date(serial(key)), options);
 }
 
 /** Met periods of a recurring goal, e.g. "Met 3 of 5 weeks". */
@@ -248,7 +250,7 @@ export function previewLabel(input: GoalInput): string {
   const period = input.window.recurrence === "season" ? ` in Season ${input.window.season ?? "?"}`
     : input.window.recurrence === "daily" ? " each day" : input.window.recurrence === "weekly" ? " each week"
       : input.window.recurrence === "monthly" ? " each month" : "";
-  const n = t.toLocaleString("en-US");
+  const n = getServerFormatter().number(t);
   switch (input.type) {
     case "games_played": return `Play ${n} ${t === 1 ? games.replace(/games$/, "game") : games}${on}${period}`;
     case "win_rate": return `Win ${n}% of ${games}${on}${period}`;

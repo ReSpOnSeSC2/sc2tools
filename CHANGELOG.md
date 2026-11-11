@@ -21,6 +21,24 @@ corresponding GitHub Release.
   Re-analyze older games from Settings → Backups & data after updating the
   desktop app.
 
+### Practice targets and reports
+
+- Edit checkpoints for a private Ghost target and count a graded game toward
+  the daily practice quest.
+- Use a saved timezone for the weekly report and share an aggregate image.
+  Notification settings let you choose which events reach each channel.
+- View finished streams and open game moments in the VOD when timestamps are
+  available. Public stream pages require a separate sharing choice.
+
+### Public replay discovery
+
+- The landing page shows recent public activity when data is available.
+  Guide pages can compare openers and Instant Analysis includes more of the
+  replay report.
+- Public player pages show overview, archive and share controls. Shared replay
+  previews show a short card before sign-in, and original replay downloads
+  honor the player's current sharing preference.
+
 ### Replay and account fixes
 
 - Include personal goals in account exports and measure edited goals against
@@ -36,6 +54,15 @@ corresponding GitHub Release.
   accurate when requests overlap.
 - Post a reviewed battle-report excerpt and link to a configured Discord
   channel. Pending posts respect updated sharing and channel settings.
+
+### Settings and donations
+
+- Set motion, text size, density, number and date formats, and the first day
+  of the week in Settings. Appearance follows your account across browsers.
+- Use one Save bar for each Settings tab. Retry failed settings and keep
+  successfully saved changes. Instant controls apply when you change them.
+- Compare recent donation totals with the site's monthly running costs.
+  Supporters can choose to appear publicly after review.
 
 ### Trends and arcade fixes
 
@@ -156,7 +183,8 @@ corresponding GitHub Release.
   days. Restored builds come back private; a nightly cleanup removes builds
   deleted more than 30 days ago.
 - Keep the last 20 versions of each build. **History** on a build's page
-  compares a version with the current one and restores it.
+  compares a version with the current one and restores it. Concurrent saves
+  and imports record the version each write actually replaced.
 - Pin builds to the top, tag them, and filter the library by Mine or Opponent
   captures, Published, race and tags.
 - Select many builds to tag, add to the randomizer, publish, unpublish, export
@@ -202,6 +230,60 @@ corresponding GitHub Release.
   show results as Win, Loss, Tie or Unknown, and link build names to the build
   page or its definition.
 - Give the header's check-in chip a 44px touch target without changing its look.
+
+### Admin console
+
+- Notifications: mark a single item read or unread from its row, see unread
+  counts on each filter chip, mark only the selected type read, and open the
+  linked user straight from a signup, install or message. A failed save shows
+  Retry instead of failing silently.
+- Opponent and global player games: ties and unrecorded results never show as
+  losses, the opponent page opens with a head-to-head summary (record, decided
+  win rate, average length, top maps, last 10), both pages filter by result and
+  map (and by user on the global page), and j/k or the arrow keys move between
+  games.
+- New Classifier console: see where players' build check-ins disagree with the
+  detected label, by matchup and engine version, with sample build orders that
+  copy as test fixtures. Rules stay hand-edited.
+
+### Build definitions
+
+- Rules with enough build check-ins now show "Matches N of M player
+  corrections" on the Build & Strategy Definitions page. Your corrections help
+  improve labels for everyone.
+
+### Coaching Locker roster
+
+- Coaches and admins can open the Locker roster to manage linked accounts,
+  display names and focus notes. Roster saves create a local JSON backup
+  with a revision-checked restore action.
+
+### Coaching sessions and prep digest
+
+- Add "Since last session" to each upcoming coaching session. Coaches see the
+  student's ranked 1v1 record and replay details already shared in practice
+  assignment evidence. Students see their own eligible 1v1 games and builds
+  with links to their game pages. The digest requires active practice sharing.
+- Copy a day's hours to the weekdays or to every day, clear a day, and undo
+  either for 10 seconds. Empty days offer evening, afternoon and weekend
+  presets, and Add hours now continues after the day's last window.
+- Add a Google Calendar link beside the .ics download on each upcoming session.
+- List past sessions under the upcoming ones, newest first, with cancelled
+  sessions marked and, for coaches, each student's session count. Sessions in
+  progress stay listed until they end.
+
+### Replay review links and navigation
+
+- Open `#comment-…` links with that comment highlighted, the replay at its
+  time and the comment in view, and `?t=5:12` links at that moment with a
+  comment started there. Links to removed comments say so.
+- Copy a link to any comment, to the moment in the comment box, or to the
+  current replay time from Share. Moving through the replay never changes the
+  address bar.
+- Step through timed comments with Prev and Next, filter the thread by focus
+  range, map pins and replies, and keep Top or Timeline order on this device.
+- Press N or P for the next or previous comment and C to comment at the
+  replay time; ? lists them. Scrolling to a comment respects reduced motion.
 
 ### Share cards
 

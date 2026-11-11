@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/i18n/format";
 export type CsvCell = string | number | boolean | null | undefined;
 export type CsvColumn<Row> = { key: keyof Row | string; label: string; format?: (value: unknown, row: Row) => CsvCell };
 
@@ -17,7 +18,7 @@ export function toCsv<Row extends object>({ columns, rows, scope, exportedAt = n
   columns: readonly CsvColumn<Row>[]; rows: readonly Row[]; scope: string; exportedAt?: Date;
 }): string {
   const lines = [
-    ["Scope", `${scope} · exported ${exportedAt.toLocaleString()}`].map(csvCell).join(","),
+    ["Scope", `${scope} · exported ${formatDateTime(exportedAt)}`].map(csvCell).join(","),
     "",
     columns.map(column => csvCell(column.label)).join(","),
     ...rows.map(row => columns.map(column => {

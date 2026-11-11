@@ -6,6 +6,9 @@ const { parseFilters } = require("../util/parseQuery");
 const { validateCasualtyEvents } = require("../validation/casualtyEvents");
 const { publicArchiveOverview } = require("./publicReplaySummary");
 const { validPlayerSlug } = require("../util/publicPlayerConfig");
+const { isPublicReplayReference } = require("../util/publicReplayReference");
+const { approximateMmr } = require("../util/leagueBands");
+const { mountPublicReplayDownloads } = require("./publicReplayDownloads");
 
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
@@ -19,16 +22,18 @@ const PUBLIC_REPLAYS_RATE_LIMIT_PER_MIN = 300;
  * data through the shared owner's identity. Every response is reconstructed
  * from allow-listed fields.
  *
- * @param {{
+ * @typedef {{
  *   replayLibrary: import('../services/replayLibrary').ReplayLibraryService,
  *   users: import('../services/types').UsersService,
  *   gameVods: {resolveForGames(userId:string, games:object[], opts?:object): Promise<any>},
  *   perGame: import('../services/types').PerGameComputeService,
  *   replayFiles?: import('../services/replayFiles').ReplayFilesService|null,
  *   auth: import('express').RequestHandler,
+ *   downloadSecret?: Buffer|string,
  *   rateLimitPerMinute?: number,
- * }} deps
+ * }} PublicReplayDependencies
  */
+/** @param {PublicReplayDependencies} deps */
 function buildPublicReplaysRouter(deps) {
   if (
     !deps?.replayLibrary
@@ -62,7 +67,7 @@ function buildPublicReplaysRouter(deps) {
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (/** @type {import('express').Request} */ req) =>
-      `${req.ip}:${String(req.params.handle || "")}`,
+      [req.ip, req.params.handle || "", req.route.path.endsWith("/file") ? "file" : "download"].join(":"),
     message: { error: { code: "rate_limited", message: "rate_limited" } },
   });
 
@@ -94,7 +99,7 @@ function buildPublicReplaysRouter(deps) {
       publicNoStore(res);
       res.json({
         profile: publicProfile(shared.profile),
-        items: page.items.map((item) =>
+        items: page.items.filter((item) => isPublicReplayReference(item.publicReference)).map((item) =>
           publicReplayItem(
             item,
             linksFor(vods, item.gameId),
@@ -109,6 +114,7 @@ function buildPublicReplaysRouter(deps) {
     }
   });
 
+  router.get("/public/replays/:handle/:gameId/card", limiter, publicReplayCardHandler(deps));
   router.get(
     "/public/replays/:handle/:gameId",
     limiter,
@@ -120,20 +126,16 @@ function buildPublicReplaysRouter(deps) {
         );
         if (!shared) return neutralNotFound(res);
 
-        const gameId = String(req.params.gameId || "");
-        const detail = await deps.replayLibrary.getDetail(
-          shared.userId,
-          gameId,
-          { view: "detector" },
-        );
-        if (!detail) return neutralNotFound(res);
+        const detail = await sharedReplayDetail(deps, shared.userId, String(req.params.gameId || ""));
+        if (!detail || !isPublicReplayReference(detail.game.publicReference)) return neutralNotFound(res);
+        const gameId = detail.game.gameId;
 
         const { filters, result, matchup, search } = parseReplayListQuery(req.query);
         const [macro, build, vods, neighbors] = await Promise.all([
           readOptional(() => deps.perGame.macroBreakdown(shared.userId, gameId)),
           readOptional(() => deps.perGame.buildOrder(shared.userId, gameId)),
           resolveVods(deps.gameVods, shared.userId, [detail.sourceGame]),
-          readOptional(() => deps.replayLibrary.neighbors(shared.userId, gameId, { filters, result, matchup, search })),
+          readOptional(() => deps.replayLibrary.neighbors(shared.userId, gameId, { filters, result, matchup, search, publicReferences: true })),
         ]);
         publicNoStore(res);
         res.json({
@@ -145,6 +147,7 @@ function buildPublicReplaysRouter(deps) {
           ),
           macroBreakdown: publicMacroBreakdown(macro),
           buildOrder: publicBuildOrder(build, {
+            reference: detail.game.publicReference,
             myBuild: detail.game.myBuild,
             oppStrategy: detail.game.opponent?.strategy,
           }),
@@ -157,34 +160,50 @@ function buildPublicReplaysRouter(deps) {
     },
   );
 
-  router.get(
-    "/public/replays/:handle/:gameId/download",
-    downloadLimiter,
-    async (req, res, next) => {
-      try {
-        const shared = await deps.users.resolveReplaySharing(
-          String(req.params.handle || ""),
-        );
-        if (!shared) return neutralNotFound(res);
-        const gameId = String(req.params.gameId || "");
-        const detail = await deps.replayLibrary.getDetail(shared.userId, gameId);
-        if (!detail) return neutralNotFound(res);
-        if (!deps.replayFiles) {
-          throw httpError(
-            503,
-            "replay_storage_unavailable",
-            "Replay storage is unavailable.",
-          );
-        }
-        publicNoStore(res);
-        res.json(await deps.replayFiles.prepareDownload(shared.userId, gameId));
-      } catch (err) {
-        next(err);
-      }
-    },
-  );
+  mountPublicReplayDownloads(router, { files: deps.replayFiles, limiter: downloadLimiter, secret: deps.downloadSecret,
+    read: (handle, replay) => publicDownloadTarget(deps, handle, replay) });
 
   return router;
+}
+
+/** @param {PublicReplayDependencies} deps @param {string} userId @param {string} requested */
+function sharedReplayDetail(deps, userId, requested) {
+  const reference = isPublicReplayReference(requested);
+  return deps.replayLibrary.getDetail(userId, requested, { view: "detector", ...(reference ? { publicReference: true } : {}) });
+}
+
+/** @param {PublicReplayDependencies} deps @param {string} handle @param {string} requested */
+async function publicDownloadTarget(deps, handle, requested) {
+  const shared = await deps.users.resolveReplaySharing(handle);
+  if (!shared) return null;
+  const detail = await sharedReplayDetail(deps, shared.userId, requested);
+  const reference = detail?.game.publicReference;
+  if (!detail || !isPublicReplayReference(reference)) return null;
+  return { handle: publicProfile(shared.profile).handle, userId: shared.userId, gameId: detail.game.gameId, reference };
+}
+
+/** @param {PublicReplayDependencies} deps @returns {import('express').RequestHandler} */
+function publicReplayCardHandler(deps) {
+  return async (req, res, next) => {
+    try {
+      const reference = req.params.gameId;
+      if (!isPublicReplayReference(reference)) return neutralNotFound(res);
+      const shared = await deps.users.resolveReplaySharing(String(req.params.handle || ""));
+      if (!shared) return neutralNotFound(res);
+      const detail = await sharedReplayDetail(deps, shared.userId, reference);
+      if (detail?.game.publicReference !== reference) return neutralNotFound(res);
+      const { handle, displayName } = publicProfile(shared.profile);
+      const game = publicReplayItem(detail.game, [], Boolean(deps.replayFiles));
+      publicNoStore(res);
+      res.json({ profile: { handle, displayName }, game: {
+        result: game.result, matchup: game.matchup, map: game.map, durationSec: game.durationSec,
+        myBuild: game.myBuild, oppStrategy: game.opponent.strategy, date: game.date,
+        replayAvailable: game.replayAvailable,
+      } });
+    } catch (err) {
+      next(err);
+    }
+  };
 }
 
 /** @param {Record<string, unknown>} raw */
@@ -215,7 +234,8 @@ function firstQueryValue(value) {
 function publicReplayNeighbors(raw) {
   if (!raw) return undefined;
   const row = objectOrEmpty(raw);
-  return { olderGameId: boundedString(row.olderGameId, 200) || null, newerGameId: boundedString(row.newerGameId, 200) || null };
+  return { olderGameId: isPublicReplayReference(row.olderGameId) ? row.olderGameId : null,
+    newerGameId: isPublicReplayReference(row.newerGameId) ? row.newerGameId : null };
 }
 
 /** @param {unknown} profile */
@@ -240,7 +260,7 @@ function publicReplayItem(raw, rawLinks, downloadsEnabled = true) {
     ? row.detectedOppStrategy
     : opponent.strategy;
   return {
-    gameId: boundedString(row.gameId, 200),
+    gameId: isPublicReplayReference(row.publicReference) ? row.publicReference : null,
     date: safeDateString(row.date),
     result: boundedString(row.result, 24),
     map: boundedString(row.map, 200),
@@ -252,9 +272,9 @@ function publicReplayItem(raw, rawLinks, downloadsEnabled = true) {
     myMmr: boundedNumber(row.myMmr, 0, 9_999, true),
     macroScore: boundedNumber(row.macroScore, 0, 100, false),
     opponent: {
-      displayName: boundedString(opponent.displayName, 80),
+      displayName: "Opponent",
       race: boundedString(opponent.race, 24),
-      mmr: boundedNumber(opponent.mmr, 0, 9_999, true),
+      mmr: approximateMmr(opponent.mmr),
       strategy: boundedString(oppStrategy, 200),
     },
     matchup: validMatchup(row.matchup),
@@ -386,7 +406,7 @@ function publicStatsEvents(raw) {
 
 /**
  * @param {unknown} raw perGame.buildOrder payload
- * @param {{myBuild?: unknown, oppStrategy?: unknown}} labels the replay's
+ * @param {{myBuild?: unknown, oppStrategy?: unknown, reference?: unknown}} labels the replay's
  *   classifier labels (the library's detector view): the payload's own
  *   ``my_build`` / ``opp_strategy`` are the owner's effective labels, which a
  *   build check-in or an opponent correction may have replaced
@@ -396,11 +416,11 @@ function publicBuildOrder(raw, labels) {
   if (source.ok !== true) return null;
   return {
     ok: true,
-    game_id: boundedString(source.game_id, 200),
+    game_id: isPublicReplayReference(labels.reference) ? labels.reference : null,
     my_build: boundedString(labels.myBuild, 200),
     my_race: boundedString(source.my_race, 24),
     opp_strategy: boundedString(labels.oppStrategy, 200),
-    opponent: boundedString(source.opponent, 80),
+    opponent: "Opponent",
     opp_race: boundedString(source.opp_race, 24),
     map: boundedString(source.map, 200),
     result: boundedString(source.result, 24),
@@ -439,7 +459,7 @@ function publicStreamLinks(raw) {
     const link = objectOrEmpty(entry);
     const platform = link.platform;
     const perspective = link.perspective;
-    const url = safeProviderUrl(link.url, platform);
+    const url = safeProviderUrl(link.url, platform, perspective === "opponent");
     const offsetSec = boundedNumber(link.offsetSec, 0, 86_400, false);
     if (
       (platform !== "twitch" && platform !== "youtube")
@@ -452,20 +472,20 @@ function publicStreamLinks(raw) {
     return [{
       platform,
       perspective,
-      playerName: boundedString(link.playerName, 80),
+      playerName: perspective === "me" ? boundedString(link.playerName, 80) : null,
       url,
       offsetSec,
-      videoId: boundedString(link.videoId, 160),
+      videoId: perspective === "me" ? boundedString(link.videoId, 160) : null,
     }];
   });
 }
 
-/** @param {unknown} rawUrl @param {unknown} platform */
-function safeProviderUrl(rawUrl, platform) {
+/** @param {unknown} rawUrl @param {unknown} platform @param {boolean} anonymous */
+function safeProviderUrl(rawUrl, platform, anonymous) {
   if (typeof rawUrl !== "string" || rawUrl.length > 2_048) return null;
   try {
     const url = new URL(rawUrl);
-    if (url.protocol !== "https:") return null;
+    if (url.protocol !== "https:" || url.username || url.password) return null;
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
     if (platform === "twitch" && host !== "twitch.tv") return null;
     if (
@@ -475,10 +495,26 @@ function safeProviderUrl(rawUrl, platform) {
     ) {
       return null;
     }
+    if (anonymous && !anonymizeOpponentVodUrl(url, platform)) return null;
     return url.toString();
   } catch {
     return null;
   }
+}
+
+/** @param {URL} url @param {unknown} platform */
+function anonymizeOpponentVodUrl(url, platform) {
+  const video = url.searchParams.get("v");
+  const valid = platform === "twitch"
+    ? /^\/videos\/\d{1,24}$/.test(url.pathname)
+    : url.pathname === "/watch" && /^[A-Za-z0-9_-]{11}$/.test(video || "");
+  if (!valid) return false;
+  const time = url.searchParams.get("t");
+  url.search = "";
+  url.hash = "";
+  if (platform === "youtube" && video) url.searchParams.set("v", video);
+  if (time && /^(?:\d{1,5}s?|\d{1,2}h\d{1,2}m\d{1,2}s)$/.test(time)) url.searchParams.set("t", time);
+  return true;
 }
 
 /** @param {any} gameVods @param {string} userId @param {unknown} sourceGames */
@@ -594,16 +630,6 @@ function neutralNotFound(res) {
 function publicNoStore(res) {
   res.set("Cache-Control", "no-store, max-age=0");
   res.set("X-Robots-Tag", "noindex, nofollow");
-}
-
-/** @param {number} status @param {string} code @param {string} message */
-function httpError(status, code, message) {
-  const error = /** @type {Error & {status:number,code:string}} */ (
-    new Error(message || code)
-  );
-  error.status = status;
-  error.code = code;
-  return error;
 }
 
 const MACRO_NUMBER_FIELDS = [

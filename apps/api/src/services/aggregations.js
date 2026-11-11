@@ -1,5 +1,6 @@
 "use strict";
 
+const { pickWeekStart } = require("../util/weekStart");
 const { LIMITS } = require("../config/constants");
 const { gamesMatchStage } = require("../util/parseQuery");
 const trendsAgg = require("./trendsAggregations");
@@ -465,10 +466,11 @@ class AggregationsService {
   }
 
   /**
-   * Daily / weekly / monthly W-L timeseries for the trends chart.
+   * Daily / weekly / monthly W-L timeseries for the trends chart. Weeks
+   * start on `opts.weekStart` (default Sunday).
    *
    * @param {string} userId
-   * @param {{interval?: 'day'|'week'|'month', tz?: string}} opts
+   * @param {{interval?: 'day'|'week'|'month', tz?: string, weekStart?: string}} opts
    * @param {object} filters
    */
   async timeseries(userId, opts, filters) {
@@ -479,12 +481,13 @@ class AggregationsService {
   /**
    * @private
    * @param {string} userId
-   * @param {{interval?: 'day'|'week'|'month', tz?: string} | undefined} opts
+   * @param {{interval?: 'day'|'week'|'month', tz?: string, weekStart?: string} | undefined} opts
    * @param {object} filters
    */
   async _timeseriesOnce(userId, opts, filters) {
     const requestedInterval = pickInterval(opts && opts.interval);
     const timezone = pickTimezone(opts && opts.tz);
+    const startOfWeek = pickWeekStart(opts && opts.weekStart);
     const match = gamesMatchStage(userId, filters);
     // Pick a coarser bucket when the matched data would overflow the
     // bucket cap. Otherwise the "All time" KPI tile silently dropped
@@ -502,6 +505,7 @@ class AggregationsService {
                 date: "$date",
                 unit: interval,
                 timezone,
+                ...(interval === "week" ? { startOfWeek } : {}),
               },
             },
             wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },

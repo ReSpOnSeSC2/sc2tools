@@ -53,26 +53,7 @@ export function rarityFor(probability: number): Rarity {
   return RARITY_TABLE[4];
 }
 
-/** Tracks both device motion reduction and the page's appearance preference. */
-export function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const root = document.documentElement;
-    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    const refresh = () => setReduced(Boolean(mq?.matches) || root.dataset.motion === "reduce");
-    refresh();
-    const observer = new MutationObserver(refresh);
-    observer.observe(root, { attributes: true, attributeFilter: ["data-motion"] });
-    if (mq?.addEventListener) mq.addEventListener("change", refresh);
-    else mq?.addListener?.(refresh);
-    return () => {
-      observer.disconnect();
-      if (mq?.removeEventListener) mq.removeEventListener("change", refresh);
-      else mq?.removeListener?.(refresh);
-    };
-  }, []);
-  return reduced;
-}
+export { useReducedMotion } from "@/lib/a11y/useReducedMotion";
 
 /**
  * Drive a reveal's "settled" flag: false during the animation, true once

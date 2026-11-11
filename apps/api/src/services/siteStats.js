@@ -3,6 +3,7 @@
 const { createHmac, randomBytes, timingSafeEqual } = require("node:crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { LandingStatsService } = require("./landingStats");
 
 const ACTIVITY_WINDOW_SECONDS = 180;
 const SNAPSHOT_CACHE_MS = 10_000;
@@ -18,7 +19,7 @@ const QUERY_MAX_TIME_MS = 2_500;
 class SiteStatsService {
   /**
    * @param {import('../db/connect').DbContext} db
-   * @param {{secret: Buffer|string, now?: () => number, cacheMs?: number, logger?: {warn: Function}}} opts
+   * @param {{secret: Buffer|string, now?: () => number, cacheMs?: number, logger?: {warn: Function}, guidesEnabled?: boolean, reviewsEnabled?: boolean}} opts
    */
   constructor(db, opts) {
     this.db = db;
@@ -26,6 +27,7 @@ class SiteStatsService {
     this.now = opts.now || Date.now;
     this.cacheMs = opts.cacheMs ?? SNAPSHOT_CACHE_MS;
     this.logger = opts.logger || null;
+    this.landing = new LandingStatsService(db, { ...opts, now: this.now });
     /** @type {SiteStatsSnapshot|null} */
     this.snapshot = null;
     this.snapshotExpiresAt = 0;

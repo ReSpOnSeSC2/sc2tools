@@ -7,6 +7,7 @@ vi.mock("@clerk/nextjs", () => ({ SignedIn: ({ children }: { children: React.Rea
 vi.mock("@/lib/instant/flag", () => ({ getInstantImportMode: () => mocks.mode }));
 vi.mock("@/components/landing/ReplayDemo", () => ({ ReplayDemo: () => <div>Build editor demo</div> }));
 vi.mock("@/components/landing/GuidesStrip", () => ({ GuidesStrip: () => null }));
+vi.mock("@/components/landing/LiveFromTheLadder", () => ({ LiveFromTheLadder: () => <div data-testid="landing-live-feed" /> }));
 vi.mock("@/components/pwa/InstallPrompt", () => ({ InstallPrompt: () => null }));
 vi.mock("@/components/landing/RealGameShowcase", () => ({ RealGameShowcase: () => <div>Real game</div> }));
 afterEach(cleanup);

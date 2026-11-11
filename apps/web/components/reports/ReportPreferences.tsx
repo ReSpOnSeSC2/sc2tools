@@ -11,7 +11,7 @@ import { RequestError } from "@/components/ui/RequestError";
 import { Section } from "@/components/ui/Section";
 import { Toggle } from "@/components/ui/Toggle";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
-import { usePublishDirty } from "@/components/analyzer/settings/SettingsContext";
+import { useSaveSource } from "@/components/analyzer/settings/SettingsContext";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 
 type ReportPrefs = { weekly: boolean; stream: boolean; timezone: string | null };
@@ -31,20 +31,22 @@ function ReportPreferencesForm() {
   const [error, setError] = useState<ClientApiError | null>(null);
   const [saved, setSaved] = useState(false);
   const deviceZone = browserTimeZone();
-  usePublishDirty("preferences", form.dirty);
+  useSaveSource("preferences", { label: "report settings", dirty: form.dirty, save, reset: () => { form.reset(); setError(null); }, order: 3 }, "reports");
   const update = (patch: Partial<ReportPrefs>) => { form.setDraft((draft) => ({ ...draft, ...patch })); setSaved(false); };
-  async function save() {
-    if (saving) return; setSaving(true); setError(null); setSaved(false);
+  async function save(): Promise<boolean> {
+    if (!form.dirty) return true;
+    if (saving) return false; setSaving(true); setError(null); setSaved(false);
     try {
       const result = await apiCall<ReportPrefs>(getToken, "/v1/me/preferences/reports", { method: "PUT", body: JSON.stringify(form.draft) });
       await query.mutate(result, { revalidate: false }); form.markSaved(); setSaved(true);
-    } catch (cause) { setError(cause as ClientApiError); }
+      return true;
+    } catch (cause) { setError(cause as ClientApiError); return false; }
     finally { setSaving(false); }
   }
   const zone = form.draft.timezone;
   return <Section id="reports" className="scroll-mt-28" title="Reports" description="A short summary of your week every Monday morning, and one after each stream you end in the Dock. Both arrive in your notifications.">
     {query.error && !query.data ? <RequestError error={query.error} onRetry={() => query.mutate()} /> : !query.data ? <Skeleton rows={3} /> : <Card>
-      {error ? <RequestError error={error} onRetry={save} /> : null}
+      {error ? <RequestError error={error} /> : null}
       <div className="divide-y divide-border">
         <PrefRow id="report-weekly" title="Weekly report" description="Monday around 09:00: games, record by matchup, MMR, best map and build, compared with the week before. Weeks with fewer than five games are skipped.">
           <Toggle id="report-weekly" checked={form.draft.weekly} onChange={(weekly) => update({ weekly })} disabled={saving} aria-labelledby="report-weekly-title" />
@@ -61,8 +63,6 @@ function ReportPreferencesForm() {
         </div>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button disabled={saving || !form.dirty} onClick={save}>{saving ? "Saving…" : "Save report settings"}</Button>
-        <Button variant="secondary" disabled={saving || !form.dirty} onClick={form.reset}>Reset report settings</Button>
         {saved ? <span role="status" className="text-caption text-success">Report settings saved</span> : null}
         <Link href="/app/reports/weekly/latest" className="inline-flex min-h-11 items-center text-caption font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Last week&apos;s report</Link>
         <Link href="/app/streams" className="inline-flex min-h-11 items-center text-caption font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Stream reports</Link>

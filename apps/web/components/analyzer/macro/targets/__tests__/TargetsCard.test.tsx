@@ -41,7 +41,7 @@ vi.mock("@/lib/clientApi", () => ({
     if (path.startsWith("/v1/benchmarks/timings")) {
       const p50 = league === "5" ? 90 : 95;
       return ok({ table: { era: "after", leagueId: Number(league), league: league === "5" ? "Master" : "Diamond", matchup: "PvZ", n: 300,
-        timings: { natural: { n: 300, deciles: deciles(p50 - 20, 5) }, third: { n: 300, deciles: deciles(200, 5) }, firstUpgrade: { n: 0, deciles: null }, keyTech: { n: 0, deciles: null } } } });
+        timings: { natural: { n: 300, deciles: deciles(p50 - 20, 5) }, third: { n: 300, deciles: deciles(200, 5) }, firstUpgrade: { n: league === "5" ? 40 : 300, deciles: league === "5" ? null : deciles(200, 5) }, keyTech: { n: 0, deciles: null } } } });
     }
     if (path.startsWith("/v1/benchmarks?")) {
       if (league === "5" && harness.masterMissing) return { data: undefined, error: { status: 404, message: "not_enough_data" }, isLoading: false, mutate: vi.fn() };
@@ -59,7 +59,7 @@ function targets(overrides: Partial<TargetsResponse> = {}): TargetsResponse {
     medians: { spq: { n: 20, median: 68 }, macroScore: { n: 20, median: 61 }, apm: { n: 20, median: 155 }, durationSec: { n: 20, median: 660 } },
     mmr: { current: 4120, at: "2026-11-09T00:00:00.000Z", region: "NA" },
     netMmr: { pairs: 18, games: 30, perGame: 5, window: 30 },
-    timings: { era: "after", n: 12, limit: 20, timings: { natural: { n: 12, median: 102 }, third: { n: 12, median: 230 }, firstUpgrade: { n: 0, median: null }, keyTech: { n: 0, median: null } } },
+    timings: { era: "after", n: 12, limit: 20, timings: { natural: { n: 12, median: 102 }, third: { n: 12, median: 230 }, firstUpgrade: { n: 12, median: 230 }, keyTech: { n: 0, median: null } } },
     ...overrides,
   };
 }
@@ -83,6 +83,9 @@ describe("Targets card", () => {
     expect(screen.getByText("Diamond PvZ p36 → Master median needs +14 SQ")).toBeTruthy();
     expect(screen.getByText("Diamond PvZ p53 · Master median 10:40")).toBeTruthy();
     expect(screen.getByText("12 s later than the Master median")).toBeTruthy();
+    // Master has a timing table, but its first-upgrade cohort is under the floor.
+    expect(screen.getByText("10 s later than the Diamond median")).toBeTruthy();
+    expect(screen.getByText("Not enough Master PvZ games yet")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: "Games below target" })[0]);
     expect(onDrill).toHaveBeenCalledWith(expect.objectContaining({
       params: { race: "P", opp_race: "Z", map_pool: "ladder", game_size: "1v1", sq_max: 82 },

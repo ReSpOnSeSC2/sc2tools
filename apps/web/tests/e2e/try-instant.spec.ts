@@ -181,6 +181,15 @@ test.describe("/try instant analysis", () => {
     await expect(gameMmr).toContainText("−32 by your next game");
     await expectSelectedGameDetail(page);
 
+    await page.getByRole("group", { name: "Matchup" }).getByRole("button", { name: "vs Terran" }).click();
+    await expect(page.getByText("Showing 1 of 2 games")).toBeVisible();
+    await expect(games).toHaveCount(0);
+    await expect(page.getByTestId("report-games")).toContainText("Both build orders and the macro timeline of your game.");
+    await page.getByRole("button", { name: "Export", exact: true }).click();
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download games (CSV)" }).click();
+    expect((await download).suggestedFilename()).toMatch(/^sc2tools-try-games-.*\.csv$/);
+
     expectNothingSent(traffic);
   });
 

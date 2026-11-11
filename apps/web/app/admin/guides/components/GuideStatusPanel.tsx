@@ -30,6 +30,7 @@ import {
   type AdminNoticeValue,
   type AdminResource,
 } from "./guidesAdminShared";
+import { formatNumber } from "@/lib/i18n/format";
 
 const HEADING_ID = "guide-status-heading";
 const MS_PER_SECOND = 1000;
@@ -62,7 +63,7 @@ function recomputeText(state: GuideRecomputeState | undefined): string | null {
 }
 
 function backfillSummary(status: GuideBackfillStatus): string {
-  const counts = `${status.processed.toLocaleString()} games processed, ${status.written.toLocaleString()} samples written, ${status.skipped.toLocaleString()} skipped, ${status.failed.toLocaleString()} failed`;
+  const counts = `${formatNumber(status.processed)} games processed, ${formatNumber(status.written)} samples written, ${formatNumber(status.skipped)} skipped, ${formatNumber(status.failed)} failed`;
   const window = status.days ? ` over the last ${status.days} days` : "";
   if (status.running) return `Running${window}: ${counts}.`;
   if (!status.startedAt) return "Not started since the API last restarted.";
@@ -148,10 +149,10 @@ function RunMetrics({ run, samples }: { run: GuideRunSummary | null; samples: nu
       <MetricStat label="Last recompute" value={run ? timeSince(run.computedAt) : "Never"} caption={runCaption(run)} />
       <MetricStat
         label="Published builds"
-        value={counts ? counts.published.toLocaleString() : "—"}
-        caption={counts ? `of ${counts.builds.toLocaleString()} builds · ${counts.counters.toLocaleString()} counters · ${counts.maps.toLocaleString()} maps` : undefined}
+        value={counts ? formatNumber(counts.published) : "—"}
+        caption={counts ? `of ${formatNumber(counts.builds)} builds · ${formatNumber(counts.counters)} counters · ${formatNumber(counts.maps)} maps` : undefined}
       />
-      <MetricStat label="Timing samples" value={samples.toLocaleString()} caption="Pseudonymous build-log samples (guide_samples)" />
+      <MetricStat label="Timing samples" value={formatNumber(samples)} caption="Pseudonymous build-log samples (guide_samples)" />
     </div>
   );
 }

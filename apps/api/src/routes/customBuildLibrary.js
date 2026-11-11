@@ -209,8 +209,8 @@ function registerImportExportRoutes(router, { deps, persistBuild }, route) {
     }
     const result = await library.importBatch(userId, items, {
       dryRun: body.dryRun === true,
-      save: async (slug, value, previous) => {
-        const previousBuild = previous ? /** @type {Record<string, any>|null} */ (await deps.customBuilds.get(userId, slug)) : null;
+      save: async (slug, value, overwriting) => {
+        const previousBuild = overwriting ? /** @type {Record<string, any>|null} */ (await deps.customBuilds.get(userId, slug)) : null;
         await persistBuild(req, userId, slug, value, {
           previousBuild,
           reclassifyRequested: false,

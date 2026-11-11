@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePollVote, tallyPollVotes } from "../poll";
+import { POLL_VOTE_EXAMPLES, POLL_VOTE_HINT, parsePollVote, tallyPollVotes } from "../poll";
 import type { ChatMessage, ChatPlatform } from "../types";
 
 function msg(
@@ -20,6 +20,13 @@ describe("parsePollVote", () => {
     expect(parsePollVote("!vote 3", 3)).toBe(2);
     expect(parsePollVote("!VOTE 2", 3)).toBe(1);
     expect(parsePollVote("  !1  ", 3)).toBe(0);
+  });
+
+  it("accepts every vote example the Dock and widget show", () => {
+    for (const example of POLL_VOTE_EXAMPLES) {
+      expect(POLL_VOTE_HINT).toContain(example);
+      expect(parsePollVote(example, 3)).toBe(1);
+    }
   });
 
   it("rejects non-votes, zero and out-of-range numbers", () => {

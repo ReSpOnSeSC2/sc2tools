@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { InstantBadge } from "@/components/ui/InstantBadge";
 import { useGhostPractice } from "@/lib/useGhostPractice";
 import { GHOST_SYNC_EVENT } from "@/lib/ghostSyncModel";
 import { assignGhostTarget, emptyGhostBuildConfig, readArmedGhostConfig, readArmedGhostTarget, readSavedGhostBuilds,
@@ -34,7 +35,7 @@ export function GhostPracticeSettings() {
   const move = async (config: GhostBuildConfig) => { if (await practice.migrate(config)) dismiss(); };
   const disabled = practice.loading || practice.saving || !!practice.readError;
   return <div className="min-w-0 space-y-5">
-    <p className="text-caption text-text-muted">Assignments are saved to your account. Your Ghost source URL stays the same when you change or clear a build. The desktop Companion&apos;s separate practice panel remains under its own controls.</p>
+    <p className="text-caption text-text-muted"><InstantBadge className="mr-1.5 align-middle" />Each assignment saves to your account as soon as you choose or clear it. Your Ghost source URL stays the same when you change or clear a build. The desktop Companion&apos;s separate practice panel remains under its own controls.</p>
     {practice.loading ? <p role="status">Loading account assignments…</p> : null}
     {practice.readError ? <p role="status" className="text-caption text-warning">{practice.offline ? "Showing this account’s cached assignments. " : ""}Couldn&apos;t load account assignments. <button className="min-h-11 px-2 underline" onClick={practice.retry}>Try again</button></p> : null}
     {practice.error ? <p role="alert" className="text-caption text-danger">{practice.error}</p> : null}

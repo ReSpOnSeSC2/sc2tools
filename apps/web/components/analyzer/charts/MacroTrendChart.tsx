@@ -6,6 +6,7 @@ import { mechanicsGeometry, mechanicsPoints, MECHANICS_METRICS, type MechanicsBu
 import { isLowSample, useChartKit } from "@/lib/charts/theme";
 import { Select } from "@/components/ui/Select";
 import { ChartFrame, type ChartTableColumn } from "./ChartFrame";
+import { formatNumber } from "@/lib/i18n/format";
 
 export type MechanicsReference = { value: number; label: string };
 const number = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
@@ -29,7 +30,7 @@ export function MacroTrendChart({ series, metric = "macro", bucket = "week", ref
   const columns: ChartTableColumn<MechanicsPoint>[] = [
     { key: "date", label: "Period", render: point => point.date },
     { key: "value", label: name, align: "right", render: point => point.value === null ? "Not measured" : number(point.value) },
-    { key: "n", label: "Measured games", align: "right", render: point => point.n === null ? "Unavailable" : point.n.toLocaleString() },
+    { key: "n", label: "Measured games", align: "right", render: point => point.n === null ? "Unavailable" : formatNumber(point.n) },
   ];
   return <ChartFrame title={`${name} over time`} rows={points.some(point => point.value !== null) ? points : []} columns={columns}
     summary={`${name} by calendar ${bucket}, ${points.length} periods. Gaps stay unmeasured. Hollow points have fewer than 20 measurements or an unknown count.`}

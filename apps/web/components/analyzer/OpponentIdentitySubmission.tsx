@@ -10,6 +10,7 @@ import { Card, Skeleton } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Field } from "@/components/ui/Field";
 import { IdentityPlayerLabel, PlayerIdentityPicker, type IdentityPlayer } from "./PlayerIdentityPicker";
+import { formatNumber } from "@/lib/i18n/format";
 
 export type IdentityProposal = {
   id: string;
@@ -179,7 +180,7 @@ function IdentitySubmissionBody({ pulseId, onChanged, ownerId, currentOwner }: {
         <Field label="Why is this the same player?" hint={`At least ${IDENTITY_REASON_MIN} characters. Reference replay details, a stream, or other evidence that can be checked.`}>
           <textarea className={IDENTITY_TEXTAREA_CLASS} rows={4} maxLength={IDENTITY_REASON_MAX} value={reason} disabled={saving} onChange={(event) => { setReason(event.target.value); setSaveError(null); }} />
         </Field>
-        <p className="text-caption text-text-dim">{data.replayCount.toLocaleString()} replay{data.replayCount === 1 ? "" : "s"} in your history available for review · {reason.length}/{IDENTITY_REASON_MAX} characters</p>
+        <p className="text-caption text-text-dim">{formatNumber(data.replayCount)} replay{data.replayCount === 1 ? "" : "s"} in your history available for review · {reason.length}/{IDENTITY_REASON_MAX} characters</p>
         {data.isAdmin ? <p className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-caption text-text-muted">Confirming applies this identity for all users immediately. Check the selected account and evidence before saving.</p> : null}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={!target || reason.trim().length < IDENTITY_REASON_MIN} loading={saving}>{data.isAdmin ? "Confirm identity" : data.submission ? "Update submission" : "Submit for review"}</Button>

@@ -8,6 +8,7 @@ import type { usePlayerChannels } from "../usePlayerChannels";
 import { OpponentLink } from "./OpponentTableRows";
 import { OpponentRace } from "./OpponentRace";
 import type { Opp, OpenOpponent } from "./types";
+import { formatDateTime, formatTime } from "@/lib/i18n/format";
 
 export function StarredRivalCards({ rows, summary, keyFor, onOpen, star, channelsFor, totalStars }: {
   rows: OpponentGroup<Opp>[]; summary?: RivalSummary; keyFor: (row: OpponentGroup<Opp>) => string | undefined;
@@ -22,7 +23,7 @@ export function StarredRivalCards({ rows, summary, keyFor, onOpen, star, channel
       return <article key={row.pulseId} className="min-w-0 rounded-xl border-2 border-line bg-bg-surface p-4"><div className="flex items-center gap-2"><OpponentLink opponent={row} onOpen={onOpen} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 font-semibold text-text hover:underline"><span className="truncate">{row.name || "unnamed"}</span><OpponentRace row={row} /></OpponentLink>{star(row)}</div>
         <p className="text-sm tabular-nums">{row.wins}–{row.losses} · {pct1(row.winRate)} · {row.games} games</p>
         <p className="mt-2 text-caption text-text-muted">{meta?.streak ? `${meta.streak.count}${meta.streak.atLeast ? "+" : ""} ${meta.streak.kind === "win" ? "wins" : "losses"} in a row` : "Streak unmeasured"}</p>
-        <p className="text-caption text-text-muted">Last meeting {row.lastPlayed ? <time dateTime={row.lastPlayed} title={new Date(row.lastPlayed).toLocaleString()}>{fmtAgo(row.lastPlayed)}</time> : "unknown"}</p>
+        <p className="text-caption text-text-muted">Last meeting {row.lastPlayed ? <time dateTime={row.lastPlayed} title={formatDateTime(new Date(row.lastPlayed))}>{fmtAgo(row.lastPlayed)}</time> : "unknown"}</p>
         <p className="mt-2 break-words text-caption"><span className="text-text-dim">Usual opener: </span>{meta?.usualOpener ? `${meta.usualOpener.name} (${meta.usualOpener.samples}/${meta.usualOpener.of} recent meetings)` : "Not enough labelled meetings"}</p>
         <p className="mt-2 text-caption" title={meta?.pulse?.change ? `${meta.pulse.change.baselineAt} → ${meta.pulse.change.currentAt}; fetched ${meta.pulse.fetchedAt || "unknown"}` : undefined}>Pulse 30-day MMR: {meta?.pulse?.change ? `${meta.pulse.change.delta > 0 ? "+" : ""}${meta.pulse.change.delta}` : "Unknown"}</p>
         {meta?.pulse?.fetchedAt ? <p className="text-micro text-text-dim">Account {row.pulseCharacterId || row.pulseId} · cached {fmtAgo(meta.pulse.fetchedAt)}</p> : null}
@@ -45,5 +46,5 @@ function CachedLiveBadge({ observations }: { observations: RivalSummary["rivals"
     return () => { if (timer !== undefined) clearTimeout(timer); };
   }, [observations]);
   const live = observations.find(item => Date.parse(item.observedAt) <= now && now - Date.parse(item.observedAt) < 20000);
-  return live ? <a href={live.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded border border-success/40 px-2 text-caption text-success" title={`Public ${live.platform} observation at ${new Date(live.observedAt).toLocaleTimeString()}`}>Live now</a> : null;
+  return live ? <a href={live.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded border border-success/40 px-2 text-caption text-success" title={`Public ${live.platform} observation at ${formatTime(new Date(live.observedAt))}`}>Live now</a> : null;
 }

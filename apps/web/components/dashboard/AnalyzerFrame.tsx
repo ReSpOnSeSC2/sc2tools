@@ -71,6 +71,7 @@ export type DashboardMe = ChecklistMe & {
   games: { total: number; latest: string | null };
   agentVersion?: string | null;
   isAdmin?: boolean;
+  weeklyReportWeek?: string | null;
 };
 
 const MeContext = createContext<DashboardMe | null>(null);

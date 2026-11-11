@@ -4,6 +4,7 @@ import { useId, useMemo } from "react";
 import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useChartTheme } from "@/lib/useChartTheme";
 import { formatTrendDate, type WinRateSampleTarget, type WinRateTrend, type WinRateTrendPoint } from "@/lib/winRateTrend";
+import { formatNumber } from "@/lib/i18n/format";
 
 const percent = (value: number) => `${value.toFixed(1)}%`;
 const timestamp = (date: string) => Date.parse(`${date}T00:00:00Z`);
@@ -25,7 +26,7 @@ export function WinRateSampleToggle({ value, onChange }: { value: WinRateSampleT
 
 function RecordCount({ wins, losses, games }: { wins: number; losses: number; games: number }) {
   const other = Math.max(0, games - wins - losses);
-  return <>{wins.toLocaleString()}W · {losses.toLocaleString()}L{other > 0 ? ` · ${other.toLocaleString()} other` : ""}</>;
+  return <>{formatNumber(wins)}W · {formatNumber(losses)}L{other > 0 ? ` · ${formatNumber(other)} other` : ""}</>;
 }
 
 /** A persistent readout also exposes the important data without hover. */
@@ -43,7 +44,7 @@ export function WinRateSampleSummary({ trend, targetGames, compact = false, reco
       <div className="rounded-lg border border-border bg-bg-elevated/60 p-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <span className="text-caption font-semibold text-text">Building a sample</span>
-          <span className="text-caption tabular-nums text-text-muted">{trend.overall.games.toLocaleString()} / {targetGames} {recordLabel}</span>
+          <span className="text-caption tabular-nums text-text-muted">{formatNumber(trend.overall.games)} / {targetGames} {recordLabel}</span>
         </div>
         <div role="progressbar" aria-label="Games toward recent-form sample" aria-valuenow={Math.min(trend.overall.games, targetGames)} aria-valuemin={0} aria-valuemax={targetGames} className="my-2 h-1.5 overflow-hidden rounded-full bg-border">
           <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, trend.overall.games / targetGames * 100)}%` }} />
@@ -67,7 +68,7 @@ export function WinRateSampleSummary({ trend, targetGames, compact = false, reco
         </div>
       </div>
       <div className={`${compact ? "text-micro" : "text-caption"} tabular-nums text-text-muted`}>
-        <div className="font-medium text-text">{latest.sampleGames.toLocaleString()} {recordLabel} · <RecordCount wins={latest.sampleWins} losses={latest.sampleLosses} games={latest.sampleGames} /></div>
+        <div className="font-medium text-text">{formatNumber(latest.sampleGames)} {recordLabel} · <RecordCount wins={latest.sampleWins} losses={latest.sampleLosses} games={latest.sampleGames} /></div>
         <div>{interval !== "day" ? `${interval === "week" ? "Weeks" : "Months"} starting ` : ""}{formatTrendDate(latest.sampleStart!, true)} – {formatTrendDate(latest.date, true)}</div>
       </div>
     </div>
@@ -118,7 +119,7 @@ export function WinRateTrendPlot({ trend, compact = false, label = "Recent win r
                 <div role="status" aria-live="polite" aria-atomic="true" className="max-w-[240px] rounded-lg border border-border-strong bg-bg-surface p-3 text-caption text-text shadow-lg">
                   <div className="mb-1 font-semibold">{interval !== "day" ? `${interval === "week" ? "Weeks" : "Months"} starting ` : ""}{formatTrendDate(point.sampleStart, true)} – {formatTrendDate(point.date, true)}</div>
                   <div className="flex items-baseline justify-between gap-4"><span>{lineLabel(trend)}</span><strong className="text-lg tabular-nums">{percent(point.rate)}</strong></div>
-                  <div className="tabular-nums text-text-muted">{point.sampleGames.toLocaleString()} {recordLabel} · <RecordCount wins={point.sampleWins} losses={point.sampleLosses} games={point.sampleGames} /></div>
+                  <div className="tabular-nums text-text-muted">{formatNumber(point.sampleGames)} {recordLabel} · <RecordCount wins={point.sampleWins} losses={point.sampleLosses} games={point.sampleGames} /></div>
                 </div>
               );
             }} />

@@ -8,6 +8,7 @@ import { useRealtimeEvents, useRealtimeState } from "@/components/realtime/Realt
 import { gamesChanged } from "@/lib/realtime/gamesRefresh";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { Popover } from "@/components/ui/Popover";
+import { formatDateTime } from "@/lib/i18n/format";
 
 // Sync health loads, and reads /v1/me/sync-health, only when the details
 // open: the pill is on every page, and its status text stays /v1/me's.
@@ -70,7 +71,7 @@ class SyncHealthBoundary extends Component<{ children: ReactNode }, { failed: bo
 }
 export function absoluteTime(value: string | null | undefined): string | undefined {
   const parsed = value ? Date.parse(value) : Number.NaN;
-  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : undefined;
+  return Number.isFinite(parsed) ? formatDateTime(new Date(parsed)) : undefined;
 }
 export function formatRelative(iso: string, now: number): string {
   const time = Date.parse(iso); if (!Number.isFinite(time)) return "unavailable";
