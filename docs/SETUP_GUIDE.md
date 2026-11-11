@@ -54,6 +54,23 @@ destination. Use the admin Supporters page to review entries and confirm the
 amount and currency before verification. See the
 [deployment guide](DEPLOYMENT_GUIDE.md).
 
+## Shared replay playback storage
+
+New playback uploads use opaque version 2 object paths derived from the
+existing `SERVER_PEPPER_HEX`. Keep that value consistent across API instances
+and deployments so reads and account deletion can find these objects. Pending
+legacy uploads and completed legacy playback keep their original storage
+paths. Shared links play those recordings through the API.
+
+For direct browser playback of new recordings, the existing replay bucket can
+allow GET from the deployed web origins. The verified API stream also works
+with the original CORS rules. Turning a share off blocks new requests. A direct
+segment URL already issued may work for the remainder of its 60-second life.
+
+Once version 2 uploads exist, roll back only to an API build that can read and
+delete both layouts. Older API builds only know the legacy layout. Restore
+the compatible API to recover access to version 2 recordings.
+
 ## Rollout and rollback
 
 1. Check the PR's exact head and use a merge commit after the checks pass.

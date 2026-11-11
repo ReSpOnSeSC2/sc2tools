@@ -478,7 +478,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   );
   const playbackArtifacts = replayFiles ? new PlaybackArtifactsService({
     client: replayFiles.client, bucket: replayFiles.bucket, games: deps.db.games,
-    notifications,
+    notifications, keySecret: deps.config.serverPepper,
   }) : null;
   // One read-only Atlas client (and OAuth token) shared by capacity
   // monitoring and backup health; null when the service account is unset.

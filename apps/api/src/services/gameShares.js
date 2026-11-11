@@ -46,6 +46,8 @@ const GAME_SHARES = Object.freeze({
   MAX_ACTIVE: 200,
   /** Links listed per game in the owner's manager. */
   MAX_LISTED: 20,
+  SEGMENT_LINK_EXPIRES_SEC: 60,
+  CLEAN_SEGMENT_CACHE: 4096,
 });
 
 const GAME_PROJECTION = Object.freeze({
@@ -84,6 +86,8 @@ class GameSharesService {
     this.leaguePercentiles = deps.leaguePercentiles || null;
     this.logger = deps.logger || null;
     this.now = deps.now || Date.now;
+    /** @type {Set<string>} */
+    this.cleanSegments = new Set();
   }
 
   // ── Owner ───────────────────────────────────────────────────────
@@ -289,13 +293,27 @@ class GameSharesService {
   }
 
   /**
-   * Existing segment object keys carry private identifiers. Keep the
-   * lookup revocation-aware and let the browser use the verified proxy.
-   * @param {string} token
+   * Only opaque storage keys may leave the API. Verify the exact
+   * content-addressed segment before signing it for the first time.
+   * @param {string} token @param {string} artifactId @param {number} index
    */
-  async segmentLink(token) {
-    await this.resolve(token);
-    throw shareError(404, "playback_direct_unavailable", "Use the replay playback endpoint.");
+  async segmentLink(token, artifactId, index) {
+    const { ownerId, gameId } = await this.resolve(token);
+    const store = this.playbackArtifacts;
+    if (!store) throw noPlayback();
+    const opaque = { requireOpaque: true };
+    const cacheKey = `${artifactId}:${index}`;
+    if (!this.cleanSegments.has(cacheKey)) {
+      this._assertClean(await store.getSegment(ownerId, gameId, artifactId, index, opaque), index);
+      if (this.cleanSegments.size >= GAME_SHARES.CLEAN_SEGMENT_CACHE) {
+        const oldest = this.cleanSegments.values().next().value;
+        if (oldest !== undefined) this.cleanSegments.delete(oldest);
+      }
+      this.cleanSegments.add(cacheKey);
+    }
+    const link = await store.signSegment(ownerId, gameId, artifactId, index, GAME_SHARES.SEGMENT_LINK_EXPIRES_SEC, opaque);
+    await this.assertStillShared(token, ownerId, gameId);
+    return link;
   }
 
   /**
