@@ -115,7 +115,7 @@ function mountPublicRoutes(router, shares, limits) {
     res.json(await shares.playbackManifest(token(req)));
   }));
   router.get(`${segment}/link`, ...read, validSegment, handle(async (req, res) => {
-    res.json(await shares.segmentLink(token(req), String(req.params.artifactId), Number(req.params.index)));
+    res.json(await shares.segmentLink(token(req)));
   }));
   router.get(segment, ...read, validSegment, handle(async (req, res) => {
     const bytes = await shares.playbackSegment(token(req), String(req.params.artifactId), Number(req.params.index));

@@ -295,26 +295,13 @@ class GameSharesService {
   }
 
   /**
-   * A presigned storage URL for one segment, valid for a minute, so the
-   * bytes go from storage to the browser without passing through the API.
-   *
-   * The bytes cannot be rewritten (the browser checks them against the
-   * manifest's SHA-256), so the fail-closed identity scan the proxied path
-   * runs happens before the first link for each segment is issued. The
-   * verdict is kept per process: content-addressed bytes never change.
-   *
+   * Existing segment object keys carry private identifiers. Keep the
+   * lookup revocation-aware and let the browser use the verified proxy.
    * @param {string} token
-   * @param {string} artifactId
-   * @param {number} index
    */
-  async segmentLink(token, artifactId, index) {
-    const { ownerId, gameId } = await this.resolve(token);
-    const store = this.playbackArtifacts;
-    if (!store) throw noPlayback();
-    if (!this.cleanSegments.has(`${artifactId}:${index}`)) {
-      this._assertClean(await store.getSegment(ownerId, gameId, artifactId, index), artifactId, index);
-    }
-    return store.signSegment(ownerId, gameId, artifactId, index, GAME_SHARES.SEGMENT_LINK_EXPIRES_SEC);
+  async segmentLink(token) {
+    await this.resolve(token);
+    throw shareError(404, "playback_direct_unavailable", "Use the replay playback endpoint.");
   }
 
   /**
