@@ -12,6 +12,7 @@ export const HEX_ALLOWLIST = {
     "components/analyzer/explorer/ExplorerCharts.tsx",
     "components/instant/report/OfflineMacroChart.tsx",
     "lib/instant/reportCard.ts",
+    "lib/overlayRaceColors.ts",
   ],
 };
 

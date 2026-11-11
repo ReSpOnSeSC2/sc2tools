@@ -264,6 +264,7 @@ export function CrashCourse({ setup }: { setup?: CourseSetup } = {}) {
             ? "Browser storage is unavailable. You can still use every lesson; progress may reset when you leave."
             : "Your place and checklist are saved in this browser. Mark a lesson complete when you have tried it."}
         </p>
+        {!setup ? <p className="text-caption text-text-muted">Signed in? We check your setup automatically.</p> : null}
       </div>
 
       <div className="grid items-start gap-5 lg:grid-cols-[17rem_minmax(0,1fr)]">
