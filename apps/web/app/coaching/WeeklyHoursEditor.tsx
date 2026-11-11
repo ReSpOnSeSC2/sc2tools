@@ -9,8 +9,13 @@ import { clockValue, COACHING_DAYS, compareWindows, endClockValue, endMinuteValu
 import { clearDay, copyDay, copyLabel, copyTargets, nextWindow, presetsFor, replacedDays, restoreDays, UNDO_MS, type CopyScope } from "./coachingAvailability";
 import type { AvailabilityDraft, AvailabilityWindow } from "./coachingScheduleModel";
 
-type Undo = { day: number; days: number[]; previous: AvailabilityWindow[]; message: string };
+type Undo = { day: number; days: number[]; previous: AvailabilityWindow[]; applied: string; message: string };
 type Change = (fn: (current: AvailabilityDraft) => AvailabilityDraft) => void;
+
+function hoursKey(windows: AvailabilityWindow[], days: number[]) {
+  return windows.filter((window) => days.includes(window.day)).sort(compareWindows)
+    .map(({ day, startMinute, endMinute }) => `${day}:${startMinute}-${endMinute}`).join(",");
+}
 
 /**
  * Weekly hours, one row per day: windows, a day menu (copy to weekdays,
@@ -28,15 +33,17 @@ export function WeeklyHoursEditor({ draft, problems, onChange }: {
     const timer = window.setTimeout(() => setUndo(null), UNDO_MS);
     return () => window.clearTimeout(timer);
   }, [undo]);
+  const availableUndo = undo && hoursKey(draft.windows, undo.days) === undo.applied ? undo : null;
   const setWindows = (fn: (windows: AvailabilityWindow[]) => AvailabilityWindow[]) =>
     onChange((current) => ({ ...current, windows: fn(current.windows) }));
   const replaceDays = (day: number, days: number[], fn: (windows: AvailabilityWindow[]) => AvailabilityWindow[], message: string) => {
     const previous = draft.windows.filter((window) => days.includes(window.day)).map((window) => ({ ...window }));
     setWindows(fn);
-    setUndo({ day, days, previous, message });
+    setUndo({ day, days, previous, applied: hoursKey(fn(draft.windows), days), message });
   };
   const runUndo = (entry: Undo) => {
-    setWindows((windows) => restoreDays(windows, entry.previous, entry.days));
+    setWindows((windows) => hoursKey(windows, entry.days) === entry.applied
+      ? restoreDays(windows, entry.previous, entry.days) : windows);
     setUndo(null);
   };
   const dayMenu = (day: (typeof COACHING_DAYS)[number], windows: AvailabilityWindow[]): ReviewMenuItem[] => {
@@ -62,7 +69,7 @@ export function WeeklyHoursEditor({ draft, problems, onChange }: {
       <p className="mt-1 text-caption text-text-muted">
         Timeclock-style recurring windows in {draft.timeZone.replaceAll("_", " ")}. Use a day&apos;s menu to copy its hours.
       </p>
-      <span role="status" className="sr-only">{undo ? `${undo.message} Undo is available for 10 seconds.` : ""}</span>
+      <span role="status" className="sr-only">{availableUndo ? `${availableUndo.message} Undo is available for 10 seconds.` : ""}</span>
       <div className="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border">
         {COACHING_DAYS.map((day) => {
           const windows = draft.windows.filter((window) => window.day === day.day);
@@ -80,9 +87,9 @@ export function WeeklyHoursEditor({ draft, problems, onChange }: {
                   <ReviewMenu label={`${day.long} hours actions`} items={dayMenu(day, windows)}>
                     <MoreHorizontal className="h-4 w-4" aria-hidden />
                   </ReviewMenu>
-                  {undo?.day === day.day ? (
-                    <button type="button" onClick={() => runUndo(undo)} className="min-h-10 rounded-full px-2 text-caption font-bold text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-                      Undo<span className="sr-only">: {undo.message}</span>
+                  {availableUndo?.day === day.day ? (
+                    <button type="button" onClick={() => runUndo(availableUndo)} className="min-h-10 rounded-full px-2 text-caption font-bold text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                      Undo<span className="sr-only">: {availableUndo.message}</span>
                     </button>
                   ) : null}
                 </div>

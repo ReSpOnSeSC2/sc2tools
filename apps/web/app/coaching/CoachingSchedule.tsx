@@ -216,7 +216,7 @@ function StudentSchedule({
                 primaryTimeZone={localTimeZone}
                 coachTimeZone={data.availability?.timeZone}
                 viewer={{ role: "student", coachName: data.coach.name }}
-                digestOpen={index === 0}
+                digestOpen={index === 0} active={active}
                 onCancel={() => setCancelBooking(item)}
               />
             ))}

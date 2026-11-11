@@ -179,11 +179,10 @@ corresponding GitHub Release.
 
 ### Coaching sessions and prep digest
 
-- Add "Since last session" to each upcoming coaching session: the student's
-  eligible 1v1 games since their previous session, wins and losses by matchup,
-  the detected builds and the newest replays. It shows facts only, never
-  grades or scores, only to that session's coach and student, and only while
-  practice sharing is on.
+- Add "Since last session" to each upcoming coaching session. Coaches see the
+  student's ranked 1v1 record and replay details already shared in practice
+  assignment evidence. Students see their own eligible 1v1 games and builds
+  with links to their game pages. The digest requires active practice sharing.
 - Copy a day's hours to the weekdays or to every day, clear a day, and undo
   either for 10 seconds. Empty days offer evening, afternoon and weekend
   presets, and Add hours now continues after the day's last window.

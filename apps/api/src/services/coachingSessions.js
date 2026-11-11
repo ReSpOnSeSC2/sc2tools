@@ -6,8 +6,9 @@
  * past-session history.
  *
  * The digest is a watch-list, never an assessment. It carries game counts
- * and W-L by matchup, the detected builds and the newest replays since the
- * previous session; no grades, scores, MMR, notes or practice-log data. A
+ * and W-L by matchup, builds and recent replays since the previous session.
+ * Coaches receive ranked record counts and detected builds from qualifying
+ * assignments. The student receives their own checked-in labels. A
  * matchup's win rate only appears once it has ``DIGEST_MIN_SAMPLE``
  * decided games. Authorization and the practice-sharing consent gate live
  * in ``CoachingService``; everything here is pure apart from the
@@ -125,15 +126,16 @@ function digestGameMatch(userId, since, until) {
   };
 }
 
-/** @param {string} userId @param {Date} since @param {Date} until */
-function digestPipeline(userId, since, until) {
-  const build = {
-    $cond: [
-      { $eq: [{ $type: "$_digestBuild" }, "string"] },
-      { $trim: { input: "$_digestBuild" } },
-      "",
-    ],
-  };
+/** @param {string} userId @param {Date} since @param {Date} until
+ * @param {Record<string,any>[]|null} [assignmentMatches] null for the owner's view */
+function digestPipeline(userId, since, until, assignmentMatches = null) {
+  const own = assignmentMatches === null;
+  const recordScope = own ? [] : [{ $match: { isLadderGame: true } }];
+  const evidenceScope = own ? [] : [{ $match: assignmentMatches.length ? { $or: assignmentMatches } : { _id: null } }];
+  const build = { $let: {
+    vars: { name: { $cond: [{ $eq: [{ $type: "$_digestBuild" }, "string"] }, { $trim: { input: "$_digestBuild" } }, ""] } },
+    in: { $cond: [{ $lte: [{ $strLenCP: "$$name" }, 120] }, "$$name", ""] },
+  } };
   return [
     { $match: digestGameMatch(userId, since, until) },
     {
@@ -141,27 +143,36 @@ function digestPipeline(userId, since, until) {
         _digestResult: coachingResultExpr(),
         _digestMyRace: coachingRaceExpr("$myRace"),
         _digestOppRace: coachingRaceExpr("$opponent.race"),
-        // The classifier's label, never a declared check-in: practice
-        // sharing covers the detected build only.
-        _digestBuild: DETECTOR_MY_BUILD_FIELD,
+        // Check-ins update the owner's effective myBuild. The coach's
+        // accepted grant covers only the original detected label.
+        _digestBuild: own ? "$myBuild" : DETECTOR_MY_BUILD_FIELD,
       },
     },
     {
       $facet: {
-        results: [{ $group: { _id: "$_digestResult", games: { $sum: 1 } } }],
-        matchups: [{
+        results: [...recordScope, { $group: { _id: "$_digestResult", games: { $sum: 1 } } }],
+        matchups: [...recordScope, {
           $group: {
             _id: { my: "$_digestMyRace", opp: "$_digestOppRace", result: "$_digestResult" },
             games: { $sum: 1 },
           },
         }],
-        builds: [{ $group: { _id: build, games: { $sum: 1 } } }, { $sort: { games: -1, _id: 1 } }],
+        builds: [
+          ...evidenceScope,
+          { $group: { _id: build, games: { $sum: 1 } } }, { $sort: { games: -1, _id: 1 } },
+          { $group: { _id: null, rows: { $firstN: { input: "$$ROOT", n: DIGEST_BUILD_ROWS + 1 } },
+            unclassified: { $sum: { $cond: [{ $eq: ["$_id", ""] }, "$games", 0] } },
+            named: { $sum: { $cond: [{ $eq: ["$_id", ""] }, 0, 1] } },
+          } },
+        ],
+        evidenceCount: [...evidenceScope, { $count: "n" }],
         recent: [
+          ...evidenceScope,
           { $sort: { date: -1, _id: -1 } },
           { $limit: DIGEST_RECENT_GAMES },
           {
             $project: {
-              _id: 0, gameId: 1, date: 1, startedAt: 1, durationSec: 1, map: 1,
+              _id: 0, ...(own ? { gameId: 1 } : {}), date: 1, startedAt: 1, durationSec: 1, map: 1,
               _digestResult: 1, _digestMyRace: 1, _digestOppRace: 1, _digestBuild: 1,
             },
           },
@@ -215,16 +226,15 @@ function matchupRows(rows) {
 function buildRows(rows) {
   /** @type {{name:string,games:number}[]} */
   const named = [];
-  let unclassifiedGames = 0;
-  for (const row of Array.isArray(rows) ? rows : []) {
+  const summary = Array.isArray(rows) ? rows[0] : null;
+  for (const row of Array.isArray(summary?.rows) ? summary.rows : []) {
     const name = boundedText(row && row._id, 120);
     if (name) named.push({ name, games: count(row.games) });
-    else unclassifiedGames += count(row && row.games);
   }
   return {
     builds: named.slice(0, DIGEST_BUILD_ROWS),
-    moreBuilds: Math.max(0, named.length - DIGEST_BUILD_ROWS),
-    unclassifiedGames,
+    moreBuilds: Math.max(0, count(summary?.named) - DIGEST_BUILD_ROWS),
+    unclassifiedGames: count(summary?.unclassified),
   };
 }
 
@@ -240,13 +250,13 @@ function digestGameStart(row) {
   return end;
 }
 
-/** @param {any} row */
-function serializeDigestGame(row) {
+/** @param {any} row @param {boolean} own */
+function serializeDigestGame(row, own) {
   const my = row && row._digestMyRace;
   const opp = row && row._digestOppRace;
   const result = row && row._digestResult;
   return {
-    gameId: boundedText(row && row.gameId, 200),
+    ...(own ? { gameId: boundedText(row && row.gameId, 200) } : {}),
     playedAt: isoOrNull(digestGameStart(row)),
     map: boundedText(row && row.map, 120),
     matchup: RACES.has(my) && RACES.has(opp) ? `${my}v${opp}` : null,
@@ -262,19 +272,22 @@ function serializeDigestGame(row) {
  * @param {{bookingId:string, role:string, window:ReturnType<typeof digestWindow>}} context
  */
 function shapeDigest(root, context) {
-  const results = new Map((Array.isArray(root && root.results) ? root.results : [])
-    .map((row) => [row && row._id, count(row && row.games)]));
+  /** @type {{_id:string,games:number}[]} */
+  const resultRows = Array.isArray(root?.results) ? root.results : [];
+  const results = new Map(resultRows.map((row) => [row._id, count(row.games)]));
   const wins = results.get("win") || 0;
   const losses = results.get("loss") || 0;
   const games = [...results.values()].reduce((total, value) => total + value, 0);
   const { matchups, unknownRaceGames } = matchupRows(root && root.matchups);
-  const replays = (Array.isArray(root && root.recent) ? root.recent : [])
-    .map(serializeDigestGame)
-    .filter((game) => game.gameId);
+  const own = context.role === "student";
+  /** @type {any[]} */
+  const recent = Array.isArray(root?.recent) ? root.recent : [];
+  const replays = recent.map((row) => serializeDigestGame(row, own)).filter((game) => !own || game.gameId);
+  const replayCount = count(root?.evidenceCount?.[0]?.n);
   return {
     bookingId: context.bookingId,
     role: context.role,
-    state: games > 0 ? "ready" : "no_games",
+    state: games > 0 || replayCount > 0 ? "ready" : "no_games",
     window: {
       since: context.window.since.toISOString(),
       until: context.window.until.toISOString(),
@@ -286,7 +299,7 @@ function shapeDigest(root, context) {
     unknownRaceGames,
     ...buildRows(root && root.builds),
     replays,
-    moreReplays: Math.max(0, games - replays.length),
+    moreReplays: Math.max(0, replayCount - replays.length),
     minSample: DIGEST_MIN_SAMPLE,
     lookbackDays: DIGEST_LOOKBACK_DAYS,
   };

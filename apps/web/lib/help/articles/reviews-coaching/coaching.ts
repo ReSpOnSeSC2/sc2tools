@@ -126,6 +126,7 @@ const article: HelpArticle = {
       type: "list",
       items: [
         "**Add to your calendar:** every upcoming session has **Add to Google Calendar**, which opens a prefilled Google Calendar event in a new tab, and **Download .ics** for Apple Calendar, Outlook and other calendar apps. Both are built in your browser from the session's own time, so no calendar account is connected. The event is named after the other person on the session only.",
+        "Use **Add sessions to your calendar** in Sessions to create a private link that keeps your calendar up to date. Copy the link when it appears and keep it private. Regenerate the link to replace it, or turn it off to stop sharing.",
         "A session that has started shows **In progress** until it ends, and can no longer be cancelled.",
         "**Past sessions** under the upcoming list opens your complete history, newest first, with cancelled sessions marked and who cancelled them. Coaches also see how many sessions each student had. The list shows the latest 50.",
       ],
@@ -133,14 +134,14 @@ const article: HelpArticle = {
     { type: "heading", anchor: "session-prep-digest", text: "Session prep digest" },
     {
       type: "paragraph",
-      text: "**Since last session**, on each upcoming session, lists what the student played since their previous session: how many eligible 1v1 games, the wins and losses by matchup, the builds the replays were detected as, and the newest replays. The next session opens it already; open the others when you need them. Students can open each new game's page from it.",
+      text: "**Since last session**, on each upcoming session, summarizes synced 1v1 replays since the student's previous session. Coaches see the ranked game count and wins and losses by matchup. Detected builds and recent replay details come from games the current practice-sharing approval lets the coach see in assignment evidence. Students see their own eligible games, including their checked-in builds, and can open their game pages. The next session opens the digest automatically.",
     },
     {
       type: "list",
       items: [
         "It is facts from synced replays only, counted with fixed rules. It never grades or scores a game and leaves out ratings, notes and practice logs. A matchup's win percentage appears only from 5 decided games; below that you see the wins and losses alone.",
         "Only the coach and the student on that session can open it, and only while the student allows practice sharing. It never reaches back before sharing started, or more than 90 days. Without sharing it says so and lists nothing.",
-        "Builds are the ones detected from each replay, as practice sharing describes, never a build the player checked in. Hidden games, team games and resumed replays are left out.",
+        "Hidden games, team games and resumed replays are left out.",
       ],
     },
   ],

@@ -5,18 +5,14 @@ import type { ReviewComment } from "@/lib/reviews";
 import {
   clampReviewTime,
   isShownComment,
-  parseCommentHash,
   parseReviewDeepLink,
 } from "@/lib/reviewNavigation";
 
 /** Whether the replay can take a seek yet: loaded, still loading, or never. */
 export type PlaybackReadiness = "pending" | "ready" | "none";
 
-/** How long a linked comment waits for map playback before it just scrolls. */
-export const PLAYBACK_WAIT_MS = 8000;
-
 type Pending =
-  | { kind: "time"; t: number; composed: boolean }
+  | { kind: "time"; t: number; composedAt: number | null }
   | { kind: "comment"; id: string; selected: boolean };
 
 export type ReviewDeepLinkOptions = {
@@ -33,12 +29,12 @@ export type ReviewDeepLinkOptions = {
 };
 
 /** Advance one pending link as far as the page allows; null when it is done. */
-function advance(pending: Pending, o: ReviewDeepLinkOptions, waited: boolean): Pending | null {
-  const canSeek = o.playback !== "pending" || waited;
+function advance(pending: Pending, o: ReviewDeepLinkOptions): Pending | null {
+  const canSeek = o.playback !== "pending";
   if (pending.kind === "time") {
     const t = clampReviewTime(pending.t, o.durationSec);
-    if (!pending.composed) o.onCompose(t);
-    if (!canSeek) return pending.composed ? pending : { ...pending, composed: true };
+    if (pending.composedAt !== t) o.onCompose(t);
+    if (!canSeek) return pending.composedAt === t ? pending : { ...pending, composedAt: t };
     o.onSeek(t);
     return null;
   }
@@ -51,48 +47,38 @@ function advance(pending: Pending, o: ReviewDeepLinkOptions, waited: boolean): P
   if (!pending.selected) o.onSelect(comment.id);
   if (comment.gameTimeSec !== null && !canSeek) return pending.selected ? pending : { ...pending, selected: true };
   // Without map playback the replay can't follow, so the card just scrolls.
-  if (comment.gameTimeSec !== null && o.playback === "ready") o.onSeek(comment.gameTimeSec, comment.id);
+  if (comment.gameTimeSec !== null && o.playback === "ready") o.onSeek(clampReviewTime(comment.gameTimeSec, o.durationSec), comment.id);
   o.onScroll(comment.id);
   return null;
 }
 
 /**
  * Admit "#comment-<id>" and "?t=5:12" when the page opens, and later
- * "#comment-<id>" hash changes. A comment is selected, then the replay
+ * location hash changes. A comment is selected, then the replay
  * seeks to it once playback is ready, then its card scrolls into view;
  * a time opens the composer there and seeks. Unknown or deleted ids are
  * reported without moving the page. Nothing here writes to the URL.
  */
 export function useReviewDeepLink(options: ReviewDeepLinkOptions): void {
   const [pending, setPending] = useState<Pending | null>(null);
-  const [waited, setWaited] = useState(false);
   const latest = useRef(options);
   latest.current = options;
 
   useEffect(() => {
-    const link = parseReviewDeepLink(window.location.hash, window.location.search);
-    if (link) setPending(link.kind === "time" ? { ...link, composed: false } : { ...link, selected: false });
-    const onHash = () => {
-      const id = parseCommentHash(window.location.hash);
-      if (!id) return;
-      setWaited(false);
-      setPending({ kind: "comment", id, selected: false });
+    const followLocation = () => {
+      const link = parseReviewDeepLink(window.location.hash, window.location.search);
+      if (!link) setPending(null);
+      else setPending(link.kind === "time" ? { ...link, composedAt: null } : { ...link, selected: false });
     };
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    followLocation();
+    window.addEventListener("hashchange", followLocation);
+    return () => window.removeEventListener("hashchange", followLocation);
   }, []);
 
-  const { comments, settled, playback } = options;
+  const { comments, settled, playback, durationSec } = options;
   useEffect(() => {
     if (!pending) return;
-    const next = advance(pending, latest.current, waited);
+    const next = advance(pending, latest.current);
     if (next !== pending) setPending(next);
-  }, [pending, comments, settled, playback, waited]);
-
-  const waiting = pending !== null && playback === "pending" && !waited;
-  useEffect(() => {
-    if (!waiting) return;
-    const timer = window.setTimeout(() => setWaited(true), PLAYBACK_WAIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [waiting]);
+  }, [pending, comments, settled, playback, durationSec]);
 }

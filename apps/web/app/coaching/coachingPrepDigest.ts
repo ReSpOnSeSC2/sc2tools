@@ -9,7 +9,7 @@
 export type PrepDigestRole = "coach" | "student";
 
 export type PrepDigestReplay = {
-  gameId: string;
+  gameId?: string;
   playedAt: string | null;
   map: string | null;
   matchup: string | null;
@@ -86,10 +86,11 @@ export function parsePrepDigest(raw: unknown): PrepDigest | null {
     unclassifiedGames: count(body.unclassifiedGames),
     replays: list(body.replays, (row) => {
       const gameId = text(row.gameId);
-      return gameId ? {
-        gameId, playedAt: text(row.playedAt), map: text(row.map), matchup: text(row.matchup),
+      if (role === "student" && !gameId) return null;
+      return {
+        ...(role === "student" && gameId ? { gameId } : {}), playedAt: text(row.playedAt), map: text(row.map), matchup: text(row.matchup),
         result: row.result === "Win" || row.result === "Loss" ? row.result : null, build: text(row.build),
-      } : null;
+      };
     }),
     moreReplays: count(body.moreReplays),
     minSample: count(body.minSample) || 5,

@@ -19,19 +19,21 @@ import {
  * "Since last session" on one upcoming booking. It loads when opened, so a
  * long session list never reads every student's games at once.
  */
-export function SessionPrepDigest({ bookingId, role, timeZone, studentName, defaultOpen = false }: {
+export function SessionPrepDigest({ bookingId, viewerRole, timeZone, studentName, defaultOpen = false, active = true }: {
   bookingId: string;
-  role: PrepDigestRole;
+  viewerRole: PrepDigestRole;
   timeZone: string;
   studentName?: string;
   defaultOpen?: boolean;
+  active?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const digest = useApi<unknown>(
-    open ? `/v1/coaching/calendar/bookings/${encodeURIComponent(bookingId)}/digest` : null,
-    { revalidateOnFocus: true, keepPreviousData: true },
+    active && open ? `/v1/coaching/calendar/bookings/${encodeURIComponent(bookingId)}/digest` : null,
+    { revalidateOnFocus: true },
   );
-  const data = parsePrepDigest(digest.data);
+  const parsed = active && open ? parsePrepDigest(digest.data) : null;
+  const data = parsed?.bookingId === bookingId && parsed.role === viewerRole && !digest.error ? parsed : null;
   return (
     <details
       open={open}
@@ -47,7 +49,7 @@ export function SessionPrepDigest({ bookingId, role, timeZone, studentName, defa
         ) : null}
       </summary>
       <div className="space-y-3 px-3 pb-3">
-        {!open ? null : data ? (
+        {!active || !open ? null : data ? (
           <PrepDigestView digest={data} timeZone={timeZone} studentName={studentName} />
         ) : digest.error ? (
           <div role="alert" className="space-y-2 text-caption text-text-muted">
@@ -75,7 +77,7 @@ export function PrepDigestView({ digest, timeZone, studentName }: { digest: Prep
   return (
     <div className="space-y-3">
       <p className="text-caption text-text-muted">
-        {digestWindowLabel(digest, timeZone)} · {digest.totals.games} eligible 1v1 game{digest.totals.games === 1 ? "" : "s"}
+        {digestWindowLabel(digest, timeZone)} · {digest.totals.games} {digest.role === "coach" ? "ranked" : "eligible"} 1v1 game{digest.totals.games === 1 ? "" : "s"}
         {digest.totals.games ? ` · ${digest.totals.wins}–${digest.totals.losses}` : ""}
       </p>
       {digest.state === "no_games" ? null : <DigestFacts digest={digest} timeZone={timeZone} />}
@@ -107,7 +109,7 @@ function DigestFacts({ digest, timeZone }: { digest: PrepDigestFacts; timeZone: 
       ) : null}
       {digest.builds.length || digest.unclassifiedGames ? (
         <section aria-label="Builds played">
-          <h4 className="text-micro font-bold uppercase tracking-wider text-text-dim">Builds played (detected)</h4>
+          <h4 className="text-micro font-bold uppercase tracking-wider text-text-dim">Builds played{digest.role === "coach" ? " in assigned games" : ""}</h4>
           <ul className="mt-1 flex flex-wrap gap-1.5 text-caption">
             {digest.builds.map((build) => <li key={build.name} className="rounded-full border border-border px-2.5 py-1 text-text">{build.name} · {build.games}</li>)}
             {digest.unclassifiedGames ? <li className="rounded-full border border-dashed border-border px-2.5 py-1 text-text-muted">Not classified · {digest.unclassifiedGames}</li> : null}
@@ -115,13 +117,14 @@ function DigestFacts({ digest, timeZone }: { digest: PrepDigestFacts; timeZone: 
           </ul>
         </section>
       ) : null}
-      <section aria-label="New replays">
-        <h4 className="text-micro font-bold uppercase tracking-wider text-text-dim">New replays</h4>
+      {digest.replays.length ? <section aria-label="New replays">
+        <h4 className="text-micro font-bold uppercase tracking-wider text-text-dim">{digest.role === "coach" ? "New assigned replays" : "New replays"}</h4>
         <ul className="mt-1 space-y-1.5">
-          {digest.replays.map((game) => <DigestReplay key={game.gameId} game={game} role={digest.role} timeZone={timeZone} />)}
+          {digest.replays.map((game, index) => <DigestReplay key={game.gameId ?? `${game.playedAt}:${index}`} game={game} role={digest.role} timeZone={timeZone} />)}
         </ul>
         {digest.moreReplays ? <p className="mt-1 text-micro text-text-dim">+{digest.moreReplays} older game{digest.moreReplays === 1 ? "" : "s"} in this window.</p> : null}
-      </section>
+        {digest.role === "coach" ? <Link href="/coaching?view=practice" className="inline-flex min-h-11 items-center text-caption text-link underline">Find assigned replays in Practice</Link> : null}
+      </section> : null}
     </>
   );
 }
@@ -137,7 +140,7 @@ function DigestReplay({ game, role, timeZone }: { game: PrepDigestFacts["replays
       </span>
       <span className="min-w-0 flex-1 break-words text-text">{label}</span>
       <span className="font-mono text-micro tabular-nums text-text-dim">{digestPlayedLabel(game.playedAt, timeZone)}</span>
-      {role === "student" ? (
+      {role === "student" && game.gameId ? (
         <Link href={`/app/game/${encodeURIComponent(game.gameId)}`} aria-label={`Open game: ${label}`} className="inline-flex min-h-10 items-center font-semibold text-link hover:underline">
           Open game
         </Link>

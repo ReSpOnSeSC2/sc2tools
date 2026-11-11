@@ -17,7 +17,7 @@ import { usePublicApi } from "@/lib/usePublicApi";
 import { useReducedMotion } from "@/lib/useChartTheme";
 import { usePageShortcuts, type PageShortcutSection } from "@/lib/pageShortcuts";
 import { REPLAY_SHORTCUTS } from "@/lib/replayControls";
-import { REVIEW_SHORTCUTS } from "@/lib/reviewNavigation";
+import { clampReviewTime, REVIEW_SHORTCUTS } from "@/lib/reviewNavigation";
 import type { ReplayMapMarker } from "@/components/analyzer/game/MapReplayer";
 import type { CommentTimelineMarker } from "@/components/analyzer/game/replay/TransportDock";
 import {
@@ -109,18 +109,23 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
   const togglePin = useCallback((owner: string) => setPickingFor((old) => old === owner ? null : owner), []);
   const [composing, setComposing] = useState<number | null>(null);
   const [playbackAvailable, setPlaybackAvailable] = useState(false);
+  const [playbackFailed, setPlaybackFailed] = useState(false);
+  const playbackUnavailable = useCallback(() => setPlaybackFailed(true), []);
+  const [filterResetKey, setFilterResetKey] = useState(0);
+  const scrollSequence = useRef(0);
   const [pinned, setPinned] = useState(true);
   const seq = useRef(0);
 
-  const duration = data.request.game.durationSec;
+  const duration = data.request.game.durationSec ?? analysisReq.data?.game.durationSec ?? null;
   const pins = useMemo(() => pinNumbers(data.comments), [data.comments]);
 
-  const seek = useCallback((t: number, commentId?: string) => {
+  const seek = useCallback((seconds: number, commentId?: string) => {
+    const t = clampReviewTime(seconds, duration);
     seq.current += 1;
     setSeekRequest({ t, seq: seq.current });
     setCurrentTime(t);
     if (commentId) setActiveId(commentId);
-  }, []);
+  }, [duration]);
 
   const mapMarkers = useMemo<ReplayMapMarker[]>(() => {
     const out: ReplayMapMarker[] = [];
@@ -152,7 +157,14 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
   const scrollToComment = useCallback((commentId: string) => {
     setActiveId(commentId);
     const reduce = reducedRef.current || prefersReducedMotionNow();
-    document.getElementById(`comment-${commentId}`)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    const id = `comment-${commentId}`;
+    const request = ++scrollSequence.current;
+    const scroll = (node: HTMLElement | null) => {
+      if (request === scrollSequence.current) node?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    };
+    const node = document.getElementById(id);
+    if (node) scroll(node);
+    else window.requestAnimationFrame(() => scroll(document.getElementById(id)));
   }, []);
 
   const goTo = useCallback((comment: ReviewComment) => {
@@ -160,11 +172,8 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
     scrollToComment(comment.id);
   }, [seek, scrollToComment]);
 
-  const playback: PlaybackReadiness = playbackAvailable
-    ? "ready"
-    : !open || data.request.hidden || !data.request.game.hasPlayback || analysisReq.error || analysisReq.data?.playback.mode === "none"
-      ? "none"
-      : "pending";
+  const canPlay = open && !data.request.hidden && data.request.game.hasPlayback && !analysisReq.error && analysisReq.data?.playback.mode !== "none";
+  const playback: PlaybackReadiness = !canPlay ? "none" : playbackAvailable ? "ready" : playbackFailed ? "none" : "pending";
   useReviewDeepLink({
     comments: data.comments,
     settled: isLoaded === true && !pageReq.isValidating,
@@ -172,7 +181,7 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
     durationSec: duration,
     onSelect: setActiveId,
     onSeek: seek,
-    onScroll: scrollToComment,
+    onScroll: (commentId) => { setFilterResetKey((key) => key + 1); scrollToComment(commentId); },
     onCompose: setComposing,
     onMissing: () => { toasts?.toast.info("That comment is no longer available"); },
   });
@@ -251,6 +260,7 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
             seekRequest={seekRequest}
             onTimeChange={setCurrentTime}
             onPlaybackAvailable={setPlaybackAvailable}
+            onPlaybackUnavailable={playbackUnavailable}
             mapMarkers={mapMarkers}
             onWorldClick={pickingFor ? onWorldClick : undefined}
             onMarkerClick={onMarkerClick}
@@ -304,6 +314,7 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
             />
           ) : null}
           <ReviewThread
+            filterResetKey={filterResetKey}
             data={data}
             pinNumbers={pins}
             activeId={activeId}

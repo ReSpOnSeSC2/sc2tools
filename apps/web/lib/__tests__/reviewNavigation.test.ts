@@ -103,10 +103,10 @@ describe("timed-comment stepper", () => {
   });
 
   it("steps from the replay clock when nothing is active", () => {
-    expect(stepPosition(list, null, 250)).toMatchObject({ index: null, prev: { id: "reply-early" }, next: { id: "mid" } });
+    expect(stepPosition(list, null, 250)).toMatchObject({ index: 2, prev: { id: "reply-early" }, next: { id: "mid" } });
     expect(stepPosition(list, null, 300)).toMatchObject({ next: { id: "mid" } });
     expect(stepPosition(list, null, 0)).toMatchObject({ prev: null, next: { id: "early" } });
-    expect(stepPosition(list, "filtered-out", 900)).toMatchObject({ index: null, prev: { id: "late" }, next: null });
+    expect(stepPosition(list, "filtered-out", 900)).toMatchObject({ index: 3, prev: { id: "late" }, next: null });
   });
 
   it("announces where a step landed", () => {

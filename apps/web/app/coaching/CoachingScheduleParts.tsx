@@ -2,6 +2,7 @@
 import { CalendarCheck2, CalendarPlus, Check, ChevronDown, Download, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { bookingIcs, downloadIcs } from "@/lib/coaching/ics";
+import { siteOrigin } from "@/lib/seo/absoluteUrl";
 import { formatDay, formatDuration, formatRange, googleCalendarUrl, sessionStarted, type CalendarViewer } from "./coachingTime";
 import { SessionPrepDigest } from "./SessionPrepDigest";
 import type { Booking, SessionHistory } from "./coachingScheduleModel";
@@ -20,6 +21,7 @@ export function BookingCard({
   showStudent = false,
   viewer,
   digestOpen = false,
+  active = true,
   onCancel,
 }: {
   booking: Booking;
@@ -28,10 +30,12 @@ export function BookingCard({
   showStudent?: boolean;
   viewer: Omit<CalendarViewer, "origin">;
   digestOpen?: boolean;
+  active?: boolean;
   onCancel: () => void;
 }) {
   const started = sessionStarted(booking, Date.now());
-  const calendar = { ...viewer, origin: window.location.origin };
+  const calendar = { ...viewer, origin: siteOrigin() };
+  const otherName = viewer.role === "coach" ? booking.studentName : viewer.coachName;
   const day = booking.startAt.slice(0, 10);
   return (
     <article className="rounded-xl border border-border bg-bg-elevated/50 p-3.5" aria-label={`Session ${formatDay(booking.startAt, primaryTimeZone)}${showStudent ? ` with ${booking.studentName}` : ""}`}>
@@ -59,16 +63,17 @@ export function BookingCard({
         <a href={googleCalendarUrl(booking, calendar)} target="_blank" rel="noopener noreferrer" className={TEXT_ACTION}>
           <CalendarPlus className="h-4 w-4" aria-hidden />Add to Google Calendar<span className="sr-only"> (opens in a new tab)</span>
         </a>
-        <a href={icsHref(bookingIcs(booking, calendar))} download={`sc2-coaching-${day}.ics`} className={TEXT_ACTION}>
+        <button type="button" className={TEXT_ACTION}
+          onClick={() => downloadIcs(`sc2tools-session-${day}.ics`, bookingIcs(booking, `Coaching session with ${otherName}`))}>
           <Download className="h-4 w-4" aria-hidden />Download .ics
-        </a>
+        </button>
         {started ? null : (
           <button type="button" onClick={onCancel} className={`${TEXT_ACTION} hover:text-danger`}>
             Cancel session
           </button>
         )}
       </div>
-      <SessionPrepDigest bookingId={booking.id} role={viewer.role} timeZone={primaryTimeZone} studentName={booking.studentName} defaultOpen={digestOpen} />
+      <SessionPrepDigest bookingId={booking.id} viewerRole={viewer.role} timeZone={primaryTimeZone} studentName={booking.studentName} defaultOpen={digestOpen} active={active} />
     </article>
   );
 }

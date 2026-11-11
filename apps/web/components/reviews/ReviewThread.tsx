@@ -45,6 +45,8 @@ export type ThreadContext = {
   onChanged: () => void | Promise<unknown>;
   /** Select, seek and scroll to a comment (the stepper and N/P). */
   onGoTo?: (comment: ReviewComment) => void;
+  /** A fresh explicit comment link reveals the target even with filters active. */
+  filterResetKey?: number;
   /** The C key: start a comment at the replay time. Absent when the viewer can't. */
   onCompose?: () => void;
 };
@@ -64,7 +66,10 @@ function useThreadOrder() {
  */
 export function ReviewThread(ctx: ThreadContext) {
   const [order, setOrder] = useThreadOrder();
-  const [filters, setFilters] = useState<ReadonlySet<ThreadFilter>>(() => new Set());
+  const resetKey = ctx.filterResetKey ?? 0;
+  const [filterState, setFilterState] = useState(() => ({ key: resetKey, filters: new Set<ThreadFilter>() }));
+  const filters = useMemo(() => filterState.key === resetKey ? filterState.filters : new Set<ThreadFilter>(), [filterState, resetKey]);
+  const setFilters = (next: Set<ThreadFilter>) => setFilterState({ key: resetKey, filters: next });
   const [announcement, setAnnouncement] = useState("");
   const { data } = ctx;
   const filtered = useMemo(() => filterThread(data.comments, filters, data.request.timeRange), [data.comments, filters, data.request.timeRange]);
@@ -85,6 +90,9 @@ export function ReviewThread(ctx: ThreadContext) {
         ? (a.gameTimeSec ?? Infinity) - (b.gameTimeSec ?? Infinity)
         : score(b) - score(a) || (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
     );
+    if (matching) {
+      for (const [id, children] of byParent) byParent.set(id, children.filter((child) => matching.has(child.id)));
+    }
     return { topLevel: sorted, replies: byParent };
   }, [data.comments, order, filtered]);
   const timed = useMemo(() => timedComments(data.comments, filtered.matching), [data.comments, filtered]);
@@ -97,11 +105,11 @@ export function ReviewThread(ctx: ThreadContext) {
     setAnnouncement(stepAnnouncement(timed, target));
   };
   useReviewShortcuts({ onNext: () => step(1), onPrev: () => step(-1), onCompose: ctx.onCompose });
-  const toggleFilter = (filter: ThreadFilter) => setFilters((old) => {
-    const next = new Set(old);
+  const toggleFilter = (filter: ThreadFilter) => {
+    const next = new Set(filters);
     if (next.has(filter)) next.delete(filter); else next.add(filter);
-    return next;
-  });
+    setFilters(next);
+  };
   const hasComments = data.comments.length > 0;
 
   return (

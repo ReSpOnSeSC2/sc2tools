@@ -18,9 +18,12 @@ vi.mock("@/components/ui/Toast", async (original) => ({
   useToastOptional: () => ({ toast: { info: h.info, success: h.success } }),
 }));
 vi.mock("../ReviewReplayPanel", () => ({
-  ReviewReplayPanel: ({ seekRequest, onPlaybackAvailable }: { seekRequest: { t: number; seq: number } | null; onPlaybackAvailable: (value: boolean) => void }) => {
+  ReviewReplayPanel: ({ seekRequest, onPlaybackAvailable, onPlaybackUnavailable }: { seekRequest: { t: number; seq: number } | null; onPlaybackAvailable: (value: boolean) => void; onPlaybackUnavailable?: () => void }) => {
     h.seeks.push(seekRequest);
-    return <div data-replay-stage="" aria-label="Map replay"><button type="button" onClick={() => onPlaybackAvailable(true)}>Playback ready</button></div>;
+    return <div data-replay-stage="" aria-label="Map replay">
+      <button type="button" onClick={() => onPlaybackAvailable(true)}>Playback ready</button>
+      <button type="button" onClick={onPlaybackUnavailable}>Playback unavailable</button>
+    </div>;
   },
 }));
 
@@ -88,6 +91,18 @@ describe("deep links", () => {
     expect(window.location.hash).toBe("#comment-CCCCCCCCCCCCCCCC");
   });
 
+  it("reveals a filtered hash target after the replay request reports no playback", async () => {
+    render(<ReviewPage initial={h.page!} />);
+    fireEvent.click(screen.getByRole("button", { name: "Map pins 1" }));
+    expect(screen.queryByRole("article", { name: "Comment by Second" })).toBeNull();
+    act(() => { visit(`/reviews/${ID}#comment-CCCCCCCCCCCCCCCC`); window.dispatchEvent(new HashChangeEvent("hashchange")); });
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Playback unavailable" }));
+    await waitFor(() => expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts[0]).toBe(card("Second")));
+    expect(lastSeek()).toBeNull();
+    expect(chip("Second").getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("opens ?t= at that moment, clamped to the game, with the composer started there", () => {
     h.page!.request.game.hasPlayback = false;
     visit(`/reviews/${ID}?t=5:12`);
@@ -98,6 +113,16 @@ describe("deep links", () => {
     visit(`/reviews/${ID}?t=25:00`);
     render(<ReviewPage initial={h.page!} />);
     expect(lastSeek()).toMatchObject({ t: 640 });
+  });
+
+  it("returns to the linked moment when the comment hash is cleared", () => {
+    h.page!.request.game.hasPlayback = false;
+    visit(`/reviews/${ID}?t=5:12#comment-CCCCCCCCCCCCCCCC`);
+    render(<ReviewPage initial={h.page!} />);
+    expect(lastSeek()).toBeNull();
+    act(() => { visit(`/reviews/${ID}?t=5:12`); window.dispatchEvent(new HashChangeEvent("hashchange")); });
+    expect(lastSeek()).toMatchObject({ t: 312 });
+    expect(screen.getByRole("form", { name: "Write a review comment" })).toBeTruthy();
   });
 
   it("reports an unknown or deleted comment and stays put", () => {
@@ -163,7 +188,7 @@ describe("keyboard shortcuts", () => {
   it("steps with N and P outside fields, modifiers, dialogs and the replay stage", () => {
     h.page!.request.game.hasPlayback = false;
     render(<ReviewPage initial={h.page!} />);
-    expect(stepper().textContent).toContain("3 timed comments");
+    expect(stepper().textContent).toContain("1 of 3");
     fireEvent.keyDown(document.body, { key: "n" });
     expect(lastSeek()).toMatchObject({ t: 120 });
     expect(stepper().querySelector("[aria-live]")?.textContent).toBe("Comment 1 of 3 at 2:00 by Reviewer");
@@ -223,10 +248,12 @@ describe("thread filters and order", () => {
     const data = fixture();
     data.comments[0].mapPoint = null;
     data.comments[2].mapPoint = { x: 1, y: 1 };
+    data.comments.push(comment("FFFFFFFFFFFFFFFF", "Other replier", { parentId: data.comments[0].id }));
     renderThread(data);
     fireEvent.click(screen.getByRole("button", { name: "Map pins 1" }));
     expect(screen.getByRole("article", { name: "Comment by Reviewer" })).toBeTruthy();
     expect(screen.getByRole("article", { name: "Comment by Replier" })).toBeTruthy();
+    expect(screen.queryByRole("article", { name: "Comment by Other replier" })).toBeNull();
     expect(screen.queryByRole("article", { name: "Comment by Second" })).toBeNull();
   });
 

@@ -304,7 +304,7 @@ export function CoachSchedule({
               primaryTimeZone={bookingTimeZone}
               showStudent
               viewer={{ role: "coach", coachName: data.coach.name }}
-              digestOpen={index === 0}
+              digestOpen={index === 0} active={active}
               onCancel={() => setCancelBooking(booking)}
             />
           )) : (

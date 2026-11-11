@@ -1908,10 +1908,28 @@ class CoachingService {
       sharingStartedAt: party.sharingStartedAt,
       now,
     });
+    const matches = party.role === "coach" ? await this._digestAssignmentMatches(party, window) : null;
     const [root = {}] = await this.db.games
-      .aggregate(digestPipeline(party.booking.studentUserId, window.since, window.until))
+      .aggregate(digestPipeline(party.booking.studentUserId, window.since, window.until, matches), { maxTimeMS: 5000 })
       .toArray();
+    const current = await this._bookingParty(userId, coachingRole, bookingId, this._assignmentNow());
+    if (!current.accepted || current.grantId !== party.grantId) {
+      return { ...base, state: "sharing_off", sharing: current.sharingStatus };
+    }
     return shapeDigest(root, { ...base, window });
+  }
+
+  /** Scope the coach's per-game details to qualifying assignments from this grant.
+   * @param {Awaited<ReturnType<CoachingService['_bookingParty']>>} party
+   * @param {{since:Date,until:Date}} window */
+  async _digestAssignmentMatches(party, window) {
+    const { booking, coachId, coachUserId, grantId } = party;
+    const rows = await this.db.coaching.find({
+      kind: ASSIGNMENT_KIND, coachId, coachUserId, studentId: booking.studentId,
+      studentUserId: booking.studentUserId, practiceSharingGrantId: grantId,
+      "requirement.startsAt": { $lt: window.until }, "requirement.endsAt": { $gt: window.since },
+    }, { maxTimeMS: 2000 }).sort({ createdAt: -1 }).limit(ASSIGNMENT_LIST_CAP).toArray();
+    return rows.map(assignmentGameMatch);
   }
 
   /**
@@ -1949,6 +1967,9 @@ class CoachingService {
       accepted: Boolean(student) && practiceSharingAccepted(student, actor.coach),
       sharingStatus: sharing ? sharing.status : "pending",
       sharingStartedAt: sharing ? sharing.respondedAt : null,
+      grantId: sharing?.grantId ?? null,
+      coachId: actor.coach.id,
+      coachUserId: actor.coach.userId,
     };
   }
 

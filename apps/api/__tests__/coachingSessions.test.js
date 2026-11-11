@@ -59,6 +59,7 @@ function game(gameId, startIso, extra = {}) {
     date: new Date(startedAt.getTime() + 600_000),
     durationSec: 600,
     matchFormat: "1v1",
+    isLadderGame: true,
     map: "Alcyone LE",
     myRace: "Protoss",
     opponent: { race: "Zerg", displayName: "SecretOpponent", mmr: 4100 },
@@ -187,11 +188,20 @@ async function seedDigest({ alexSharing = sharing("accepted", "2026-09-01T13:00:
       booking("blair-next", "student-2", "2026-10-23T18:00:00.000Z"),
     ],
   });
+  await db.coaching.insertMany([
+    { _id: "assignment:active", kind: "game_requirement", id: "active", coachId: "coach-1", coachUserId: "coach-user",
+      studentId: "student-1", studentUserId: "student-user-1", practiceSharingGrantId: "grant-student-user-1",
+      createdAt: at("2026-10-14T00:00:00Z"), requirement: { type: "games", startsAt: at("2026-10-14T00:00:00Z"), endsAt: at("2026-10-20T00:00:00Z") } },
+    { _id: "assignment:old", kind: "game_requirement", id: "old", coachId: "coach-1", coachUserId: "coach-user",
+      studentId: "student-1", studentUserId: "student-user-1", practiceSharingGrantId: "superseded",
+      createdAt: at("2026-10-11T00:00:00Z"), requirement: { type: "games", startsAt: at("2026-10-11T00:00:00Z"), endsAt: at("2026-10-13T00:00:00Z") } },
+  ]);
   await db.games.insertMany([
     game("before-last-session", "2026-10-10T12:00:00.000Z"),
     game("w1", "2026-10-11T12:00:00.000Z"),
     game("w2", "2026-10-12T12:00:00.000Z"),
     game("l1", "2026-10-13T12:00:00.000Z", { result: "Defeat" }),
+    game("custom", "2026-10-13T13:00:00.000Z", { isLadderGame: false, myBuild: "Unassigned custom build" }),
     game("w3", "2026-10-14T12:00:00.000Z"),
     game("l2", "2026-10-15T12:00:00.000Z", { result: "Defeat", myBuild: null }),
     game("pvt", "2026-10-16T12:00:00.000Z", { opponent: { race: "Terran" }, map: "Ghost River LE", result: "Defeat" }),
@@ -208,7 +218,7 @@ async function seedDigest({ alexSharing = sharing("accepted", "2026-09-01T13:00:
 }
 
 describe("booking prep digest facts", () => {
-test("counts only eligible games since the last held session, with detected builds and newest replays", async () => {
+  test("gives the coach ranked counts and only current-assignment replay facts", async () => {
     await seedDigest();
     const digest = await service.bookingDigest("coach-user", coachRole, "next");
     expect(digest).toMatchObject({
@@ -228,22 +238,26 @@ test("counts only eligible games since the last held session, with detected buil
       { matchup: "PvT", games: 1, wins: 0, losses: 1, winRate: null },
     ]);
     expect(digest.builds).toEqual([
-      { name: "Blink Stalkers", games: 5 },
+      { name: "Blink Stalkers", games: 2 },
       { name: "Chargelot All-in", games: 1 },
     ]);
-    expect(digest.replays.map((item) => item.gameId)).toEqual(["checked-in", "pvt", "l2", "w3", "l1", "w2", "w1"]);
+    expect(digest.replays).toHaveLength(4);
     expect(digest.replays[1]).toEqual({
-      gameId: "pvt", playedAt: "2026-10-16T12:00:00.000Z", map: "Ghost River LE", matchup: "PvT", result: "Loss", build: "Blink Stalkers",
+      playedAt: "2026-10-16T12:00:00.000Z", map: "Ghost River LE", matchup: "PvT", result: "Loss", build: "Blink Stalkers",
     });
+    expect(JSON.stringify(digest)).not.toMatch(/gameId|Unassigned custom build|SecretOpponent|DT Rush/);
   });
 
-  test("carries no grades, scores, ratings, notes, opponent identity or declared check-ins", async () => {
+  test("the student sees their own check-in labels and links without grades or private metrics", async () => {
     await seedDigest();
     const digest = await service.bookingDigest("student-user-1", alexRole, "next");
     expect(digest.role).toBe("student");
     const keys = [...keysOf(digest)].join(" ");
     expect(keys).not.toMatch(/grade|score|mmr|macro|apm|note|practice|opponent|intent|check/i);
-    expect(JSON.stringify(digest)).not.toMatch(/SecretOpponent|DT Rush|private note/);
+    expect(JSON.stringify(digest)).not.toMatch(/SecretOpponent|private note/);
+    expect(digest.totals.games).toBe(8);
+    expect(digest.replays[0]).toMatchObject({ gameId: "checked-in", build: "DT Rush" });
+    expect(digest.builds).toContainEqual({ name: "Unassigned custom build", games: 1 });
   });
 });
 
@@ -258,6 +272,22 @@ describe("booking prep digest consent and window", () => {
       .resolves.toEqual({ bookingId: "blair-next", role: "coach", state: "sharing_off", sharing: "pending" });
     await seedDigest({ alexSharing: { ...sharing("accepted", "2026-09-01T13:00:00.000Z"), policyVersion: "practice-replays-v0" } });
     await expect(service.bookingDigest("coach-user", coachRole, "next")).resolves.toMatchObject({ state: "sharing_off" });
+  });
+
+  test("drops an in-flight digest when the student revokes its grant", async () => {
+    await seedDigest();
+    const read = db.games.aggregate.bind(db.games);
+    const spy = jest.spyOn(db.games, "aggregate").mockImplementationOnce((...args) => {
+      const cursor = read(...args);
+      return { toArray: async () => {
+        const rows = await cursor.toArray();
+        await db.coaching.updateOne({ _id: "locker" }, { $set: { "state.students.0.practiceSharing": sharing("revoked", NOW.toISOString()) } });
+        return rows;
+      } };
+    });
+    try {
+      await expect(service.bookingDigest("coach-user", coachRole, "next")).resolves.toEqual({ bookingId: "next", role: "coach", state: "sharing_off", sharing: "revoked" });
+    } finally { spy.mockRestore(); }
   });
 
   test("starts at consent when sharing began after the last session", async () => {

@@ -1,11 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CalendarPayload, SessionHistory } from "./coachingScheduleModel";
-const api = vi.hoisted(() => ({ call: vi.fn(), token: vi.fn(async () => "token"), success: vi.fn(), error: vi.fn(), calendar: undefined as CalendarPayload | undefined, history: undefined as SessionHistory | undefined, refresh: vi.fn() }));
+const api = vi.hoisted(() => ({ call: vi.fn(), token: vi.fn(async () => "token"), success: vi.fn(), error: vi.fn(), download: vi.fn(), calendar: undefined as CalendarPayload | undefined, history: undefined as SessionHistory | undefined, refresh: vi.fn() }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: api.token }) }));
 vi.mock("@/lib/clientApi", () => ({ apiCall: api.call, useApi: (path: string | null) => path?.includes("/digest") ? { data: undefined, mutate: vi.fn() } : path?.includes("past=1") ? { data: api.history, mutate: vi.fn() } : { data: api.calendar, mutate: api.refresh } }));
 vi.mock("@/components/ui/Toast", () => ({ useToast: () => ({ toast: { success: api.success, error: api.error } }) }));
 vi.mock("./coachingTime", async (importOriginal) => ({ ...await importOriginal<typeof import("./coachingTime")>(), useLocalTimeZone: () => "UTC", useZoneClock: () => "12:00" }));
+vi.mock("@/lib/coaching/ics", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/coaching/ics")>(), downloadIcs: api.download,
+}));
 import { CoachSchedule } from "./CoachSchedule";
 import CoachingSchedule from "./CoachingSchedule";
 
@@ -14,7 +17,7 @@ function payload(): CalendarPayload {
     availability: { enabled: true, timeZone: "UTC", durations: [60], windows: [{ day: 1, startMinute: 540, endMinute: 600 }], updatedAt: "2026-10-01" },
     bookings: [{ id: "booked", studentName: "Player", startAt: "2034-10-23T14:00:00Z", endAt: "2034-10-23T15:00:00Z", durationMinutes: 60, status: "booked", cancelledBy: null, createdAt: "2026-10-01" }], unreadAlerts: [], slots: [] };
 }
-beforeEach(() => { api.call.mockReset(); api.refresh.mockReset(); api.success.mockReset(); api.error.mockReset(); api.calendar = payload(); api.history = undefined; });
+beforeEach(() => { api.call.mockReset(); api.refresh.mockReset(); api.success.mockReset(); api.error.mockReset(); api.download.mockReset(); api.calendar = payload(); api.history = undefined; });
 afterEach(cleanup);
 
 describe("availability drafts and published bookings", () => {
@@ -115,6 +118,16 @@ describe("faster weekly hours", () => {
     }
   });
 
+  it("keeps hours edited after a bulk copy", () => {
+    render(<CoachSchedule data={payload()} localTimeZone="UTC" refresh={api.refresh} active />);
+    fireEvent.click(screen.getByRole("button", { name: "Monday hours actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy to weekdays" }));
+    const wednesday = screen.getByLabelText("Wednesday start time 1") as HTMLInputElement;
+    fireEvent.change(wednesday, { target: { value: "08:00" } });
+    expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
+    expect(wednesday.value).toBe("08:00");
+  });
+
   it("clears a day, and starts an empty day from a preset or 18:00", () => {
     render(<CoachSchedule data={payload()} localTimeZone="UTC" refresh={api.refresh} active />);
     fireEvent.click(screen.getByRole("button", { name: "Monday hours actions" }));
@@ -142,9 +155,8 @@ describe("booking calendar links and past sessions", () => {
     const url = new URL(google.getAttribute("href")!);
     expect(url.searchParams.get("text")).toBe("SC2 coaching with Player");
     expect(url.searchParams.get("dates")).toBe("20341023T140000Z/20341023T150000Z");
-    const ics = screen.getByRole("link", { name: "Download .ics" });
-    expect(ics.getAttribute("download")).toBe("sc2-coaching-2034-10-23.ics");
-    expect(decodeURIComponent(ics.getAttribute("href")!.split(",")[1])).toContain("UID:booked@sc2tools.com\r\n");
+    fireEvent.click(screen.getByRole("button", { name: "Download .ics" }));
+    expect(api.download).toHaveBeenCalledWith("sc2tools-session-2034-10-23.ics", expect.stringContaining("UID:booked@sc2tools.com\r\n"));
   });
 
   it("lists the complete history with per-student counts and marks cancelled sessions", () => {

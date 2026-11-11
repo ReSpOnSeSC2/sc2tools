@@ -18,7 +18,7 @@ function ready(role: "coach" | "student") {
     matchups: [{ matchup: "PvZ", games: 6, wins: 4, losses: 2, winRate: 0.667 }, { matchup: "PvT", games: 1, wins: 0, losses: 1, winRate: null }],
     unknownRaceGames: 0,
     builds: [{ name: "Blink Stalkers", games: 5 }], moreBuilds: 0, unclassifiedGames: 1,
-    replays: [{ gameId: "game/1", playedAt: "2026-10-16T12:00:00.000Z", map: "Ghost River LE", matchup: "PvT", result: "Loss", build: "Blink Stalkers" }],
+    replays: [{ ...(role === "student" ? { gameId: "game/1" } : {}), playedAt: "2026-10-16T12:00:00.000Z", map: "Ghost River LE", matchup: "PvT", result: "Loss", build: "Blink Stalkers" }],
     moreReplays: 6, minSample: 5, lookbackDays: 90,
   };
 }
@@ -36,11 +36,11 @@ afterEach(cleanup);
 describe("session prep digest", () => {
   it("reads nothing until opened, then shows facts with rates only above the sample floor", () => {
     api.data = ready("coach");
-    render(<SessionPrepDigest bookingId="next" role="coach" timeZone="UTC" studentName="Alex" />);
+    render(<SessionPrepDigest bookingId="next" viewerRole="coach" timeZone="UTC" studentName="Alex" />);
     expect(api.paths.every((path) => path === null)).toBe(true);
     const details = open();
     expect(api.paths.at(-1)).toBe("/v1/coaching/calendar/bookings/next/digest");
-    expect(details.textContent).toContain("Since your last session together on Oct 10 · 7 eligible 1v1 games · 4–3");
+    expect(details.textContent).toContain("Since your last session together on Oct 10 · 7 ranked 1v1 games · 4–3");
     const matchups = within(details).getByRole("region", { name: "Record by matchup" });
     expect(matchups.textContent).toContain("PvZ · 6 · 4–2 (67%)");
     expect(matchups.textContent).toContain("PvT · 1 · 0–1");
@@ -49,11 +49,22 @@ describe("session prep digest", () => {
     expect(within(details).getByText("+6 older games in this window.")).toBeTruthy();
     // A coach sees the facts; the game page is the student's own.
     expect(within(details).queryByRole("link", { name: /Open game/ })).toBeNull();
+    expect(within(details).getByRole("link", { name: "Find assigned replays in Practice" }).getAttribute("href")).toBe("/coaching?view=practice");
+  });
+
+  it("pauses the default-open digest while Sessions is hidden", () => {
+    api.data = ready("coach");
+    const view = render(<SessionPrepDigest bookingId="next" viewerRole="coach" timeZone="UTC" defaultOpen active={false} />);
+    expect(api.paths.every((path) => path === null)).toBe(true);
+    expect(screen.queryByRole("region", { name: "New replays" })).toBeNull();
+    view.rerender(<SessionPrepDigest bookingId="next" viewerRole="coach" timeZone="UTC" defaultOpen active />);
+    expect(api.paths.at(-1)).toBe("/v1/coaching/calendar/bookings/next/digest");
+    expect(screen.getByRole("region", { name: "New replays" })).toBeTruthy();
   });
 
   it("links the student's own new replays to their game pages", () => {
     api.data = ready("student");
-    render(<SessionPrepDigest bookingId="next" role="student" timeZone="UTC" defaultOpen />);
+    render(<SessionPrepDigest bookingId="next" viewerRole="student" timeZone="UTC" defaultOpen />);
     const link = screen.getByRole("link", { name: "Open game: Ghost River LE · PvT · Blink Stalkers" });
     expect(link.getAttribute("href")).toBe("/app/game/game%2F1");
     expect(screen.getByText("Since your last session on Oct 10 · 7 eligible 1v1 games · 4–3")).toBeTruthy();
@@ -61,24 +72,24 @@ describe("session prep digest", () => {
 
   it("explains the consent gate to each side without any game facts", () => {
     api.data = { bookingId: "next", role: "coach", state: "sharing_off", sharing: "pending" };
-    const view = render(<SessionPrepDigest bookingId="next" role="coach" timeZone="UTC" studentName="Alex" defaultOpen />);
+    const view = render(<SessionPrepDigest bookingId="next" viewerRole="coach" timeZone="UTC" studentName="Alex" defaultOpen />);
     expect(screen.getByText(/Alex hasn't allowed practice sharing, so their games stay private/)).toBeTruthy();
     expect(screen.queryByRole("region", { name: "New replays" })).toBeNull();
     view.unmount();
     api.data = { bookingId: "next", role: "student", state: "sharing_off", sharing: "revoked" };
-    render(<SessionPrepDigest bookingId="next" role="student" timeZone="UTC" defaultOpen />);
+    render(<SessionPrepDigest bookingId="next" viewerRole="student" timeZone="UTC" defaultOpen />);
     expect(screen.getByText(/Allow practice sharing on the Practice tab/)).toBeTruthy();
   });
 
   it("states an empty window and retries a failed read", () => {
     api.data = { ...ready("coach"), state: "no_games", totals: { games: 0, wins: 0, losses: 0, other: 0 }, matchups: [], builds: [], unclassifiedGames: 0, replays: [], moreReplays: 0,
       window: { since: "2026-10-14T00:00:00.000Z", until: "2026-10-20T12:00:00.000Z", basis: "sharing_started" } };
-    const view = render(<SessionPrepDigest bookingId="next" role="coach" timeZone="UTC" defaultOpen />);
-    expect(screen.getByText("Since practice sharing started on Oct 14 · 0 eligible 1v1 games")).toBeTruthy();
+    const view = render(<SessionPrepDigest bookingId="next" viewerRole="coach" timeZone="UTC" defaultOpen />);
+    expect(screen.getByText("Since practice sharing started on Oct 14 · 0 ranked 1v1 games")).toBeTruthy();
     expect(screen.queryByRole("region", { name: "New replays" })).toBeNull();
     view.unmount();
     api.data = undefined; api.error = { status: 500, message: "down" };
-    render(<SessionPrepDigest bookingId="next" role="coach" timeZone="UTC" defaultOpen />);
+    render(<SessionPrepDigest bookingId="next" viewerRole="coach" timeZone="UTC" defaultOpen />);
     fireEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: "Retry" }));
     expect(api.mutate).toHaveBeenCalled();
   });

@@ -112,7 +112,7 @@ export function timedComments(comments: readonly ReviewComment[], matching: Set<
 }
 
 export type StepPosition = {
-  /** Index of the active comment in the list, or null when none is active. */
+  /** Active comment index, or the replay clock’s position in the list. */
   index: number | null;
   prev: ReviewComment | null;
   next: ReviewComment | null;
@@ -129,7 +129,11 @@ export function stepPosition(list: readonly ReviewComment[], activeId: string | 
   if (index >= 0) return { index, prev: list[index - 1] ?? null, next: list[index + 1] ?? null };
   const after = list.findIndex((c) => (c.gameTimeSec ?? 0) >= currentTime - SAME_MOMENT_SEC);
   const nextIndex = after < 0 ? list.length : after;
-  return { index: null, prev: list[nextIndex - 1] ?? null, next: list[nextIndex] ?? null };
+  return {
+    index: list.length ? Math.min(nextIndex, list.length - 1) : null,
+    prev: list[nextIndex - 1] ?? null,
+    next: list[nextIndex] ?? null,
+  };
 }
 
 export function stepAnnouncement(list: readonly ReviewComment[], comment: ReviewComment): string {
