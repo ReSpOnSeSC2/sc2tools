@@ -4750,6 +4750,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Long account labels and four-digit MMR changes fit beside the story on exported recap cards.
 
+### Practice Links
+
+- Owner-curated Practice Links support a synchronized video, a spoken drill, and local one-replay grading on desktop Chromium. The first links require a verified build and video pairing.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:
