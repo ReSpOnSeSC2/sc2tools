@@ -44,8 +44,14 @@ broken loss streaks, revenge wins, giant-killer wins and marathon wins.
 Pulse league changes and approved streamer-opponent wins use stream delivery.
 Giant-killer copy rounds the replay rating gap to the nearest 100 MMR.
 The bell respects per-kind mutes and uses the existing per-recipient delivery
-key with the game ID and moment kind. It uses the bell only.
+key with the game ID and moment kind. Server delivery ends at the bell.
 The receipt stores pending bell items before delivery. A failed write gets one
 immediate retry. A fresh, accepted reupload can finish pending bell delivery
 under the same event keys, with current preferences and without replaying the
 overlay.
+
+The desktop Agent has a separate opt-in for showing the newest unread
+milestone of a freshly synced game. It reads the private bell with the device
+credential, gives sequential bell writes a short settling interval, and holds
+the notice during play. A local owner-and-game receipt is saved before native
+dispatch so restarts cannot repeat the same notice.

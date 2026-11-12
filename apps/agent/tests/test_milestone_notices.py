@@ -1,22 +1,28 @@
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import json
 import logging
-from queue import Queue
 import threading
 from types import SimpleNamespace
 
 import pytest
 from requests import Response
 
-from sc2tools_agent import milestone_notices, runner
+from sc2tools_agent import milestone_notices, recent_games, runner
+from sc2tools_agent.agent_credentials import CredentialIntent
 from sc2tools_agent.live.types import LiveLifecycleEvent, LiveLifecyclePhase
 from sc2tools_agent.runner import _Multiplexer, _start_milestone_notices
-from sc2tools_agent.state import AgentState, _STATE_SAVE_LOCK, load_state, save_state
+from sc2tools_agent.state import (
+    AgentState, _STATE_SAVE_LOCK, commit_state_credentials, credential_revision, load_state, save_state,
+)
+from sc2tools_agent.sync_retry import replay_ticket
 from sc2tools_agent.ui.console import ConsoleUI
 from sc2tools_agent.ui.gui import SettingsPayload
 from sc2tools_agent.ui.tray import TrayUI
+from sc2tools_agent.uploader.queue import UploadQueue
 from tests._gui_offscreen import run_gui_check
 from tests.test_agent_credentials import MemoryStorage, SyntheticCrypto
+from tests.test_upload_queue import _cfg, _game, _StubApi
 
 
 def synced_game(**changes):
@@ -25,7 +31,7 @@ def synced_game(**changes):
 
 def milestone(**changes):
     return {
-        "href": "/app/game/game%2Fone", "kind": "moment.win_streak",
+        "id": "win-streak", "href": "/app/game/game%2Fone", "kind": "moment.win_streak",
         "title": "Winning streak", "body": "Five wins in a row", "readAt": None,
         **changes,
     }
@@ -51,11 +57,12 @@ def make_worker(tmp_path, monkeypatch):
 
     monkeypatch.setattr(milestone_notices, "save_state", save)
     monkeypatch.setattr(milestone_notices, "_RETRY_DELAYS", (0, 0, 0))
+    monkeypatch.setattr(milestone_notices, "_SETTLE_DELAY", 0)
     save(tmp_path, state)
     workers = []
 
     def start(request, *, settings=state):
-        calls, toasts, completed = [], [], Queue()
+        calls, toasts = [], []
 
         def http(method, url, *, headers, **_options):
             calls.append((method, url, headers.get("authorization")))
@@ -68,18 +75,24 @@ def make_worker(tmp_path, monkeypatch):
         cfg = SimpleNamespace(state_dir=tmp_path, api_base="https://api.example.test")
         worker = _start_milestone_notices(cfg, settings, ui, tray, threading.Event())
         workers.append(worker)
-        original = worker._check_for_notice
 
-        def track(game):
-            try:
-                original(game)
-            finally:
-                completed.put(True)
+        def wait_done():
+            with worker._changed:
+                return worker._changed.wait_for(lambda: worker._latest is None, timeout=3)
 
-        worker._check_for_notice = track
+        def relink(token):
+            with _STATE_SAVE_LOCK:
+                settings._owner_epoch = object()
+                commit_state_credentials(tmp_path, settings, device=CredentialIntent("set", token),
+                                         expected_device_revision=credential_revision(settings, "device"),
+                                         expected_owner_epoch=settings._owner_epoch,
+                                         device_owner=(settings.user_id, datetime.now(timezone.utc).isoformat()),
+                                         storage=state_storage, crypto=crypto)
+
         return SimpleNamespace(
-            state=settings, calls=calls, toasts=toasts, completed=completed,
-            worker=worker, submit=lambda game: ui.on_game_synced("inert.SC2Replay", game),
+            state=settings, calls=calls, toasts=toasts, wait_done=wait_done,
+            worker=worker, ui=ui, relink=relink,
+            submit=lambda game: ui.on_game_synced("inert.SC2Replay", game, replay_ticket(settings).epoch),
             phase=lambda phase: worker.on_game_event(LiveLifecycleEvent(phase=phase)), reload=reload,
         )
 
@@ -96,22 +109,34 @@ def test_waits_for_async_ingest_then_uses_authenticated_newest_matching_unread(m
         milestone(),
         milestone(title="Earlier milestone"),
     ]
-    app = make_worker(lambda call: response(items=rows if call == 2 else ()))
+    app = make_worker(lambda call: response(items=rows if call >= 2 else ()))
     app.phase(LiveLifecyclePhase.MENU)
     app.submit(synced_game())
-    assert app.completed.get(timeout=3)
+    assert app.wait_done()
     assert app.toasts == [("Winning streak", "Five wins in a row")]
     assert app.calls == [
         ("GET", "https://api.example.test/v1/me/notifications?kind=milestones&unread=true&limit=20", "Bearer fake-device-a"),
-    ] * 2
+    ] * 3
+
+
+def test_waits_for_the_newest_row_when_bell_inserts_multiple_milestones(make_worker):
+    older = milestone()
+    newer = milestone(id="personal-best", title="Personal best", body="A new rank")
+    app = make_worker(lambda call: response(items=[older] if call == 1 else [newer, older]))
+    app.phase(LiveLifecyclePhase.MENU)
+    app.submit(synced_game())
+    assert app.wait_done()
+    assert app.toasts == [("Personal best", "A new rank")]
+    assert len(app.calls) == 3
 
 
 def test_holds_notice_when_game_starts_during_request(make_worker, monkeypatch):
     fetched, release, waiting = threading.Event(), threading.Event(), threading.Event()
 
-    def request(_call):
-        fetched.set()
-        assert release.wait(3)
+    def request(call):
+        if call == 2:
+            fetched.set()
+            assert release.wait(3)
         return response(items=[milestone()])
 
     app = make_worker(request)
@@ -134,9 +159,62 @@ def test_holds_notice_when_game_starts_during_request(make_worker, monkeypatch):
     assert waiting.wait(3)
     assert app.toasts == []
     app.phase(LiveLifecyclePhase.MATCH_ENDED)
-    assert app.completed.get(timeout=3)
+    assert app.wait_done()
     assert app.toasts == [("Winning streak", "Five wins in a row")]
-    assert len(app.calls) == 1
+    assert len(app.calls) == 2
+
+
+def test_match_start_during_receipt_write_holds_the_notice(make_worker, monkeypatch):
+    saving, release, published, holding = (threading.Event() for _ in range(4))
+    app = make_worker(lambda _call: response(items=[milestone()]))
+    original = milestone_notices.save_state
+    wait_for = app.worker._changed.wait_for
+
+    def save(directory, state):
+        saving.set()
+        assert release.wait(3)
+        original(directory, state)
+
+    def track_wait(predicate, timeout=None):
+        if timeout is None and saving.is_set() and not predicate():
+            holding.set()
+        return wait_for(predicate, timeout=timeout)
+
+    def start_match():
+        app.phase(LiveLifecyclePhase.MATCH_LOADING)
+        published.set()
+
+    monkeypatch.setattr(milestone_notices, "save_state", save)
+    monkeypatch.setattr(app.worker._changed, "wait_for", track_wait)
+    app.phase(LiveLifecyclePhase.MENU)
+    app.submit(synced_game())
+    match_thread = threading.Thread(target=start_match)
+    try:
+        assert saving.wait(3)
+        match_thread.start()
+        assert published.wait(1)
+    finally:
+        release.set()
+        if match_thread.ident is not None:
+            match_thread.join(timeout=3)
+    assert holding.wait(3)
+    assert app.toasts == []
+    app.phase(LiveLifecyclePhase.MATCH_ENDED)
+    assert app.wait_done()
+    assert app.toasts == [("Winning streak", "Five wins in a row")]
+
+
+def test_retries_a_fresh_sync_after_a_rate_limited_attempt(make_worker):
+    app = make_worker(lambda call: response(429) if call == 1 else response(items=[milestone()]))
+    game = synced_game()
+    app.phase(LiveLifecyclePhase.MENU)
+    app.submit(game)
+    assert app.wait_done()
+    assert len(app.calls) == 1 and not app.toasts
+    app.submit(game)
+    assert app.wait_done()
+    assert len(app.calls) == 3
+    assert app.toasts == [("Winning streak", "Five wins in a row")]
 
 
 def test_dedupes_repeated_upload_and_survives_real_state_roundtrip(make_worker):
@@ -144,15 +222,14 @@ def test_dedupes_repeated_upload_and_survives_real_state_roundtrip(make_worker):
     first = make_worker(lambda _call: response(items=[milestone()]))
     first.phase(LiveLifecyclePhase.IDLE)
     first.submit(game)
-    assert first.completed.get(timeout=3)
+    assert first.wait_done()
     first.submit(game)
     first.worker.close()
-    assert len(first.toasts) == len(first.calls) == 1
+    assert len(first.toasts) == 1 and len(first.calls) == 2
     restored = first.reload()
     assert restored.notify_milestones is True
     assert len(restored.milestone_notice_receipts) == 1
     second = make_worker(lambda _call: pytest.fail("already delivered"), settings=restored)
-    second.phase(LiveLifecyclePhase.MENU)
     second.submit(game)
     assert second.worker._latest is None
 
@@ -161,7 +238,7 @@ def test_old_api_stops_without_unlinking_or_marking_seen(make_worker):
     app = make_worker(lambda _call: response(404))
     app.phase(LiveLifecyclePhase.MENU)
     app.submit(synced_game())
-    assert app.completed.get(timeout=3)
+    assert app.wait_done()
     assert len(app.calls) == 1
     assert not app.toasts and not app.state.milestone_notice_receipts
     assert app.state.is_paired
@@ -186,9 +263,45 @@ def test_retired_account_cannot_surface_an_inflight_response(make_worker):
             app.state._owner_epoch = object()
     finally:
         release.set()
-    assert app.completed.get(timeout=3)
+    assert app.wait_done()
     assert len(app.calls) == 1
     assert not app.toasts and not app.state.milestone_notice_receipts
+
+
+def test_same_owner_relink_rejects_retired_upload_context(make_worker, tmp_path, monkeypatch):
+    entered, release = threading.Event(), threading.Event()
+    app = make_worker(lambda _call: response(items=[milestone()]))
+    replay_ticket(app.state)
+    queue = UploadQueue(cfg=_cfg(tmp_path), state=app.state, api=_StubApi(),
+                        on_game_synced_current=app.ui.on_game_synced)
+    job = replace(_game(tmp_path, "accepted.SC2Replay", date_iso=datetime.now(timezone.utc).isoformat()),
+                  priority=True)
+    original = recent_games.build_game_summary
+
+    def build_summary(*args, **kwargs):
+        entered.set()
+        assert release.wait(3)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(recent_games, "build_game_summary", build_summary)
+    row = {"gameId": "game/one"}
+    callback = threading.Thread(target=queue._notify_game_synced, args=(job, row, "owner-a"),
+                                kwargs={"context": queue._upload_context()})
+    callback.start()
+    try:
+        assert entered.wait(3)
+        app.relink("fake-device-renewed")
+    finally:
+        release.set()
+        callback.join(timeout=3)
+    assert not callback.is_alive()
+    assert app.worker._latest is None and not app.calls and not app.toasts
+
+    queue._notify_game_synced(job, row, "owner-a", context=queue._upload_context())
+    app.phase(LiveLifecyclePhase.MENU)
+    assert app.wait_done()
+    assert [call[2] for call in app.calls] == ["Bearer fake-device-renewed"] * 2
+    assert app.toasts == [("Winning streak", "Five wins in a row")]
 
 
 def test_default_mute_history_and_stale_games_do_not_enqueue(make_worker):
@@ -224,8 +337,8 @@ def test_failed_receipt_save_is_retried_before_notifying(make_worker, monkeypatc
     monkeypatch.setattr(milestone_notices, "save_state", fail_first)
     app.phase(LiveLifecyclePhase.MENU)
     app.submit(synced_game())
-    assert app.completed.get(timeout=3)
-    assert len(app.calls) == len(writes) == 2
+    assert app.wait_done()
+    assert len(app.calls) == 3 and len(writes) == 2
     assert len(app.toasts) == 1
 
 

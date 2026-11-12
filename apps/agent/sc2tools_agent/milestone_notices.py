@@ -21,6 +21,7 @@ from .sync_retry import ReplayTicket, replay_ticket
 log = logging.getLogger(__name__)
 _RECENT_GAME_AGE = timedelta(minutes=15)  # The server's Game Moments freshness window.
 _RETRY_DELAYS = (2, 2, 4, 8, 16, 32, 64)
+_SETTLE_DELAY = 2
 _BETWEEN_GAMES = {LiveLifecyclePhase.IDLE, LiveLifecyclePhase.MENU, LiveLifecyclePhase.MATCH_ENDED}
 
 
@@ -30,6 +31,13 @@ class _SyncedGame:
     href: str
     receipt_key: str
     ticket: ReplayTicket = field(repr=False)
+
+
+@dataclass(frozen=True)
+class _Notice:
+    identifier: str | None
+    title: str
+    body: str
 
 
 def _fresh_game(summary):
@@ -61,7 +69,18 @@ def _newest_notice(payload, href):
             continue
         title, body = row.get("title"), row.get("body")
         if isinstance(title, str) and title.strip():
-            return title.strip(), body.strip() if isinstance(body, str) else ""
+            return _Notice(row.get("id"), title.strip(), body.strip() if isinstance(body, str) else "")
+    return None
+
+
+def _read_notice(client, href):
+    try:
+        return _newest_notice(client.get_unread_milestones(), href)
+    except ApiError as exc:
+        if 400 <= exc.status < 500 and exc.status != 408:
+            raise  # Old deployments, retired auth and rate limits end this attempt.
+    except RequestException:
+        pass
     return None
 
 
@@ -98,21 +117,23 @@ class MilestoneNotices:
                 self._between_games = between_games
                 self._changed.notify_all()
 
-    def on_game_synced(self, summary):
+    def on_game_synced(self, summary, owner_epoch):
         owner, fresh = summary.get("_owner"), _fresh_game(summary)
         if not owner or fresh is None:
             return
         game_id, date = fresh
         ticket = replay_ticket(self._state)
-        if ticket.owner != owner:
+        if ticket.owner != owner or ticket.epoch is not owner_epoch:
             return
         receipt_key = sha256(f"{owner}\0{game_id}".encode("utf-8")).hexdigest()
         href = "/app/game/" + quote(game_id, safe="!'()*")
         self._queue(_SyncedGame(date, href, receipt_key, ticket))
 
     def _queue(self, game):
+        if not self._eligible(game):
+            return
         with self._changed:
-            if self._closed or not self._eligible(game):
+            if self._closed:
                 return
             latest = self._latest
             if (latest and latest.ticket.epoch is game.ticket.epoch
@@ -121,60 +142,63 @@ class MilestoneNotices:
             self._latest = game
             self._changed.notify_all()
 
+    def _enabled_for(self, game):
+        state = self._state
+        return (not self._stop_event.is_set() and state.notify_milestones
+                and not state.notifications_muted and state.is_paired and game.ticket.current(state))
+
     def _eligible(self, game):
         with _STATE_SAVE_LOCK:
-            state = self._state
-            return (not self._stop_event.is_set() and state.notify_milestones
-                    and not state.notifications_muted and state.is_paired
-                    and game.ticket.current(state) and game.receipt_key not in state.milestone_notice_receipts)
+            return self._enabled_for(game) and game.receipt_key not in self._state.milestone_notice_receipts
 
     def _run(self):
-        previous = None
         while True:
             with self._changed:
-                self._changed.wait_for(lambda: self._closed or self._latest is not previous)
+                self._changed.wait_for(lambda: self._closed or self._latest is not None)
                 if self._closed:
                     return
-                previous = self._latest
-            self._check_for_notice(previous)
+                game = self._latest
+            try:
+                self._check_for_notice(game)
+            finally:
+                with self._changed:
+                    if self._latest is game:
+                        self._latest = None
+                    self._changed.notify_all()
 
-    def _check_for_notice(self, game):
+    def _wait_between_games(self, game, delay=0):
         def interrupted():
             return self._closed or self._latest is not game
 
+        with self._changed:
+            self._changed.wait_for(interrupted, timeout=delay)
+            self._changed.wait_for(lambda: interrupted() or self._between_games)
+            return not interrupted()
+
+    def _check_for_notice(self, game):
         client = ApiClient(base_url=self._api_base, device_token=game.ticket.token,
                            _auth_guard=lambda: self._eligible(game))
-        # Ingest responds before the bell sink finishes. Retry an empty read
-        # or a transient transport failure without keeping an upload worker busy.
-        for delay in _RETRY_DELAYS:
-            with self._changed:
-                self._changed.wait_for(interrupted, timeout=delay)
-                self._changed.wait_for(lambda: interrupted() or self._between_games)
-                if interrupted():
-                    return
-            if not self._eligible(game):
+        # Ingest responds before the bell sink finishes writing its rows.
+        # Give each newly observed candidate a quiet interval to settle.
+        candidate = None
+        for delay in (*_RETRY_DELAYS, _SETTLE_DELAY):
+            if not self._wait_between_games(game, _SETTLE_DELAY if candidate else delay) or not self._eligible(game):
                 return
             try:
-                notice = _newest_notice(client.get_unread_milestones(), game.href)
-            except ApiError as exc:
-                if 400 <= exc.status < 500 and exc.status != 408:
-                    return  # Includes old deployments, retired auth and rate limits.
+                notice = _read_notice(client, game.href)
+            except ApiError:
+                return
+            if notice is None or notice != candidate:
+                candidate = notice
                 continue
-            except RequestException:
-                continue
-            if notice is None:
-                continue
-            with self._changed:
-                self._changed.wait_for(lambda: interrupted() or self._between_games)
-                if interrupted():
-                    return
-                if self._deliver(game, notice):
-                    return
+            if self._claim(game):
+                self._show_when_between_games(game, notice)
+                return
 
-    def _deliver(self, game, notice):
+    def _claim(self, game):
         with _STATE_SAVE_LOCK:
             if not self._eligible(game):
-                return True
+                return False
             state = self._state
             previous = state.milestone_notice_receipts
             cutoff = datetime.now(timezone.utc) - _RECENT_GAME_AGE
@@ -191,9 +215,20 @@ class MilestoneNotices:
                 state.milestone_notice_receipts = previous
                 log.warning("milestone_notice_save_failed")
                 return False
-            title, body = notice
-            try:
-                self._notify(body or title, title=title if body else "SC2 Tools Agent")
-            except Exception:
-                log.warning("milestone_notice_display_failed")
             return True
+
+    def _show_when_between_games(self, game, notice):
+        while self._wait_between_games(game):
+            # The live poller must publish phase changes even during a slow
+            # state write. Hold its condition only for the final dispatch.
+            with _STATE_SAVE_LOCK, self._changed:
+                if self._closed or self._latest is not game or not self._enabled_for(game):
+                    return
+                if not self._between_games:
+                    continue
+                try:
+                    self._notify(notice.body or notice.title,
+                                 title=notice.title if notice.body else "SC2 Tools Agent")
+                except Exception:
+                    log.warning("milestone_notice_display_failed")
+                return

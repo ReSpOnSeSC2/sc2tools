@@ -292,10 +292,11 @@ resumed/synthetic results do not become ordinary ladder records by retrying.
 
 To see a local result message such as **Victory vs Opponent (Z) on Alcyone LE**,
 set **Settings → Desktop notifications** to **Every game** and Save. History
-imports stay quiet. Enable **Show game milestones in the tray** beside that
-setting and turn on game milestones in your web bell to get the newest unread
-milestone after a game. The agent waits until you finish playing before showing
-it. See [Your recent games](https://sc2tools.com/help/desktop-app-recent-games)
+imports stay quiet. To get an unread milestone after a game, enable
+**Show game milestones in the tray** beside that setting and turn on
+**Milestones** under **Settings → Preferences** on the web. The agent waits
+until you finish playing before showing it.
+See [Your recent games](https://sc2tools.com/help/desktop-app-recent-games)
 and [Importing your replay history](https://sc2tools.com/help/desktop-app-import).
 
 ### Streams

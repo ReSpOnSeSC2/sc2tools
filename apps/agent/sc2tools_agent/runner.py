@@ -528,7 +528,7 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
         on_support_error=lambda context, code: recovery_cell.support.record_upload_error(context, code) if recovery_cell.support else None,
         on_pending_changed=ui.on_pending,
         on_archive_pending_changed=ui.health.set_archive_pending,
-        on_game_synced=ui.on_game_synced,
+        on_game_synced_current=ui.on_game_synced,
     )
     recovery_cell.upload = upload
     upload.set_activity_gate(activity_gate)
@@ -1217,7 +1217,7 @@ def _gui_boot_worker(
             on_support_error=lambda context, code: cell.support.record_upload_error(context, code) if cell.support else None,
             on_pending_changed=ui.on_pending,
             on_archive_pending_changed=ui.health.set_archive_pending,
-            on_game_synced=ui.on_game_synced,
+            on_game_synced_current=ui.on_game_synced,
             # Late-bound: the build check-in starts with the live bridge.
             on_game_accepted=lambda *accepted: _handle_checkin_game_accepted(
                 cfg.state_dir, state, cell, *accepted,
@@ -4108,12 +4108,12 @@ class _Multiplexer:
         for s in self._sinks:
             s.on_upload_success(name)
 
-    def on_game_synced(self, path, summary):
+    def on_game_synced(self, path, summary, owner_epoch=None):
         owner = summary.get("_owner")
         if self._recent_history and owner != self._recent_history.owner_provider():
             return
         if self._milestone_notices:
-            self._milestone_notices.on_game_synced(summary)
+            self._milestone_notices.on_game_synced(summary, owner_epoch)
         if self._recent_history:
             self._recent_history.game_synced(path, summary)
         for sink in self._sinks:
