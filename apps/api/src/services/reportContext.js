@@ -40,6 +40,7 @@ const LIMITS = Object.freeze({
 
 // Browser-source pages and shared-game pages carry their credential in the URL.
 const TOKEN_PAGE_SEGMENT = /^\/(overlay|dock|g)\/[^/?#]+/iu;
+const STREAM_VIEWER_PAGE = /^\/p\/[^/]+\/live\/?$/iu;
 
 /**
  * A page path for a report: no query string or #anchor, browser-source
@@ -55,6 +56,7 @@ function sanitiseReportPagePath(raw) {
   if (typeof raw !== "string") return "";
   const path = raw.trim().split(/[?#]/u)[0];
   if (!path.startsWith("/")) return "";
+  if (STREAM_VIEWER_PAGE.test(path)) return "/p/:handle/live";
   const redacted = sanitiseRequestUrl(
     path.replace(TOKEN_PAGE_SEGMENT, (_match, root) => `/${root}/[redacted]`),
   );

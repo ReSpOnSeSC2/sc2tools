@@ -6,6 +6,7 @@ const {
 const { isSearchQueryUrl, requestCarriesSearchQuery } = require("./searchQueryPrivacy");
 const { isSyncActionPath } = require("./syncActionJson");
 const { isReplayDownloadBatchPath, isReplayDownloadBatchFailure } = require("./replayDownloadBatchBoundary");
+const { isStreamViewerRequest } = require("./requestLogging");
 const PRIVATE_SEARCH_TAG = "sc2tools.private_search";
 const HEARTBEAT_PATH = /^\/v1\/devices\/heartbeat\/?$/i;
 const CREDENTIAL_BODY_PATH = /^\/(?:v1\/)?(?:me\/integrations\/discord\/hooks(?:\/[^/]+\/battle-report)?|me\/push\/(?:subscriptions|unsubscribe)|push\/subscription-change|me\/replay-sharing\/reference)\/?$/i;
@@ -20,7 +21,7 @@ function isBearerPath(value) {
 
 /** @param {unknown} value */
 function isPrivateTelemetryPath(value) {
-  return isPrivateSearchPath(value) || isReplayDownloadBatchPath(value) || isBearerPath(value);
+  return isPrivateSearchPath(value) || isReplayDownloadBatchPath(value) || isBearerPath(value) || isStreamViewerRequest(value);
 }
 
 /** @param {unknown} value @param {string} key @returns {unknown} */

@@ -1,7 +1,7 @@
 "use strict";
 
 const sentry = require("../util/sentry");
-const { sanitiseRequestUrl } = require("./requestLogging");
+const { sanitiseRequestUrl, isStreamViewerRequest } = require("./requestLogging");
 const { isSearchQueryUrl } = require("./searchQueryPrivacy");
 
 /**
@@ -17,7 +17,7 @@ function buildErrorHandler(logger) {
     const code = err && err.code ? String(err.code) : codeFromStatus(status);
     logger.error(
       {
-        err: isSearchQueryUrl(req.originalUrl || req.url) ? searchSafeError(err) : err,
+        err: diagnosticError(err, req.originalUrl || req.url),
         reqId: req.id,
         method: req.method,
         // Same redaction as request logs: tokens and live game keys in
@@ -46,6 +46,11 @@ function buildErrorHandler(logger) {
       },
     });
   };
+}
+
+/** @param {unknown} err @param {string} url */
+function diagnosticError(err, url) {
+  return isSearchQueryUrl(url) || isStreamViewerRequest(url) ? searchSafeError(err) : err;
 }
 
 /**

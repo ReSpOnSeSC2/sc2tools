@@ -8,6 +8,7 @@ const { COLLECTIONS } = require("../config/constants");
 const { sanitizeReportPrefs } = require("./reportPreferences");
 const { StreamReportPublication } = require("./streamReportPublication");
 const { streamVodUrl } = require("./streamReportVod");
+const { sha256 } = require("../util/hash");
 const facts = require("./reportFacts");
 
 /**
@@ -60,15 +61,17 @@ class StreamReportsService {
     this.now = opts.now || Date.now;
   }
 
-  /** Dock "Start new session": end any open stream, open a new one. @param {string} userId @param {number} startMs */
-  async start(userId, startMs) {
+  /** Dock "Start new session": end any open stream, open a new one.
+   * @param {string} userId @param {number} startMs @param {string} [sourceToken] */
+  async start(userId, startMs, sourceToken) {
     const nextStart = new Date(startMs);
     await this.withOwnerWrite(userId, async () => {
       const user = await this.db.users.findOne({ userId }, { projection: { _id: 0, streamSession: 1 } });
       const current = user?.streamSession?.startAt;
       if (current && current >= nextStart) return;
       const closing = current ? await this.stageClose(userId, current, "restart", nextStart) : null;
-      await this.db.users.updateOne({ userId, "streamSession.startAt": { $exists: false } }, { $set: { streamSession: { startAt: nextStart } } });
+      const streamSession = { startAt: nextStart, ...(sourceToken ? { viewerSource: sha256(sourceToken) } : {}) };
+      await this.db.users.updateOne({ userId, "streamSession.startAt": { $exists: false } }, { $set: { streamSession } });
       if (closing) await this.buildStagedReport(closing);
     });
   }

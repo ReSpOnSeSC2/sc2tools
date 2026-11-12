@@ -4835,6 +4835,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Send a saved command reply as yourself from Chat command settings. Open live replies, then choose **Answer as me** on a Twitch, Kick or YouTube command. The reply uses your connected chat-send grant and targets the source chat.
 
+### Delayed stream viewer page
+
+- Share completed games from one Browser Source's Dock session from **Settings → Profile → Stream viewer page**. Sharing starts off. Choose a delay of 5–60 minutes, and viewers can see recent wins, losses, opponent races and known ladder maps.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

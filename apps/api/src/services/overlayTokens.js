@@ -11,9 +11,14 @@ const { validateOverlayProfile, defaultOverlayProfile, overlayProfileForRead, ov
 /** @param {unknown} value */
 const profileRevision = value => Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : 0;
 
+/** @param {string} userId */
+function activeOverlayTokenMatch(userId) {
+  return { userId, revokedAt: null, _rotation: { $exists: false }, _rotationPending: { $ne: true } };
+}
+
 /** @param {string} userId @param {string} token */
 function activeOwnedToken(userId, token) {
-  return { userId, token, revokedAt: null, _rotation: { $exists: false }, _rotationPending: { $ne: true } };
+  return { ...activeOverlayTokenMatch(userId), token };
 }
 
 const DEFAULT_WIDGETS = Object.freeze([
@@ -482,6 +487,7 @@ function widgetSelection(value) {
 
 module.exports = {
   OverlayTokensService,
+  activeOverlayTokenMatch,
   DEFAULT_WIDGETS,
   KNOWN_WIDGETS,
   RESOLVE_CACHE_TTL_MS,

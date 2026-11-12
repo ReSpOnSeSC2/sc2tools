@@ -11,6 +11,7 @@ import { PlayerCopyButton } from "@/components/public-profile/PlayerCopyButton";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { usePublicPlayerEditor, PLAYER_SECTION_FIELDS } from "./usePublicPlayerEditor";
 import { PlayerPanelSettings } from "./PlayerPanelSettings";
+import { StreamViewerSettings } from "./StreamViewerSettings";
 import { useSaveSource } from "./SettingsContext";
 
 const labels = { showReplays: "Link my shared replays", showChannels: "Show approved channels", showRecentForm: "Show recent results and last played", showMmrHistory: "Show weekly MMR over 90 days", showSeasons: "Show season records", showMaps: "Show map records with at least 10 games" };
@@ -56,6 +57,7 @@ function OwnedPublicProfile() {
         </>}
         {editor.feedback ? <p role={editor.feedback.error ? "alert" : "status"} className={`text-caption ${editor.feedback.error ? "text-danger" : "text-success"}`}>{editor.feedback.text}</p> : null}
       </form>
+      <StreamViewerSettings handle={baseline.slug} publicProfileEnabled={baseline.enabled} />
     </Card>}
   </Section>;
 }

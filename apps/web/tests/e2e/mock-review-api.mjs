@@ -128,14 +128,30 @@ const ROUTES = new Map([
   ...COMMUNITY_DETAIL_ROUTES,
 ]);
 
-const server = http.createServer(async (req, res) => {
-  const path = (req.url || "/").split("?")[0];
-  if (await publicPlayerControl(req, res, path)) return;
-  const cors = {
+const cors = {
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "authorization, content-type",
     "access-control-allow-methods": "GET, OPTIONS",
-  };
+};
+const streamViewerModes = /^\/v1\/public\/players\/fixture-viewer-(ready|empty|off|error)-0123456789\/live$/;
+function writeStreamViewer(req, res, path) {
+  const mode = req.method === "GET" && streamViewerModes.exec(path)?.[1];
+  if (!mode) return false;
+  const games = mode === "ready" ? [
+    { result: "win", opponentRace: "Zerg", map: "Deathaura LE" },
+    { result: "loss", opponentRace: "Terran", map: "Goldenaura LE" },
+  ] : [];
+  const status = mode === "off" ? 404 : mode === "error" ? 503 : 200;
+  res.writeHead(status, { ...cors, "content-type": "application/json", "cache-control": "no-store" })
+    .end(JSON.stringify({ games, wins: games.length / 2, losses: games.length / 2, delayMinutes: 5 }));
+  return true;
+}
+async function handleFixtureControl(req, res, path) {
+  return await publicPlayerControl(req, res, path) || writeStreamViewer(req, res, path);
+}
+const server = http.createServer(async (req, res) => {
+  const path = (req.url || "/").split("?")[0];
+  if (await handleFixtureControl(req, res, path)) return;
   if (path === "/__mock/health") {
     res.writeHead(200, { "content-type": "text/plain" }).end("ok");
     return;

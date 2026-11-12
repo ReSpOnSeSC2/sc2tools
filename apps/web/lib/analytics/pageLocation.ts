@@ -29,14 +29,7 @@ import { ROOM_ROUTE } from "../matchRoomRoute";
 import { SITE_NAME } from "../siteTitle";
 
 /** Paths that are never sent to Google Analytics. */
-const UNTRACKED_PATHS: ReadonlyArray<RegExp> = [
-  /^\/admin(?:\/|$)/,
-  /^\/overlay(?:\/|$)/,
-  /^\/dock(?:\/|$)/,
-  /^\/(?:wrapped|career)(?:\/|$)/,
-  ROOM_ROUTE,
-  /^\/(?:p|players)\/[^/]+\/replays(?:\/|$)/,
-];
+const UNTRACKED_ROUTE = /^\/(?:admin|overlay|dock|wrapped|career|(?:p|players)\/[^/]+\/(?:replays|live))(?:\/|$)/;
 
 /** Per-record screens, collapsed to their route pattern. */
 const DYNAMIC_ROUTES: ReadonlyArray<readonly [RegExp, string]> = [
@@ -81,7 +74,7 @@ const ATTRIBUTION_PARAMS: ReadonlySet<string> = new Set([
  */
 export function isUntrackedPath(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
-  return UNTRACKED_PATHS.some((pattern) => pattern.test(pathname));
+  return UNTRACKED_ROUTE.test(pathname) || ROOM_ROUTE.test(pathname);
 }
 
 /**

@@ -24,6 +24,7 @@ describe("isUntrackedPath", () => {
     "/players/reaver-7a6b/replays",
     "/players/reaver-7a6b/replays/01J",
     "/p/legacy-share/replays",
+    "/p/synthetic-handle-0123456789/live",
   ])("never reports %s", (path) => {
     expect(isUntrackedPath(path)).toBe(true);
   });

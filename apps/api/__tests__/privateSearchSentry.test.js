@@ -27,6 +27,19 @@ afterEach(() => {
   else process.env.SENTRY_DSN = previousDsn;
 });
 
+test.each(["/v1/public/players/private-handle-0123456789/live?ignored=1", "/v1/me/stream-viewer"])("keeps viewer handle and owner settings out of Sentry on %s", path => {
+  process.env.SENTRY_DSN = "https://example.invalid/fixture";
+  const sentry = load();
+  expect(sentry.init()).toBe(true);
+  const options = mockSdk.init.mock.calls.at(-1)[0];
+  options.integrations([]);
+  const http = mockSdk.httpIntegration.mock.calls.at(-1)[0];
+  expect(http.ignoreIncomingRequestBody(path)).toBe(true);
+  expect(http.ignoreIncomingRequests(path)).toBe(true);
+  expect(options.beforeSend({ request: { url: path } })).toBeNull();
+  expect(options.beforeSendTransaction({ transaction: `GET ${path}` })).toBeNull();
+});
+
 test("never keeps the device heartbeat body, whose sync report carries players' names", () => {
   process.env.SENTRY_DSN = "https://example.invalid/fixture";
   const sentry = load();

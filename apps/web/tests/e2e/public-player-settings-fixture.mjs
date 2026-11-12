@@ -51,13 +51,44 @@ function fixtureAssets() {
 const settings = owner => ({ enabled: true, legacyPublic: false, slug: owner === "owner-b" ? "beta-abcdef0123" : "frontier-0123456789",
   revision: 0, updatedAt: null, renameAvailableAt: null, replaySharingEnabled: false, publicDisplayName: "Synthetic Public Player",
   showReplays: false, showChannels: false, showRecentForm: false, showMmrHistory: false, showSeasons: false, showMaps: false });
+const fixtureOwner = request => request.headers().authorization?.endsWith("owner-b") ? "owner-b" : "owner-a";
+
+function settingsFixture() {
+  const writes = [], held = [], viewerSettings = new Map(), viewerWrites = [];
+  function player(request, route, json) {
+    const owner = fixtureOwner(request);
+    if (request.method() === "GET") return json(settings(owner));
+    if (request.method() !== "PUT") return null;
+    const body = request.postDataJSON();
+    writes.push({ owner, body }); held.push({ route, owner, body });
+    return Promise.resolve();
+  }
+  function viewer(request, json) {
+    const owner = fixtureOwner(request);
+    const source = { id: "1234567890abcdef01234567", label: "Main broadcast" };
+    const saved = viewerSettings.get(owner) || { eligible: true, tokenId: null, delayMinutes: 5, revision: 0, href: null, sources: [source] };
+    if (request.method() === "GET") return json(saved);
+    if (request.method() !== "PUT") return null;
+    const body = request.postDataJSON();
+    viewerWrites.push({ owner, body });
+    const next = { ...saved, ...body, revision: saved.revision + 1, href: body.tokenId ? `/p/${settings(owner).slug}/live` : null };
+    viewerSettings.set(owner, next);
+    return json(next);
+  }
+  return { writes, held, viewerWrites, respond(request, route, path, json) {
+    if (path === "/v1/me/public-profile") return player(request, route, json);
+    if (path === "/v1/me/stream-viewer") return viewer(request, json);
+    return null;
+  } };
+}
 
 /** Actual settings, API ownership, copy controls, global CSS and local fonts.
  * Clerk and all HTTP requests are isolated synthetic adapters; no live account
  * or publication preference can be reached by this fixture. */
-export async function openPublicPlayerSettingsFixture(page) {
+export async function openPublicPlayerSettingsFixture(page, theme = "dark") {
   const { script, css, fonts } = await fixtureAssets();
-  const errors = [], unexpectedRequests = [], writes = [], held = [];
+  const errors = [], unexpectedRequests = [];
+  const { writes, held, viewerWrites, respond } = settingsFixture();
   page.on("pageerror", error => errors.push(error.message));
   await page.addInitScript(() => Object.defineProperty(navigator, "clipboard", { configurable: true,
     value: { writeText: async () => { throw new DOMException("Fixture permission denied", "NotAllowedError"); } },
@@ -66,24 +97,21 @@ export async function openPublicPlayerSettingsFixture(page) {
     const request = route.request(), url = new URL(request.url());
     if (url.origin !== ORIGIN) { unexpectedRequests.push(`${request.method()} ${url.origin}${url.pathname}`); return route.abort(); }
     const json = data => route.fulfill({ contentType: "application/json", body: JSON.stringify(data), headers: { "cache-control": "no-store" } });
-    if (url.pathname === "/v1/me/public-profile") {
-      const owner = request.headers().authorization?.endsWith("owner-b") ? "owner-b" : "owner-a";
-      if (request.method() === "GET") return json(settings(owner));
-      if (request.method() === "PUT") { const body = request.postDataJSON(); writes.push({ owner, body }); held.push({ route, owner, body }); return; }
-    }
+    const response = respond(request, route, url.pathname, json);
+    if (response) return response;
     if (request.method() === "GET") {
       if (url.pathname === "/v1/me/public-profile/slug") return json({ slug: url.searchParams.get("slug"), available: true, reason: null });
       if (url.pathname === "/fixture.js") return route.fulfill({ contentType: "text/javascript", body: script });
       if (url.pathname === "/fixture.css") return route.fulfill({ contentType: "text/css", body: css });
       if (url.pathname.startsWith("/fonts/") && fonts.has(url.pathname.slice(7))) return route.fulfill({ contentType: "font/woff2", body: fonts.get(url.pathname.slice(7)) });
-      if (url.pathname === "/settings") return route.fulfill({ contentType: "text/html", body: '<!doctype html><html lang="en" data-theme="dark" data-theme-mode="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>' });
+      if (url.pathname === "/settings") return route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="en" data-theme="${theme}" data-theme-mode="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Public profile settings fixture</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>` });
     }
     unexpectedRequests.push(`${request.method()} ${url.pathname}`); return route.fulfill({ status: 404, body: "Unknown fixture resource" });
   });
   await page.goto(`${ORIGIN}/settings`);
   await page.getByRole("textbox", { name: "Player link prefix" }).waitFor();
   await page.evaluate(async () => { await document.fonts.ready; });
-  return { errors, unexpectedRequests, writes, async releaseWrites() {
+  return { errors, unexpectedRequests, writes, viewerWrites, async releaseWrites() {
     for (const entry of held.splice(0)) {
       try { await entry.route.fulfill({ contentType: "application/json", body: JSON.stringify({ ...settings(entry.owner), ...entry.body, revision: 1 }) }); }
       catch { /* The browser may already have aborted the retired owner's fetch. */ }
