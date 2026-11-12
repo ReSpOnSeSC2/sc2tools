@@ -17,11 +17,13 @@ export function LossPanel({
   color,
   losses,
   efficiency,
+  showIcons = true,
 }: {
   label: string;
-  color: string;
+  color?: string;
   losses: LossSummary;
   efficiency: number | null;
+  showIcons?: boolean;
 }) {
   const shown = losses.byUnit.slice(0, LOSS_ROWS_MAX);
   const folded = losses.byUnit.length - shown.length;
@@ -32,7 +34,7 @@ export function LossPanel({
     >
       <div className="flex items-baseline justify-between gap-2 text-caption">
         <span className="whitespace-nowrap">
-          <b style={{ color }}>{label}</b>{" "}
+          <b className={color ? undefined : "text-text"} style={color ? { color } : undefined}>{label}</b>{" "}
           <span className="text-text-muted">units lost</span>
         </span>
         <span
@@ -49,7 +51,7 @@ export function LossPanel({
       {shown.length > 0 && (
         <ul className="mt-1.5 flex flex-wrap gap-1.5">
           {shown.map((g) => {
-            const icon = getIconPath(g.name, "unit");
+            const icon = showIcons ? getIconPath(g.name, "unit") : null;
             return (
               <li
                 key={g.name}

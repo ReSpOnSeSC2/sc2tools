@@ -4714,6 +4714,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Start with browser replay analysis when it is publicly available, or download the Windows Agent. Public marketing pages skip live activity requests for signed-out visitors.
 
+### Local replay selection and playback
+
+- Browser replay analysis scans the selected files first, then analyzes up to 25 recent one-on-one games for the chosen player. Select Watch to open a local replay player.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

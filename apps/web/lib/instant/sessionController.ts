@@ -41,6 +41,8 @@ import type { EngineClient, EnginePhase, ErrorKind, IntakeFile, IntakeSource } f
 export interface SessionControllerOptions {
   /** Cap on queued replays (newest kept); unlimited when omitted. */
   maxFiles?: number;
+  /** Scan the whole queue, then parse at most this many eligible games. */
+  maxParsedFiles?: number;
   /** Skip team/FFA games and resumed-from-replay sessions. */
   onlyOneVsOne?: boolean;
   /** The signed-in user's saved toon handles ("which player is me?"). */
@@ -149,7 +151,12 @@ class InstantSessionController {
     if (this.engine.isDisposed() || !STARTABLE_PHASES.has(state.phase) || state.expanding || state.files.length === 0) return;
     const deps = this.beginRun();
     const options = this.options();
-    const rules: RunRules = { dateWindow: state.dateWindow, now: Date.now(), onlyOneVsOne: options.onlyOneVsOne === true };
+    const rules: RunRules = {
+      dateWindow: state.dateWindow,
+      now: Date.now(),
+      onlyOneVsOne: options.onlyOneVsOne === true,
+      maxParsedFiles: options.maxParsedFiles,
+    };
     try {
       const scanned = await scanFiles(deps, state.files, rules, options.profileToons ?? []);
       if (!scanned) return;
@@ -265,7 +272,7 @@ class InstantSessionController {
     const outcome = await parseScanned(deps, scanned, toon, rules, this.options().wantDigests === true);
     if (!outcome) return;
     this.abort = null;
-    deps.dispatch({ type: "done", parsedWithFiles: outcome.parsed });
+    deps.dispatch({ type: "done", parsedWithFiles: outcome.parsed, deferredCount: outcome.deferredCount });
     trackRunDone(outcome.parsed, [...this.store.getState().intakeFailed, ...outcome.failed]);
   }
 

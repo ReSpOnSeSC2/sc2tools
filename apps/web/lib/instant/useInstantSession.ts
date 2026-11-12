@@ -51,7 +51,7 @@ export interface InstantSession extends SessionActions {
   phase: InstantSessionPhase;
   /** Queued replays (filtered, zip-expanded, deduped, capped at `maxFiles`). */
   files: IntakeFile[];
-  /** Unique replays left out because of `maxFiles` (newest are kept). */
+  /** Replays left out by the queue cap or the latest run's parse cap. */
   truncatedCount: number;
   /** True while a .zip is being unpacked. */
   expanding: boolean;
@@ -79,9 +79,14 @@ function estimateFor(
   files: ReadonlyArray<IntakeFile>,
   dateWindow: DateWindow,
   engineInfo: EngineInfo | null,
+  maxParsedFiles?: number,
 ): ParseEstimate | null {
   const count = preFilterByDate(files, dateWindow, Date.now()).length;
-  return count > 0 ? estimateParseSeconds(count, { warm: engineInfo !== null }) : null;
+  if (count === 0) return null;
+  const warm = engineInfo !== null;
+  return maxParsedFiles === undefined
+    ? estimateParseSeconds(count, { warm })
+    : estimateParseSeconds(Math.min(count, maxParsedFiles), { warm, scanCount: count });
 }
 
 /**
@@ -107,7 +112,11 @@ export function useInstantSession(options: UseInstantSessionOptions = {}): Insta
   }, [lifecycle]);
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const { files, dateWindow, engineInfo } = state;
-  const estimate = useMemo(() => estimateFor(files, dateWindow, engineInfo), [files, dateWindow, engineInfo]);
+  const { maxParsedFiles } = options;
+  const estimate = useMemo(
+    () => estimateFor(files, dateWindow, engineInfo, maxParsedFiles),
+    [files, dateWindow, engineInfo, maxParsedFiles],
+  );
   const parsed = useMemo(() => state.parsedWithFiles.map((entry) => entry.game), [state.parsedWithFiles]);
   const failed = useMemo(() => [...state.intakeFailed, ...state.runFailed], [state.intakeFailed, state.runFailed]);
   // One stable object per state change, so callers can list it in effect deps.

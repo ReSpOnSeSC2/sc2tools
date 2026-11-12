@@ -42,21 +42,11 @@ import type { PatchEra } from "@/lib/meta";
 import { useReplayMusic } from "@/lib/replayMusic";
 import { clampReplayTime } from "@/lib/replayLink";
 import { MapReplayer } from "../MapReplayer";
+import type { MapFrameStyle } from "./mapCanvasRenderer";
 import { MusicControl } from "./MusicControl";
 import type { ReplaySpeed } from "./TransportDock";
 
-export function CompactReplayHost({
-  playback,
-  gameId,
-  myRace,
-  maxHeightPx,
-  initialTimeSec,
-  onPlaybackTimeChange,
-  onPlaybackSpeedChange,
-  playbackWindow,
-  buffering = false,
-  patchEra,
-}: {
+interface CompactReplayProps {
   playback: MapPlayback;
   /** Seeds the score so one game always draws the same track. */
   gameId?: string | null;
@@ -70,7 +60,33 @@ export function CompactReplayHost({
   buffering?: boolean;
   /** The game's patch era, which prices the units-lost panels. */
   patchEra?: PatchEra | null;
-}) {
+}
+
+const LOCAL_DOTS: MapFrameStyle = { entities: "dots" };
+
+export function CompactReplayHost(props: CompactReplayProps | (Pick<CompactReplayProps, "playback" | "patchEra"> & { local: true })) {
+  if ("local" in props) {
+    return (
+      <div className="[&_button]:min-h-11 [&_button]:min-w-11 [&_input]:min-h-11">
+        <MapReplayer playback={props.playback} skipTerrain frameStyle={LOCAL_DOTS} inspect={false} maxHeightPx={360} patchEra={props.patchEra} />
+      </div>
+    );
+  }
+  return <ScoredReplay {...props} />;
+}
+
+function ScoredReplay({
+  playback,
+  gameId,
+  myRace,
+  maxHeightPx,
+  initialTimeSec,
+  onPlaybackTimeChange,
+  onPlaybackSpeedChange,
+  playbackWindow,
+  buffering = false,
+  patchEra,
+}: CompactReplayProps) {
   const [time, setTime] = useState(() => clampReplayTime(initialTimeSec, playback.gameLength) ?? 0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<ReplaySpeed>(8);

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 /**
@@ -68,16 +68,23 @@ interface Traffic {
   outbound: string[];
   pageErrors: string[];
   engineRequests: string[];
+  replayAssets: string[];
+  scripts: string[];
 }
 
 /** Record every API-origin request, every upload-sized or write request, and page errors. */
 function watchTraffic(page: Page, siteOrigin: string): Traffic {
-  const traffic: Traffic = { apiRequests: [], outbound: [], pageErrors: [], engineRequests: [] };
+  const traffic: Traffic = { apiRequests: [], outbound: [], pageErrors: [], engineRequests: [], replayAssets: [], scripts: [] };
   page.context().on("request", (request) => {
     const url = new URL(request.url());
     const label = `${request.method()} ${url.origin}${url.pathname}`;
     if (isApiOrigin(url)) traffic.apiRequests.push(label);
+    if (url.origin === siteOrigin && request.resourceType() === "script") traffic.scripts.push(url.pathname);
     if (url.origin === siteOrigin && /^\/(engine|pyodide)\//.test(url.pathname)) traffic.engineRequests.push(label);
+    // The report already renders small unit icons outside the player.
+    if (/\/(?:map-image|sprites(?!\/icons\/)|replay-attacks|audio\/replay)(?:\/|$)/.test(url.pathname) || request.resourceType() === "media") {
+      traffic.replayAssets.push(label);
+    }
     const bytes = request.postDataBuffer()?.length ?? 0;
     const allowedWrite = url.origin === siteOrigin && ALLOWED_SITE_WRITES.has(url.pathname);
     if (bytes > MAX_REQUEST_BODY_BYTES) traffic.outbound.push(`${label} (${bytes} B)`);
@@ -116,6 +123,47 @@ function expectNothingSent(traffic: Traffic): void {
   expect(traffic.apiRequests, "nothing may leave the browser before the visitor chooses to save").toEqual([]);
   expect(traffic.outbound, "no replay or payload may be sent anywhere").toEqual([]);
   expect(traffic.pageErrors).toEqual([]);
+}
+
+function compactPlayerChunks(): Set<string> {
+  const directory = path.resolve(__dirname, "../../.next/static/chunks");
+  // Use the compact host's test id to find the hashed files in this build.
+  return new Set(readdirSync(directory, { recursive: true, encoding: "utf8" })
+    .filter((file) => file.endsWith(".js") && readFileSync(path.join(directory, file), "utf8").includes("replay-compact-controls"))
+    .map((file) => `/_next/static/chunks/${file.split(path.sep).join("/")}`));
+}
+
+async function expectLocalReplay(page: Page, traffic: Traffic): Promise<void> {
+  const panel = page.getByRole("region", { name: "Local replay" });
+  const open = panel.getByRole("button", { name: "Watch this game" });
+  const map = panel.getByLabel(/Map playback of/);
+  await expect(open).toHaveAttribute("aria-expanded", "false");
+  await expect(map).toHaveCount(0);
+  const playerChunks = compactPlayerChunks();
+  expect(playerChunks.size, "the build must include the compact player").toBeGreaterThan(0);
+  expect(traffic.scripts.filter((script) => playerChunks.has(script)), "no player code before Watch").toEqual([]);
+  expect(traffic.replayAssets, "no terrain, sprite or audio asset before Watch").toEqual([]);
+  await open.click();
+  await expect(map).toBeVisible();
+  expect(traffic.scripts.some((script) => playerChunks.has(script)), "Watch loads the compact player").toBe(true);
+  const fits = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+  expect(fits, "open playback must fit the viewport").toBe(true);
+  const targets = await panel.getByTestId("map-replayer").locator("button, input[type=range]").evaluateAll((controls) =>
+    controls.map((control) => control.getBoundingClientRect()).filter(({ width, height }) => width > 0 && height > 0)
+      .every(({ width, height }) => width >= 44 && height >= 44),
+  );
+  expect(targets, "visible playback controls need 44 px touch targets").toBe(true);
+  await panel.getByRole("slider", { name: "Playback position" }).fill("300");
+  await expect(panel.getByTestId("map-replayer").locator("img")).toHaveCount(0);
+  const play = panel.getByRole("button", { name: /▶ Play/ });
+  await play.click();
+  const pause = panel.getByRole("button", { name: /Pause/ });
+  await expect(pause).toBeVisible();
+  await pause.press("Escape");
+  await expect(map).toHaveCount(0);
+  await expect(open).toBeFocused();
+  expect(traffic.replayAssets, "local playback uses only the replay payload and geometric marks").toEqual([]);
+  expectNothingSent(traffic);
 }
 
 test.describe("/try instant analysis", () => {
@@ -180,6 +228,7 @@ test.describe("/try instant analysis", () => {
     await expect(games.nth(1)).toHaveAttribute("aria-pressed", "true");
     await expect(gameMmr).toContainText("−32 by your next game");
     await expectSelectedGameDetail(page);
+    await expectLocalReplay(page, traffic);
 
     await page.getByRole("group", { name: "Matchup" }).getByRole("button", { name: "vs Terran" }).click();
     await expect(page.getByText("Showing 1 of 2 games")).toBeVisible();
@@ -202,6 +251,7 @@ test.describe("/try instant analysis", () => {
     await expect(page.getByTestId("report-opp-openers")).toContainText("Opponent openers");
     await expectSelectedGameDetail(page);
     await expect(page.getByTestId("report-game-mmr")).toContainText("favored by 208");
+    await expectLocalReplay(page, traffic);
     const overflow = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,

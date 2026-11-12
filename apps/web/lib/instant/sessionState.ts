@@ -64,7 +64,7 @@ export interface InstantSessionState {
   phase: InstantSessionPhase;
   /** Queued replays (after filtering, zip expansion, dedupe and `maxFiles`). */
   files: IntakeFile[];
-  /** Unique replays left out because the queue reached `maxFiles`. */
+  /** Replays left out by the queue cap or the latest run's parse cap. */
   truncatedCount: number;
   /** Every unique key ever accepted since the last reset (dedupe). */
   seenKeys: ReadonlySet<string>;
@@ -99,7 +99,7 @@ export type SessionAction =
   | { type: "choosing"; candidates: MeCandidate[]; meMode: MeDetectionMode }
   | { type: "scanned"; meMode: MeDetectionMode }
   | { type: "chosen"; toon: string }
-  | { type: "done"; parsedWithFiles: ParsedWithFile[] }
+  | { type: "done"; parsedWithFiles: ParsedWithFile[]; deferredCount?: number }
   | { type: "error"; kind: ErrorKind }
   | { type: "cancelled" }
   | { type: "reset" };
@@ -220,11 +220,16 @@ const NO_RUN_RESULTS = {
 
 /** Back to the queue after a cancel: run results are discarded. */
 function cancelled(state: InstantSessionState): InstantSessionState {
-  return { ...state, ...NO_RUN_RESULTS, phase: state.files.length > 0 ? "ready" : "idle", expanding: false };
+  return {
+    ...state, ...NO_RUN_RESULTS, phase: state.files.length > 0 ? "ready" : "idle", expanding: false,
+    truncatedCount: state.seenKeys.size - state.files.length,
+  };
 }
 
 function startStage(state: InstantSessionState, phase: "booting" | "scanning" | "parsing"): InstantSessionState {
-  if (phase === "booting") return { ...state, ...NO_RUN_RESULTS, phase };
+  if (phase === "booting") {
+    return { ...state, ...NO_RUN_RESULTS, phase, truncatedCount: state.seenKeys.size - state.files.length };
+  }
   return { ...state, phase, progress: null, error: null };
 }
 
@@ -259,7 +264,10 @@ function outcomeReducer(state: InstantSessionState, action: OutcomeAction): Inst
     case "chosen":
       return { ...state, chosenToon: action.toon, candidates: [] };
     case "done":
-      return { ...state, phase: "done", progress: null, parsedWithFiles: action.parsedWithFiles };
+      return {
+        ...state, phase: "done", progress: null, parsedWithFiles: action.parsedWithFiles,
+        truncatedCount: state.seenKeys.size - state.files.length + (action.deferredCount ?? 0),
+      };
     case "error":
       return { ...state, phase: "error", expanding: false, progress: null, error: action.kind };
   }

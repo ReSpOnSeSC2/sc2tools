@@ -47,6 +47,8 @@ export type InstantMacroBreakdown = Omit<
 >;
 
 export interface InstantPayload {
+  /** Read and validated only when the visitor opens local playback. */
+  mapPlayback?: unknown;
   gameId: string;
   date: string;
   result: string;
@@ -382,5 +384,6 @@ export function parseInstantPayload(json: string): InstantPayload | null {
     buildLog: strings(value.buildLog),
     oppBuildLog: strings(value.oppBuildLog),
     apmCurve: toApmCurve(value.apmCurve, durationSec),
+    ...(isRecord(value.mapPlayback) ? { mapPlayback: value.mapPlayback } : {}),
   };
 }

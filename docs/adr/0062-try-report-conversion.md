@@ -40,5 +40,17 @@ the committed source hash without requiring ignored build output. An always-run
 transport regression covers wheel/dependency-only bundle drift and explicit
 retry, alongside the runtime pointer guard that retires the previous sample.
 
+Anonymous analysis scans the selection with the existing browser header entry
+before spending deep parses. It filters team and A.I. games, resolves the
+selected player, and then deep-parses up to 25 replays by recorded end time,
+falling back to modification time when unavailable. Resume detection happens
+during the deep parse, so a resumed game can consume a slot and yield no
+report row. Account import keeps its existing queue policy.
+
+Game detail reads playback from the local payload only after **Watch this
+game**. The compact player draws geometric unit and building markers using
+recorded positions. It fetches no terrain, sprites, score or playback data,
+and opening or playing it does not upload the game.
+
 No data migration or engine/native version change is needed. Rollback removes
 the UI and optional static artifact; existing local reports remain readable.

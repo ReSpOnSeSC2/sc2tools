@@ -57,6 +57,8 @@ export interface ReplayIntakeProps {
   disabled?: boolean;
   /** Per-run cap, mentioned in the microcopy. */
   maxFiles?: number;
+  /** Deep-parse cap applied after scanning the entire selection. */
+  maxParsedFiles?: number;
   dateWindow: DateWindow;
   onDateWindowChange: (window: DateWindow) => void;
   /** Replays currently queued. */
@@ -75,7 +77,7 @@ export interface ReplayIntakeProps {
   className?: string;
 }
 
-function IntakeStatus({ fileCount, estimate, maxFiles }: Pick<ReplayIntakeProps, "fileCount" | "estimate" | "maxFiles">) {
+function IntakeStatus({ fileCount, estimate, maxFiles, maxParsedFiles }: Pick<ReplayIntakeProps, "fileCount" | "estimate" | "maxFiles" | "maxParsedFiles">) {
   const noun = fileCount === 1 ? "replay" : "replays";
   const timing = estimate ? ` · ${estimate.label} to analyze` : "";
   return (
@@ -84,6 +86,9 @@ function IntakeStatus({ fileCount, estimate, maxFiles }: Pick<ReplayIntakeProps,
         {fileCount === 0 ? "No replays selected yet." : `${fileCount} ${noun} ready${timing}`}
       </p>
       {maxFiles !== undefined ? <p>Up to {maxFiles} replays per run — we keep the most recent ones.</p> : null}
+      {maxParsedFiles !== undefined ? (
+        <p>We scan your selection and analyze up to {maxParsedFiles} 1v1 games, newest first. Games resumed from replays may be skipped during analysis, leaving fewer results.</p>
+      ) : null}
     </div>
   );
 }
@@ -197,6 +202,7 @@ export function ReplayIntake({
   onPickFolder,
   disabled = false,
   maxFiles,
+  maxParsedFiles,
   dateWindow,
   onDateWindowChange,
   fileCount,
@@ -242,7 +248,7 @@ export function ReplayIntake({
       {allowFolderInput ? (
         <input ref={inputs.attachFolderInput} type="file" multiple onChange={inputs.onPicked("folder")} disabled={disabled} tabIndex={-1} aria-label="Replay folder" className="sr-only" />
       ) : null}
-      <IntakeStatus fileCount={fileCount} estimate={estimate} maxFiles={maxFiles} />
+      <IntakeStatus fileCount={fileCount} estimate={estimate} maxFiles={maxFiles} maxParsedFiles={maxParsedFiles} />
       <details className="rounded-lg border-2 border-line bg-bg-surface px-3">
         <summary className="flex min-h-[44px] cursor-pointer items-center text-caption font-semibold text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           Where are my replays?
