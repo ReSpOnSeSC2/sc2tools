@@ -82,7 +82,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Reachability checks must work even when authentication or app APIs fail.
   if (isPublicStatusRoute(pathname)) return <>{children}</>;
 
-  if (isTokenSurface || pathname === "/wrapped" || isReportCardPath(pathname)) {
+  if (isTokenSurface || pathname === "/wrapped" || pathname === "/career" || isReportCardPath(pathname)) {
     return (
       <ToastProvider>
         <main id="main-content" className={MAIN_CLASS}>

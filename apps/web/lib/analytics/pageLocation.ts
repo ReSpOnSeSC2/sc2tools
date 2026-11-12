@@ -33,7 +33,7 @@ const UNTRACKED_PATHS: ReadonlyArray<RegExp> = [
   /^\/admin(?:\/|$)/,
   /^\/overlay(?:\/|$)/,
   /^\/dock(?:\/|$)/,
-  /^\/wrapped(?:\/|$)/,
+  /^\/(?:wrapped|career)(?:\/|$)/,
   ROOM_ROUTE,
   /^\/(?:p|players)\/[^/]+\/replays(?:\/|$)/,
 ];

@@ -28,6 +28,8 @@ export default function YearRecapPage() {
         <p>The recap checks up to 50,000 replay files. It reads files last modified in 2026 and counts one-versus-one ladder games dated in 2026 (UTC). Games resumed from a replay can be included.</p>
         <Link className="inline-flex min-h-11 items-center rounded-md font-semibold text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           href="/help/year-in-review" prefetch={false}>How the recap works</Link>
+        <Link className="inline-flex min-h-11 items-center rounded-md font-semibold text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          href="/career" prefetch={false}>View your replay record across years</Link>
       </aside>
     </div>
   );

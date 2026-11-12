@@ -23,6 +23,7 @@ describe("sitemap", () => {
     vi.stubEnv("NEXT_PUBLIC_INSTANT_IMPORT", "all");
     expect(await paths()).toContain("/try");
     expect(await paths()).toContain("/wrapped");
+    expect(await paths()).toContain("/career");
   });
 
   it.each(["admins", "off", ""])("leaves /try out when the flag is %j", async (value) => {
@@ -30,6 +31,7 @@ describe("sitemap", () => {
     const listed = await paths();
     expect(listed).not.toContain("/try");
     expect(listed).not.toContain("/wrapped");
+    expect(listed).not.toContain("/career");
     expect(listed).toContain("/");
     expect(listed).toContain("/arcade");
     expect(listed).toContain("/match");

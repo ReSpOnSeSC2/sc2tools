@@ -1,0 +1,25 @@
+.banner {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 99999;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(11, 13, 18, 0.92);
+  color: #e6e8ee;
+  border: 1px solid rgba(62, 192, 199, 0.45);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55), 0 0 24px rgba(62, 192, 199, 0.18);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: 2.4s ease-in-out infinite;
+}
+
+.label {
+  letter-spacing: 0.2px;
+}

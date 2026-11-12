@@ -114,6 +114,7 @@ describe("isolated broadcast and local recap routes", () => {
     "/dock",
     "/dock/public-token",
     "/wrapped",
+    "/career",
     "/card/report/summary",
     "/card/r%65port/%73ummary",
   ])("renders %s without Clerk or normal site chrome", (pathname) => {
@@ -356,7 +357,7 @@ describe("analytics page state", () => {
     expect(route.syncAnalyticsPage.mock.calls).toEqual([[pathname, "?tab=games"]]);
   });
 
-  it.each(["/admin/users", "/wrapped"])("follows a client-side move onto %s", (pathname) => {
+  it.each(["/admin/users", "/wrapped", "/career"])("follows a client-side move onto %s", (pathname) => {
     const view = renderAt("/app");
     route.pathname = pathname;
     view.rerender(

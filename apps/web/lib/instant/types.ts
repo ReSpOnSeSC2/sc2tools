@@ -63,6 +63,8 @@ export interface IntakeFile {
   blob: Blob;
 }
 
+export type ReplaySource = (signal: AbortSignal) => Promise<IntakeFile[] | null>;
+
 /** A human, non-observer player as read by `list_replay_players`. */
 export interface ReplayPlayer {
   name: string;

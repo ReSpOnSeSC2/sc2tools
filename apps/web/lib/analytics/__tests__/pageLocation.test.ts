@@ -18,6 +18,7 @@ describe("isUntrackedPath", () => {
     "/overlay/tok123/scene/between-games",
     "/dock/tok123",
     "/wrapped",
+    "/career",
     "/match/room",
     "/match/%72oom",
     "/players/reaver-7a6b/replays",
