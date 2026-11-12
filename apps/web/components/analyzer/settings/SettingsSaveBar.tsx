@@ -11,17 +11,24 @@ export function joinLabels(labels: readonly string[]): string {
 }
 
 type Outcome = { saved: string[]; failedKeys: string[] };
+type SaveBarCopy = { message: string; saveLabel: string; blocked: boolean; retryKeys?: readonly string[] };
 
 /** The bar's copy for the current dirty sources and the last save attempt. */
-export function saveBarCopy(dirty: readonly SaveSourceMeta[], outcome: Outcome | null): { message: string; saveLabel: string; blocked: boolean } {
-  const blocker = dirty.find((source) => source.blocked);
-  if (blocker && dirty.every((source) => source.blocked)) {
-    return { message: blocker.blocked ?? "", saveLabel: outcome ? "Retry" : dirty.length === 1 ? `Save ${blocker.label}` : "Save all", blocked: true };
-  }
+export function saveBarCopy(dirty: readonly SaveSourceMeta[], outcome: Outcome | null): SaveBarCopy {
   const failed = outcome ? dirty.filter((source) => outcome.failedKeys.includes(source.key)) : [];
+  const pending = failed.length ? failed : dirty;
+  const blocker = pending.find((source) => source.blocked);
+  if (blocker && pending.every((source) => source.blocked)) {
+    return { message: blocker.blocked ?? "", saveLabel: failed.length ? "Retry" : dirty.length === 1 ? `Save ${blocker.label}` : "Save all", blocked: true };
+  }
   if (outcome && failed.length) {
     const saved = outcome.saved.length ? `Saved ${joinLabels(outcome.saved)}. ` : "";
-    return { message: `${saved}Couldn't save ${joinLabels(failed.map((source) => source.label))}.`, saveLabel: "Retry", blocked: false };
+    return {
+      message: `${saved}Couldn't save ${joinLabels(failed.map((source) => source.label))}.`,
+      saveLabel: "Retry",
+      blocked: false,
+      retryKeys: failed.map((source) => source.key),
+    };
   }
   return {
     message: `Unsaved changes to ${joinLabels(dirty.map((source) => source.label))}`,
@@ -52,8 +59,9 @@ export function SettingsSaveBar({ tabId }: { tabId: string }) {
   const latest = useRef({ registry, dirty });
   latest.current = { registry, dirty };
 
-  const saveAll = useCallback(async () => {
-    const { registry: current, dirty: pending } = latest.current;
+  const saveAll = useCallback(async (retryKeys?: readonly string[]) => {
+    const { registry: current, dirty: candidates } = latest.current;
+    const pending = retryKeys ? candidates.filter((source) => retryKeys.includes(source.key)) : candidates;
     if (!current || running.current || !pending.length || pending.every((source) => source.blocked)) return;
     running.current = true;
     setSaving(true);
@@ -111,7 +119,7 @@ export function SettingsSaveBar({ tabId }: { tabId: string }) {
       saveDisabled={copy.blocked}
       stackOnMobile
       buttonClassName="min-h-11"
-      onSave={() => void saveAll()}
+      onSave={() => void saveAll(copy.retryKeys)}
       onReset={discard}
       saveLabel={copy.saveLabel}
       message={message}
