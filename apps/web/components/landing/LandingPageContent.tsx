@@ -36,9 +36,16 @@ import { PRODUCT_FACTS } from "@/lib/productFacts";
 import { CompanionShowcase } from "@/components/landing/CompanionShowcase";
 import { LiveFromTheLadder } from "@/components/landing/LiveFromTheLadder";
 import { LinkButton } from "@/components/ui/Button";
+import { buttonClassName } from "@/components/ui/buttonStyles";
 
 // A long landing label may grow past one line on a phone.
 const WRAPPING_CTA = "h-auto min-h-12 py-2 text-center";
+const HOME_TOOL_LINKS = [
+  { href: "/arcade", label: "SC2 Daily" },
+  { href: "/match", label: "Match Rooms" },
+  { href: "/wrapped", label: "Wrapped" },
+  { href: "/changelog", label: "Release notes" },
+] as const;
 
 export function LandingPageContent({ donationCoverage }: { donationCoverage?: ReactNode } = {}) {
   return (
@@ -89,6 +96,7 @@ function LandingHero() {
             practice, and powers a complete stream production suite.
           </p>
           <HeroCtas />
+          <LandingToolLinks />
           <LandingTrustStrip />
           <Link
             href="#stream-sessions"
@@ -103,6 +111,27 @@ function LandingHero() {
         </div>
       </div>
     </section>
+  );
+}
+
+function LandingToolLinks() {
+  const browserPublic = getInstantImportMode() === "all";
+  const links = HOME_TOOL_LINKS.filter(({ href }) => href !== "/wrapped" || browserPublic);
+
+  return (
+    <nav aria-label="More SC2 Tools" className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-line bg-bg-surface p-1">
+      {links.map(({ href, label }) => (
+        <Link
+          key={href}
+          href={href}
+          prefetch={false}
+          className={buttonClassName({ variant: "ghost", size: "sm", className: "min-h-11" })}
+        >
+          {label}
+          <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        </Link>
+      ))}
+    </nav>
   );
 }
 
