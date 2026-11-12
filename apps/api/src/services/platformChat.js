@@ -158,6 +158,8 @@ class PlatformChatService {
         const reply = await compose(grant.platformUserName || grant.platformUserId);
         if (!reply.text) return { status: reply.status };
         const text = validateChatText(platform, reply.text);
+        // Composition can await saved preferences or a guide lookup.
+        if (platform === "twitch") await this._assertTwitchUnshared(grant, destinations[0]);
         await grant.assertCurrent();
         attempted = true;
         await this._sendOne(platform, grant, destinations[0], text, messageId);

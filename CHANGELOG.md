@@ -4833,7 +4833,7 @@ release preparation, not a signed or published 0.24.9 installer.
 
 ### Live chat command replies
 
-- Send a saved command reply as yourself from Chat command settings. Open live replies, then choose **Answer as me** on a Twitch, Kick or YouTube command. The reply uses the connected chat-send grant and stays in that chat.
+- Send a saved command reply as yourself from Chat command settings. Open live replies, then choose **Answer as me** on a Twitch, Kick or YouTube command. The reply uses your connected chat-send grant and targets the source chat.
 
 ## [agent-v0.5.13] - 2026-05-09
 

@@ -83,9 +83,11 @@ function fixture(options = {}) {
   const app = express();
   app.use(express.json());
   app.use(buildChatCommandsOwnerRouter({ commands, replies, auth: (req, res, next) => {
-    const userId = req.get("authorization")?.replace(/^Bearer /, "");
+    const bearer = req.get("authorization")?.replace(/^Bearer /, "");
+    const source = bearer === "device-owner-a" ? "device" : "clerk";
+    const userId = source === "device" ? "owner-a" : bearer;
     if (!["owner-a", "owner-b"].includes(userId)) { res.sendStatus(401); return; }
-    req.auth = { userId };
+    req.auth = { userId, source };
     next();
   } }));
   return { commands, replies, app, writes, provider, integrations, preferences, overlayTokens, chatbot, tick: () => { now += 30_000; } };
@@ -129,6 +131,17 @@ test("only Clerk owners can act; OBS token, wrong owner, unknown source platform
   await post(f, { ...EVENT, id: "local-fallback-id" }).expect(400);
   await post(f, { ...EVENT, platform: "youtube", source: "video000001", id: "video000002:message" }).expect(400);
   expect(f.integrations.withChatGrant).not.toHaveBeenCalled();
+});
+
+test("a paired device for the same owner cannot send or use the browser reply limit", async () => {
+  const f = fixture();
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const response = await post(f, EVENT, "device-owner-a").expect(403);
+    expect(response.body.error.code).toBe("clerk_session_required");
+  }
+  expect(f.integrations.withChatGrant).not.toHaveBeenCalled();
+  expect((await post(f)).body.status).toBe("sent");
+  expect(f.writes).toHaveLength(1);
 });
 
 test.each([
@@ -180,6 +193,31 @@ test("a Shared Chat refusal leaves the reply and its link available after the se
   options.sharedChat = false;
   expect((await post(f)).body.status).toBe("sent");
   expect(f.writes[0].message).toContain(GUIDE);
+});
+
+test("Shared Chat starting during composition stops the provider write", async () => {
+  const options = { build: async () => {
+    options.sharedChat = true;
+    return { text: "Recorded reply", link: GUIDE };
+  } };
+  const f = fixture(options);
+  expect((await post(f)).body).toMatchObject({ status: "failed", message: expect.stringContaining("Shared Chat") });
+  expect(f.chatbot.buildReply).toHaveBeenCalledTimes(1);
+  expect(f.provider).toHaveBeenCalledTimes(2);
+  expect(f.writes).toEqual([]);
+});
+
+test("revocation during the final Twitch lookup stops the provider write", async () => {
+  const options = {};
+  const f = fixture(options);
+  const transport = f.provider.getMockImplementation();
+  f.provider.mockImplementationOnce(transport).mockImplementationOnce(async (...args) => {
+    options.revoked = true;
+    return transport(...args);
+  });
+  expect((await post(f)).body).toMatchObject({ status: "failed", message: expect.stringContaining("Connect Twitch") });
+  expect(f.provider).toHaveBeenCalledTimes(2);
+  expect(f.writes).toEqual([]);
 });
 
 test("Twitch bot replies and the connected owner's own message do not produce a duplicate or echo", async () => {

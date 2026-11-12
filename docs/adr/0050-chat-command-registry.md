@@ -67,20 +67,23 @@ owner preview uses the same saved settings and bypasses the cooldown.
 
 ## Answer as me
 
-An authenticated owner opens live replies in Chat command settings and chooses
+A browser-authenticated owner opens live replies in Chat command settings and chooses
 one live viewer command. Twitch and Kick chat arrive through browser readers.
 The YouTube relay also takes browser-supplied continuation values. Those paths
 keep their existing on-stream behavior and cannot initiate an OAuth chat write.
-The live reply action stays in owner Settings because the OBS Dock has only
-the overlay credential.
+The live reply action requires a Clerk session in owner Settings. An OBS
+credential or a paired desktop Agent cannot authorize the action.
 
 The owner endpoint resolves the token and composes the saved command inside
 the existing token write fence and platform chat grant. It checks the saved
 source and connected account again before sending. Twitch and Kick use the
 provider's reply-to-message ID and the room carried by the transport. A Twitch
-Shared Chat preflight checks that the user grant can send without mirroring
-the reply to additional rooms. Kick verifies the saved room ID through the
-existing public channel resolver and requires a successful match. YouTube
+Shared Chat check before composition avoids spending a command cooldown on an
+active session. A second check after composition and a final grant check run
+before sending. Twitch provides no atomic check-and-send for this user grant,
+so a session can still start between the final check and the send. Kick
+verifies the saved room ID through the existing public channel resolver and
+requires a successful match. YouTube
 resolves one exact owned live video, including when multiple broadcasts are
 live. Linked replies reserve the complete URL within the platform limit. The shared chat cooldown
 and a bounded source-message receipt cover duplicate clicks and uncertain

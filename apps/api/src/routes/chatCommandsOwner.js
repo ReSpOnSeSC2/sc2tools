@@ -20,7 +20,13 @@ function buildChatCommandsOwnerRouter(deps) {
   router.post("/me/chat-commands/reply", (_req, res, next) => {
     res.set("Cache-Control", "private, no-store");
     next();
-  }, deps.auth, replyLimiter, async (req, res, next) => {
+  }, deps.auth, (req, res, next) => {
+    if (req.auth?.source !== "clerk") {
+      res.status(403).json({ error: { code: "clerk_session_required" } });
+      return;
+    }
+    next();
+  }, replyLimiter, async (req, res, next) => {
     try {
       if (!req.auth) { res.status(401).json({ error: { code: "auth_required" } }); return; }
       if (!deps.replies) { res.status(503).json({ error: { code: "chat_commands_unavailable" } }); return; }
