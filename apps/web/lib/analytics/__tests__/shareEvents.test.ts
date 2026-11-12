@@ -31,8 +31,8 @@ describe("trackCardShared", () => {
     trackCardShared({ card: "season_recap", method: "download" });
     trackCardShared({ card: "battle_card", method: "web_share" });
     expect(gtag.mock.calls).toEqual([
-      ["event", "card_shared", { content_type: "season_recap", method: "download", page_location: ARCADE }],
-      ["event", "card_shared", { content_type: "battle_card", method: "web_share", page_location: ARCADE }],
+      ["event", "card_shared", { content_type: "season_recap", method: "download", page_location: ARCADE, page_title: "SC2 Tools" }],
+      ["event", "card_shared", { content_type: "battle_card", method: "web_share", page_location: ARCADE, page_title: "SC2 Tools" }],
     ]);
   });
 
@@ -47,6 +47,7 @@ describe("trackCardShared", () => {
           method: "clipboard_image",
           content_id: "rivalry-ranker",
           page_location: ARCADE,
+          page_title: "SC2 Tools",
         },
       ],
     ]);
@@ -60,7 +61,7 @@ describe("trackCardShared", () => {
         [
           "event",
           "card_shared",
-          { content_type: "arcade_round", method: "clipboard_text", page_location: ARCADE },
+          { content_type: "arcade_round", method: "clipboard_text", page_location: ARCADE, page_title: "SC2 Tools" },
         ],
       ]);
     },
@@ -91,8 +92,8 @@ describe("trackCardShared", () => {
     trackCardShared({ card: "session_report", method: "download" });
 
     expect(gtag.mock.calls).toEqual([
-      ["event", "card_shared", { content_type: "fingerprint", method: "clipboard_image", page_location: `${window.location.origin}/app/analyzer` }],
-      ["event", "card_shared", { content_type: "session_report", method: "download", page_location: `${window.location.origin}/app/sessions/:sessionId` }],
+      ["event", "card_shared", { content_type: "fingerprint", method: "clipboard_image", page_location: `${window.location.origin}/app/analyzer`, page_title: "SC2 Tools" }],
+      ["event", "card_shared", { content_type: "session_report", method: "download", page_location: `${window.location.origin}/app/sessions/:sessionId`, page_title: "/app/sessions/:sessionId" }],
     ]);
   });
 
@@ -108,7 +109,7 @@ describe("trackCardShared", () => {
     visit("/b/creator-opening?grade=S");
     trackCardShared({ card: "practice_grade", method: "download" });
     expect(gtag.mock.calls).toEqual([
-      ["event", "card_shared", { content_type: "practice_grade", method: "download", page_location: `${window.location.origin}/b/:alias` }],
+      ["event", "card_shared", { content_type: "practice_grade", method: "download", page_location: `${window.location.origin}/b/:alias`, page_title: "/b/:alias" }],
     ]);
   });
 });

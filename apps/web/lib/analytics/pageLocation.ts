@@ -26,6 +26,7 @@
 
 import { PRACTICE_LINK_PATTERN, PRACTICE_LINK_ROUTE } from "../practice/practiceLinkPath";
 import { ROOM_ROUTE } from "../matchRoomRoute";
+import { SITE_NAME } from "../siteTitle";
 
 /** Paths that are never sent to Google Analytics. */
 const UNTRACKED_PATHS: ReadonlyArray<RegExp> = [
@@ -50,6 +51,10 @@ const DYNAMIC_ROUTES: ReadonlyArray<readonly [RegExp, string]> = [
   // A share link's token is the page's credential.
   [/^\/g\/[^/]+/, "/g/:token"],
 ];
+
+function dynamicRoute(pathname: string): (typeof DYNAMIC_ROUTES)[number] | undefined {
+  return DYNAMIC_ROUTES.find(([pattern]) => pattern.test(pathname));
+}
 
 /** Query parameters GA4 needs for traffic attribution, plus the PWA launch marker. */
 const ATTRIBUTION_PARAMS: ReadonlySet<string> = new Set([
@@ -85,10 +90,16 @@ export function isUntrackedPath(pathname: string | null | undefined): boolean {
  * Example: `normalizePagePath("/app/opponents/1-S2-1-123")` → "/app/opponents/:pulseId".
  */
 export function normalizePagePath(pathname: string): string {
-  for (const [pattern, replacement] of DYNAMIC_ROUTES) {
-    if (pattern.test(pathname)) return pathname.replace(pattern, replacement);
-  }
-  return pathname;
+  const route = dynamicRoute(pathname);
+  return route ? pathname.replace(...route) : pathname;
+}
+
+/**
+ * A literal route template or the site name. A missing override sticks in
+ * gtag, and clearing it can expose the browser title during a navigation.
+ */
+export function analyticsPageTitle(pathname: string): string {
+  return dynamicRoute(pathname)?.[1] ?? SITE_NAME;
 }
 
 /**

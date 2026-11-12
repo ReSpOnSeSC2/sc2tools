@@ -66,6 +66,7 @@ describe("GoogleAnalytics", () => {
     delete window[`ga-disable-${GA_MEASUREMENT_ID}`];
     window.localStorage.clear();
     delete (document as { referrer?: string }).referrer;
+    document.title = "";
     window.history.pushState({}, "", "/");
     route.pathname = "/";
     route.search = "";
@@ -81,6 +82,7 @@ describe("GoogleAnalytics", () => {
   });
 
   it("states the normalized page before config reads the browser's address", () => {
+    document.title = "SecretFoe's replay";
     open(
       `/app/game/${GAME_ID}`,
       "?tab=macro&opponentName=SecretFoe&utm_source=discord",
@@ -90,6 +92,7 @@ describe("GoogleAnalytics", () => {
     const script = initScript();
     const state = `gtag('set', ${JSON.stringify({
       page_location: `${ORIGIN}/app/game/:gameId?utm_source=discord`,
+      page_title: "/app/game/:gameId",
       page_referrer: `${ORIGIN}/app/opponents/:pulseId`,
     })});`;
     expect(script).toContain(state);
@@ -110,7 +113,7 @@ describe("GoogleAnalytics", () => {
 
     const script = initScript();
     expect(script).toContain(
-      `gtag('set', ${JSON.stringify({ page_location: `${ORIGIN}/guides?utm_source=discord` })});`,
+      `gtag('set', ${JSON.stringify({ page_location: `${ORIGIN}/guides?utm_source=discord`, page_title: "SC2 Tools" })});`,
     );
     for (const left of ["players", "reaver", "01JREPLAY", "timeline"]) {
       expect(script).not.toContain(left);
@@ -122,9 +125,17 @@ describe("GoogleAnalytics", () => {
 
     const location = `${ORIGIN}/app/opponents/:pulseId`;
     expect(gtag.mock.calls).toEqual([
-      ["set", { page_location: location }],
+      ["set", { page_location: location, page_title: "/app/opponents/:pulseId" }],
       ["event", "page_view", { page_location: location }],
     ]);
+  });
+
+  it("uses the site label on a public player page with a named browser title", () => {
+    document.title = "Example Player · StarCraft II player";
+    open("/players/synthetic-profile", "");
+
+    expect(initScript()).toContain('"page_title":"SC2 Tools"');
+    expect(initScript()).not.toContain("Example Player");
   });
 
   it("writes the page as data that cannot close the script element", () => {

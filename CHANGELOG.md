@@ -4792,6 +4792,11 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Create a StarCraft II best-of room, share player and watch links, run a timed map veto and copy the series score.
 
+### Analytics page titles
+
+- Google Analytics uses fixed page labels so browser titles with player names,
+  build names or record identifiers stay on the site.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

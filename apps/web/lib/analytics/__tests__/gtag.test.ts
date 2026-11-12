@@ -55,6 +55,7 @@ describe("gtag wrappers", () => {
     delete window[`ga-disable-${GA_MEASUREMENT_ID}`];
     window.localStorage.clear();
     delete (document as { referrer?: string }).referrer;
+    document.title = "";
     visit("/");
   });
 
@@ -71,14 +72,14 @@ describe("gtag wrappers", () => {
     pageview("/app/opponents/1-S2-1-20646762", "?tab=timeline&utm_source=discord");
     const location = `${ORIGIN}/app/opponents/:pulseId?utm_source=discord`;
     expect(gtag.mock.calls).toEqual([
-      ["set", { page_location: location }],
+      ["set", { page_location: location, page_title: "/app/opponents/:pulseId" }],
       ["event", "page_view", { page_location: location }],
     ]);
   });
 
   it("stops every wrapper immediately when consent is revoked mid-visit", () => {
     gaEvent("before_opt_out");
-    expect(gtag).toHaveBeenCalledWith("event", "before_opt_out", { page_location: HOME });
+    expect(gtag).toHaveBeenCalledWith("event", "before_opt_out", { page_location: HOME, page_title: "SC2 Tools" });
     setConsent("denied");
     gtag.mockClear();
     expect(isGtagReady()).toBe(false);
@@ -92,7 +93,7 @@ describe("gtag wrappers", () => {
     setConsent("granted");
     gtag.mockClear();
     gaEvent("after_opt_in");
-    expect(gtag).toHaveBeenCalledWith("event", "after_opt_in", { page_location: HOME });
+    expect(gtag).toHaveBeenCalledWith("event", "after_opt_in", { page_location: HOME, page_title: "SC2 Tools" });
   });
 
   it("does not use a still-loaded gtag after the saved choice is cleared", () => {
@@ -116,12 +117,12 @@ describe("gtag wrappers", () => {
     pageview("/");
     gaEvent("overlay_url_copied", { widget: "scouting" });
     expect(gtag.mock.calls[1]).toEqual(["event", "page_view", { page_location: HOME, traffic_type: "internal" }]);
-    expect(gtag.mock.calls[2][2]).toEqual({ widget: "scouting", page_location: HOME, traffic_type: "internal" });
+    expect(gtag.mock.calls[2][2]).toEqual({ widget: "scouting", page_location: HOME, page_title: "SC2 Tools", traffic_type: "internal" });
   });
 
   it("leaves visitors' events untagged", () => {
     gaEvent("agent_download", { platform: "windows" });
-    expect(gtag.mock.calls[0][2]).toEqual({ platform: "windows", page_location: HOME });
+    expect(gtag.mock.calls[0][2]).toEqual({ platform: "windows", page_location: HOME, page_title: "SC2 Tools" });
   });
 
   it("can tag the rest of a running session as internal", () => {
@@ -141,17 +142,19 @@ describe("gtag wrappers", () => {
         [
           "event",
           "review_requested",
-          { level: "gold", page_location: `${ORIGIN}/app/opponents/:pulseId?utm_source=discord` },
+          { level: "gold", page_location: `${ORIGIN}/app/opponents/:pulseId?utm_source=discord`, page_title: "/app/opponents/:pulseId" },
         ],
       ]);
     });
 
-    it("does not let a caller state a different page", () => {
+    it("does not let a caller set a raw address or title while navigation settles", () => {
+      document.title = "Private build name";
       visit("/app/game/abc");
-      gaEvent("card_shared", { page_location: `${ORIGIN}/app/game/abc`, method: "download" });
+      gaEvent("card_shared", { page_location: `${ORIGIN}/app/game/abc`, page_title: document.title, method: "download" });
       expect(gtag.mock.calls[0][2]).toEqual({
         method: "download",
         page_location: `${ORIGIN}/app/game/:gameId`,
+        page_title: "/app/game/:gameId",
       });
     });
 
@@ -163,6 +166,7 @@ describe("gtag wrappers", () => {
           "set",
           {
             page_location: `${ORIGIN}/app/game/:gameId`,
+            page_title: "/app/game/:gameId",
             page_referrer: `${ORIGIN}/app/opponents/:pulseId`,
           },
         ],
@@ -170,10 +174,16 @@ describe("gtag wrappers", () => {
       ]);
     });
 
-    it("syncs the page state on a navigation that sends no page view", () => {
+    it("resets the page title on a navigation without a page view while old metadata remains", () => {
+      visit("/builds/test-build");
+      document.title = "Private build name";
+      syncAnalyticsPage("/builds/test-build");
       visit("/status");
       syncAnalyticsPage("/status");
-      expect(gtag.mock.calls).toEqual([["set", { page_location: `${ORIGIN}/status` }]]);
+      expect(gtag.mock.calls).toEqual([
+        ["set", { page_location: `${ORIGIN}/builds/:slug`, page_title: "/builds/:slug" }],
+        ["set", { page_location: `${ORIGIN}/status`, page_title: "SC2 Tools" }],
+      ]);
     });
 
     it("describes the browser's own address by default", () => {
@@ -181,6 +191,7 @@ describe("gtag wrappers", () => {
       visit("/builds/my-secret-build?tab=notes&source=pwa");
       expect(analyticsPageState()).toEqual({
         page_location: `${ORIGIN}/builds/:slug?source=pwa`,
+        page_title: "/builds/:slug",
         page_referrer: "https://www.reddit.com/",
       });
     });
@@ -213,7 +224,7 @@ describe("gtag wrappers", () => {
       visit("/guides");
       syncAnalyticsPage("/guides");
       expect(optedOut()).toBe(false);
-      expect(gtag.mock.calls).toEqual([["set", { page_location: `${ORIGIN}/guides` }]]);
+      expect(gtag.mock.calls).toEqual([["set", { page_location: `${ORIGIN}/guides`, page_title: "SC2 Tools" }]]);
     });
 
     it("are cut down to the site root when they are the referrer", () => {
@@ -221,7 +232,7 @@ describe("gtag wrappers", () => {
       pageview("/guides");
       expect(gtag.mock.calls[0]).toEqual([
         "set",
-        { page_location: `${ORIGIN}/guides`, page_referrer: HOME },
+        { page_location: `${ORIGIN}/guides`, page_title: "SC2 Tools", page_referrer: HOME },
       ]);
     });
   });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   analyticsPageLocation,
+  analyticsPageTitle,
   analyticsReferrer,
   analyticsSearch,
   isUntrackedPath,
@@ -36,6 +37,31 @@ describe("isUntrackedPath", () => {
   it("treats a missing pathname as trackable (nothing to hide)", () => {
     expect(isUntrackedPath(null)).toBe(false);
   });
+});
+
+describe("analyticsPageTitle", () => {
+  it.each([
+    ["/app/game/test-id", "/app/game/:gameId"],
+    ["/app/sessions/test-id", "/app/sessions/:sessionId"],
+    ["/app/opponents/test-id", "/app/opponents/:pulseId"],
+    ["/builds/test-id", "/builds/:slug"],
+    ["/community/opponents/test-id", "/community/opponents/:pulseId"],
+    ["/community/authors/test-id", "/community/authors/:userId"],
+    ["/card/report/summary", "/card/:type/:class"],
+    ["/b/curated-opening", "/b/:alias"],
+    ["/g/test-id", "/g/:token"],
+  ])("uses a fixed title for %s", (path, title) => {
+    expect(analyticsPageTitle(path)).toBe(title);
+  });
+
+  it("uses only the matched template even when the path has a suffix", () => {
+    expect(analyticsPageTitle("/builds/test-id/private-suffix")).toBe("/builds/:slug");
+  });
+
+  it.each(["/pricing", "/players/private-name", "/community/builds/private-name"])(
+    "uses the site name when %s has no route template",
+    (path) => expect(analyticsPageTitle(path)).toBe("SC2 Tools"),
+  );
 });
 
 describe("normalizePagePath", () => {

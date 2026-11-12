@@ -77,6 +77,7 @@ describe("SignUpTracker", () => {
     expect(gtag).toHaveBeenCalledWith("event", "sign_up", {
       method: "google",
       page_location: `${window.location.origin}/`,
+      page_title: "SC2 Tools",
     });
     cleanup();
     render(<SignUpTracker />);

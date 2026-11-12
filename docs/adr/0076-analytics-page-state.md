@@ -55,6 +55,15 @@ setting is left to the owner (see "Not decided here").
    listener for a choice made in another tab, every wrapper call and every
    navigation go through it. Measured: no hit while the flag is up, and nothing
    held back for later.
+6. **Titles come from the route policy.** The page state sets `page_title`
+   to the literal template for each per-record route and `SC2 Tools` elsewhere.
+   Custom events state the same title so a caller or a navigation in progress
+   cannot supply a browser title. The app keeps browser titles for display.
+   In the X5 offline Chromium probe, automatic events inherited the override.
+   Omitting the next page's title kept the previous one, `undefined` fell back
+   to the browser title, and `null` or an empty string sent a blank title.
+   The explicit site label resets the state before the next page's metadata
+   is available. See [X5](../handoff/growth/X5.md) for the measured results.
 
 ## Consequences
 
@@ -79,9 +88,3 @@ setting is left to the owner (see "Not decided here").
   Both stay on, and keep sending those two values, until someone switches them
   off in Google Analytics (Admin, Data streams, the web stream, Enhanced
   measurement). That is a provider setting and the owner's to change.
-- The page title is sent with every event, as before, and is not normalized
-  here. On the signed-in pages it holds no id and no other player's name: a game
-  page's title is result, matchup and map, and an opponent page's is fixed.
-  Three other titles do carry a record: a community opponent page's has its
-  Pulse id (`lib/communityOpponent.ts`), a public player page's has the
-  player's display name, and a build page's has the build name.
