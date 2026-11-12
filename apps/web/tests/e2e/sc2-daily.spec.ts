@@ -71,15 +71,22 @@ test("plays a signed-out practice set with accessible, responsive controls", asy
 
 test("retries a failed schedule and lets Escape finish a playing clip", async ({ page }) => {
   let loads = 0;
+  let loadingHelpTop: number | undefined;
+  const helpTop = () => page.getByRole("link", { name: "How SC2 Daily works" })
+    .evaluate(link => link.getBoundingClientRect().top + window.scrollY);
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.route("**/daily/v1/index.json", route => {
+  await page.route("**/daily/v1/index.json", async route => {
     loads += 1;
-    return loads === 1 ? route.fulfill({ status: 503, body: "" }) : route.continue();
+    if (loads === 1) return route.fulfill({ status: 503, body: "" });
+    await expect(page.getByRole("status", { name: "Loading the Daily" })).toBeVisible();
+    loadingHelpTop = await helpTop();
+    return route.continue();
   });
   await page.goto("/arcade");
   await expect(page.getByRole("region", { name: "Daily unavailable" })).toBeVisible();
   await page.getByRole("button", { name: "Try again" }).click();
   await ready(page);
+  expect(Math.abs((await helpTop()) - (loadingHelpTop ?? 0))).toBeLessThanOrEqual(2);
   await page.getByRole("button", { name: "Blue wins big" }).click();
   await expect(page.getByRole("button", { name: "Skip to result" })).toBeFocused();
   await expect(page.getByText("Resources lost:", { exact: false })).toHaveCount(0);

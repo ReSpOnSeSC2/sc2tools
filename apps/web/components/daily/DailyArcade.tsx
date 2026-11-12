@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { SkeletonBar } from "@/components/ui/Skeleton";
 import { useCopy } from "@/lib/useCopy";
 import { loadDaily, type LoadedDay } from "@/lib/daily/loadDaily";
 import { browserStorage, completeDay, readResults, streakOn, type DailyKind } from "@/lib/daily/progress";
 import { DAY_MS, FIGHTS_PER_DAY, shareDaily, utcDay } from "@/lib/daily/rules";
-import { CallTheFight } from "./CallTheFight";
+import { CallTheFight, FightSkeleton } from "./CallTheFight";
 
 type Load = { day: number; attempt: number; data?: LoadedDay };
 
@@ -31,16 +30,6 @@ function useUtcDay(): number | null {
   return day;
 }
 
-function DaySkeleton() {
-  return (
-    <div role="status" aria-label="Loading the Daily" className="space-y-3 rounded-xl border border-line bg-bg-surface p-4 sm:p-6">
-      <SkeletonBar className="h-5 w-36" />
-      <SkeletonBar className="aspect-[3/2] max-h-80 w-full rounded-lg" />
-      <SkeletonBar className="h-11 w-full" />
-    </div>
-  );
-}
-
 export function DailyArcade() {
   const day = useUtcDay();
   const [attempt, setAttempt] = useState(0);
@@ -56,7 +45,7 @@ export function DailyArcade() {
     return () => controller.abort();
   }, [attempt, day]);
 
-  if (!loaded || loaded.day !== day || loaded.attempt !== attempt) return <DaySkeleton />;
+  if (!loaded || loaded.day !== day || loaded.attempt !== attempt) return <FightSkeleton />;
   if (!loaded.data) return (
     <section className="space-y-3 rounded-xl border border-line bg-bg-surface p-4 sm:p-6" aria-label="Daily unavailable">
       <p role="status" className="text-body text-text">The set did not load. You can try again.</p>

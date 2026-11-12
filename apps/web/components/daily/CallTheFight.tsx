@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { SkeletonBar } from "@/components/ui/Skeleton";
 import { prefersReducedMotion } from "@/lib/a11y/useReducedMotion";
 import { isOpeningUnit, type DailyFight } from "@/lib/daily/clip";
 import { CALLS, FIGHTS_PER_DAY, gradeTrade, type FightCall } from "@/lib/daily/rules";
@@ -13,6 +14,45 @@ const ClipPlayer = dynamic(() => import("./ClipPlayer"), {
   ssr: false,
   loading: () => <div aria-hidden className="h-full w-full bg-bg-elevated" />,
 });
+
+const OPENING_QUESTION = "The fight starts in one second. Who loses fewer resources?";
+const CHOICES = "grid grid-cols-2 gap-2 sm:grid-cols-5";
+const WIDE_CHOICE = "col-span-2 sm:col-span-1";
+const FIELD = "aspect-[3/2] max-h-80 w-full border-y border-line";
+
+export function FightSkeleton() {
+  return (
+    <div role="status" aria-label="Loading the Daily" className="space-y-4">
+      <div className="flex h-5 items-center justify-between gap-6">
+        <SkeletonBar className="h-4 w-36" />
+        <SkeletonBar className="h-4 w-20" />
+      </div>
+      <div className="overflow-hidden rounded-xl border border-line bg-bg-surface">
+        <div className="flex items-center justify-between gap-6 px-4 py-4 sm:px-6">
+          <SkeletonBar className="h-6 w-32" />
+          <SkeletonBar className="h-4 w-20" />
+        </div>
+        <div className={FIELD}><SkeletonBar className="h-full w-full" /></div>
+        <div className="grid grid-cols-2 gap-3 border-b border-line px-4 py-3 sm:px-6">
+          {[0, 1].map(side => <div key={side} className="space-y-2">
+            <SkeletonBar className="h-4 w-20" />
+            <SkeletonBar className="h-4 w-16" />
+          </div>)}
+        </div>
+        <div className="min-h-36 space-y-3 p-4 sm:p-6">
+          <div className="relative">
+            <p aria-hidden className="invisible text-body">{OPENING_QUESTION}</p>
+            <SkeletonBar className="absolute inset-y-1 left-0 w-4/5" />
+          </div>
+          <div className={CHOICES}>
+            {CALLS.map((label, index) => <SkeletonBar key={label}
+              className={`h-11 rounded-full ${index === 2 ? WIDE_CHOICE : ""}`} />)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function armyText(fight: DailyFight, side: 0 | 1): string {
   const groups = new Map<string, number>();
@@ -74,18 +114,18 @@ export function CallTheFight({ fight, slot, terrain, onNext }: Props) {
         </h2>
         <p className="text-caption font-semibold tabular-nums text-text-muted">Fight {slot + 1} of {FIGHTS_PER_DAY}</p>
       </div>
-      <div className={"replay-scope aspect-[3/2] max-h-80 w-full border-y border-line bg-bg " + (terrain ? "" : field.practice)}>
+      <div className={`replay-scope ${FIELD} bg-bg ${terrain ? "" : field.practice}`}>
         <ClipPlayer fight={fight} phase={round.phase} terrain={terrain} onEnd={finish} />
       </div>
       <ArmyLine fight={fight} />
       <div className="min-h-36 space-y-3 p-4 sm:p-6">
         {round.phase === "frozen" && (
           <>
-            <p className="text-body text-text-muted">The fight starts in one second. Who loses fewer resources?</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" role="group" aria-label="Your call">
+            <p className="text-body text-text-muted">{OPENING_QUESTION}</p>
+            <div className={CHOICES} role="group" aria-label="Your call">
               {CALLS.map((label, index) => (
                 <Button key={label} variant="secondary" size="sm"
-                  className={"min-h-11 !px-2 text-center leading-tight " + (index === 2 ? "col-span-2 sm:col-span-1" : "")}
+                  className={`min-h-11 !px-2 text-center leading-tight ${index === 2 ? WIDE_CHOICE : ""}`}
                   onClick={() => setRound({ phase: prefersReducedMotion() ? "result" : "playing", call: index as FightCall })}>
                   <span>{label}</span>
                 </Button>
