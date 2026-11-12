@@ -5,6 +5,7 @@ import { reviewsRollout } from "@/lib/reviews";
 import { fetchGuideSitemap } from "@/lib/guides/api";
 import { guidesEnabled } from "@/lib/guides/flags";
 import { helpSitemapRows } from "@/lib/help/sitemap";
+import { practiceLinkPath, practiceLinks } from "@/lib/practice/practiceLinks";
 import type { CommunitySitemapPayload } from "@/lib/guides/types";
 import {
   communitySitemapRows,
@@ -154,5 +155,9 @@ async function playerRows(): Promise<SitemapRows> {
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [reviews, guides, community, players] = await Promise.all([reviewRows(), guideRows(), communityRows(), playerRows()]);
-  return finalizeSitemap([...staticRows(), ...helpSitemapRows(SITE_URL), ...reviews, ...guides, ...community, ...players]);
+  const practice: SitemapRows = practiceLinks.flatMap(link => {
+    const build = community.find(row => row.url === `${SITE_URL}/community/builds/${link.communitySlug}`);
+    return build ? [{ ...build, url: `${SITE_URL}${practiceLinkPath(link)}` }] : [];
+  });
+  return finalizeSitemap([...staticRows(), ...helpSitemapRows(SITE_URL), ...reviews, ...guides, ...community, ...practice, ...players]);
 }

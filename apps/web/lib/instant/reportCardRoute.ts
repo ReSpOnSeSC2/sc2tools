@@ -25,15 +25,11 @@ export const REPORT_CARD_PATH = reportCardPath("summary");
 export const REPORT_COMPARE_PATH = reportCardPath("compare");
 
 export function canonicalReportCardPath(pathname: string | null | undefined): string | null {
-  if (pathname === REPORT_CARD_PATH || pathname === REPORT_COMPARE_PATH) return pathname;
-  if (!pathname?.startsWith(CARD_PREFIX) || !pathname.includes("%")) return null;
-  const segments = pathname.slice(CARD_PREFIX.length).split("/");
-  if (segments.length !== 2) return null;
+  // Next decodes the dynamic segments once. Escapes must preserve their boundaries.
+  if (!pathname?.startsWith(CARD_PREFIX) || /%2f/i.test(pathname)) return null;
   try {
-    // Next decodes the dynamic segments once. Keep the privacy guards on
-    // those aliases without letting escapes change the segment boundaries.
-    const cardClass = reportCardClass(decodeURIComponent(segments[0]), decodeURIComponent(segments[1]));
-    return cardClass ? reportCardPath(cardClass) : null;
+    const decoded = decodeURIComponent(pathname);
+    return decoded === REPORT_CARD_PATH || decoded === REPORT_COMPARE_PATH ? decoded : null;
   } catch {
     return null;
   }

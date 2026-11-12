@@ -16,6 +16,7 @@
     "/try": 240,
     "/wrapped": 215,
     "/card/[type]/[class]": 215,
+    "/b/[alias]": 215,
     "/welcome": 245,
     "/guides/[matchup]/[build]": 175,
     "/stream-studio": 130,

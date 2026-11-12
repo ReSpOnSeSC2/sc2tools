@@ -1,5 +1,6 @@
 import { sanitiseRequestPath } from "./feedback/sanitise";
 import { canonicalReportCardPath } from "./instant/reportCardRoute";
+import { PRACTICE_LINK_PATTERN, PRACTICE_LINK_ROUTE } from "./practice/practiceLinkPath";
 
 // Browser Sentry keeps no typed search text or credential path (ADR 0069,
 // 2026-11-01 amendment). Request URLs in fetch and XHR breadcrumbs and in
@@ -16,23 +17,27 @@ const QUERY_FIELDS = ["http.query", "url.query", "http.fragment", "url.fragment"
 const REQUEST_NAME = /^([A-Z]+\s+)(\S+)$/u;
 
 function scrubUrl(value: unknown): unknown {
-  return typeof value === "string" ? sanitiseRequestPath(value) || "[redacted]" : value;
+  return typeof value === "string" ? sanitizeTelemetryPath(value) ?? (sanitiseRequestPath(value) || "[redacted]") : value;
 }
 
-function scrubCardNavigation(value: unknown): unknown {
-  if (typeof value !== "string") return value;
+function sanitizeTelemetryPath(value: string): string | null {
   try {
-    return canonicalReportCardPath(new URL(value, "https://sc2tools.com").pathname) ?? value;
+    const { pathname } = new URL(value, "https://sc2tools.com");
+    return PRACTICE_LINK_ROUTE.test(pathname) ? PRACTICE_LINK_PATTERN : canonicalReportCardPath(pathname);
   } catch {
-    return value;
+    return null;
   }
+}
+
+function scrubNavigation(value: unknown): unknown {
+  return typeof value === "string" ? sanitizeTelemetryPath(value) ?? value : value;
 }
 
 /** Example: a fetch breadcrumb for "https://api/v1/replays?search=Bob" keeps "/v1/replays?search=%5Bredacted%5D". */
 export function scrubBreadcrumb<T extends Breadcrumb>(breadcrumb: T): T {
   const data = breadcrumb.data;
   if (breadcrumb.category === "navigation" && data) {
-    const from = scrubCardNavigation(data.from), to = scrubCardNavigation(data.to);
+    const from = scrubNavigation(data.from), to = scrubNavigation(data.to);
     if (from !== data.from || to !== data.to) return { ...breadcrumb, data: { ...data, from, to } };
   }
   if ((breadcrumb.category !== "fetch" && breadcrumb.category !== "xhr") || !data || !Object.hasOwn(data, "url")) return breadcrumb;

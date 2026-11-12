@@ -25,7 +25,7 @@ let client: Promise<Sentry | null> | null = null;
 
 function onLocalReplaySurface(): boolean {
   const pathname = globalThis.location?.pathname;
-  return pathname === "/wrapped" || isReportCardPath(pathname);
+  return pathname === "/wrapped" || isReportCardPath(pathname) || /^\/(?:b|%62)(?:\/|$)/.test(pathname ?? "");
 }
 
 /**
