@@ -103,6 +103,7 @@ import gettingStarted_installAndPair from "./getting-started/install-and-pair";
 import gettingStarted_installApp from "./getting-started/install-app";
 import gettingStarted_instantAnalysis from "./getting-started/instant-analysis";
 import gettingStarted_keyboardShortcuts from "./getting-started/keyboard-shortcuts";
+import gettingStarted_matchRooms from "./getting-started/match-rooms";
 import gettingStarted_practiceLinks from "./getting-started/practice-links";
 import gettingStarted_reportCardLinks from "./getting-started/report-card-links";
 import gettingStarted_sc2Daily from "./getting-started/sc2-daily";
@@ -233,6 +234,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_installApp,
   gettingStarted_instantAnalysis,
   gettingStarted_keyboardShortcuts,
+  gettingStarted_matchRooms,
   gettingStarted_practiceLinks,
   gettingStarted_reportCardLinks,
   gettingStarted_sc2Daily,

@@ -44,9 +44,12 @@ function MissingRoom({ invite }: { invite: boolean }) {
   </section>;
 }
 
-function RoomConnection({ invite }: { invite: RoomInvite }) {
-  const session = useMatchRoom(invite);
-  const { frame, reading, actionError, busy } = session;
+function ActiveRoom({ invite, session, frame }: {
+  invite: RoomInvite;
+  session: ReturnType<typeof useMatchRoom>;
+  frame: NonNullable<ReturnType<typeof useMatchRoom>["frame"]>;
+}) {
+  const { reading, actionError, busy } = session;
   const { confirm, dialog } = useConfirm();
   async function removeRoom() {
     if (await confirm({ title: "Delete this room?", description: "The seat and watch links will stop working immediately.",
@@ -62,30 +65,38 @@ function RoomConnection({ invite }: { invite: RoomInvite }) {
     }
     return saved;
   }
-  const room = frame?.room;
-  if (reading.gone) return <MissingRoom invite />;
+  const { room, receivedAt } = frame;
   const role = invite.role;
   const host = role === "host";
   const blocked = busy || Boolean(reading.error);
+  return (
+    <>
+      <p className="text-body text-text-muted">
+        Best of {room.config.format} · {room.config.practice ? "Practice" : roleLabel(role)}
+      </p>
+      {actionError && <p role="alert" className="rounded-lg border border-line p-3 text-body text-danger">{actionError}</p>}
+      <RoomSeats room={room} role={role} blocked={blocked} send={send} />
+      <VetoBoard room={room} role={role} blocked={blocked} send={send} receivedAt={receivedAt} />
+      <ScoreBoard room={room} role={role} blocked={blocked} send={send} />
+      {room.phase === "complete" && <MatchResultExport room={room} />}
+      {invite.role === "host" && !room.config.practice && <InviteLinks invite={invite} />}
+      {host && <Button variant="danger" disabled={busy} onClick={() => { void removeRoom(); }}>Delete room now</Button>}
+      {dialog}
+    </>
+  );
+}
+
+function RoomConnection({ invite }: { invite: RoomInvite }) {
+  const session = useMatchRoom(invite);
+  const { frame, reading } = session;
+  if (reading.gone) return <MissingRoom invite />;
   return (
     <>
       {reading.error && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-bg-surface p-4">
         <p className="text-body text-text">{reading.error}</p>
         <Button variant="secondary" onClick={session.retry}>Retry connection</Button>
       </div>}
-      {!frame || !room ? !reading.error && <LoadingRoom /> : <>
-        <p className="text-body text-text-muted">
-          Best of {room.config.format} · {room.config.practice ? "Practice" : roleLabel(role)}
-        </p>
-        {actionError && <p role="alert" className="rounded-lg border border-line p-3 text-body text-danger">{actionError}</p>}
-        <RoomSeats room={room} role={role} blocked={blocked} send={send} />
-        <VetoBoard room={room} role={role} blocked={blocked} send={send} receivedAt={frame.receivedAt} />
-        <ScoreBoard room={room} role={role} blocked={blocked} send={send} />
-        {room.phase === "complete" && <MatchResultExport room={room} />}
-        {invite.role === "host" && !room.config.practice && <InviteLinks invite={invite} />}
-        {host && <Button variant="danger" disabled={busy} onClick={() => { void removeRoom(); }}>Delete room now</Button>}
-        {dialog}
-      </>}
+      {frame ? <ActiveRoom invite={invite} session={session} frame={frame} /> : !reading.error && <LoadingRoom />}
     </>
   );
 }

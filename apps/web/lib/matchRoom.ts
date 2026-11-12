@@ -1,4 +1,4 @@
-import type { PersonalShareCard } from "./personalShareCards";
+import type { MatchResultShareCard } from "./personalShareCards";
 import { ROOM_PATH } from "./matchRoomRoute";
 
 export const FORMATS = [1, 3, 5, 7] as const;
@@ -44,6 +44,10 @@ export function parseRoomInvite(hash: string): RoomInvite | null {
   const key = params.get("key") ?? "";
   if (!ID.test(id)) return null;
   if (role === null && !key) return { id, role: "watch" };
+  return parseWriteInvite(id, role, key);
+}
+
+function parseWriteInvite(id: string, role: string | null, key: string): RoomInvite | null {
   if (role === "host" && ID.test(key)) return { id, role, key };
   if (isSeat(role) && SEAT_KEY.test(key)) return { id, role, key };
   return null;
@@ -78,7 +82,7 @@ export function resultText(room: Room, style: "discord" | "reddit") {
   return [format, score, games].filter(Boolean).join("\n\n");
 }
 
-export function matchResultCard(room: Room): PersonalShareCard {
+export function matchResultCard(room: Room): MatchResultShareCard {
   return { kind: "match_result", path: "/match", title: "Match result",
     subtitle: "StarCraft II best of " + room.config.format,
     stats: SEATS.map(seat => ({ label: seatLabel(seat), value: String(room.score[seat]) })) };
@@ -130,13 +134,17 @@ function validTiming(value: Record<string, unknown>) {
     && (value.deadline === null || natural(value.deadline));
 }
 
+function validTurn(phase: Room["phase"], turn: unknown, deadline: unknown) {
+  return phase === "veto" ? isTurn(turn) && natural(deadline) : turn === null && deadline === null;
+}
+
 function roomProgress(value: Record<string, unknown>, mapCount: number) {
   const { phase, turn, deadline, moves, order, winners } = value;
   const isMap = (map: unknown): map is number => natural(map) && map < mapCount;
-  const isMove = (move: unknown): move is Move => isRecord(move) && isTurn(move) && isMap(move.map) && isBoolean(move.automatic);
+  const isMove = (move: unknown): move is Move => isRecord(move) && isMap(move.map) && isBoolean(move.automatic) && isTurn(move);
   if (!isPhase(phase) || !Array.isArray(moves) || !moves.every(isMove)
     || !Array.isArray(order) || !order.every(isMap) || !Array.isArray(winners) || !winners.every(isSeat)) return null;
-  if (phase === "veto" ? !isTurn(turn) || !natural(deadline) : turn !== null || deadline !== null) return null;
+  if (!validTurn(phase, turn, deadline)) return null;
   return { phase, turn: isTurn(turn) ? turn : null, moves, order, winners };
 }
 

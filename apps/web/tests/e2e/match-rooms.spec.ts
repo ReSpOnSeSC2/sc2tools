@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
 import { captureAccessibility, checkAccessibility } from "./accessibility-check";
 import type { Room, RoomAction } from "../../lib/matchRoom";
 
@@ -55,7 +55,12 @@ async function installFixture(context: BrowserContext, { failFirst = false } = {
   await context.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", { value: {
       writeText: async (text: string) => { sessionStorage.setItem("test-match-copy", text); },
+      write: async (items: ClipboardItem[]) => {
+        const png = await items[0].getType("image/png");
+        sessionStorage.setItem("test-match-image", png.type + ":" + png.size);
+      },
     } });
+    Object.defineProperty(navigator, "share", { value: undefined });
   });
   await context.route("**/v1/seasons", route => route.fulfill({ headers: HEADERS, json: {
     items: [], current: 69, source: "pulse", mapPool: room.config.maps,
@@ -67,7 +72,10 @@ async function installFixture(context: BrowserContext, { failFirst = false } = {
     const method = request.method();
     const send = (status: number, json?: unknown) => route.fulfill({ status, headers: HEADERS, json });
     if (method === "OPTIONS") return send(204);
-    if (method === "POST" && url.pathname.endsWith("/match-rooms")) return send(201, { id: ROOM_ID, hostKey: HOST_KEY });
+    if (method === "POST" && url.pathname.endsWith("/match-rooms")) {
+      room.config = request.postDataJSON() as Room["config"];
+      return send(201, { id: ROOM_ID, hostKey: HOST_KEY });
+    }
     if (deleted || !url.pathname.includes("/" + ROOM_ID)) return send(404);
     if (method === "DELETE") { deleted = true; return send(204); }
     if (method === "POST") {
@@ -115,6 +123,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByRole("button", { name: "Create room" }).click();
     await expect(page.getByRole("heading", { name: "Invite players and spectators" })).toBeVisible();
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
+    await captureAccessibility(page, info, "match-host-" + theme, true);
     const seatA = await copy(page, "Copy Seat A link");
     const seatB = await copy(page, "Copy Seat B link");
     const watch = await copy(page, "Copy watch link");
@@ -122,15 +131,15 @@ for (const theme of ["light", "dark"] as const) {
     expect(seatA).not.toBe(seatB);
     expect(watch).not.toContain("key=");
     expect((await page.request.get("/match/room")).headers()["cache-control"]).toBe("no-store");
-    await captureAccessibility(page, info, "match-host-" + theme, true);
-    await playVeto(context, seatA, seatB);
+    await playVeto(context, seatA, seatB, theme, info);
     await verifyResult(page, context, watch, theme, info);
     expect(requests.some(query => query.startsWith("?rev="))).toBe(true);
   });
 }
 
-async function playVeto(context: BrowserContext, seatA: string, seatB: string) {
+async function playVeto(context: BrowserContext, seatA: string, seatB: string, theme: "light" | "dark", info: TestInfo) {
   const a = await context.newPage();
+  await a.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
   await a.goto(seatA);
   await a.getByRole("textbox", { name: "Seat A name" }).fill("Fixture Blue");
   await a.getByRole("button", { name: "Save name" }).click();
@@ -143,6 +152,8 @@ async function playVeto(context: BrowserContext, seatA: string, seatB: string) {
   await expect(b.getByRole("timer")).toBeVisible();
   await refreshRoom(a);
   const map = a.getByRole("button", { name: "Ban Alpha" });
+  await expect(map).toBeVisible();
+  await captureAccessibility(a, info, "match-veto-" + theme, true);
   await map.focus();
   await a.keyboard.press("Space");
   await expect(a.getByRole("heading", { name: "Series score" })).toBeFocused();
@@ -161,6 +172,8 @@ async function verifyResult(page: Page, context: BrowserContext, watch: string, 
   const result = await copy(viewer, "Copy for Discord");
   expect(result).toContain("Seat A 1–0 Seat B");
   expect(result).not.toMatch(/Fixture Blue|#r=|key=/);
+  await viewer.getByRole("button", { name: "Share result image" }).click();
+  await expect.poll(() => viewer.evaluate(() => sessionStorage.getItem("test-match-image"))).toMatch(/^image\/png:[1-9]\d+$/);
   expect(await viewer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
     await viewer.evaluate(() => document.documentElement.clientWidth),
   );
@@ -180,10 +193,19 @@ async function verifyResult(page: Page, context: BrowserContext, watch: string, 
   await viewer.close();
 }
 
-test("recovers a signed-out room after a connection failure", async ({ page, context }) => {
+test("creates a custom practice room and recovers a connection failure", async ({ page, context }) => {
   await installFixture(context, { failFirst: true });
-  await page.goto("/match/room#r=" + ROOM_ID);
+  await page.goto("/match");
+  await page.getByRole("combobox", { name: "Series format" }).selectOption("1");
+  await rejectCookies(page);
+  await page.getByRole("checkbox", { name: "Use a custom map pool" }).check();
+  await page.getByRole("textbox", { name: "Map names" }).fill("Zulu\nYankee");
+  await page.getByRole("button", { name: "Practice solo" }).click();
   await expect(page.getByRole("button", { name: "Retry connection" })).toBeVisible();
   await page.getByRole("button", { name: "Retry connection" }).click();
   await expect(page.getByRole("heading", { name: "Map veto" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ready Seat A" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ready Seat B" })).toBeVisible();
+  await expect(page.getByText("Zulu", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy watch link" })).toHaveCount(0);
 });

@@ -9,8 +9,12 @@ export type PersonalShareCard = {
 } & (
   { kind: Extract<SharedCardKind, "fingerprint" | "session_report">; path?: never }
   | { kind: "practice_grade"; path: `/b/${string}` }
-  | { kind: "match_result"; path: "/match" }
 );
+
+export type MatchResultShareCard = Pick<PersonalShareCard, "title" | "subtitle" | "stats"> & {
+  kind: "match_result";
+  path: "/match";
+};
 
 type FingerprintShareFacts = {
   matchup: string;

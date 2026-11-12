@@ -17,11 +17,7 @@ type RoomSession = {
 };
 
 /** A session owns its polling timer and abort signal until its invite is retired. */
-function pollRoom(
-  id: string,
-  publish: (frame: Frame | null) => void,
-  status: (error: string, gone: boolean) => void,
-) {
+function pollRoom(id: string, publish: (frame: Frame | null) => void, status: (error: string, gone: boolean) => void) {
   const stop = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let retryMs = 0;
@@ -48,12 +44,7 @@ function pollRoom(
     session.refreshAgain = false;
   }
   function failed(error: unknown, startedAtRev: number | undefined) {
-    if (stop.signal.aborted || session.gone) return;
-    if (error instanceof RoomRequestError && error.status === 404) {
-      session.finish();
-      return;
-    }
-    if (session.frame?.room.rev !== startedAtRev) return;
+    if (!isCurrentReadError(session, error, startedAtRev)) return;
     retryMs = error instanceof RoomRequestError ? error.retryMs : 0;
     session.refreshAgain = false;
     status(roomErrorText(error, false), false);
@@ -74,23 +65,37 @@ function pollRoom(
       schedule();
     });
   }
-  function visibility() {
+  observeVisibility(stop.signal, () => {
     clearTimeout(timer);
     if (document.visibilityState === "visible" && retryMs === 0) refresh();
     else if (!session.reading) schedule();
-  }
-  document.addEventListener("visibilitychange", visibility);
-  stop.signal.addEventListener("abort", () => {
-    clearTimeout(timer);
-    document.removeEventListener("visibilitychange", visibility);
-  }, { once: true });
+  });
+  stop.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
   refresh();
   return session;
+}
+
+function observeVisibility(signal: AbortSignal, callback: () => void) {
+  document.addEventListener("visibilitychange", callback);
+  signal.addEventListener("abort", () => document.removeEventListener("visibilitychange", callback), { once: true });
+}
+
+function isCurrentReadError(session: RoomSession, error: unknown, startedAtRev: number | undefined) {
+  if (session.stop.signal.aborted || session.gone) return false;
+  if (error instanceof RoomRequestError && error.status === 404) {
+    session.finish();
+    return false;
+  }
+  return session.frame?.room.rev === startedAtRev;
 }
 
 function isNewerFrame(frame: Frame | null, room: Room) {
   if (!frame) return true;
   return room.rev > frame.room.rev || (room.rev === frame.room.rev && room.serverTime > frame.room.serverTime);
+}
+
+function hasWritableRoom(session: RoomSession | null, busy: boolean): session is RoomSession & { frame: Frame } {
+  return Boolean(session?.frame) && !session?.gone && !busy;
 }
 
 export function useMatchRoom(invite: RoomInvite) {
@@ -109,7 +114,7 @@ export function useMatchRoom(invite: RoomInvite) {
 
   async function mutate(action: RoomAction | "delete") {
     const session = current.current;
-    if (invite.role === "watch" || !session?.frame || session.gone || busyRef.current) return false;
+    if (invite.role === "watch" || !hasWritableRoom(session, busyRef.current)) return false;
     busyRef.current = true;
     setBusy(true);
     setActionError("");

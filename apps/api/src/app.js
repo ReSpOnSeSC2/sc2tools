@@ -1245,7 +1245,7 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
       // tokens must never be copied into Render logs.
       wrapSerializers: false,
       serializers: { req: sanitiseRequestForLog, res: sanitiseResponseForLog },
-      autoLogging: { ignore: req => {
+      autoLogging: { ignore: (/** @type {import("http").IncomingMessage} */ req) => {
         const { res, originalUrl } = /** @type {import("express").Request} */ (req);
         return req.method === "GET" && res?.statusCode === 204
           && /^\/v1\/match-rooms\//iu.test(originalUrl || "");
