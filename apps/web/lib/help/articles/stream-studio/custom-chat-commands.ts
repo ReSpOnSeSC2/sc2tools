@@ -9,11 +9,11 @@ const article: HelpArticle = {
   signedInOnly: true,
   order: 5,
   keywords: ["chat commands", "custom", "alias", "Nightbot", "variables", "cooldown", "Twitch", "Kick", "YouTube", "TikTok"],
-  updated: "2026-10-25",
+  updated: "2026-11-11",
   body: [
     { type: "steps", items: [
       "Open **Settings → Chat & alerts** and choose your overlay token. Find **Chat command settings** below the command guide.",
-      "Use **Add custom command**. Give it a name such as `hello`, without spaces. Names start with a letter and use at most 24 letters, numbers or underscores. Built-in names, default aliases and engagement commands are reserved.",
+      "Use **Add custom command**. Give it a name such as `hello`, without spaces. Names start with a letter and use at most 24 letters, numbers or underscores. Built-in names, default aliases and engagement commands are reserved. A custom command or alias named `sc2tools` takes precedence over the built-in spelling.",
       "Write a one-line reply of up to 1,000 characters. Use plain text and the supported variables below. You can save up to 25 custom commands.",
       "Choose **Enabled**, a cooldown from 5 to 3,600 seconds, the platforms where it answers, and whether it can appear in on-stream answers. An empty platform selection disables replies everywhere.",
       "Select **Save chat commands**. Edits remain local until Save. Set the preview argument, viewer, platform and on-stream context, then select **Try it** on a saved command. Preview shows the exact reply without sending a message or consuming a cooldown.",
@@ -30,6 +30,9 @@ const article: HelpArticle = {
     { type: "heading", text: "Built-ins, aliases and cooldowns", anchor: "availability" },
     { type: "paragraph", text: "Built-in commands use the same settings. A configured alias adds another name; canonical names and default aliases remain available. Disabling a built-in disables every name for it. Saved platform and on-stream settings apply across the bot, Nightbot and the on-stream command endpoint. Viewer rank, predictions and voting retain their separate engagement behavior." },
     { type: "paragraph", text: "A command shares its configured cooldown across its names. Each viewer also has a five-second reply limit. Chat replies and on-stream answers use separate cooldown lanes so one chat message can produce both. Missing replay or session data is described honestly rather than guessed." },
+    { type: "heading", text: "Links in chat replies", anchor: "reply-links" },
+    { type: "paragraph", text: "Turn on **Include a link in chat** for `!build` to link a matching published guide. Enable `!sc2tools` for a short introduction, and turn on its link to include the site address. On-stream answers use text only for these links. Live links share a two-minute cooldown, and **Try it** lets you see the linked reply after saving." },
+    { type: "paragraph", text: "A custom `!sc2tools` keeps that command name. Give the built-in a different alias to use both replies." },
     { type: "heading", text: "Use a command in Nightbot", anchor: "nightbot" },
     { type: "steps", items: [
       "Save the command and allow the **nightbot** platform.",

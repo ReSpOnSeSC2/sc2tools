@@ -8,10 +8,13 @@ const { ChatCommandService } = require("../src/services/chatCommandService");
 const { TwitchChatBotService } = require("../src/services/twitchChatBot");
 const { CHAT_COMMANDS } = require("../src/services/chatCommands");
 
-function fixture() {
+const SITE_REPLY = "SC2 Tools analyzes StarCraft II replays and powers stream overlays.";
+
+/** @param {Array<{id:string,enabled:boolean,includeLink?:boolean}>} [builtins] */
+function fixture(builtins = []) {
   let now = 100000;
   const overlayTokens = { resolve: jest.fn(async token => token === "owned" ? { userId: "owner" } : null), list: async () => [] };
-  const users = { getPreferences: jest.fn(async () => ({ custom: [{ trigger: "hello", response: "Hi {user}; {record}" }] })) };
+  const users = { getPreferences: jest.fn(async () => ({ builtins, custom: [{ trigger: "hello", response: "Hi {user}; {record}" }] })) };
   const chatbot = { commandLine: jest.fn(async (_token, command, argument) => `<b>${command}</b> reply${argument ? ` ${argument}` : ""}`) };
   const commands = new ChatCommandService(/** @type {any} */ ({ overlayTokens, users, chatbot, now: () => now }));
   const app = express(); app.use(express.json());
@@ -24,8 +27,9 @@ function fixture() {
 
 describe("registry transport parity", () => {
   test.each(CHAT_COMMANDS.map(command => command.id))("%s has the same plain reply in Nightbot, multichat, Twitch and owner preview", async command => {
-    const { app, bot, tick } = fixture();
-    const expected = `${command} reply${command === "winrate" ? " PvZ" : ""}`;
+    const site = command === "sc2tools";
+    const { app, bot, tick } = fixture(site ? [{ id: command, enabled: true }] : []);
+    const expected = site ? SITE_REPLY : `${command} reply${command === "winrate" ? " PvZ" : ""}`;
     const argument = command === "winrate" ? "PvZ" : "";
     const nightbot = await request(app).get(`/chatbot/owned/${command}`).query({ args: argument, user: "Viewer" });
     expect(nightbot.status).toBe(200); expect(nightbot.text).toBe(expected);
@@ -35,6 +39,19 @@ describe("registry transport parity", () => {
     tick(); expect(await bot._answerCommand({ overlayToken: "owned" }, command, "Viewer", argument)).toBe(expected);
     const preview = await request(app).post("/me/chat-commands/try").send({ token: "owned", command, argument, user: "Viewer" });
     expect(preview.status).toBe(200); expect(preview.body.text).toBe(expected);
+  });
+  test("the opt-in link reaches chat and owner preview while the browser source receives text only", async () => {
+    const command = "sc2tools";
+    const { app } = fixture([{ id: command, enabled: true, includeLink: true }]);
+    const nightbot = await request(app).get(`/chatbot/owned/${command}`);
+    expect(nightbot.status).toBe(200);
+    expect(nightbot.text).toBe(`${SITE_REPLY} https://sc2tools.com`);
+    const stream = await request(app).post("/multichat/owned/command").send({ command, platform: "twitch", user: "Viewer" });
+    expect(stream.status).toBe(200);
+    expect(stream.body.text).toBe(SITE_REPLY);
+    const preview = await request(app).post("/me/chat-commands/try").send({ token: "owned", command });
+    expect(preview.status).toBe(200);
+    expect(preview.body.text).toBe(nightbot.text);
   });
   test("custom replies have transport parity and Nightbot cooldown returns no chat text", async () => {
     const { app, bot, tick } = fixture();

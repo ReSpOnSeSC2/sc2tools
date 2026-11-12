@@ -1,6 +1,6 @@
 "use strict";
 
-const { CHAT_COMMANDS, PLATFORMS, VARIABLES, plainText, sanitizeChatCommands, configuredReplies, CommandCooldowns } = require("./chatCommands");
+const { CHAT_COMMANDS, PLATFORMS, VARIABLES, plainText, sanitizeChatCommands, configuredCommands, CommandCooldowns } = require("./chatCommands");
 const { clip, MAX_LINE_CHARS } = require("./chatbot");
 const { SC2TOOLS_LINK } = require("./chatCommandLinks");
 
@@ -33,7 +33,7 @@ class ChatCommandService {
     const trigger = String(input.command || "").replace(/^!/, "").trim().toLowerCase();
     if (!/^[a-z][a-z0-9_]{0,23}$/.test(trigger)) return { status: "unknown", text: null };
     const custom = prefs.custom.find(command => command.trigger === trigger);
-    const builtin = custom ? undefined : configuredReplies(prefs).find(command => command.trigger === trigger || command.id === trigger || command.aliases.some(alias => alias === trigger));
+    const builtin = custom ? undefined : configuredCommands(prefs).find(command => command.trigger === trigger || command.id === trigger || command.aliases.some(alias => alias === trigger));
     const command = builtin || custom;
     const platform = input.platform || "nightbot";
     if (!command || !PLATFORMS.includes(platform)) return { status: "unknown", text: null };
@@ -76,7 +76,7 @@ class ChatCommandService {
   }
 
   /** @param {unknown} raw */
-  metadata(raw) { return { commands: configuredReplies(sanitizeChatCommands(raw)), variables: VARIABLES, maxCustom: 25 }; }
+  metadata(raw) { return { commands: configuredCommands(sanitizeChatCommands(raw)), variables: VARIABLES, maxCustom: 25 }; }
 }
 
 module.exports = { ChatCommandService, CHAT_COMMANDS };

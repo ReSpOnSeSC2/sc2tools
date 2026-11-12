@@ -18,6 +18,41 @@ it("public Help is a read-only registry guide without private reads or an editor
   render(<ChatCommandsCard rankRace="protoss" />);
   expect(screen.getByText("!winrate [matchup|race]")).toBeTruthy(); expect(screen.queryByRole("table", { name: "Chat command settings" })).toBeNull(); expect(fetch).not.toHaveBeenCalled();
 });
+it("saves the link opt-in and previews exact chat and on-stream replies", async () => {
+  const guide = "https://sc2tools.com/guides/pvz/stargate-into-glaives";
+  const request = vi.fn(async (url: unknown, init?: RequestInit) => {
+    const body = JSON.parse(typeof init?.body === "string" ? init.body : "{}");
+    const reply = { status: "reply", command: "build", text: body.onStream ? "Current build" : `Current build ${guide}` };
+    return { ok: true, status: 200, json: async () => String(url).endsWith("/try") ? reply : body };
+  });
+  vi.stubGlobal("fetch", request);
+  render(<ChatCommandsEditor token="synthetic-token" onSaved={vi.fn()} />);
+  const linkToggle = await screen.findByRole("checkbox", { name: "Include a link for !build" });
+  expect(linkToggle).toHaveProperty("checked", false);
+  expect(screen.getByRole("checkbox", { name: "Enable !sc2tools" })).toHaveProperty("checked", false);
+  expect(screen.queryByRole("checkbox", { name: "Include a link for !opponent" })).toBeNull();
+  fireEvent.click(linkToggle);
+  const tryBuild = screen.getByRole("button", { name: "Try it · !build" });
+  expect(tryBuild).toHaveProperty("disabled", true);
+  expect(request).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Save chat commands" }));
+  await waitFor(() => expect(tryBuild).toHaveProperty("disabled", false));
+  const saved = request.mock.calls[0][1]?.body;
+  expect(JSON.parse(typeof saved === "string" ? saved : "{}").builtins).toContainEqual(expect.objectContaining({ id: "build", includeLink: true }));
+  fireEvent.click(tryBuild);
+  expect(await screen.findByText(`Current build ${guide}`)).toBeTruthy();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Preview on-stream answer" }));
+  fireEvent.click(tryBuild);
+  expect(await screen.findByText("Current build", { exact: true })).toBeTruthy();
+});
+
+it("keeps the custom !sc2tools preview available and explains the shadowed builtin", async () => {
+  Object.assign(env.read.data, { custom: [{ trigger: "sc2tools", response: "My saved reply" }] });
+  render(<ChatCommandsEditor token="synthetic-token" onSaved={vi.fn()} />);
+  expect(await screen.findByRole("button", { name: "Try it · !sc2tools" })).toHaveProperty("disabled", true);
+  expect(screen.getByRole("button", { name: "Try it · Custom command 1" })).toHaveProperty("disabled", false);
+  expect(screen.getByText(/Another saved command answers !sc2tools/)).toBeTruthy();
+});
 it("adds a custom command locally, saves explicitly, previews exactly and copies the saved Nightbot snippet", async () => {
   render(<ChatCommandsEditor token="synthetic-token" onSaved={vi.fn()} />);
   await screen.findByRole("table", { name: "Chat command settings" });

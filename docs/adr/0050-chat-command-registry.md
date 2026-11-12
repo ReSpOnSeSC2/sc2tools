@@ -53,3 +53,14 @@ Nightbot snippet syntax follows its official
 [UrlFetch](https://docs.nightbot.tv/variables/urlfetch) documentation; arguments
 and viewer names are URL-encoded, and the380-character line fits its plain-text
 response limit. This is copied configuration, never an automatic provider write.
+
+## Optional reply links
+
+`!build` can append its published guide, using the canonical catalog slug and
+the guide page's publication floor. `!sc2tools` is disabled by default. An
+existing custom command or alias of that name has priority over the canonical spelling.
+
+The per-command `includeLink` setting defaults to false. The composer reserves
+room for the entire URL within the 380-character limit and appends it only in
+chat. Linked replies share a two-minute cooldown in the existing ledger. The
+owner preview uses the same saved settings and bypasses the cooldown.

@@ -4763,6 +4763,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Browse desktop app release notes by version on the changelog and subscribe to a dedicated Agent RSS feed.
 
+### Chat command links
+
+- Opt in to a published guide link for `!build`, or enable `!sc2tools` and add the site link. Preview the saved reply from Chat & alerts.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

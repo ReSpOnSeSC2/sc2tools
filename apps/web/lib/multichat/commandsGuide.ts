@@ -6,7 +6,7 @@
 
 import { RANK_LADDERS, type RankRace } from "./rankLadders";
 import catalog from "./chatCommandCatalog.generated.json";
-import type { ChatCommandPreferences } from "./chatCommandPreferences";
+import { hasSiteCommandOverride, SITE_COMMAND_ID, type ChatCommandPreferences } from "./chatCommandPreferences";
 
 export interface CommandEntry {
   /** e.g. "!rank" */
@@ -69,7 +69,7 @@ export const COMMAND_GROUPS: readonly CommandGroup[] = [
     emoji: "📊",
     title: "Live stats",
     intro: "Ask about the game — the overlay answers on stream, no bot needed.",
-    commands: catalog.commands.map(command => ({ syntax: `!${command.id}${"argument" in command ? ` ${command.argument}` : ""}`, description: command.description,
+    commands: catalog.commands.filter(command => catalog.defaults.some(row => row.id === command.id && row.enabled)).map(command => ({ syntax: `!${command.id}${"argument" in command ? ` ${command.argument}` : ""}`, description: command.description,
       ...(command.aliases.length ? { aliases: command.aliases.map(alias => `!${alias}`).join(" / ") } : {}) })),
   },
 ];
@@ -81,9 +81,11 @@ export const COMMAND_GROUPS: readonly CommandGroup[] = [
  */
 export function commandGroups(preferences?: ChatCommandPreferences): readonly CommandGroup[] {
   if (!preferences) return COMMAND_GROUPS;
-  const commands = catalog.commands.map(command => ({ ...command, ...preferences.builtins.find(row => row.id === command.id) })).filter(command => command.enabled !== false && (!command.platforms || command.platforms.length > 0));
+  const siteOverride = hasSiteCommandOverride(preferences);
+  const commands = catalog.commands.map(command => ({ ...command, ...catalog.defaults.find(row => row.id === command.id), ...preferences.builtins.find(row => row.id === command.id) }))
+    .filter(command => command.enabled && command.platforms?.length && !(siteOverride && command.id === SITE_COMMAND_ID && command.trigger === SITE_COMMAND_ID));
   const rows: CommandEntry[] = commands.map(command => ({ syntax: `!${command.trigger || command.id}${"argument" in command ? ` ${command.argument}` : ""}`, description: command.description,
-    aliases: [...new Set([command.id, ...command.aliases])].filter(alias => alias !== (command.trigger || command.id)).map(alias => `!${alias}`).join(" / ") }));
+    aliases: [...new Set([command.id, ...command.aliases])].filter(alias => alias !== (command.trigger || command.id) && !(siteOverride && alias === SITE_COMMAND_ID)).map(alias => `!${alias}`).join(" / ") }));
   rows.push(...preferences.custom.filter(command => command.enabled && command.platforms.length > 0).map(command => ({ syntax: `!${command.trigger}`, description: "custom channel reply" })));
   return COMMAND_GROUPS.map(group => group.id === "stats" ? { ...group, commands: rows } : group);
 }
