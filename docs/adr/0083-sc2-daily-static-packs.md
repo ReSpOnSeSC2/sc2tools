@@ -4,7 +4,7 @@ Status: Accepted
 
 /arcade serves five field fights for a UTC day from versioned static files. The tiny index revalidates and points to immutable packs of allow-listed clip data and cropped terrain. Each published clip contains ten seconds of relative time and crop-local coordinates, plus neutral teams, unit types and priced losses. The index contains scheduled publication days and hashes of the published bytes. It carries no source recording keys or dates.
 
-The offline builder reads complete Recorded Agent playback. It uses the first observed local attack after a quiet period and requires both armies in the opening frame. It excludes structure losses, worker-heavy trades, fights spread across the map and outcomes close to a scoring boundary. It prices losses with the replay viewer's patch costs, excluding units consumed in morphs. A fight needs a complete ten-second window within a verified source segment. The crop and sample rules favor clear field fights that fit on phones.
+The offline builder reads complete Recorded Agent playback. It uses the first observed local attack after a quiet period and requires both armies in the opening frame. It excludes structure involvement, worker-heavy trades, fights spread across the map and outcomes close to a scoring boundary. It prices losses with the replay viewer's patch costs, excluding units consumed in morphs. A fight needs a complete ten-second window and the preceding quiet period within a verified source segment. The crop and sample rules favor clear field fights that fit on phones.
 
 The clip player uses the replay renderer with local icons and a fixed view. Accessible opening rosters describe the armies before the guess. Resource losses appear in the interface after the guess. Static pack bytes contain answers and are inspectable.
 
@@ -31,4 +31,4 @@ Example plan:
 
     node scripts/build-daily-packs.mjs --plan /path/to/private-plan.json
 
-Source paths are relative to the plan. Add recordings until each day yields five qualifying fights. The command publishes the index only after all requested days build and preserves the other scheduled days. Review the five opening frames, outcomes and terrain crops for every day before publishing. Commit only reviewed output under public/daily/v1/. Keep the release horizon short.
+Source paths are relative to the plan. Add recordings until each day yields five qualifying fights. The command publishes the index only after all requested days build and preserves the other scheduled days. Once a recorded UTC day starts, its published pack stays pinned so open sessions and saved results keep the same fights. Review the five opening frames, outcomes and terrain crops for every day before publishing. Commit only reviewed output under public/daily/v1/. Keep the release horizon short.

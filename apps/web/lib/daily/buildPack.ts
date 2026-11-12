@@ -1,5 +1,6 @@
 import {
-  isWorkerUnit, unitNameAt, unitVisibleAt, type MapPlayback, type PlaybackBounds, type PlaybackUnit,
+  buildingPositionAt, isWorkerUnit, unitNameAt, unitVisibleAt,
+  type MapPlayback, type PlaybackBounds, type PlaybackBuilding, type PlaybackUnit,
 } from "../mapReplay";
 import { computeLosses, lossValue, morphConsumedIndices, unitCost } from "../mapReplayLosses";
 import type { PatchEra } from "../meta";
@@ -92,9 +93,25 @@ function bothArmies(playback: MapPlayback, window: FightWindow, era: PatchEra): 
   return armies.size === 2;
 }
 
+function inWindow(time: number, { start, end }: FightWindow): boolean {
+  return time >= start && time <= end;
+}
+
+function structureInvolved(building: PlaybackBuilding, window: FightWindow): boolean {
+  const { bounds } = window;
+  const death = building.died;
+  if (death !== null && inWindow(death, window) &&
+      inside(buildingPositionAt(building, death, true), bounds)) return true;
+  const aim = building.aim ?? [];
+  for (let i = 0; i + 2 < aim.length; i += 3) {
+    if (inWindow(aim[i], window) && inside({ x: aim[i + 1], y: aim[i + 2] }, bounds)) return true;
+  }
+  return (building.attacks ?? []).some(time => inWindow(time, window) &&
+    inside(buildingPositionAt(building, time, true), bounds));
+}
+
 function buildFight(playback: MapPlayback, deaths: readonly Death[], window: FightWindow, era: PatchEra, swapped: boolean): FightDraft | null {
-  if (playback.buildings.some(b => b.died !== null && b.died >= window.start && b.died <= window.end &&
-    inside(b, window.bounds))) return null;
+  if (playback.buildings.some(building => structureInvolved(building, window))) return null;
   const losses = measuredLosses(deaths, window, era);
   if (!losses || !bothArmies(playback, window, era)) return null;
   const units = playback.units.flatMap(unit => {
@@ -112,11 +129,11 @@ function buildFight(playback: MapPlayback, deaths: readonly Death[], window: Fig
 
 /** One complete observed segment. A fight crossing its edge is left out. */
 export function selectFights(playback: MapPlayback, range: RecordingRange, era: PatchEra, seed: number): FightDraft[] {
-  if (playback.fidelity?.positions !== "engine" || playback.fidelity.attacks !== "observed" ||
-      playback.fidelity.complete !== true) return [];
+  if (!completeRecording(playback.fidelity)) return [];
   const contacts = contactEvents(playback), deaths = deathEvents(playback, era);
   const fights: FightDraft[] = [];
-  let next = range.start + FREEZE_LEAD;
+  // At a segment boundary, shots from the preceding segment are unavailable.
+  let next = range.start > 0 ? range.start + SAME_FIGHT_GAP : FREEZE_LEAD;
   for (const [index, contact] of contacts.entries()) {
     const start = contact.time - FREEZE_LEAD, end = start + CLIP_SECONDS;
     if (end > range.end) break;
@@ -130,4 +147,8 @@ export function selectFights(playback: MapPlayback, range: RecordingRange, era: 
     } else next = contact.time + 0.5;
   }
   return fights;
+}
+
+function completeRecording(fidelity: MapPlayback["fidelity"]): boolean {
+  return fidelity?.positions === "engine" && fidelity.attacks === "observed" && fidelity.complete === true;
 }

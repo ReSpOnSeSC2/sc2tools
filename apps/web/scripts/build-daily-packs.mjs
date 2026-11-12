@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { link, mkdir, mkdtemp, open, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, open, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { publishIndex, readIndex } from "./daily/packIndex.mjs";
 import { recordingFights, resolveRecording } from "./daily/recordings.mjs";
 
 const require = createRequire(import.meta.url);
@@ -56,17 +57,6 @@ async function readPlan(path, helpers) {
   }).sort((a, b) => a.day - b.day);
 }
 
-async function readIndex(path, helpers) {
-  try {
-    const index = helpers.readDailyIndex(JSON.parse(await readFile(path, "utf8")));
-    if (!index) throw new Error("Existing Daily index is invalid.");
-    return index;
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-    return { version: 1, days: {}, practice: [] };
-  }
-}
-
 async function writeImmutable(path, bytes) {
   const temporary = path + "." + randomUUID() + ".tmp";
   try {
@@ -111,19 +101,10 @@ async function collectDay(sources, used, helpers) {
   throw new Error("Fewer than five qualifying fights. Add more consented recordings to this UTC day.");
 }
 
-async function publishIndex(path, index) {
-  const temporary = path + "." + randomUUID() + ".tmp";
-  try {
-    await writeFile(temporary, JSON.stringify(index, null, 2) + "\n", { flag: "wx" });
-    await rename(temporary, path);
-  } finally {
-    await rm(temporary, { force: true });
-  }
-}
-
 async function build(values, out, helpers) {
   const indexPath = join(out, "index.json");
-  const index = await readIndex(indexPath, helpers);
+  const index = await readIndex(indexPath, helpers.readDailyIndex);
+  const previousDays = { ...index.days };
   if (values.practice) {
     index.practice = [];
     for (const pack of helpers.fixtureWeek()) index.practice.push(await publishPack(out, pack, [], helpers));
@@ -137,7 +118,7 @@ async function build(values, out, helpers) {
     }
   }
   if (!helpers.readDailyIndex(index)) throw new Error("Build the seven-day practice set before publishing the Daily index.");
-  await publishIndex(indexPath, index);
+  await publishIndex(indexPath, index, previousDays, helpers.utcDay);
   console.log("Published " + index.practice.length + " practice sets and " + Object.keys(index.days).length + " recorded UTC days.");
 }
 

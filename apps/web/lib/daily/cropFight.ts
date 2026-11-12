@@ -1,5 +1,5 @@
 import {
-  unitMaxSpeed, unitNameAt, unitPositionAt, type PlaybackBounds, type PlaybackUnit,
+  unitAliveAt, unitMaxSpeed, unitNameAt, unitPositionAt, unitVisibleAt, type PlaybackBounds, type PlaybackUnit,
 } from "../mapReplay";
 import { unitCost } from "../mapReplayLosses";
 import type { PatchEra } from "../meta";
@@ -54,6 +54,11 @@ function trackTimes(unit: PlaybackUnit, from: number, until: number): number[] {
   return times;
 }
 
+function terminalHidden(unit: PlaybackUnit, time: number, outside: boolean): true | undefined {
+  if (!unitAliveAt(unit, time)) return undefined;
+  return outside || !unitVisibleAt(unit, time) ? true : undefined;
+}
+
 function croppedTrack(unit: PlaybackUnit, from: number, until: number, window: FightWindow) {
   const { bounds, start } = window;
   const path: number[] = [], outside: number[] = [];
@@ -70,7 +75,11 @@ function croppedTrack(unit: PlaybackUnit, from: number, until: number, window: F
   }
   if (!visible) return null;
   if (hiddenFrom !== null) outside.push(hiddenFrom, until);
-  return { path, gaps: cropGaps([...(unit.hidden ?? []), ...outside], from, until, start) };
+  return {
+    path,
+    gaps: cropGaps([...(unit.hidden ?? []), ...outside], from, until, start),
+    hiddenAtEnd: terminalHidden(unit, until, hiddenFrom !== null),
+  };
 }
 
 function cropAim(values: readonly number[], from: number, until: number, window: FightWindow): number[] {
@@ -104,5 +113,6 @@ export function cropUnit(unit: PlaybackUnit, window: FightWindow, swapped: boole
     until: unit.died === until ? clipTime(until, start) : null,
     path: clipped.path,
     shots, aim, forms, gaps: clipped.gaps,
+    hiddenAtEnd: clipped.hiddenAtEnd,
   };
 }

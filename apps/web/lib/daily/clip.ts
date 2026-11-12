@@ -20,6 +20,7 @@ export type DailyUnit = {
   aim?: number[];
   forms?: { at: number; unit: string }[];
   gaps?: number[];
+  hiddenAtEnd?: true;
 };
 export type DailyFight = {
   width: number;
@@ -94,11 +95,12 @@ function validAim(value: Row, width: number, height: number, from: number, until
 
 function validLifecycle(value: Row, from: number, until: number): boolean {
   if (value.forms !== undefined && !formsValid(value.forms, from, until)) return false;
+  if (value.hiddenAtEnd !== undefined && (value.hiddenAtEnd !== true || value.until !== null)) return false;
   return value.gaps === undefined || (times(value.gaps, from, until) && value.gaps.length % 2 === 0);
 }
 
 function validUnit(value: unknown, width: number, height: number): value is DailyUnit {
-  const unit = allowedRow(value, ["side", "unit", "from", "until", "path", "shots", "aim", "forms", "gaps"]);
+  const unit = allowedRow(value, ["side", "unit", "from", "until", "path", "shots", "aim", "forms", "gaps", "hiddenAtEnd"]);
   if (!unit) return false;
   if ((unit.side !== 0 && unit.side !== 1) || !name(unit.unit) || !numberIn(unit.from, 0, CLIP_SECONDS)) return false;
   if (unit.until !== null && (!numberIn(unit.until, unit.from, CLIP_SECONDS) || unit.until <= unit.from)) return false;
@@ -152,6 +154,11 @@ export function packDirectory(hash: string): string {
   return DAILY_ROOT + "/packs/" + hash;
 }
 
+function playbackGaps(unit: DailyUnit): number[] | undefined {
+  // Replay gaps are half-open. Keep an offscreen survivor hidden on the frozen final frame.
+  return unit.hiddenAtEnd ? [...(unit.gaps ?? []), CLIP_SECONDS, CLIP_SECONDS + 1] : unit.gaps;
+}
+
 export function fightPlayback(fight: DailyFight): MapPlayback | null {
   return sanitizeMapPlayback({
     v: 7,
@@ -168,7 +175,7 @@ export function fightPlayback(fight: DailyFight): MapPlayback | null {
       attacks: unit.shots,
       aim: unit.aim,
       forms: unit.forms?.map(form => ({ t: form.at, name: form.unit })),
-      hidden: unit.gaps,
+      hidden: playbackGaps(unit),
     })),
   });
 }

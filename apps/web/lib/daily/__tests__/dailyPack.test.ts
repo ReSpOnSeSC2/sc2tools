@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
-import { sanitizeMapPlayback } from "../../mapReplay";
+import { sanitizeMapPlayback, unitVisibleAt, type PlaybackBuilding } from "../../mapReplay";
 import { selectFights } from "../buildPack";
 import { fightPlayback, readDailyIndex, readDailyPack } from "../clip";
 import { cropUnit } from "../cropFight";
@@ -37,10 +37,12 @@ function recording() {
   };
 }
 
-function selection(raw = recording(), era = "after" as const, seed = 0) {
+type Recording = ReturnType<typeof recording> & { buildings?: PlaybackBuilding[] };
+
+function selection(raw: Recording = recording(), era = "after" as const, seed = 0, range = { start: 0, end: 60 }) {
   const playback = sanitizeMapPlayback(raw);
   if (!playback) throw new Error("Invalid test playback");
-  return selectFights(playback, { start: 0, end: 60 }, era, seed);
+  return selectFights(playback, range, era, seed);
 }
 
 describe("D1 offline field-fight selection", () => {
@@ -77,6 +79,54 @@ describe("D1 offline field-fight selection", () => {
     expect(selection({ ...raw, units: [...raw.units, spent] })[0].fight.losses).toEqual([50, 250]);
     const workers = Array.from({ length: 3 }, () => ({ ...fighter("me", 23), name: "SCV" }));
     expect(selection({ ...raw, units: [...raw.units, ...workers] })).toEqual([]);
+  });
+
+  test("excludes local shots from surviving structures by aim or firing position", () => {
+    const raw = recording();
+    const cannon: PlaybackBuilding = {
+      owner: "opp", name: "PhotonCannon", t: 10, died: null, x: 77, y: 55, moves: [], attacks: [21],
+    };
+    expect(selection({ ...raw, buildings: [cannon] })).toHaveLength(1);
+    expect(selection({ ...raw, buildings: [{ ...cannon, aim: [21, 52, 55] }] })).toEqual([]);
+    expect(selection({ ...raw, buildings: [{ ...cannon, x: 62 }] })).toEqual([]);
+    const relocated = { ...cannon, t: 18, moves: [20, 62, 55], attacks: [20] };
+    expect(selection({ ...raw, buildings: [relocated] })).toEqual([]);
+  });
+
+  test("requires the full quiet interval inside later source segments", () => {
+    const raw = recording();
+    const withContact = (contact: number) => ({
+      ...raw,
+      units: raw.units.map(unit => ({
+        ...unit,
+        born: 60,
+        died: unit.died === null ? null : unit.died + 41.1,
+        attacks: [contact],
+        aim: [contact, 52, 55],
+        wp: [60, 52, 55, contact, 52, 55, 75, 52, 55],
+      })),
+    });
+    const range = { start: 60, end: 80 };
+    expect(selection(withContact(61.1), "after", 0, range)).toEqual([]);
+    expect(selection(withContact(63.1), "after", 0, range)).toHaveLength(1);
+  });
+
+  test("keeps surviving units that leave or are unobserved hidden on the frozen result frame", () => {
+    const raw = recording();
+    const finishUnit = (unit: typeof raw.units[0] & { hidden?: number[] }) => {
+      const [draft] = selection({ ...raw, units: [unit, ...raw.units.slice(1)] });
+      const playback = fightPlayback(draft.fight);
+      if (!playback) throw new Error("Expected cropped playback");
+      return playback.units[0];
+    };
+    const survivor = raw.units[0];
+    const outside = finishUnit({ ...survivor, wp: [10, 52, 55, 20, 52, 55, 26, 52, 55, 27, 80, 55, 29, 81, 55] });
+    expect(unitVisibleAt(outside, 7)).toBe(true);
+    expect(unitVisibleAt(outside, 8)).toBe(false);
+    expect(unitVisibleAt(outside, 10)).toBe(false);
+    expect(outside.died).toBeNull();
+    expect(unitVisibleAt(finishUnit({ ...survivor, hidden: [27, 30] }), 10)).toBe(false);
+    expect(unitVisibleAt(finishUnit({ ...survivor, hidden: [27, 29] }), 10)).toBe(true);
   });
 
   test("hides outside positions, trims observation gaps, and never stores world coordinates beyond the crop", () => {
