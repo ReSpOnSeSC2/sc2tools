@@ -2,7 +2,6 @@
 import dynamic from "next/dynamic";
 import { useOverlaySeriesState } from "@/components/overlay/useOverlaySeriesState";
 const LocalCompositePreview = dynamic(() => import("@/components/overlay/LocalCompositePreview").then(module => module.LocalCompositePreview), { ssr: false });
-const LazySeriesWidget = dynamic(() => import("@/components/overlay/widgets/SeriesWidget").then(module => module.SeriesWidget), { ssr: false });
 
 import {
   useCallback,
@@ -14,7 +13,7 @@ import {
   type RefObject,
   type ReactNode,
 } from "react";
-import { CompositeTestWidgets } from "@/components/overlay/CompositeTestWidgets";
+import { COMPOSITE_PAYLOAD_WIDGETS, CompositeSeriesWidget, CompositeTestWidgets } from "@/components/overlay/CompositeTestWidgets";
 import { OverlayPlacement } from "@/components/overlay/OverlayPlacement";
 import type { OverlayCanvas } from "@/lib/overlayLayout";
 import { useGameWidgetsPaused } from "@/components/overlay/useGameWidgetsPaused";
@@ -58,18 +57,6 @@ import { ReconnectDot } from "@/components/overlay/ReconnectDot";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
 import { OverlayCredit } from "@/components/overlay/OverlayCredit";
 import { OpponentWidget } from "@/components/overlay/widgets/OpponentWidget";
-import { MatchResultWidget } from "@/components/overlay/widgets/MatchResultWidget";
-import { PostGameWidget } from "@/components/overlay/widgets/PostGameWidget";
-import { MmrDeltaWidget } from "@/components/overlay/widgets/MmrDeltaWidget";
-import { StreakWidget } from "@/components/overlay/widgets/StreakWidget";
-import { CheeseWidget } from "@/components/overlay/widgets/CheeseWidget";
-import { RematchWidget } from "@/components/overlay/widgets/RematchWidget";
-import { RivalWidget } from "@/components/overlay/widgets/RivalWidget";
-import { RankWidget } from "@/components/overlay/widgets/RankWidget";
-import { MetaWidget } from "@/components/overlay/widgets/MetaWidget";
-import { TopBuildsWidget } from "@/components/overlay/widgets/TopBuildsWidget";
-import { FavOpeningWidget } from "@/components/overlay/widgets/FavOpeningWidget";
-import { BestAnswerWidget } from "@/components/overlay/widgets/BestAnswerWidget";
 import { ScoutingWidget } from "@/components/overlay/widgets/ScoutingWidget";
 import {
   SessionWidget,
@@ -88,7 +75,7 @@ import {
   mergeLiveGameStreamerHistory,
   type StickyStreamerHistory,
 } from "@/components/overlay/mergeLiveGameStreamerHistory";
-import { hasLiveIntel, LIVE_INTEL_WIDGETS, liveIntelPayload } from "@/components/overlay/liveIntelPayload";
+import { hasLiveIntel, isLiveIntelWidget, LIVE_INTEL_WIDGETS, liveIntelPayload } from "@/components/overlay/liveIntelPayload";
 
 /**
  * Public OBS overlay (all-in-one). The token IS the auth — we trade
@@ -254,7 +241,7 @@ function ConnectedOverlayClient({
   const intel = liveIntelPayload(live, liveGame);
   const testTargets = (id: WidgetId) => enabled.has(id) && (!singleWidget || singleWidget === id) && testLayer.targets(id);
   const layout = singleWidget === null ? canvas === "vertical" ? profile.layoutVertical : profile.layout : undefined;
-  const realSlot = (id: WidgetId, card: ReactNode) => <div data-overlay-real={id} style={{ display: testTargets(id) ? "none" : undefined }}>
+  const realSlot = (id: WidgetId, card: ReactNode) => <div key={id} data-overlay-real={id} style={{ display: testTargets(id) ? "none" : undefined }}>
     <OverlayPlacement placement={layout?.[id]}>{card}</OverlayPlacement>
   </div>;
 
@@ -267,21 +254,11 @@ function ConnectedOverlayClient({
     >
       <OverlayCheckBadge status={connectionStatus} live={hasActiveOverlayGame(liveGame)} />
       {shouldShow("opponent") && realSlot("opponent", <OpponentWidget live={live} liveGame={liveGame} />)}
-      {shouldShow("match-result") && realSlot("match-result", <MatchResultWidget live={live} />)}
-      {shouldShow("post-game") && realSlot("post-game", <PostGameWidget live={live} />)}
-      {shouldShow("mmr-delta") && realSlot("mmr-delta", <MmrDeltaWidget live={live} />)}
-      {shouldShow("streak") && realSlot("streak", <StreakWidget live={intel} />)}
-      {shouldShow("cheese") && realSlot("cheese", <CheeseWidget live={intel} />)}
-      {shouldShow("rematch") && realSlot("rematch", <RematchWidget live={intel} />)}
-      {shouldShow("rival") && realSlot("rival", <RivalWidget live={intel} />)}
-      {shouldShow("rank") && realSlot("rank", <RankWidget live={live} />)}
-      {shouldShow("meta") && realSlot("meta", <MetaWidget live={intel} />)}
-      {shouldShow("topbuilds") && realSlot("topbuilds", <TopBuildsWidget live={intel} />)}
-      {shouldShow("fav-opening") && realSlot("fav-opening", <FavOpeningWidget live={intel} />)}
-      {shouldShow("best-answer") && realSlot("best-answer", <BestAnswerWidget live={intel} />)}
+      {COMPOSITE_PAYLOAD_WIDGETS.map(([id, Widget]) =>
+        shouldShow(id) && realSlot(id, <Widget live={isLiveIntelWidget(id) ? intel : live} />))}
       {shouldShow("scouting") && realSlot("scouting", <ScoutingWidget live={live} liveGame={liveGame} />)}
       {shouldShow("session") && realSlot("session", <SessionWidget live={live} session={session} />)}
-      {shouldShow("series") && realSlot("series", <LazySeriesWidget rawSeries={series} composite />)}
+      {shouldShow("series") && realSlot("series", <CompositeSeriesWidget rawSeries={series} composite />)}
       {/* Preserve the spin ledger through timed hides and brief bridge
           interruptions, so recovering the same match cannot replay it. */}
       {enabled.has("randomizer") && (!singleWidget || singleWidget === "randomizer") && (
