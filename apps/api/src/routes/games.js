@@ -1093,79 +1093,75 @@ function buildGamesRouter(deps) {
             },
           );
         }
-        // Derive and broadcast the full LiveGamePayload for every
-        // widget that depends on ``overlay:live`` — but ONLY for a
-        // game the streamer just finished. Re-uploads of historical
-        // replays (full resync, the Builds-page reclassify, the Macro
-        // backfill, bulk imports) flow through this same ingest in
-        // 25-game batches; pre-gate, each batch fan-out fired the
-        // post-game widgets for a years-old game and overwrote the
-        // broker's cached payload with it, so the streamer's scene
-        // re-ran stale widgets for the whole duration of a backfill
-        // (and the resync replay kept re-showing the last one for
-        // 30 min after). ``date`` is the replay's UTC end time
-        // (sc2reader's replay.date, normalised with a Z by the
-        // agent), so a tight window cleanly separates "just played"
-        // from "re-uploaded history". We pick the FRESHEST accepted
-        // game of the batch (not the last array element) so a real
-        // game finishing mid-backfill still reaches the stream.
-        if (deps.overlayLive && deps.overlayTokens) {
-          if (freshGame) {
-            emitOverlayLive(
-              deps.io,
-              deps.overlayLive,
-              deps.overlayTokens,
-              userId,
-              freshGame,
-              deps.liveGameBroker || null,
-              deps.engagement || null,
-              deps.gameMoments || null,
-            ).catch((err) => {
+      }
+      // Derive and broadcast the full LiveGamePayload for every
+      // widget that depends on ``overlay:live`` — but ONLY for a
+      // game the streamer just finished. Re-uploads of historical
+      // replays (full resync, the Builds-page reclassify, the Macro
+      // backfill, bulk imports) flow through this same ingest in
+      // 25-game batches; pre-gate, each batch fan-out fired the
+      // post-game widgets for a years-old game and overwrote the
+      // broker's cached payload with it, so the streamer's scene
+      // re-ran stale widgets for the whole duration of a backfill
+      // (and the resync replay kept re-showing the last one for
+      // 30 min after). ``date`` is the replay's UTC end time
+      // (sc2reader's replay.date, normalised with a Z by the
+      // agent), so a tight window cleanly separates "just played"
+      // from "re-uploaded history". We pick the FRESHEST accepted
+      // game of the batch (not the last array element) so a real
+      // game finishing mid-backfill still reaches the stream.
+      const canBroadcastOverlay = deps.io && deps.overlayLive && deps.overlayTokens;
+      if (freshGame && (deps.gameMoments || canBroadcastOverlay)) {
+        emitOverlayLive(
+          deps.io,
+          deps.overlayLive,
+          deps.overlayTokens,
+          userId,
+          freshGame,
+          deps.liveGameBroker || null,
+          deps.engagement || null,
+          deps.gameMoments || null,
+        ).catch((err) => {
+          req.log?.warn({ err, userId }, "overlay_live_emit_failed");
+        });
+      } else if (canBroadcastOverlay && accepted.length > 0) {
+        req.log?.debug({ userId, accepted: accepted.length }, "overlay_live_skipped_stale_batch");
+      }
+      if (deps.io && deps.overlayLive && deps.overlayTokens && accepted.length > 0) {
+        // Invalidate the pre-game scouting cache for every opponent
+        // touched by this ingest. Without this, a rematch against the
+        // same opponent inside the 5-minute enrichment cache window
+        // would render its LAST GAMES list missing the just-uploaded
+        // encounter. Per accepted game (not just the last) so a
+        // batch upload also clears every opponent it touched.
+        //
+        // We pass the opponent's ``pulseCharacterId`` (when available)
+        // so the region-aware cache flushes BOTH the
+        // ``pulse:<pcid>`` and the name-keyed entries together — a
+        // streamer who switched servers and re-faced the same
+        // opponent gets their freshly-uploaded encounter reflected on
+        // the very next envelope tick on either keying scheme.
+        if (typeof deps.overlayLive.invalidateEnrichmentForOpponent === "function") {
+          const seen = new Set();
+          for (const g of competitiveIncoming) {
+            const name = g?.opponent?.displayName;
+            if (typeof name !== "string" || !name) continue;
+            const key = name.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const pcid = g?.opponent?.pulseCharacterId;
+            try {
+              deps.overlayLive.invalidateEnrichmentForOpponent(
+                userId,
+                name,
+                pcid,
+              );
+            } catch (err) {
               if (req.log) {
                 req.log.warn(
-                  { err, userId },
-                  "overlay_live_emit_failed",
+                  { err, userId, name },
+                  "overlay_enrichment_invalidate_failed",
                 );
-              }
-            });
-          } else if (req.log) {
-            req.log.debug({ userId, accepted: accepted.length }, "overlay_live_skipped_stale_batch");
-          }
-          // Invalidate the pre-game scouting cache for every opponent
-          // touched by this ingest. Without this, a rematch against the
-          // same opponent inside the 5-minute enrichment cache window
-          // would render its LAST GAMES list missing the just-uploaded
-          // encounter. Per accepted game (not just the last) so a
-          // batch upload also clears every opponent it touched.
-          //
-          // We pass the opponent's ``pulseCharacterId`` (when available)
-          // so the region-aware cache flushes BOTH the
-          // ``pulse:<pcid>`` and the name-keyed entries together — a
-          // streamer who switched servers and re-faced the same
-          // opponent gets their freshly-uploaded encounter reflected on
-          // the very next envelope tick on either keying scheme.
-          if (typeof deps.overlayLive.invalidateEnrichmentForOpponent === "function") {
-            const seen = new Set();
-            for (const g of competitiveIncoming) {
-              const name = g?.opponent?.displayName;
-              if (typeof name !== "string" || !name) continue;
-              const key = name.toLowerCase();
-              if (seen.has(key)) continue;
-              seen.add(key);
-              const pcid = g?.opponent?.pulseCharacterId;
-              try {
-                deps.overlayLive.invalidateEnrichmentForOpponent(
-                  userId,
-                  name,
-                  pcid,
-                );
-              } catch (err) {
-                if (req.log) {
-                  req.log.warn(
-                    { err, userId, name },
-                    "overlay_enrichment_invalidate_failed",
-                  );
-                }
               }
             }
           }
@@ -1473,9 +1469,9 @@ function pickFreshOverlayGame(incoming, accepted) {
  *     fall back to ``game.gameId`` — still unique per game, just not
  *     name-derivable.
  *
- * @param {import('socket.io').Server} io
- * @param {import('../services/overlayLive').OverlayLiveService} overlayLive
- * @param {import('../services/types').OverlayTokensService} overlayTokens
+ * @param {import('socket.io').Server|undefined} io
+ * @param {import('../services/overlayLive').OverlayLiveService|undefined} overlayLive
+ * @param {import('../services/types').OverlayTokensService|undefined} overlayTokens
  * @param {string} userId
  * @param {Record<string, any>} game
  * @param {import('../services/liveGameBroker').LiveGameBroker|null} broker
@@ -1492,46 +1488,23 @@ async function emitOverlayLive(
   engagement = null,
   gameMoments = null,
 ) {
-  if (!io || !overlayLive || !overlayTokens || !userId || !game) return;
-  // ``buildFromGame`` is declared ``Promise<object|null>`` on the
-  // service; this route stamps/reads dynamic fields (``gameKey``,
-  // ``oppName``), so hold it as a string-keyed record locally.
-  /** @type {Record<string, any> | null} */
-  const payload = await overlayLive.buildFromGame(userId, game);
-  if (!payload) return;
-  payload.gameKey = pickGameKey(broker, userId, game, payload);
-  // Cache the post-game payload on the broker so an
-  // ``overlay:resync`` from a reconnected Browser Source can replay
-  // it without re-running the full Mongo aggregation. Best-effort —
-  // a missing broker just skips the cache.
-  if (broker && typeof broker.setLatestOverlayLive === "function") {
-    try {
-      broker.setLatestOverlayLive(userId, payload);
-    } catch {
-      /* caching is advisory; never break the fan-out */
+  if (!userId || !game) return;
+  /** @type {Awaited<ReturnType<typeof publishOverlayLive>>} */
+  let broadcast = null;
+  try {
+    broadcast = await publishOverlayLive(io, overlayLive, overlayTokens, userId, game, broker);
+  } finally {
+    // Fresh ingest also supplies the personal bell when the overlay is unavailable.
+    if (gameMoments) {
+      try { await gameMoments.process(userId, game, broadcast?.payload ?? null, broadcast?.tokens ?? [], { created: true }); }
+      catch { /* Optional celebrations cannot break verified settlement. */ }
     }
-  }
-  // ``list`` returns *all* tokens for the user (active + revoked).
-  // Filter the revoked ones out so a leaked-then-revoked token can't
-  // still receive live data after revocation.
-  const items = await overlayTokens.list(userId);
-  const activeTokens = [];
-  for (const t of items) {
-    if (!t || !t.token) continue;
-    if (t.revokedAt || t.rotationPending) continue;
-    activeTokens.push(t.token);
-    io.to(`overlay:${t.token}`).emit("overlay:live", payload);
-  }
-  // Only this freshly inserted game reaches the moment path. Its durable
-  // conditional receipt also protects a concurrent/restarted caller.
-  if (gameMoments) {
-    try { await gameMoments.process(userId, game, payload, activeTokens, { created: true }); }
-    catch { /* Optional celebrations cannot break verified settlement. */ }
   }
   // Engagement hooks — settle Crystal Ball predictions against the
   // replay-verified result, and flag clip-worthy game moments. Both
   // best-effort: engagement must never break the live fan-out.
-  if (engagement && activeTokens.length > 0) {
+  if (engagement && broadcast?.tokens.length) {
+    const { payload, tokens: activeTokens } = broadcast;
     const eng = engagement;
     try {
       await eng.settlePrediction(activeTokens, {
@@ -1561,6 +1534,33 @@ async function emitOverlayLive(
       /* engagement is advisory */
     }
   }
+}
+
+/**
+ * @param {import('socket.io').Server|undefined} io
+ * @param {import('../services/overlayLive').OverlayLiveService|undefined} overlayLive
+ * @param {import('../services/types').OverlayTokensService|undefined} overlayTokens
+ * @param {string} userId
+ * @param {import('mongodb').Document} game
+ * @param {import('../services/liveGameBroker').LiveGameBroker|null} broker
+ */
+async function publishOverlayLive(io, overlayLive, overlayTokens, userId, game, broker) {
+  if (!io || !overlayLive || !overlayTokens) return null;
+  /** @type {import('mongodb').Document|null} */
+  const payload = await overlayLive.buildFromGame(userId, game);
+  if (!payload) return null;
+  payload.gameKey = pickGameKey(broker, userId, game, payload);
+  // A reconnected Browser Source can resync this payload without re-deriving it.
+  if (broker && typeof broker.setLatestOverlayLive === "function") {
+    try { broker.setLatestOverlayLive(userId, payload); }
+    catch { /* Caching is advisory. */ }
+  }
+  /** @type {string[]} */
+  const tokens = (await overlayTokens.list(userId))
+    .filter(item => item?.token && !item.revokedAt && !item.rotationPending)
+    .map(item => item.token);
+  for (const token of tokens) io.to(`overlay:${token}`).emit("overlay:live", payload);
+  return { payload, tokens };
 }
 
 /**

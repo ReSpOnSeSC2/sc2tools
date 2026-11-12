@@ -107,7 +107,9 @@ class NotificationsService {
   async _notify(userId, input) {
     if (!KIND_RE.test(String(input.kind || ""))) throw new Error("invalid_notification_kind");
     const user = await this.db.users.findOne({ userId }, { projection: { "preferences.notifications": 1 } });
-    if (!user || sanitizeNotificationPrefs(user.preferences?.notifications).muted.includes(input.kind)) return null;
+    const prefs = sanitizeNotificationPrefs(user?.preferences?.notifications);
+    const milestone = input.kind.startsWith("moment.");
+    if (!user || prefs.muted.includes(input.kind) || (milestone && !prefs.milestones)) return null;
     const eventKey = deliveryKey(input.eventKey);
     if (eventKey && await this.db.notifications.findOne({ userId, deliveryKeys: eventKey }, { projection: { _id: 1 } })) return null;
     const now = new Date();
@@ -147,10 +149,11 @@ class NotificationsService {
       }
     }
     if (!row) return null;
-    this._push(userId, row);
+    // The shared socket room includes OBS tokens. The bell refetches details over authenticated REST.
+    this._push(userId, milestone ? { kind: "refresh" } : row);
     // Devices are best effort and never delay or fail the stored row. Only
     // rows that were stored reach here, so muted kinds never push.
-    if (this.push) void this.push.deliver(userId, row).catch(() => {});
+    if (this.push && !milestone) void this.push.deliver(userId, row).catch(() => {});
     return row;
   }
 
@@ -201,7 +204,8 @@ class NotificationsService {
     if (typeof opts.kind === "string" && opts.kind !== "all") {
       if (opts.kind === "reviews") filter.kind = /^review\./;
       else if (opts.kind === "coaching") filter.kind = /^coaching\./;
-      else if (opts.kind === "system") filter.kind = { $not: /^(review|coaching)\./ };
+      else if (opts.kind === "milestones") filter.kind = /^moment\./;
+      else if (opts.kind === "system") filter.kind = { $not: /^(review|coaching|moment)\./ };
       else if (KIND_RE.test(opts.kind)) filter.kind = opts.kind;
       else throw Object.assign(new Error("Invalid notification kind."), { status: 400, code: "bad_request" });
     }

@@ -1,8 +1,8 @@
 export type NotificationRow = { id: string; kind: string; title: string; body: string; href: string | null; count: number; readAt: string | null; createdAt: string };
 export type NotificationPage = { items: NotificationRow[]; nextCursor: string | null };
-export type NotificationCategory = "all" | "reviews" | "coaching" | "system";
-export const NOTIFICATION_CATEGORIES: NotificationCategory[] = ["all", "reviews", "coaching", "system"];
-export const CATEGORY_LABELS = { all: "All", reviews: "Reviews", coaching: "Coaching", system: "System" };
+export type NotificationCategory = "all" | "reviews" | "coaching" | "milestones" | "system";
+export const NOTIFICATION_CATEGORIES: NotificationCategory[] = ["all", "reviews", "coaching", "milestones", "system"];
+export const CATEGORY_LABELS = { all: "All", reviews: "Reviews", coaching: "Coaching", milestones: "Milestones", system: "System" };
 export const NOTIFICATION_KINDS = [
   ["review.new", "New reviews"], ["review.reply", "Review replies"], ["review.helpful", "Helpful review marks"],
   ["review.best", "Best review marks"], ["review.digest", "Review digest"], ["coaching.booked", "Session bookings"],
@@ -14,7 +14,13 @@ export const NOTIFICATION_KINDS = [
   ["whats_new", "Major product updates"], ["goal_met", "Goals reached"],
 ] as const;
 export function notificationCategory(kind: string): NotificationCategory {
-  return kind.startsWith("review.") ? "reviews" : kind.startsWith("coaching.") ? "coaching" : "system";
+  if (kind.startsWith("review.")) return "reviews";
+  if (kind.startsWith("coaching.")) return "coaching";
+  if (kind.startsWith("moment.")) return "milestones";
+  return "system";
+}
+export function notificationCategoryName(category: NotificationCategory): string {
+  return category === "milestones" ? "milestone" : CATEGORY_LABELS[category].toLowerCase();
 }
 export function fmtAgo(iso: string, now = Date.now()): string {
   const seconds = Math.max(0, Math.floor((now - Date.parse(iso)) / 1000));

@@ -2,6 +2,7 @@
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const { MongoClient } = require("mongodb");
 const { GameMomentsService } = require("../src/services/gameMoments");
+const { NotificationsService } = require("../src/services/notifications");
 const { OverlayTokenWrites } = require("../src/services/overlayTokenWrites");
 const { sanitizeGameMomentAlerts } = require("../src/services/multichatAppearance");
 const { emitOverlayLive } = require("../src/routes/games");
@@ -14,16 +15,20 @@ const game = (/** @type {Record<string,any>} */ patch = {}) => ({ userId: OWNER,
 /** @type {import('mongodb').Db} */ let db;
 beforeAll(async () => { mongo = await MongoMemoryServer.create(); client = await MongoClient.connect(mongo.getUri()); db = client.db("moment_alerts_test"); });
 afterAll(async () => { await client?.close(); await mongo?.stop(); });
-beforeEach(async () => { await Promise.all(["games", "users", "clips"].map(name => db.collection(name).deleteMany({}))); await db.collection("users").insertOne({ userId: OWNER }); });
+beforeEach(async () => { await Promise.all(["games", "users", "clips", "notifications"].map(name => db.collection(name).deleteMany({}))); await db.collection("users").insertOne({ userId: OWNER }); });
 afterEach(() => jest.restoreAllMocks());
 
-function fixture() {
+/** @param {boolean} [bell] */
+function fixture(bell = false) {
   /** @type {Array<{room:string,event:string,payload:any}>} */ const events = [];
   /** @type {unknown[][]} */ const posts = [];
   const gate = new OverlayTokenWrites(async token => ["one", "two"].includes(token) ? { userId: OWNER } : null);
   let config = sanitizeGameMomentAlerts({ moments: { marathonWin: { enabled: true } } });
-  const deps = { now: () => NOW,
-    users: { getPreferences: jest.fn(async () => ({ alerts: { gameMoments: config } })) },
+  const notifications = new NotificationsService(/** @type {import('../src/db/connect').DbContext} */ (/** @type {unknown} */ ({ users: db.collection("users"), notifications: db.collection("notifications") })));
+  const deps = { now: () => NOW, notifications: bell ? notifications : undefined,
+    users: { getPreferences: jest.fn(async (userId = OWNER, type = "multichat") => type === "multichat"
+      ? { alerts: { gameMoments: config } }
+      : (await db.collection("users").findOne({ userId }))?.preferences?.notifications) },
     tokens: { withWrite: (/** @type {string} */ token, /** @type {()=>Promise<any>} */ work) => gate.run(token, work) },
     channels: { forGame: jest.fn(async () => ({})) }, seasons: { cachedCurrent: () => ({ battlenetId: 70, start: "2026-10-01" }) },
     engagement: { _recordMomentAdmitted: jest.fn(async (token, moment) => { await db.collection("clips").insertOne({ token, ...moment }); }) },
@@ -31,7 +36,7 @@ function fixture() {
     io: { to: (/** @type {string} */ room) => ({ emit: (/** @type {string} */ event, /** @type {unknown} */ payload) => events.push({ room, event, payload }) }) },
   };
   const service = new GameMomentsService({ games: db.collection("games"), users: db.collection("users") }, /** @type {any} */ (deps));
-  return { service, deps, gate, events, posts, configure: (/** @type {unknown} */ raw) => { config = sanitizeGameMomentAlerts(raw); } };
+  return { service, deps, gate, events, posts, notifications, configure: (/** @type {unknown} */ raw) => { config = sanitizeGameMomentAlerts(raw); } };
 }
 const run = (/** @type {GameMomentsService} */ service, /** @type {Record<string,any>} */ input = game(), payload = {}) => service.process(OWNER, input, { gameKey: "live-key", ...payload }, ["one", "two"], { created: true });
 
@@ -66,6 +71,97 @@ describe("durable owner/game moment processing", () => {
   test.each([{ excluded: true }, { _deleted: true }, { _deletionPending: true }, { isResumedFromReplay: true }, { playerCount: 4 }])("noncontributing stored rows cannot emit: %j", async patch => {
     await db.collection("games").insertMany([game(patch), game({ userId: "foreign" })]); const value = fixture();
     expect(await run(value.service)).toEqual([]); expect(value.events).toEqual([]); expect(await db.collection("clips").countDocuments()).toBe(0);
+  });
+});
+
+describe("private milestone sink", () => {
+  async function optIn(muted = /** @type {string[]} */ ([])) {
+    await db.collection("users").updateOne({ userId: OWNER }, { $set: { "preferences.notifications": { milestones: true, muted } } });
+  }
+
+  test("a fresh tokenless insert reaches the private bell exactly once across independent workers", async () => {
+    const current = game();
+    await db.collection("games").insertOne(current);
+    await optIn();
+    const a = fixture(true), b = fixture(true);
+    const fanout = (/** @type {GameMomentsService} */ service) => emitOverlayLive(undefined, undefined, undefined, OWNER, current, null, null, service);
+    await Promise.all([fanout(a.service), fanout(b.service)]);
+    await fanout(fixture(true).service);
+    expect(await db.collection("notifications").find({}).toArray()).toEqual([
+      expect.objectContaining({ userId: OWNER, kind: "moment.marathon_win", title: "Marathon win", href: "/app/game/current", count: 1, deliveryKeys: expect.any(Array) }),
+    ]);
+    expect((await db.collection("games").findOne({ gameId: "current" }))?._gameMoments).toMatchObject({ version: 1, kinds: ["marathonWin"] });
+    expect(a.events.concat(b.events)).toEqual([]);
+  });
+
+  test("a tokenless default-off player has no history scan and a muted milestone has no bell row", async () => {
+    await db.collection("games").insertOne(game());
+    const value = fixture(true);
+    const read = jest.spyOn(value.service.db.games, "find");
+    await value.service.process(OWNER, game(), null, [], { created: true });
+    expect(read).not.toHaveBeenCalled();
+    expect((await db.collection("games").findOne({}))?._gameMoments).toBeUndefined();
+    await optIn(["moment.marathon_win"]);
+    await value.service.process(OWNER, game(), null, [], { created: true });
+    expect((await db.collection("games").findOne({}))?._gameMoments.kinds).toEqual(["marathonWin"]);
+    expect(await db.collection("notifications").countDocuments()).toBe(0);
+    await optIn();
+    await value.service.process(OWNER, game(), null, [], { created: true });
+    expect(await db.collection("notifications").countDocuments()).toBe(0);
+  });
+
+  test.each([
+    ["Victory", "moment.win_streak"],
+    ["Defeat", "moment.loss_streak_broken"],
+  ])("recorded %s history supplies the matching personal streak milestone", async (result, kind) => {
+    const current = game({ durationSec: 600 });
+    const history = Array.from({ length: 4 }, (_, i) => game({
+      gameId: `prior-${i}`, date: new Date(NOW - (i + 1) * 60 * 60_000), result,
+      opponent: { pulseCharacterId: "81" },
+    }));
+    await db.collection("games").insertMany([current, ...history]);
+    await optIn();
+    await fixture(true).service.process(OWNER, current, null, [], { created: true });
+    expect(await db.collection("notifications").find({}).toArray()).toEqual([expect.objectContaining({ kind })]);
+  });
+
+  test("one scan feeds independent stream filters and a private rounded bell without Web Push", async () => {
+    const opponent = { pulseCharacterId: "77", mmr: 4422, mmrSource: "replay" };
+    const current = game({ opponent });
+    await db.collection("games").insertMany([current, game({
+      gameId: "prior", date: new Date(NOW - 30 * 60_000), result: "Defeat", myMmr: 3890,
+      _gameMoments: { rank: { source: "pulse", league: "Diamond", season: 70, context: "1-S2-1-42:P" } },
+    })]);
+    await optIn();
+    const value = fixture(true);
+    value.configure({ moments: { leagueChange: { enabled: true }, giantKiller: { enabled: true }, streamerOpponentWin: { enabled: true }, marathonWin: { enabled: true } } });
+    value.deps.channels.forGame.mockResolvedValue(/** @type {Record<string,unknown>} */ ({ twitch: { login: "synthetic-channel" } }));
+    const push = jest.fn(async () => {});
+    value.notifications.push = { deliver: push };
+    const read = jest.spyOn(value.service.db.games, "find");
+    await run(value.service, current, { rank: { source: "pulse", league: "Master" } });
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(value.events.filter(event => event.room === "overlay:one").map(event => event.payload.kind))
+      .toEqual(["leagueChange", "giantKiller", "marathonWin", "streamerOpponentWin"]);
+    const bell = await db.collection("notifications").find({}).toArray();
+    expect(bell.map(row => row.kind).sort()).toEqual([
+      "moment.crossed_mmr_mark", "moment.giant_killer", "moment.marathon_win", "moment.new_season_peak", "moment.revenge_win",
+    ]);
+    expect(bell.find(row => row.kind === "moment.giant_killer")?.body).toBe("Opponent started about 400 MMR higher.");
+    expect(value.events.find(event => event.payload.kind === "giantKiller")?.payload.detail).toBe("Opponent started about 400 MMR higher.");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  test("a personal receipt stays independent when every stream token is rotating", async () => {
+    await db.collection("games").insertOne(game());
+    await optIn();
+    const value = fixture(true);
+    value.gate.block("one");
+    value.gate.block("two");
+    await run(value.service);
+    expect(value.events).toEqual([]);
+    expect(await db.collection("clips").countDocuments()).toBe(0);
+    expect(await db.collection("notifications").countDocuments({ userId: OWNER, kind: "moment.marathon_win" })).toBe(1);
   });
 });
 

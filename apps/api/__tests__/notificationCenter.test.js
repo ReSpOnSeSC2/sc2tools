@@ -4,6 +4,8 @@
 const request = require("supertest");
 jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 const { createHarness } = require("./helpers/reviewsHarness");
+const { sampleGame } = require("./helpers/browserIngestHarness");
+const { NotificationsService } = require("../src/services/notifications");
 
 describe("always-on notification center and support loop", () => {
   let h;
@@ -23,7 +25,7 @@ describe("always-on notification center and support loop", () => {
     await as("ann", request(h.app).get("/v1/me/notifications")).expect(200);
     await h.db.users.updateOne({ userId: h.userId("ann") }, { $set: { "preferences.onboarding": { dismissedAt: "kept" }, "preferences.misc": { defaultTab: "macro" } } });
     const saved = await as("ann", request(h.app).put("/v1/me/preferences/notifications")).send({ muted: ["import.done", "import.done", "BAD KIND", 4], arbitrary: true }).expect(200);
-    expect(saved.body).toEqual({ muted: ["import.done"] });
+    expect(saved.body).toEqual({ muted: ["import.done"], milestones: false });
     const user = await h.db.users.findOne({ userId: h.userId("ann") });
     expect(user.preferences.onboarding).toEqual({ dismissedAt: "kept" }); expect(user.preferences.misc).toEqual({ defaultTab: "macro" });
     expect(await h.services.notifications.notify(h.userId("ann"), { kind: "import.done", title: "Muted" })).toBeNull();
@@ -56,6 +58,59 @@ describe("always-on notification center and support loop", () => {
     expect(new Set([...first.body.items, ...next.body.items].map((row) => row.id)).size).toBe(25);
     expect((await as("ann", request(h.app).get("/v1/me/notifications?kind=system"))).body.items).toHaveLength(10);
     await as("ann", request(h.app).get("/v1/me/notifications?kind=invalid%20kind")).expect(400);
+  });
+
+  test("milestone delivery requires explicit consent and the category is owner-scoped", async () => {
+    const userId = h.userId("ann");
+    const input = { kind: "moment.win_streak", title: "5 wins in a row", eventKey: "test-game:winStreak", href: "/app/game/test-game" };
+    const emit = jest.fn();
+    const notifications = new NotificationsService(h.db, { io: { to: jest.fn(() => ({ emit })) } });
+    await as("ann", request(h.app).get("/v1/me/preferences/notifications")).expect(200, { muted: [], milestones: false });
+    await as("ann", request(h.app).put("/v1/me/preferences/notifications")).send({ milestones: "true" }).expect(200, { muted: [], milestones: false });
+    expect(await notifications.notify(userId, input)).toBeNull();
+    await as("ann", request(h.app).put("/v1/me/preferences/notifications")).send({ milestones: true }).expect(200, { muted: [], milestones: true });
+    expect(await notifications.notify(userId, input)).toMatchObject({ kind: input.kind });
+    expect(await notifications.notify(userId, input)).toBeNull();
+    expect(emit.mock.calls).toEqual([["notifications:changed", { kind: "refresh" }]]);
+    const mine = await as("ann", request(h.app).get("/v1/me/notifications?kind=milestones")).expect(200);
+    expect(mine.body.items).toEqual([expect.objectContaining({ kind: input.kind, title: input.title, href: input.href, count: 1 })]);
+    expect(JSON.stringify(mine.body)).not.toMatch(/deliveryKeys|userId/);
+    for (const [owner, category] of [["ann", "system"], ["bob", "milestones"]]) {
+      const other = await as(owner, request(h.app).get(`/v1/me/notifications?kind=${category}`)).expect(200);
+      expect(other.body.items).toEqual([]);
+    }
+    await as("ann", request(h.app).put("/v1/me/preferences/notifications")).send({ milestones: false }).expect(200);
+    expect(await notifications.notify(userId, { ...input, eventKey: "another-game:winStreak" })).toBeNull();
+    expect(await h.db.notifications.countDocuments({ userId })).toBe(1);
+  });
+
+  test("fresh replay ingest supplies the milestone bell without a browser-source token", async () => {
+    const userId = h.userId("ann");
+    await as("ann", request(h.app).put("/v1/me/preferences/notifications")).send({ milestones: true }).expect(200);
+    const moments = h.services.gameMoments;
+    const process = moments.process.bind(moments);
+    const pending = [];
+    const trigger = jest.spyOn(moments, "process").mockImplementation((...args) => {
+      const work = process(...args);
+      pending.push(work);
+      return work;
+    });
+    const upload = game => as("ann", request(h.app).post("/v1/games")).send({ games: [game] }).expect(202);
+    const fresh = sampleGame(1, { date: new Date().toISOString(), durationSec: 1_500, playerCount: 2 });
+    const historical = sampleGame(2, { date: new Date(Date.now() - 30 * 60_000).toISOString(), durationSec: 1_500, playerCount: 2 });
+    try {
+      await upload(historical);
+      expect(trigger).not.toHaveBeenCalled();
+      await upload(fresh);
+      expect(trigger).toHaveBeenCalledTimes(1);
+      await Promise.all(pending);
+      await upload(fresh);
+      expect(trigger).toHaveBeenCalledTimes(1);
+      const rows = await h.db.notifications.find({ userId }).toArray();
+      expect(rows).toEqual([expect.objectContaining({ kind: "moment.marathon_win", href: `/app/game/${encodeURIComponent(fresh.gameId)}` })]);
+    } finally {
+      trigger.mockRestore();
+    }
   });
 
   test("the same event cannot be folded into competing unread groups", async () => {

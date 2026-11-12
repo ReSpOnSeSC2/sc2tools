@@ -16,7 +16,7 @@ import { ReportReplyControl } from "@/app/admin/components/ReportReplyControl";
 
 let rows: NotificationRow[];
 let report: MyReport;
-let prefs: { muted: string[] };
+let prefs: { muted: string[]; milestones?: boolean };
 let failSave: boolean;
 let failReply: boolean;
 let fetcher: ReturnType<typeof vi.fn>;
@@ -49,6 +49,7 @@ beforeEach(() => {
       let page = rows.filter((row) => !url.searchParams.has("unread") || !row.readAt);
       const kind = url.searchParams.get("kind");
       if (kind === "coaching") page = page.filter((row) => row.kind.startsWith("coaching."));
+      if (kind === "milestones") page = page.filter((row) => row.kind.startsWith("moment."));
       if (kind === "system") page = page.filter((row) => row.kind === "import.done");
       if (kind === "reviews") page = [];
       const offset = Number(url.searchParams.get("before") || 0);
@@ -74,13 +75,30 @@ describe("notification center consumers", () => {
     expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST" && JSON.parse(init.body as string).all === true)).toBe(true);
   });
 
-  it("retains a muted-kind draft on failed save and persists only notification preferences after retry", async () => {
+  it("filters private milestone rows and links to their game", async () => {
+    rows.unshift({ ...rows[0], id: "milestone", kind: "moment.win_streak", title: "5 wins in a row", href: "/app/game/test-game" });
+    mount(<NotificationsPage />);
+    await screen.findByText("Notice 0");
+    fireEvent.click(screen.getByRole("button", { name: "Milestones" }));
+    await waitFor(() => expect(screen.queryByText("Notice 0")).toBeNull());
+    const notice = await screen.findByRole("link", { name: /5 wins in a row/ });
+    expect(notice.getAttribute("href")).toBe("/app/game/test-game");
+  });
+
+  it("retains an opt-in and muted-kind draft on failed save, then lets the player opt out", async () => {
     mount(<SettingsSaveScope tabId="preferences"><NotificationPreferences /></SettingsSaveScope>);
-    const input = await screen.findByRole("checkbox", { name: "Import finished" }); fireEvent.click(input);
+    const input = await screen.findByRole<HTMLInputElement>("checkbox", { name: "Import finished" });
+    const milestones = screen.getByRole<HTMLInputElement>("checkbox", { name: "Milestones" });
+    expect(milestones.checked).toBe(false);
+    fireEvent.click(milestones);
+    fireEvent.click(input);
     failSave = true; fireEvent.click(screen.getByRole("button", { name: "Save notifications" }));
-    await screen.findByRole("alert"); expect((input as HTMLInputElement).checked).toBe(false);
+    await screen.findByRole("alert"); expect(input.checked).toBe(false); expect(milestones.checked).toBe(true);
     failSave = false; fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
-    await screen.findByText("Notification preferences saved"); expect(prefs).toEqual({ muted: ["import.done"] });
+    await screen.findByText("Notification preferences saved"); expect(prefs).toEqual({ muted: ["import.done"], milestones: true });
+    fireEvent.click(milestones);
+    fireEvent.click(screen.getByRole("button", { name: "Save notifications" }));
+    await screen.findByText("Notification preferences saved"); expect(prefs).toEqual({ muted: ["import.done"], milestones: false });
     expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT").every(([url]) => String(url).endsWith("/preferences/notifications"))).toBe(true);
   });
 
