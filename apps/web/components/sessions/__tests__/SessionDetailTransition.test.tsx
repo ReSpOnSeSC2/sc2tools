@@ -19,10 +19,12 @@ afterEach(cleanup);
 
 it("preserves loaded-chart intent across game-page loading while admitting only the fresh next-page graph data", () => {
   const view = render(host(<SessionDetail id="owned-report" />));
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Share session report" }).disabled).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Load recorded MMR chart" }));
   expect(screen.getByLabelText("Loaded recorded MMR chart")).toBeTruthy(); const old = h.data?.mmr;
   h.search += "&gamesBefore=next-page"; h.data = undefined; view.rerender(host(<SessionDetail id="owned-report" />));
   expect(screen.getByText("Loading session view…")).toBeTruthy(); expect(screen.queryByLabelText("Loaded recorded MMR chart")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Share session report" })).toBeNull();
   h.data = historyDetail({ games: [historyGame({ position: 2 })] }); view.rerender(host(<SessionDetail id="owned-report" />));
   expect(screen.getByLabelText("Loaded recorded MMR chart")).toBeTruthy(); expect(screen.queryByRole("button", { name: "Load recorded MMR chart" })).toBeNull();
   expect(h.tracks.at(-1)).toBe(h.data.mmr); expect(h.tracks.at(-1)).not.toBe(old);

@@ -36,6 +36,7 @@ const UNTRACKED_PATHS: ReadonlyArray<RegExp> = [
 /** Per-record screens, collapsed to their route pattern. */
 const DYNAMIC_ROUTES: ReadonlyArray<readonly [RegExp, string]> = [
   [/^\/app\/game\/[^/]+/, "/app/game/:gameId"],
+  [/^\/app\/sessions\/[^/]+/, "/app/sessions/:sessionId"],
   [/^\/app\/opponents\/[^/]+/, "/app/opponents/:pulseId"],
   [/^\/builds\/[^/]+/, "/builds/:slug"],
   [/^\/community\/opponents\/[^/]+/, "/community/opponents/:pulseId"],

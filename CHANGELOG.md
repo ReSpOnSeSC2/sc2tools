@@ -4742,6 +4742,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Compare a shared replay report with your own card link and share both selected game records side by side. Report and comparison links have separate social previews.
 
+### Fingerprint and session images
+
+- Share an image of your skill fingerprint or session report. Each image uses aggregate results from your own replay sample.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

@@ -7,7 +7,9 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { longLabelFor } from "@/lib/datePresets";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { PersonalCardShareButton } from "@/components/ui/PersonalCardShareButton";
 import { formatNumber } from "@/lib/i18n/format";
+import { fingerprintShareCard } from "@/lib/personalShareCards";
 
 type FingerprintAxis = {
   key: string;
@@ -303,6 +305,7 @@ export function FingerprintCard() {
             fp={fp}
             rangeLabel={rangeLabel}
             onUseAllTime={isAllTime ? null : useAllTime}
+            shareKey={`${matchup}${query}#${dbRev}`}
           />
         ) : null}
       </Card.Body>
@@ -334,10 +337,12 @@ function FingerprintBody({
   fp,
   rangeLabel,
   onUseAllTime,
+  shareKey,
 }: {
   fp: FingerprintData;
   rangeLabel: string;
   onUseAllTime: (() => void) | null;
+  shareKey: string;
 }) {
   const axes = new Map(fp.axes.map((axis) => [axis.key, axis]));
   const taxonomyAxes = fp.taxonomy?.axes ?? [];
@@ -411,6 +416,11 @@ function FingerprintBody({
                 >
                   Use all time instead
                 </button>
+              </div>
+            ) : null}
+            {fp.games > 0 ? (
+              <div className="mt-3">
+                <FingerprintShare key={shareKey} fp={fp} repertoire={repertoire} pace={pace} />
               </div>
             ) : null}
           </div>
@@ -503,6 +513,22 @@ function FingerprintBody({
       <ArchetypeVocabulary fp={fp} />
     </div>
   );
+}
+
+function FingerprintShare({ fp, repertoire, pace }: {
+  fp: FingerprintData;
+  repertoire?: FingerprintAxis;
+  pace?: FingerprintAxis;
+}) {
+  const card = fingerprintShareCard({
+    matchup: fp.matchup,
+    games: fp.games,
+    distinctBuilds: axisAvailable(repertoire) ? repertoireMeasures(fp, repertoire).distinct : null,
+    buildSamples: repertoire?.sampleSize ?? 0,
+    averageSeconds: axisAvailable(pace) ? paceAverage(fp, pace) : null,
+    durationSamples: pace?.sampleSize ?? 0,
+  });
+  return <PersonalCardShareButton card={card} label="Share fingerprint" />;
 }
 
 /**
@@ -1665,7 +1691,7 @@ function MatchupPicker({
   return (
     <div
       aria-label="Fingerprint matchup"
-      className="flex max-w-full items-end gap-2 overflow-x-auto pb-1 sm:ml-auto sm:pb-0"
+      className="flex max-w-full flex-wrap items-end gap-2 pb-1 sm:ml-auto sm:pb-0"
     >
       <ChipGroup
         label="You play"
@@ -1673,7 +1699,7 @@ function MatchupPicker({
         active={my}
         onPick={(letter) => onChange(letter, vs)}
       />
-      <span className="mb-3 text-micro font-bold text-text-dim">vs</span>
+      <span aria-hidden className="mb-3 hidden text-micro font-bold text-text-dim sm:block">vs</span>
       <ChipGroup
         label="Opponent"
         side="Versus"
