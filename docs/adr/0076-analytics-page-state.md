@@ -85,6 +85,10 @@ setting is left to the owner (see "Not decided here").
 - Opponent list links use `opponentFilter`, which is outside Site search's
   recognized parameter names. Old bookmarks still read `q`. New list writes,
   copied view links and dossier return links use `opponentFilter`.
+- Saved list URLs use the same canonical comparison on return, so a saved
+  legacy filter restores the list window and scroll position after deployment.
+  Browser Sentry keeps only the opponent list path. Problem-report request
+  paths redact both filter values and retain other safe parameters.
 
 ## Not decided here
 

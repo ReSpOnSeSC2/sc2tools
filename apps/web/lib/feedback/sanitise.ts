@@ -17,12 +17,14 @@ const TOKEN_PAGE_SEGMENT = /^\/(overlay|dock|g)\/[^/?#]+/iu;
 const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|token)/iu;
 const OAUTH_CALLBACK_PATH = /^\/v1\/integrations\/(?:twitch|kick|youtube)\/callback\/?$/iu;
 const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set(["code", "state", "error", "error_description", "error_uri"]);
-// Typed search text: quick search's recent games and signed-out Community search (ADR 0069 amendment),
-// counted by the key the API's qs parser reads, so search[], search[0] and [search] are all `search`.
+// Typed search text in requests and browser routes. Match the query root so
+// search[], search[0] and [search] are all `search` (ADR 0069 amendment).
+export const OPPONENT_LIST_REPORT_PATH = /^\/app\/opponents\/?$/u;
 const SEARCH_QUERY_ROUTES = [
-  { path: /^\/v1\/replays\/?$/iu, root: "search" },
-  { path: /^\/v1\/community\/builds\/?$/iu, root: "q" },
-];
+  [/^\/v1\/replays\/?$/iu, /^search$/iu],
+  [/^\/v1\/community\/builds\/?$/iu, /^q$/iu],
+  [OPPONENT_LIST_REPORT_PATH, /^(?:opponentFilter|q)$/u],
+] as const;
 function queryRoot(name: string): string {
   const open = name.indexOf("["), close = open === 0 ? name.indexOf("]") : -1;
   return open > 0 ? name.slice(0, open) : close > 0 ? name.slice(1, close) : name;
@@ -60,9 +62,9 @@ export function sanitiseRequestPath(raw: string): string {
   if (/^\/v1\/search\/quick\/?$/iu.test(parsed.pathname)) return "/v1/search/quick";
   const path = parsed.pathname.replace(CREDENTIAL_PATH_SEGMENT, "/$1/[redacted]");
   const isOauthCallback = OAUTH_CALLBACK_PATH.test(parsed.pathname);
-  const searchRoot = SEARCH_QUERY_ROUTES.find(route => route.path.test(parsed.pathname))?.root;
+  const searchRoot = SEARCH_QUERY_ROUTES.find(([route]) => route.test(parsed.pathname))?.[1];
   for (const key of new Set(parsed.searchParams.keys())) {
-    if (SENSITIVE_QUERY_KEY.test(key) || (searchRoot !== undefined && queryRoot(key).toLowerCase() === searchRoot)
+    if (SENSITIVE_QUERY_KEY.test(key) || searchRoot?.test(queryRoot(key))
       || (isOauthCallback && OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS.has(key.toLowerCase()))) {
       parsed.searchParams.set(key, "[redacted]");
     }

@@ -256,11 +256,14 @@ describe("opponent list controls and navigation", () => {
     fireEvent.pointerEnter(alpha); act(() => vi.advanceTimersByTime(100)); fireEvent.pointerEnter(beta); act(() => vi.advanceTimersByTime(149)); expect(prefetch).not.toHaveBeenCalled(); act(() => vi.advanceTimersByTime(1)); expect(prefetch).toHaveBeenCalledOnce(); expect(prefetch).toHaveBeenCalledWith("/app/opponents/beta");
     expect(screen.getByText(/Showing your most recent 8,000 opponents/)).toBeTruthy(); expect(screen.queryByText(/\d+ pages/)).toBeNull();
   });
-  it("restores the saved render window before scrolling and clears the return flag", () => {
-    vi.useFakeTimers(); window.history.replaceState({}, "", "/app/opponents");
+  it.each([
+    ["/app/opponents", "/app/opponents"],
+    ["/app/opponents?q=Alpha&cursor=keep", "/app/opponents?cursor=keep&opponentFilter=Alpha"],
+  ])("restores the saved render window and scroll from %s to %s", (listUrl, destination) => {
+    vi.useFakeTimers(); window.history.replaceState({}, "", destination);
     const scroll = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
     sessionStorage.setItem("opponents:from-list", "1");
-    sessionStorage.setItem("opponents:list-state", JSON.stringify({ listUrl: "/app/opponents", renderWindow: 400, expandedGroups: [], scrollY: 950 }));
+    sessionStorage.setItem("opponents:list-state", JSON.stringify({ listUrl, renderWindow: 400, expandedGroups: [], scrollY: 950 }));
     useApiPaginatedMock.mockReturnValue({ items: Array.from({ length: 450 }, (_, index) => ({ ...opponents[0], pulseId: String(index), pulseCharacterId: String(index), name: `Player ${index}` })), isLoading: false });
     render(<OpponentsTab onOpen={() => undefined} />);
     expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(400);

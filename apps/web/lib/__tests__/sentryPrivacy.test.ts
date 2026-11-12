@@ -14,6 +14,31 @@ const SEARCH = "https://api.sc2tools.com/v1/replays?search=Private%20Rival&limit
 const SCRUBBED = "/v1/replays?search=%5Bredacted%5D&limit=5&sort=date_desc&enrich=none&window=recent";
 
 describe("browser Sentry keeps no typed search text or credential path", () => {
+  it("keeps only the opponent list route in navigation, fetch and span URLs", () => {
+    const url = "https://sc2tools.com/app/opponents?opponentFilter=Fixture+Rival&q=Legacy&sort=name";
+    const other = "/app/opponents/rival?q=keep";
+    expect(scrubBreadcrumb({ category: "navigation", data: { from: url, to: other } }).data)
+      .toEqual({ from: "/app/opponents", to: other });
+    expect(scrubBreadcrumb({ category: "fetch", data: { url: url.replace("?", "/?") + "&_rsc=flight" } }).data.url)
+      .toBe("/app/opponents");
+    expect(scrubSpan({ description: `GET ${url}`, data: { "url.full": url } })).toEqual({
+      description: "GET /app/opponents", data: { "url.full": "/app/opponents" },
+    });
+    expect(scrubSpan({ data: { "http.request.header.referer": url } }).data)
+      .toEqual({ "http.request.header.referer": "/app/opponents" });
+    expect(scrubSpan({ data: { "http.request.header.referer": other } }).data)
+      .toEqual({ "http.request.header.referer": other });
+  });
+
+  it("scrubs transaction request context as well as child spans", () => {
+    const url = "/app/opponents?q=Old+Fixture";
+    const event = { request: { url, headers: { Referer: url } }, spans: [{ data: { "http.target": url } }] };
+    expect(scrubTransaction(event)).toEqual({
+      request: { url: "/app/opponents", headers: { Referer: "/app/opponents" } },
+      spans: [{ data: { "http.target": "/app/opponents" } }],
+    });
+  });
+
   it("strips Match Room fragments and polling credentials from telemetry", () => {
     const from = "https://sc2tools.com/match/%72oom#r=private&key=private";
     expect(scrubBreadcrumb({ category: "navigation", data: { from, to: "/match" } }).data)

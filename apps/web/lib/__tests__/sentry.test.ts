@@ -46,6 +46,22 @@ describe("browser Sentry", () => {
       beforeSendTransaction: expect.any(Function) });
   });
 
+  it("scrubs opponent filters from the SDK's error URL and referrer", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@example.ingest/1");
+    const { initClientSentry } = await import("../sentry");
+    await initClientSentry();
+    const hook = sdk.options?.beforeSend;
+    const url = "https://sc2tools.com/app/opponents?opponentFilter=Fixture+Rival";
+    const referer = "https://sc2tools.com/app/opponents?q=Legacy";
+    const event = { request: { url, headers: { Referer: referer, "User-Agent": "Fixture browser" } } };
+    expect(typeof hook === "function" ? hook(event) : undefined).toEqual({
+      request: { url: "/app/opponents", headers: { Referer: "/app/opponents", "User-Agent": "Fixture browser" } },
+    });
+    expect(event.request).toEqual({ url, headers: { Referer: referer, "User-Agent": "Fixture browser" } });
+    const neighboring = { request: { url: "/app/replays?q=keep", headers: { referer: "/app/help?q=keep" } } };
+    expect(typeof hook === "function" ? hook(neighboring) : undefined).toEqual(neighboring);
+  });
+
   it("stays off, with the error on the console, when the scrubber chunk fails to load", async () => {
     vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@example.ingest/1");
     vi.doMock("../sentryPrivacy", () => { throw new Error("ChunkLoadError"); });

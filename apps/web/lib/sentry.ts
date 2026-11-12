@@ -52,7 +52,8 @@ function clientSentry(): Promise<Sentry | null> {
         environment: process.env.NEXT_PUBLIC_SC2TOOLS_ENV || "production",
         beforeBreadcrumb: (crumb: Parameters<typeof privacy.scrubBreadcrumb>[0]) =>
           onLocalReplaySurface() ? null : privacy.scrubBreadcrumb(crumb),
-        beforeSend: (event: unknown) => onLocalReplaySurface() ? null : event,
+        beforeSend: (event: Parameters<typeof privacy.scrubErrorContext>[0]) =>
+          onLocalReplaySurface() ? null : privacy.scrubErrorContext(event),
         beforeSendSpan: privacy.scrubSpan,
         beforeSendTransaction: (event: Parameters<typeof privacy.scrubTransaction>[0]) =>
           onLocalReplaySurface() ? null : privacy.scrubTransaction(event),

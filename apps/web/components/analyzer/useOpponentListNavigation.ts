@@ -6,7 +6,7 @@ import { usePersistentSort } from "@/components/ui/SortableTh";
 import type { SortState } from "@/components/ui/SortableTh";
 import { OPPONENT_COMPARATORS } from "./opponentListSort";
 import { OPPONENT_DETAIL_SORT_KEYS } from "@/lib/opponentPresentation";
-import { canonicalizeOpponentFilter, LEGACY_OPPONENT_FILTER_KEY, OPPONENT_FILTER_KEY, OPPONENT_LIST_PATH } from "@/lib/opponentListQuery";
+import { canonicalOpponentListUrl, LEGACY_OPPONENT_FILTER_KEY, OPPONENT_FILTER_KEY, OPPONENT_LIST_PATH } from "@/lib/opponentListQuery";
 
 export type MmrImpactFilter = "all" | "tracked" | "net-gain" | "net-loss";
 export type OpponentListLocation = {
@@ -48,11 +48,7 @@ export type OpponentListSnapshot = { listUrl: string; scrollY: number; renderWin
 export function storedOpponentListUrl() {
   try {
     const stored = JSON.parse(sessionStorage.getItem("opponents:list-state") || "null");
-    const url = new URL(stored?.listUrl || OPPONENT_LIST_PATH, window.location.origin);
-    if (url.origin === window.location.origin && url.pathname === OPPONENT_LIST_PATH) {
-      canonicalizeOpponentFilter(url.searchParams);
-      return `${url.pathname}${url.search}`;
-    }
+    return canonicalOpponentListUrl(stored?.listUrl, window.location.origin) ?? OPPONENT_LIST_PATH;
   } catch { /* A malformed or unavailable entry falls back to the list. */ }
   return OPPONENT_LIST_PATH;
 }

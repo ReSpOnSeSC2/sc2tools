@@ -32,6 +32,10 @@ describe("sanitiseRequestPath", () => {
     ["/v1/replays/g-1?search=keep", "/v1/replays/g-1?search=keep"],
     ["/v1/replays?[search]=Rival&%5Bsearch%5D%5B0%5D=Bob&[search=keep", "/v1/replays?%5Bsearch%5D=%5Bredacted%5D&%5Bsearch%5D%5B0%5D=%5Bredacted%5D&%5Bsearch=keep"],
     ["/v1/community/builds?view=quick&[q]=Stargate", "/v1/community/builds?view=quick&%5Bq%5D=%5Bredacted%5D"],
+    ["/app/opponents?opponentFilter=Fixture+Rival&q=Legacy&sort=name&_rsc=flight",
+      "/app/opponents?opponentFilter=%5Bredacted%5D&q=%5Bredacted%5D&sort=name&_rsc=flight"],
+    ["/app/opponents/?q=Legacy", "/app/opponents/?q=%5Bredacted%5D"],
+    ["/app/opponents/rival?q=keep", "/app/opponents/rival?q=keep"],
   ])("redacts credentials but keeps the route: %s", (input, expected) => {
     expect(sanitiseRequestPath(input)).toBe(expected);
   });

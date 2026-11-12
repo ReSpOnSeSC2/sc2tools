@@ -45,6 +45,7 @@ import {
 
 import { type Opp, type OpenOpponent, type OpponentExportAction, notePreview } from "./opponents/types";
 import { formatNumber } from "@/lib/i18n/format";
+import { canonicalOpponentListUrl } from "@/lib/opponentListQuery";
 
 const LS_MIN_OPP = "analyzer.opponents.minGames";
 type QuickOpponentView = "all" | "regulars" | "week" | "rivals";
@@ -280,8 +281,9 @@ export function OpponentsTab({
     try {
       if (sessionStorage.getItem("opponents:from-list") === "1") {
         const stored = JSON.parse(sessionStorage.getItem("opponents:list-state") || "null");
-        const here = `${window.location.pathname}${window.location.search}`;
-        if (stored?.listUrl === here && Array.isArray(stored.expandedGroups) && stored.expandedGroups.every((id: unknown) => typeof id === "string") && Number.isFinite(stored.scrollY) && Number.isFinite(stored.renderWindow)) restore.current = stored;
+        const { href, origin } = window.location;
+        const here = canonicalOpponentListUrl(href, origin);
+        if (here && canonicalOpponentListUrl(stored?.listUrl, origin) === here && Array.isArray(stored.expandedGroups) && stored.expandedGroups.every((id: unknown) => typeof id === "string") && Number.isFinite(stored.scrollY) && Number.isFinite(stored.renderWindow)) restore.current = stored;
       }
       sessionStorage.removeItem("opponents:from-list");
     } catch { /* List navigation does not depend on session storage. */ }
