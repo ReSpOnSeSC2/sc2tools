@@ -515,11 +515,6 @@ function FingerprintBody({
   );
 }
 
-/**
- * Say which traits produced the name. Population-calibrated names identify
- * their top two; provisional names list every rated category because no
- * cross-axis rarity ordering exists yet.
- */
 function FingerprintShare({ fp, repertoire, pace }: {
   fp: FingerprintData;
   repertoire?: FingerprintAxis;
@@ -536,6 +531,11 @@ function FingerprintShare({ fp, repertoire, pace }: {
   return <PersonalCardShareButton card={card} label="Share fingerprint" />;
 }
 
+/**
+ * Say which traits produced the name. Population-calibrated names identify
+ * their top two; provisional names list every rated category because no
+ * cross-axis rarity ordering exists yet.
+ */
 function NameRationale({ fp }: { fp: FingerprintData }) {
   const provisional = fp.archetype.namingMode === "taxonomy_fallback";
   const named = provisional
