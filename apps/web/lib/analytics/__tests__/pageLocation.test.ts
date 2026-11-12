@@ -84,6 +84,12 @@ describe("analyticsPageLocation", () => {
   it("never repeats the query string", () => {
     expect(analyticsPageLocation("https://sc2tools.com", "/", "?source=pwa")).toBe("https://sc2tools.com/?source=pwa");
   });
+
+  it("collapses card paths and discards their fragments from the referrer", () => {
+    const origin = "https://sc2tools.com";
+    expect(analyticsPageLocation(origin, "/card/report/summary", "?value=PrivateName")).toBe(`${origin}/card/:type/:class`);
+    expect(analyticsReferrer(`${origin}/card/forged/private-name#PrivateValue`, origin)).toBe(`${origin}/card/:type/:class`);
+  });
 });
 
 describe("analyticsReferrer", () => {

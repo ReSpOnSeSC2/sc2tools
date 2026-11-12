@@ -110,6 +110,8 @@ describe("isolated broadcast and local recap routes", () => {
     "/dock",
     "/dock/public-token",
     "/wrapped",
+    "/card/report/summary",
+    "/card/r%65port/%73ummary",
   ])("renders %s without Clerk or normal site chrome", (pathname) => {
     renderAt(pathname);
 

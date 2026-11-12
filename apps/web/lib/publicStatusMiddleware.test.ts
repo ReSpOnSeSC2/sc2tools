@@ -117,8 +117,8 @@ describe("existing private request protection", () => {
   });
 });
 
-describe("local recap middleware auth independence", () => {
-  it.each(["/wrapped", "/wrapped/opengraph-image"])("serves %s without a Clerk handshake", async pathname => {
+describe("local replay middleware auth independence", () => {
+  it.each(["/wrapped", "/wrapped/opengraph-image", "/card/report/summary", "/card/r%65port/%73ummary"])("serves %s without a Clerk handshake", async pathname => {
     authBoundary.unavailable = true;
     const response = await request(pathname, undefined, { cookie: "__session=synthetic-expired" });
     expect(response.headers.get("x-middleware-next")).toBe("1");
@@ -126,7 +126,8 @@ describe("local recap middleware auth independence", () => {
     expect(authBoundary.wrapped).not.toHaveBeenCalled();
   });
 
-  it.each(["/wrapped-other", "/wrapped/private", "/wrapped/opengraph-image/private"])("keeps %s inside Clerk", async pathname => {
+  it.each(["/wrapped-other", "/wrapped/private", "/wrapped/opengraph-image/private", "/card/report/private",
+    "/card/report%2Fsummary", "/card/r%2565port/summary", "/card/report/summ%ary"])("keeps %s inside Clerk", async pathname => {
     await request(pathname);
     expect(authBoundary.wrapped).toHaveBeenCalledOnce();
   });

@@ -87,7 +87,7 @@ export function trackInstantReportView(): void {
 }
 
 /** Delivery only, never a preview/cancel; consent is enforced by gaEvent. */
-export function trackInstantReportShared(method: "web_share" | "download" | "text"): void {
+export function trackInstantReportShared(method: "web_share" | "download" | "text" | "link"): void {
   gaEvent("instant_report_shared", { method });
 }
 

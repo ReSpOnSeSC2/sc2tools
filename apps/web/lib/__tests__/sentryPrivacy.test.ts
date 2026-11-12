@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { scrubBreadcrumb, scrubSpan, scrubTransaction } from "../sentryPrivacy";
 
+it.each(["/card/report/summary", "/card/r%65port/%73ummary"])("drops card fragments from navigation breadcrumbs after leaving %s", path => {
+  const crumb = { category: "navigation", data: { from: `https://sc2tools.com${path}#PrivateData`, to: "/try" } };
+  expect(scrubBreadcrumb(crumb).data).toEqual({ from: "/card/report/summary", to: "/try" });
+  expect(crumb.data.from).toContain("#PrivateData");
+});
+
 const SEARCH = "https://api.sc2tools.com/v1/replays?search=Private%20Rival&limit=5&sort=date_desc&enrich=none&window=recent";
 const SCRUBBED = "/v1/replays?search=%5Bredacted%5D&limit=5&sort=date_desc&enrich=none&window=recent";
 

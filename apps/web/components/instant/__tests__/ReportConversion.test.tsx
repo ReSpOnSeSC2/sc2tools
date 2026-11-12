@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildInstantReport } from "@/lib/instant/report";
+import { decodeReportCard } from "@/lib/instant/reportCardLink";
+import { REPORT_CARD_PATH } from "@/lib/instant/reportCardRoute";
 import { realWin } from "@/lib/instant/__tests__/fixtures/reportGames";
 import { ShareReportDialog } from "../ShareReportDialog";
 import { OpenersCard } from "../report/OpenersCard";
@@ -22,6 +24,49 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe("report conversion actions", () => {
+  it("copies a fragment-only card link for the selected rows", async () => {
+    render(<ShareReportDialog report={source()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Macro score" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy card link" }));
+    await screen.findByText("Card link copied.");
+    const url = new URL(mocks.copied.mock.calls[0][0]);
+    expect(url.pathname).toBe(REPORT_CARD_PATH);
+    expect(url.search).toBe("");
+    expect(decodeReportCard(url.hash.slice(1))).toMatchObject({ totals: { games: 3, wins: 3 }, macro: null });
+    expect(mocks.event.mock.calls).toEqual([["instant_report_shared", { method: "link" }]]);
+  });
+
+  it("returns focus to the card-link button after manual copy", async () => {
+    mocks.copied.mockRejectedValueOnce(new Error("Clipboard denied"));
+    render(<ShareReportDialog report={source()} onClose={vi.fn()} />);
+    const copyLink = screen.getByRole("button", { name: "Copy card link" });
+    fireEvent.click(copyLink);
+    const fallback = await screen.findByRole("textbox", { name: "Copy card link manually" });
+    expect((fallback as HTMLTextAreaElement).value).toContain(`${REPORT_CARD_PATH}#`);
+    expect(document.activeElement).toBe(fallback);
+    fireEvent.keyDown(fallback, { key: "Escape" });
+    expect(document.activeElement).toBe(copyLink);
+    expect(mocks.event).not.toHaveBeenCalled();
+  });
+
+  it("keeps the card-link button focused while a delayed clipboard write settles", async () => {
+    let finish!: () => void;
+    mocks.copied.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    render(<ShareReportDialog report={source()} onClose={vi.fn()} />);
+    const link = screen.getByRole("button", { name: "Copy card link" }) as HTMLButtonElement;
+    link.focus();
+    fireEvent.click(link);
+    expect(link.getAttribute("aria-disabled")).toBe("true");
+    expect(link.disabled).toBe(false);
+    fireEvent.click(link);
+    expect(mocks.copied).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(link);
+    await act(async () => { finish(); });
+    expect(screen.getByText("Card link copied.")).toBeTruthy();
+    expect(link.getAttribute("aria-disabled")).toBe("false");
+    expect(document.activeElement).toBe(link);
+  });
+
   it("previews selected rows, copies identity-free text and mocks native sharing only", async () => {
     render(<ShareReportDialog report={source()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("checkbox", { name: "Macro score" }));
