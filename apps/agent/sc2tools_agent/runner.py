@@ -70,6 +70,7 @@ from .pairing.recovery import RuntimeRecovery
 from .errors import classify
 from .health import HealthMonitor, classify_boot_error
 from .recent_games import parse_time
+from .milestone_notices import MilestoneNotices
 from .relaunch import AgentRelaunch, take_restart_marker
 from .status_model import StatusFacts, ConnectionFacts, derive_status
 from .game_activity import GameActivityGate
@@ -638,6 +639,10 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
     recovery_cell.live_metrics_logger = live_metrics_logger
     if live_bus is not None:
         live_bus.subscribe(activity_gate.on_event)
+        notices = _start_milestone_notices(cfg, state, ui, tray, stop_event)
+        if notices:
+            live_bus.subscribe(notices.on_game_event)
+            support_lifetime.callback(notices.close)
     obs_client, obs_scene = _build_obs_switcher(
         state=state, bridge=live_bridge, log=log, no_obs=no_obs, health=ui.health,
     )
@@ -699,6 +704,8 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
     finally:
         recovery_cell.support.close()
         log.info("agent_stopping")
+        if ui._milestone_notices:
+            ui._milestone_notices.close()
         if stream_service:
             stream_service.close()
         if obs_scene:
@@ -777,6 +784,7 @@ def _run_with_gui(
         autostart_enabled=autostart.is_enabled(),
         start_minimized=state.start_minimized,
         notify_every_game=state.notify_every_game,
+        notify_milestones=state.notify_milestones,
         notifications_muted=state.notifications_muted,
         close_to_tray=state.close_to_tray,
         # Only an explicit override attributed to this account is prefilled.
@@ -1034,6 +1042,8 @@ def _run_with_gui(
         name="sc2tools-boot",
         daemon=True,
     )
+    if not no_live:
+        _start_milestone_notices(cfg, state, multiplex, tray, stop_event)
     worker.start()
     if stream_service:
         stream_service.start()
@@ -1041,6 +1051,8 @@ def _run_with_gui(
     try:
         rc = gui.run()
     finally:
+        if multiplex._milestone_notices:
+            multiplex._milestone_notices.close()
         cell.support.close()
 
     log.info("agent_stopping rc=%s", rc)
@@ -1331,6 +1343,8 @@ def _gui_boot_worker(
                 device_token=state.device_token,
             )
             live_bus.subscribe(cell.activity_gate.on_event)
+            if notices := getattr(ui, "_milestone_notices", None):
+                live_bus.subscribe(notices.on_game_event)
             if cell.stream_service:
                 live_bus.subscribe(cell.stream_service.on_game_event)
             cell.live_bus = live_bus
@@ -1492,6 +1506,16 @@ def _handle_resync(
     if upload:
         upload.request_full_resync()
     logging.getLogger(__name__).info("agent_resync_requested")
+
+
+def _start_milestone_notices(cfg, state, ui, tray, stop_event):
+    if tray is None:
+        return None
+    notices = MilestoneNotices(state=state, state_dir=cfg.state_dir, api_base=cfg.api_base,
+                              notify=tray.show_notice, stop_event=stop_event)
+    ui._milestone_notices = notices
+    notices.start()
+    return notices
 
 
 def _start_desktop_history(cfg, state, ui):
@@ -2128,8 +2152,6 @@ def _handle_save_settings(
         state.start_minimized = bool(payload.start_minimized)
     if payload.notify_every_game is not None:
         state.notify_every_game = payload.notify_every_game is True
-    if payload.notifications_muted is not None:
-        state.notifications_muted = payload.notifications_muted is True
     if payload.close_to_tray is not None:
         state.close_to_tray = payload.close_to_tray is True
     if payload.auto_update_enabled is not None:
@@ -3008,19 +3030,25 @@ def _activate_obs_settings(state, cell, log, previous_connection, revision):
 
 
 def _apply_obs_settings(state, payload, cell, log, *, state_dir):
-    """Commit credential intent/settings before touching shared OBS clients."""
+    """Commit Settings before touching shared OBS clients."""
     intent = _obs_intent(payload)
     obs_lock = getattr(cell, "obs_lock", None)
     with (obs_lock if obs_lock is not None else nullcontext()):
         previous_connection = _effective_obs_connection(state)
         with _STATE_SAVE_LOCK:
+            # Delivery checks these preferences under the same lock.
+            notices = ("notify_milestones", "notifications_muted")
             names = ("obs_scene_switch_enabled", "obs_host", "obs_port", "obs_scene_map",
-                "obs_switch_debounce_sec", "obs_switch_on_replays", "obs_website_add_enabled")
+                "obs_switch_debounce_sec", "obs_switch_on_replays", "obs_website_add_enabled", *notices)
             previous = {name: dict(getattr(state, name)) if name == "obs_scene_map" else getattr(state, name) for name in names}
             expected = getattr(payload, "obs_credential_revision", None)
             if intent.operation != "keep" and expected is None and getattr(payload, "obs_password_intent", None) is None:
                 expected = credential_revision(state, "obs")  # Legacy trusted callers admit now; GUI always supplies its captured revision.
             try:
+                for name in notices:
+                    value = getattr(payload, name, None)
+                    if value is not None:
+                        setattr(state, name, value is True)
                 _stage_obs_settings(state, payload, cell)
                 if intent.operation == "keep":
                     save_state(state_dir, state)
@@ -3866,6 +3894,7 @@ class _Multiplexer:
         self._offline_toasted = False
         self._recovered_count = 0
         self._recent_history = None
+        self._milestone_notices = None
         self._import_ctl = None
         self._game_notifications = lambda: False
         self._notified_games = []
@@ -4083,6 +4112,8 @@ class _Multiplexer:
         owner = summary.get("_owner")
         if self._recent_history and owner != self._recent_history.owner_provider():
             return
+        if self._milestone_notices:
+            self._milestone_notices.on_game_synced(summary)
         if self._recent_history:
             self._recent_history.game_synced(path, summary)
         for sink in self._sinks:

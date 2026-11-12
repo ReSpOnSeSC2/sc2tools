@@ -153,6 +153,7 @@ class SettingsPayload:
         "autostart_enabled",
         "start_minimized",
         "notify_every_game",
+        "notify_milestones",
         "notifications_muted",
         "close_to_tray",
         "show_summary",
@@ -193,6 +194,7 @@ class SettingsPayload:
         autostart_enabled: Optional[bool] = None,
         start_minimized: Optional[bool] = None,
         notify_every_game: Optional[bool] = None,
+        notify_milestones: Optional[bool] = None,
         notifications_muted: Optional[bool] = None,
         close_to_tray: Optional[bool] = None,
         show_summary: bool = True,
@@ -234,6 +236,7 @@ class SettingsPayload:
         self.autostart_enabled = autostart_enabled
         self.start_minimized = start_minimized
         self.notify_every_game = notify_every_game
+        self.notify_milestones = notify_milestones
         self.notifications_muted = notifications_muted
         self.close_to_tray = close_to_tray
         self.show_summary = show_summary
@@ -3077,7 +3080,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             for widget in (self._concurrency_slider, self._upload_batch_slider, self._obs_port_input, self._obs_debounce_spin):
                 bind(widget, "value", "setValue", "valueChanged")
             for widget in (self._pause_history_check, self._battery_check, self._autostart_check, self._minimized_check,
-                           self._autoupdate_check, self._obs_replay_check,
+                           self._milestones_check, self._autoupdate_check, self._obs_replay_check,
                            self._obs_website_add_check, self._obs_clear_password):
                 bind(widget, "isChecked", "setChecked", "toggled")
             for widget in self._obs_scene_combos.values():
@@ -3517,6 +3520,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 autostart_enabled=self._autostart_check.isChecked(),
                 start_minimized=self._minimized_check.isChecked(),
                 notify_every_game=self._notifications_combo.currentData() == "all",
+                notify_milestones=self._milestones_check.isChecked(),
                 notifications_muted=self._notifications_combo.currentData() == "off",
                 close_to_tray=self._close_behavior_combo.currentData() is True,
                 auto_update_enabled=self._autoupdate_check.isChecked(),
@@ -4188,6 +4192,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             notification_mode = "off" if initial.notifications_muted else "all" if initial.notify_every_game else "important"
             self._notifications_combo.setCurrentIndex(self._notifications_combo.findData(notification_mode))
+            self._milestones_check.setChecked(initial.notify_milestones is True)
             self._close_to_tray_last_saved = initial.close_to_tray is not False
             self._close_behavior_combo.setCurrentIndex(self._close_behavior_combo.findData(self._close_to_tray_last_saved))
             # Default ON when the runner didn't say otherwise — matches

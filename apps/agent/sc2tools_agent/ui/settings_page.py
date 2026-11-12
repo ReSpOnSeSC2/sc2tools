@@ -567,6 +567,11 @@ def build_settings_page(
         window._notifications_combo.addItem(label, mode)
     window._notifications_combo.setToolTip("Every game includes a result notification on this PC. Replay-history imports stay quiet.")
     form.addRow("Desktop notifications", window._notifications_combo)
+    window._milestones_check = QtWidgets.QCheckBox("Show game milestones in the tray")
+    milestone_help = "Turn on game milestones in your web bell and choose Important or Every game above."
+    window._milestones_check.setToolTip(milestone_help)
+    window._milestones_check.setAccessibleDescription(milestone_help)
+    form.addRow(window._milestones_check)
     window._close_behavior_combo = QtWidgets.QComboBox()
     window._close_behavior_combo.addItem("Keep syncing in the tray", True)
     window._close_behavior_combo.addItem("Quit SC2 Tools", False)
@@ -638,6 +643,7 @@ def build_settings_page(
         (window._autostart_check, SAVED_WITH_SAVE),
         (window._minimized_check, SAVED_WITH_SAVE),
         (window._notifications_combo, SAVED_WITH_SAVE),
+        (window._milestones_check, SAVED_WITH_SAVE),
         (window._close_behavior_combo, SAVED_WITH_SAVE),
     ))
     updates, _ = section("Updates", ((window._autoupdate_check, SAVED_WITH_SAVE),))

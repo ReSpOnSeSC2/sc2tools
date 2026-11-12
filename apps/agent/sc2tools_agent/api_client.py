@@ -783,6 +783,9 @@ class ApiClient:
         """Current cached private scouting; interactive timeout, no retries."""
         return self._interactive("GET", "/v1/agent/live/scouting?gameKey=" + quote(game_key, safe=""))
 
+    def get_unread_milestones(self) -> Dict[str, Any]:
+        return self._interactive("GET", "/v1/me/notifications?kind=milestones&unread=true&limit=20")
+
     def put_opponent_note(self, pulse_id: str, notes: str) -> Dict[str, Any]:
         """Save a private note; desktop entry never opts it into read-aloud."""
         return self._interactive("PUT", "/v1/agent/opponents/" + quote(pulse_id, safe="") + "/notes",

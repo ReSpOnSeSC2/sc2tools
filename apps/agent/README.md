@@ -291,8 +291,11 @@ first; the saved date filter still applies. AI games, incomplete matches and
 resumed/synthetic results do not become ordinary ladder records by retrying.
 
 To see a local result message such as **Victory vs Opponent (Z) on Alcyone LE**,
-enable **Settings → Notify me after every new game syncs** and Save. This is off
-by default and history imports stay quiet. See [Your recent games](https://sc2tools.com/help/desktop-app-recent-games)
+set **Settings → Desktop notifications** to **Every game** and Save. History
+imports stay quiet. Enable **Show game milestones in the tray** beside that
+setting and turn on game milestones in your web bell to get the newest unread
+milestone after a game. The agent waits until you finish playing before showing
+it. See [Your recent games](https://sc2tools.com/help/desktop-app-recent-games)
 and [Importing your replay history](https://sc2tools.com/help/desktop-app-import).
 
 ### Streams
