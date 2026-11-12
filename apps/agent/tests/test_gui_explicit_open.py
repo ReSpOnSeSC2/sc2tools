@@ -20,7 +20,7 @@ pin = page.overlays["opponent"]
 pin_size = pin.size()
 button.click()
 app.processEvents()
-assert window.size().toTuple() == (520, 480), window.size().toTuple()
+assert window.size().toTuple() == (520, 680), window.size().toTuple()
 assert window.property("textOverlay") is False
 assert page.current_density() == "standard"
 assert layouts == ["compact", "standard"]
@@ -49,5 +49,5 @@ assert len(observed) == 1
 assert observed[0][0] == {"compact" if minimized else "standard"!r}
 assert observed[0][2] is {not minimized!r}
 if not {minimized!r}:
-    assert observed[0][1] == (520, 480), observed
+    assert observed[0][1] == (520, 680), observed
 ''', timeout=60)

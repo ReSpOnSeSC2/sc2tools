@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 
+LEGACY_STANDARD_SIZE = (520, 480)
+
 WINDOW_SIZE_PRESETS = (
     ("Compact", "compact", (420, 44)),
-    ("Standard", "standard", (520, 480)),
+    ("Standard", "standard", (520, 680)),
     ("Detailed", "detailed", (1024, 800)),
     ("Full workspace", "full", None),
 )

@@ -387,7 +387,7 @@ def test_explicit_pinned_enable_and_preview_restore_minimized_panel_without_poll
     assert panel.isVisible() and not panel.isMinimized()
 
 
-def test_real_standard_main_window_fits_two_columns_and_first_observed_timings(tmp_path):
+def test_real_standard_main_window_fits_two_columns_two_rows_and_both_ghost_actions(tmp_path):
     from tests._gui_offscreen import run_gui_check
     run_gui_check(tmp_path, '''
         from tests.test_companion_build_range_scope import replay, stored_order
@@ -401,7 +401,12 @@ def test_real_standard_main_window_fits_two_columns_and_first_observed_timings(t
                 return {"name": "Selected opponent", "race": "Terran", "mmr": 4321,
                         "totals": {"wins": 3, "losses": 1}, "last5GamesScouting": [replay("fixture")]}
             if action == "game_build_order":
-                return stored_order(payload["gameId"])
+                order = stored_order(payload["gameId"])
+                order["opp_events"].extend([
+                    {"name": "Factory", "category": "building", "is_building": True, "time": 75},
+                    {"name": "Marine", "category": "unit", "time": 90},
+                ])
+                return order
             return {}
         ui, win = make_window(on_companion_action=handler, window_information_layout="standard")
         page = win._companion_page
@@ -413,15 +418,23 @@ def test_real_standard_main_window_fits_two_columns_and_first_observed_timings(t
         while ("one", "fixture") not in page._build_order_cache and not deadline.hasExpired():
             QtTest.QTest.qWait(5)
         QtTest.QTest.qWait(100)
-        assert win.size().toTuple() == (520, 480), win.size().toTuple()
+        assert win.size().toTuple() == (520, 680), win.size().toTuple()
         assert page.current_density() == "standard"
         viewport = page.overview.viewport()
         for side in ("my", "opp"):
             chain = page.build_chains[side]
             assert chain._columns == 2, (side, chain.scroll.viewport().size().toTuple(), chain._columns)
-            for observation in (chain.steps[0].icon_label, chain.steps[0].time_label, chain.steps[0].timing_label):
-                rectangle = QtCore.QRect(observation.mapTo(viewport, QtCore.QPoint()), observation.size())
-                assert viewport.rect().contains(rectangle), (side, viewport.size().toTuple(), rectangle)
+            assert len(chain.steps) >= 4, side
+            build_viewport = chain.scroll.viewport()
+            for step in chain.steps[:4]:
+                for observation in (step.icon_label, step.time_label, step.timing_label):
+                    for container in (viewport, build_viewport):
+                        rectangle = QtCore.QRect(observation.mapTo(container, QtCore.QPoint()), observation.size())
+                        assert container.rect().contains(rectangle), (side, container.size().toTuple(), rectangle)
+        for button in page.chain_reference_buttons.values():
+            assert button.isVisible() and button.isEnabled()
+            rectangle = QtCore.QRect(button.mapTo(viewport, QtCore.QPoint()), button.size())
+            assert viewport.rect().contains(rectangle), (viewport.size().toTuple(), rectangle)
         summary = page.console.opponent_summary.toolTip()
         assert "Selected opponent" in summary and "4321" in summary and "75%" in summary
         win._set_window_size("Detailed")

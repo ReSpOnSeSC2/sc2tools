@@ -407,7 +407,7 @@ def test_display_pins_and_only_main_compact_follow_foreground_while_scouting_sta
         app.processEvents()
         controller.refresh()
         assert int(window.winId()) not in native.locked
-        assert window.size().toTuple() == (520, 480)
+        assert window.size().toTuple() == (520, 680)
         assert window.isVisible()
         panels[1].hide()
         controller.refresh()

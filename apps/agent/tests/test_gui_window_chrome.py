@@ -80,7 +80,7 @@ def test_standard_agent_pages_keep_navigation_drafts_and_window_controls_at_smal
             app.processEvents()
             assert win._PAGE_KEYS[win._stack.currentIndex()] == page and win._stack.currentWidget() is pages[index]
             assert win._nav_group.button(index).isChecked()
-            assert win.size() == QtCore.QSize(520, 480), (page, win.size())
+            assert win.size() == QtCore.QSize(520, 680), (page, win.size())
             assert win.geometry() == geometry, (page, win.geometry())
             assert not win._sidebar.isVisible()
             controls = win._companion_window_controls if page == "companion" else win._agent_window_controls

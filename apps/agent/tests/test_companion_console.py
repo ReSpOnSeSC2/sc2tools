@@ -336,7 +336,7 @@ def test_real_standard_profile_scroll_reveals_portrait_identity_record_and_all_t
         shell.navigate("profile", opponent_id="sample-opponent")
         for tick in range(10):
             app.processEvents()
-        assert window.size().toTuple() == (520, 480)
+        assert window.size().toTuple() == (520, 680)
         assert shell.profile_scroll.viewport().height() >= card.minimumHeight()
         assert shell.profile_scroll.verticalScrollBar().maximum() == 0
         scroll = shell.profile_route_scroll

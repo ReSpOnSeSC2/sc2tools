@@ -144,7 +144,7 @@ for skin in ("default", "protoss", "terran", "zerg"):
                 assert page.controls_page.horizontalScrollBar().maximum() == 0, (skin, preset, page.controls_page.viewport().size())
             assert not win.grab().isNull()
         if preset == "Standard":
-            assert win.size().toTuple() == (520, 480)
+            assert win.size().toTuple() == (520, 680)
 page.shutdown()
 win._race_effects.shutdown()
 win._really_quit = True

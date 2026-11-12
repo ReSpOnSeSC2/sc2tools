@@ -385,6 +385,11 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.25.1
+
+- Make the Standard Companion window taller so the Scouting report shows more
+  of both build orders above the Ghost buttons.
+
 ### Agent 0.25.0
 
 - Refresh Streams, menus and dialogs, keep Stream setup reachable at the smallest
