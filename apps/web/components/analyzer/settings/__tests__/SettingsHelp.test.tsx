@@ -29,7 +29,7 @@ function stubScroll() {
 }
 
 describe("SettingsHelp", () => {
-  it("renders every guide section and the support email", () => {
+  it("renders every guide section and the support email", async () => {
     renderHelp();
     for (const heading of [
       /Getting started/,
@@ -50,7 +50,8 @@ describe("SettingsHelp", () => {
     expect(
       screen.getByRole("link", { name: "Stream Studio crash course & widget guides" }).getAttribute("href"),
     ).toBe("/stream-studio/learn");
-    // The commands card is embedded with the full command list.
+    await act(async () => { await vi.dynamicImportSettled(); });
+    // The lazy commands card is embedded with the full command list.
     expect(screen.getByText("!rank")).toBeTruthy();
     expect(screen.getByText("!opponent")).toBeTruthy();
   });
