@@ -202,6 +202,29 @@ describe("SeasonRecap", () => {
   });
 });
 
+function stubCanvas() {
+  const drawn: Array<{ text: string; x: number; y: number; maxWidth?: number; font: string }> = [];
+  const context = {
+    fillStyle: "",
+    font: "",
+    textBaseline: "",
+    fillRect: vi.fn(),
+    fillText(text: string, x: number, y: number, maxWidth?: number) {
+      drawn.push({ text, x, y, maxWidth, font: this.font });
+    },
+    measureText: (t: string) => ({ width: String(t).length * 8 }),
+    createLinearGradient: () => ({ addColorStop: vi.fn() }),
+  };
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as unknown as CanvasRenderingContext2D);
+  vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (
+    this: HTMLCanvasElement,
+    cb: BlobCallback,
+  ) {
+    cb(new Blob(["png-bytes"], { type: "image/png" }));
+  });
+  return drawn;
+}
+
 describe("Season Recap share card (public once shared)", () => {
   const SEASON: RecapWindow = {
     since: new Date("2026-01-01T00:00:00Z"),
@@ -293,34 +316,40 @@ describe("Season Recap share card (public once shared)", () => {
   });
 
   it("draws no opponent name, id or rating on the image", async () => {
-    const drawn: string[] = [];
-    const ctxStub = {
-      fillStyle: "",
-      font: "",
-      textBaseline: "",
-      fillRect: vi.fn(),
-      fillText: (text: string) => {
-        drawn.push(String(text));
-      },
-      measureText: (t: string) => ({ width: String(t).length * 8 }),
-      createLinearGradient: () => ({ addColorStop: vi.fn() }),
-    };
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-      ctxStub as unknown as CanvasRenderingContext2D,
-    );
-    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (
-      this: HTMLCanvasElement,
-      cb: BlobCallback,
-    ) {
-      cb(new Blob(["png-bytes"], { type: "image/png" }));
-    });
+    const drawn = stubCanvas();
 
     const blob = await renderSeasonRecapPng(rivalSeason(), SEASON);
 
     expect(blob).toBeInstanceOf(Blob);
-    const image = drawn.join("\n");
+    const image = drawn.map(({ text }) => text).join("\n");
     expect(image).toContain("a Zerg opponent");
     for (const secret of SECRETS) expect(image).not.toContain(secret);
+  });
+
+  it.each([1234, -1234])("keeps the full account and %i MMR in the stat column", async (delta) => {
+    const drawn = stubCanvas();
+    const accountLabel = "SEA 4294967295";
+    const recap = rivalSeason();
+    recap.mmrJourneys = [{
+      toonHandle: "6-S2-1-4294967295", region: "SEA", accountLabel,
+      start: 4000, end: 4000 + delta, peak: Math.max(4000, 4000 + delta), delta,
+    }];
+
+    await renderSeasonRecapPng(recap, SEASON);
+
+    const signedDelta = delta > 0 ? `+${delta}` : String(delta);
+    expect(drawn).toContainEqual(expect.objectContaining({
+      text: `${accountLabel}: ${signedDelta}`,
+      x: 300,
+      y: 378,
+      maxWidth: 300,
+      font: expect.stringMatching(/^700 34px /),
+    }));
+    expect(drawn).toContainEqual(expect.objectContaining({
+      text: `MMR: ${accountLabel} ${signedDelta}.`,
+      x: 620,
+      y: 190,
+    }));
   });
 
   it("posts text with totals only", () => {
@@ -333,29 +362,6 @@ describe("Season Recap share card (public once shared)", () => {
 });
 
 describe("Share recap button", () => {
-  /** Stub the canvas and return everything drawn on it. */
-  function stubCanvas(): string[] {
-    const drawn: string[] = [];
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
-      fillStyle: "",
-      font: "",
-      textBaseline: "",
-      fillRect: vi.fn(),
-      fillText: (text: string) => {
-        drawn.push(String(text));
-      },
-      measureText: (t: string) => ({ width: String(t).length * 8 }),
-      createLinearGradient: () => ({ addColorStop: vi.fn() }),
-    } as unknown as CanvasRenderingContext2D);
-    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (
-      this: HTMLCanvasElement,
-      cb: BlobCallback,
-    ) {
-      cb(new Blob(["png-bytes"], { type: "image/png" }));
-    });
-    return drawn;
-  }
-
   function offerShareSheet(share: (data: ShareData) => Promise<void>) {
     Object.defineProperty(navigator, "share", { configurable: true, value: share });
     Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
@@ -387,7 +393,7 @@ describe("Share recap button", () => {
     expect(sent.text).toMatch(/recap: 14 games, 50% WR, -13 MMR on NA 267727\.\n\nhttps:\/\/sc2tools\.com\/arcade$/);
     expect(sent.files?.[0].name).toBe("sc2-season-recap.png");
 
-    const image = drawn.join("\n");
+    const image = drawn.map(({ text }) => text).join("\n");
     // Foe1: two wins and three losses across the fourteen games.
     expect(image).toContain("Nemesis: a Zerg opponent (you went 2-3).");
     expect(`${image}\n${sent.text}`).not.toMatch(/Foe\d/);

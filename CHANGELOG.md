@@ -4746,6 +4746,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Share an image of your skill fingerprint or session report. Each image uses aggregate results from your own replay sample.
 
+### Season recap image
+
+- Long account labels and four-digit MMR changes fit beside the story on exported recap cards.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:
