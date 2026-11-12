@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { sharedDay } from "@/lib/sharePrivacy";
+import { compareReportCards, decodeReportComparison, encodeReportComparison } from "@/lib/instant/reportCardLink";
 import { mulberry32 } from "../ArcadeEngine";
 import { ALL_MODES, type AnyMode } from "../modes";
 import { buildShareSummary } from "../shareSummary";
@@ -77,6 +78,24 @@ const EXACT_MMR = new RegExp(
 );
 /** A time to the second ("9:14:32 PM"), which would single out one game. */
 const CLOCK_TIME = /\b\d{1,2}:\d{2}:\d{2}\b/;
+
+test("the replay comparison contains only the two selected game records", () => {
+  const own = {
+    totals: { games: 10, wins: 7, losses: 2, name: displayName(1), mmr: exactMmr(1) },
+    matchups: [], opener: null, macro: null, account: toonHandle(1),
+  };
+  const shared = {
+    totals: { games: 8, wins: 4, losses: 3, name: rawName(2), mmr: exactMmr(2) },
+    matchups: [], opener: null, macro: null, gameId: "zq9game", date: "2026-10-01T08:02:03Z",
+  };
+  const expected = { first: { games: 10, wins: 7, losses: 2 }, second: { games: 8, wins: 4, losses: 3 } };
+  const comparison = compareReportCards(own, shared);
+  expect(comparison).toEqual(expected);
+  if (!comparison) throw new Error("Missing comparison");
+  const fragment = encodeReportComparison(comparison);
+  expect(fragment).toMatch(/^[A-Za-z0-9_-]{1,59}$/);
+  expect(decodeReportComparison(fragment!)).toEqual(expected);
+});
 
 function leaks(text: string): string[] {
   const found = SENTINELS.filter((s) => text.includes(s));

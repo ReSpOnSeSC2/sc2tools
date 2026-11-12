@@ -88,6 +88,7 @@ describe("analyticsPageLocation", () => {
   it("collapses card paths and discards their fragments from the referrer", () => {
     const origin = "https://sc2tools.com";
     expect(analyticsPageLocation(origin, "/card/report/summary", "?value=PrivateName")).toBe(`${origin}/card/:type/:class`);
+    expect(analyticsPageLocation(origin, "/card/r%65port/c%6Fmpare", "?value=PrivateName")).toBe(`${origin}/card/:type/:class`);
     expect(analyticsReferrer(`${origin}/card/forged/private-name#PrivateValue`, origin)).toBe(`${origin}/card/:type/:class`);
   });
 });

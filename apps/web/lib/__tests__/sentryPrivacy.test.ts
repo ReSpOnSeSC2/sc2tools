@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { scrubBreadcrumb, scrubSpan, scrubTransaction } from "../sentryPrivacy";
 
-it.each(["/card/report/summary", "/card/r%65port/%73ummary"])("drops card fragments from navigation breadcrumbs after leaving %s", path => {
+it.each([
+  ["/card/report/summary", "/card/report/summary"], ["/card/r%65port/%73ummary", "/card/report/summary"],
+  ["/card/report/compare", "/card/report/compare"], ["/card/r%65port/c%6Fmpare", "/card/report/compare"],
+])("drops card fragments from navigation breadcrumbs after leaving %s", (path, canonical) => {
   const crumb = { category: "navigation", data: { from: `https://sc2tools.com${path}#PrivateData`, to: "/try" } };
-  expect(scrubBreadcrumb(crumb).data).toEqual({ from: "/card/report/summary", to: "/try" });
+  expect(scrubBreadcrumb(crumb).data).toEqual({ from: canonical, to: "/try" });
   expect(crumb.data.from).toContain("#PrivateData");
 });
 

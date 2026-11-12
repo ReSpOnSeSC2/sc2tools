@@ -17,6 +17,7 @@ export interface CopyRecoveryDialogProps {
   onDismiss: () => void;
   title?: string;
   label?: string;
+  inputClassName?: string;
 }
 
 /** Controlled manual-copy presentation. This component never starts a copy,
@@ -24,7 +25,7 @@ export interface CopyRecoveryDialogProps {
  * an explicit trigger return. Keep it mounted while its controlled text closes.
  */
 export function CopyRecoveryDialog({ text, inputRef, triggerRef, scopeKey, onDismiss,
-  title = "Copy link manually", label = "Copy link manually" }: CopyRecoveryDialogProps) {
+  title = "Copy link manually", label = "Copy link manually", inputClassName }: CopyRecoveryDialogProps) {
   const inputId = useId(), helpId = useId();
   const currentScope = useRef(scopeKey); currentScope.current = scopeKey;
   const restore = useRef<{ scope: object; target: HTMLButtonElement | null } | null>(null);
@@ -47,7 +48,7 @@ export function CopyRecoveryDialog({ text, inputRef, triggerRef, scopeKey, onDis
     footer={<Button variant="secondary" onClick={dismiss}>Done</Button>}>
     {text !== null ? <div className="space-y-2">
       <label htmlFor={inputId} className="block text-caption font-semibold">{label}</label>
-      <Input ref={setInput} id={inputId} value={text} readOnly aria-describedby={helpId} className="min-h-11"
+      <Input ref={setInput} id={inputId} value={text} readOnly aria-describedby={helpId} className={`min-h-11 ${inputClassName ?? ""}`}
         onFocus={event => event.currentTarget.select()} onKeyDown={event => {
           if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); dismiss(); }
         }} />
