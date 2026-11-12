@@ -78,6 +78,29 @@ for (const surface of ["all-in-one", "widget"] as const) describe(`${surface} sa
 const landscape = { anchor: "top", xPct: 25, yPct: 8, scale: 1.25, zIndex: 3 } as const;
 const vertical = { anchor: "bottom", xPct: 73, yPct: 10, scale: 0.8, zIndex: 9 } as const;
 
+it("keeps the live composite card mounted underneath a targeted test", () => {
+  const { container } = render(<OverlayClient token="one" />);
+  const socket = sockets[0];
+  config(socket);
+  live(socket);
+  const selector = '[data-overlay-real="mmr-delta"]';
+  const real = container.querySelector<HTMLElement>(selector);
+  if (!real) throw new Error("Expected a live rating card.");
+  const card = screen.getByTestId("rating-card");
+
+  live(socket, { isTest: true, testWidget: "mmr-delta", testNonce: 1 });
+  const preview = '[data-overlay-layer="test"] [data-layout-widget="mmr-delta"] [data-testid="rating-card"]';
+  expect(container.querySelector(preview)).not.toBeNull();
+  expect(container.querySelector(selector)).toBe(real);
+  expect(real.querySelector('[data-testid="rating-card"]')).toBe(card);
+  expect(real.style.display).toBe("none");
+
+  advance(20_000);
+  expect(container.querySelector(preview)).toBeNull();
+  expect(screen.getByTestId("rating-card")).toBe(card);
+  expect(real.style.display).toBe("");
+});
+
 it.each(["landscape", "vertical", "widget"] as const)("applies only the selected composite canvas in %s", canvas => {
   render(canvas === "widget" ? <OverlayWidgetClient token="one" widget="mmr-delta" /> : <OverlayClient token="one" canvas={canvas} />);
   const socket = sockets[0];

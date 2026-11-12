@@ -27,3 +27,17 @@ test("a dedicated overlay source loads its local sample after route hydration", 
   await expect(page.getByText("TestOpponent", { exact: true })).toBeVisible();
   expect(connections).toBe(0);
 });
+
+test("a composite overlay sample keeps its card order without connecting", async ({ page }) => {
+  let connections = 0;
+  page.on("websocket", () => { connections += 1; });
+  await page.goto("/overlay/local-sample?demo=1");
+  await expect(page.getByRole("status").filter({ hasText: "Local preview · sample data" })).toBeVisible();
+  const cards = page.locator('[data-overlay-layer="test"] [data-layout-widget]');
+  await expect(cards).toHaveCount(17);
+  expect(await cards.evaluateAll(nodes => nodes.map(node => node.getAttribute("data-layout-widget")))).toEqual([
+    "opponent", "match-result", "post-game", "mmr-delta", "streak", "cheese", "rematch", "rival",
+    "rank", "meta", "topbuilds", "fav-opening", "best-answer", "scouting", "session", "randomizer", "series",
+  ]);
+  expect(connections).toBe(0);
+});
