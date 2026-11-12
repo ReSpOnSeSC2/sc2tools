@@ -53,6 +53,8 @@ export interface SessionControllerOptions {
   clientFactory?: () => EngineClient;
   /** False preserves /try's no-API-before-save privacy promise. */
   refreshPolicy?: boolean;
+  /** Local grading omits replay selection, parsing and error analytics. */
+  trackAnalytics?: boolean;
 }
 
 /** User actions exposed by the session hook (bound: safe to pass as callbacks). */
@@ -137,7 +139,7 @@ class InstantSessionController {
       ignored: selection.ignoredCount,
       maxFiles: this.options().maxFiles,
     });
-    if (replays.length > 0) {
+    if (replays.length > 0 && this.options().trackAnalytics !== false) {
       trackInstantFilesSelected({ count: replays.length, source: selectionSource(source, selection.zips.length > 0) });
     }
   };
@@ -264,7 +266,7 @@ class InstantSessionController {
     deps.dispatch({ type: "expanding", value: false });
     if (!result.fatal) return result;
     deps.dispatch({ type: "error", kind: result.fatal.kind });
-    trackInstantError({ kind: result.fatal.kind });
+    if (this.options().trackAnalytics !== false) trackInstantError({ kind: result.fatal.kind });
     return null;
   }
 
@@ -273,7 +275,9 @@ class InstantSessionController {
     if (!outcome) return;
     this.abort = null;
     deps.dispatch({ type: "done", parsedWithFiles: outcome.parsed, deferredCount: outcome.deferredCount });
-    trackRunDone(outcome.parsed, [...this.store.getState().intakeFailed, ...outcome.failed]);
+    if (this.options().trackAnalytics !== false) {
+      trackRunDone(outcome.parsed, [...this.store.getState().intakeFailed, ...outcome.failed]);
+    }
   }
 
   private fail(id: number, error: unknown): void {
@@ -285,7 +289,7 @@ class InstantSessionController {
       return;
     }
     this.settle({ type: "error", kind });
-    trackInstantError({ kind });
+    if (this.options().trackAnalytics !== false) trackInstantError({ kind });
   }
 }
 

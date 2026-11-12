@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { PracticeLinkTabs } from "@/components/practice/PracticeLinkTabs";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { getInstantImportMode } from "@/lib/instant/flag";
+import { practiceGradeTarget } from "@/lib/practice/practiceGrade";
 import { practiceLinkByAlias, practiceLinkPath } from "@/lib/practice/practiceLinks";
 import { loadPracticeLink } from "@/lib/practice/serverPracticeLink";
 import { referenceOrderPracticeTarget } from "@/lib/practiceTarget";
@@ -43,6 +45,8 @@ async function PublishedPracticeLink({ alias }: { alias: string }) {
   return <article className="mx-auto max-w-5xl space-y-5">
     <PageHeader eyebrow="Practice Link" title={build.title} className="[overflow-wrap:anywhere]" description={`Build by ${build.creator}`} />
     <PracticeLinkTabs title={build.title} videoId={link.youtubeId} offset={link.offsetSec} steps={build.order?.steps ?? []}
-      drill={referenceOrderPracticeTarget(build.title, build.order, build.race === "Random" ? undefined : build.race)} />
+      drill={referenceOrderPracticeTarget(build.title, build.order, build.race === "Random" ? undefined : build.race)}
+      grade={practiceGradeTarget(build.title, build.order, build.race, link.gradeEndSec)}
+      race={build.race} era={link.patchEra} gradeEnabled={getInstantImportMode() === "all"} />
   </article>;
 }

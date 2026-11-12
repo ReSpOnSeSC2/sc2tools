@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PlayerChooser } from "@/components/instant/PlayerChooser";
 import { errorCopy } from "@/lib/instant/errorCopy";
-import { useInstantSession } from "@/lib/instant/useInstantSession";
+import { SINGLE_REPLAY_SESSION_OPTIONS, useInstantSession } from "@/lib/instant/useInstantSession";
 import type { MeCandidate } from "@/lib/instant/meDetection";
 import type { ErrorKind } from "@/lib/instant/types";
 import { instantPreview, type PreviewDossier } from "./replayDemoPreview";
@@ -19,13 +19,12 @@ export interface BrowserDemoProps {
   onClose: () => void;
   onChooseAnother: () => void;
 }
-export const DEMO_SESSION_OPTIONS = { maxFiles: 1, onlyOneVsOne: true, initialDateWindow: { kind: "all" as const }, refreshPolicy: false };
 const supported = () => typeof Worker !== "undefined" && typeof WebAssembly !== "undefined" && !!globalThis.crypto?.subtle;
 
 /** Mounted only after real hover/focus/drop intent. No saved games, policy
  * refresh, upload or API fallback: this session is memory-only. */
 export function ReplayDemoBrowserSession(props: BrowserDemoProps) {
-  const session = useInstantSession(DEMO_SESSION_OPTIONS);
+  const session = useInstantSession(SINGLE_REPLAY_SESSION_OPTIONS);
   const { addFiles, start, cancel, reset, prewarm } = session;
   const callbacks = useRef(props); callbacks.current = props;
   const active = useRef<{ request: DemoRequest; current: boolean; started: boolean; complete: boolean } | null>(null);

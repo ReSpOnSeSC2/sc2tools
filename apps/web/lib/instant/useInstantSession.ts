@@ -46,6 +46,10 @@ export interface UseInstantSessionOptions extends SessionControllerOptions {
   initialDateWindow?: DateWindow;
 }
 
+export const SINGLE_REPLAY_SESSION_OPTIONS: UseInstantSessionOptions = {
+  maxFiles: 1, onlyOneVsOne: true, initialDateWindow: { kind: "all" }, refreshPolicy: false,
+};
+
 /** Everything a view needs: read-only state plus actions. */
 export interface InstantSession extends SessionActions {
   phase: InstantSessionPhase;
