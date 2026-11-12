@@ -138,9 +138,16 @@ class AgentState:
     Useful when the agent is set to launch on login."""
 
     notify_every_game: bool = False
+    """Opt-in local result notice for newly synced live games."""
+
+    notify_milestones: bool = False
+    """Opt-in local notice for the newest unread milestone of a synced game."""
+
+    milestone_notice_receipts: Dict[str, str] = field(default_factory=dict)
+    """Hashed owner/game keys with replay dates for restart-safe delivery."""
+
     notifications_muted: bool = False
     close_to_tray: bool = True
-    """Opt-in local notification for newly synced live games; never history imports."""
 
     companion_preferences: Dict[str, bool] = field(default_factory=dict)
     """Native Companion panel and speech switches. Missing switches default to off."""
@@ -527,6 +534,8 @@ def _state_from_raw(raw):
         autostart_enabled=bool(raw.get("autostart_enabled") or False),
         start_minimized=bool(raw.get("start_minimized") or False),
         notify_every_game=raw.get("notify_every_game") is True,
+        notify_milestones=raw.get("notify_milestones") is True,
+        milestone_notice_receipts=_coerce_str_map(raw.get("milestone_notice_receipts")),
         notifications_muted=raw.get("notifications_muted") is True,
         close_to_tray=raw.get("close_to_tray") is not False,
         companion_preferences={
@@ -956,6 +965,7 @@ def _snapshot(state: AgentState) -> dict:
         companion_modes=normalize_modes(state.companion_modes),
         companion_ghost=dict(state.companion_ghost),
         release_seen=dict(state.release_seen),
+        milestone_notice_receipts=dict(state.milestone_notice_receipts),
         replay_folders_override=list(state.replay_folders_override),
         replay_folders_excluded=list(state.replay_folders_excluded),
         obs_website_add_enabled=state.obs_website_add_enabled is True,
