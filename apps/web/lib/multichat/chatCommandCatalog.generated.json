@@ -17,7 +17,8 @@
     {
       "id": "build",
       "aliases": [],
-      "description": "Your current or last recorded build"
+      "description": "Your current or last recorded build",
+      "supportsLink": true
     },
     {
       "id": "record",
@@ -64,6 +65,12 @@
       "id": "series",
       "aliases": [],
       "description": "This token's best-of score and next scheduled map"
+    },
+    {
+      "id": "sc2tools",
+      "aliases": [],
+      "description": "A short introduction to SC2 Tools",
+      "supportsLink": true
     }
   ],
   "platforms": [
@@ -115,7 +122,8 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
     },
     {
       "id": "mmr",
@@ -133,12 +141,14 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
     },
     {
       "id": "build",
       "aliases": [],
       "description": "Your current or last recorded build",
+      "supportsLink": true,
       "trigger": "build",
       "enabled": true,
       "cooldownSec": 15,
@@ -149,7 +159,8 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
     },
     {
       "id": "record",
@@ -165,7 +176,8 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
     },
     {
       "id": "winrate",
@@ -182,7 +194,8 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
     },
     {
       "id": "streak",
@@ -198,7 +211,8 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
     },
     {
       "id": "lastgame",
@@ -214,7 +228,8 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
     },
     {
       "id": "h2h",
@@ -230,7 +245,8 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
     },
     {
       "id": "peak",
@@ -246,7 +262,8 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
     },
     {
       "id": "oracle",
@@ -262,7 +279,8 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
     },
     {
       "id": "uptime",
@@ -278,7 +296,8 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
     },
     {
       "id": "series",
@@ -294,7 +313,26 @@
         "tiktok",
         "nightbot"
       ],
-      "answerOnStream": true
+      "answerOnStream": true,
+      "includeLink": false
+    },
+    {
+      "id": "sc2tools",
+      "aliases": [],
+      "description": "A short introduction to SC2 Tools",
+      "supportsLink": true,
+      "trigger": "sc2tools",
+      "enabled": false,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true,
+      "includeLink": false
     }
   ]
 }

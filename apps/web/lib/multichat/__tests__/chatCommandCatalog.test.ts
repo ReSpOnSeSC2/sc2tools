@@ -10,14 +10,34 @@ describe("authoritative chat command catalog", () => {
   it("is fresh against the actual API registry, defaults, limits and reserved names", () => {
     expect(catalog).toEqual({ commands: registry.CHAT_COMMANDS, platforms: registry.PLATFORMS, variables: registry.VARIABLES,
       reserved: [...registry.RESERVED], maxCustom: registry.MAX_CUSTOM_COMMANDS, defaults: registry.configuredCommands({ builtins: [], custom: [] }) });
-    expect(catalog.commands).toHaveLength(12);
-    for (const command of catalog.commands) expect(buildBioText("protoss")).toContain(`!${command.id}`);
+    expect(catalog.commands).toHaveLength(13);
+    const bio = buildBioText("protoss");
+    for (const command of catalog.defaults) {
+      if (command.enabled) expect(bio).toContain(`!${command.id}`);
+      else expect(bio).not.toContain(`!${command.id}`);
+    }
   });
   it("expands sparse preferences without carrying unknown fields into a save", () => {
     const value = readChatCommands({ builtins: [{ id: "mmr", trigger: "rating", enabled: false, secret: "discard" }], custom: [] });
-    expect(value.builtins).toHaveLength(12); expect(value.builtins.find(row => row.id === "mmr")).toMatchObject({ trigger: "rating", enabled: false, cooldownSec: 15 });
+    expect(value.builtins).toHaveLength(13); expect(value.builtins.find(row => row.id === "mmr")).toMatchObject({ trigger: "rating", enabled: false, cooldownSec: 15, includeLink: false });
     expect(JSON.stringify(serializeChatCommands(value))).not.toContain("secret");
     expect(commandGroups(value).find(group => group.id === "stats")!.commands.some(row => row.syntax.startsWith("!rating"))).toBe(false);
+  });
+  it("preserves opt-in links and a custom !sc2tools with the default-disabled builtin", () => {
+    const value = readChatCommands({ builtins: [{ id: "build", includeLink: true }], custom: [{ trigger: "!SC2TOOLS", response: "My custom reply" }] });
+    expect(value.builtins.find(row => row.id === "sc2tools")).toMatchObject({ enabled: false, includeLink: false });
+    expect(serializeChatCommands(value).builtins.find(row => row.id === "build")?.includeLink).toBe(true);
+    expect(validateChatCommands(value)).toBeNull();
+    expect(buildBioText("zerg", value)).toContain("!sc2tools — custom channel reply");
+    value.custom.push({ ...value.custom[0] });
+    expect(validateChatCommands(value)).toMatch(/reserved or used/);
+  });
+
+  it("keeps a saved !sc2tools alias in the guide and validates the new builtin beside it", () => {
+    const value = readChatCommands({ builtins: [{ id: "mmr", trigger: "sc2tools" }, { id: "sc2tools", enabled: true }] });
+    expect(validateChatCommands(value)).toBeNull();
+    expect(buildBioText("zerg", value)).toContain("!sc2tools — Current MMR and session record");
+    expect(buildBioText("zerg", value)).not.toContain("A short introduction to SC2 Tools");
   });
   it("bio uses saved aliases and enabled custom names, retaining canonical aliases", () => {
     const value = readChatCommands({ builtins: [{ id: "mmr", trigger: "rating" }], custom: [] });

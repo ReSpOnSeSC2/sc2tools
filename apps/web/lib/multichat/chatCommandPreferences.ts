@@ -1,6 +1,7 @@
 import catalog from "./chatCommandCatalog.generated.json";
 export { catalog as CHAT_COMMAND_CATALOG };
-export type CommandOptions = { trigger: string; enabled: boolean; cooldownSec: number; platforms: string[]; answerOnStream: boolean };
+export const SITE_COMMAND_ID = "sc2tools";
+export type CommandOptions = { trigger: string; enabled: boolean; cooldownSec: number; platforms: string[]; answerOnStream: boolean; includeLink: boolean };
 export type BuiltinCommand = CommandOptions & { id: string };
 export type CustomCommand = CommandOptions & { response: string };
 export type ChatCommandPreferences = { builtins: BuiltinCommand[]; custom: CustomCommand[] };
@@ -13,9 +14,15 @@ const options = (value: unknown, fallback: CommandOptions): CommandOptions => {
     enabled: typeof row.enabled === "boolean" ? row.enabled : fallback.enabled,
     cooldownSec: typeof row.cooldownSec === "number" && Number.isInteger(row.cooldownSec) && row.cooldownSec >= 5 && row.cooldownSec <= 3600 ? row.cooldownSec : fallback.cooldownSec,
     platforms: Array.isArray(row.platforms) ? [...new Set(row.platforms.filter((platform): platform is string => typeof platform === "string" && catalog.platforms.includes(platform)))] : [...fallback.platforms],
-    answerOnStream: typeof row.answerOnStream === "boolean" ? row.answerOnStream : fallback.answerOnStream };
+    answerOnStream: typeof row.answerOnStream === "boolean" ? row.answerOnStream : fallback.answerOnStream,
+    includeLink: row.includeLink === true };
 };
-export const newCustomCommand = (): CustomCommand => ({ trigger: "", response: "", enabled: true, cooldownSec: 15, platforms: [...catalog.platforms], answerOnStream: true });
+export const newCustomCommand = (): CustomCommand => ({ trigger: "", response: "", enabled: true, cooldownSec: 15, platforms: [...catalog.platforms], answerOnStream: true, includeLink: false });
+
+/** A saved custom command or alias takes priority over the new built-in spelling. */
+export function hasSiteCommandOverride(value: ChatCommandPreferences): boolean {
+  return [...value.custom, ...value.builtins.filter(row => row.id !== SITE_COMMAND_ID)].some(row => trigger(row.trigger) === SITE_COMMAND_ID);
+}
 
 /** Expand sparse saved overrides for display; never import server code into a browser. */
 export function readChatCommands(raw: unknown): ChatCommandPreferences {
@@ -29,12 +36,15 @@ export function readChatCommands(raw: unknown): ChatCommandPreferences {
 /** Client feedback mirrors exported registry names; the server remains the final validator. */
 export function validateChatCommands(value: ChatCommandPreferences): string | null {
   if (value.custom.length > catalog.maxCustom) return `Save at most ${catalog.maxCustom} custom commands.`;
-  const reserved = new Set([...catalog.reserved, ...catalog.commands.flatMap(command => [command.id, ...command.aliases])]), used = new Set<string>();
+  const reserved = new Set([...catalog.reserved, ...catalog.commands.filter(command => command.id !== SITE_COMMAND_ID).flatMap(command => [command.id, ...command.aliases])]);
+  const used = new Set<string>();
   for (const row of [...value.builtins, ...value.custom]) {
     const name = trigger(row.trigger), own = "id" in row ? row.id : null;
     if (!/^[a-z][a-z0-9_]{0,23}$/.test(name)) return "Command names must start with a letter and contain up to 24 letters, numbers or underscores.";
-    if (used.has(name) || reserved.has(name) && name !== own) return `!${name} is already reserved or used by another command.`;
-    used.add(name);
+    const siteDefault = own === SITE_COMMAND_ID && name === own;
+    const collision = (!siteDefault && used.has(name)) || (reserved.has(name) && name !== own);
+    if (collision) return `!${name} is already reserved or used by another command.`;
+    if (!siteDefault) used.add(name);
     if (!Number.isInteger(row.cooldownSec) || row.cooldownSec < 5 || row.cooldownSec > 3600) return "Cooldowns must be whole numbers from 5 to 3600 seconds.";
     if (row.platforms.some(platform => !catalog.platforms.includes(platform))) return "Choose supported platforms.";
     if ("response" in row) {

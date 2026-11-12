@@ -1,12 +1,13 @@
 "use strict";
 
 const { createHash } = require("crypto");
+const SITE_COMMAND = { id: "sc2tools", aliases: [], description: "A short introduction to SC2 Tools", supportsLink: true };
 
 /** This registry also generates the web guide; command implementations stay server-side. */
 const CHAT_COMMANDS = Object.freeze([
   { id: "opponent", aliases: ["opp"], description: "Current or last opponent and your history" },
   { id: "mmr", aliases: ["session"], description: "Current MMR and session record" },
-  { id: "build", aliases: [], description: "Your current or last recorded build" },
+  { id: "build", aliases: [], description: "Your current or last recorded build", supportsLink: true },
   { id: "record", aliases: [], description: "Today's wins and losses by matchup (UTC)" },
   { id: "winrate", aliases: [], argument: "[matchup|race]", description: "30-day and current-season win rates, with sample sizes" },
   { id: "streak", aliases: [], description: "Current recorded win or loss streak" },
@@ -16,9 +17,8 @@ const CHAT_COMMANDS = Object.freeze([
   { id: "oracle", aliases: [], description: "The top three prediction scorers" },
   { id: "uptime", aliases: [], description: "Time since the stream session was started" },
   { id: "series", aliases: [], description: "This token's best-of score and next scheduled map" },
+  SITE_COMMAND,
 ]);
-const SITE_COMMAND = { id: "sc2tools", aliases: [], description: "A short introduction to SC2 Tools" };
-const REPLY_COMMANDS = [...CHAT_COMMANDS, SITE_COMMAND];
 const PLATFORMS = Object.freeze(["twitch", "kick", "youtube", "tiktok", "nightbot"]);
 const VARIABLES = Object.freeze(["user", "mmr", "record", "opponent", "streak"]);
 const RESERVED = new Set(["rank", "level", "xp", "commands", "help", "win", "w", "loss", "lose", "l", "vote", "so", "1", "2", "3"]);
@@ -50,8 +50,8 @@ function sanitizeChatCommands(raw, strict = false) {
     (source.custom !== undefined && !Array.isArray(source.custom)))) invalid("Use builtin and custom command lists.");
   const rows = Array.isArray(source.builtins) ? source.builtins : [];
   const custom = Array.isArray(source.custom) ? source.custom : [];
-  if (strict && (rows.length > REPLY_COMMANDS.length || custom.length > MAX_CUSTOM_COMMANDS)) invalid("Save at most 25 custom commands.");
-  const used = new Set([...RESERVED, ...CHAT_COMMANDS.flatMap(command => [command.id, ...command.aliases])]);
+  if (strict && (rows.length > CHAT_COMMANDS.length || custom.length > MAX_CUSTOM_COMMANDS)) invalid("Save at most 25 custom commands.");
+  const used = new Set([...RESERVED, ...CHAT_COMMANDS.filter(command => command !== SITE_COMMAND).flatMap(command => [command.id, ...command.aliases])]);
   const ids = new Set();
   /** @param {Record<string, any>} row @param {string} fallback @param {boolean} defaultEnabled @returns {CommandOptions|null} */
   const options = (row, fallback, defaultEnabled = true) => {
@@ -73,8 +73,8 @@ function sanitizeChatCommands(raw, strict = false) {
     return { trigger, enabled: row.enabled ?? defaultEnabled, cooldownSec, platforms: [...new Set(platforms)],
       answerOnStream: row.answerOnStream !== false, includeLink: row.includeLink === true };
   };
-  for (const row of rows.slice(0, REPLY_COMMANDS.length)) {
-    if (!row || typeof row !== "object" || Array.isArray(row) || !REPLY_COMMANDS.some(command => command.id === row.id) || ids.has(row.id)) {
+  for (const row of rows.slice(0, CHAT_COMMANDS.length)) {
+    if (!row || typeof row !== "object" || Array.isArray(row) || !CHAT_COMMANDS.some(command => command.id === row.id) || ids.has(row.id)) {
       if (strict) invalid("Each builtin command can be configured once.");
       continue;
     }
@@ -97,17 +97,10 @@ function sanitizeChatCommands(raw, strict = false) {
 }
 
 /** @param {ChatCommandPreferences} prefs */
-function configuredReplies(prefs) {
-  return REPLY_COMMANDS.map(command => ({ ...command, trigger: command.id, enabled: command.id !== SITE_COMMAND.id,
+function configuredCommands(prefs) {
+  return CHAT_COMMANDS.map(command => ({ ...command, trigger: command.id, enabled: command.id !== SITE_COMMAND.id,
     cooldownSec: 15, platforms: [...PLATFORMS], answerOnStream: true, includeLink: false,
     ...prefs.builtins.find(row => row.id === command.id) }));
-}
-
-/** Keep the existing web catalog stable while the API deploys first.
- * @param {ChatCommandPreferences} prefs */
-function configuredCommands(prefs) {
-  return configuredReplies(prefs).filter(command => command.id !== SITE_COMMAND.id)
-    .map(({ includeLink, ...command }) => command);
 }
 
 /** One bounded cooldown ledger is shared by all reply transports in this process.
@@ -135,4 +128,4 @@ class CommandCooldowns {
 }
 
 module.exports = { CHAT_COMMANDS, PLATFORMS, VARIABLES, RESERVED, MAX_CUSTOM_COMMANDS, VIEWER_COOLDOWN_MS,
-  plainText, sanitizeChatCommands, configuredCommands, configuredReplies, CommandCooldowns };
+  plainText, sanitizeChatCommands, configuredCommands, CommandCooldowns };

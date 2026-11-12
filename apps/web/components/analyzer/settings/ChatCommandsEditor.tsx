@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { API_BASE, boundedApiRequest } from "@/lib/clientApi";
-import { CHAT_COMMAND_CATALOG as catalog, newCustomCommand, nightbotSnippet, type ChatCommandPreferences, type CommandOptions, type CustomCommand } from "@/lib/multichat/chatCommandPreferences";
+import { CHAT_COMMAND_CATALOG as catalog, hasSiteCommandOverride, newCustomCommand, nightbotSnippet, SITE_COMMAND_ID, type ChatCommandPreferences, type CommandOptions, type CustomCommand } from "@/lib/multichat/chatCommandPreferences";
 import { useChatCommandSettings } from "@/lib/multichat/useChatCommandSettings";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -26,6 +26,7 @@ function EditorBody({ token, onSaved }: { token: string; onSaved: (preferences: 
   if (settings.readError) return <div role="alert" className="space-y-2 text-caption text-warning"><p>Couldn’t load your saved commands. Retry before editing.</p><Button size="sm" className="min-h-11" variant="secondary" onClick={settings.retry}>Retry command settings</Button></div>;
   if (!settings.ready || !settings.draft) return <p role="status" className="text-caption text-text-muted">Loading saved commands…</p>;
   const draft = settings.draft, busy = !!settings.busy || copy.busy;
+  const siteOverride = hasSiteCommandOverride(draft);
   const change = (kind: "builtins" | "custom", index: number, patch: Partial<CommandOptions & { response: string }>) => {
     settings.setDraft({ ...draft, [kind]: draft[kind].map((row, position) => position === index ? { ...row, ...patch } : row) });
     setCopy({ busy: false, trigger: "", fallback: "", copied: false });
@@ -53,7 +54,14 @@ function EditorBody({ token, onSaved }: { token: string; onSaved: (preferences: 
       <legend className="sr-only">Saved and custom commands</legend>
       <div role="table" aria-label="Chat command settings" aria-colcount={4} className="min-w-0 space-y-3">
         <div role="row" className="hidden gap-3 text-caption font-semibold lg:grid lg:grid-cols-4">{["Command", "Alias and cooldown", "Where it answers", "Preview and copy"].map(name => <div key={name} role="columnheader">{name}</div>)}</div>
-        {draft.builtins.map((row, index) => { const definition = catalog.commands.find(command => command.id === row.id)!; return <CommandRow key={row.id} row={row} label={`!${row.id}`} description={definition.description} aliases={definition.aliases} changed={patch => change("builtins", index, patch)} dirty={settings.dirty} trying={settings.busy === row.trigger} onTry={() => void settings.tryCommand(row.trigger, argument, user, platform, onStream)} onCopy={() => void copySnippet(row.trigger)} />; })}
+        {draft.builtins.map((row, index) => {
+          const definition = catalog.commands.find(command => command.id === row.id)!;
+          const shadowed = siteOverride && row.id === SITE_COMMAND_ID && row.trigger === SITE_COMMAND_ID;
+          return <CommandRow key={row.id} row={row} label={`!${row.id}`} description={definition.description} aliases={definition.aliases}
+            supportsLink={"supportsLink" in definition && definition.supportsLink} shadowed={shadowed}
+            changed={patch => change("builtins", index, patch)} dirty={settings.dirty} trying={settings.busy === row.trigger}
+            onTry={() => void settings.tryCommand(row.trigger, argument, user, platform, onStream)} onCopy={() => void copySnippet(row.trigger)} />;
+        })}
         {draft.custom.map((row, index) => <CommandRow key={index} row={row} label={`Custom command ${index + 1}`} changed={patch => change("custom", index, patch)} dirty={settings.dirty} trying={settings.busy === row.trigger} onTry={() => void settings.tryCommand(row.trigger, argument, user, platform, onStream)} onCopy={() => void copySnippet(row.trigger)} onRemove={() => settings.setDraft({ ...draft, custom: draft.custom.filter((_, position) => position !== index) })} />)}
       </div>
       <Button variant="secondary" className="min-h-11" disabled={draft.custom.length >= catalog.maxCustom} onClick={() => settings.setDraft({ ...draft, custom: [...draft.custom, newCustomCommand()] })}>Add custom command</Button>
@@ -68,14 +76,26 @@ function EditorBody({ token, onSaved }: { token: string; onSaved: (preferences: 
   </section>;
 }
 
-function CommandRow({ row, label, description, aliases = [], changed, dirty, trying, onTry, onCopy, onRemove }: {
+function CommandRow({ row, label, description, aliases = [], supportsLink, shadowed, changed, dirty, trying, onTry, onCopy, onRemove }: {
   row: CommandOptions & Partial<CustomCommand>; label: string; description?: string; aliases?: string[];
+  supportsLink?: boolean; shadowed?: boolean;
   changed: (patch: Partial<CommandOptions & { response: string }>) => void; dirty: boolean; trying: boolean; onTry: () => void; onCopy: () => void; onRemove?: () => void;
 }) {
   return <div role="row" className="grid min-w-0 gap-3 rounded-lg border border-border p-3 lg:grid-cols-4">
     <div role="rowheader" className="min-w-0 space-y-2"><h4 className="break-words text-body font-semibold">{label}</h4>{description ? <p className="text-caption text-text-muted">{description}</p> : null}{aliases.length ? <p className="text-micro text-text-muted">Also {aliases.map(alias => `!${alias}`).join(", ")}. Default names remain available.</p> : null}<label className="flex min-h-11 items-center gap-2 text-caption"><input type="checkbox" aria-label={`Enable ${label}`} checked={row.enabled} onChange={event => changed({ enabled: event.target.checked })} />Enabled</label>{row.response !== undefined ? <label className="block text-caption">Reply<textarea aria-label={`Reply for ${label}`} rows={3} maxLength={1000} value={row.response} onChange={event => changed({ response: event.target.value })} className="mt-1 w-full min-w-0 rounded-lg border border-border bg-bg-surface p-2 text-caption" /></label> : null}</div>
     <div role="cell" className="min-w-0 space-y-2"><label className="block text-caption">Alias<Input aria-label={`Alias for ${label}`} className="mt-1 min-h-11" value={row.trigger} maxLength={24} onChange={event => changed({ trigger: event.target.value })} /></label><label className="block text-caption">Cooldown · seconds<Input aria-label={`Cooldown for ${label}`} className="mt-1 min-h-11" type="number" min={5} max={3600} step={1} value={row.cooldownSec} onChange={event => changed({ cooldownSec: Number(event.target.value) })} /></label></div>
-    <div role="cell" className="min-w-0"><details><summary className="min-h-11 cursor-pointer py-3 text-caption">Platforms ({row.platforms.length})</summary>{catalog.platforms.map(platform => <label key={platform} className="flex min-h-11 items-center gap-2 text-caption"><input type="checkbox" aria-label={`${platform} for ${label}`} checked={row.platforms.includes(platform)} onChange={event => changed({ platforms: event.target.checked ? [...row.platforms, platform] : row.platforms.filter(value => value !== platform) })} />{platform}</label>)}</details><label className="flex min-h-11 items-center gap-2 text-caption"><input type="checkbox" aria-label={`On-stream answers for ${label}`} checked={row.answerOnStream} onChange={event => changed({ answerOnStream: event.target.checked })} />On-stream answers</label></div>
-    <div role="cell" className="flex min-w-0 flex-wrap items-start gap-2 lg:flex-col"><Button size="sm" className="min-h-11" variant="secondary" disabled={dirty} loading={trying} aria-label={`Try it · ${label}`} onClick={onTry}>Try it</Button><Button size="sm" className="min-h-11" variant="ghost" disabled={dirty} aria-label={`Copy Nightbot · ${label}`} onClick={onCopy}>Copy Nightbot</Button>{onRemove ? <Button size="sm" className="min-h-11" variant="ghost" aria-label={`Remove ${label}`} onClick={onRemove}>Remove</Button> : null}</div>
+    <div role="cell" className="min-w-0">
+      <details><summary className="min-h-11 cursor-pointer py-3 text-caption">Platforms ({row.platforms.length})</summary>{catalog.platforms.map(platform => <label key={platform} className="flex min-h-11 items-center gap-2 text-caption"><input type="checkbox" aria-label={`${platform} for ${label}`} checked={row.platforms.includes(platform)} onChange={event => changed({ platforms: event.target.checked ? [...row.platforms, platform] : row.platforms.filter(value => value !== platform) })} />{platform}</label>)}</details>
+      <label className="flex min-h-11 items-center gap-2 text-caption"><input type="checkbox" aria-label={`On-stream answers for ${label}`} checked={row.answerOnStream} onChange={event => changed({ answerOnStream: event.target.checked })} />On-stream answers</label>
+      {supportsLink ? <label className="flex min-h-11 items-center gap-2 text-caption">
+        <input type="checkbox" aria-label={`Include a link for ${label}`} checked={row.includeLink} onChange={event => changed({ includeLink: event.target.checked })} />Include a link in chat
+      </label> : null}
+    </div>
+    <div role="cell" className="flex min-w-0 flex-wrap items-start gap-2 lg:flex-col">
+      <Button size="sm" className="min-h-11" variant="secondary" disabled={dirty || shadowed} loading={trying} aria-label={`Try it · ${label}`} onClick={onTry}>Try it</Button>
+      <Button size="sm" className="min-h-11" variant="ghost" disabled={dirty || shadowed} aria-label={`Copy Nightbot · ${label}`} onClick={onCopy}>Copy Nightbot</Button>
+      {shadowed ? <p className="text-caption text-text-muted">Another saved command answers !sc2tools. Set another alias to use this built-in.</p> : null}
+      {onRemove ? <Button size="sm" className="min-h-11" variant="ghost" aria-label={`Remove ${label}`} onClick={onRemove}>Remove</Button> : null}
+    </div>
   </div>;
 }

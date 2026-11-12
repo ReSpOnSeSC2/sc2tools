@@ -1,12 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ChatCommandsCard } from "@/components/analyzer/settings/ChatCommandsCard";
 import type { HelpWidgetId } from "@/lib/help/types";
 
-// Keep the searchable catalog with its widget, while retaining public SSR.
+// Load each widget on its own article and retain its public server render.
 const GlossaryBrowser = dynamic(() => import("./GlossaryBrowser").then(module => module.GlossaryBrowser), { ssr: true });
 const TakeATour = dynamic(() => import("./TakeATour").then(module => module.TakeATour), { ssr: true });
+const ChatCommandsCard = dynamic(
+  () => import("@/components/analyzer/settings/ChatCommandsCard").then(module => module.ChatCommandsCard),
+  { ssr: true, loading: () => <p role="status" className="text-caption text-text-muted">Loading chat commands…</p> },
+);
 
 /**
  * Interactive pieces an article can embed with `{ type: "widget" }`.

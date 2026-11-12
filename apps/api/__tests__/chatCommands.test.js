@@ -6,7 +6,7 @@ const { ChatbotService } = require("../src/services/chatbot");
 
 describe("shared chat registry", () => {
   test("contains every planned deterministic reply with distinct aliases", () => {
-    expect(CHAT_COMMANDS.map(command => command.id)).toEqual(["opponent", "mmr", "build", "record", "winrate", "streak", "lastgame", "h2h", "peak", "oracle", "uptime", "series"]);
+    expect(CHAT_COMMANDS.map(command => command.id)).toEqual(["opponent", "mmr", "build", "record", "winrate", "streak", "lastgame", "h2h", "peak", "oracle", "uptime", "series", "sc2tools"]);
     const names = CHAT_COMMANDS.flatMap(command => [command.id, ...command.aliases]);
     expect(new Set(names).size).toBe(names.length);
   });

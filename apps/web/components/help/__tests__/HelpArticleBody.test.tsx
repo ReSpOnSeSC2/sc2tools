@@ -40,7 +40,7 @@ function renderBody(props: Partial<Parameters<typeof HelpArticleBody>[0]> = {}) 
 }
 
 describe("HelpArticleBody", () => {
-  it("renders every block type with the right semantics", () => {
+  it("renders every block type with the right semantics", async () => {
     renderBody();
     expect(screen.getByRole("heading", { level: 2, name: "A sub-heading" })).toBeTruthy();
     const steps = screen.getAllByRole("list")[0];
@@ -58,7 +58,7 @@ describe("HelpArticleBody", () => {
     expect(screen.getByRole("img", { name: "The logo" }).getAttribute("loading")).toBe("lazy");
     expect(screen.getByRole("columnheader", { name: "Command" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Table: Command, Does" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Copy for your bio/ })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /Copy for your bio/ })).toBeTruthy();
   });
 
   it("gives anchored headings their id on the article page", () => {
