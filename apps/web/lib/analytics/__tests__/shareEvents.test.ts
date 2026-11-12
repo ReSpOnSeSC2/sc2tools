@@ -103,4 +103,12 @@ describe("trackCardShared", () => {
     }
     expect(gtag).not.toHaveBeenCalled();
   });
+
+  it("counts a practice grade card without sending the grade or alias", () => {
+    visit("/b/creator-opening?grade=S");
+    trackCardShared({ card: "practice_grade", method: "download" });
+    expect(gtag.mock.calls).toEqual([
+      ["event", "card_shared", { content_type: "practice_grade", method: "download", page_location: `${window.location.origin}/b/:alias` }],
+    ]);
+  });
 });

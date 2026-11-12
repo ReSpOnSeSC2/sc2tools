@@ -12,7 +12,7 @@ const { session, options } = vi.hoisted(() => ({
 vi.mock("@/lib/instant/useInstantSession", () => ({ SINGLE_REPLAY_SESSION_OPTIONS: {}, useInstantSession: (value: unknown) => { options(value); return session; } }));
 
 const target = { v: 1 as const, name: "Opening", steps: [{ t: 10, supply: 14, name: "Pylon" }] };
-const props = { target, race: "Protoss", era: "before" } as const;
+const props = { target, race: "Protoss", era: "before", credit: { title: "Opening", creator: "Fixture creator", path: "/b/opening" } } as const;
 afterEach(() => { cleanup(); vi.clearAllMocks(); session.phase = "idle"; });
 
 describe("Practice Link replay intake", () => {

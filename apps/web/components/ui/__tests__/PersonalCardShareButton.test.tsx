@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PersonalCardShareButton } from "@/components/ui/PersonalCardShareButton";
 import { fingerprintShareCard, sessionReportShareCard } from "@/lib/personalShareCards";
+import { practiceGradeShareCard } from "@/lib/practice/practiceGradeShareCard";
 import type { ShareDelivery } from "@/components/analyzer/arcade/ShareCard";
 
 const { deliverShareCard, trackCardShared } = vi.hoisted(() => ({
@@ -83,5 +84,18 @@ describe("PersonalCardShareButton", () => {
     expect((await screen.findByRole("status")).textContent).toBe("Session report saved");
     expect(deliverShareCard).toHaveBeenCalledWith(expect.objectContaining({ filename: "sc2tools-session-report.png" }));
     expect(trackCardShared.mock.calls).toEqual([[{ card: "session_report", method: "download" }]]);
+  });
+
+  it("fits public creator credit and links back to the Practice Link", async () => {
+    deliverShareCard.mockResolvedValueOnce({ shared: true, method: "download" });
+    const card = practiceGradeShareCard({ title: "Recorded opener", creator: "Creator", path: "/b/opener" }, "A");
+    render(<PersonalCardShareButton card={card} label="Share grade card" />);
+    fireEvent.click(screen.getByRole("button", { name: "Share grade card" }));
+    expect((await screen.findByRole("status")).textContent).toBe("Practice Link grade saved");
+    expect(fillText).toHaveBeenCalledWith(card.subtitle, expect.any(Number), expect.any(Number), expect.any(Number));
+    expect(fillText).toHaveBeenCalledWith("sc2tools.com/b/opener", expect.any(Number), expect.any(Number));
+    expect(deliverShareCard).toHaveBeenCalledWith(expect.objectContaining({
+      text: "Practice Link grade\nRecorded opener · Build by Creator\nGrade: A\n\nhttps://sc2tools.com/b/opener",
+    }));
   });
 });

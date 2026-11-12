@@ -8,6 +8,7 @@ import { Tabs } from "@/components/ui/Tabs";
 import type { ReferenceBuildStep } from "@/lib/buildOrderReference";
 import type { GhostTarget } from "@/lib/ghostBuild";
 import type { PatchEra } from "@/lib/meta";
+import type { PracticeGradeCredit } from "@/lib/practice/practiceGradeShareCard";
 import type { Race } from "@/lib/race";
 
 const DropGrade = lazy(() => import("./DropGrade").then(module => ({ default: module.DropGrade })));
@@ -25,9 +26,9 @@ function useGradeCapability(enabled: boolean) {
   return allowed;
 }
 
-export function PracticeLinkTabs({ videoId, offset, steps, title, drill, grade, race, era, gradeEnabled }: {
+export function PracticeLinkTabs({ videoId, offset, steps, title, drill, grade, race, era, gradeEnabled, credit }: {
   videoId: string; offset: number; steps: readonly ReferenceBuildStep[]; title: string; drill: GhostTarget | null;
-  grade: GhostTarget | null; race: Race; era: PatchEra; gradeEnabled: boolean;
+  grade: GhostTarget | null; race: Race; era: PatchEra; gradeEnabled: boolean; credit: PracticeGradeCredit;
 }) {
   const [tab, setTab] = useState("watch");
   const canGrade = useGradeCapability(gradeEnabled);
@@ -40,7 +41,7 @@ export function PracticeLinkTabs({ videoId, offset, steps, title, drill, grade, 
     <Tabs.Content value="watch"><WatchSync videoId={videoId} offset={offset} steps={steps} title={title} /></Tabs.Content>
     <Tabs.Content value="drill">{drill ? <BrowserDrill target={drill} /> : <p className="text-body text-text-muted">This build has no timed steps for a drill.</p>}</Tabs.Content>
     {canGrade ? <Tabs.Content value="grade">{grade ? (
-      <Suspense fallback={<p role="status">Loading replay grading…</p>}><DropGrade target={grade} race={race} era={era} /></Suspense>
+      <Suspense fallback={<p role="status">Loading replay grading…</p>}><DropGrade target={grade} race={race} era={era} credit={credit} /></Suspense>
     ) : <p className="text-body text-text-muted">Grade needs at least six timed structure or upgrade steps recorded from a game.</p>}</Tabs.Content> : null}
   </Tabs>;
 }

@@ -21,7 +21,7 @@
 import { gaEvent } from "@/lib/analytics/gtag";
 
 /** The share surfaces that produce a card. */
-export type SharedCardKind = "arcade_round" | "season_recap" | "battle_card" | "fingerprint" | "session_report";
+export type SharedCardKind = "arcade_round" | "season_recap" | "battle_card" | "fingerprint" | "session_report" | "practice_grade";
 
 /** How a card actually left the app (see `deliverShareCard`). */
 export type CardShareMethod =
