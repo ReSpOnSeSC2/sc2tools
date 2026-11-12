@@ -21,7 +21,7 @@ describe("Companion release documentation", () => {
 
   it("documents the small layouts, themed controls and stored replay ranges", () => {
     const text = getArticle("desktop-companion")!.body.map(helpBlockText).join(" ");
-    for (const phrase of ["420 × 44", "transparent", "race-themed", "520 × 480", "1024 × 800", "minimize", "close", "3 minutes", "6 minutes", "10 minutes", "Full build order", "Scouting preview", "repeated production", "Default", "Protoss", "Terran", "Zerg", "animations off"]) {
+    for (const phrase of ["420 × 44", "transparent", "race-themed", "520 × 680", "1024 × 800", "minimize", "close", "3 minutes", "6 minutes", "10 minutes", "Full build order", "Scouting preview", "repeated production", "Default", "Protoss", "Terran", "Zerg", "animations off"]) {
       expect(text).toContain(phrase);
     }
   });

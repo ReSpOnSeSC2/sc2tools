@@ -21,7 +21,7 @@ stdout,stderr=child.communicate(timeout=2)
 QtTest.QTest.qWait(20)
 assert child.returncode==0 and stdout.strip()=="True",(stdout,stderr)
 assert win.isVisible()
-assert win.size().toTuple()==(520,480)
+assert win.size().toTuple()==(520,680)
 assert win._companion_page.current_density()=="standard"
 assert layouts==["compact","standard"]
 assert pin.size()==pin_size

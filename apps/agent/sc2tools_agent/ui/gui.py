@@ -3415,12 +3415,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _restore_window_state(self):
             from .build_checkin_window import clamp_card_position, screen_rects
+            from .window_sizes import LEGACY_STANDARD_SIZE, fit_window_preset, minimum_window_size
             key = "companion" if self._window_information_layout == "compact" else self._preferred_paired_page() if self._paired else "dashboard"
             self._go_to_page(key)
-            if ui._window_geometry:
-                self.restoreGeometry(QtCore.QByteArray.fromBase64(ui._window_geometry.encode("ascii")))
-                if self._compact_window_active() and self.width() <= 360 and self.height() in {68, 78}:
-                    self.resize(420, 44)
+            restored = bool(ui._window_geometry) and self.restoreGeometry(
+                QtCore.QByteArray.fromBase64(ui._window_geometry.encode("ascii"))
+            )
+            if restored and self._compact_window_active() and self.width() <= 360 and self.height() in {68, 78}:
+                self.resize(420, 44)
             screens = QtWidgets.QApplication.screens()
             if screens:
                 rects = screen_rects(screens)
@@ -3429,11 +3431,24 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 target = QtWidgets.QApplication.primaryScreen().availableGeometry()
                 if point is not None:
                     target = next((screen.availableGeometry() for screen in screens if screen.availableGeometry().contains(QtCore.QPoint(*point))), target)
-                from .window_sizes import minimum_window_size
                 minimum = minimum_window_size("compact" if self._compact_window_active() else "standard")
                 frame_size = self._window_frame_size()
                 self.setMinimumSize(min(minimum[0], max(1, target.width() - frame_size[0])), min(minimum[1], max(1, target.height() - frame_size[1])))
-                if point is None:
+                fresh_companion = not restored and key == "companion"
+                legacy_standard = (
+                    restored and not self.isMaximized() and not self.isFullScreen()
+                    and self.size().toTuple() == LEGACY_STANDARD_SIZE
+                )
+                if self._window_information_layout == "standard" and (fresh_companion or legacy_standard):
+                    left, top, width, height = fit_window_preset(
+                        "Standard", target.getRect(), position=point or (target.x(), target.y()), frame=frame_size,
+                    )
+                    self.resize(width, height)
+                    point = (left, top)
+                    if fresh_companion:
+                        point = (target.x() + (target.width() - width - frame_size[0]) // 2,
+                                 target.y() + (target.height() - height - frame_size[1]) // 2)
+                elif point is None:
                     self.resize(min(960, target.width()), min(640, target.height()))
                     point = (target.x() + (target.width() - self.width()) // 2, target.y() + (target.height() - self.height()) // 2)
                 else:

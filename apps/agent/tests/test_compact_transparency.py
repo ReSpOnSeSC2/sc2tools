@@ -53,7 +53,7 @@ for skin in ("default", "protoss", "terran", "zerg"):
     actions["Expand Companion"].trigger()
     app.processEvents()
     assert window.isVisible()
-    assert window.size().toTuple() == (520, 480)
+    assert window.size().toTuple() == (520, 680)
     assert window.property("textOverlay") is False
     assert window.grab().toImage().pixelColor(0, 0).alpha() == 255
     assert actions["Agent"].menu() is page.agent_menu_button.menu()

@@ -23,7 +23,7 @@ def test_four_named_layouts_have_distinct_information_levels():
 
 
 @pytest.mark.parametrize("name,expected", [
-    ("Compact", (420, 44)), ("Standard", (520, 480)), ("Detailed", (1024, 800)),
+    ("Compact", (420, 44)), ("Standard", (520, 680)), ("Detailed", (1024, 800)),
 ])
 def test_normal_sizes_use_logical_pixels_and_keep_the_existing_screen(name, expected):
     placement = fit_window_preset(name, (-2560, -200, 2560, 1440), position=(-100, 1000), frame=(16, 40))
@@ -77,6 +77,10 @@ def test_real_window_presets_resize_change_density_and_restore_normal_chrome(tmp
         app.processEvents()
         page = win._companion_page
         assert page.current_density() == "standard"
+        screen = win.screen().availableGeometry()
+        expected = fit_window_preset("Standard", screen.getRect(), frame=win._window_frame_size())
+        assert win.size().toTuple() == expected[2:]
+        assert page.window_size.currentText() == "Standard"
         assert layouts == []
         for title, level in [("Compact", "compact"), ("Standard", "standard"), ("Detailed", "detailed"), ("Full workspace", "full")]:
             index = page.window_size.findData(title)
@@ -104,6 +108,32 @@ def test_real_window_presets_resize_change_density_and_restore_normal_chrome(tmp
         assert page.current_density() == "standard"
         assert not win.isMaximized()
         page.shutdown()
+    ''')
+
+
+@pytest.mark.parametrize("saved_size,expected_size,label", [
+    ((520, 480), (520, 680), "Standard"),
+    ((560, 620), (560, 620), "Custom"),
+])
+def test_saved_standard_layout_restores_the_current_preset_or_custom_geometry(tmp_path, saved_size, expected_size, label):
+    run_gui_check(tmp_path, f'''
+        saved_window = QtWidgets.QWidget()
+        saved_window.setWindowFlag(QtCore.Qt.FramelessWindowHint, True)
+        saved_window.resize(*{saved_size!r})
+        saved_window.move(50, 40)
+        geometry = bytes(saved_window.saveGeometry().toBase64()).decode("ascii")
+        layouts = []
+        ui, win = make_window(window_page="companion", window_geometry=geometry,
+            window_information_layout="standard", on_window_information_layout=layouts.append)
+        win.show()
+        app.processEvents()
+        assert win.size().toTuple() == {expected_size!r}, win.size().toTuple()
+        assert win.pos().toTuple() == (50, 40), win.pos().toTuple()
+        assert win._companion_page.window_size.currentText() == {label!r}
+        assert layouts == []
+        win._companion_page.shutdown()
+        win._race_effects.shutdown()
+        win.hide()
     ''')
 
 
