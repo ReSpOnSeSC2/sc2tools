@@ -28,6 +28,7 @@ const COMMUNITY_GIFT_ORIGIN_CAP = 256;
 
 export interface ParsedTwitchMessage {
   id: string;
+  replySource?: string;
   user: string;
   text: string;
   color?: string;
@@ -70,6 +71,12 @@ export function twitchBadgeTags(badgesTag: string | undefined): ChatBadge[] {
   return out;
 }
 
+function twitchReplySource(tags: Record<string, string>, channel: string, subscribedRoom: string | undefined) {
+  const room = channel.toLowerCase();
+  const ownRoom = !tags["source-room-id"] || tags["source-room-id"] === tags["room-id"];
+  return room === subscribedRoom && ownRoom && tags.id ? { replySource: room } : {};
+}
+
 /**
  * Parse the IRC `emotes=` tag ("id:start-end,start-end/id:start-end")
  * against the message text into renderable emotes. Ranges are
@@ -107,7 +114,7 @@ export function parseTwitchEmotesTag(
  * Parse one raw IRC line into a chat message, or null for anything
  * that isn't a user PRIVMSG (JOINs, NOTICEs, ROOMSTATE, …).
  */
-export function parseTwitchMessage(line: string): ParsedTwitchMessage | null {
+export function parseTwitchMessage(line: string, subscribedRoom?: string): ParsedTwitchMessage | null {
   if (!line.includes(" PRIVMSG #")) return null;
   let tags: Record<string, string> = {};
   let rest = line;
@@ -118,9 +125,9 @@ export function parseTwitchMessage(line: string): ParsedTwitchMessage | null {
     rest = rest.slice(space + 1);
   }
   // :nick!nick@nick.tmi.twitch.tv PRIVMSG #chan :text
-  const m = rest.match(/^:([^!\s]+)![^\s]*\s+PRIVMSG\s+#\S+\s+:(.*)$/);
+  const m = rest.match(/^:([^!\s]+)![^\s]*\s+PRIVMSG\s+#(\S+)\s+:(.*)$/);
   if (!m) return null;
-  let text = m[2];
+  let text = m[3];
   // /me actions arrive as \x01ACTION <text>\x01.
   const action = text.match(/^ACTION (.*)$/);
   if (action) text = action[1];
@@ -133,6 +140,7 @@ export function parseTwitchMessage(line: string): ParsedTwitchMessage | null {
   const bits = Number(tags.bits);
   return {
     id: tags.id || `${tags["tmi-sent-ts"] || Date.now()}-${m[1]}`,
+    ...twitchReplySource(tags, m[2], subscribedRoom),
     user: tags["display-name"] || m[1],
     text,
     color: /^#[0-9A-Fa-f]{6}$/.test(tags.color || "") ? tags.color : undefined,
@@ -435,7 +443,7 @@ export function createTwitchChat(
           callbacks.onStatus("connected");
           continue;
         }
-        const parsed = parseTwitchMessage(line);
+        const parsed = parseTwitchMessage(line, channel);
         if (parsed) {
           callbacks.onMessage({ platform: "twitch", ...parsed });
           const cheer = parseTwitchCheer(line);

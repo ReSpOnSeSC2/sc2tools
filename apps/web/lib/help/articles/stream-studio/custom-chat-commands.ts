@@ -3,13 +3,13 @@ import type { HelpArticle } from "@/lib/help/types";
 const article: HelpArticle = {
   slug: "custom-chat-commands",
   title: "Custom chat commands",
-  summary: "Add plain-text replies, choose platforms and cooldowns, preview saved commands, and copy a Nightbot snippet.",
+  summary: "Set up plain-text commands, preview them, send live replies as yourself, and copy a Nightbot snippet.",
   category: "stream-studio",
   audience: "streamer",
   signedInOnly: true,
   order: 5,
   keywords: ["chat commands", "custom", "alias", "Nightbot", "variables", "cooldown", "Twitch", "Kick", "YouTube", "TikTok"],
-  updated: "2026-11-11",
+  updated: "2026-11-12",
   body: [
     { type: "steps", items: [
       "Open **Settings → Chat & alerts** and choose your overlay token. Find **Chat command settings** below the command guide.",
@@ -26,13 +26,21 @@ const article: HelpArticle = {
       ["`{opponent}`", "Your current or last recorded opponent."],
       ["`{streak}`", "Your recorded win or loss streak."],
     ] },
-    { type: "paragraph", text: "For example, `Hi {user}! Today: {record}.` Only the five variables above are supported. Markup and unknown variables are rejected. Outgoing replies are clipped to 380 characters, so preview longer responses before using them." },
+    { type: "paragraph", text: "For example, `Hi {user}! Today: {record}.` Only the five variables above are supported. Markup and unknown variables are rejected. Replies are limited to 380 characters and Answer as me uses YouTube’s 200-character limit." },
     { type: "heading", text: "Built-ins, aliases and cooldowns", anchor: "availability" },
     { type: "paragraph", text: "Built-in commands use the same settings. A configured alias adds another name; canonical names and default aliases remain available. Disabling a built-in disables every name for it. Saved platform and on-stream settings apply across the bot, Nightbot and the on-stream command endpoint. Viewer rank, predictions and voting retain their separate engagement behavior." },
     { type: "paragraph", text: "A command shares its configured cooldown across its names. Each viewer also has a five-second reply limit. Chat replies and on-stream answers use separate cooldown lanes so one chat message can produce both. Missing replay or session data is described honestly rather than guessed." },
     { type: "heading", text: "Links in chat replies", anchor: "reply-links" },
     { type: "paragraph", text: "Turn on **Include a link in chat** for `!build` to link a matching published guide. Enable `!sc2tools` for a short introduction, and turn on its link to include the site address. On-stream answers use text only for these links. Live links share a two-minute cooldown, and **Try it** lets you see the linked reply after saving." },
     { type: "paragraph", text: "A custom `!sc2tools` keeps that command name. Give the built-in a different alias to use both replies." },
+    { type: "heading", text: "Answer as me", anchor: "answer-as-me" },
+    { type: "steps", items: [
+      "Configure your chat in **Chat & alerts**. Under **Connected accounts**, choose **Connect chat sending** for the same Twitch, Kick or YouTube account.",
+      "Under **Chat command settings**, select **Open live replies**. Choose **Answer as me** beside a viewer’s live command to send the saved reply to that chat.",
+      "Check the delivery status beside the feed. If delivery is unconfirmed, check the source chat before sending another message.",
+    ] },
+    { type: "paragraph", text: "Each click sends to one chat, including the exact live video on YouTube. Saved command, viewer and link cooldowns still apply. Replies that use private game or player details are unavailable here. TikTok is receive-only." },
+    { type: "paragraph", text: "Let your Twitch bot reply if it already answers commands in that channel. Use Twitch during Shared Chat. If Kick can’t verify the saved chatroom, check your chat settings or reply in Kick." },
     { type: "heading", text: "Use a command in Nightbot", anchor: "nightbot" },
     { type: "steps", items: [
       "Save the command and allow the **nightbot** platform.",

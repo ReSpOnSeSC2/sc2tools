@@ -84,7 +84,6 @@ const { PracticeLogService } = require("./services/practiceLog");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { PlatformIntegrationsService } = require("./services/platformIntegrations");
-const { PlatformChatService } = require("./services/platformChat");
 const { StreamingTitlesService } = require("./services/streamingTitles");
 const { TwitchRewardsService } = require("./services/twitchRewards");
 const { TwitchRewardActions } = require("./services/twitchRewardActions");
@@ -108,7 +107,7 @@ const { MultichatViewersService } = require("./services/multichatViewers");
 const { TickerFactsService } = require("./services/tickerFacts");
 const { ChatStatsService } = require("./services/chatStats");
 const { ChatCommandService } = require("./services/chatCommandService");
-const { buildChatCommandsOwnerRouter } = require("./routes/chatCommandsOwner");
+const { mountChatCommandsOwnerRoutes } = require("./routes/chatCommandsOwner");
 const { TwitchChatBotService } = require("./services/twitchChatBot");
 const { buildChatBotSettingsRouter } = require("./routes/chatBotSettings");
 const { buildMultichatRouter } = require("./routes/multichat");
@@ -1518,7 +1517,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildChatbotRouter({ chatbot: services.chatbot, commands: services.chatCommands, logger: deps.logger }),
   );
-  app.use(SERVICE.ROUTE_PREFIX, buildChatCommandsOwnerRouter({ auth, commands: services.chatCommands }));
+  const platformChat = mountChatCommandsOwnerRoutes(app, SERVICE.ROUTE_PREFIX, auth, services);
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildChatBotSettingsRouter({
@@ -1737,7 +1736,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       sounds: services.multichatSounds,
       engagement: services.multichatEngagement,
       viewers: services.multichatViewers,
-      platformChat: new PlatformChatService({ integrations: services.platformIntegrations }),
+      platformChat,
       twitchChatBot: services.twitchChatBot,
       customBuilds: services.customBuilds,
       buildsList: (userId) => services.builds.list(userId, {}),

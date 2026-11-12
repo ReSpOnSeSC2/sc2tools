@@ -29,6 +29,8 @@ export interface ChatMessage {
   platform: ChatPlatform;
   /** Platform-scoped id — deduped on (platform, id). */
   id: string;
+  /** Room carried by a Twitch or Kick message eligible for a native reply. */
+  replySource?: string;
   user: string;
   text: string;
   /** Author colour when the platform provides one (Twitch/Kick). */

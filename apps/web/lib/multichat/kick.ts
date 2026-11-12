@@ -117,6 +117,10 @@ export function parseKickChatEvent(
   };
 }
 
+function kickReplySource(channel: string | undefined, roomId: number, messageId: unknown) {
+  return channel === `chatrooms.${roomId}.v2` && messageId ? { replySource: String(roomId) } : {};
+}
+
 /**
  * Parse one non-chat Pusher event from the chatroom channel into a
  * platform event, or null for events we don't surface. Payload shapes
@@ -347,7 +351,7 @@ export function createKickChat(
     }, CONNECT_TIMEOUT_MS);
     socket.onmessage = (event) => {
       if (closed || ws !== socket || failed) return;
-      let frame: { event?: string; data?: unknown };
+      let frame: { event?: string; data?: unknown; channel?: string };
       try {
         frame = JSON.parse(String(event.data));
       } catch {
@@ -405,7 +409,7 @@ export function createKickChat(
             return;
           }
           const parsed = parseKickChatEvent(payload);
-          if (parsed) callbacks.onMessage({ platform: "kick", ...parsed });
+          if (parsed) callbacks.onMessage({ platform: "kick", ...parsed, ...kickReplySource(frame.channel, opts.chatroomId, payload.id) });
           break;
         }
         default: {
