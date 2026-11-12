@@ -72,8 +72,7 @@ export interface SelectedHeader extends KeyedHeader {
   opponent: ReplayHeaderPlayer;
 }
 
-export function selectedGamesFromHeaders(rows: KeyedHeader[], chosenToon?: string): SelectedHeader[] {
-  const identity = headerIdentity(rows);
+export function selectedGamesFromHeaders(rows: KeyedHeader[], chosenToon?: string | null, identity = headerIdentity(rows)): SelectedHeader[] {
   const seen = new Set<string>();
   const games: SelectedHeader[] = [];
   for (const row of rows) {

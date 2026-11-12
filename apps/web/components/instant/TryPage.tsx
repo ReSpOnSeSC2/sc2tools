@@ -269,6 +269,7 @@ async function persist(fresh: ReadonlyArray<TryGameInput>): Promise<TryGameInput
 
 interface TryGames {
   games: TryGameInput[];
+  commanderRows?: InstantSession["commanderRows"];
   /** False once this browser refused to store games. */
   persisted: boolean;
   clear(): void;
@@ -281,9 +282,9 @@ interface TryGames {
  * Example:
  *   const stored = useTryGames(session, () => setAdding(false));
  */
-function useTryGames(session: Pick<InstantSession, "phase" | "parsed" | "engineInfo">, onSaved: () => void): TryGames {
-  const { phase, parsed, engineInfo } = session;
-  const [state, setState] = useState<{ games: TryGameInput[]; persisted: boolean }>({ games: [], persisted: true });
+function useTryGames(session: Pick<InstantSession, "phase" | "parsed" | "engineInfo" | "commanderRows">, onSaved: () => void): TryGames {
+  const { phase, parsed, engineInfo, commanderRows } = session;
+  const [state, setState] = useState<Omit<TryGames, "clear">>({ games: [], persisted: true });
   const onSavedRef = useRef(onSaved);
   const handled = useRef<ParsedGame[] | null>(null);
   useEffect(() => {
@@ -306,11 +307,11 @@ function useTryGames(session: Pick<InstantSession, "phase" | "parsed" | "engineI
     handled.current = parsed;
     const fresh = fromParsed(parsed, engineInfo);
     void persist(fresh).then((saved) => {
-      setState((prev) => ({ games: saved ?? mergeGames(prev.games, fresh), persisted: saved !== null }));
+      setState((prev) => ({ games: saved ?? mergeGames(prev.games, fresh), persisted: saved !== null, commanderRows }));
       onSavedRef.current();
     });
-  }, [phase, parsed, engineInfo]);
-  const clear = useCallback(() => setState((prev) => ({ ...prev, games: [] })), []);
+  }, [phase, parsed, engineInfo, commanderRows]);
+  const clear = useCallback(() => setState((prev) => ({ ...prev, games: [], commanderRows: undefined })), []);
   return { ...state, clear };
 }
 
@@ -422,6 +423,7 @@ function FocusedReport({ ws, guideLinks }: { ws: WorkspaceState } & TryGuideProp
     </Button>
   );
   return <FilteredInstantReport report={ws.report} payloads={ws.reportPayloads} guideLinks={guideLinks}
+    commanderRows={ws.stored.commanderRows}
     guideFocus={guideFocus} actions={ws.showTool ? null : moreButton} focusKey={ws.reportFocusKey} />;
 }
 

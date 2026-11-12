@@ -2,13 +2,16 @@ import { absoluteUrl, siteOrigin } from "@/lib/seo/absoluteUrl";
 import openersV1 from "./reportCardOpeners.v1.json";
 import { canonicalReportCardPath, REPORT_CARD_PATH, REPORT_COMPARE_PATH } from "./reportCardRoute";
 import type { ReportCardModel } from "./reportSharing";
+import { commanderNameFromCode } from "./commanderTaxonomy";
 
 const VERSION = 1;
+const COMMANDER_VERSION = 2;
 const REPORT_TYPE = 1;
 const COMPARISON_TYPE = 2;
 const TOTALS = 1;
 const OPENER = 2;
 const MACRO = 4;
+const COMMANDER = 8;
 const SECTION_MASK = TOTALS | OPENER | MACRO;
 const MAX_GAMES = 999;
 const MAX_FRAGMENT_LENGTH = 59;
@@ -45,9 +48,10 @@ function validOpener(opener: ReportCardModel["opener"], totals: ReportCardModel[
 }
 
 function validModel(model: ReportCardModel): boolean {
-  const { totals, matchups, opener, macro } = model;
-  if (!totals && !matchups.length && !opener && !macro) return false;
+  const { totals, matchups, opener, macro, commander } = model;
+  if (!totals && !matchups.length && !opener && !macro && commander === undefined) return false;
   return (!totals || validRecord(totals)) && validMatchups(model) && validOpener(opener, totals)
+    && (commander === undefined || commanderNameFromCode(commander) !== null)
     && (!macro || (inRange(macro.score, 0, 100) && inRange(macro.games, 1, totals?.games ?? MAX_GAMES)));
 }
 
@@ -67,14 +71,15 @@ function recordValues({ games, wins, losses }: GameRecord): number[] {
 /** Encode only aggregate integers and frozen catalog indexes. No object is serialized. */
 export function encodeReportCard(model: ReportCardModel): string | null {
   if (!validModel(model)) return null;
-  const { totals, matchups, opener, macro } = model;
-  const sections = (totals ? TOTALS : 0) | (opener ? OPENER : 0) | (macro ? MACRO : 0);
+  const { totals, matchups, opener, macro, commander } = model;
+  const sections = (totals ? TOTALS : 0) | (opener ? OPENER : 0) | (macro ? MACRO : 0) | (commander === undefined ? 0 : COMMANDER);
   const fields = [matchups.length];
   if (totals) fields.push(...recordValues(totals));
   for (const row of matchups) fields.push(MATCHUPS.indexOf(row.label), row.wins, row.losses);
   if (opener) fields.push(OPENER_INDEX.get(opener.name)!, ...recordValues(opener));
   if (macro) fields.push(macro.score, macro.games);
-  return toBase64url([VERSION, REPORT_TYPE, sections, ...toVarintBytes(fields)]);
+  if (commander !== undefined) fields.push(commander);
+  return toBase64url([commander === undefined ? VERSION : COMMANDER_VERSION, REPORT_TYPE, sections, ...toVarintBytes(fields)]);
 }
 
 class ReportCardReader {
@@ -101,17 +106,19 @@ class ReportCardReader {
 }
 
 function readReportCard(reader: ReportCardReader): ReportCardModel | null {
-  if (reader.read() !== VERSION || reader.read() !== REPORT_TYPE) return null;
+  const version = reader.read();
+  if ((version !== VERSION && version !== COMMANDER_VERSION) || reader.read() !== REPORT_TYPE) return null;
   const sections = reader.read();
   const matchupCount = reader.read();
-  if (sections > SECTION_MASK || matchupCount > MATCHUPS.length) return null;
+  const hasCommander = Boolean(sections & COMMANDER);
+  if (sections > (SECTION_MASK | COMMANDER) || hasCommander !== (version === COMMANDER_VERSION) || matchupCount > MATCHUPS.length) return null;
   const totals = sections & TOTALS ? reader.record() : null;
   const matchups = Array.from({ length: matchupCount }, () => ({
     label: MATCHUPS[reader.read()], wins: reader.read(), losses: reader.read(),
   }));
   const opener = sections & OPENER ? { name: openersV1[reader.read()], ...reader.record() } : null;
   const macro = sections & MACRO ? { score: reader.read(), games: reader.read() } : null;
-  const model = { totals, matchups, opener, macro };
+  const model = { totals, matchups, opener, macro, ...(hasCommander ? { commander: reader.read() } : {}) };
   return validModel(model) ? model : null;
 }
 

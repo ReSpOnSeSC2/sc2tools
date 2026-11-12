@@ -1,0 +1,110 @@
+{
+  "repertoire": [
+    {
+      "key": "one_trick",
+      "label": "One-Trick Wonder",
+      "noun": "Purist",
+      "adjective": "Devoted"
+    },
+    {
+      "key": "signature",
+      "label": "Signature Pilot",
+      "noun": "Pilot",
+      "adjective": "Signature"
+    },
+    {
+      "key": "grinder",
+      "label": "Consistent Grinder",
+      "noun": "Grinder",
+      "adjective": "Disciplined"
+    },
+    {
+      "key": "adaptive",
+      "label": "Adaptive Strategist",
+      "noun": "Strategist",
+      "adjective": "Adaptive"
+    },
+    {
+      "key": "creative",
+      "label": "Creative Genius",
+      "noun": "Inventor",
+      "adjective": "Creative"
+    }
+  ],
+  "pace": [
+    {
+      "key": "cheeser",
+      "label": "Cheeser",
+      "noun": "Ambusher",
+      "adjective": "All-In"
+    },
+    {
+      "key": "timing_attacker",
+      "label": "Timing Attacker",
+      "noun": "Striker",
+      "adjective": "Clockwork"
+    },
+    {
+      "key": "flexible",
+      "label": "Flexible Pacer",
+      "noun": "Operator",
+      "adjective": "Flexible"
+    },
+    {
+      "key": "mid_late_master",
+      "label": "Mid-Game Maestro",
+      "noun": "Navigator",
+      "adjective": "Transitional"
+    },
+    {
+      "key": "late_game",
+      "label": "Long-Game Lean",
+      "noun": "Endurer",
+      "adjective": "Long-Game"
+    },
+    {
+      "key": "late_game_master",
+      "label": "Late-Game Master",
+      "noun": "Commander",
+      "adjective": "Endgame"
+    },
+    {
+      "key": "two_speed",
+      "label": "Two-Speed Player",
+      "noun": "Switchblade",
+      "adjective": "Two-Speed"
+    }
+  ],
+  "matchup_edge": [
+    {
+      "key": "specialist",
+      "label": "Matchup Specialist",
+      "noun": "Ace",
+      "adjective": "Dominant"
+    },
+    {
+      "key": "matchup_edge",
+      "label": "Matchup Edge",
+      "noun": "Hunter",
+      "adjective": "Favored"
+    },
+    {
+      "key": "universalist",
+      "label": "Matchup Universalist",
+      "noun": "Universalist",
+      "adjective": "Even-Handed"
+    },
+    {
+      "key": "matchup_hurdle",
+      "label": "Matchup Hurdle",
+      "noun": "Climber",
+      "adjective": "Battle-Tested"
+    },
+    {
+      "key": "blind_spot",
+      "label": "Matchup Blind Spot",
+      "noun": "Underdog",
+      "adjective": "Fault-Line"
+    }
+  ]
+}

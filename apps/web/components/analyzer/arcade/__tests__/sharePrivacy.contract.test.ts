@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { sharedDay } from "@/lib/sharePrivacy";
-import { compareReportCards, decodeReportComparison, encodeReportComparison } from "@/lib/instant/reportCardLink";
+import { compareReportCards, decodeReportCard, decodeReportComparison, encodeReportCard, encodeReportComparison } from "@/lib/instant/reportCardLink";
+import { buildInstantReport, parseInstantPayload } from "@/lib/instant/report";
+import { summaryFromModel } from "@/lib/instant/reportExport";
+import { reportCardModel } from "@/lib/instant/reportSharing";
 import { fingerprintShareCard, sessionReportShareCard } from "@/lib/personalShareCards";
 import { practiceGradeShareCard } from "@/lib/practice/practiceGradeShareCard";
 import { mulberry32 } from "../ArcadeEngine";
@@ -97,6 +100,24 @@ test("the replay comparison contains only the two selected game records", () => 
   const fragment = encodeReportComparison(comparison);
   expect(fragment).toMatch(/^[A-Za-z0-9_-]{1,59}$/);
   expect(decodeReportComparison(fragment!)).toEqual(expected);
+});
+
+test("the Commander ID share field is a fixed taxonomy index, with no evidence attached", () => {
+  const payload = parseInstantPayload(JSON.stringify({
+    gameId: "zq9game", date: "2026-10-01T08:02:03Z", result: "Win", myBuild: rawName(1),
+    myRace: "Zerg", myToonHandle: toonHandle(2), myMmr: exactMmr(1),
+    opponent: { displayName: displayName(1), race: "Terran", toonHandle: toonHandle(1) },
+  }));
+  if (!payload) throw new Error("Missing fixture payload");
+  const report = buildInstantReport([payload], new Date("2026-10-02"));
+  const card = reportCardModel(report, { totals: false, matchups: [], opener: false, macro: false, commander: true }, 0);
+  const fragment = encodeReportCard(card);
+  expect(decodeReportCard(fragment!)).toEqual({ totals: null, matchups: [], opener: null, macro: null, commander: 0 });
+  const text = JSON.stringify(summaryFromModel(card));
+  expect(text).toContain("Commander ID:");
+  for (const sentinel of SENTINELS) expect(text).not.toContain(sentinel);
+  expect(text).not.toMatch(EXACT_MMR);
+  expect(text).not.toMatch(CLOCK_TIME);
 });
 
 test("the fingerprint card projects measured player aggregates and a fixed matchup alphabet", () => {

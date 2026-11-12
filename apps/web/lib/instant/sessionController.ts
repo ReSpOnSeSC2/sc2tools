@@ -274,7 +274,7 @@ class InstantSessionController {
     const outcome = await parseScanned(deps, scanned, toon, rules, this.options().wantDigests === true);
     if (!outcome) return;
     this.abort = null;
-    deps.dispatch({ type: "done", parsedWithFiles: outcome.parsed, deferredCount: outcome.deferredCount });
+    deps.dispatch({ type: "done", parsedWithFiles: outcome.parsed, deferredCount: outcome.deferredCount, commanderRows: outcome.commanderRows });
     if (this.options().trackAnalytics !== false) {
       trackRunDone(outcome.parsed, [...this.store.getState().intakeFailed, ...outcome.failed]);
     }

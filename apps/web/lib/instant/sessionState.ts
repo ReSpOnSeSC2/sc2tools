@@ -80,6 +80,7 @@ export interface InstantSessionState {
   meMode: MeDetectionMode | null;
   chosenToon: string | null;
   parsedWithFiles: ParsedWithFile[];
+  commanderRows?: import("./commanderEvidence").CommanderRow[];
   /** Files rejected at intake (too large, unreadable .zip). */
   intakeFailed: FailedParse[];
   /** Files that failed or were skipped during the current run. */
@@ -99,7 +100,7 @@ export type SessionAction =
   | { type: "choosing"; candidates: MeCandidate[]; meMode: MeDetectionMode }
   | { type: "scanned"; meMode: MeDetectionMode }
   | { type: "chosen"; toon: string }
-  | { type: "done"; parsedWithFiles: ParsedWithFile[]; deferredCount?: number }
+  | { type: "done"; parsedWithFiles: ParsedWithFile[]; deferredCount?: number; commanderRows?: InstantSessionState["commanderRows"] }
   | { type: "error"; kind: ErrorKind }
   | { type: "cancelled" }
   | { type: "reset" };
@@ -214,6 +215,7 @@ const NO_RUN_RESULTS = {
   meMode: null,
   chosenToon: null,
   parsedWithFiles: [],
+  commanderRows: undefined,
   runFailed: [],
   error: null,
 } satisfies Partial<InstantSessionState>;
@@ -266,6 +268,7 @@ function outcomeReducer(state: InstantSessionState, action: OutcomeAction): Inst
     case "done":
       return {
         ...state, phase: "done", progress: null, parsedWithFiles: action.parsedWithFiles,
+        commanderRows: action.commanderRows,
         truncatedCount: state.seenKeys.size - state.files.length + (action.deferredCount ?? 0),
       };
     case "error":
