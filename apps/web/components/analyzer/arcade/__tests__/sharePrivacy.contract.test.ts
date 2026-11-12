@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { sharedDay } from "@/lib/sharePrivacy";
 import { compareReportCards, decodeReportComparison, encodeReportComparison } from "@/lib/instant/reportCardLink";
 import { fingerprintShareCard, sessionReportShareCard } from "@/lib/personalShareCards";
+import { practiceGradeShareCard } from "@/lib/practice/practiceGradeShareCard";
 import { mulberry32 } from "../ArcadeEngine";
 import { ALL_MODES, type AnyMode } from "../modes";
 import { buildShareSummary } from "../shareSummary";
@@ -115,6 +116,17 @@ test("the fingerprint card projects measured player aggregates and a fixed match
   const unknown = fingerprintShareCard(malformed as unknown as Parameters<typeof fingerprintShareCard>[0]);
   expect(unknown.subtitle).toBe("1v1 playstyle");
   expect(unknown.stats).toEqual([{ label: "Games in sample", value: "Unavailable" }]);
+});
+
+test("the Practice Link card exports only the letter and the public creator’s build credit", () => {
+  const credit = {
+    title: "Public opening", creator: "Public creator", path: "/b/opening" as const,
+    opponent: displayName(2), fileName: rawName(2), playerId: toonHandle(2), rating: exactMmr(2),
+  };
+  expect(practiceGradeShareCard(credit, "B")).toEqual({
+    kind: "practice_grade", title: "Practice Link grade", subtitle: "Public opening · Build by Public creator",
+    path: "/b/opening", stats: [{ label: "Grade", value: "B" }],
+  });
 });
 
 test("the session card excludes the private locator, games, timestamps and rating tracks", () => {

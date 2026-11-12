@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { PlayerChooser } from "@/components/instant/PlayerChooser";
 import { Button } from "@/components/ui/Button";
+import { PersonalCardShareButton } from "@/components/ui/PersonalCardShareButton";
 import type { GhostTarget } from "@/lib/ghostBuild";
 import { spokenStepName } from "@/lib/ghostVoice";
 import { fmtClock } from "@/lib/guides/format";
@@ -11,12 +12,13 @@ import { parseInstantPayload } from "@/lib/instant/reportPayload";
 import { SINGLE_REPLAY_SESSION_OPTIONS, useInstantSession } from "@/lib/instant/useInstantSession";
 import type { PatchEra } from "@/lib/meta";
 import { gradePracticeReplay } from "@/lib/practice/practiceGrade";
+import { practiceGradeShareCard, type PracticeGradeCredit } from "@/lib/practice/practiceGradeShareCard";
 import type { Race } from "@/lib/race";
 
 type Result = ReturnType<typeof gradePracticeReplay>;
 const LOCAL_GRADE_SESSION_OPTIONS = { ...SINGLE_REPLAY_SESSION_OPTIONS, trackAnalytics: false };
 
-function GradeResult({ grade }: { grade: Result }) {
+function GradeResult({ grade, credit }: { grade: Result; credit: PracticeGradeCredit }) {
   if (grade.kind === "wrong_race") return <p role="status">Choose your side in a replay played as the build’s race.</p>;
   const mismatch = grade.patchMismatch ? <p role="status" className="text-body font-semibold">The replay and build use different patch eras. Compare the timings with care.</p> : null;
   if (grade.kind === "wrong_build") return <div className="space-y-2">{mismatch}<p role="status">This replay doesn’t match the build. Fewer than half the recorded steps matched.</p></div>;
@@ -29,6 +31,7 @@ function GradeResult({ grade }: { grade: Result }) {
     <p className="text-body">{slip
       ? `The first slip was ${spokenStepName(slip.name)} at ${fmtClock(slip.expectedT)}. ${slip.actualT === null ? "Missed." : `Recorded at ${fmtClock(slip.actualT)}.`}`
       : "No major slip detected."}</p>
+    <PersonalCardShareButton card={practiceGradeShareCard(credit, result.grade)} label="Share grade card" />
   </div>;
 }
 
@@ -69,7 +72,7 @@ function useReplayGrade() {
   return { session, intakeError, busy: preparing || session.busy, current, start, cancel };
 }
 
-export function DropGrade({ target, race, era }: { target: GhostTarget; race: Race; era: PatchEra }) {
+export function DropGrade({ target, race, era, credit }: { target: GhostTarget; race: Race; era: PatchEra; credit: PracticeGradeCredit }) {
   const { session, intakeError, busy, current, start, cancel } = useReplayGrade();
   const picker = useRef<HTMLInputElement>(null);
   const choose = useRef<HTMLButtonElement>(null);
@@ -109,6 +112,6 @@ export function DropGrade({ target, race, era }: { target: GhostTarget; race: Ra
       {copy?.hint ? <p className="text-caption text-text-muted">{copy.hint}</p> : null}
       {current.current ? <Button variant="secondary" className="min-h-11" onClick={retry}>Try again</Button> : null}
     </div> : null}
-    {grade ? <GradeResult grade={grade} /> : null}
+    {grade ? <GradeResult grade={grade} credit={credit} /> : null}
   </section>;
 }

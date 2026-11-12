@@ -49,4 +49,4 @@ export const practiceLinks = readPracticeLinks(registry);
 export const practiceLinkByAlias = (alias: string) => practiceLinks.find((link) => link.alias === alias);
 export const practiceLinkByBuild = (slug: string, creator: string | undefined) =>
   practiceLinks.find((link) => link.communitySlug === slug && link.creator === creator);
-export const practiceLinkPath = (link: Pick<PracticeLink, "alias">) => `/b/${link.alias}`;
+export const practiceLinkPath = (link: Pick<PracticeLink, "alias">): `/b/${string}` => `/b/${link.alias}`;

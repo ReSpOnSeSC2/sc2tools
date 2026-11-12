@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { PracticeLinkTabs } from "@/components/practice/PracticeLinkTabs";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { getInstantImportMode } from "@/lib/instant/flag";
-import { practiceGradeTarget } from "@/lib/practice/practiceGrade";
+import { practiceEraLabel, practiceGradeTarget } from "@/lib/practice/practiceGrade";
 import { practiceLinkByAlias, practiceLinkPath } from "@/lib/practice/practiceLinks";
 import { loadPracticeLink } from "@/lib/practice/serverPracticeLink";
 import { referenceOrderPracticeTarget } from "@/lib/practiceTarget";
@@ -42,11 +42,13 @@ async function PublishedPracticeLink({ alias }: { alias: string }) {
     <a className="inline-flex min-h-11 items-center text-accent underline" href={practiceLinkPath(result.link)}>Try again</a>
   </section>;
   const { build, link } = result;
+  const steps = build.order?.steps.map(({ t, supply, action }) => ({ t, supply, action })) ?? [];
   return <article className="mx-auto max-w-5xl space-y-5">
-    <PageHeader eyebrow="Practice Link" title={build.title} className="[overflow-wrap:anywhere]" description={`Build by ${build.creator}`} />
-    <PracticeLinkTabs title={build.title} videoId={link.youtubeId} offset={link.offsetSec} steps={build.order?.steps ?? []}
+    <PageHeader eyebrow="Practice Link" title={build.title} className="[overflow-wrap:anywhere]" description={`Build by ${build.creator} · ${practiceEraLabel(link.patchEra)}`} />
+    <PracticeLinkTabs title={build.title} videoId={link.youtubeId} offset={link.offsetSec} steps={steps}
       drill={referenceOrderPracticeTarget(build.title, build.order, build.race === "Random" ? undefined : build.race)}
       grade={practiceGradeTarget(build.title, build.order, build.race, link.gradeEndSec)}
-      race={build.race} era={link.patchEra} gradeEnabled={getInstantImportMode() === "all"} />
+      race={build.race} era={link.patchEra} gradeEnabled={getInstantImportMode() === "all"}
+      credit={{ title: build.title, creator: build.creator, path: practiceLinkPath(link) }} />
   </article>;
 }

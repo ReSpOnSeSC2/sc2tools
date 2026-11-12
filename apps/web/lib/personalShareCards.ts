@@ -3,11 +3,13 @@ import type { SessionSummary } from "@/lib/sessionHistory";
 
 type ShareStat = { label: string; value: string };
 export type PersonalShareCard = {
-  kind: Extract<SharedCardKind, "fingerprint" | "session_report">;
   title: string;
   subtitle: string;
   stats: readonly ShareStat[];
-};
+} & (
+  { kind: Extract<SharedCardKind, "fingerprint" | "session_report">; path?: never }
+  | { kind: "practice_grade"; path: `/b/${string}` }
+);
 
 type FingerprintShareFacts = {
   matchup: string;

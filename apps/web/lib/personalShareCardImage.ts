@@ -20,7 +20,8 @@ export async function sharePersonalCard(card: PersonalShareCard) {
   ctx.fillText(card.title, CARD_PAD, 54);
   ctx.fillStyle = shareReportPalette.weeklyMuted;
   ctx.font = `500 28px ${FONT_STACK}`;
-  ctx.fillText(card.subtitle, CARD_PAD, 136);
+  if (card.kind === "practice_grade") ctx.fillText(card.subtitle, CARD_PAD, 136, CARD_W - 2 * CARD_PAD);
+  else ctx.fillText(card.subtitle, CARD_PAD, 136);
 
   const gap = 20;
   const width = (CARD_W - 2 * CARD_PAD - gap) / 2;
@@ -37,7 +38,8 @@ export async function sharePersonalCard(card: PersonalShareCard) {
     ctx.font = `750 48px ${FONT_STACK}`;
     ctx.fillText(value, x + 22, y + 62);
   });
-  drawCardFooter(ctx, { brand: "SC2 Tools", linkLabel: SITE });
+  const link = `${SITE}${card.path ?? ""}`;
+  drawCardFooter(ctx, { brand: "SC2 Tools", linkLabel: link });
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("PNG unavailable");
@@ -45,7 +47,7 @@ export async function sharePersonalCard(card: PersonalShareCard) {
   const { shared, method } = await deliverShareCard({
     blob,
     title: card.title,
-    text: [card.title, card.subtitle, ...lines, "", `https://${SITE}`].join("\n"),
+    text: [card.title, card.subtitle, ...lines, "", `https://${link}`].join("\n"),
     filename: `sc2tools-${card.kind.replaceAll("_", "-")}.png`,
   });
   return shared && method ? { method, feedback: shareOutcome(card.title, method) } : null;
