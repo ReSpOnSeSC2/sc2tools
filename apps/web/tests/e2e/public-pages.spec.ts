@@ -138,6 +138,8 @@ async function verifyAgentReleaseHistory(
   await page.emulateMedia({ colorScheme: theme });
   const response = await page.goto("/changelog");
   expect(response?.status()).toBe(200);
+  const rejectCookies = page.getByRole("button", { name: "Reject", exact: true });
+  if (await rejectCookies.isVisible()) await rejectCookies.click();
   const history = page.getByRole("region", { name: "Agent release notes" });
   await page.getByRole("link", { name: "Agent release notes", exact: true }).click();
   await expect(page).toHaveURL(/\/changelog#agent-release-notes$/);
