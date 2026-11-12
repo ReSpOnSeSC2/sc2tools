@@ -5,9 +5,7 @@ import type { ArcadeGame } from "@/components/analyzer/arcade/types";
 import { gamesFromHeaders, headerIdentity, type KeyedHeader, yearLadderHeaders, yearReplayFiles } from "@/lib/career/headerRows";
 import { MAX_REPLAY_BYTES } from "@/lib/instant/fileIntake";
 import type { MeCandidate } from "@/lib/instant/meDetection";
-import type { EngineProgress, IntakeFile } from "@/lib/instant/types";
-
-type Source = (signal: AbortSignal) => Promise<IntakeFile[] | null>;
+import type { EngineProgress, IntakeFile, ReplaySource } from "@/lib/instant/types";
 type Results = { rows: KeyedHeader[]; candidates: MeCandidate[]; unreadable: number };
 
 export type RecapState =
@@ -59,10 +57,10 @@ async function scanYear(files: IntakeFile[], signal: AbortSignal, setState: (sta
 export function useYearRecap() {
   const [state, setState] = useState<RecapState>({ kind: "idle" });
   const active = useRef<AbortController | null>(null);
-  const lastSource = useRef<Source | null>(null);
+  const lastSource = useRef<ReplaySource | null>(null);
   useEffect(() => () => active.current?.abort(), []);
 
-  async function start(source: Source) {
+  async function start(source: ReplaySource) {
     if (active.current) return;
     lastSource.current = source;
     const controller = new AbortController();

@@ -19,12 +19,18 @@ export function yearReplayFiles(files: IntakeFile[]): IntakeFile[] {
 
 export interface KeyedHeader {
   key: string;
+  replayDigest?: string;
   header: ReplayHeader & { date: string };
 }
 
+export function isLadderHeader(result: ReplayHeaderResult): result is KeyedHeader["header"] {
+  return result.ok && !!result.date && Number.isFinite(Date.parse(result.date))
+    && result.matchFormat === "1v1" && result.isLadderGame === true
+    && !result.isAiGame && result.playerCount === 2 && result.players.length === 2;
+}
+
 function isYearLadderGame(result: ReplayHeaderResult): result is KeyedHeader["header"] {
-  if (!result.ok || !result.date || result.matchFormat !== "1v1") return false;
-  if (result.isLadderGame !== true || result.isAiGame || result.playerCount !== 2 || result.players.length !== 2) return false;
+  if (!isLadderHeader(result)) return false;
   const date = Date.parse(result.date);
   return date >= RECAP_START && date < RECAP_END;
 }
@@ -61,10 +67,15 @@ function toArcadeGame(row: KeyedHeader, me: ReplayHeaderPlayer, opponent: Replay
   };
 }
 
-export function gamesFromHeaders(rows: KeyedHeader[], chosenToon?: string): ArcadeGame[] {
+export interface SelectedHeader extends KeyedHeader {
+  me: ReplayHeaderPlayer;
+  opponent: ReplayHeaderPlayer;
+}
+
+export function selectedGamesFromHeaders(rows: KeyedHeader[], chosenToon?: string): SelectedHeader[] {
   const identity = headerIdentity(rows);
   const seen = new Set<string>();
-  const games: ArcadeGame[] = [];
+  const games: SelectedHeader[] = [];
   for (const row of rows) {
     const selector = identity.selectorFor(row.key, chosenToon);
     if (!selector?.toon) continue;
@@ -74,12 +85,16 @@ export function gamesFromHeaders(rows: KeyedHeader[], chosenToon?: string): Arca
     const pair = [me.toon, opponent.toon].sort();
     const gameKey = opponent.toon
       ? JSON.stringify([row.header.date, row.header.durationSec, row.header.map, pair])
-      : row.key;
+      : row.replayDigest ?? row.key;
     if (seen.has(gameKey)) continue;
     seen.add(gameKey);
-    games.push(toArcadeGame(row, me, opponent));
+    games.push({ ...row, me, opponent });
   }
   return games;
+}
+
+export function gamesFromHeaders(rows: KeyedHeader[], chosenToon?: string): ArcadeGame[] {
+  return selectedGamesFromHeaders(rows, chosenToon).map((row) => toArcadeGame(row, row.me, row.opponent));
 }
 
 export function busiestReplayMonth(games: ArcadeGame[]): { month: string; games: number } | null {

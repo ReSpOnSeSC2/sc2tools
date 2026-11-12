@@ -13,7 +13,7 @@ import { formatNumber } from "@/lib/i18n/format";
 import { computeSeasonRecap } from "@/lib/seasonRecap";
 import { useYearRecap, type RecapState } from "./useYearRecap";
 import { WrappedShareButton } from "./WrappedShareButton";
-import { YearRecapIntake } from "./YearRecapIntake";
+import { LocalReplayIntake } from "@/components/instant/LocalReplayIntake";
 
 const WINDOW = { since: new Date(RECAP_START), until: new Date(RECAP_END - 1), separateRaceQueues: true };
 const YEAR_LABEL = `${RECAP_YEAR} ladder games`;
@@ -104,7 +104,7 @@ export function YearRecap() {
 
   return (
     <div ref={panel} className="min-h-64">
-      {state.kind === "idle" ? <YearRecapIntake start={start} /> : null}
+      {state.kind === "idle" ? <LocalReplayIntake start={start} modifiedWindow={WINDOW} /> : null}
       {state.kind === "scanning" ? <ScanProgress {...state} onCancel={clear} /> : null}
       {state.kind === "empty" || state.kind === "error" ? <IntakeMessage state={state} clear={clear} retry={retry} /> : null}
       {state.kind === "identify" ? <PlayerChooser candidates={state.candidates} onChoose={choose} onCancel={clear} showToon /> : null}

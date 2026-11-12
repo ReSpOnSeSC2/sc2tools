@@ -66,7 +66,7 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   if (statusRedirect) return NextResponse.redirect(statusRedirect, PERMANENT_REDIRECT);
   const pathname = req.nextUrl.pathname;
   // Static replay views must work without a Clerk session handshake.
-  if (isPublicStatusRequest(pathname) || pathname === "/wrapped" || pathname === "/wrapped/opengraph-image"
+  if (isPublicStatusRequest(pathname) || pathname === "/wrapped" || pathname === "/wrapped/opengraph-image" || pathname === "/career"
     || isReportCardPath(pathname) || isReportCardPreviewPath(pathname)) {
     return NextResponse.next();
   }

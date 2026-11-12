@@ -4807,6 +4807,10 @@ release preparation, not a signed or published 0.24.9 installer.
 - New opponent list links keep filter text outside the query keys Google
   Analytics Site search reads. Older opponent links still open their saved filter.
 
+### Local replay career
+
+- See your ladder record from selected replay files at `/career`, including recorded play time, races and maps by year, expansion eras, and gaps between replays. Unchanged headers are reused in the browser when you select the folder again.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

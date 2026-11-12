@@ -105,6 +105,7 @@ import gettingStarted_instantAnalysis from "./getting-started/instant-analysis";
 import gettingStarted_keyboardShortcuts from "./getting-started/keyboard-shortcuts";
 import gettingStarted_matchRooms from "./getting-started/match-rooms";
 import gettingStarted_practiceLinks from "./getting-started/practice-links";
+import gettingStarted_replayCareer from "./getting-started/replay-career";
 import gettingStarted_reportCardLinks from "./getting-started/report-card-links";
 import gettingStarted_sc2Daily from "./getting-started/sc2-daily";
 import gettingStarted_settingsOverview from "./getting-started/settings-overview";
@@ -236,6 +237,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_keyboardShortcuts,
   gettingStarted_matchRooms,
   gettingStarted_practiceLinks,
+  gettingStarted_replayCareer,
   gettingStarted_reportCardLinks,
   gettingStarted_sc2Daily,
   gettingStarted_settingsOverview,

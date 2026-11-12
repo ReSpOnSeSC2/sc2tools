@@ -15,6 +15,7 @@
     "/help/[slug]": 200,
     "/try": 240,
     "/wrapped": 215,
+    "/career": 215,
     "/arcade": 215,
     "/match": 215,
     "/match/room": 215,
