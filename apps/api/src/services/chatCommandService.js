@@ -45,9 +45,10 @@ class ChatCommandService {
     const lane = `${owner.userId}:${input.onStream ? "stream" : "chat"}`;
     const cooldownId = `${builtin ? "builtin" : "custom"}:${id}`;
     if (!options.previewOwner && !this.cooldowns.claim(lane, cooldownId, command.cooldownSec, platform, viewer)) return { status: "cooldown", text: null, command: id };
+    const includeLink = command.includeLink && !input.onStream && (Boolean(options.previewOwner) || !this.cooldowns.isActive(lane, "linked-reply"));
     const reply = custom
       ? { text: await this.customLine(token, custom.response, viewer), link: null }
-      : await this.builtinReply(token, id, String(input.argument || "").slice(0, 80), command.includeLink && !input.onStream);
+      : await this.builtinReply(token, id, String(input.argument || "").slice(0, 80), includeLink);
     // A rotation/revocation during composition cannot leak a late token reply.
     const current = await this.deps.overlayTokens.resolve(token);
     if (!current || current.userId !== owner.userId) return null;

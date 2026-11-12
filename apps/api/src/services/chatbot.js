@@ -159,6 +159,7 @@ class ChatbotService {
    *   liveGameBroker?: import('./liveGameBroker').LiveGameBroker,
    *   games?: import('./games').GamesService,
    *   chatStats?: import('./chatStats').ChatStatsService,
+   *   guidesEnabled?: boolean,
    *   engagement?: Pick<import('./multichatEngagement').MultichatEngagementService,'topOracles'>,
    *   studio?: Pick<import('./multichatStudio').MultichatStudioService,'get'>,
    *   series?: Pick<import('./streamSeries').StreamSeriesService,'chatLine'>,
@@ -175,7 +176,7 @@ class ChatbotService {
     this.engagement = services.engagement;
     this.studio = services.studio;
     this.series = services.series;
-    this.buildGuideLink = createBuildGuideLink(db.guideStats);
+    this.buildGuideLink = createBuildGuideLink(services.guidesEnabled ? db.guideStats : undefined);
     this.now = services.now || Date.now;
     this.logger = services.logger || null;
   }

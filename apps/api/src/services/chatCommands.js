@@ -115,11 +115,15 @@ function configuredCommands(prefs) {
 class CommandCooldowns {
   /** @param {()=>number} [now] */
   constructor(now = Date.now) { this.now = now; /** @type {Map<string,number>} */ this.entries = new Map(); }
+  /** @param {string} owner @param {string} command */
+  commandKey(owner, command) { return `command:${owner}:${command}`; }
+  /** @param {string} owner @param {string} command */
+  isActive(owner, command) { return (this.entries.get(this.commandKey(owner, command)) ?? 0) > this.now(); }
   /** @param {string} owner @param {string} command @param {number} seconds @param {string} platform @param {string} viewer */
   claim(owner, command, seconds, platform, viewer) {
     const now = this.now();
     for (const [key, until] of this.entries) if (until <= now) this.entries.delete(key);
-    const commandKey = `command:${owner}:${command}`;
+    const commandKey = this.commandKey(owner, command);
     const viewerKey = `viewer:${owner}:${createHash("sha256").update(`${platform}:${viewer.toLowerCase()}`).digest("base64url")}`;
     if ((this.entries.get(commandKey) ?? 0) > now || (viewer && (this.entries.get(viewerKey) ?? 0) > now)) return false;
     // Capacity refusal avoids evicting live cooldowns and opening a spam path.

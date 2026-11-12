@@ -45,15 +45,24 @@ test("the linked build is the build used in the reply rather than a different re
   const overlayTokens = { resolve: async () => ({ userId: "owner" }) };
   const games = { findOne: jest.fn(async () => ({ myBuild: name, myRace: "Protoss", opponent: { race: "Zerg" } })) };
   const guideStats = { findOne: jest.fn(async () => published) };
-  const chatbot = new ChatbotService({ games, guideStats }, { overlayTokens });
+  const chatbot = new ChatbotService({ games, guideStats }, { overlayTokens, guidesEnabled: true });
   await expect(chatbot.buildLine("token")).resolves.toContain(name);
   expect(guideStats.findOne).not.toHaveBeenCalled();
   await expect(chatbot.buildReply("token", true)).resolves.toEqual({ text: `Last opener: ${name} (PvZ)`, link });
   const liveGameBroker = { latest: () => ({ myBuild: name, myRace: "Protoss", opponent: { race: "Zerg" } }) };
-  const liveChatbot = new ChatbotService({ games, guideStats }, { overlayTokens, liveGameBroker });
+  const liveChatbot = new ChatbotService({ games, guideStats }, { overlayTokens, liveGameBroker, guidesEnabled: true });
   games.findOne.mockClear();
   await expect(liveChatbot.buildReply("token", true)).resolves.toEqual({ text: `Current build: ${name}`, link });
   expect(games.findOne).not.toHaveBeenCalled();
+});
+
+test.each([undefined, false])("stale publication does not create a link with Guides disabled (%s)", async guidesEnabled => {
+  const overlayTokens = { resolve: async () => ({ userId: "owner" }) };
+  const games = { findOne: jest.fn(async () => ({ myBuild: name, myRace: "Protoss", opponent: { race: "Zerg" } })) };
+  const guideStats = { findOne: jest.fn(async () => published) };
+  const chatbot = new ChatbotService({ games, guideStats }, { overlayTokens, guidesEnabled });
+  await expect(chatbot.buildReply("token", true)).resolves.toEqual({ text: `Last opener: ${name} (PvZ)`, link: null });
+  expect(guideStats.findOne).not.toHaveBeenCalled();
 });
 
 function fixture(prefs = {}) {
@@ -111,4 +120,25 @@ test("linked replies share a cooldown across commands and platforms while owner 
   expect((await service.answer("token", { command: "sc2tools" }, { previewOwner: "owner" })).text.endsWith(SC2TOOLS_LINK)).toBe(true);
   expect((await service.answer("token", { command: "build", platform: "twitch" })).text.endsWith(link)).toBe(true);
   expect((await service.answer("token", { command: "sc2tools", platform: "kick" })).text).not.toContain(SC2TOOLS_LINK);
+});
+
+test("an active linked-reply cooldown skips guide lookup for chat but allows owner previews", async () => {
+  const { service, chatbot } = fixture({ builtins: [{ id: "build", includeLink: true }, { id: "sc2tools", enabled: true, includeLink: true }] });
+  expect((await service.answer("token", { command: "sc2tools", platform: "kick" })).text.endsWith(SC2TOOLS_LINK)).toBe(true);
+  await expect(service.answer("token", { command: "build", platform: "twitch", user: "other viewer" })).resolves.toMatchObject({ text: "Unlinked build" });
+  expect(chatbot.buildReply).not.toHaveBeenCalled();
+  expect((await service.answer("token", { command: "build" }, { previewOwner: "owner" })).text.endsWith(link)).toBe(true);
+});
+
+test("a linked reply claimed during a guide lookup still suppresses the pending link", async () => {
+  const { service, chatbot } = fixture({ builtins: [{ id: "build", includeLink: true }, { id: "sc2tools", enabled: true, includeLink: true }] });
+  let startLookup, finishLookup;
+  const started = new Promise(resolve => { startLookup = resolve; });
+  const lookup = new Promise(resolve => { finishLookup = resolve; });
+  chatbot.buildReply.mockImplementation(() => { startLookup(); return lookup; });
+  const pending = service.answer("token", { command: "build", platform: "twitch", user: "first viewer" });
+  await started;
+  expect((await service.answer("token", { command: "sc2tools", platform: "kick", user: "second viewer" })).text.endsWith(SC2TOOLS_LINK)).toBe(true);
+  finishLookup({ text: "Last opener", link });
+  await expect(pending).resolves.toMatchObject({ text: "Last opener" });
 });
