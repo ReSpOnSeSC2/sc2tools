@@ -24,6 +24,7 @@ import type { ReportGame } from "./reportGames";
 import { replayMmr } from "./reportMmr";
 import { DEFAULT_REPORT_FILTERS, reportFilterLabel, type ReportFilters } from "./reportFilters";
 import type { ReportCardModel } from "./reportSharing";
+import { commanderNameFromCode } from "./commanderTaxonomy";
 
 export const REPORT_SHARE_URL = "https://sc2tools.com/try?utm_source=report&utm_medium=share&utm_campaign=instant";
 
@@ -147,11 +148,13 @@ function summaryFromReport(report: InstantReport): string[] {
 
 export function summaryFromModel(model: ReportCardModel): string[] {
   const totals = model.totals;
+  const commander = commanderNameFromCode(model.commander);
   return [
     totals ? `SC2 Tools /try report: ${totals.games} ${totals.games === 1 ? "game" : "games"}, ${record(totals.wins, totals.losses)}` : "SC2 Tools /try report",
     ...model.matchups.map((row) => `${row.label}: ${record(row.wins, row.losses)}`),
     model.opener ? `Best opener: ${model.opener.name} ${record(model.opener.wins, model.opener.losses)} over ${model.opener.games} games` : null,
     model.macro ? `Macro score: ${model.macro.score}/100 over ${model.macro.games} measured games` : null,
+    commander ? `Commander ID: ${commander}` : null,
   ].filter((line): line is string => line !== null);
 }
 

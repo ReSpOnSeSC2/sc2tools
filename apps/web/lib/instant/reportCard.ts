@@ -1,5 +1,6 @@
 import { CARD_W, CARD_H, CARD_PAD, FONT_STACK, drawCardBackground, wrapText } from "@/components/analyzer/arcade/ShareCard";
 import type { ReportCardModel } from "./reportSharing";
+import { commanderNameFromCode } from "./commanderTaxonomy";
 
 /**
  * Fixed 1200×630 local canvas. Input is the identity-free aggregate
@@ -47,9 +48,27 @@ export function drawReportCard(canvas: HTMLCanvasElement, model: ReportCardModel
     ctx.font = `400 18px ${FONT_STACK}`;
     ctx.fillText(`${model.macro.games} measured games`, 905, 510);
   }
+  const commander = commanderNameFromCode(model.commander);
+  if (commander) drawCommander(ctx, commander, model);
   ctx.fillStyle = "#a9d6ff";
   ctx.font = `600 25px ${FONT_STACK}`;
   ctx.fillText("sc2tools.com/try — analyze yours free", CARD_PAD, 574);
+}
+
+function drawCommander(ctx: CanvasRenderingContext2D, name: string, model: ReportCardModel): void {
+  if (model.opener || model.macro) {
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `600 22px ${FONT_STACK}`;
+    ctx.fillText(`Commander ID: ${name}`, CARD_PAD, 547);
+    return;
+  }
+  const y = model.matchups.length > 0 ? 170 + model.matchups.length * 74 + 20 : 200;
+  ctx.fillStyle = "#b7c6d8";
+  ctx.font = `600 22px ${FONT_STACK}`;
+  ctx.fillText("COMMANDER ID", CARD_PAD, y);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `700 42px ${FONT_STACK}`;
+  wrapText(ctx, name, CARD_PAD, y + 34, CARD_W - CARD_PAD * 2, 48, 2);
 }
 
 function drawMatchup(ctx: CanvasRenderingContext2D, row: ReportCardModel["matchups"][number], y: number): void {

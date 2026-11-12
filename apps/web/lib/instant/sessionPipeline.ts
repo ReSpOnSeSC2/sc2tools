@@ -22,6 +22,7 @@
 import { failedParse } from "./engineOutcome";
 import { isInDateWindow, preFilterByDate, type DateWindow } from "./fileIntake";
 import type { MeDetection, MeScan } from "./meDetection";
+import { isLadderHeader, type KeyedHeader } from "@/lib/career/headerRows";
 import type { ParsedWithFile } from "./sessionState";
 import { intakeFailure } from "./sessionIntake";
 import type { ErrorKind, FailedParse, IntakeFile, ParseOutcome, ParseRequest, ParsedGame, PlayersResult } from "./types";
@@ -41,6 +42,7 @@ export interface EligibleFile {
   scan: MeScan;
   /** Recorded end time, falling back to modification time when absent. */
   playedAt: number;
+  header?: KeyedHeader["header"];
 }
 
 type OkPlayers = Extract<PlayersResult, { ok: true }>;
@@ -74,6 +76,11 @@ function scanTime(scan: OkPlayers, file: IntakeFile): number {
   return Number.isFinite(playedAt) ? playedAt : file.lastModified;
 }
 
+function rankedHeader(scan: OkPlayers): KeyedHeader["header"] | undefined {
+  const header = "isLadderGame" in scan ? scan as KeyedHeader["header"] : null;
+  return header && isLadderHeader(header) ? header : undefined;
+}
+
 /**
  * Apply the header-scan rules (step 2 of the module comment).
  * `scans[i]` must belong to `files[i]` (engine order).
@@ -97,11 +104,15 @@ export function triageScans(
     } else {
       const skip = scanSkipKind(scan, rules);
       if (skip) failed.push(intakeFailure(file, skip));
-      else eligible.push({
-        file,
-        scan: { key: file.key, players: scan.players, toonFromPath: scan.toonFromPath },
-        playedAt: scanTime(scan, file),
-      });
+      else {
+        const header = rankedHeader(scan);
+        eligible.push({
+          file,
+          scan: { key: file.key, players: scan.players, toonFromPath: scan.toonFromPath },
+          playedAt: scanTime(scan, file),
+          ...(header ? { header } : {}),
+        });
+      }
     }
   });
   if (rules.maxParsedFiles !== undefined) eligible.sort((a, b) => b.playedAt - a.playedAt);

@@ -13,6 +13,7 @@
  *   if (scanned && !scanned.detection.needsConfirmation) await parseScanned(deps, scanned, null, rules, false);
  */
 import { medianMs, trackInstantError, trackInstantParseDone } from "./analytics";
+import type { CommanderRow } from "./commanderEvidence";
 import { EngineError } from "./engineErrors";
 import { detectMe, type MeDetection } from "./meDetection";
 import { buildRequests, finalizeOutcomes, splitByDate, triageScans, type EligibleFile, type RunRules } from "./sessionPipeline";
@@ -42,6 +43,7 @@ export interface ScanOutcome {
 export interface RunOutcome {
   parsed: ParsedWithFile[];
   deferredCount: number;
+  commanderRows?: CommanderRow[];
   /** Every failure of the run, scan pass included (all already dispatched). */
   failed: FailedParse[];
 }
@@ -124,7 +126,13 @@ export async function parseScanned(
   if (!deps.isCurrent()) return null;
   const finalized = finalizeOutcomes(selected, outcomes, rules);
   report(deps, failed, finalized.failed);
-  return { parsed: finalized.parsed, failed, deferredCount };
+  const result: RunOutcome = { parsed: finalized.parsed, failed, deferredCount };
+  if (scanned.eligible.some(entry => entry.header)) {
+    const { commanderHeaderRows } = await import("./commanderEvidence");
+    if (!deps.isCurrent()) return null;
+    result.commanderRows = commanderHeaderRows(scanned.eligible, scanned.detection, chosenToon, selected, finalized.parsed);
+  }
+  return result;
 }
 
 /**

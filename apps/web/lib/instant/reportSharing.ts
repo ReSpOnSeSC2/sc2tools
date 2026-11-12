@@ -1,21 +1,23 @@
 import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
+import { commanderNameFromCode } from "./commanderTaxonomy";
 import type { InstantReport } from "./report";
 
 /** The share text is reportSummaryText (reportExport.ts) over this projection, so there is one summary builder. */
 
-export interface ReportSelection { totals: boolean; matchups: string[]; opener: boolean; macro: boolean }
+export interface ReportSelection { totals: boolean; matchups: string[]; opener: boolean; macro: boolean; commander?: boolean }
 export interface ReportCardModel {
   totals: { games: number; wins: number; losses: number } | null;
   matchups: Array<{ label: string; wins: number; losses: number }>;
   opener: { name: string; games: number; wins: number; losses: number } | null;
   macro: { score: number; games: number } | null;
+  commander?: number;
 }
 
 const catalogNames = new Set(BUILD_DEFINITIONS.flatMap((row) => [row.name, row.eightWorkerName].filter((name): name is string => !!name)));
 const count = (value: number) => Number.isSafeInteger(value) && value >= 0;
 
 /** Allowlist aggregate fields only. Never copy game, player or account objects. */
-export function reportCardModel(report: InstantReport, selection?: ReportSelection): ReportCardModel {
+export function reportCardModel(report: InstantReport, selection?: ReportSelection, commander?: number | null): ReportCardModel {
   const totals = report.totals;
   const rows = (report.recordByMatchup ?? []).filter((row) => /^[PTZ]$/.test(row.oppRace) && count(row.wins) && count(row.losses));
   const best = (report.openers ?? []).filter((row) => catalogNames.has(row.name) && row.games >= 3 && count(row.games)
@@ -31,6 +33,7 @@ export function reportCardModel(report: InstantReport, selection?: ReportSelecti
     macro: selection?.macro !== false && macro && macro.games > 0 && count(macro.games) && macro.averageScore !== null
       && Number.isFinite(macro.averageScore) && macro.averageScore >= 0 && macro.averageScore <= 100
       ? { score: Math.round(macro.averageScore), games: macro.games } : null,
+    ...((!selection || selection.commander) && typeof commander === "number" && commanderNameFromCode(commander) ? { commander } : {}),
   };
 }
 

@@ -73,6 +73,7 @@ export interface InstantSession extends SessionActions {
   parsed: ParsedGame[];
   /** Parsed games with their original file (upload + replay backup). */
   parsedWithFiles: ParsedWithFile[];
+  commanderRows?: import("./commanderEvidence").CommanderRow[];
   /** Intake rejects first, then this run's skips and failures. */
   failed: FailedParse[];
   error: ErrorKind | null;
@@ -140,6 +141,7 @@ export function useInstantSession(options: UseInstantSessionOptions = {}): Insta
       chosenToon: state.chosenToon,
       parsed,
       parsedWithFiles: state.parsedWithFiles,
+      commanderRows: state.commanderRows,
       failed,
       error: state.error,
       engineInfo,
