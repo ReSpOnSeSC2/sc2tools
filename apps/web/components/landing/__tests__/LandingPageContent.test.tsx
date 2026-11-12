@@ -26,6 +26,33 @@ it("puts the headline before product slides and gives the hero one browser try p
   expect(container.textContent).toContain(`Included in the desktop app since ${STREAMS_MIN_AGENT_VERSION}`);
 });
 
+it("puts the public tool links in the hero without replacing the main or streaming actions", () => {
+  render(<LandingPageContent />);
+  const hero = screen.getByRole("heading", { level: 1 }).closest("section")!;
+  const tools = within(hero).getByRole("navigation", { name: "More SC2 Tools" });
+  expect(within(tools).getAllByRole("link").map(link => [link.textContent, link.getAttribute("href")])).toEqual([
+    ["SC2 Daily", "/arcade"],
+    ["Match Rooms", "/match"],
+    ["Wrapped", "/wrapped"],
+    ["Release notes", "/changelog"],
+  ]);
+  const heroLinks = within(hero).getAllByRole("link");
+  expect(heroLinks.slice(0, 2).map(link => link.getAttribute("href"))).toEqual(["/try", "/download"]);
+  const stream = within(hero).getByRole("link", { name: /shared stream titles/ });
+  expect(stream.getAttribute("href")).toBe("#stream-sessions");
+  expect(tools.compareDocumentPosition(stream) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+it.each(["admins", "off"])("keeps the always-public tool links when Wrapped access is %s", mode => {
+  mocks.mode = mode;
+  render(<LandingPageContent />);
+  const tools = screen.getByRole("navigation", { name: "More SC2 Tools" });
+  expect(within(tools).queryByRole("link", { name: "Wrapped" })).toBeNull();
+  expect(within(tools).getAllByRole("link").map(link => link.getAttribute("href"))).toEqual([
+    "/arcade", "/match", "/changelog",
+  ]);
+});
+
 it("gives signed-in visitors dashboard and update paths in both CTA rows", () => {
   mocks.signedIn = true; const { container } = render(<LandingPageContent />);
   expect(screen.getAllByRole("link", { name: "Open your dashboard" })).toHaveLength(2);

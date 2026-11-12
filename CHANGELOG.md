@@ -4815,6 +4815,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Game detail in `/try` can compare opening workers and resources with an approved 5,300-MMR reference for the same matchup and patch era. If that reference is unavailable, the report says so.
 
+### Homepage discovery
+
+- Find SC2 Daily, Match Rooms, Wrapped and release notes from the top of the homepage.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:
