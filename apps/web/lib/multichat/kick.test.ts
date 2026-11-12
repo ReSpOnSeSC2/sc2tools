@@ -17,9 +17,9 @@ class FakeWebSocket {
     FakeWebSocket.instances.push(this);
   }
 
-  emit(event: string, data: unknown) {
+  emit(event: string, data: unknown, channel?: string) {
     this.onmessage?.({
-      data: JSON.stringify({ event, data: JSON.stringify(data) }),
+      data: JSON.stringify({ event, data: JSON.stringify(data), channel }),
     });
   }
 
@@ -150,6 +150,16 @@ describe("Kick Pusher chat", () => {
     expect(socket.closed).toBe(false);
     socket.emit("pusher:ping", {});
     expect(JSON.parse(socket.sent[1])).toEqual({ event: "pusher:pong", data: {} });
+    engine.close();
+  });
+
+  it("provides a reply source only for native messages in the subscribed room", () => {
+    const { engine, socket, onMessage } = startChat();
+    const message = { id: "80000002-a159-4c58-a5b0-30a13142dddc", content: "!build", sender: { username: "viewer" } };
+    socket.emit("App\\Events\\ChatMessageEvent", message, "chatrooms.4242.v2");
+    socket.emit("App\\Events\\ChatMessageEvent", message, "chatrooms.4321.v2");
+    socket.emit("App\\Events\\ChatMessageEvent", { ...message, id: undefined }, "chatrooms.4242.v2");
+    expect(onMessage.mock.calls.map(([row]) => row.replySource)).toEqual(["4242", undefined, undefined]);
     engine.close();
   });
 

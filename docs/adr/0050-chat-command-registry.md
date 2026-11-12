@@ -64,3 +64,30 @@ The per-command `includeLink` setting defaults to false. The composer reserves
 room for the entire URL within the 380-character limit and appends it only in
 chat. Linked replies share a two-minute cooldown in the existing ledger. The
 owner preview uses the same saved settings and bypasses the cooldown.
+
+## Answer as me
+
+An authenticated owner opens live replies in Chat command settings and chooses
+one live viewer command. Twitch and Kick chat arrive through browser readers.
+The YouTube relay also takes browser-supplied continuation values. Those paths
+keep their existing on-stream behavior and cannot initiate an OAuth chat write.
+The live reply action stays in owner Settings because the OBS Dock has only
+the overlay credential.
+
+The owner endpoint resolves the token and composes the saved command inside
+the existing token write fence and platform chat grant. It checks the saved
+source and connected account again before sending. Twitch and Kick use the
+provider's reply-to-message ID and the room carried by the transport. A Twitch
+Shared Chat preflight checks that the user grant can send without mirroring
+the reply to additional rooms. Kick verifies the saved room ID through the
+existing public channel resolver and requires a successful match. YouTube
+resolves one exact owned live video, including when multiple broadcasts are
+live. Linked replies reserve the complete URL within the platform limit. The shared chat cooldown
+and a bounded source-message receipt cover duplicate clicks and uncertain
+delivery. A configured Twitch bot that already answers the channel keeps
+that responsibility. The endpoint excludes commands that draw private player
+data and uses a neutral viewer label in custom variables.
+
+[Twitch Send Chat Message](https://dev.twitch.tv/docs/api/reference/chat#send-chat-message),
+[Twitch Get Shared Chat Session](https://dev.twitch.tv/docs/api/reference/chat#get-shared-chat-session),
+[Kick Chat API](https://docs.kick.com/apis/chat).

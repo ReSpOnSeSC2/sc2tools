@@ -39,8 +39,10 @@ export function useMultiChat(args: {
   apiBase: string;
   token: string;
   config: MultichatConfig | null;
+  includeOfficialEvents?: boolean;
 }): MultiChatState {
-  const { apiBase, token, config } = args;
+  const { apiBase, token, config, includeOfficialEvents = true } = args;
+  const eventToken = includeOfficialEvents ? token : "";
   const preview = useOverlayPreview();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [events, setEvents] = useState<ChatEvent[]>([]);
@@ -109,8 +111,8 @@ export function useMultiChat(args: {
     // separate from platform status dots so one shared socket cannot mask a
     // direct chat outage.
     const chatEngineCount = engines.length;
-    if (token) {
-      engines.push(createOfficialPlatformEvents({ apiBase, token, onEvent }));
+    if (eventToken) {
+      engines.push(createOfficialPlatformEvents({ apiBase, token: eventToken, onEvent }));
     }
     setActive(chatEngineCount > 0);
 
@@ -134,7 +136,7 @@ export function useMultiChat(args: {
       eventBufferRef.current = [];
       setStatuses({});
     };
-  }, [apiBase, token, config, preview]);
+  }, [apiBase, token, config, preview, eventToken]);
 
   return { messages, events, statuses, active };
 }

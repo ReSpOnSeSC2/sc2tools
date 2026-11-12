@@ -4831,6 +4831,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Add a sc2tools.com QR code to the credit on Starting Soon and BRB from Settings → Overlay → Full-screen scenes. The option starts off and existing Browser Source URLs keep working.
 
+### Live chat command replies
+
+- Send a saved command reply as yourself from Chat command settings. Open live replies, then choose **Answer as me** on a Twitch, Kick or YouTube command. The reply uses the connected chat-send grant and stays in that chat.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

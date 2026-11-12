@@ -112,6 +112,8 @@ class CommandCooldowns {
   commandKey(owner, command) { return `command:${owner}:${command}`; }
   /** @param {string} owner @param {string} command */
   isActive(owner, command) { return (this.entries.get(this.commandKey(owner, command)) ?? 0) > this.now(); }
+  /** @param {string} owner @param {string} command */
+  release(owner, command) { this.entries.delete(this.commandKey(owner, command)); }
   /** @param {string} owner @param {string} command @param {number} seconds @param {string} platform @param {string} viewer */
   claim(owner, command, seconds, platform, viewer) {
     const now = this.now();

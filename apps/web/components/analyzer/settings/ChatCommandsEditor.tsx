@@ -7,15 +7,16 @@ import { useChatCommandSettings } from "@/lib/multichat/useChatCommandSettings";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { ChatOwnerRepliesDisclosure } from "./ChatOwnerRepliesDisclosure";
 
 export function ChatCommandsEditor({ token, onSaved }: { token: string; onSaved: (preferences: ChatCommandPreferences | null) => void }) {
   const { userId, isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return <p role="status" className="text-caption text-text-muted">Loading command settings…</p>;
   if (!isSignedIn || !userId) return <p role="status" className="text-caption text-text-muted">Sign in to edit commands.</p>;
-  return <EditorBody key={`${userId}:${token}`} token={token} onSaved={onSaved} />;
+  return <EditorBody key={`${userId}:${token}`} owner={userId} token={token} onSaved={onSaved} />;
 }
 
-function EditorBody({ token, onSaved }: { token: string; onSaved: (preferences: ChatCommandPreferences | null) => void }) {
+function EditorBody({ owner, token, onSaved }: { owner: string; token: string; onSaved: (preferences: ChatCommandPreferences | null) => void }) {
   const settings = useChatCommandSettings(token);
   const [argument, setArgument] = useState(""), [user, setUser] = useState("viewer"), [platform, setPlatform] = useState("twitch"), [onStream, setOnStream] = useState(false);
   const [copy, setCopy] = useState({ busy: false, trigger: "", fallback: "", copied: false });
@@ -44,6 +45,7 @@ function EditorBody({ token, onSaved }: { token: string; onSaved: (preferences: 
   };
   return <section aria-label="Edit chat commands" className="space-y-4 border-t border-border pt-4">
     <div><h3 className="text-body font-semibold">Chat command settings</h3><p className="mt-1 text-caption text-text-muted">Changes stay in this draft until Save. Try it uses saved settings and shows the exact reply without posting to chat. Save changes before trying or copying updated commands.</p></div>
+    <ChatOwnerRepliesDisclosure owner={owner} token={token} commands={settings.saved} />
     <fieldset disabled={busy} className="flex min-w-0 flex-wrap gap-3 rounded-lg border border-border p-3"><legend className="text-caption font-semibold">Preview context</legend>
       <label className="min-w-40 flex-1 text-caption">Argument<Input className="mt-1 min-h-11" aria-label="Command argument" maxLength={80} value={argument} onChange={event => setArgument(event.target.value)} placeholder="For example, PvZ or Zerg" /></label>
       <label className="min-w-32 flex-1 text-caption">Viewer<Input className="mt-1 min-h-11" aria-label="Preview viewer" maxLength={80} value={user} onChange={event => setUser(event.target.value)} /></label>

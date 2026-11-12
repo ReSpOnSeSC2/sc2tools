@@ -46,7 +46,6 @@ import type { ChatMessage } from "@/lib/multichat/types";
 import { useVoiceApplier } from "@/lib/useVoiceApplier";
 import { inferVoiceGender } from "@/lib/voiceCatalog";
 import { DockChat } from "./DockChat";
-import { DockChatComposer } from "./DockChatComposer";
 import { DockBlockedUsers } from "./DockBlockedUsers";
 import { DOCK_BLOCKLIST_MAX, DOCK_CONFIG_REFRESH_MS } from "./dockConstants";
 import { DockPollCard } from "./DockPollCard";
@@ -69,7 +68,7 @@ import { useDockSummaries } from "./useDockSummaries";
 import { usePollTally } from "@/lib/multichat/usePollTally";
 export { DockButton } from "./DockControls";
 import { DockStatusHeader } from "./DockStatusHeader";
-import { loadGameDesk } from "./dockLazyLoaders";
+import { loadChatComposer, loadGameDesk } from "./dockLazyLoaders";
 import { DockLazyPanel } from "./DockLazyPanel";
 const loadClips = () => import("./DockClips").then(module => module.DockClips);
 const loadBuildProfile = () => import("./BuildProfileEditor").then(module => module.BuildProfileEditor);
@@ -407,7 +406,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
             busy={busy}
             blocklistFull={studio.blockedUsers.length >= DOCK_BLOCKLIST_MAX}
             viewers={viewers}
-            composer={<DockChatComposer token={token} platforms={platforms} loaded={loaded} onInvalid={onInvalid} />}
+            composer={<DockLazyPanel label="chat sending" loader={loadChatComposer} componentProps={{ token, platforms, loaded, onInvalid }} />}
             onHighlight={(m) => void highlightMessage(m)}
             onBlock={(user) => void blockUser(user)}
           />

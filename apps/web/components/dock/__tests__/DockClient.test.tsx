@@ -109,6 +109,17 @@ async function drain() {
 }
 
 describe("DockClient", () => {
+  it("loads the manual chat composer and its saved destinations", async () => {
+    const fixtureFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => String(url).endsWith("/chat")
+      ? Response.json({ platforms: [{ platform: "twitch", available: true, maxLength: 500 }] })
+      : fixtureFetch(url, init));
+    render(<DockClient token="fixture" />);
+    const composer = await screen.findByRole("form", { name: "Send chat message" });
+    expect(await within(composer).findByRole("checkbox", { name: "Send to Twitch" })).toHaveProperty("checked", true);
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
   it.each(["/config", "/studio"])("stops every retry/fetch after an invalid token from %s", async (failedPath) => {
     vi.useFakeTimers();
     fetchMock.mockImplementation(async (url: string) => String(url).includes(failedPath)
