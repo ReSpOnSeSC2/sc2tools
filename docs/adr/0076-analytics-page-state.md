@@ -64,6 +64,12 @@ setting is left to the owner (see "Not decided here").
    to the browser title, and `null` or an empty string sent a blank title.
    The explicit site label resets the state before the next page's metadata
    is available. See [X5](../handoff/growth/X5.md) for the measured results.
+7. **The shell keeps consent in sync across tabs.** One storage listener
+   applies the current choice before notifying consent controls. The shell
+   keeps it active even on `/status`, where the analytics loader is absent.
+   Revoking or clearing consent opts out, updates the loaded tag and removes
+   analytics cookies. Granting consent refreshes the safe page state before
+   updating the tag on a tracked route. An untracked route stays opted out.
 
 ## Consequences
 

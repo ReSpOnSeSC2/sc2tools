@@ -4797,6 +4797,11 @@ release preparation, not a signed or published 0.24.9 installer.
 - Google Analytics uses fixed page labels so browser titles with player names,
   build names or record identifiers stay on the site.
 
+### Analytics consent across tabs
+
+- Changing analytics consent updates other open SC2 Tools tabs, including the
+  status page, without a reload.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

@@ -13,6 +13,7 @@ import { clerkAppearanceBase } from "@/lib/clerk-appearance";
 import { isTokenAuthRoute } from "@/lib/tokenAuthRoutes";
 import { isPublicStatusRoute } from "@/lib/publicStatusRoute";
 import { isReportCardPath } from "@/lib/instant/reportCardRoute";
+import { subscribeConsent } from "@/lib/analytics/consent";
 import { isUntrackedPath } from "@/lib/analytics/pageLocation";
 import { syncAnalyticsPage } from "@/lib/analytics/gtag";
 import { AppChrome } from "@/components/chrome/AppChrome";
@@ -63,6 +64,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   // provider; the /p form remains during the legacy-link redirect window)
   // and the operator-only /admin screens. See lib/analytics/pageLocation.
   const analyticsAllowed = !isUntrackedPath(pathname);
+  // The tag can stay loaded on routes without a consent UI, including /status.
+  useEffect(subscribeConsent, []);
   // gtag.js outlives the page that loaded it. After a client-side move it
   // must report the new page in its normalized form, and go silent on an
   // untracked surface, where <GoogleAnalytics> is no longer mounted to say

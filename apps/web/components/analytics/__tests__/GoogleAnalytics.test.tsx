@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 
 const route = vi.hoisted(() => ({ pathname: "/", search: "" }));
 
@@ -79,6 +79,17 @@ describe("GoogleAnalytics", () => {
     expect(screen.queryByTestId("gtag-js")).toBeNull();
     expect(screen.queryByTestId("ga4-init")).toBeNull();
     expect(gtag).not.toHaveBeenCalledWith("event", "page_view", expect.anything());
+  });
+
+  it("removes the loader without repeating a same-tab revocation", () => {
+    open("/guides");
+    expect(screen.getByTestId("gtag-js")).toBeTruthy();
+    gtag.mockClear();
+
+    act(() => setConsent("denied"));
+
+    expect(screen.queryByTestId("gtag-js")).toBeNull();
+    expect(gtag.mock.calls).toEqual([["consent", "update", { analytics_storage: "denied" }]]);
   });
 
   it("states the normalized page before config reads the browser's address", () => {

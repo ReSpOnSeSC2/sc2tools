@@ -7,9 +7,8 @@
  * Google Analytics never loads until the visitor explicitly accepts.
  * The choice is persisted
  * in ``localStorage`` (not a cookie — a cookie would itself be a
- * non-essential tracker before consent) and broadcast on a window
- * event so the ``<GoogleAnalytics>`` component can react the instant
- * the visitor clicks Accept, without a page reload.
+ * non-essential tracker before consent). Subscribers update as soon as the
+ * choice changes, including when it was made in another tab.
  *
  * Three states:
  *   - ``"unset"``   — visitor hasn't chosen yet → show the banner, no GA.
@@ -17,15 +16,15 @@
  *   - ``"denied"``  — opted out → never load GA.
  */
 
-import { isUntrackedPath } from "./pageLocation";
+import { analyticsPageState, isUntrackedPath } from "./pageLocation";
 
 export type ConsentState = "unset" | "granted" | "denied";
 
 const STORAGE_KEY = "sc2tools.analyticsConsent.v1";
-const EVENT_NAME = "sc2tools:analytics-consent";
 export const COOKIE_SETTINGS_EVENT = "sc2tools:open-cookie-settings";
 let memoryConsent: ConsentState = "unset";
 let memoryOnly = false;
+const consentSubscriptions = new Set<() => void>();
 
 /**
  * The GA4 Measurement ID (``G-XXXXXXXXXX``). Defaults to the production
@@ -42,16 +41,19 @@ export function isAnalyticsConfigured(): boolean {
   return GA_MEASUREMENT_ID.length > 0;
 }
 
+function storedConsent(storage: Storage): ConsentState {
+  const value = storage.getItem(STORAGE_KEY);
+  return value === "granted" || value === "denied" ? value : "unset";
+}
+
 /** Read the persisted consent state. SSR-safe (returns "unset"). */
 export function readConsent(): ConsentState {
   if (typeof window === "undefined") return "unset";
   if (memoryOnly) return memoryConsent;
   try {
-    const v = window.localStorage.getItem(STORAGE_KEY);
-    return v === "granted" || v === "denied" ? v : "unset";
+    return storedConsent(window.localStorage);
   } catch {
-    // Private mode / disabled storage — treat as undecided so we never
-    // silently track someone we couldn't record a choice for.
+    // Keep only a choice this tab already observed or recorded.
     return memoryConsent;
   }
 }
@@ -67,8 +69,8 @@ export function readConsent(): ConsentState {
  * admin screen, someone's shared replays; see ``./pageLocation``), where
  * it would otherwise keep reporting clicks, form use and time spent.
  *
- * ``state`` defaults to the stored choice; ``setConsent`` passes the new
- * one because it is not stored yet.
+ * ``state`` defaults to the stored choice. Consent changes pass the
+ * resolved choice so the tracker and the store stay in sync.
  */
 export function syncAnalyticsOptOut(state: ConsentState = readConsent()): boolean {
   if (typeof window === "undefined") return true;
@@ -90,29 +92,29 @@ export function syncAnalyticsOptOut(state: ConsentState = readConsent()): boolea
 export function setConsent(state: Exclude<ConsentState, "unset">): void {
   memoryConsent = state;
   if (typeof window === "undefined") return;
-  // gtag.js stays loaded after its Script component unmounts. Google's
-  // opt-out flag blocks automatic hits as well as our own events.
-  syncAnalyticsOptOut(state);
   try {
     window.localStorage.setItem(STORAGE_KEY, state);
     memoryOnly = false;
   } catch {
     memoryOnly = true;
-    // Storage unavailable — still fire the event so GA reacts for this
-    // session; it just won't be remembered on the next visit.
+    // Apply the choice for this session even when storage is unavailable.
   }
+  applyConsent(state);
+}
+
+function applyConsent(state: ConsentState): void {
+  const off = syncAnalyticsOptOut(state);
+  const granted = state === "granted";
   try {
-    window.dispatchEvent(new CustomEvent<ConsentState>(EVENT_NAME, { detail: state }));
-  } catch {
-    // Older browsers without CustomEvent constructor — ignore; the
-    // value is persisted and will be read on the next navigation.
-  }
-  try {
-    window.gtag?.("consent", "update", { analytics_storage: state });
+    const gtag = window.gtag;
+    // Navigation while opted out may have left the loaded tag on an old page.
+    if (gtag && !off) gtag("set", analyticsPageState());
+    gtag?.("consent", "update", { analytics_storage: granted ? "granted" : "denied" });
   } catch {
     // gtag threw: the stored choice still decides the next page load.
   }
-  if (state === "denied") clearAnalyticsCookies();
+  if (!granted) clearAnalyticsCookies();
+  for (const listener of [...consentSubscriptions]) listener();
 }
 
 /** Reopen the choice from the footer, policy or Settings. */
@@ -150,24 +152,29 @@ export function clearAnalyticsCookies(): void {
   }
 }
 
-/**
- * Subscribe to consent changes. Returns an unsubscribe fn. Wired into
- * ``useSyncExternalStore`` so React components stay in lockstep with
- * the stored value, including cross-tab updates via the ``storage``
- * event.
- */
-export function subscribeConsent(callback: () => void): () => void {
-  const onCustom = () => callback();
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === STORAGE_KEY || e.key === null) {
-      syncAnalyticsOptOut();
-      callback();
-    }
-  };
-  window.addEventListener(EVENT_NAME, onCustom);
-  window.addEventListener("storage", onStorage);
+function onStorage(event: StorageEvent): void {
+  if (event.key !== STORAGE_KEY && event.key !== null) return;
+  let state: ConsentState = "unset";
+  try {
+    if (event.storageArea !== window.localStorage) return;
+    // Read the current value. A queued storage event can carry an older choice.
+    state = storedConsent(event.storageArea);
+  } catch {
+    // Keep the tracker off when the stored choice cannot be read.
+  }
+  memoryConsent = state;
+  memoryOnly = false;
+  applyConsent(state);
+}
+
+/** Keep one storage listener for the shell and every consent subscriber. */
+export function subscribeConsent(callback?: () => void): () => void {
+  const listener = () => callback?.();
+  consentSubscriptions.add(listener);
+  if (consentSubscriptions.size === 1) window.addEventListener("storage", onStorage);
   return () => {
-    window.removeEventListener(EVENT_NAME, onCustom);
-    window.removeEventListener("storage", onStorage);
+    if (consentSubscriptions.delete(listener) && consentSubscriptions.size === 0) {
+      window.removeEventListener("storage", onStorage);
+    }
   };
 }

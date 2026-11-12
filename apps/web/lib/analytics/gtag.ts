@@ -34,10 +34,12 @@ import {
 } from "./internalTraffic";
 import {
   analyticsPageLocation,
+  analyticsPageState,
   analyticsPageTitle,
-  analyticsReferrer,
   isUntrackedPath,
 } from "./pageLocation";
+
+export { analyticsPageState } from "./pageLocation";
 
 type GtagFn = (...args: unknown[]) => void;
 
@@ -73,31 +75,6 @@ function withTrafficType(
   return isInternalBrowser()
     ? { ...params, traffic_type: INTERNAL_TRAFFIC_TYPE }
     : params;
-}
-
-/**
- * The page state gtag.js applies to every event that does not state its
- * own: the normalized location, fixed title and any normalized referrer.
- * Defaults to the browser's current address.
- *
- * Example (on /app/game/abc?tab=macro, opened from an opponent's page):
- *   analyticsPageState();
- *   // -> { page_location: ".../app/game/:gameId",
- *   //      page_title: "/app/game/:gameId",
- *   //      page_referrer: ".../app/opponents/:pulseId" }
- */
-export function analyticsPageState(
-  pathname: string = window.location.pathname,
-  search: string = window.location.search,
-): Record<string, string> {
-  const origin = window.location.origin;
-  const state: Record<string, string> = {
-    page_location: analyticsPageLocation(origin, pathname, search),
-    page_title: analyticsPageTitle(pathname),
-  };
-  const referrer = analyticsReferrer(document.referrer, origin);
-  if (referrer) state.page_referrer = referrer;
-  return state;
 }
 
 /**
