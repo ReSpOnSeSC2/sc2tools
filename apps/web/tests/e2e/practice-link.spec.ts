@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { captureAccessibility, checkAccessibility } from "./accessibility-check";
-import { openPracticeLinkFixture } from "./practice-link-fixture.mjs";
+import { openPracticeLinkFixture } from "./practice-link-fixture";
 
 test.beforeEach(async ({ page }, info) => {
   if (info.project.name === "desktop-1280") return;

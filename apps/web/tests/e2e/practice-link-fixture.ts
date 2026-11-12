@@ -1,8 +1,9 @@
 import { build } from "esbuild";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import type { APIRequestContext, Page } from "@playwright/test";
 
-let bundlePromise;
+let bundlePromise: Promise<string> | undefined;
 function bundle() {
   bundlePromise ??= build({
     entryPoints: ["tests/e2e/practice-link-entry.tsx"], bundle: true, write: false,
@@ -17,8 +18,7 @@ function bundle() {
   return bundlePromise;
 }
 
-/** @param {import('@playwright/test').Page} page @param {import('@playwright/test').APIRequestContext} request @param {string} theme @param {boolean} [empty] */
-export async function openPracticeLinkFixture(page, request, theme, empty = false) {
+export async function openPracticeLinkFixture(page: Page, request: APIRequestContext, theme: string, empty = false) {
   const root = path.resolve(".next/static/css");
   const files = (await readdir(root, { recursive: true })).filter(file => file.endsWith(".css"));
   const [js, css, shell] = await Promise.all([
