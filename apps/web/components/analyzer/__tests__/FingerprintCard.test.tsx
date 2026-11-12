@@ -431,6 +431,16 @@ function ok(fingerprint: unknown = FP) {
 }
 
 describe("FingerprintCard", () => {
+  it("offers sharing only after a fingerprint with games has loaded", () => {
+    useApiMock.mockReturnValue({ data: undefined, isLoading: true });
+    const view = render(<FingerprintCard />);
+    expect(screen.queryByRole("button", { name: "Share fingerprint" })).toBeNull();
+
+    useApiMock.mockReturnValue(ok(FP));
+    view.rerender(<FingerprintCard />);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Share fingerprint" }).disabled).toBe(false);
+  });
+
   describe("filter wiring", () => {
     it("sends the global filters and the db revision with the request", () => {
       filtersValue = {

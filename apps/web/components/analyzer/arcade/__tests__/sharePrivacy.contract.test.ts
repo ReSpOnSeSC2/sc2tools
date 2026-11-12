@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { sharedDay } from "@/lib/sharePrivacy";
 import { compareReportCards, decodeReportComparison, encodeReportComparison } from "@/lib/instant/reportCardLink";
+import { fingerprintShareCard, sessionReportShareCard } from "@/lib/personalShareCards";
 import { mulberry32 } from "../ArcadeEngine";
 import { ALL_MODES, type AnyMode } from "../modes";
 import { buildShareSummary } from "../shareSummary";
@@ -95,6 +96,43 @@ test("the replay comparison contains only the two selected game records", () => 
   const fragment = encodeReportComparison(comparison);
   expect(fragment).toMatch(/^[A-Za-z0-9_-]{1,59}$/);
   expect(decodeReportComparison(fragment!)).toEqual(expected);
+});
+
+test("the fingerprint card projects measured player aggregates and a fixed matchup alphabet", () => {
+  const facts = {
+    matchup: "PvZ", games: 8, distinctBuilds: 4, buildSamples: 6, averageSeconds: 400, durationSamples: 7,
+    archetype: displayName(1), opponentMmr: exactMmr(1), opponentId: toonHandle(1), buildName: rawName(1),
+  };
+  expect(fingerprintShareCard(facts)).toEqual({
+    kind: "fingerprint", title: "Skill fingerprint", subtitle: "PvZ · 1v1 playstyle",
+    stats: [
+      { label: "Games in sample", value: "8" },
+      { label: "Builds detected in 6 games", value: "4" },
+      { label: "Average duration in 7 games", value: "6.7 min" },
+    ],
+  });
+  const malformed = { ...facts, matchup: displayName(1), games: rawName(1), buildSamples: 0, durationSamples: 0 };
+  const unknown = fingerprintShareCard(malformed as unknown as Parameters<typeof fingerprintShareCard>[0]);
+  expect(unknown.subtitle).toBe("1v1 playstyle");
+  expect(unknown.stats).toEqual([{ label: "Games in sample", value: "Unavailable" }]);
+});
+
+test("the session card excludes the private locator, games, timestamps and rating tracks", () => {
+  const session = {
+    games: 5, wins: 2, losses: 2, unknown: 1, playedMin: 36, durationSamples: 4,
+    id: "zq9game", start: "2026-11-01T08:02:03Z", end: "2026-11-01T08:20:36Z",
+    opponent: { displayName: displayName(2), toonHandle: toonHandle(2), mmr: exactMmr(2) },
+  };
+  expect(sessionReportShareCard(session)).toEqual({
+    kind: "session_report", title: "Session report", subtitle: "Your replay results for this session",
+    stats: [
+      { label: "Games in session", value: "5" },
+      { label: "Wins – losses", value: "2 – 2" },
+      { label: "Unknown outcomes", value: "1" },
+      { label: "Time played in 4 games", value: "36 min" },
+    ],
+  });
+  expect(sessionReportShareCard({ ...session, playedMin: null, durationSamples: 0 }).stats).toHaveLength(3);
 });
 
 function leaks(text: string): string[] {

@@ -8,7 +8,9 @@ import { clientTimezone } from "@/lib/timeseries";
 import { Card } from "@/components/ui/Card";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PersonalCardShareButton } from "@/components/ui/PersonalCardShareButton";
 import type { QueryLike } from "@/components/ui/QueryState";
+import { sessionReportShareCard } from "@/lib/personalShareCards";
 import type { SessionHistoryDetail } from "@/lib/sessionHistory";
 import { changeSessionQuery, sessionDetailApi, sessionDetailHref, sessionDetailQuery, sessionHref, refreshSessionQuery, sessionScopeIsSynced, sessionTransportError } from "@/lib/sessionHistoryUrls";
 import { SessionCard } from "./SessionCard";
@@ -67,6 +69,7 @@ function SessionDetailReady({ data, query, id, chart, loadChart, requestGamesFoc
   const session = data.session;
   if (!session) return null;
   return <div className="space-y-5">
+    <PersonalCardShareButton card={sessionReportShareCard(session)} label="Share session report" />
     <SessionCard session={session} headingLevel={3} timeZone={data.window.tz} detailHref={sessionDetailHref(id, query)}
       currentView={data.definition.mode === "current" ? { activity: session.active ? "active" : "last", manualAnchorAt: null } : undefined} />
     <Card title="Recorded MMR over this session" headingLevel={3}>

@@ -84,6 +84,18 @@ describe("trackCardShared", () => {
     expect(sent).not.toContain("Alcyone");
   });
 
+  it("counts fingerprint and session card deliveries without sending the private session locator", () => {
+    visit("/app/analyzer?matchup=PvZ");
+    trackCardShared({ card: "fingerprint", method: "clipboard_image" });
+    visit("/app/sessions/private-session-id?day=2026-11-01&gamesBefore=private-cursor");
+    trackCardShared({ card: "session_report", method: "download" });
+
+    expect(gtag.mock.calls).toEqual([
+      ["event", "card_shared", { content_type: "fingerprint", method: "clipboard_image", page_location: `${window.location.origin}/app/analyzer` }],
+      ["event", "card_shared", { content_type: "session_report", method: "download", page_location: `${window.location.origin}/app/sessions/:sessionId` }],
+    ]);
+  });
+
   it("stays silent on pages that are never reported to analytics", () => {
     for (const path of ["/admin/users", "/overlay/secret-token", "/dock/secret-token"]) {
       visit(path);

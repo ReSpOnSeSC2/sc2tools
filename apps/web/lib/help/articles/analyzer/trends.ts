@@ -27,7 +27,7 @@ const article: HelpArticle = {
     "fingerprint",
     "day week month",
   ],
-  updated: "2026-10-28",
+  updated: "2026-11-11",
   body: [
     { type: "heading", text: "Getting around", anchor: "getting-around" },
     { type: "paragraph", text: "Use the section links to jump to Overview, Performance & MMR, Time & activity, Explorer or your Fingerprint. The current section is highlighted as you scroll. The first chart row loads straight away; charts below it load as you approach them, or when you press their **Load** button. Jumping to a section loads its charts and moves focus to its heading. Scrolling keeps your chart choices, Inspect window selection and unapplied Explorer settings. Collapse chart groups from their headings; that choice stays on this device and collapsed charts stop loading. Jumping to a collapsed group opens it. Collapsing a group closes its current chart controls. **Group charts by** sets day, week or month buckets for activity, matchup, MMR and map charts." },
@@ -50,7 +50,7 @@ const article: HelpArticle = {
         ["Activity by time of day, Activity calendar", "When you play, and when you play best."],
         ["Map performance over time", "Which maps are trending up or down for you."],
         ["Explore performance", "Ready-made analyses you pick from a list, such as comparing two periods, first meetings against rematches, or whether a worker or army lead at 5 minutes turns into wins. Press **Load analyses** to open it."],
-        ["Fingerprint", "Your playstyle in each matchup, compared to common player archetypes."],
+        ["Fingerprint", "Your playstyle in each matchup, compared to common player archetypes. **Share fingerprint** makes an image with the matchup and measured playstyle totals from your selected games."],
       ],
     },
     { type: "heading", text: "Drill in", anchor: "drill-in" },
