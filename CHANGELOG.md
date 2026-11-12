@@ -4811,6 +4811,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - See your ladder record from selected replay files at `/career`, including recorded play time, races and maps by year, expansion eras, and gaps between replays. Unchanged headers are reused in the browser when you select the folder again.
 
+### Local replay pace
+
+- Game detail in `/try` can compare opening workers and resources with an approved 5,300-MMR reference for the same matchup and patch era. If that reference is unavailable, the report says so.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:
