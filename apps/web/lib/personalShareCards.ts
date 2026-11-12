@@ -11,6 +11,11 @@ export type PersonalShareCard = {
   | { kind: "practice_grade"; path: `/b/${string}` }
 );
 
+export type MatchResultShareCard = Pick<PersonalShareCard, "title" | "subtitle" | "stats"> & {
+  kind: "match_result";
+  path: "/match";
+};
+
 type FingerprintShareFacts = {
   matchup: string;
   games: number;

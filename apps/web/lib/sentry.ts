@@ -12,6 +12,7 @@
  */
 
 import { isReportCardPath } from "./instant/reportCardRoute";
+import { ROOM_ROUTE } from "./matchRoomRoute";
 
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
@@ -25,7 +26,8 @@ let client: Promise<Sentry | null> | null = null;
 
 function onLocalReplaySurface(): boolean {
   const pathname = globalThis.location?.pathname;
-  return pathname === "/wrapped" || isReportCardPath(pathname) || /^\/(?:b|%62)(?:\/|$)/.test(pathname ?? "");
+  return pathname === "/wrapped" || isReportCardPath(pathname)
+    || /^\/(?:b|%62)(?:\/|$)/.test(pathname ?? "") || ROOM_ROUTE.test(pathname ?? "");
 }
 
 /**

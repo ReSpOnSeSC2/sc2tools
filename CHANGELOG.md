@@ -4788,6 +4788,10 @@ release preparation, not a signed or published 0.24.9 installer.
 - Call the trade in five StarCraft II fights at /arcade. Play a seven-day
   practice set, keep a streak on this device and share a spoiler-free score.
 
+### Match Rooms
+
+- Create a StarCraft II best-of room, share player and watch links, run a timed map veto and copy the series score.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

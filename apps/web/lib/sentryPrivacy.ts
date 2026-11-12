@@ -1,6 +1,7 @@
 import { sanitiseRequestPath } from "./feedback/sanitise";
 import { canonicalReportCardPath } from "./instant/reportCardRoute";
 import { PRACTICE_LINK_PATTERN, PRACTICE_LINK_ROUTE } from "./practice/practiceLinkPath";
+import { ROOM_PATH, ROOM_ROUTE } from "./matchRoomRoute";
 
 // Browser Sentry keeps no typed search text or credential path (ADR 0069,
 // 2026-11-01 amendment). Request URLs in fetch and XHR breadcrumbs and in
@@ -23,6 +24,7 @@ function scrubUrl(value: unknown): unknown {
 function sanitizeTelemetryPath(value: string): string | null {
   try {
     const { pathname } = new URL(value, "https://sc2tools.com");
+    if (ROOM_ROUTE.test(pathname)) return ROOM_PATH;
     return PRACTICE_LINK_ROUTE.test(pathname) ? PRACTICE_LINK_PATTERN : canonicalReportCardPath(pathname);
   } catch {
     return null;

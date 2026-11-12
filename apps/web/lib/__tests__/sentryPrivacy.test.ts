@@ -14,6 +14,16 @@ const SEARCH = "https://api.sc2tools.com/v1/replays?search=Private%20Rival&limit
 const SCRUBBED = "/v1/replays?search=%5Bredacted%5D&limit=5&sort=date_desc&enrich=none&window=recent";
 
 describe("browser Sentry keeps no typed search text or credential path", () => {
+  it("strips Match Room fragments and polling credentials from telemetry", () => {
+    const from = "https://sc2tools.com/match/%72oom#r=private&key=private";
+    expect(scrubBreadcrumb({ category: "navigation", data: { from, to: "/match" } }).data)
+      .toEqual({ from: "/match/room", to: "/match" });
+    const url = "https://api.sc2tools.com/v1/match-rooms/private?rev=2";
+    expect(scrubSpan({ description: `GET ${url}`, data: { url } })).toEqual({
+      description: "GET /v1/match-rooms/[redacted]?rev=2",
+      data: { url: "/v1/match-rooms/[redacted]?rev=2" },
+    });
+  });
   it.each(["/b/local-alias", "/%62/local-alias"])("normalizes Practice Link telemetry from %s", path => {
     const url = `https://sc2tools.com${path}?state=private#private`;
     expect(scrubBreadcrumb({ category: "navigation", data: { from: url, to: "/try" } }).data)

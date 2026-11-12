@@ -16,6 +16,8 @@
     "/try": 240,
     "/wrapped": 215,
     "/arcade": 215,
+    "/match": 215,
+    "/match/room": 215,
     "/card/[type]/[class]": 215,
     "/b/[alias]": 215,
     "/welcome": 245,

@@ -64,6 +64,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   adminAudit: import('mongodb').Collection<any>,
  *   supportEmailSync: import('mongodb').Collection<any>,
  *   sitePresence: import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>,
+ *   matchRooms: import('mongodb').Collection<import('../services/matchRooms').MatchRoomDoc>,
  *   siteConfig: import('mongodb').Collection<any>,
  *   ghostExamples: import('mongodb').Collection<any>,
  *   pulseAccounts: import('mongodb').Collection,
@@ -193,6 +194,9 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     ghostExamples: db.collection(COLLECTIONS.GHOST_EXAMPLES),
     sitePresence: /** @type {import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>} */ (
       db.collection(COLLECTIONS.SITE_PRESENCE)
+    ),
+    matchRooms: /** @type {import('mongodb').Collection<import('../services/matchRooms').MatchRoomDoc>} */ (
+      db.collection(COLLECTIONS.MATCH_ROOMS)
     ),
     coaching: db.collection(COLLECTIONS.COACHING),
     pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
@@ -670,6 +674,9 @@ async function ensureIndexes(ctx, opts = {}) {
   // MongoDB's asynchronous TTL sweep can never inflate the public counter.
   await ctx.sitePresence.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await ctx.sitePresence.createIndex({ lastSeenAt: -1, identityKey: 1 });
+  await ctx.matchRooms.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await ctx.matchRooms.createIndex({ slot: 1 }, { unique: true, sparse: true });
+  await ctx.matchRooms.createIndex({ creationDigest: 1 }, { unique: true });
 
   await ensureBrowserIngestDailyIndexes(ctx);
 

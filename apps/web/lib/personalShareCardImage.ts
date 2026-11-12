@@ -1,12 +1,12 @@
 import {
   CARD_H, CARD_PAD, CARD_PALETTE, CARD_W, FONT_STACK, deliverShareCard, drawCardBackground, drawCardFooter, shareOutcome,
 } from "@/components/analyzer/arcade/ShareCard";
-import type { PersonalShareCard } from "@/lib/personalShareCards";
+import type { MatchResultShareCard, PersonalShareCard } from "@/lib/personalShareCards";
 import { shareReportPalette } from "@/lib/shareReportPalette";
 
 const SITE = "sc2tools.com";
 
-export async function sharePersonalCard(card: PersonalShareCard) {
+export async function sharePersonalCard(card: PersonalShareCard | MatchResultShareCard) {
   const canvas = document.createElement("canvas");
   canvas.width = CARD_W;
   canvas.height = CARD_H;

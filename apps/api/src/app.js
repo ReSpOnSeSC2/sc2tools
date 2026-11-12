@@ -198,6 +198,7 @@ const { ClassifierQualityService } = require("./services/classifierQuality");
 const { AdminGlobalTrendsService } = require("./services/adminGlobalTrends");
 const { AdminEventsService } = require("./services/adminEvents");
 const { SiteStatsService } = require("./services/siteStats");
+const { MatchRoomsService } = require("./services/matchRooms");
 const { AnalyticsService } = require("./services/analytics");
 const { buildPulseResolver } = require("./services/pulseResolver");
 const { PulseDirectoryService } = require("./services/pulseDirectory");
@@ -263,6 +264,7 @@ const { buildMapImageRouter } = require("./routes/mapImage");
 const { buildMlRouter } = require("./routes/ml");
 const { buildAgentVersionRouter } = require("./routes/agentVersion");
 const { buildSiteStatsRouter } = require("./routes/siteStats");
+const { buildMatchRoomsRouter } = require("./routes/matchRooms");
 const { buildCommunityRouter } = require("./routes/community");
 const { buildSeasonsRouter } = require("./routes/seasons");
 const { buildClerkWebhookRouter } = require("./routes/clerkWebhook");
@@ -1243,6 +1245,11 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
       // tokens must never be copied into Render logs.
       wrapSerializers: false,
       serializers: { req: sanitiseRequestForLog, res: sanitiseResponseForLog },
+      autoLogging: { ignore: (/** @type {import("http").IncomingMessage} */ req) => {
+        const { res, originalUrl } = /** @type {import("express").Request} */ (req);
+        return req.method === "GET" && res?.statusCode === 204
+          && /^\/v1\/match-rooms\//iu.test(originalUrl || "");
+      } },
     }),
   );
   app.use(requestId);
@@ -1250,6 +1257,7 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
   // own signed-visitor/issuance limits and 1KB parser avoid consuming the
   // ordinary API's per-IP bucket for every visible browser tab.
   app.use(SERVICE.ROUTE_PREFIX, buildSiteStatsRouter({ siteStats, auth }));
+  app.use(SERVICE.ROUTE_PREFIX, buildMatchRoomsRouter(new MatchRoomsService(deps.db.matchRooms)));
   const isSignedProviderWebhook = (/** @type {import('express').Request} */ req) =>
     req.method === "POST"
     && (
