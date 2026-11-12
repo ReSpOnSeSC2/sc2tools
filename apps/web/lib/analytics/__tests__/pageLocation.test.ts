@@ -104,6 +104,14 @@ describe("analyticsSearch", () => {
 });
 
 describe("analyticsPageLocation", () => {
+  it("drops both opponent filter keys from the normalized page location and referrer", () => {
+    const origin = "https://sc2tools.com";
+    const search = "?opponentFilter=Fixture+Opponent&q=Legacy+Opponent&utm_source=fixture";
+    const safe = `${origin}/app/opponents?utm_source=fixture`;
+    expect(analyticsPageLocation(origin, "/app/opponents", search)).toBe(safe);
+    expect(analyticsReferrer(`${origin}/app/opponents${search}`, origin)).toBe(safe);
+  });
+
   it("builds a normalized absolute location without a hash or private params", () => {
     expect(
       analyticsPageLocation("https://sc2tools.com", "/app/game/g1", "?opponent=2-S2-1-1&utm_campaign=launch"),

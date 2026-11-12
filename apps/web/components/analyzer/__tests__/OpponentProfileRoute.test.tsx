@@ -11,7 +11,7 @@ it("uses browser Back when the dossier came from the list", () => {
   sessionStorage.setItem("opponents:list-state", JSON.stringify({ listUrl: "/app/opponents?q=Alpha&sort=games" }));
   vi.spyOn(window.history, "length", "get").mockReturnValue(2);
   render(<OpponentProfileRoute pulseId="123" />);
-  expect(screen.getByRole("link").getAttribute("href")).toBe("/app/opponents?q=Alpha&sort=games");
+  expect(screen.getByRole("link").getAttribute("href")).toBe("/app/opponents?sort=games&opponentFilter=Alpha");
   fireEvent.click(screen.getByRole("button")); expect(router.back).toHaveBeenCalledOnce(); expect(router.push).not.toHaveBeenCalled();
 });
 it("keeps a real fallback list link for a new tab and follows it without the from-list flag", () => {

@@ -3,9 +3,12 @@ import { useLayoutEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSort, type SortState } from "@/components/ui/SortableTh";
 import { useUrlState } from "@/lib/useUrlState";
+import { LEGACY_OPPONENT_FILTER_KEY, OPPONENT_FILTER_KEY } from "@/lib/opponentListQuery";
 import { OPPONENT_COMPARATORS } from "./opponentListSort";
 import { OPPONENT_SORTS, type MmrImpactFilter, type OpponentListControls } from "./useOpponentListNavigation";
-const searchOptions = { defaultValue: "", parse: (raw: string | null) => raw && raw.length <= 200 && !/[\u0000-\u001f\u007f]/.test(raw) ? raw : "", serialize: (value: string) => value || null };
+const searchOptions = { defaultValue: "", legacyKey: LEGACY_OPPONENT_FILTER_KEY, debounceMs: 300,
+  parse: (raw: string | null) => raw && raw.length <= 200 && !/[\u0000-\u001f\u007f]/.test(raw) ? raw : "",
+  serialize: (value: string) => value || null };
 const impactOptions = { defaultValue: "all" as MmrImpactFilter, parse: (raw: string | null): MmrImpactFilter => ["tracked", "net-gain", "net-loss"].includes(raw || "") ? raw as MmrImpactFilter : "all", serialize: (value: MmrImpactFilter) => value === "all" ? null : value };
 type Pair = { sortBy: string; sortDir: "asc" | "desc" };
 const DEFAULT: Pair = { sortBy: "lastPlayed", sortDir: "desc" };
@@ -16,7 +19,7 @@ function pair(raw: unknown, legacyDir: string | null): Pair {
 }
 export function useOpponentUrlControls(): OpponentListControls {
   const legacyDir = useSearchParams()?.get("dir") ?? null;
-  const search = useUrlState("q", searchOptions), impact = useUrlState("impact", impactOptions);
+  const search = useUrlState(OPPONENT_FILTER_KEY, searchOptions), impact = useUrlState("impact", impactOptions);
   const notes = useUrlState("notes", { defaultValue: false, parse: raw => raw === "1", serialize: value => value ? "1" : null });
   const selected = useUrlState<Pair>("sort", { defaultValue: legacyDir ? pair(null, legacyDir) : DEFAULT,
     storageKey: legacyDir ? undefined : "analyzer.opponents.sort", parse: raw => pair(raw, legacyDir),

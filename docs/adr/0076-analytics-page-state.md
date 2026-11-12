@@ -82,6 +82,13 @@ setting is left to the owner (see "Not decided here").
 - A new per-record route must be added to `DYNAMIC_ROUTES` in
   `pageLocation.ts`, as before. A path that is not listed passes through as it
   is.
+- Opponent list links use `opponentFilter`, which is outside Site search's
+  recognized parameter names. Old bookmarks still read `q`. New list writes,
+  copied view links and dossier return links use `opponentFilter`.
+- Saved list URLs use the same canonical comparison on return, so a saved
+  legacy filter restores the list window and scroll position after deployment.
+  Browser Sentry keeps only the opponent list path. Problem-report request
+  paths redact both filter values and retain other safe parameters.
 
 ## Not decided here
 
@@ -90,7 +97,7 @@ setting is left to the owner (see "Not decided here").
   with the production container: "Form interactions" sends `form_destination`,
   which is the raw page address for any form without an `action`; "Site
   search" sends `search_term` from a `q`, `s`, `search`, `query` or `keyword`
-  parameter on page load, and the opponent list keeps its search in `?q=`.
+  parameter on page load, including when an old opponent bookmark still has `q`.
   Both stay on, and keep sending those two values, until someone switches them
   off in Google Analytics (Admin, Data streams, the web stream, Enhanced
   measurement). That is a provider setting and the owner's to change.
