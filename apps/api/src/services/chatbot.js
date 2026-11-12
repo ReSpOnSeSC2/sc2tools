@@ -1,6 +1,7 @@
 "use strict";
 
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+const { createBuildGuideLink } = require("./chatCommandLinks");
 const { plainText } = require("./chatCommands");
 const { liveOpponentIdentity } = require("./chatStats");
 
@@ -61,12 +62,16 @@ function clean(value) {
 
 /**
  * @param {string} line
+ * @param {number} [limit]
  * @returns {string} single line, ≤ MAX_LINE_CHARS.
  */
-function clip(line) {
+function clip(line, limit = MAX_LINE_CHARS) {
   const s = clean(line);
-  if (s.length <= MAX_LINE_CHARS) return s;
-  return `${s.slice(0, MAX_LINE_CHARS - 1)}…`;
+  if (s.length <= limit) return s;
+  const end = limit - 1;
+  // Keep UTF-16 pairs intact when the line stops at an emoji boundary.
+  const beforeEnd = s.charCodeAt(end - 1);
+  return `${s.slice(0, beforeEnd >= 0xd800 && beforeEnd <= 0xdbff ? end - 1 : end)}…`;
 }
 
 /**
@@ -147,12 +152,14 @@ class ChatbotService {
    * @param {{
    *   games: import('mongodb').Collection,
    *   opponents: import('mongodb').Collection,
+   *   guideStats?: import('mongodb').Collection,
    * }} db
    * @param {{
    *   overlayTokens?: import('./types').OverlayTokensService,
    *   liveGameBroker?: import('./liveGameBroker').LiveGameBroker,
    *   games?: import('./games').GamesService,
    *   chatStats?: import('./chatStats').ChatStatsService,
+   *   guidesEnabled?: boolean,
    *   engagement?: Pick<import('./multichatEngagement').MultichatEngagementService,'topOracles'>,
    *   studio?: Pick<import('./multichatStudio').MultichatStudioService,'get'>,
    *   series?: Pick<import('./streamSeries').StreamSeriesService,'chatLine'>,
@@ -169,6 +176,7 @@ class ChatbotService {
     this.engagement = services.engagement;
     this.studio = services.studio;
     this.series = services.series;
+    this.buildGuideLink = createBuildGuideLink(services.guidesEnabled ? db.guideStats : undefined);
     this.now = services.now || Date.now;
     this.logger = services.logger || null;
   }
@@ -261,17 +269,22 @@ class ChatbotService {
    * @returns {Promise<string|null>}
    */
   async buildLine(token) {
+    const reply = await this.buildReply(token);
+    return reply ? clip(reply.text) : null;
+  }
+
+  /** Resolve the line and optional guide from the same selected build.
+   * @param {string} token @param {boolean} [includeLink] */
+  async buildReply(token, includeLink = false) {
     const userId = await this._userIdForToken(token);
     if (!userId) return null;
     try {
-      const fromBroker = this._buildFromBrokerPayloads(userId);
-      if (fromBroker) return clip(fromBroker);
-      const row = await this._lastTaggedBuildRow(userId);
-      if (row) return clip(this._buildLineFromRow(row));
+      const build = this._buildFromBrokerPayloads(userId) ?? await this._recordedBuild(userId);
+      if (build) return { text: build.text, link: includeLink ? await this.buildGuideLink(build.matchup, build.name) : null };
     } catch (err) {
       this._warn(err, "chatbot_build_line_failed");
     }
-    return clip("No build data yet.");
+    return { text: "No build data yet.", link: null };
   }
 
   /* ================= internals ================= */
@@ -560,21 +573,29 @@ class ChatbotService {
    * stamps it, the chat line picks it up with no code change here.
    *
    * @param {string} userId
-   * @returns {string|null}
+   * @returns {{text:string,name:string,matchup:string|null}|null}
    */
   _buildFromBrokerPayloads(userId) {
     if (!this.liveGameBroker) return null;
     const env = this.liveGameBroker.latest(userId);
     if (env && !env.isReplay && typeof env.myBuild === "string" && env.myBuild.trim()) {
-      return `Current build: ${clean(env.myBuild)}`;
+      const opponent = env.opponent;
+      const race = opponent && typeof opponent === "object" && "race" in opponent ? opponent.race : null;
+      return { text: `Current build: ${clean(env.myBuild)}`, name: env.myBuild, matchup: matchupLabel(env.myRace, race) };
     }
     const post = /** @type {Record<string, any>|null} */ (
       this.liveGameBroker.latestOverlayLive(userId)
     );
     if (post && typeof post.myBuild === "string" && post.myBuild.trim()) {
-      return `Last game's build: ${clean(post.myBuild)}`;
+      return { text: `Last game's build: ${clean(post.myBuild)}`, name: post.myBuild, matchup: matchupLabel(post.myRace, post.oppRace) };
     }
     return null;
+  }
+
+  /** @param {string} userId */
+  async _recordedBuild(userId) {
+    const row = await this._lastTaggedBuildRow(userId);
+    return row ? { text: this._buildLineFromRow(row), name: String(row.myBuild), matchup: matchupLabel(row.myRace, row.opponent?.race) } : null;
   }
 
   /**

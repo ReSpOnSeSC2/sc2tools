@@ -17,6 +17,8 @@ const CHAT_COMMANDS = Object.freeze([
   { id: "uptime", aliases: [], description: "Time since the stream session was started" },
   { id: "series", aliases: [], description: "This token's best-of score and next scheduled map" },
 ]);
+const SITE_COMMAND = { id: "sc2tools", aliases: [], description: "A short introduction to SC2 Tools" };
+const REPLY_COMMANDS = [...CHAT_COMMANDS, SITE_COMMAND];
 const PLATFORMS = Object.freeze(["twitch", "kick", "youtube", "tiktok", "nightbot"]);
 const VARIABLES = Object.freeze(["user", "mmr", "record", "opponent", "streak"]);
 const RESERVED = new Set(["rank", "level", "xp", "commands", "help", "win", "w", "loss", "lose", "l", "vote", "so", "1", "2", "3"]);
@@ -33,7 +35,7 @@ function plainText(value) {
 /** @param {string} message @returns {never} */
 function invalid(message) { throw Object.assign(new Error(message), { code: "invalid_chat_commands", status: 400 }); }
 
-/** @typedef {{trigger:string, enabled:boolean, cooldownSec:number, platforms:string[], answerOnStream:boolean}} CommandOptions */
+/** @typedef {{trigger:string, enabled:boolean, cooldownSec:number, platforms:string[], answerOnStream:boolean, includeLink:boolean}} CommandOptions */
 /** @typedef {CommandOptions & {response:string}} CustomCommand */
 /** @typedef {{builtins:Array<CommandOptions & {id:string}>, custom:CustomCommand[]}} ChatCommandPreferences */
 
@@ -48,32 +50,36 @@ function sanitizeChatCommands(raw, strict = false) {
     (source.custom !== undefined && !Array.isArray(source.custom)))) invalid("Use builtin and custom command lists.");
   const rows = Array.isArray(source.builtins) ? source.builtins : [];
   const custom = Array.isArray(source.custom) ? source.custom : [];
-  if (strict && (rows.length > CHAT_COMMANDS.length || custom.length > MAX_CUSTOM_COMMANDS)) invalid("Save at most 25 custom commands.");
+  if (strict && (rows.length > REPLY_COMMANDS.length || custom.length > MAX_CUSTOM_COMMANDS)) invalid("Save at most 25 custom commands.");
   const used = new Set([...RESERVED, ...CHAT_COMMANDS.flatMap(command => [command.id, ...command.aliases])]);
   const ids = new Set();
-  /** @param {Record<string, any>} row @param {string} fallback @returns {CommandOptions|null} */
-  const options = (row, fallback) => {
+  /** @param {Record<string, any>} row @param {string} fallback @param {boolean} defaultEnabled @returns {CommandOptions|null} */
+  const options = (row, fallback, defaultEnabled = true) => {
     const trigger = typeof row.trigger === "string" ? row.trigger.replace(/^!/, "").toLowerCase().trim() : fallback;
+    const siteDefault = fallback === SITE_COMMAND.id && trigger === fallback;
     const cooldownSec = row.cooldownSec ?? 15;
     const platforms = row.platforms ?? [...PLATFORMS];
     if (!triggerPattern.test(trigger) || (trigger !== fallback && used.has(trigger)) ||
       typeof cooldownSec !== "number" || !Number.isInteger(cooldownSec) || cooldownSec < 5 || cooldownSec > 3600 ||
       !Array.isArray(platforms) || platforms.length > PLATFORMS.length || platforms.some(platform => !PLATFORMS.includes(platform)) ||
       (row.enabled !== undefined && typeof row.enabled !== "boolean") ||
-      (row.answerOnStream !== undefined && typeof row.answerOnStream !== "boolean")) {
+      (row.answerOnStream !== undefined && typeof row.answerOnStream !== "boolean") ||
+      (row.includeLink !== undefined && typeof row.includeLink !== "boolean")) {
       if (strict) invalid("Use unique command names, valid platforms and a cooldown from 5 to 3600 seconds.");
       return null;
     }
-    used.add(trigger);
-    return { trigger, enabled: row.enabled !== false, cooldownSec, platforms: [...new Set(platforms)], answerOnStream: row.answerOnStream !== false };
+    // Older channels can already use this spelling as a custom command or alias.
+    if (!siteDefault) used.add(trigger);
+    return { trigger, enabled: row.enabled ?? defaultEnabled, cooldownSec, platforms: [...new Set(platforms)],
+      answerOnStream: row.answerOnStream !== false, includeLink: row.includeLink === true };
   };
-  for (const row of rows.slice(0, CHAT_COMMANDS.length)) {
-    if (!row || typeof row !== "object" || Array.isArray(row) || !CHAT_COMMANDS.some(command => command.id === row.id) || ids.has(row.id)) {
+  for (const row of rows.slice(0, REPLY_COMMANDS.length)) {
+    if (!row || typeof row !== "object" || Array.isArray(row) || !REPLY_COMMANDS.some(command => command.id === row.id) || ids.has(row.id)) {
       if (strict) invalid("Each builtin command can be configured once.");
       continue;
     }
     ids.add(row.id);
-    const value = options(row, row.id);
+    const value = options(row, row.id, row.id !== SITE_COMMAND.id);
     if (value) result.builtins.push({ id: row.id, ...value });
   }
   for (const row of custom.slice(0, MAX_CUSTOM_COMMANDS)) {
@@ -91,9 +97,17 @@ function sanitizeChatCommands(raw, strict = false) {
 }
 
 /** @param {ChatCommandPreferences} prefs */
+function configuredReplies(prefs) {
+  return REPLY_COMMANDS.map(command => ({ ...command, trigger: command.id, enabled: command.id !== SITE_COMMAND.id,
+    cooldownSec: 15, platforms: [...PLATFORMS], answerOnStream: true, includeLink: false,
+    ...prefs.builtins.find(row => row.id === command.id) }));
+}
+
+/** Keep the existing web catalog stable while the API deploys first.
+ * @param {ChatCommandPreferences} prefs */
 function configuredCommands(prefs) {
-  return CHAT_COMMANDS.map(command => ({ ...command, trigger: command.id, enabled: true, cooldownSec: 15,
-    platforms: [...PLATFORMS], answerOnStream: true, ...prefs.builtins.find(row => row.id === command.id) }));
+  return configuredReplies(prefs).filter(command => command.id !== SITE_COMMAND.id)
+    .map(({ includeLink, ...command }) => command);
 }
 
 /** One bounded cooldown ledger is shared by all reply transports in this process.
@@ -101,11 +115,15 @@ function configuredCommands(prefs) {
 class CommandCooldowns {
   /** @param {()=>number} [now] */
   constructor(now = Date.now) { this.now = now; /** @type {Map<string,number>} */ this.entries = new Map(); }
+  /** @param {string} owner @param {string} command */
+  commandKey(owner, command) { return `command:${owner}:${command}`; }
+  /** @param {string} owner @param {string} command */
+  isActive(owner, command) { return (this.entries.get(this.commandKey(owner, command)) ?? 0) > this.now(); }
   /** @param {string} owner @param {string} command @param {number} seconds @param {string} platform @param {string} viewer */
   claim(owner, command, seconds, platform, viewer) {
     const now = this.now();
     for (const [key, until] of this.entries) if (until <= now) this.entries.delete(key);
-    const commandKey = `command:${owner}:${command}`;
+    const commandKey = this.commandKey(owner, command);
     const viewerKey = `viewer:${owner}:${createHash("sha256").update(`${platform}:${viewer.toLowerCase()}`).digest("base64url")}`;
     if ((this.entries.get(commandKey) ?? 0) > now || (viewer && (this.entries.get(viewerKey) ?? 0) > now)) return false;
     // Capacity refusal avoids evicting live cooldowns and opening a spam path.
@@ -117,4 +135,4 @@ class CommandCooldowns {
 }
 
 module.exports = { CHAT_COMMANDS, PLATFORMS, VARIABLES, RESERVED, MAX_CUSTOM_COMMANDS, VIEWER_COOLDOWN_MS,
-  plainText, sanitizeChatCommands, configuredCommands, CommandCooldowns };
+  plainText, sanitizeChatCommands, configuredCommands, configuredReplies, CommandCooldowns };

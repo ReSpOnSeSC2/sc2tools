@@ -733,6 +733,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     liveGameBroker,
     games,
     chatStats,
+    guidesEnabled: deps.config.guidesEnabled,
     engagement: multichatEngagement,
     studio: multichatStudio,
     logger: deps.logger,
