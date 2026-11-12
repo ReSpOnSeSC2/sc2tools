@@ -4,6 +4,9 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## 0.25.1
 
+### Added
+- Opt in to tray notifications for unread game milestones after playing.
+
 ### Changed
 - Make the Standard Companion window taller so the Scouting report shows more
   of both build orders above the Ghost buttons.

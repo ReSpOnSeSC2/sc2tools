@@ -289,6 +289,7 @@ class UploadQueue:
             Callable[[Path, CloudGame, str, Dict[str, Any]], None]
         ] = None,
         on_game_synced: Optional[Callable[[Path, Dict[str, Any]], None]] = None,
+        on_game_synced_current: Optional[Callable[[Path, Dict[str, Any], object], None]] = None,
         on_support_error: Optional[Callable] = None,
         on_auth_outcome: Optional[Callable] = None,
         on_owned_outcome: Optional[Callable] = None,
@@ -390,6 +391,7 @@ class UploadQueue:
         # ``on_success`` and outside ``_lock``.
         self._on_game_accepted = on_game_accepted
         self._on_game_synced = on_game_synced
+        self._on_game_synced_current = on_game_synced_current
         self._lock = threading.Lock()
         # Preserve notification order across parser + uploader threads.
         # The callback itself stays outside ``_lock`` so UI work cannot
@@ -2399,14 +2401,18 @@ class UploadQueue:
         self._maybe_push_last_mmr(job, context=context)
 
     def _notify_game_synced(self, job: UploadJob, accepted_row: Dict[str, Any], owner=None, *, context=None) -> None:
-        if (self._on_game_synced is None or owner != self._state.user_id
+        if ((self._on_game_synced is None and self._on_game_synced_current is None) or owner != self._state.user_id
                 or context is not None and not self._upload_context_current(context)):
             return
         try:
             from ..recent_games import build_game_summary
             summary = build_game_summary(job.game, accepted_row, history=not job.priority)
             summary["_owner"] = owner  # Local handoff fence, never a cloud field.
-            self._on_game_synced(job.file_path, summary)
+            if self._on_game_synced_current is not None:
+                # Keep the epoch out of summaries that reach the UI and disk.
+                self._on_game_synced_current(job.file_path, summary, context.owner_epoch if context else None)
+            else:
+                self._on_game_synced(job.file_path, summary)
         except Exception:
             # Local desktop history is advisory, unlike the replay archive.
             # A UI/persistence sink must not retry an already accepted upload.
