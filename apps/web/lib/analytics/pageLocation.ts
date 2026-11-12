@@ -160,3 +160,18 @@ export function analyticsReferrer(
   if (isUntrackedPath(url.pathname)) return `${origin}/`;
   return analyticsPageLocation(origin, url.pathname, url.search);
 }
+
+/** The normalized page state inherited by automatic gtag.js events. */
+export function analyticsPageState(
+  pathname: string = window.location.pathname,
+  search: string = window.location.search,
+): Record<string, string> {
+  const origin = window.location.origin;
+  const state: Record<string, string> = {
+    page_location: analyticsPageLocation(origin, pathname, search),
+    page_title: analyticsPageTitle(pathname),
+  };
+  const referrer = analyticsReferrer(document.referrer, origin);
+  if (referrer) state.page_referrer = referrer;
+  return state;
+}

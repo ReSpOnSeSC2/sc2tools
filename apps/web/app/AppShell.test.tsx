@@ -83,6 +83,7 @@ vi.mock("@/components/chrome/AppChrome", () => ({
 }));
 
 import { AppShell } from "./AppShell";
+import { GA_MEASUREMENT_ID } from "@/lib/analytics/consent";
 
 function renderAt(pathname: string | null) {
   route.pathname = pathname;
@@ -100,6 +101,9 @@ afterEach(() => {
   route.clerkRenders.mockClear();
   route.syncAnalyticsPage.mockClear();
   window.history.pushState({}, "", "/");
+  window.localStorage.removeItem("sc2tools.analyticsConsent.v1");
+  delete window.gtag;
+  delete window[`ga-disable-${GA_MEASUREMENT_ID}`];
 });
 
 describe("isolated broadcast and local recap routes", () => {
@@ -140,6 +144,36 @@ it("renders status without auth, realtime, analytics, background traffic or site
   for (const id of ["clerk-provider", "realtime-provider", "toast-provider", "site-header", "site-footer", "app-chrome", "cookie-banner", "google-analytics", "service-worker", "site-stats", "site-presence", "device-history-guard", "command-search"]) {
     expect(screen.queryByTestId(id)).toBeNull();
   }
+});
+
+it("keeps a single consent subscription across status and route changes", () => {
+  const key = "sc2tools.analyticsConsent.v1";
+  const gtag = vi.fn();
+  window.gtag = gtag;
+  window.history.pushState({}, "", "/status");
+  const shell = renderAt("/status");
+  const changeFromAnotherTab = (newValue: string) => {
+    window.localStorage.setItem(key, newValue);
+    window.dispatchEvent(new StorageEvent("storage", { key, newValue, storageArea: window.localStorage }));
+  };
+
+  changeFromAnotherTab("denied");
+  expect(gtag.mock.calls).toEqual([["consent", "update", { analytics_storage: "denied" }]]);
+  expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(true);
+
+  route.pathname = "/overlay/test-token";
+  window.history.pushState({}, "", route.pathname);
+  shell.rerender(<AppShell><div /></AppShell>);
+  changeFromAnotherTab("granted");
+  expect(gtag.mock.calls).toEqual([
+    ["consent", "update", { analytics_storage: "denied" }],
+    ["consent", "update", { analytics_storage: "granted" }],
+  ]);
+  expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(true);
+
+  shell.unmount();
+  changeFromAnotherTab("denied");
+  expect(gtag).toHaveBeenCalledTimes(2);
 });
 
 describe("app chrome routes", () => {
