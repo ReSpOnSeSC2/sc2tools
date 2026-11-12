@@ -6,13 +6,13 @@ import { useSaveSource } from "../SettingsContext";
 
 afterEach(cleanup);
 
-function Draft({ tab, label, save, reset, order }: {
-  tab: string; label: string; save: () => Promise<boolean>; reset: () => void; order: number;
+function Draft({ tab, label, save, reset, order, keepDirtyOnSave = false }: {
+  tab: string; label: string; save: () => Promise<boolean>; reset: () => void; order: number; keepDirtyOnSave?: boolean;
 }) {
   const [dirty, setDirty] = useState(true);
   useSaveSource(tab, {
     label, dirty, order,
-    save: async () => { const saved = await save(); if (saved) setDirty(false); return saved; },
+    save: async () => { const saved = await save(); if (saved && !keepDirtyOnSave) setDirty(false); return saved; },
     reset: () => { reset(); setDirty(false); },
   }, label);
   return null;
@@ -23,7 +23,7 @@ it("saves one tab sequentially, leaves a failed draft, and retries that draft al
   const saveChat = vi.fn(async () => { calls.push("chat"); return true; });
   const saveBot = vi.fn(async () => { calls.push("bot"); return calls.length > 2; });
   render(<SettingsSaveScope tabId="chat">
-    <Draft tab="chat" label="chat settings" save={saveChat} reset={vi.fn()} order={0} />
+    <Draft tab="chat" label="chat settings" save={saveChat} reset={vi.fn()} order={0} keepDirtyOnSave />
     <Draft tab="chat" label="bot settings" save={saveBot} reset={vi.fn()} order={1} />
   </SettingsSaveScope>);
   expect(screen.getAllByRole("button", { name: "Save all" })).toHaveLength(1);

@@ -12,7 +12,6 @@
  */
 
 import { isReportCardPath } from "./instant/reportCardRoute";
-import { PRACTICE_LINK_ROUTE } from "./practice/practiceLinkPath";
 
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
@@ -26,7 +25,7 @@ let client: Promise<Sentry | null> | null = null;
 
 function onLocalReplaySurface(): boolean {
   const pathname = globalThis.location?.pathname;
-  return pathname === "/wrapped" || isReportCardPath(pathname) || PRACTICE_LINK_ROUTE.test(pathname ?? "");
+  return pathname === "/wrapped" || isReportCardPath(pathname) || /^\/(?:b|%62)(?:\/|$)/.test(pathname ?? "");
 }
 
 /**
