@@ -132,15 +132,14 @@ function ConnectedOverlayClient({
    */
   themeParam?: string | null;
   /**
-   * Show the "Overlay by sc2tools.com" credit while widgets are on
-   * screen (default). The server page turns it off for ``?credit=0``.
+   * The server page passes false for the legacy ``?credit=0`` override.
    */
   showCredit?: boolean;
   canvas?: OverlayCanvas;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const { gameWidgetsPaused, receivePause, resetPause } = useGameWidgetsPaused(token);
-  const { profile, themeVars, optionsRef, receiveProfile } = useOverlayProfile(token, themeParam);
+  const { profile, credit, themeVars, optionsRef, receiveProfile } = useOverlayProfile(token, themeParam);
   const testLayer = useOverlayTestLayer(token, optionsRef);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
@@ -305,23 +304,10 @@ function ConnectedOverlayClient({
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
       ) : null}
-      <OverlayCredit placement="top-left" visible={compositeCreditVisible(showCredit, singleWidget, (id) => shouldShow(id) || (!gameWidgetsPaused && testTargets(id)))} />
+      <OverlayCredit placement="top-left" visible={credit && showCredit !== false && singleWidget === null
+        && COMPOSITE_WIDGETS.some(id => shouldShow(id) || (!gameWidgetsPaused && testTargets(id)))} />
     </div>
   );
-}
-
-/**
- * The credit rides along only while this composite source actually shows
- * a widget, so a between-games scene stays fully transparent. Dedicated
- * ``?w=`` sources never show it (several would stack up). An unset
- * ``showCredit`` means shown, the default.
- */
-function compositeCreditVisible(
-  showCredit: boolean | undefined,
-  singleWidget: WidgetId | null,
-  shouldShow: (id: WidgetId) => boolean,
-): boolean {
-  return showCredit !== false && singleWidget === null && COMPOSITE_WIDGETS.some(shouldShow);
 }
 
 /** The widgets this all-in-one source renders (keep in step with the JSX above). */

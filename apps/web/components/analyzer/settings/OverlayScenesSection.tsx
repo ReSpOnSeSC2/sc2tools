@@ -136,13 +136,7 @@ export function OverlayScenesSection({
       <Card padded={false}>
         <ul className="min-w-0 divide-y divide-border">
           {SCENES.map((scene) => {
-            const sceneUrl = `${base}/overlay/${token}/scene/${scene.id}`;
-            // A virtual set contains no themed UI, so its permanent OBS URL
-            // stays unchanged when the streamer restyles overlay widgets.
-            const url =
-              scene.kind === "virtual-set"
-                ? sceneUrl
-                : appendOverlayCreditToUrl(sceneUrl, showCredit);
+            const url = `${base}/overlay/${token}/scene/${scene.id}`;
             const SceneIcon =
               scene.kind === "virtual-set" ? Clapperboard : Layers;
             return (

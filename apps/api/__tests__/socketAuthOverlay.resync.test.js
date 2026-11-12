@@ -151,6 +151,44 @@ describe("attachSocketAuth (overlay) — connect replay", () => {
 });
 
 describe("attachSocketAuth (overlay) — overlay:resync", () => {
+  test("recovers a missed credit update for the requesting token only", async () => {
+    const io = setupIo();
+    const shown = { v: 1, theme: {}, widgetOptions: {}, credit: true };
+    const hidden = { ...shown, credit: false };
+    const resolveOwnedOverlayProfile = jest.fn(async () => ({ profile: hidden, profileRevision: 5 }));
+    const validateOverlayToken = jest.fn(async () => true);
+    attachSocketAuth(io, {
+      secretKey: "sk_test",
+      resolveOverlayToken: async () => ({ userId: "u1", label: "main", profile: shown, profileRevision: 4 }),
+      resolveOwnedOverlayProfile,
+      validateOverlayToken,
+    });
+    const socket = await io.runHandshake({ auth: { overlayToken: "tok-1" } });
+    const other = await io.runHandshake({ auth: { overlayToken: "tok-2" } });
+    io.runConnect(socket);
+    io.runConnect(other);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(socket.emitted).toContainEqual({
+      event: "overlay:config",
+      payload: expect.objectContaining({ profile: shown, profileRevision: 4 }),
+    });
+    socket.emitted.length = 0;
+    other.emitted.length = 0;
+
+    await socket.fire("overlay:resync");
+    expect(resolveOwnedOverlayProfile).toHaveBeenCalledWith("u1", "tok-1");
+    expect(validateOverlayToken).not.toHaveBeenCalled();
+    expect(socket.emitted).toEqual([{ event: "overlay:config", payload: { profile: hidden, profileRevision: 5 } }]);
+    expect(other.emitted).toEqual([]);
+
+    resolveOwnedOverlayProfile.mockResolvedValueOnce(null);
+    socket.data.lastResyncMs = Date.now() - RESYNC_MIN_INTERVAL_MS - 1;
+    socket.emitted.length = 0;
+    await socket.fire("overlay:resync");
+    expect(socket.disconnectCalls).toEqual([true]);
+    expect(socket.emitted).toEqual([]);
+  });
+
   test("re-emits all current snapshots on demand", async () => {
     const io = setupIo();
     const sessionCalls = [];

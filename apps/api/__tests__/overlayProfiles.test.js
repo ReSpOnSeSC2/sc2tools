@@ -64,11 +64,36 @@ describe("owned live overlay profiles", () => {
     expect((await put({ profile: invalid, expectedRevision: 0 })).status).toBe(400);
     expect(await collection.findOne({ token: "synthetic-token" })).not.toHaveProperty("profile"); expect(emit).not.toHaveBeenCalled();
   });
-  test("saved overlay flags round-trip through the owner and widget reads", async () => {
+  test("publishes and resolves the saved credit per token with legacy defaults", async () => {
+    await collection.insertOne({ userId: "owner", token: "other-synthetic-token", label: "Second synthetic source", revokedAt: null });
     const flags = profile({ credit: false, ghostVoice: true });
     await put({ profile: flags, expectedRevision: 0 }).expect(200, { profile: flags, profileRevision: 1 });
-    expect((await service.list("owner"))[0].profile).toEqual(flags);
+    expect((await service.list("owner")).find(row => row.token === "synthetic-token").profile).toEqual(flags);
     expect((await service.resolve("synthetic-token")).profile).toEqual(flags);
+    expect(emit).toHaveBeenNthCalledWith(1, "overlay:config", { profile: flags, profileRevision: 1 });
+
+    const visible = { ...flags, credit: true };
+    await put({ profile: visible, expectedRevision: 1 }).expect(200, { profile: visible, profileRevision: 2 });
+    expect(await service.resolve("synthetic-token")).toMatchObject({ profile: visible, profileRevision: 2 });
+    expect(emit).toHaveBeenNthCalledWith(2, "overlay:config", { profile: visible, profileRevision: 2 });
+    expect(await service.resolve("other-synthetic-token")).toMatchObject({ profile: profile(), profileRevision: 0 });
+    expect(await collection.findOne({ token: "other-synthetic-token" })).not.toHaveProperty("profile");
+  });
+
+  test("resync reads the current owned profile despite a stale token cache", async () => {
+    const token = "synthetic-token";
+    await expect(service.resolve(token)).resolves.toMatchObject({ profile: profile(), profileRevision: 0 });
+    const remote = new OverlayTokensService({ overlayTokens: collection });
+    const hidden = profile({ credit: false });
+    await remote.setProfile("owner", token, hidden, 0);
+
+    await expect(service.resolve(token)).resolves.toMatchObject({ profile: profile(), profileRevision: 0 });
+    await expect(service.readOwnedProfile("owner", token)).resolves.toEqual({ profile: hidden, profileRevision: 1 });
+    await expect(service.readOwnedProfile("other-owner", token)).resolves.toBeNull();
+    await collection.updateOne({ token }, { $set: { _rotationPending: true } });
+    await expect(service.readOwnedProfile("owner", token)).resolves.toBeNull();
+    await collection.updateOne({ token }, { $set: { revokedAt: new Date() }, $unset: { _rotationPending: "" } });
+    await expect(service.readOwnedProfile("owner", token)).resolves.toBeNull();
   });
   test("prototype keys and nonfinite values fail the direct validator too", () => {
     expect(() => validateOverlayProfile(JSON.parse('{"v":1,"theme":{"__proto__":{}},"widgetOptions":{}}'))).toThrow();

@@ -11,6 +11,11 @@ const { validateOverlayProfile, defaultOverlayProfile, overlayProfileForRead } =
 /** @param {unknown} value */
 const profileRevision = value => Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : 0;
 
+/** @param {string} userId @param {string} token */
+function activeOwnedToken(userId, token) {
+  return { userId, token, revokedAt: null, _rotation: { $exists: false }, _rotationPending: { $ne: true } };
+}
+
 const DEFAULT_WIDGETS = Object.freeze([
   "opponent",
   "match-result",
@@ -354,12 +359,18 @@ class OverlayTokensService {
    * @param {string} token
    */
   async tokenBelongsToUser(userId, token) {
-    const row = await this.db.overlayTokens.findOne({
-      userId,
-      token,
-      revokedAt: null, _rotation: { $exists: false }, _rotationPending: { $ne: true },
-    });
+    const row = await this.db.overlayTokens.findOne(activeOwnedToken(userId, token), { projection: { _id: 1 } });
     return Boolean(row);
+  }
+
+  /** Read the current profile and verify ownership in the same uncached lookup.
+   * @param {string} userId @param {string} token */
+  async readOwnedProfile(userId, token) {
+    const row = await this.db.overlayTokens.findOne(
+      activeOwnedToken(userId, token),
+      { projection: { _id: 0, profile: 1, profileRevision: 1 } },
+    );
+    return row ? { profile: overlayProfileForRead(row.profile), profileRevision: profileRevision(row.profileRevision) } : null;
   }
 
   /** Bounded device-heartbeat catch-up; private device auth is required by

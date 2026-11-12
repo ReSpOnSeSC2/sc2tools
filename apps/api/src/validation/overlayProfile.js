@@ -8,9 +8,8 @@ const THEME_KEYS = new Set(["accent", "scale", "opacity", "radius", "font", "sty
 const plain = (/** @type {unknown} */ value) => !!value && typeof value === "object" && !Array.isArray(value)
   && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 const invalid = () => Object.assign(new Error("Use a valid overlay profile, theme, display time and widget placement."), { status: 400, code: "invalid_overlay_profile" });
-/** Account-wide overlay choices Settings bakes into copied URLs. Absent
- * means "not chosen yet" (credit shown, Ghost voice off), so Settings can
- * move an older per-browser choice in once. */
+/** Optional token preferences. Absence preserves the defaults (credit shown,
+ * Ghost voice off) and lets Settings migrate an older per-browser choice. */
 const FLAG_KEYS = /** @type {const} */ (["credit", "ghostVoice"]);
 const PROFILE_KEYS = new Set(["v", "theme", "widgetOptions", ...LAYOUT_KEYS, ...FLAG_KEYS]);
 /** @typedef {{anchor:"top"|"bottom",xPct:number,yPct:number,scale:number,zIndex:number}} WidgetPlacement */

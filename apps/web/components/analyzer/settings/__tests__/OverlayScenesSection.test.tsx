@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { DEFAULT_OVERLAY_FLAGS, OverlayFlagsContext } from "../overlayFlags";
 import { STREAM_BACKGROUNDS } from "@/lib/streamBackgrounds";
 import { OverlayScenesSection } from "../OverlayScenesSection";
@@ -51,19 +51,23 @@ describe("OverlayScenesSection virtual sets", () => {
 });
 
 describe("OverlayScenesSection credit flag", () => {
-  it("bakes credit=0 into the animated scenes once the account's credit is switched off", () => {
+  it("keeps Browser Source URLs stable and applies the saved credit to the demo", () => {
     const scenes = (credit: boolean) => <OverlayFlagsContext.Provider value={{ ...DEFAULT_OVERLAY_FLAGS, credit }}>
       <OverlayScenesSection token="overlay-token" origin="https://studio.example" theme={{}} />
     </OverlayFlagsContext.Provider>;
     const { rerender } = render(scenes(true));
     screen.getAllByRole("button", { name: "Reveal" }).forEach(button => fireEvent.click(button));
     const urls = () => screen.getAllByLabelText("Widget Browser Source URL").map((node) => node.textContent);
-    expect(urls()).toContain("https://studio.example/overlay/overlay-token/scene/starting-soon");
+    const live = "https://studio.example/overlay/overlay-token/scene/starting-soon";
+    expect(urls()).toContain(live);
+    const startingSoon = screen.getByRole("button", { name: /starting soon/i });
+    fireEvent.click(startingSoon);
+    expect(screen.getByTitle("Scene preview").getAttribute("src")).toBe(`${live}?demo=1`);
 
-    act(() => rerender(scenes(false)));
-    screen.getAllByRole("button", { name: "Reveal" }).forEach(button => fireEvent.click(button));
-    expect(urls()).toContain("https://studio.example/overlay/overlay-token/scene/starting-soon?credit=0");
-    // Virtual sets never show the credit, so their URLs never change.
+    rerender(scenes(false));
+    expect(urls()).toContain(live);
+    expect(urls()).not.toContain(`${live}?credit=0`);
+    expect(screen.getByTitle("Scene preview").getAttribute("src")).toBe(`${live}?demo=1&credit=0`);
     expect(urls()).toContain(`https://studio.example/overlay/overlay-token/scene/${STREAM_BACKGROUNDS[0].id}`);
   });
 });
