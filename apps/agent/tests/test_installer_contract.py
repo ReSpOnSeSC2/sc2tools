@@ -2,8 +2,11 @@
 import json
 import os
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
+import sys
+from types import SimpleNamespace
 import pytest
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -67,6 +70,92 @@ try { & $Helper -Path 'fixture.exe'; exit 0 } catch { exit 17 }
     file=tmp_path/'check.ps1';file.write_text(script,encoding='utf-8')
     result=subprocess.run([powershell,'-NoProfile','-NonInteractive','-File',str(file),str(ROOT/'packaging/verify-signature.ps1'),status,str(signer),str(timestamp)],capture_output=True,text=True,timeout=15)
     assert result.returncode==(0 if ok else 17),result.stdout+result.stderr
+
+
+@pytest.mark.parametrize("version", ["0.25.0", "65536.0.0", "0.25.0-rc.1"])
+def test_windows_spec_uses_canonical_version_resource(tmp_path, monkeypatch, version):
+    # Run the spec with build primitives replaced. No executable is built or run.
+    package = tmp_path / "sc2tools_agent"
+    package.mkdir()
+    (package / "__init__.py").write_text(f'__version__ = "{version}"\n', encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setitem(sys.modules, "PyInstaller.compat", SimpleNamespace(is_win=True))
+    monkeypatch.setitem(sys.modules, "PyInstaller.utils.hooks", SimpleNamespace(
+        collect_all=lambda _: ([], [], []), collect_data_files=lambda _: [], collect_submodules=lambda _: [],
+    ))
+    resource_factory = SimpleNamespace(
+        VSVersionInfo=SimpleNamespace, FixedFileInfo=SimpleNamespace, StringFileInfo=list,
+        StringTable=lambda locale, fields: (locale, dict(fields)), StringStruct=lambda key, value: (key, value),
+        VarFileInfo=list, VarStruct=lambda key, value: (key, value),
+    )
+    monkeypatch.setitem(sys.modules, "PyInstaller.utils.win32", SimpleNamespace(versioninfo=resource_factory))
+    exe = {}
+    build_functions = {
+        "Analysis": lambda *args, **kwargs: SimpleNamespace(pure=[], zipped_data=[], scripts=[], binaries=[], zipfiles=[], datas=[]),
+        "PYZ": lambda *args, **kwargs: None,
+        "EXE": lambda *args, **kwargs: exe.update(kwargs),
+        "COLLECT": lambda *args, **kwargs: None,
+    }
+    spec = str(ROOT / "packaging/sc2tools_agent.spec")
+    if version != "0.25.0":
+        with pytest.raises(ValueError, match="[Aa]gent version"):
+            runpy.run_path(spec, init_globals=build_functions)
+        return
+
+    runpy.run_path(spec, init_globals=build_functions)
+    resource = exe["version"]
+    assert resource.ffi.filevers == resource.ffi.prodvers == (0, 25, 0, 0)
+    [(locale, strings)], translations = resource.kids
+    assert locale == "040904B0"
+    assert strings["FileVersion"] == strings["ProductVersion"] == version
+    assert strings["ProductName"] == "SC2 Tools Agent"
+    assert strings["OriginalFilename"] == "sc2tools-agent.exe"
+    assert translations == [("Translation", [0x0409, 1200])]
+
+
+def test_packaging_checks_executable_version_before_signing():
+    script = (ROOT / "packaging/build-installer.ps1").read_text(encoding="utf-8")
+    resolve = script.index("$AgentVersion = Resolve-AgentVersion")
+    cleanup = script.index('Invoke-Step "Cleaning build artefacts"')
+    metadata = script.index("$fileVersionInfo = (Get-Item -LiteralPath $ExePath).VersionInfo")
+    sign = script.index("Sign-AgentFile $ExePath")
+    assert resolve < cleanup < metadata < sign
+    assert "$fileVersionInfo.ProductVersion -cne $AgentVersion" in script[metadata:sign]
+    assert "$fileVersionInfo.FileVersion -cne $AgentVersion" in script[metadata:sign]
+
+
+def test_requested_version_is_an_assertion_against_the_canonical_release(tmp_path):
+    powershell = shutil.which("pwsh")
+    if powershell is None:
+        pytest.skip("PowerShell not installed")
+    package = tmp_path / "sc2tools_agent"
+    package.mkdir()
+    (package / "__init__.py").write_text('__version__ = "1.2.3"\n', encoding="utf-8")
+    fixture = tmp_path / "resolve-version.ps1"
+    fixture.write_text(r"""
+param($BuildScript)
+$ErrorActionPreference = 'Stop'
+$AgentRoot = (Get-Location).Path
+$ast = [Management.Automation.Language.Parser]::ParseFile($BuildScript, [ref]$null, [ref]$null)
+$resolver = $ast.Find({ param($node)
+    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Resolve-AgentVersion'
+}, $true)
+Invoke-Expression $resolver.Extent.Text
+if ((Resolve-AgentVersion) -ne '1.2.3') { throw 'Wrong default build version' }
+$Version = '1.2.3'
+if ((Resolve-AgentVersion) -ne '1.2.3') { throw 'Wrong explicit build version' }
+$Version = '1.2.4'
+try { Resolve-AgentVersion | Out-Null } catch {
+    if ($_.Exception.Message -like '*does not match the canonical agent version*') { exit 0 }
+    throw
+}
+throw 'Mismatched build version was accepted'
+""", encoding="utf-8")
+    result = subprocess.run(
+        [powershell, "-NoProfile", "-NonInteractive", "-File", str(fixture), str(ROOT / "packaging/build-installer.ps1")],
+        cwd=tmp_path, capture_output=True, text=True, timeout=15,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_signing_order_keeps_inner_signature_and_hashes_only_final_setup():

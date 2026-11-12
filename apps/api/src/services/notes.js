@@ -304,13 +304,15 @@ class NotesService {
       { projection: { _id: 0, target: 1, text: 1, tags: 1, visibility: 1, scope: 1 } },
     );
     for await (const doc of cursor) {
-      if (typeof doc.text === "string" && doc.text.trim()) out.set(doc.target.id, /** @type {NoteDoc} */ (doc));
+      if ((typeof doc.text === "string" && doc.text.trim()) || (Array.isArray(doc.tags) && doc.tags.length)) {
+        out.set(doc.target.id, /** @type {NoteDoc} */ (doc));
+      }
     }
     return out;
   }
 
   /**
-   * Create, update or (blank text) delete the owner's note on one account.
+   * Save the owner's note on one account, or delete it when empty of text and tags.
    * Omitted fields keep their stored value. A legacy client that asks for
    * read-aloud is asking for a stream note, so that also sets visibility.
    *
@@ -332,20 +334,24 @@ class NotesService {
     const pulseId = cleanId(opponent?.pulseId);
     const text = normalizeNoteText(input?.text);
     if (!pulseId || text === null || text.length > LIMITS.NOTE_TEXT_MAX_LENGTH) throw failure("bad_request", 400, "invalid note");
-    await this.ensureMigrated(userId);
-    const filter = { userId, "target.kind": "opponent", "target.id": pulseId };
-    if (!text) {
-      await this.db.notes.deleteOne(filter);
-      return null;
-    }
     const tags = input.tags === undefined ? undefined : normalizeTags(input.tags);
     if (tags?.error !== undefined) throw failure("bad_request", 400, tags.error);
+    await this.ensureMigrated(userId);
+    const filter = { userId, "target.kind": "opponent", "target.id": pulseId };
+    const clearTextOnly = !text && tags === undefined;
+    if (!text && !tags?.tags?.length) {
+      // Quick editors omit tags. Only delete if the row still has none.
+      const deleteFilter = clearTextOnly ? { ...filter, "tags.0": { $exists: false } } : filter;
+      const { deletedCount } = await this.db.notes.deleteOne(deleteFilter);
+      if (!clearTextOnly || deletedCount) return null;
+    }
     const existing = /** @type {NoteDoc|null} */ (await this.db.notes.findOne(filter, { projection: NOTE_PROJECTION }));
+    if (clearTextOnly && !existing?.tags?.length) return null;
     const legacySpeak = input.visibility === undefined && input.preserveReadAloud !== true && input.readAloud === true;
     const fields = enforceNoteInvariants({
       tags: tags?.tags ?? existing?.tags ?? [],
       visibility: legacySpeak ? "stream" : input.visibility ?? existing?.visibility ?? "private",
-      readAloud: input.preserveReadAloud === true ? existing?.readAloud === true : input.readAloud === true,
+      readAloud: Boolean(text) && (input.preserveReadAloud === true ? existing?.readAloud === true : input.readAloud === true),
     });
     const scope = input.scope ?? existing?.scope ?? "account";
     const groupKey = scope === "player" ? await this._groupKey(userId, opponent) : null;
@@ -353,7 +359,7 @@ class NotesService {
     const update = {
       $set: {
         text,
-        tags: fields.tags,
+        ...(clearTextOnly ? {} : { tags: fields.tags }),
         visibility: fields.visibility,
         readAloud: fields.readAloud,
         scope,
@@ -365,8 +371,10 @@ class NotesService {
       $setOnInsert: { createdAt: now },
       ...(groupKey ? {} : { $unset: { groupKey: "" } }),
     };
-    const write = () => this.db.notes.findOneAndUpdate(filter, update, {
-      upsert: true, returnDocument: "after", projection: NOTE_PROJECTION, includeResultMetadata: false,
+    // A text-only clear must not recreate a concurrently deleted note or restore its tags.
+    const writeFilter = clearTextOnly ? { ...filter, "tags.0": { $exists: true } } : filter;
+    const write = () => this.db.notes.findOneAndUpdate(writeFilter, update, {
+      upsert: !clearTextOnly, returnDocument: "after", projection: NOTE_PROJECTION, includeResultMetadata: false,
     });
     try { return /** @type {NoteDoc|null} */ (await write()); }
     catch (err) {

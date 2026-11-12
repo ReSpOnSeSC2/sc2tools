@@ -233,6 +233,21 @@ describe("opponent list controls and navigation", () => {
     fireEvent.click(screen.getByRole("switch", { name: "Group same player" }));
     expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(2); expect(screen.getByRole("button", { name: "Scouting note: Legacy note" })).toBeTruthy();
   });
+
+  it("previews saved tags and includes them in the Has notes filter when the note text is blank", () => {
+    useApiPaginatedMock.mockReturnValue({
+      items: [{ ...opponents[0], notesMeta: { preview: "", tags: ["Macro"] } }, opponents[1]],
+      isLoading: false,
+    });
+    render(<OpponentsTab onOpen={() => undefined} />);
+
+    fireEvent.click(screen.getByRole("switch", { name: "Has notes" }));
+
+    const table = screen.getByRole("table");
+    expect(within(table).getByRole("link", { name: "Alpha" })).toBeTruthy();
+    expect(within(table).getByRole("button", { name: "Scouting note: Macro" })).toBeTruthy();
+    expect(within(table).queryByRole("link", { name: "Beta" })).toBeNull();
+  });
   it("debounces row prefetch through one timer and reports the page cap without page jargon", () => {
     vi.useFakeTimers(); const prefetch = vi.fn();
     useApiPaginatedMock.mockReturnValue({ items: opponents, isLoading: false, hitMaxPages: true });
