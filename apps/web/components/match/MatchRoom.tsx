@@ -50,13 +50,14 @@ function ActiveRoom({ invite, session, frame }: {
   frame: NonNullable<ReturnType<typeof useMatchRoom>["frame"]>;
 }) {
   const { reading, actionError, busy } = session;
+  const { room, receivedAt } = frame;
   const { confirm, dialog } = useConfirm();
   async function removeRoom() {
     if (await confirm({ title: "Delete this room?", description: "The seat and watch links will stop working immediately.",
-      confirmLabel: "Delete room", intent: "danger", focusCancel: true })) await session.mutate("delete");
+      confirmLabel: "Delete room", intent: "danger", focusCancel: true })) await session.mutate("delete", room.rev);
   }
   async function send(action: RoomAction) {
-    const saved = await session.mutate(action);
+    const saved = await session.mutate(action, room.rev);
     if (saved && action.type !== "name" && action.type !== "ready") {
       window.requestAnimationFrame(() => {
         const title = document.getElementById("match-score-title") ?? document.getElementById("match-veto-title");
@@ -65,7 +66,6 @@ function ActiveRoom({ invite, session, frame }: {
     }
     return saved;
   }
-  const { room, receivedAt } = frame;
   const role = invite.role;
   const host = role === "host";
   const blocked = busy || Boolean(reading.error);

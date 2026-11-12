@@ -47,7 +47,7 @@ function pollRoom(id: string, publish: (frame: Frame | null) => void, status: (e
     if (!isCurrentReadError(session, error, startedAtRev)) return;
     retryMs = error instanceof RoomRequestError ? error.retryMs : 0;
     session.refreshAgain = false;
-    status(roomErrorText(error, false), false);
+    status(roomErrorText(error, "read"), false);
   }
   function refresh() {
     if (stop.signal.aborted || session.gone) return;
@@ -82,7 +82,7 @@ function observeVisibility(signal: AbortSignal, callback: () => void) {
 
 function isCurrentReadError(session: RoomSession, error: unknown, startedAtRev: number | undefined) {
   if (session.stop.signal.aborted || session.gone) return false;
-  if (error instanceof RoomRequestError && error.status === 404) {
+  if (error instanceof RoomRequestError && error.code === "match_room_missing") {
     session.finish();
     return false;
   }
@@ -112,7 +112,7 @@ export function useMatchRoom(invite: RoomInvite) {
     return () => session.stop.abort();
   }, [invite.id]);
 
-  async function mutate(action: RoomAction | "delete") {
+  async function mutate(action: RoomAction | "delete", displayedRev: number) {
     const session = current.current;
     if (invite.role === "watch" || !hasWritableRoom(session, busyRef.current)) return false;
     busyRef.current = true;
@@ -123,7 +123,7 @@ export function useMatchRoom(invite: RoomInvite) {
         await deleteRoom(invite, session.stop.signal);
         if (!session.stop.signal.aborted) session.finish();
       } else {
-        session.accept(await writeRoom(invite, session.frame.room.rev, action, session.stop.signal));
+        session.accept(await writeRoom(invite, displayedRev, action, session.stop.signal));
         session.retry();
       }
       return !session.stop.signal.aborted;
@@ -139,10 +139,10 @@ export function useMatchRoom(invite: RoomInvite) {
 }
 
 function handleError(session: RoomSession, error: unknown, show: (text: string) => void) {
-  if (error instanceof RoomRequestError && error.status === 404) {
+  if (error instanceof RoomRequestError && error.code === "match_room_missing") {
     session.finish();
     return;
   }
-  show(roomErrorText(error, true));
-  if (!(error instanceof RoomRequestError) || error.status === 409) session.retry();
+  show(roomErrorText(error, "write"));
+  if (!(error instanceof RoomRequestError) || error.status === 409 || error.status === 404) session.retry();
 }

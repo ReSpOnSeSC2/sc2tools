@@ -47,11 +47,13 @@ function fixtureAction(room: Room, action: RoomAction) {
   }
 }
 
-async function installFixture(context: BrowserContext, { failFirst = false } = {}) {
+async function installFixture(context: BrowserContext, { failFirst = false, dropCreate = false } = {}) {
   const room = initialRoom();
   let deleted = false;
   let failed = false;
+  const firstRead = Promise.withResolvers<void>();
   const requests: string[] = [];
+  const attempts: string[] = [];
   await context.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", { value: {
       writeText: async (text: string) => { sessionStorage.setItem("test-match-copy", text); },
@@ -73,10 +75,13 @@ async function installFixture(context: BrowserContext, { failFirst = false } = {
     const send = (status: number, json?: unknown) => route.fulfill({ status, headers: HEADERS, json });
     if (method === "OPTIONS") return send(204);
     if (method === "POST" && url.pathname.endsWith("/match-rooms")) {
-      room.config = request.postDataJSON() as Room["config"];
+      const { attempt, ...config } = request.postDataJSON() as Room["config"] & { attempt: string };
+      room.config = config;
+      attempts.push(attempt);
+      if (dropCreate && attempts.length === 1) return route.abort("failed");
       return send(201, { id: ROOM_ID, hostKey: HOST_KEY });
     }
-    if (deleted || !url.pathname.includes("/" + ROOM_ID)) return send(404);
+    if (deleted || !url.pathname.includes("/" + ROOM_ID)) return send(404, { error: { code: "match_room_missing" } });
     if (method === "DELETE") { deleted = true; return send(204); }
     if (method === "POST") {
       const body = request.postDataJSON() as { key: string; rev: number; action: RoomAction };
@@ -85,12 +90,16 @@ async function installFixture(context: BrowserContext, { failFirst = false } = {
     }
     if (method === "GET") {
       requests.push(url.search);
-      if (failFirst && !failed) { failed = true; return send(503); }
+      if (failFirst && !failed) {
+        failed = true;
+        await firstRead.promise;
+        return send(404);
+      }
       if (url.searchParams.get("rev") === String(room.rev)) return send(204);
     }
     return send(200, { ...room, serverTime: Date.now() });
   });
-  return { requests };
+  return { requests, attempts, releaseFirstRead: firstRead.resolve };
 }
 
 async function copy(page: Page, name: string) {
@@ -134,6 +143,9 @@ for (const theme of ["light", "dark"] as const) {
     await playVeto(context, seatA, seatB, theme, info);
     await verifyResult(page, context, watch, theme, info);
     expect(requests.some(query => query.startsWith("?rev="))).toBe(true);
+    await page.goto("/match/room");
+    await expect(page.getByRole("heading", { name: "Open a room link" })).toBeVisible();
+    await captureAccessibility(page, info, "match-no-link-" + theme, true);
   });
 }
 
@@ -172,8 +184,11 @@ async function verifyResult(page: Page, context: BrowserContext, watch: string, 
   const result = await copy(viewer, "Copy for Discord");
   expect(result).toContain("Seat A 1–0 Seat B");
   expect(result).not.toMatch(/Fixture Blue|#r=|key=/);
+  const textCopied = viewer.getByText("Result copied.", { exact: true });
+  await expect(textCopied).toBeVisible();
   await viewer.getByRole("button", { name: "Share result image" }).click();
   await expect.poll(() => viewer.evaluate(() => sessionStorage.getItem("test-match-image"))).toMatch(/^image\/png:[1-9]\d+$/);
+  await expect(textCopied).toHaveCount(0);
   expect(await viewer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
     await viewer.evaluate(() => document.documentElement.clientWidth),
   );
@@ -188,24 +203,44 @@ async function verifyResult(page: Page, context: BrowserContext, watch: string, 
   await remove.click();
   await page.getByRole("button", { name: "Delete room", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Room unavailable" })).toBeVisible();
+  await captureAccessibility(page, info, "match-deleted-" + theme, true);
   await refreshRoom(viewer);
   await expect(viewer.getByRole("heading", { name: "Room unavailable" })).toBeVisible();
   await viewer.close();
 }
 
-test("creates a custom practice room and recovers a connection failure", async ({ page, context }) => {
-  await installFixture(context, { failFirst: true });
+async function verifyRecovery(page: Page, context: BrowserContext, theme: "light" | "dark", info: TestInfo) {
+  const { attempts, releaseFirstRead } = await installFixture(context, { failFirst: true, dropCreate: true });
+  await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
   await page.goto("/match");
   await page.getByRole("combobox", { name: "Series format" }).selectOption("1");
   await rejectCookies(page);
   await page.getByRole("checkbox", { name: "Use a custom map pool" }).check();
   await page.getByRole("textbox", { name: "Map names" }).fill("Zulu\nYankee");
-  await page.getByRole("button", { name: "Practice solo" }).click();
+  const practice = page.getByRole("button", { name: "Practice solo" });
+  await practice.click();
+  await expect(page.getByText("The room could not be created. Try again.")).toBeVisible();
+  await captureAccessibility(page, info, "match-create-retry-" + theme, true);
+  try {
+    await practice.click();
+    await expect(page.getByText("Loading match room")).toBeAttached();
+    await captureAccessibility(page, info, "match-loading-" + theme, true);
+  } finally {
+    releaseFirstRead();
+  }
   await expect(page.getByRole("button", { name: "Retry connection" })).toBeVisible();
+  await captureAccessibility(page, info, "match-retry-" + theme, true);
+  expect(attempts).toEqual([expect.stringMatching(/^[0-9a-f]{48}$/), attempts[0]]);
   await page.getByRole("button", { name: "Retry connection" }).click();
   await expect(page.getByRole("heading", { name: "Map veto" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Ready Seat A" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Ready Seat B" })).toBeVisible();
   await expect(page.getByText("Zulu", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy watch link" })).toHaveCount(0);
-});
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test("recovers a lost creation response and a temporary room outage in " + theme, async ({ page, context }, info) => {
+    await verifyRecovery(page, context, theme, info);
+  });
+}

@@ -675,7 +675,8 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.sitePresence.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await ctx.sitePresence.createIndex({ lastSeenAt: -1, identityKey: 1 });
   await ctx.matchRooms.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-  await ctx.matchRooms.createIndex({ slot: 1 }, { unique: true });
+  await ctx.matchRooms.createIndex({ slot: 1 }, { unique: true, sparse: true });
+  await ctx.matchRooms.createIndex({ creationDigest: 1 }, { unique: true });
 
   await ensureBrowserIngestDailyIndexes(ctx);
 

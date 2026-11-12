@@ -43,10 +43,17 @@ export function InviteLinks({ invite }: { invite: Extract<RoomInvite, { key: str
   );
 }
 
+const IMAGE_IDLE = { busy: false, message: "", error: false };
+
 export function MatchResultExport({ room }: { room: Room }) {
   const copy = useCopy({ scopeKey: room.rev });
-  const [image, setImage] = useState({ busy: false, message: "", error: false });
+  const [image, setImage] = useState(IMAGE_IDLE);
+  function copyText(style: "discord" | "reddit") {
+    setImage(IMAGE_IDLE);
+    void copy.copy(resultText(room, style));
+  }
   async function shareImage() {
+    copy.clear();
     setImage({ busy: true, message: "", error: false });
     try {
       const { sharePersonalCard } = await import("@/lib/personalShareCardImage");
@@ -61,9 +68,9 @@ export function MatchResultExport({ room }: { room: Room }) {
       <h2 id="match-result-title" className="font-display text-h3 font-bold text-text">Share the result</h2>
       <p className="text-caption text-text-muted">Share the score with neutral seat labels.</p>
       <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" disabled={copy.pending} onClick={() => { void copy.copy(resultText(room, "discord")); }}>Copy for Discord</Button>
-        <Button variant="secondary" disabled={copy.pending} onClick={() => { void copy.copy(resultText(room, "reddit")); }}>Copy for Reddit</Button>
-        <Button variant="secondary" loading={image.busy} onClick={() => { void shareImage(); }}>Share result image</Button>
+        <Button variant="secondary" disabled={copy.pending || image.busy} onClick={() => copyText("discord")}>Copy for Discord</Button>
+        <Button variant="secondary" disabled={copy.pending || image.busy} onClick={() => copyText("reddit")}>Copy for Reddit</Button>
+        <Button variant="secondary" disabled={copy.pending} loading={image.busy} onClick={() => { void shareImage(); }}>Share result image</Button>
       </div>
       {copy.copied && <p role="status" className="text-caption text-text-muted">Result copied.</p>}
       {copy.fallbackText && <textarea aria-label="Result text" className="block w-full rounded-lg border border-line bg-bg-surface p-3 text-body"

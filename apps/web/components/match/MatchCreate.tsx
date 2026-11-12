@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { currentPool } from "@/lib/currentMapPool";
-import { FORMATS, PRESETS, invitePath, isFormat, isPreset, type Format, type Preset } from "@/lib/matchRoom";
-import { createRoom, roomErrorText } from "@/lib/matchRoomClient";
+import { FORMATS, PRESETS, invitePath, isFormat, isPreset, type Format, type Preset, type RoomConfig } from "@/lib/matchRoom";
+import { createRoom, newCreationAttempt, RoomRequestError, roomErrorText } from "@/lib/matchRoomClient";
 import { useSeasons } from "@/lib/useSeasons";
 
 const SELECT = "min-h-11 w-full rounded-lg border border-line bg-bg-surface px-3 text-body text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
@@ -30,6 +30,21 @@ function LadderPool({ maps, fresh, loading, retry }: {
 
 function validMapList(maps: string[], format: Format) {
   return maps.length >= format && maps.length <= 20 && maps.every(map => map.length <= 48);
+}
+
+type CreationAttempt = { signature: string; attempt: string };
+
+function prepareCreation(config: RoomConfig, previous: CreationAttempt | null) {
+  if (!validMapList(config.maps, config.format)) {
+    return "Enter at least " + config.format + " maps and at most 20. Each map name can have up to 48 characters.";
+  }
+  const signature = JSON.stringify(config);
+  const pending = previous?.signature === signature ? previous : { signature, attempt: newCreationAttempt() };
+  const input = { ...config, attempt: pending.attempt };
+  if (new TextEncoder().encode(JSON.stringify(input)).length > 2048) {
+    return "Shorten the custom map names before creating the room.";
+  }
+  return { input, pending };
 }
 
 function MatchOptions({ format, preset, onFormat, onPreset }: {
@@ -64,29 +79,31 @@ function useCreateRoom(format: Format, preset: Preset, maps: string[]) {
   const [saving, setSaving] = useState<"match" | "practice" | null>(null);
   const [error, setError] = useState("");
   const controller = useRef<AbortController | null>(null);
+  const pending = useRef<CreationAttempt | null>(null);
 
   useEffect(() => () => controller.current?.abort(), []);
 
   async function start(practice: boolean) {
     if (controller.current) return;
-    if (!validMapList(maps, format)) {
-      setError("Enter at least " + format + " maps and at most 20. Each map name can have up to 48 characters.");
+    const draft = prepareCreation({ format, preset, maps, practice }, pending.current);
+    if (typeof draft === "string") {
+      setError(draft);
       return;
     }
-    const config = { format, preset, maps, practice };
-    if (new TextEncoder().encode(JSON.stringify(config)).length > 2048) {
-      setError("Shorten the custom map names before creating the room.");
-      return;
-    }
+    pending.current = draft.pending;
     const request = new AbortController();
     controller.current = request;
     setSaving(practice ? "practice" : "match");
     setError("");
     try {
-      const invite = await createRoom(config, request.signal);
-      if (!request.signal.aborted) window.location.assign(invitePath(invite));
+      const invite = await createRoom(draft.input, request.signal);
+      if (!request.signal.aborted) {
+        pending.current = null;
+        window.location.assign(invitePath(invite));
+      }
     } catch (err) {
-      if (!request.signal.aborted) setError(roomErrorText(err, true));
+      if (err instanceof RoomRequestError && err.creationAttemptEnded) pending.current = null;
+      if (!request.signal.aborted) setError(roomErrorText(err, "create"));
     } finally {
       if (!request.signal.aborted) setSaving(null);
       controller.current = null;

@@ -2,11 +2,28 @@ import { API_BASE } from "@/lib/clientApi";
 import { parseCreatedRoom, parseRoom, type RoomAction, type RoomConfig, type RoomInvite } from "./matchRoom";
 
 const PATH = API_BASE + "/v1/match-rooms";
+type RoomErrorCode = "match_room_missing" | "match_room_attempt_closed" | "match_room_attempt_mismatch";
 
 export class RoomRequestError extends Error {
-  constructor(readonly status: number, readonly retryMs = 0) {
+  constructor(readonly status: number, readonly retryMs = 0, readonly code?: RoomErrorCode) {
     super("Match room request failed");
   }
+
+  get creationAttemptEnded() {
+    return this.code === "match_room_attempt_closed" || this.code === "match_room_attempt_mismatch";
+  }
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" ? value as Record<string, unknown> : undefined;
+}
+
+async function knownErrorCode(response: Response): Promise<RoomErrorCode | undefined> {
+  if (response.status !== 404 && response.status !== 409) return;
+  const body = record(await response.json().catch(() => null));
+  const code = record(body?.error)?.code;
+  if (response.status === 404) return code === "match_room_missing" ? code : undefined;
+  if (code === "match_room_attempt_closed" || code === "match_room_attempt_mismatch") return code;
 }
 
 async function request(url: string, init: RequestInit) {
@@ -16,7 +33,7 @@ async function request(url: string, init: RequestInit) {
   if (!response.ok) {
     const delay = Number(response.headers.get("Retry-After"));
     const retryMs = Number.isFinite(delay) ? Math.max(0, Math.min(delay * 1000, 3_600_000)) : 0;
-    throw new RoomRequestError(response.status, retryMs);
+    throw new RoomRequestError(response.status, retryMs, await knownErrorCode(response));
   }
   return response.status === 204 ? null : response.json() as Promise<unknown>;
 }
@@ -25,7 +42,12 @@ function jsonRequest(method: "POST" | "DELETE", body: unknown, signal: AbortSign
   return { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal };
 }
 
-export async function createRoom(config: RoomConfig, signal: AbortSignal) {
+export function newCreationAttempt() {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export async function createRoom(config: RoomConfig & { attempt: string }, signal: AbortSignal) {
   const invite = parseCreatedRoom(await request(PATH, jsonRequest("POST", config, signal)));
   if (!invite) throw new RoomRequestError(502);
   return invite;
@@ -50,13 +72,25 @@ export async function deleteRoom(invite: Exclude<RoomInvite, { role: "watch" }>,
   await request(PATH + "/" + invite.id, jsonRequest("DELETE", { key: invite.key }, signal));
 }
 
-export function roomErrorText(error: unknown, writing: boolean) {
+const INVALID_REQUEST = {
+  create: "Check the series format and map list, then try again.",
+  read: "This room could not be read.",
+  write: "Check the name or selected move and try again.",
+};
+const REQUEST_FAILED = {
+  create: "The room could not be created. Try again.",
+  read: "The room could not be reached.",
+  write: "The change could not be saved. Check the room before trying again.",
+};
+
+export function roomErrorText(error: unknown, action: keyof typeof REQUEST_FAILED) {
   if (error instanceof RoomRequestError) {
+    if (error.creationAttemptEnded) return "This creation attempt has ended. Try creating the room again.";
     if (error.status === 429) return "Too many requests. Wait a moment and try again.";
     if (error.status === 409) return "The room changed. Check the current turn or score, then try again.";
     if (error.status === 403) return "This link cannot make that change. Open the original host or seat link.";
-    if (error.status === 400) return writing ? "Check the name or map list and try again." : "This room could not be read.";
+    if (error.status === 400) return INVALID_REQUEST[action];
     if (error.status === 503) return "Match Rooms are busy. Try again in a moment.";
   }
-  return writing ? "The change could not be saved. Check the room before trying again." : "The room could not be reached.";
+  return REQUEST_FAILED[action];
 }

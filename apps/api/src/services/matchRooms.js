@@ -1,33 +1,68 @@
 "use strict";
 
-const { timingSafeEqual } = require("crypto");
+const { createHash, timingSafeEqual } = require("crypto");
 const { randomToken, sha256 } = require("../util/hash");
 const { isDuplicateKey } = require("../util/jobLock");
 const { MatchRoomError, roomConfig, initialRoom, advanceExpiredTurns,
   reduceMatchRoom, roomSnapshot } = require("./matchRoomModel");
 
 const LIFE_MS = 14 * 24 * 60 * 60 * 1000;
+const CREATE_RETRY_MS = 10 * 60 * 1000;
+const CREATE_ATTEMPT_PATTERN = /^[0-9a-f]{48}$/u;
 const MAX_ROOMS = 500;
 const ID_PATTERN = /^[A-Za-z0-9_-]{32}$/u;
 const KEY_PATTERN = /^(?:[A-Za-z0-9_-]{32}|[0-9a-f]{64})$/u;
 const WRITE_ROLES = /** @type {const} */ (["host", "a", "b"]);
 
 /** @typedef {import("./matchRoomModel").RoomState} RoomState */
+/** @typedef {RoomState["config"]} RoomConfig */
 /** @typedef {typeof WRITE_ROLES[number]} WriteRole */
-/** @typedef {{_id: string, _schemaVersion: number, slot: number, rev: number, expiresAt: Date,
- * credentials: Record<WriteRole, string>, state: RoomState}} MatchRoomDoc */
+/** @typedef {{_id: string, _schemaVersion: number, creationDigest: string, expiresAt: Date}} ClosedRoomDoc */
+/** @typedef {ClosedRoomDoc & {slot: number, rev: number, creationSalt: string,
+ * credentials: Record<WriteRole, string>, state: RoomState}} ActiveRoomDoc */
+/** @typedef {ActiveRoomDoc | ClosedRoomDoc} MatchRoomDoc */
+
+/** @param {unknown} input */
+function creationAttempt(input) {
+  const attempt = input && typeof input === "object" && "attempt" in input ? input.attempt : null;
+  if (typeof attempt !== "string" || !CREATE_ATTEMPT_PATTERN.test(attempt)) {
+    throw new MatchRoomError(400, "invalid_room_attempt");
+  }
+  return attempt;
+}
+
+/** @param {string} attempt @param {string} salt */
+function creationInvite(attempt, salt) {
+  const input = salt + ":" + attempt;
+  return {
+    id: createHash("sha256").update("match-room/create-watch:" + input).digest("base64url").slice(0, 32),
+    hostKey: createHash("sha256").update("match-room/create-host:" + input).digest("base64url").slice(0, 32),
+  };
+}
+
+/** @param {MatchRoomDoc | null} doc @param {RoomConfig} config @param {number} now */
+function retrySalt(doc, config, now) {
+  if (!doc) return null;
+  if (!("slot" in doc) || doc.expiresAt.getTime() <= now) {
+    throw new MatchRoomError(409, "match_room_attempt_closed");
+  }
+  if (JSON.stringify(doc.state.config) !== JSON.stringify(config)) {
+    throw new MatchRoomError(409, "match_room_attempt_mismatch");
+  }
+  return doc.creationSalt;
+}
 
 /** @param {string} hostKey @param {"a"|"b"} seat */
 function inviteKey(hostKey, seat) {
   return sha256("match-room/seat-" + seat + ":" + hostKey);
 }
 
-/** @param {string} hostKey @returns {MatchRoomDoc["credentials"]} */
+/** @param {string} hostKey @returns {ActiveRoomDoc["credentials"]} */
 function roomCredentials(hostKey) {
   return { host: sha256(hostKey), a: sha256(inviteKey(hostKey, "a")), b: sha256(inviteKey(hostKey, "b")) };
 }
 
-/** @param {MatchRoomDoc} doc @param {unknown} key @returns {WriteRole} */
+/** @param {ActiveRoomDoc} doc @param {unknown} key @returns {WriteRole} */
 function writeRole(doc, key) {
   if (typeof key === "string" && KEY_PATTERN.test(key)) {
     const digest = Buffer.from(sha256(key), "hex");
@@ -50,26 +85,40 @@ class MatchRoomsService {
   /** @param {unknown} input */
   async create(input) {
     const config = roomConfig(input);
-    const id = randomToken(24);
-    const hostKey = randomToken(24);
+    const attempt = creationAttempt(input);
+    const creationDigest = sha256("match-room/creation-attempt:" + attempt);
     const now = this.now();
+    const existing = retrySalt(await this.rooms.findOne({ creationDigest }), config, now);
+    if (existing) return creationInvite(attempt, existing);
+    const creationSalt = randomToken(24);
+    const { id, hostKey } = creationInvite(attempt, creationSalt);
+    const base = { _id: sha256(id), _schemaVersion: 1, rev: 0, expiresAt: new Date(now + LIFE_MS),
+      creationDigest, creationSalt, credentials: roomCredentials(hostKey), state: initialRoom(config, randomToken(24)) };
+    return creationInvite(attempt, await this.#claimSlot(base, now));
+  }
+
+  /** @param {Omit<ActiveRoomDoc, "slot">} room @param {number} now */
+  async #claimSlot(room, now) {
+    const { creationDigest, state: { config } } = room;
     const occupied = await this.rooms.find({ expiresAt: { $gt: new Date(now) } },
       { projection: { slot: 1, _id: 0 } }).toArray();
-    const active = new Set(occupied.map(row => row.slot));
-    const base = { _id: sha256(id), _schemaVersion: 1, rev: 0, expiresAt: new Date(now + LIFE_MS),
-      credentials: roomCredentials(hostKey), state: initialRoom(config, randomToken(24)) };
+    const active = new Set(occupied.flatMap(row => "slot" in row ? [row.slot] : []));
     // The unique slot index enforces the hard cap even across overlapping API
     // processes. Reclaim an expired slot without waiting for the TTL sweep.
     for (let slot = 0; slot < this.capacity; slot += 1) {
       if (active.has(slot)) continue;
       await this.rooms.deleteOne({ slot, expiresAt: { $lte: new Date(now) } });
       try {
-        await this.rooms.insertOne({ ...base, slot });
-        return { id, hostKey };
+        await this.rooms.insertOne({ ...room, slot });
+        return room.creationSalt;
       } catch (err) {
         if (!isDuplicateKey(err)) throw err;
+        const existing = retrySalt(await this.rooms.findOne({ creationDigest }), config, this.now());
+        if (existing) return existing;
       }
     }
+    const existing = retrySalt(await this.rooms.findOne({ creationDigest }), config, this.now());
+    if (existing) return existing;
     throw new MatchRoomError(503, "match_rooms_full");
   }
 
@@ -77,11 +126,11 @@ class MatchRoomsService {
   async load(id, now) {
     if (!ID_PATTERN.test(id)) throw new MatchRoomError(404, "match_room_missing");
     const doc = await this.rooms.findOne({ _id: sha256(id), expiresAt: { $gt: new Date(now) } });
-    if (!doc) throw new MatchRoomError(404, "match_room_missing");
+    if (!doc || !("slot" in doc)) throw new MatchRoomError(404, "match_room_missing");
     return doc;
   }
 
-  /** @param {MatchRoomDoc} doc @param {RoomState} state @param {number} now */
+  /** @param {ActiveRoomDoc} doc @param {RoomState} state @param {number} now */
   async save(doc, state, now) {
     const result = await this.rooms.updateOne(
       { _id: doc._id, rev: doc.rev, expiresAt: { $gt: new Date(now) } },
@@ -139,7 +188,12 @@ class MatchRoomsService {
     const now = this.now();
     const doc = await this.load(id, now);
     if (writeRole(doc, key) !== "host") throw new MatchRoomError(403, "host_required");
-    await this.rooms.deleteOne({ _id: doc._id });
+    // Drop room data and release the slot atomically. Keep the digest briefly
+    // so a delayed creation request cannot restore deleted capabilities.
+    await this.rooms.replaceOne({ _id: doc._id, slot: { $exists: true } }, {
+      _schemaVersion: doc._schemaVersion, creationDigest: doc.creationDigest,
+      expiresAt: new Date(now + CREATE_RETRY_MS),
+    });
   }
 }
 
