@@ -2,13 +2,13 @@
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 const { sanitizeGameMomentAlerts } = require("./multichatAppearance");
-const { deliverNotification } = require("./notificationDelivery");
 const { NOTIFICATIONS_PREF_TYPE, sanitizeNotificationPrefs } = require("./notificationPrefs");
 const { deriveGameMoments, ladderContext, eligibleGame, league } = require("./gameMomentRules");
 /** @typedef {import('./gameMomentRules').Moment} Moment */
 /** @typedef {ReturnType<typeof sanitizeGameMomentAlerts>} OverlayConfig */
 /** @typedef {import('mongodb').Document} Document */
-/** @typedef {{game:Document,moments:Moment[],receipt:Document}} Computation */
+/** @typedef {{version:1,claimedAt:Date,kinds:string[],rank?:Document,pendingBell?:Moment[]}} Receipt */
+/** @typedef {{game:Document,moments:Moment[],receipt:Receipt}} Computation */
 /** @type {Readonly<Record<string, string>>} */
 const BELL_KINDS = Object.freeze({
   crossedMmrMark: "moment.crossed_mmr_mark",
@@ -49,19 +49,24 @@ class GameMomentsService {
   /** The created flag comes only from the ingest insert result, not its body.
    * @param {string} userId @param {Document} game @param {Document|null} payload @param {string[]} tokens @param {{created:boolean}} options */
   async process(userId, game, payload, tokens, options) {
-    if (!options.created || !fresh(game, this.now())) return [];
-    const key = JSON.stringify([userId, game.gameId]), existing = this.inflight.get(key); if (existing) return existing;
+    if (!fresh(game, this.now()) || (!options.created && !this.deps.notifications)) return [];
+    const key = JSON.stringify([userId, game.gameId, options.created]), existing = this.inflight.get(key); if (existing) return existing;
     if (this.inflight.size >= MAX_INFLIGHT) throw Object.assign(new Error("game_moments_busy"), { code: "game_moments_busy" });
-    const work = this._process(userId, game, payload, [...new Set(tokens)]).finally(() => { if (this.inflight.get(key) === work) this.inflight.delete(key); });
+    const work = (options.created ? this._process(userId, game, payload, [...new Set(tokens)]) : this._resumeBell(userId, game.gameId))
+      .finally(() => { if (this.inflight.get(key) === work) this.inflight.delete(key); });
     this.inflight.set(key, work); return work;
   }
   /** @param {string} userId @param {Document} input @param {Document|null} payload @param {string[]} tokens */
   async _process(userId, input, payload, tokens) {
-    const [overlayPrefs, personalPrefs] = await Promise.all([
+    const [overlay, personal] = await Promise.allSettled([
       payload && tokens.length ? this.deps.users.getPreferences(userId, "multichat") : null,
       this.deps.notifications ? this.deps.users.getPreferences(userId, NOTIFICATIONS_PREF_TYPE) : null,
     ]);
-    const bellEnabled = sanitizeNotificationPrefs(personalPrefs).milestones;
+    if (overlay.status === "rejected") this.deps.logger?.warn({ err: overlay.reason }, "moment_overlay_preferences_failed");
+    if (personal.status === "rejected") this.deps.logger?.warn({ err: personal.reason }, "moment_bell_preferences_failed");
+    const overlayPrefs = overlay.status === "fulfilled" ? overlay.value : null;
+    // The durable notification writer checks current opt-in and mute even if this preliminary read failed.
+    const bellEnabled = personal.status === "rejected" || sanitizeNotificationPrefs(personal.value).milestones;
     if (!overlayPrefs && !bellEnabled) return [];
     const alerts = /** @type {{gameMoments?: unknown}|undefined} */ (overlayPrefs?.alerts);
     const config = sanitizeGameMomentAlerts(alerts?.gameMoments);
@@ -88,6 +93,7 @@ class GameMomentsService {
     const moments = deriveGameMoments({ game, history: rows.slice(0, MAX_HISTORY), historyTruncated: rows.length > MAX_HISTORY,
       season, pulseRank: payload?.rank, approvedChannel: Boolean(channels.twitch || channels.youtube), mmrStep: config.mmrStep });
     const rank = rankReceipt(game, payload, season);
+    /** @type {Receipt} */
     const receipt = { version: 1, claimedAt: new Date(this.now()), kinds: moments.map(moment => moment.kind), ...(rank ? { rank } : {}) };
     return { game, moments, receipt };
   }
@@ -103,9 +109,11 @@ class GameMomentsService {
       });
       return claimed ? overlayMoments : [];
     }
+    const pendingBell = moments.filter(moment => Object.hasOwn(BELL_KINDS, moment.kind));
+    if (pendingBell.length) receipt.pendingBell = pendingBell;
     if (!await this._claim(userId, game, receipt)) return [];
     const deliveries = await Promise.allSettled([
-      this._deliverBell(userId, game, moments),
+      this._deliverBell(userId, game.gameId, receipt),
       payload && overlayMoments.length ? this._deliverOverlay(userId, game, payload, tokens, overlayMoments, config.botPost) : null,
     ]);
     for (const delivery of deliveries) if (delivery.status === "rejected") throw delivery.reason;
@@ -140,17 +148,47 @@ class GameMomentsService {
       }
     }
   }
-  /** @param {string} userId @param {Document} game @param {Moment[]} moments */
-  async _deliverBell(userId, game, moments) {
-    const href = `/app/game/${encodeURIComponent(game.gameId)}`;
-    for (const moment of moments) {
-      if (!Object.hasOwn(BELL_KINDS, moment.kind)) continue;
-      await deliverNotification(this.deps.notifications, userId, {
-        kind: BELL_KINDS[moment.kind], title: moment.headline, body: moment.detail,
-        href: href.length <= 300 ? href : "/app/replays",
-        eventKey: `${game.gameId}:${moment.kind}`,
-      }, this.deps.logger);
+  /** Reuploads may only finish a previously claimed bell delivery. @param {string} userId @param {string} gameId @returns {Promise<Moment[]>} */
+  async _resumeBell(userId, gameId) {
+    const filter = { userId, gameId, ...STATS_GAME_MATCH,
+      isResumedFromReplay: { $ne: true }, playerCount: 2, isLadderGame: { $ne: false }, "_gameMoments.pendingBell": { $exists: true },
+    };
+    if (!await this.db.games.findOne(filter, { projection: { _id: 1 }, maxTimeMS: 1500 })) return [];
+    const lease = await claimUserDataLease(this.db.users, userId);
+    try {
+      // Visibility may have changed before the write lease was acquired.
+      const game = await this.db.games.findOne(filter, { projection: { date: 1, gameId: 1, _gameMoments: 1 }, maxTimeMS: 1500 });
+      if (!game || !fresh(game, this.now())) return [];
+      await lease.assert();
+      await this._deliverBell(userId, gameId, game._gameMoments);
+      return [];
+    } finally { await lease.release(); }
+  }
+  /** @param {string} userId @param {string} gameId @param {Receipt} receipt */
+  async _deliverBell(userId, gameId, receipt) {
+    const notifications = this.deps.notifications;
+    if (!notifications || !receipt.pendingBell?.length) return;
+    const href = `/app/game/${encodeURIComponent(gameId)}`;
+    let pending = false;
+    for (const moment of receipt.pendingBell) {
+      const input = { kind: BELL_KINDS[moment.kind], title: moment.headline, body: moment.detail,
+        href: href.length <= 300 ? href : "/app/replays", eventKey: `${gameId}:${moment.kind}` };
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          await notifications.notify(userId, input);
+          break;
+        } catch (err) {
+          if (attempt === 1) {
+            pending = true;
+            this.deps.logger?.warn({ err }, "moment_bell_delivery_pending");
+          }
+        }
+      }
     }
+    if (pending) return;
+    // A retry after an uncertain write uses the same unique event key; the overlay receipt stays claimed.
+    await this.db.games.updateOne({ userId, gameId, "_gameMoments.claimedAt": receipt.claimedAt },
+      { $unset: { "_gameMoments.pendingBell": "" } });
   }
   /** Runs inside exact token admission; use the admitted clip writer to avoid
    * reopening admission after rotation has started draining the held write.

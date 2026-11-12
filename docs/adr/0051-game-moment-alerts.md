@@ -2,9 +2,10 @@
 
 Status: Accepted
 
-Moment alerts run once after a newly inserted, freshly ended competitive game
-reaches post-ingest processing. Historical imports, resumed
-replays, hidden/deleted rows and repeat ingestions do not produce alerts. A
+Moment computation runs once for each newly inserted, freshly ended competitive
+game. A batch sends the latest fresh game to the overlay and can send a private
+bell milestone for each qualifying replay. Historical imports, resumed replays,
+hidden or deleted rows, and repeat ingestions cannot create a moment receipt. A
 conditional receipt on the existing owner/game row deduplicates processing;
 no new collection, index, background poll or upstream provider call is added.
 An owner mutation lease protects the receipt and delivery from erasure and
@@ -44,3 +45,7 @@ Pulse league changes and approved streamer-opponent wins use stream delivery.
 Giant-killer copy rounds the replay rating gap to the nearest 100 MMR.
 The bell respects per-kind mutes and uses the existing per-recipient delivery
 key with the game ID and moment kind. It uses the bell only.
+The receipt stores pending bell items before delivery. A failed write gets one
+immediate retry. A fresh, accepted reupload can finish pending bell delivery
+under the same event keys, with current preferences and without replaying the
+overlay.

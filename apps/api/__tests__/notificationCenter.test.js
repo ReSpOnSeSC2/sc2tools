@@ -84,7 +84,7 @@ describe("always-on notification center and support loop", () => {
     expect(await h.db.notifications.countDocuments({ userId })).toBe(1);
   });
 
-  test("fresh replay ingest supplies the milestone bell without a browser-source token", async () => {
+  test("a fresh replay batch supplies every eligible bell milestone without a browser-source token", async () => {
     const userId = h.userId("ann");
     await as("ann", request(h.app).put("/v1/me/preferences/notifications")).send({ milestones: true }).expect(200);
     const moments = h.services.gameMoments;
@@ -95,19 +95,28 @@ describe("always-on notification center and support loop", () => {
       pending.push(work);
       return work;
     });
-    const upload = game => as("ann", request(h.app).post("/v1/games")).send({ games: [game] }).expect(202);
+    const upload = (...games) => as("ann", request(h.app).post("/v1/games")).send({ games }).expect(202);
+    const waitForCalls = async count => {
+      for (let wait = 0; pending.length < count && wait < 100; wait++) await new Promise(resolve => setTimeout(resolve, 10));
+      expect(pending).toHaveLength(count);
+      await Promise.all(pending);
+    };
     const fresh = sampleGame(1, { date: new Date().toISOString(), durationSec: 1_500, playerCount: 2 });
     const historical = sampleGame(2, { date: new Date(Date.now() - 30 * 60_000).toISOString(), durationSec: 1_500, playerCount: 2 });
+    const earlier = sampleGame(3, { date: new Date(Date.now() - 60_000).toISOString(), durationSec: 1_500, playerCount: 2 });
+    const resumed = sampleGame(4, { date: new Date().toISOString(), durationSec: 1_500, playerCount: 2, isResumedFromReplay: true });
     try {
-      await upload(historical);
-      expect(trigger).not.toHaveBeenCalled();
+      await upload(earlier, resumed, fresh, historical);
+      await waitForCalls(2);
+      expect(trigger.mock.calls.map(([, game, , , options]) => [game.gameId, options.created]))
+        .toEqual([[fresh.gameId, true], [earlier.gameId, true]]);
       await upload(fresh);
-      expect(trigger).toHaveBeenCalledTimes(1);
-      await Promise.all(pending);
-      await upload(fresh);
-      expect(trigger).toHaveBeenCalledTimes(1);
+      await waitForCalls(3);
+      expect(trigger.mock.calls[2][4]).toEqual({ created: false });
       const rows = await h.db.notifications.find({ userId }).toArray();
-      expect(rows).toEqual([expect.objectContaining({ kind: "moment.marathon_win", href: `/app/game/${encodeURIComponent(fresh.gameId)}` })]);
+      expect(rows).toHaveLength(2);
+      expect(rows).toEqual(expect.arrayContaining([fresh, earlier].map(game =>
+        expect.objectContaining({ kind: "moment.marathon_win", href: `/app/game/${encodeURIComponent(game.gameId)}` }))));
     } finally {
       trigger.mockRestore();
     }

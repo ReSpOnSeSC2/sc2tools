@@ -32,6 +32,8 @@ Private `moment.*` rows appear under **Milestones**. Each links to the owner's
 game and uses `gameId:kind` as its event key. Delivery requires a newly inserted,
 fresh competitive game, an owner/game receipt and current opt-in. The bell
 stores a separate row for each qualifying milestone and skips muted kinds.
+An interrupted write remains pending on the private game receipt and can finish
+on a fresh reupload. The event key deduplicates retries.
 The shared socket room gets a generic refresh ping. Only the authenticated
 inbox response includes the milestone kind and details.
 

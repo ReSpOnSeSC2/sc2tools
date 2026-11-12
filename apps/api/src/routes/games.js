@@ -573,7 +573,9 @@ function buildGamesRouter(deps) {
        *   },
        * }>} */
       const accepted = [];
+      /** @type {Array<{gameId:string,created:boolean}>} */
       const competitiveAccepted = [];
+      /** @type {ReturnType<typeof compactGameForRealtime>[]} */
       const competitiveIncoming = [];
       /** @type {Array<{
        *   gameId: string,
@@ -1111,8 +1113,9 @@ function buildGamesRouter(deps) {
       // game of the batch (not the last array element) so a real
       // game finishing mid-backfill still reaches the stream.
       const canBroadcastOverlay = deps.io && deps.overlayLive && deps.overlayTokens;
+      let liveDelivery = Promise.resolve();
       if (freshGame && (deps.gameMoments || canBroadcastOverlay)) {
-        emitOverlayLive(
+        liveDelivery = emitOverlayLive(
           deps.io,
           deps.overlayLive,
           deps.overlayTokens,
@@ -1126,6 +1129,13 @@ function buildGamesRouter(deps) {
         });
       } else if (canBroadcastOverlay && accepted.length > 0) {
         req.log?.debug({ userId, accepted: accepted.length }, "overlay_live_skipped_stale_batch");
+      }
+      const gameMoments = deps.gameMoments;
+      if (gameMoments && competitiveAccepted.length) {
+        const log = req.log;
+        void liveDelivery.then(() => deliverRemainingGameMoments(
+          gameMoments, userId, competitiveIncoming, competitiveAccepted, freshGame?.gameId, log,
+        )).catch(err => log?.warn({ err }, "game_moments_batch_failed"));
       }
       if (deps.io && deps.overlayLive && deps.overlayTokens && accepted.length > 0) {
         // Invalidate the pre-game scouting cache for every opponent
@@ -1436,6 +1446,25 @@ function pickFreshOverlayGame(incoming, accepted) {
   if (!best) return null;
   if (Date.now() - bestTime > OVERLAY_LIVE_FRESHNESS_MS) return null;
   return best;
+}
+
+/** Deliver the remaining bell work serially within the validated replay batch.
+ * @param {import('../services/gameMoments').GameMomentsService} moments @param {string} userId
+ * @param {Array<Record<string, any>>} incoming @param {Array<{gameId:string,created:boolean}>} accepted
+ * @param {string|undefined} overlayGameId @param {import('pino').Logger|undefined} log */
+async function deliverRemainingGameMoments(moments, userId, incoming, accepted, overlayGameId, log) {
+  const outcomes = new Map();
+  for (const { gameId, created } of accepted) outcomes.set(gameId, created || outcomes.get(gameId) === true);
+  outcomes.delete(overlayGameId);
+  const now = Date.now();
+  for (const game of incoming) {
+    const created = outcomes.get(game.gameId);
+    const playedAt = Date.parse(game.date);
+    if (created === undefined || !Number.isFinite(playedAt) || playedAt > now + 30_000 || now - playedAt > OVERLAY_LIVE_FRESHNESS_MS) continue;
+    outcomes.delete(game.gameId);
+    try { await moments.process(userId, game, null, [], { created }); }
+    catch (err) { log?.warn({ err }, "game_moments_delivery_failed"); }
+  }
 }
 
 /**

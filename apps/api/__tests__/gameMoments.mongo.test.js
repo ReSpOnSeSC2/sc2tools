@@ -13,7 +13,11 @@ const game = (/** @type {Record<string,any>} */ patch = {}) => ({ userId: OWNER,
 /** @type {MongoMemoryServer} */ let mongo;
 /** @type {MongoClient} */ let client;
 /** @type {import('mongodb').Db} */ let db;
-beforeAll(async () => { mongo = await MongoMemoryServer.create(); client = await MongoClient.connect(mongo.getUri()); db = client.db("moment_alerts_test"); });
+beforeAll(async () => {
+  mongo = await MongoMemoryServer.create(); client = await MongoClient.connect(mongo.getUri()); db = client.db("moment_alerts_test");
+  await db.collection("notifications").createIndex({ userId: 1, deliveryKeys: 1 },
+    { unique: true, partialFilterExpression: { deliveryKeys: { $type: "array" } } });
+});
 afterAll(async () => { await client?.close(); await mongo?.stop(); });
 beforeEach(async () => { await Promise.all(["games", "users", "clips", "notifications"].map(name => db.collection(name).deleteMany({}))); await db.collection("users").insertOne({ userId: OWNER }); });
 afterEach(() => jest.restoreAllMocks());
@@ -162,6 +166,75 @@ describe("private milestone sink", () => {
     expect(value.events).toEqual([]);
     expect(await db.collection("clips").countDocuments()).toBe(0);
     expect(await db.collection("notifications").countDocuments({ userId: OWNER, kind: "moment.marathon_win" })).toBe(1);
+  });
+
+  test.each(["multichat", "notifications"])("a failed %s settings read leaves the other sink live", async type => {
+    await db.collection("games").insertOne(game());
+    await optIn();
+    const value = fixture(true);
+    const read = value.deps.users.getPreferences.getMockImplementation();
+    value.deps.users.getPreferences.mockImplementation(async (userId, preference) => {
+      if (preference === type) throw new Error("settings read interrupted");
+      return read?.(userId, preference);
+    });
+    await run(value.service);
+    expect(value.events).toHaveLength(type === "multichat" ? 0 : 2);
+    expect(await db.collection("notifications").countDocuments({ userId: OWNER })).toBe(1);
+  });
+
+  test("a failed bell write survives restart and concurrent reuploads finish it without repeating the overlay", async () => {
+    await db.collection("games").insertOne(game());
+    await optIn();
+    const initial = fixture(true);
+    const failedInsert = jest.spyOn(initial.notifications.db.notifications, "insertOne")
+      .mockRejectedValue(new Error("write interrupted"));
+    await run(initial.service);
+    expect(failedInsert).toHaveBeenCalledTimes(2);
+    expect(initial.events).toHaveLength(2);
+    expect(await db.collection("notifications").countDocuments()).toBe(0);
+    expect((await db.collection("games").findOne({ gameId: "current" }))?._gameMoments.pendingBell)
+      .toEqual([expect.objectContaining({ kind: "marathonWin" })]);
+
+    const restarted = [fixture(true), fixture(true)];
+    const scans = restarted.map(value => jest.spyOn(value.service.db.games, "find"));
+    // Both workers must reach the insert after the delivery-key precheck.
+    let reachedInsert = 0;
+    /** @type {()=>void} */ let release = () => {};
+    const bothWriting = new Promise(resolve => { release = () => resolve(undefined); });
+    for (const value of restarted) {
+      const collection = value.notifications.db.notifications;
+      const insert = collection.insertOne.bind(collection);
+      jest.spyOn(collection, "insertOne").mockImplementation(async (...args) => {
+        if (++reachedInsert === 2) release();
+        await bothWriting;
+        return insert(...args);
+      });
+    }
+    await Promise.all(restarted.map(value => value.service.process(OWNER, game(), { gameKey: "already-played" }, ["one"], { created: false })));
+    expect(reachedInsert).toBe(2);
+    expect(await db.collection("notifications").countDocuments({ userId: OWNER })).toBe(1);
+    expect(await db.collection("clips").countDocuments()).toBe(2);
+    expect(restarted.flatMap(value => value.events)).toEqual([]);
+    const pendingOnly = expect.objectContaining({ userId: OWNER, gameId: "current", "_gameMoments.pendingBell": { $exists: true } });
+    for (const scan of scans) expect(scan.mock.calls.map(([filter]) => filter)).toEqual([pendingOnly, pendingOnly]);
+    expect((await db.collection("games").findOne({ gameId: "current" }))?._gameMoments.pendingBell).toBeUndefined();
+  });
+
+  test("a visibility change before the retry lease prevents a pending bell write", async () => {
+    await db.collection("games").insertOne(game({ _gameMoments: { version: 1, claimedAt: new Date(NOW),
+      kinds: ["marathonWin"], pendingBell: [{ kind: "marathonWin", headline: "Marathon win", detail: "Victory after 25 minutes." }],
+    } }));
+    await optIn();
+    const value = fixture(true);
+    const collection = value.service.db.games;
+    const find = collection.findOne.bind(collection);
+    jest.spyOn(collection, "findOne").mockImplementationOnce(async () => {
+      const row = await find({ userId: OWNER, gameId: "current" });
+      await collection.updateOne({ userId: OWNER, gameId: "current" }, { $set: { excluded: true } });
+      return row;
+    });
+    await value.service.process(OWNER, game(), null, [], { created: false });
+    expect(await db.collection("notifications").countDocuments()).toBe(0);
   });
 });
 
