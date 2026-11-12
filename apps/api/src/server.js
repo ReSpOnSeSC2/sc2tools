@@ -163,6 +163,7 @@ async function main() {
     isOverlayTokenReplaced: (token) => services.overlayTokens.isReplaced(token),
     validateOverlayToken: (userId, token) =>
       services.overlayTokens.tokenBelongsToUser(userId, token),
+    resolveOwnedOverlayProfile: (userId, token) => services.overlayTokens.readOwnedProfile(userId, token),
     resolveDeviceToken: (tokenHash) =>
       /** @type {any} */ (services).pairings.findTokenByHash(tokenHash),
     // Same Clerk → internal userId map the REST middleware uses, so a

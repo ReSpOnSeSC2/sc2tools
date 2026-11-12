@@ -21,6 +21,25 @@ const ROLL_REPORTS_PER_WINDOW = 10;
 const ROLL_REPORT_WINDOW_MS = 60_000;
 
 /**
+ * @typedef {{
+ *   resolveOverlayToken?: (token: string) => Promise<{userId: string, label: string, enabledWidgets?: string[], profile?: unknown, profileRevision?: number} | null>,
+ *   validateOverlayToken?: (userId: string, token: string) => Promise<boolean>,
+ *   resolveOwnedOverlayProfile?: (userId: string, token: string) => Promise<{profile: unknown, profileRevision: number} | null>,
+ * }} OverlayTokenResolvers
+ */
+
+/** @param {OverlayTokenResolvers} opts @param {string} userId @param {string | undefined} token
+ * @returns {Promise<{profile?: unknown, profileRevision?: number} | null>} */
+async function resolveResyncConfig(opts, userId, token) {
+  if (!token) return null;
+  if (opts.resolveOwnedOverlayProfile) return opts.resolveOwnedOverlayProfile(userId, token);
+  if (opts.validateOverlayToken) return await opts.validateOverlayToken(userId, token) ? {} : null;
+  const current = await opts.resolveOverlayToken?.(token);
+  if (current?.userId !== userId) return null;
+  return current.profile ? { profile: current.profile, profileRevision: current.profileRevision ?? 0 } : {};
+}
+
+/**
  * Authenticate Socket.io connections. Three flavours of caller:
  *
  *  - **Web app** sends `auth.token = <Clerk JWT>` and joins the
@@ -40,7 +59,7 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *
  * **Overlay events emitted by this module:**
  *
- *   * ``overlay:config`` — per-token enabled-widgets + voice prefs
+ *   * ``overlay:config`` — per-token profile, enabled widgets and voice prefs
  *     (one-shot on connect / resync).
  *   * ``overlay:session`` — today's W-L aggregate (one-shot on
  *     connect / set_timezone / resync).
@@ -80,13 +99,11 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *     (which validates everything) at most 10 times a minute per socket.
  *
  * @param {import('socket.io').Server} io
- * @param {{
+ * @param {OverlayTokenResolvers & {
  *   secretKey: string,
  *   issuer?: string,
  *   audience?: string,
- *   resolveOverlayToken?: (token: string) => Promise<{userId: string, label: string, enabledWidgets?: string[],profile?:unknown,profileRevision?:number}|null>,
  *   isOverlayTokenReplaced?: (token:string) => Promise<boolean>,
- *   validateOverlayToken?: (userId: string, token: string) => Promise<boolean>,
  *   resolveDeviceToken?: (tokenHash: string) => Promise<{userId: string, deviceId?: string}|null>,
  *   resolveSession?: (userId: string, timezone?: string) => Promise<{
  *     wins: number, losses: number, games: number,
@@ -364,20 +381,15 @@ function attachSocketAuth(io, opts) {
         // one (rather than its short-lived resolve cache), and fail closed on
         // lookup errors. The revoke route also disconnects the room promptly;
         // this check protects cross-process sockets and disconnect races.
-        let stillValid = false;
+        let config;
         try {
-          if (t && opts.validateOverlayToken) {
-            stillValid = await opts.validateOverlayToken(userId, t);
-          } else if (t && opts.resolveOverlayToken) {
-            const current = await opts.resolveOverlayToken(t);
-            stillValid = current?.userId === userId;
-          }
+          config = await resolveResyncConfig(opts, userId, t);
         } catch {
           // Do not replay private state while token validity is unknown. Keep
           // the socket connected so a transient database issue can recover.
           return;
         }
-        if (!stillValid) {
+        if (!config) {
           try {
             socket.disconnect(true);
           } catch {
@@ -386,6 +398,7 @@ function attachSocketAuth(io, opts) {
           return;
         }
         if (socket.connected === false) return;
+        if (config.profile) socket.emit("overlay:config", config);
         if (opts.resolveGhostPrefs) {
           try {
             const ghost = await opts.resolveGhostPrefs(userId);

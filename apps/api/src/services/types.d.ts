@@ -890,6 +890,7 @@ export interface OverlayTokensService {
   setEnabledWidgets(userId: string, token: string, enabled: unknown, expectedEnabled?: unknown): Promise<{ enabledWidgets: string[] }>;
   setProfile(userId: string, token: string, profile: unknown, expectedRevision: unknown): Promise<{ profile: { v: 1; theme: Record<string, unknown>; widgetOptions: Record<string, { durationSec: number | null }>; credit?: boolean; ghostVoice?: boolean }; profileRevision: number }>;
   tokenBelongsToUser(userId: string, token: string): Promise<boolean>;
+  readOwnedProfile(userId: string, token: string): ReturnType<import("./overlayTokens").OverlayTokensService["readOwnedProfile"]>;
 }
 
 export interface AggregationsService {

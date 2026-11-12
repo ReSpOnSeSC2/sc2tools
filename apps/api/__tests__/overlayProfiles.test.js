@@ -79,6 +79,22 @@ describe("owned live overlay profiles", () => {
     expect(await service.resolve("other-synthetic-token")).toMatchObject({ profile: profile(), profileRevision: 0 });
     expect(await collection.findOne({ token: "other-synthetic-token" })).not.toHaveProperty("profile");
   });
+
+  test("resync reads the current owned profile despite a stale token cache", async () => {
+    const token = "synthetic-token";
+    await expect(service.resolve(token)).resolves.toMatchObject({ profile: profile(), profileRevision: 0 });
+    const remote = new OverlayTokensService({ overlayTokens: collection });
+    const hidden = profile({ credit: false });
+    await remote.setProfile("owner", token, hidden, 0);
+
+    await expect(service.resolve(token)).resolves.toMatchObject({ profile: profile(), profileRevision: 0 });
+    await expect(service.readOwnedProfile("owner", token)).resolves.toEqual({ profile: hidden, profileRevision: 1 });
+    await expect(service.readOwnedProfile("other-owner", token)).resolves.toBeNull();
+    await collection.updateOne({ token }, { $set: { _rotationPending: true } });
+    await expect(service.readOwnedProfile("owner", token)).resolves.toBeNull();
+    await collection.updateOne({ token }, { $set: { revokedAt: new Date() }, $unset: { _rotationPending: "" } });
+    await expect(service.readOwnedProfile("owner", token)).resolves.toBeNull();
+  });
   test("prototype keys and nonfinite values fail the direct validator too", () => {
     expect(() => validateOverlayProfile(JSON.parse('{"v":1,"theme":{"__proto__":{}},"widgetOptions":{}}'))).toThrow();
     for (const opacity of [Infinity, -Infinity, NaN]) expect(() => validateOverlayProfile(profile({ theme: { opacity } }))).toThrow();
