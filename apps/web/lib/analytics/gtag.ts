@@ -34,6 +34,7 @@ import {
 } from "./internalTraffic";
 import {
   analyticsPageLocation,
+  analyticsPageTitle,
   analyticsReferrer,
   isUntrackedPath,
 } from "./pageLocation";
@@ -76,12 +77,13 @@ function withTrafficType(
 
 /**
  * The page state gtag.js applies to every event that does not state its
- * own: the normalized location and, when there is one, the normalized
- * referrer. Defaults to the browser's current address.
+ * own: the normalized location, fixed title and any normalized referrer.
+ * Defaults to the browser's current address.
  *
  * Example (on /app/game/abc?tab=macro, opened from an opponent's page):
  *   analyticsPageState();
  *   // -> { page_location: ".../app/game/:gameId",
+ *   //      page_title: "/app/game/:gameId",
  *   //      page_referrer: ".../app/opponents/:pulseId" }
  */
 export function analyticsPageState(
@@ -91,6 +93,7 @@ export function analyticsPageState(
   const origin = window.location.origin;
   const state: Record<string, string> = {
     page_location: analyticsPageLocation(origin, pathname, search),
+    page_title: analyticsPageTitle(pathname),
   };
   const referrer = analyticsReferrer(document.referrer, origin);
   if (referrer) state.page_referrer = referrer;
@@ -147,7 +150,7 @@ export function pageview(pathname: string, search = ""): void {
 /**
  * Record an arbitrary custom event from the page the visitor is on.
  *
- * The event states its own normalized location instead of leaning on
+ * The event states its own normalized location and fixed title instead of leaning on
  * gtag's page state: a component can fire one while a navigation is
  * still settling, before the new page's state is in place. A caller
  * cannot override it, and nothing is sent from an untracked surface.
@@ -169,6 +172,7 @@ export function gaEvent(
     withTrafficType({
       ...params,
       page_location: analyticsPageLocation(origin, pathname, search),
+      page_title: analyticsPageTitle(pathname),
     }),
   );
 }
