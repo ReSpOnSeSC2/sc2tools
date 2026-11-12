@@ -7,7 +7,7 @@ export type PersonalShareCard = {
   subtitle: string;
   stats: readonly ShareStat[];
 } & (
-  { kind: Extract<SharedCardKind, "fingerprint" | "session_report">; path?: never }
+  { kind: Extract<SharedCardKind, "fingerprint" | "session_report" | "milestone">; path?: never }
   | { kind: "practice_grade"; path: `/b/${string}` }
 );
 

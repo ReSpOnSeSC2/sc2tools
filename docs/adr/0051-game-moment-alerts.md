@@ -50,6 +50,14 @@ immediate retry. A fresh, accepted reupload can finish pending bell delivery
 under the same event keys, with current preferences and without replaying the
 overlay.
 
+The full inbox can share eligible milestones as images through the existing
+card delivery controls. The browser matches the stored kind and exact safe
+headline, including the recorded rating's 100 or 250 MMR mark. The card
+carries that headline, fixed context and the site homepage. Body copy, replay
+links, identifiers and timestamps stay in the inbox. Successful shares report
+only the milestone card kind, delivery method and normalized page state as
+specified in ADR 0075.
+
 The desktop Agent has a separate opt-in for showing the newest unread
 milestone of a freshly synced game. It reads the private bell with the device
 credential, gives sequential bell writes a short settling interval, and holds

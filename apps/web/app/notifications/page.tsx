@@ -10,13 +10,25 @@ import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { PersonalCardShareButton } from "@/components/ui/PersonalCardShareButton";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { NotificationItem } from "@/components/notifications/NotificationItem";
-import { CATEGORY_LABELS, NOTIFICATION_CATEGORIES, notificationCategoryName, notificationFocus, type NotificationCategory, type NotificationPage } from "@/components/notifications/notificationModel";
+import { CATEGORY_LABELS, NOTIFICATION_CATEGORIES, notificationCategoryName, notificationFocus, type NotificationCategory, type NotificationPage, type NotificationRow } from "@/components/notifications/notificationModel";
+import { milestoneShareCard } from "@/lib/milestoneShareCard";
 
 export default function NotificationsPage() {
   const { userId } = useAuth();
   return <NotificationsCenter key={userId || "signed-out"} />;
+}
+
+function InboxNotification({ row, onOpen }: { row: NotificationRow; onOpen: () => void }) {
+  const card = milestoneShareCard(row);
+  return <>
+    <NotificationItem row={row} isNew={!row.readAt} onOpen={onOpen} />
+    {card ? <div className="px-2.5 pb-2.5">
+      <PersonalCardShareButton card={card} label={`Share ${card.title}`} />
+    </div> : null}
+  </>;
 }
 
 function NotificationsCenter() {
@@ -58,7 +70,7 @@ function NotificationsCenter() {
     {writeError ? <RequestError error={writeError} onRetry={() => retryWrite.current()} /> : null}
     {unread.error ? <RequestError title="Unread count unavailable" error={unread.error} onRetry={() => unread.mutate()} /> : null}
     {list.error ? <RequestError error={list.error} onRetry={() => list.mutate()} /> : list.isLoading && !list.data ? <Skeleton rows={4} /> : !list.data?.items.length ? <EmptyStatePanel title={`No ${unreadOnly ? "unread " : ""}${category === "all" ? "" : notificationCategoryName(category) + " "}notifications`} description="New activity will appear here. You can choose which updates you receive in Settings → Preferences." action={<Link className={`inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-accent-cyan ${notificationFocus}`} href="/settings?tab=preferences#notifications">Notification settings</Link>} />
-      : <Card><ul className="space-y-2">{list.data.items.map((row) => <li key={row.id}><NotificationItem row={row} isNew={!row.readAt} onOpen={() => void markOne(row.id)} /></li>)}</ul></Card>}
+      : <Card><ul className="space-y-2">{list.data.items.map((row) => <li key={row.id}><InboxNotification row={row} onOpen={() => void markOne(row.id)} /></li>)}</ul></Card>}
     <nav aria-label="Notification pages" className="flex items-center justify-between gap-3">
       <Button variant="secondary" disabled={cursors.length <= 1 || list.isValidating} onClick={() => setCursors((current) => current.slice(0, -1))}>Previous</Button>
       <span className="text-caption text-text-muted">Page {cursors.length}</span>

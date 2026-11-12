@@ -4823,6 +4823,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Instant Analysis describes playstyle from your own ranked replay selection. Share a completed Commander ID as an optional label on your local report card.
 
+### Milestone share cards
+
+- Share a ladder milestone from Notifications as an image of its headline. Replay links and notification details stay private.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:
