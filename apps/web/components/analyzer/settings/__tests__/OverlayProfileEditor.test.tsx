@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { OverlayProfileEditor } from "../OverlayProfileEditor";
+import { OverlayScenesSection } from "../OverlayScenesSection";
 import { OverlayThemeSection } from "../OverlayThemeSection";
 import { OverlayWidgetDisplay } from "../OverlayWidgetDisplay";
 import { SettingsContextProvider } from "../SettingsContext";
@@ -12,9 +13,10 @@ vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
 const token = (over: Partial<OverlayToken> = {}): OverlayToken => ({ token: "synthetic-token", label: "Main", createdAt: "2026-10-25", ...over });
 const saved = vi.fn(), dirties = vi.fn();
 const placement = { anchor: "top", xPct: 35, yPct: 20, scale: 1, zIndex: 2 } as const;
-function Fixture({ value = token() }: { value?: OverlayToken }) {
+function Fixture({ value = token(), showScenes = false }: { value?: OverlayToken; showScenes?: boolean }) {
   return <SettingsContextProvider onDirtyChange={dirties}><OverlayProfileEditor key={`${auth.userId}:${value.token}`} token={value} onSaved={saved}>{({ profile, setTheme, setDuration, setLayout, saving }) => <>
     <OverlayThemeSection theme={profile.theme} onChange={setTheme} />
+    {showScenes ? <OverlayScenesSection token={value.token} theme={profile.theme} /> : null}
     <OverlayWidgetDisplay id="scouting" name="Scouting" durationSec={profile.widgetOptions.scouting?.durationSec} onChange={seconds => setDuration("scouting", seconds)} disabled={saving} />
     <OverlayWidgetDisplay id="session" name="Session" onChange={seconds => setDuration("session", seconds)} disabled={saving} />
     <button onClick={() => {
@@ -96,6 +98,26 @@ describe("saved overlay display draft", () => {
     }));
     expect(toggle.getAttribute("aria-checked")).toBe("false");
     expect(source.textContent).toBe("https://studio.example/overlay/synthetic-token");
+  });
+  it("recovers a failed QR save and keeps the saved flag when an existing draft is saved", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 503 }));
+    render(<Fixture value={token({ profileRevision: 3 })} showScenes />);
+    changeDuration("45");
+    const toggle = screen.getByRole("switch", { name: "Show a QR code on Starting Soon and BRB" });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(toggle);
+    await screen.findByText(/Couldn't save that change/);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(toggle);
+    await waitFor(() => expect(saved).toHaveBeenCalledWith({
+      profile: { v: 1, theme: {}, widgetOptions: {}, creditQr: true },
+      profileRevision: 4,
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Save overlay display" }));
+    await waitFor(() => expect(saved).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body as string)).toEqual({
+      expectedRevision: 4, profile: { v: 1, theme: {}, widgetOptions: { scouting: { durationSec: 45 } }, creditQr: true },
+    });
   });
   it("keeps a stale draft on CAS conflict without overwriting a different tab's profile", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: { code: "overlay_profile_changed", message: "Changed" } }), { status: 409 }));

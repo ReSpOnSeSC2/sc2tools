@@ -4827,6 +4827,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Share a ladder milestone from Notifications as an image of its headline. Replay links and notification details stay private.
 
+### Overlay scene QR credit
+
+- Add a sc2tools.com QR code to the credit on Starting Soon and BRB from Settings → Overlay → Full-screen scenes. The option starts off and existing Browser Source URLs keep working.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

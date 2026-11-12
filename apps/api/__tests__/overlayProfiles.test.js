@@ -125,3 +125,23 @@ describe("owned live overlay profiles", () => {
     jest.restoreAllMocks();
   });
 });
+
+describe("owned overlay credit QR", () => {
+  test.each(["1", null])("rejects non-boolean credit QR %j before persisting or broadcasting", async creditQr => {
+    await put({ profile: profile({ creditQr }), expectedRevision: 0 }).expect(400);
+    expect(await collection.findOne({ token: "synthetic-token" })).not.toHaveProperty("profile");
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  test("saves QR independently of credit and preserves both choices in owned reads", async () => {
+    const enabled = profile({ credit: false, creditQr: true });
+    await put({ profile: enabled, expectedRevision: 0 }, "other-owner").expect(404);
+    await put({ profile: enabled, expectedRevision: 0 }).expect(200, { profile: enabled, profileRevision: 1 });
+    const disabled = { ...enabled, creditQr: false };
+    await put({ profile: disabled, expectedRevision: 0 }).expect(409);
+    expect(await service.readOwnedProfile("owner", "synthetic-token")).toEqual({ profile: enabled, profileRevision: 1 });
+    await put({ profile: disabled, expectedRevision: 1 }).expect(200, { profile: disabled, profileRevision: 2 });
+    expect(emit).toHaveBeenLastCalledWith("overlay:config", { profile: disabled, profileRevision: 2 });
+    expect(await service.resolve("synthetic-token")).toMatchObject({ profile: disabled, profileRevision: 2 });
+  });
+});

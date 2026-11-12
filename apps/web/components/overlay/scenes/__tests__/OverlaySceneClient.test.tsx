@@ -44,9 +44,10 @@ function fireSocket(event: string, ...args: unknown[]) {
   for (const [name, handler] of socket.on.mock.calls) if (name === event) handler(...args);
 }
 
-function receiveCreditProfile(profileRevision: number, credit?: boolean) {
+function receiveCreditProfile(profileRevision: number, credit?: boolean, creditQr?: unknown) {
   act(() => fireSocket("overlay:config", {
-    profile: { v: 1, theme: {}, widgetOptions: {}, ...(credit === undefined ? {} : { credit }) },
+    profile: { v: 1, theme: {}, widgetOptions: {}, ...(credit === undefined ? {} : { credit }),
+      ...(creditQr === undefined ? {} : { creditQr }) },
     profileRevision,
   }));
 }
@@ -373,6 +374,74 @@ describe("sc2tools.com credit", () => {
     receiveCreditProfile(1, true);
     expect(screen.queryByTestId("overlay-credit")).toBeNull();
   });
+});
+
+describe("credit QR", () => {
+  const qr = () => screen.queryByRole("img", { name: "QR code for sc2tools.com" });
+
+  it.each(["starting-soon", "brb"] as const)("is opt-in and follows fresh live profiles on %s", scene => {
+    render(<OverlaySceneClient token="synthetic-token" scene={scene} demoCreditQr />);
+    expect(qr()).toBeNull();
+    receiveCreditProfile(0);
+    expect(qr()).toBeNull();
+    receiveCreditProfile(1, true, "true");
+    expect(qr()).toBeNull();
+    receiveCreditProfile(2, true, true);
+    expect(qr()?.getAttribute("viewBox")).toBe("0 0 33 33");
+    expect(screen.getByTestId("overlay-credit").textContent).toBe("Overlay by sc2tools.com");
+    expect(qr()?.outerHTML).not.toContain("synthetic-token");
+    receiveCreditProfile(3, false, true);
+    expect(screen.queryByTestId("overlay-credit")).toBeNull();
+    receiveCreditProfile(4, true, true);
+    expect(qr()).toBeTruthy();
+    receiveCreditProfile(5, true, false);
+    receiveCreditProfile(4, true, true);
+    expect(qr()).toBeNull();
+  });
+
+  it.each(["intermission", "between-games", "manual", "frontier-cantina"] as const)(
+    "omits the QR from an ineligible %s demo",
+    scene => {
+      render(<OverlaySceneClient token="tok" scene={scene} demo demoCreditQr />);
+      expect(qr()).toBeNull();
+    },
+  );
+
+  it("keeps a legacy URL hidden on both live and disconnected QR scenes", () => {
+    const { rerender } = render(<OverlaySceneClient token="tok" scene="brb" showCredit={false} />);
+    receiveCreditProfile(1, true, true);
+    expect(qr()).toBeNull();
+    expect(screen.queryByTestId("overlay-credit")).toBeNull();
+    rerender(<OverlaySceneClient token="tok" scene="brb" demo demoCreditQr showCredit={false} />);
+    expect(qr()).toBeNull();
+    expect(screen.queryByTestId("overlay-credit")).toBeNull();
+  });
+
+  it("previews the QR on an eligible disconnected scene", () => {
+    render(<OverlaySceneClient token="tok" scene="starting-soon" demo demoCreditQr />);
+    expect(qr()).toBeTruthy();
+    expect(io).not.toHaveBeenCalled();
+  });
+
+  it("keeps text credit without QR when a named backdrop presents an ineligible Dock headline", async () => {
+    fetchSpy.mockResolvedValue({ ok: true, json: async () => ({ scene: { mode: "intermission", message: null, countdownEndsAt: null } }) });
+    render(<OverlaySceneClient token="tok" scene="starting-soon" />);
+    receiveCreditProfile(1, true, true);
+    await screen.findByText("INTERMISSION");
+    expect(screen.getByTestId("overlay-credit")).toBeTruthy();
+    expect(qr()).toBeNull();
+  });
+
+  it.each([["starting", true], ["brb", true], ["intermission", false], ["ending", false]] as const)(
+    "renders the manual cover QR only during eligible Dock modes (%s)",
+    async (mode, expected) => {
+      fetchSpy.mockResolvedValue({ ok: true, json: async () => ({ scene: { mode, message: null, countdownEndsAt: null } }) });
+      render(<OverlaySceneClient token="tok" scene="manual" />);
+      receiveCreditProfile(1, true, true);
+      await screen.findByTestId("overlay-credit");
+      expect(Boolean(qr())).toBe(expected);
+    },
+  );
 });
 
 

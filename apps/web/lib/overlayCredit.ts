@@ -1,7 +1,13 @@
 export const OVERLAY_CREDIT_PARAM = "credit";
+export const OVERLAY_CREDIT_QR_PARAM = "creditQr";
 
 /** The public text of the credit. */
 export const OVERLAY_CREDIT_TEXT = "Overlay by sc2tools.com";
+export const OVERLAY_CREDIT_URL = "https://sc2tools.com";
+
+export function isOverlayCreditQrScene(scene: string): boolean {
+  return scene === "starting-soon" || scene === "brb";
+}
 
 const HIDDEN_VALUES: ReadonlySet<string> = new Set(["0", "off", "false", "no", "hide", "hidden"]);
 
