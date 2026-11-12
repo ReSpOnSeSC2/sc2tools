@@ -1,5 +1,5 @@
 import { MAX_REPLAY_BYTES, isReplayFileName } from "@/lib/instant/fileIntake";
-import { sha256Hex } from "@/lib/instant/integrity";
+import { replayDigest } from "@/lib/instant/replayDigest";
 import { toonFromPath } from "@/lib/instant/toonPath";
 import type { EngineProgress, IntakeFile, ReplayHeaderEngineClient, ReplayHeaderResult } from "@/lib/instant/types";
 import { readCareerCache, saveCareerCache, type CachedHeader } from "./careerCache";
@@ -20,21 +20,13 @@ type ScanOptions = {
   onProgress: (progress: CareerProgress) => void;
 };
 
-async function digestFile(file: IntakeFile): Promise<string | null> {
-  try {
-    return await sha256Hex(await file.blob.arrayBuffer());
-  } catch {
-    return null;
-  }
-}
-
 async function prepareScan(files: IntakeFile[], rows: Map<string, CachedHeader> | undefined, { signal, onProgress }: ScanOptions): Promise<Job> {
   const seen = new Set(rows?.keys());
   const entries: Candidate[] = [];
   const missing: Candidate[] = [];
   for (const [index, file] of files.entries()) {
     signal.throwIfAborted();
-    const digest = await digestFile(file);
+    const digest = await replayDigest(file.blob);
     signal.throwIfAborted();
     const entry = { file, digest };
     entries.push(entry);

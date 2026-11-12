@@ -128,9 +128,11 @@ export async function parseScanned(
   report(deps, failed, finalized.failed);
   const result: RunOutcome = { parsed: finalized.parsed, failed, deferredCount };
   if (scanned.eligible.some(entry => entry.header)) {
-    const { commanderHeaderRows } = await import("./commanderEvidence");
+    const { commanderHeaderRows } = await import("./commanderHeaderEvidence");
     if (!deps.isCurrent()) return null;
-    result.commanderRows = commanderHeaderRows(scanned.eligible, scanned.detection, chosenToon, selected, finalized.parsed);
+    const { eligible, detection } = scanned;
+    result.commanderRows = await commanderHeaderRows({ eligible, detection, chosenToon, signal: deps.signal }, selected, finalized.parsed);
+    if (!deps.isCurrent()) return null;
   }
   return result;
 }

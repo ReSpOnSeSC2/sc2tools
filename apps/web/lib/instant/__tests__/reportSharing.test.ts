@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildInstantReport } from "../report";
 import { realWin } from "./fixtures/reportGames";
 import { defaultReportSelection, reportCardModel } from "../reportSharing";
-import { reportSummaryText } from "../reportExport";
+import { reportShareFilterNote, reportSummaryText } from "../reportExport";
 import { drawReportCard, reportPng } from "../reportCard";
 import { decodeReportCard, encodeReportCard } from "../reportCardLink";
 
@@ -69,6 +69,24 @@ describe("private report sharing projection", () => {
     expect(calls).toContain("Filtered: vs Z · last 25 games");
     expect(calls).toContain("sc2tools.com/try — analyze yours free");
     expect(calls.join(" ")).not.toMatch(/Squirtuoz|Tourmaline|267727/);
+  });
+
+  it("scopes filtered subtitles to report stats in text and on the share canvas", () => {
+    const source = report();
+    const filters = { matchup: "Z", result: "all", recency: "25" } as const;
+    const commanderOnly = reportCardModel(source, { totals: false, matchups: [], opener: false, macro: false, commander: true }, 0);
+    const mixed = { ...reportCardModel(source), commander: 0 };
+    const draw = vi.fn();
+    const ctx = { createLinearGradient: () => ({ addColorStop: vi.fn() }), fillRect: vi.fn(), fillText: draw,
+      measureText: (value: string) => ({ width: value.length * 10 }) };
+    const canvas = { width: 0, height: 0, getContext: () => ctx } as unknown as HTMLCanvasElement;
+    const note = "Report stats filtered: vs Z · last 25 games";
+    expect(reportSummaryText(source, filters, commanderOnly)).not.toMatch(/filtered|vs Z/i);
+    drawReportCard(canvas, commanderOnly, reportShareFilterNote(filters, commanderOnly));
+    expect(draw).not.toHaveBeenCalledWith(expect.stringMatching(/filtered|vs Z/i), expect.any(Number), expect.any(Number));
+    expect(reportSummaryText(source, filters, mixed)).toContain(note);
+    drawReportCard(canvas, mixed, reportShareFilterNote(filters, mixed));
+    expect(draw).toHaveBeenCalledWith(note, 60, 141);
   });
 
   it("gives a stand-alone Commander name a headline and keeps it below dense report rows", () => {

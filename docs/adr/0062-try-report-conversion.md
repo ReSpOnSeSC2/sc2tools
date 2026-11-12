@@ -16,12 +16,15 @@ remain separate explicit actions; cancelled or failed actions emit no event.
 Commander ID uses fixed playstyle categories derived locally from the selected
 player's ladder headers and deeply parsed builds. The most played matchup
 supplies repertoire and game length. Matchup edge requires decided results
-against every race. Incomplete profiles name only rated axes. Header evidence
-stays in memory, and older local reports can fall back to stored deep parses.
+against every race. An explicit player selection governs the profile. For
+headers without an opponent toon, a local content digest or a deep game ID
+establishes uniqueness. Incomplete profiles name only rated axes. Header
+evidence stays in memory, and older local reports can fall back to stored deep parses.
 The share dialog can explicitly include one complete taxonomy label. Text and
 PNG expand only the fixed label. Version 2 card fragments carry a bounded
 taxonomy index; version 1 report and comparison links are unchanged. No raw
 axis values, replay evidence or player information enters this share field.
+Active filters label the selected report statistics separately from Commander ID.
 Text copy uses the shared resource-scoped clipboard hook. Permission waits
 settle after five seconds into a visible selected-text fallback; dismissal
 returns to Copy text, and retired report/selection work cannot deliver a late

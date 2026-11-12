@@ -74,6 +74,7 @@ for (const theme of ["light", "dark"] as const) {
     const issues = await new AxeBuilder({ page }).include('section[aria-labelledby="' + labelId + '"]').withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
     expect(issues.violations.filter(row => row.impact === "serious" || row.impact === "critical")).toEqual([]);
     await captureAccessibility(page, info, "commander-" + theme + "-complete");
+    await page.getByRole("group", { name: "Matchup" }).getByRole("button", { name: "vs Zerg" }).click();
     const share = page.getByRole("button", { name: "Share report" });
     await share.focus();
     await share.press("Enter");
@@ -83,7 +84,11 @@ for (const theme of ["light", "dark"] as const) {
     await optIn.check();
     await expect(dialog.getByRole("img")).toHaveAccessibleName(/Commander ID: .*Clockwork Purist/);
     await expect(dialog.getByRole("img")).not.toHaveAccessibleName(/Private Fixture|987654|4321|private-source/);
+    await expect(dialog.getByRole("img")).toHaveAccessibleName(/Report stats filtered: vs Z/);
     await captureAccessibility(page, info, "commander-" + theme + "-share");
+    await dialog.getByRole("checkbox", { name: "Totals" }).uncheck();
+    await dialog.getByRole("checkbox", { name: "vs Z" }).uncheck();
+    await expect(dialog.getByRole("img")).not.toHaveAccessibleName(/filtered|vs Z/i);
     await dialog.getByRole("button", { name: "Copy card link" }).click();
     await expect(dialog.getByRole("status")).toContainText("Card link copied.");
     await page.keyboard.press("Escape");

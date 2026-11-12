@@ -158,6 +158,14 @@ export function summaryFromModel(model: ReportCardModel): string[] {
   ].filter((line): line is string => line !== null);
 }
 
+/** Label only the report rows affected by the active filters. */
+export function reportShareFilterNote(filters: ReportFilters, model?: ReportCardModel): string | null {
+  const label = reportFilterLabel(filters);
+  if (!label) return null;
+  if (model?.commander === undefined) return `Filtered: ${label}`;
+  return model.totals || model.matchups.length || model.opener || model.macro ? `Report stats filtered: ${label}` : null;
+}
+
 /**
  * Plain-text summary of the report (opponent-free). With `model` (the
  * share dialog's selected rows) it prints exactly those rows.
@@ -171,8 +179,8 @@ export function reportSummaryText(
   filters: ReportFilters = DEFAULT_REPORT_FILTERS,
   model?: ReportCardModel,
 ): string {
-  const note = reportFilterLabel(filters);
-  return [...(model ? summaryFromModel(model) : summaryFromReport(report)), note ? `Filtered: ${note}` : null, REPORT_SHARE_URL]
+  const note = reportShareFilterNote(filters, model);
+  return [...(model ? summaryFromModel(model) : summaryFromReport(report)), note, REPORT_SHARE_URL]
     .filter((line): line is string => line !== null)
     .join("\n");
 }

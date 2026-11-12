@@ -19,7 +19,7 @@ export function CommanderIdCard({ profile, scanned }: { profile: CommanderProfil
     <h3 id={title} className="font-display text-h3 text-text">Commander ID</h3>
     {profile ? <>
       <p className="text-body font-semibold text-text">{profile.name}{profile.code === null ? " · Incomplete" : ""}</p>
-      <p className="text-caption text-text-muted">{profile.matchup} · the most played matchup for the player with the most games in {scanned ? "this scan" : "these saved replays"}. Report filters do not change this ID.</p>
+      <p className="text-caption text-text-muted">{profile.matchup} · most played matchup for this profile. Based on {scanned ? "your scan" : "saved replays"}. Report filters do not change this ID.</p>
       <dl className="grid gap-3 sm:grid-cols-3">
         {profile.axes.map(({ key, label }) => <div key={key} className="min-w-0 space-y-1">
           <dt className="text-caption font-semibold text-text">{LABELS[key]}</dt>
