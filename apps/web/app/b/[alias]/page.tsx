@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { WatchSync } from "@/components/practice/WatchSync";
+import { PracticeLinkTabs } from "@/components/practice/PracticeLinkTabs";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { practiceLinkByAlias, practiceLinkPath } from "@/lib/practice/practiceLinks";
 import { loadPracticeLink } from "@/lib/practice/serverPracticeLink";
+import { referenceOrderPracticeTarget } from "@/lib/practiceTarget";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { PracticeLinkLoading } from "./PracticeLinkLoading";
 
@@ -41,6 +42,7 @@ async function PublishedPracticeLink({ alias }: { alias: string }) {
   const { build, link } = result;
   return <article className="mx-auto max-w-5xl space-y-5">
     <PageHeader eyebrow="Practice Link" title={build.title} className="[overflow-wrap:anywhere]" description={`Build by ${build.creator}`} />
-    <WatchSync title={build.title} videoId={link.youtubeId} offset={link.offsetSec} steps={build.order?.steps ?? []} />
+    <PracticeLinkTabs title={build.title} videoId={link.youtubeId} offset={link.offsetSec} steps={build.order?.steps ?? []}
+      drill={referenceOrderPracticeTarget(build.title, build.order, build.race === "Random" ? undefined : build.race)} />
   </article>;
 }
