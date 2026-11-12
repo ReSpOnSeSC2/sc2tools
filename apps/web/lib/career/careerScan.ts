@@ -29,11 +29,7 @@ async function digestFile(file: IntakeFile): Promise<string | null> {
 }
 
 async function prepareScan(files: IntakeFile[], rows: Map<string, CachedHeader> | undefined, { signal, onProgress }: ScanOptions): Promise<Job> {
-  if (!rows) {
-    const entries = files.map((file) => ({ file, digest: null }));
-    return { entries, missing: entries };
-  }
-  const seen = new Set(rows.keys());
+  const seen = new Set(rows?.keys());
   const entries: Candidate[] = [];
   const missing: Candidate[] = [];
   for (const [index, file] of files.entries()) {
@@ -124,5 +120,6 @@ export async function scanCareer(files: IntakeFile[], options: ScanOptions): Pro
   if (totalUnreadable === candidates.length) throw new Error("Could not read the selected replays");
   const unchanged = reused === eligible.length && retained.size === cache?.rows.size;
   const cacheAvailable = cache !== null && (unchanged || await saveCareerCache({ ...cache, rows: retained }, options.signal));
+  options.signal.throwIfAborted();
   return { rows, reused, unreadable: totalUnreadable, cacheAvailable };
 }

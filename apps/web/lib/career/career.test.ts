@@ -153,6 +153,20 @@ describe("career replay scan", () => {
     await expect(scanCareer([intake("memory")], OK())).resolves.toMatchObject({ cacheAvailable: false, unreadable: 0 });
   });
 
+  it("deduplicates identical bytes without storage or an opponent toon", async () => {
+    vi.stubGlobal("indexedDB", undefined);
+    const left = intake("duplicate");
+    const right = intake("duplicate", "1-S2-1-11/Copy.SC2Replay");
+    fakeEngine.scanHeaders.mockImplementationOnce(async (files: IntakeFile[]) =>
+      files.map(() => header({ players: [ME, { ...OPP, toon: null }] })));
+
+    const result = await scanCareer([left, right], OK());
+
+    expect(result).toMatchObject({ cacheAvailable: false, unreadable: 0 });
+    expect(fakeEngine.scanHeaders.mock.lastCall?.[0]).toEqual([left]);
+    expect(selectedGamesFromHeaders(result?.rows ?? [])).toHaveLength(1);
+  });
+
   it("does not keep a cancelled scan or its worker", async () => {
     const controller = new AbortController();
     fakeEngine.scanHeaders.mockImplementationOnce(async () => {
@@ -162,6 +176,26 @@ describe("career replay scan", () => {
     await expect(scanCareer([intake("abort")], { ...OK(), signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
     expect(fakeEngine.dispose).toHaveBeenCalledTimes(1);
     expect((await cache()).rows.size).toBe(0);
+  });
+
+  it("rolls back a queued snapshot if the scan is cancelled before commit", async () => {
+    const oldHeader = header({ map: "Last Completed" });
+    const previous = await cache();
+    await saveCareerCache({ ...previous, rows: new Map([[A, oldHeader]]) });
+    const controller = new AbortController();
+    const remove = vi.spyOn(controller.signal, "removeEventListener");
+    const put = IDBObjectStore.prototype.put;
+    const queued = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementationOnce(function (this: IDBObjectStore, value, key) {
+      const request = put.call(this, value, key);
+      queueMicrotask(() => controller.abort());
+      return request;
+    });
+
+    await expect(scanCareer([intake("replacement")], { ...OK(), signal: controller.signal }))
+      .rejects.toMatchObject({ name: "AbortError" });
+    expect(queued).toHaveBeenCalledTimes(1);
+    expect((await cache()).rows).toEqual(new Map([[A, oldHeader]]));
+    expect(remove).toHaveBeenCalledWith("abort", expect.any(Function));
   });
 });
 

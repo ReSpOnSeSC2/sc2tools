@@ -96,21 +96,40 @@ export async function readCareerCache(): Promise<CareerCache | null> {
   }
 }
 
-/** An overlapping clear invalidates the snapshot even if the scan runs in another tab. */
-export async function saveCareerCache(cache: CareerCache, signal?: AbortSignal): Promise<boolean> {
+async function writeSnapshot(db: IDBDatabase, cache: CareerCache, signal?: AbortSignal): Promise<void> {
+  let transaction: IDBTransaction | undefined;
+  const abort = () => {
+    try {
+      transaction?.abort();
+    } catch {
+      // A transaction that has already committed or aborted cannot be rolled back.
+    }
+  };
+  signal?.addEventListener("abort", abort, { once: true });
   try {
-    await withCareerDatabase((db) => idbTransactionOn(db, STORE, "readwrite", (tx) => {
+    signal?.throwIfAborted();
+    await idbTransactionOn(db, STORE, "readwrite", (tx) => {
+      transaction = tx;
       const store = tx.objectStore(STORE);
       const request = store.get("generation");
       request.onsuccess = () => {
-        if (signal?.aborted || generation(request.result) !== cache.generation) return;
+        if (generation(request.result) !== cache.generation) return;
         try {
           store.put({ format: FORMAT, rows: [...cache.rows] }, "snapshot");
         } catch {
-          tx.abort();
+          abort();
         }
       };
-    }));
+    });
+  } finally {
+    signal?.removeEventListener("abort", abort);
+  }
+}
+
+/** An overlapping clear invalidates the snapshot even if the scan runs in another tab. */
+export async function saveCareerCache(cache: CareerCache, signal?: AbortSignal): Promise<boolean> {
+  try {
+    await withCareerDatabase((db) => writeSnapshot(db, cache, signal));
     return true;
   } catch {
     return false;
