@@ -5,6 +5,7 @@ import { buildInstantReport, parseInstantPayload } from "@/lib/instant/report";
 import { summaryFromModel } from "@/lib/instant/reportExport";
 import { reportCardModel } from "@/lib/instant/reportSharing";
 import { fingerprintShareCard, sessionReportShareCard } from "@/lib/personalShareCards";
+import { milestoneShareCard } from "@/lib/milestoneShareCard";
 import { practiceGradeShareCard } from "@/lib/practice/practiceGradeShareCard";
 import { mulberry32 } from "../ArcadeEngine";
 import { ALL_MODES, type AnyMode } from "../modes";
@@ -166,6 +167,42 @@ test("the session card excludes the private locator, games, timestamps and ratin
     ],
   });
   expect(sessionReportShareCard({ ...session, playedMin: null, durationSamples: 0 }).stats).toHaveLength(3);
+});
+
+test.each([
+  ["moment.crossed_mmr_mark", "Recorded 4100 MMR"],
+  ["moment.crossed_mmr_mark", "Recorded 4250 MMR"],
+  ["moment.new_season_peak", "New recorded season peak"],
+  ["moment.win_streak", "5 wins in a row"],
+  ["moment.win_streak", "10 wins in a row"],
+  ["moment.loss_streak_broken", "Loss streak broken"],
+  ["moment.revenge_win", "Revenge win"],
+  ["moment.giant_killer", "Giant-killer win"],
+  ["moment.marathon_win", "Marathon win"],
+])("the %s card contains only its allowed headline (%s)", (kind, title) => {
+  const row = {
+    kind, title, id: "zq9game", href: `/app/game/${toonHandle(1)}`, createdAt: "2026-11-01T08:02:03Z",
+    body: `${displayName(1)} ${rawName(1)} ${exactMmr(1)} MMR`,
+  };
+  expect(milestoneShareCard(row)).toEqual({
+    kind: "milestone", title, subtitle: "StarCraft II 1v1 ladder milestone", stats: [],
+  });
+});
+
+test.each([
+  ["review.reply", "Revenge win"],
+  ["moment.streamer_opponent_win", "Revenge win"],
+  ["moment.giant_killer", "Marathon win"],
+  ["moment.revenge_win", `Revenge win over ${displayName(1)}`],
+  ["moment.win_streak", "15 wins in a row"],
+  ["moment.crossed_mmr_mark", `Recorded ${exactMmr(1)} MMR`],
+  ["moment.crossed_mmr_mark", "Recorded 400 MMR"],
+  ["moment.crossed_mmr_mark", "Recorded 10000 MMR"],
+  ["moment.crossed_mmr_mark", "Recorded 4100 MMR\n"],
+  ["moment.crossed_mmr_mark", "Recorded 0410 MMR"],
+  ["toString", "Revenge win"],
+])("the milestone card rejects %s with title %j", (kind, title) => {
+  expect(milestoneShareCard({ kind, title })).toBeNull();
 });
 
 function leaks(text: string): string[] {

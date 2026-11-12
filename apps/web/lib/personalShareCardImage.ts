@@ -15,13 +15,14 @@ export async function sharePersonalCard(card: PersonalShareCard | MatchResultSha
 
   drawCardBackground(ctx, CARD_PALETTE.accent);
   ctx.textBaseline = "top";
+  const headingY = card.stats.length ? 54 : 205;
   ctx.fillStyle = CARD_PALETTE.ink;
   ctx.font = `750 62px ${FONT_STACK}`;
-  ctx.fillText(card.title, CARD_PAD, 54);
+  ctx.fillText(card.title, CARD_PAD, headingY);
   ctx.fillStyle = shareReportPalette.weeklyMuted;
   ctx.font = `500 28px ${FONT_STACK}`;
   if (card.kind === "practice_grade") ctx.fillText(card.subtitle, CARD_PAD, 136, CARD_W - 2 * CARD_PAD);
-  else ctx.fillText(card.subtitle, CARD_PAD, 136);
+  else ctx.fillText(card.subtitle, CARD_PAD, headingY + 82);
 
   const gap = 20;
   const width = (CARD_W - 2 * CARD_PAD - gap) / 2;

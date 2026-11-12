@@ -112,4 +112,12 @@ describe("trackCardShared", () => {
       ["event", "card_shared", { content_type: "practice_grade", method: "download", page_location: `${window.location.origin}/b/:alias`, page_title: "/b/:alias" }],
     ]);
   });
+
+  it("counts a milestone card without sending the headline, game or inbox filters", () => {
+    visit("/notifications?kind=milestones&before=private-cursor#private-game");
+    trackCardShared({ card: "milestone", method: "download" });
+    expect(gtag.mock.calls).toEqual([
+      ["event", "card_shared", { content_type: "milestone", method: "download", page_location: `${window.location.origin}/notifications`, page_title: "SC2 Tools" }],
+    ]);
+  });
 });

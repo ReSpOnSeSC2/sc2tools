@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PersonalCardShareButton } from "@/components/ui/PersonalCardShareButton";
 import { fingerprintShareCard, sessionReportShareCard } from "@/lib/personalShareCards";
+import { milestoneShareCard } from "@/lib/milestoneShareCard";
 import { practiceGradeShareCard } from "@/lib/practice/practiceGradeShareCard";
 import type { ShareDelivery } from "@/components/analyzer/arcade/ShareCard";
 
@@ -97,5 +98,23 @@ describe("PersonalCardShareButton", () => {
     expect(deliverShareCard).toHaveBeenCalledWith(expect.objectContaining({
       text: "Practice Link grade\nRecorded opener · Build by Creator\nGrade: A\n\nhttps://sc2tools.com/b/opener",
     }));
+  });
+
+  it("draws and delivers only the safe milestone headline and fixed copy", async () => {
+    deliverShareCard.mockResolvedValueOnce({ shared: true, method: "download" });
+    const row = { kind: "moment.giant_killer", title: "Giant-killer win", body: "Private opponent", href: "/app/game/private-id" };
+    const card = milestoneShareCard(row);
+    if (!card) throw new Error("Missing milestone card");
+    render(<PersonalCardShareButton card={card} label="Share Giant-killer win" />);
+    fireEvent.click(screen.getByRole("button", { name: "Share Giant-killer win" }));
+    expect((await screen.findByRole("status")).textContent).toBe("Giant-killer win saved");
+    expect(fillText.mock.calls.map(([value]) => value)).toEqual([
+      "Giant-killer win", "StarCraft II 1v1 ladder milestone", "SC2 Tools", "sc2tools.com",
+    ]);
+    expect(deliverShareCard).toHaveBeenCalledWith({
+      blob: png, title: "Giant-killer win", filename: "sc2tools-milestone.png",
+      text: "Giant-killer win\nStarCraft II 1v1 ladder milestone\n\nhttps://sc2tools.com",
+    });
+    expect(trackCardShared.mock.calls).toEqual([[{ card: "milestone", method: "download" }]]);
   });
 });

@@ -76,13 +76,21 @@ describe("notification center consumers", () => {
   });
 
   it("filters private milestone rows and links to their game", async () => {
-    rows.unshift({ ...rows[0], id: "milestone", kind: "moment.win_streak", title: "5 wins in a row", href: "/app/game/test-game" });
+    rows.unshift(
+      { ...rows[0], id: "milestone", kind: "moment.win_streak", title: "5 wins in a row", href: "/app/game/test-game" },
+      { ...rows[0], id: "unsafe", kind: "moment.revenge_win", title: "Revenge win over Private Opponent" },
+    );
     mount(<NotificationsPage />);
     await screen.findByText("Notice 0");
     fireEvent.click(screen.getByRole("button", { name: "Milestones" }));
     await waitFor(() => expect(screen.queryByText("Notice 0")).toBeNull());
     const notice = await screen.findByRole("link", { name: /5 wins in a row/ });
     expect(notice.getAttribute("href")).toBe("/app/game/test-game");
+    const share = screen.getByRole("button", { name: "Share 5 wins in a row" });
+    expect(share.closest("li")).toBe(notice.closest("li"));
+    expect(notice.contains(share)).toBe(false);
+    expect(screen.getAllByRole("button", { name: /^Share / })).toEqual([share]);
+    expect(screen.getByRole("link", { name: /Revenge win over Private Opponent/ })).toBeTruthy();
   });
 
   it("retains an opt-in and muted-kind draft on failed save, then lets the player opt out", async () => {
