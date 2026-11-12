@@ -12,7 +12,7 @@ import { RequestError } from "@/components/ui/RequestError";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { NotificationItem } from "@/components/notifications/NotificationItem";
-import { CATEGORY_LABELS, NOTIFICATION_CATEGORIES, notificationFocus, type NotificationCategory, type NotificationPage } from "@/components/notifications/notificationModel";
+import { CATEGORY_LABELS, NOTIFICATION_CATEGORIES, notificationCategoryName, notificationFocus, type NotificationCategory, type NotificationPage } from "@/components/notifications/notificationModel";
 
 export default function NotificationsPage() {
   const { userId } = useAuth();
@@ -50,14 +50,14 @@ function NotificationsCenter() {
     catch (error) { setWriteError(error as ClientApiError); }
   }
   return <div className="space-y-5">
-    <PageHeader title="Notifications" description="Reviews, coaching, sync updates and replies to your reports. Notifications are kept for 90 days."
+    <PageHeader title="Notifications" description="Reviews, coaching, ladder milestones, sync updates and replies to your reports. Notifications are kept for 90 days."
       actions={<><Button variant="secondary" disabled={saving || !unread.data?.count} onClick={markAll}>{saving ? "Working…" : "Mark all as read"}</Button><LazyHelpLink slug="notifications" /></>} />
-    <div className="flex flex-wrap gap-2" aria-label="Notification kinds">{NOTIFICATION_CATEGORIES.map((kind) => <button key={kind} type="button" aria-pressed={category === kind} onClick={() => { setCategory(kind); setCursors([null]); }} className={`rounded-full border border-border px-3 py-2 text-caption ${notificationFocus} ${category === kind ? "bg-accent/15 text-accent-cyan" : "text-text-muted hover:bg-bg-elevated"}`}>{CATEGORY_LABELS[kind]}</button>)}
-      <label className="inline-flex items-center gap-2 px-2 text-caption"><input type="checkbox" checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); setCursors([null]); }} />Unread only</label>
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Notification kinds">{NOTIFICATION_CATEGORIES.map((kind) => <button key={kind} type="button" aria-pressed={category === kind} onClick={() => { setCategory(kind); setCursors([null]); }} className={`min-h-11 min-w-11 rounded-full border border-border px-3 py-2 text-caption ${notificationFocus} ${category === kind ? "bg-accent/15 text-accent-cyan" : "text-text-muted hover:bg-bg-elevated"}`}>{CATEGORY_LABELS[kind]}</button>)}
+      <label className="inline-flex min-h-11 items-center gap-2 px-2 text-caption"><input type="checkbox" checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); setCursors([null]); }} />Unread only</label>
     </div>
     {writeError ? <RequestError error={writeError} onRetry={() => retryWrite.current()} /> : null}
     {unread.error ? <RequestError title="Unread count unavailable" error={unread.error} onRetry={() => unread.mutate()} /> : null}
-    {list.error ? <RequestError error={list.error} onRetry={() => list.mutate()} /> : list.isLoading && !list.data ? <Skeleton rows={4} /> : !list.data?.items.length ? <EmptyStatePanel title={`No ${category === "all" ? "" : CATEGORY_LABELS[category].toLowerCase() + " "}${unreadOnly ? "unread " : ""}notifications`} description="New activity will appear here. You can change which kinds you receive in Settings → Misc." action={<Link className={`rounded-lg px-3 py-2 text-accent-cyan ${notificationFocus}`} href="/settings?tab=misc">Notification settings</Link>} />
+    {list.error ? <RequestError error={list.error} onRetry={() => list.mutate()} /> : list.isLoading && !list.data ? <Skeleton rows={4} /> : !list.data?.items.length ? <EmptyStatePanel title={`No ${unreadOnly ? "unread " : ""}${category === "all" ? "" : notificationCategoryName(category) + " "}notifications`} description="New activity will appear here. You can choose which updates you receive in Settings → Preferences." action={<Link className={`inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-accent-cyan ${notificationFocus}`} href="/settings?tab=preferences#notifications">Notification settings</Link>} />
       : <Card><ul className="space-y-2">{list.data.items.map((row) => <li key={row.id}><NotificationItem row={row} isNew={!row.readAt} onOpen={() => void markOne(row.id)} /></li>)}</ul></Card>}
     <nav aria-label="Notification pages" className="flex items-center justify-between gap-3">
       <Button variant="secondary" disabled={cursors.length <= 1 || list.isValidating} onClick={() => setCursors((current) => current.slice(0, -1))}>Previous</Button>

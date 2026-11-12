@@ -314,12 +314,19 @@ describe("notification center panel behavior", () => {
   });
 
   it("filters loaded kinds and hides absent categories without discarding rows", async () => {
-    rows.ann = [notification("review"), { ...notification("booking"), kind: "coaching.booked", title: "Session booked" }];
-    render(<Bell />); const panel = await open(2);
+    rows.ann = [
+      notification("review"),
+      { ...notification("booking"), kind: "coaching.booked", title: "Session booked" },
+      { ...notification("streak"), kind: "moment.win_streak", title: "5 wins in a row", href: "/app/game/streak" },
+    ];
+    render(<Bell />); const panel = await open(3);
     await within(panel).findByText("Session booked");
     expect(within(panel).queryByRole("button", { name: "System" })).toBeNull();
     fireEvent.click(within(panel).getByRole("button", { name: "Coaching" }));
     expect(within(panel).queryByText("Review review")).toBeNull();
+    fireEvent.click(within(panel).getByRole("button", { name: "Milestones" }));
+    expect(within(panel).getByRole("link", { name: /5 wins in a row/ }).getAttribute("href")).toBe("/app/game/streak");
+    expect(within(panel).queryByText("Session booked")).toBeNull();
     fireEvent.click(within(panel).getByRole("button", { name: "All" }));
     expect(within(panel).getByText("Review review")).toBeTruthy();
   });

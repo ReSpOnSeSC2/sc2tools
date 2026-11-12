@@ -1000,7 +1000,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const publicPlayerPreferences = new PublicPlayerPreferencesService(deps.db, { community, onPublicChanged: communityRevalidator.notify, resolveLegacy: (userId) => publicPlayers.resolve(userId) });
   users.publicPlayerIdentity = (userId) => publicPlayers.identity(userId);
   const gameMoments = new GameMomentsService(deps.db, { users, tokens: overlayTokens, channels: opponentChannels,
-    seasons, engagement: multichatEngagement, bot: twitchChatBot, io: deps.io, logger: deps.logger });
+    seasons, engagement: multichatEngagement, bot: twitchChatBot, notifications, io: deps.io, logger: deps.logger });
   const arcade = new ArcadeService(deps.db, { games, gameDetails });
   // Replay Review Exchange (docs/reviews.md). Built unconditionally —
   // REVIEWS_ENABLED only gates the routes — so GDPR export/deletion and

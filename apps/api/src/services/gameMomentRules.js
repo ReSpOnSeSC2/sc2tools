@@ -59,7 +59,10 @@ function deriveGameMoments(input) {
   const previousMeeting = past.find(row => sameOpponent(game, row));
   if (previousMeeting && outcome(previousMeeting.result) === "loss") add("revengeWin", "Revenge win", "Won the next recorded meeting against this exact opponent.");
   const own = recordedRating(game), opponent = number(game.opponent?.mmr);
-  if (own !== null && opponent !== null && game.opponent?.mmrSource === "replay" && opponent - own >= 200) add("giantKiller", "Giant-killer win", `Opponent started ${opponent - own} MMR higher (${opponent} vs ${own}, replay ratings).`);
+  const gap = own !== null && opponent !== null ? opponent - own : 0;
+  if (game.opponent?.mmrSource === "replay" && gap >= 200) {
+    add("giantKiller", "Giant-killer win", `Opponent started about ${Math.round(gap / 100) * 100} MMR higher.`);
+  }
   const duration = number(game.durationSec);
   if (duration !== null && duration >= 25 * 60) add("marathonWin", "Marathon win", `Victory after ${Math.floor(duration / 60)} minutes.`);
   if (input.approvedChannel === true) add("streamerOpponentWin", "Streamer opponent defeated", "Won against an opponent with an approved exact channel identity.");
