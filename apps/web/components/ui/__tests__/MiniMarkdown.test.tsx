@@ -14,4 +14,18 @@ describe("release note Markdown subset", () => {
     expect(screen.queryByRole("link", { name: "Unsafe" })).toBeNull(); expect(screen.queryByRole("link", { name: "Other" })).toBeNull();
     for (const url of ["/\\evil", "/\n/evil", "data:text/html,test", "https://user:pass@evil.example"]) expect(safeMarkdownHref(url)).toBe(false);
   });
+  it("keeps indented continuation lines in their release-note bullet", () => {
+    render(<MiniMarkdown text={"- Read the release notes\n  before installing.\n- Restart the Agent."} />);
+    expect(screen.getAllByRole("listitem").map(item => item.textContent)).toEqual([
+      "Read the release notes before installing.",
+      "Restart the Agent.",
+    ]);
+  });
+  it("renders an indented fence as code and preserves its inner indentation", () => {
+    const { container } = render(<MiniMarkdown text={[
+      "- Check the opener:", "  ```python", "  if ready:", "      return True", "  ```", "- Next step.",
+    ].join("\n")} />);
+    expect(container.querySelector("pre > code")?.textContent).toBe("if ready:\n    return True");
+    expect(screen.getAllByRole("listitem").map(item => item.textContent)).toEqual(["Check the opener:", "Next step."]);
+  });
 });
