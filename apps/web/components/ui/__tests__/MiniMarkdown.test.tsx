@@ -21,4 +21,11 @@ describe("release note Markdown subset", () => {
       "Restart the Agent.",
     ]);
   });
+  it("renders an indented fence as code and preserves its inner indentation", () => {
+    const { container } = render(<MiniMarkdown text={[
+      "- Check the opener:", "  ```python", "  if ready:", "      return True", "  ```", "- Next step.",
+    ].join("\n")} />);
+    expect(container.querySelector("pre > code")?.textContent).toBe("if ready:\n    return True");
+    expect(screen.getAllByRole("listitem").map(item => item.textContent)).toEqual(["Check the opener:", "Next step."]);
+  });
 });

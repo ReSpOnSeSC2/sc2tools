@@ -165,6 +165,17 @@ async function verifyAgentReleaseHistory(
   const { scrollWidth, width } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, width: window.innerWidth }));
   expect(scrollWidth).toBeLessThanOrEqual(width);
   await checkAccessibility(page, info, "/changelog", theme);
+
+  const olderLink = await page.evaluate((xml) => new DOMParser().parseFromString(xml, "application/xml")
+    .querySelectorAll("item")[1]?.querySelector("link")?.textContent, feed);
+  expect(olderLink).toBeTruthy();
+  const { pathname, hash } = new URL(olderLink ?? "");
+  await page.goto("about:blank");
+  await page.goto(`${pathname}${hash}`);
+  const olderNotes = page.locator(`[id="${hash.slice(1)}"]`);
+  await expect(olderNotes).toBeVisible();
+  await expect(history.locator("details").filter({ has: olderNotes })).toHaveAttribute("open", "");
+  await captureAccessibility(page, info, `f3-${theme}-older`);
 }
 
 test("missing shared replay archives return a real public-friendly 404", async ({ page }) => {

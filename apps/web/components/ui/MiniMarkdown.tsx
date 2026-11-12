@@ -3,14 +3,24 @@ import { Fragment, type ReactNode } from "react";
 /** Small text-only subset for release notes: paragraphs, headings, lists, code,
  * emphasis and safe links. Raw HTML and images remain escaped text. */
 export function MiniMarkdown({ text, className = "" }: { text: string; className?: string }) {
-  const blocks: ReactNode[] = []; let paragraph: string[] = []; let list: string[] = []; let code: string[] | null = null;
+  const blocks: ReactNode[] = []; let paragraph: string[] = []; let list: string[] = [];
+  let code: { indent: string; lines: string[] } | null = null;
   function flush() {
     if (paragraph.length) { blocks.push(<p key={blocks.length}>{inline(paragraph.join(" "))}</p>); paragraph = []; }
     if (list.length) { blocks.push(<ul key={blocks.length} className="list-disc space-y-1 pl-5">{list.map((item, i) => <li key={i}>{inline(item)}</li>)}</ul>); list = []; }
   }
   for (const line of text.slice(0, 30000).split(/\r?\n/)) {
-    if (/^```/.test(line)) { flush(); if (code) { blocks.push(<pre key={blocks.length} className="overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-bg-elevated p-2"><code>{code.join("\n")}</code></pre>); code = null; } else code = []; continue; }
-    if (code) { code.push(line); continue; }
+    if (code) {
+      if (/^[ \t]*```\s*$/.test(line)) {
+        blocks.push(<pre key={blocks.length} className="overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-bg-elevated p-2"><code>{code.lines.join("\n")}</code></pre>);
+        code = null;
+      } else {
+        code.lines.push(line.startsWith(code.indent) ? line.slice(code.indent.length) : line);
+      }
+      continue;
+    }
+    const fence = /^([ \t]*)```/.exec(line);
+    if (fence) { flush(); code = { indent: fence[1], lines: [] }; continue; }
     const heading = /^#{1,6}\s+(.+)$/.exec(line); const bullet = /^\s*(?:[-*]|\d+\.)\s+(.+)$/.exec(line);
     if (heading) { flush(); blocks.push(<p key={blocks.length} className="font-semibold text-text">{inline(heading[1])}</p>); }
     else if (bullet) { if (paragraph.length) flush(); list.push(bullet[1]); }
@@ -18,7 +28,7 @@ export function MiniMarkdown({ text, className = "" }: { text: string; className
     else if (list.length && /^\s/.test(line)) list[list.length - 1] += ` ${line.trim()}`;
     else { if (list.length) flush(); paragraph.push(line); }
   }
-  flush(); if (code) blocks.push(<pre key={blocks.length} className="whitespace-pre-wrap break-words"><code>{code.join("\n")}</code></pre>);
+  flush(); if (code) blocks.push(<pre key={blocks.length} className="whitespace-pre-wrap break-words"><code>{code.lines.join("\n")}</code></pre>);
   return <div className={`space-y-3 break-words text-caption text-text-muted ${className}`}>{blocks}</div>;
 }
 

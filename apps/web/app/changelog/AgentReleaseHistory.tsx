@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { MiniMarkdown } from "@/components/ui/MiniMarkdown";
 import { buttonClassName } from "@/components/ui/buttonStyles";
-import { agentReleaseAnchor, getAgentReleaseNotes } from "@/lib/agentReleases";
+import { agentReleaseAnchor, agentReleaseMarkdown, getAgentReleaseNotes } from "@/lib/agentReleases";
 
 export function AgentReleaseHistory() {
   const releases = getAgentReleaseNotes();
@@ -14,12 +14,14 @@ export function AgentReleaseHistory() {
       <ol className="space-y-2">
         {releases.map(({ version, date, notes }, index) => (
           <li key={version}>
-            <details id={agentReleaseAnchor(version)} className="scroll-mt-24 rounded-xl border border-border bg-bg-surface" open={index === 0}>
+            <details className="rounded-xl border border-border bg-bg-surface" open={index === 0}>
               <summary className="min-h-11 cursor-pointer rounded-xl px-4 py-3 text-body font-semibold text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
                 Agent {version}
                 {date && <time className="ml-3 text-caption font-normal text-text-muted" dateTime={date}>{date}</time>}
               </summary>
-              <MiniMarkdown className="border-t border-border p-4" text={notes} />
+              <div id={agentReleaseAnchor(version)} className="scroll-mt-24 border-t border-border p-4">
+                <MiniMarkdown text={agentReleaseMarkdown(version, notes)} />
+              </div>
             </details>
           </li>
         ))}

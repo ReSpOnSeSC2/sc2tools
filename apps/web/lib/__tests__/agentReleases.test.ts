@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { GET, dynamic } from "@/app/changelog/agent.xml/route";
 import { FALLBACK_LATEST_AGENT_VERSION } from "../agentNotice";
-import { agentReleaseAnchor, getAgentReleaseNotes, parseAgentChangelog } from "../agentReleases";
+import { agentReleaseAnchor, agentReleaseMarkdown, getAgentReleaseNotes, parseAgentChangelog } from "../agentReleases";
 import { rssResponse } from "../rss";
 
 describe("Agent release history", () => {
@@ -28,6 +30,17 @@ describe("Agent release history", () => {
     const releases = getAgentReleaseNotes();
     expect(releases.length).toBeGreaterThan(1);
     expect(releases[0].version).toBe(FALLBACK_LATEST_AGENT_VERSION);
+  });
+
+  it("links the release's committed gallery and leaves unrelated relative links alone", () => {
+    const source = readFileSync(resolve(process.cwd(), "../agent/CHANGELOG.md"), "utf8");
+    const notes = parseAgentChangelog(source).find(({ version }) => version === "0.25.0")?.notes ?? "";
+    const gallery = "docs/images/agent-0.25.0/interface-gallery/README.md";
+    expect(agentReleaseMarkdown("0.25.0", notes)).toContain(
+      `[interface gallery](https://github.com/ReSpOnSeSC2/sc2tools/blob/main/${gallery})`,
+    );
+    const unrelated = "[internal](../../private/notes.md)";
+    expect(agentReleaseMarkdown("0.25.0", unrelated)).toBe(unrelated);
   });
 
   it("publishes valid static RSS with a stable page link for every included version", async () => {

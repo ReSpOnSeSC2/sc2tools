@@ -62,3 +62,9 @@ export function getAgentReleaseNotes(): AgentRelease[] {
 export function agentReleaseAnchor(version: string): string {
   return `agent-v${version}`;
 }
+
+export function agentReleaseMarkdown(version: string, notes: string): string {
+  const gallery = `docs/images/agent-${version}/interface-gallery/README.md`;
+  const repository = "https://github.com/ReSpOnSeSC2/sc2tools/blob/main/";
+  return notes.replaceAll(`](../../${gallery})`, `](${repository}${gallery})`);
+}
