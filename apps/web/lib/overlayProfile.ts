@@ -3,9 +3,9 @@ import { normalizeOverlayLayout, type OverlayLayout } from "./overlayLayout";
 import { normalizeOverlayTheme, type OverlayTheme } from "./overlayTheme";
 /**
  * Optional preferences on a token. Missing preserves the defaults of showing
- * credit and leaving Ghost voice off.
+ * credit and leaving its QR code and Ghost voice off.
  */
-export type OverlayProfileFlags = { credit?: boolean; ghostVoice?: boolean };
+export type OverlayProfileFlags = { credit?: boolean; creditQr?: boolean; ghostVoice?: boolean };
 export type OverlayProfile = { v: 1; theme: OverlayTheme; widgetOptions: Record<string, { durationSec: number | null }>; layout?: OverlayLayout; layoutVertical?: OverlayLayout } & OverlayProfileFlags;
 export const defaultOverlayProfile = (): OverlayProfile => ({ v: 1, theme: {}, widgetOptions: {} });
 
@@ -30,8 +30,10 @@ export function normalizeOverlayProfile(raw: unknown): OverlayProfile {
 export function overlayProfileFlags(raw: Readonly<Record<string, unknown>> | OverlayProfile): OverlayProfileFlags {
   const value = raw as Record<string, unknown>;
   const flags: OverlayProfileFlags = {};
-  if (typeof value.credit === "boolean") flags.credit = value.credit;
-  if (typeof value.ghostVoice === "boolean") flags.ghostVoice = value.ghostVoice;
+  for (const key of ["credit", "creditQr", "ghostVoice"] as const) {
+    const choice = value[key];
+    if (typeof choice === "boolean") flags[key] = choice;
+  }
   return flags;
 }
 

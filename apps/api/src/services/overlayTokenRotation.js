@@ -3,7 +3,7 @@
 const { randomToken } = require("../util/hash");
 const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
-const { overlayProfileForRead } = require("../validation/overlayProfile");
+const { overlayProfileForRead, overlayProfileForStorage } = require("../validation/overlayProfile");
 const { rotationBusy } = require("./overlayTokenWrites");
 
 const ROW_BATCH = 500;
@@ -53,7 +53,7 @@ class OverlayTokenRotation {
       const match = { token: replacement, userId, _rotationSource: token };
       if (source._rotation.state !== "complete") await this.db.overlayTokens.updateOne(match, { $setOnInsert: stampVersion({
         ...match, label: source.label || "Default", enabledWidgets: source.enabledWidgets,
-        profile: overlayProfileForRead(source.profile), profileRevision: 0,
+        ...overlayProfileForStorage(overlayProfileForRead(source.profile, source.creditQr)), profileRevision: 0,
         createdAt: source._rotation.startedAt, lastSeenAt: null, revokedAt: null, _rotationPending: true,
       }, COLLECTIONS.OVERLAY_TOKENS) }, { upsert: true });
 

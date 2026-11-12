@@ -50,9 +50,9 @@ function startMatch(socket: FakeSocket): void {
   });
 }
 
-function receiveCreditProfile(socket: FakeSocket, profileRevision: number, credit?: boolean): void {
+function receiveCreditProfile(socket: FakeSocket, profileRevision: number, credit?: boolean, creditQr?: boolean): void {
   socket.fire("overlay:config", {
-    profile: { v: 1, theme: {}, widgetOptions: {}, ...(credit === undefined ? {} : { credit }) },
+    profile: { v: 1, theme: {}, widgetOptions: {}, ...(credit === undefined ? {} : { credit }), creditQr },
     profileRevision,
   });
 }
@@ -82,6 +82,16 @@ describe("OverlayClient credit", () => {
     const credit = screen.getByTestId("overlay-credit");
     expect(credit.textContent).toBe("Overlay by sc2tools.com");
     expect(credit.getAttribute("data-placement")).toBe("top-left");
+  });
+
+  it("keeps the all-in-one credit as text when a scene QR is enabled", () => {
+    render(<OverlayClient token="tok" />);
+    act(() => {
+      startMatch(activeSocket!);
+      receiveCreditProfile(activeSocket!, 1, true, true);
+    });
+    expect(screen.getByTestId("overlay-credit").textContent).toBe("Overlay by sc2tools.com");
+    expect(screen.queryByRole("img", { name: /QR code/ })).toBeNull();
   });
 
   it("updates from the saved credit and ignores stale or partial config", () => {

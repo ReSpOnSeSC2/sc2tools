@@ -614,15 +614,15 @@ const centerStyle: CSSProperties = {
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  gap: 20,
+  gap: "clamp(6px, 4vh, 20px)",
   textAlign: "center",
   // Lifted off centre so the headline sits in the sky rather than
   // being bisected by the horizon glow at 48%.
-  padding: "0 8vw 14% 8vw",
+  padding: "0 8vw min(14%, 20vh) 8vw",
 };
 
 const headlineStyle: CSSProperties = {
-  fontSize: "clamp(32px, 6.5vw, 92px)",
+  fontSize: "min(clamp(32px, 6.5vw, 92px), max(16px, 12vh))",
   fontWeight: 900,
   letterSpacing: "0.24em",
   textTransform: "uppercase",
@@ -648,7 +648,7 @@ const messageStyle: CSSProperties = {
 
 const countdownStyle = (accent: string): CSSProperties => ({
   marginTop: 4,
-  fontSize: "clamp(38px, 7.5vw, 104px)",
+  fontSize: "min(clamp(38px, 7.5vw, 104px), max(20px, 14vh))",
   fontWeight: 800,
   fontVariantNumeric: "tabular-nums",
   letterSpacing: "0.06em",

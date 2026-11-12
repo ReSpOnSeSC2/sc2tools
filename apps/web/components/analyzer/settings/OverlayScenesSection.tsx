@@ -15,8 +15,10 @@ import { useState } from "react";
 import { Clapperboard, Layers, Monitor } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
+import { InstantBadge } from "@/components/ui/InstantBadge";
+import { Toggle } from "@/components/ui/Toggle";
 import type { OverlayTheme } from "@/lib/overlayTheme";
-import { appendOverlayCreditToUrl } from "@/lib/overlayCredit";
+import { appendOverlayCreditToUrl, isOverlayCreditQrScene, OVERLAY_CREDIT_QR_PARAM } from "@/lib/overlayCredit";
 import {
   STREAM_BACKGROUNDS,
   type StreamBackgroundId,
@@ -91,16 +93,17 @@ export function OverlayScenesSection({
   theme: OverlayTheme;
 }) {
   void theme;
-  void theme;
   const [preview, setPreview] = useState<string>("between-games");
   // Same choice as the All-in-one row's credit toggle (the overlay profile).
-  const { credit: showCredit } = useOverlayFlags();
+  const { credit: showCredit, creditQr, setCreditQr, busy } = useOverlayFlags();
   const base = origin ?? "";
   const selectedScene = SCENES.find((scene) => scene.id === preview);
+  const qrPreview = showCredit && creditQr && isOverlayCreditQrScene(preview)
+    ? `&${OVERLAY_CREDIT_QR_PARAM}=1` : "";
   const previewUrl =
     selectedScene?.kind === "virtual-set"
       ? `${base}/overlay/${token}/scene/${preview}`
-      : appendOverlayCreditToUrl(`${base}/overlay/${token}/scene/${preview}?demo=1`, showCredit);
+      : appendOverlayCreditToUrl(`${base}/overlay/${token}/scene/${preview}?demo=1${qrPreview}`, showCredit);
 
   return (
     <Section id="scenes" data-tour="overlay-scenes" className="scroll-mt-28"
@@ -172,6 +175,14 @@ export function OverlayScenesSection({
       </Card>
 
       <Card>
+        <label className="mb-3 flex min-h-11 items-center gap-2 text-caption text-text-dim">
+          <Toggle checked={creditQr} onChange={setCreditQr} disabled={busy || !showCredit} label="Show a QR code on Starting Soon and BRB" />
+          <span>
+            <InstantBadge className="mr-1.5 align-middle" />
+            Show a QR code beside the sc2tools.com credit on Starting Soon and BRB.
+            {!showCredit && " Turn on overlay credit to show the QR code."}
+          </span>
+        </label>
         <div className="min-w-0 space-y-2">
           <div className="text-caption font-medium text-text">
             Preview — {SCENES.find((s) => s.id === preview)?.label}

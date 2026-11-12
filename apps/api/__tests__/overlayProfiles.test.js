@@ -84,7 +84,7 @@ describe("owned live overlay profiles", () => {
     const token = "synthetic-token";
     await expect(service.resolve(token)).resolves.toMatchObject({ profile: profile(), profileRevision: 0 });
     const remote = new OverlayTokensService({ overlayTokens: collection });
-    const hidden = profile({ credit: false });
+    const hidden = profile({ credit: false, creditQr: true });
     await remote.setProfile("owner", token, hidden, 0);
 
     await expect(service.resolve(token)).resolves.toMatchObject({ profile: profile(), profileRevision: 0 });
@@ -123,5 +123,44 @@ describe("owned live overlay profiles", () => {
     await service.setProfile("owner", "synthetic-token", profile({ theme: { accent: "#fff" } }), 0); release();
     await expect(pending).rejects.toMatchObject({ code: "overlay_token_resolve_busy", status: 503 }); expect(await service.resolve("synthetic-token")).toMatchObject({ profileRevision: 1, profile: profile({ theme: { accent: "#fff" } }) });
     jest.restoreAllMocks();
+  });
+});
+
+describe("owned overlay credit QR", () => {
+  test.each(["1", null])("rejects non-boolean credit QR %j before persisting or broadcasting", async creditQr => {
+    await put({ profile: profile({ creditQr }), expectedRevision: 0 }).expect(400);
+    expect(await collection.findOne({ token: "synthetic-token" })).not.toHaveProperty("profile");
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  test("saves QR independently of credit and preserves both choices in owned reads", async () => {
+    const storedProfile = profile({ credit: false, theme: { accent: "#abc" }, layout: { opponent: placement } });
+    const enabled = { ...storedProfile, creditQr: true };
+    await put({ profile: enabled, expectedRevision: 0 }, "other-owner").expect(404);
+    await put({ profile: enabled, expectedRevision: 0 }).expect(200, { profile: enabled, profileRevision: 1 });
+    expect(await collection.findOne({ token: "synthetic-token" })).toMatchObject({ profile: storedProfile, profileRevision: 1, creditQr: true });
+    expect((await collection.findOne({ token: "synthetic-token" })).profile).toEqual(storedProfile);
+    const disabled = { ...enabled, creditQr: false };
+    await put({ profile: disabled, expectedRevision: 0 }).expect(409);
+    expect(await service.readOwnedProfile("owner", "synthetic-token")).toEqual({ profile: enabled, profileRevision: 1 });
+    await put({ profile: disabled, expectedRevision: 1 }).expect(200, { profile: disabled, profileRevision: 2 });
+    expect(await collection.findOne({ token: "synthetic-token" })).toMatchObject({ profile: storedProfile, profileRevision: 2, creditQr: false });
+    expect((await collection.findOne({ token: "synthetic-token" })).profile).toEqual(storedProfile);
+    expect(emit).toHaveBeenLastCalledWith("overlay:config", { profile: disabled, profileRevision: 2 });
+    expect(await service.resolve("synthetic-token")).toMatchObject({ profile: disabled, profileRevision: 2 });
+  });
+
+  test("an older Settings client can change the layout or theme without erasing QR credit", async () => {
+    const token = "synthetic-token";
+    await put({ profile: profile({ creditQr: true }), expectedRevision: 0 }).expect(200);
+    const edited = profile({ credit: false, theme: { accent: "#abc" } });
+    const expected = { profile: { ...edited, creditQr: true }, profileRevision: 2 };
+    await put({ profile: edited, expectedRevision: 1 }).expect(200, expected);
+    expect(emit).toHaveBeenLastCalledWith("overlay:config", expected);
+    expect(await service.resolve(token)).toMatchObject(expected);
+    expect(await service.readOwnedProfile("owner", token)).toEqual(expected);
+    const [owned] = await service.list("owner");
+    expect(owned).toMatchObject(expected);
+    expect(owned).not.toHaveProperty("creditQr");
   });
 });

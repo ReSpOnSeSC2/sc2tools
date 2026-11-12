@@ -151,10 +151,10 @@ describe("attachSocketAuth (overlay) — connect replay", () => {
 });
 
 describe("attachSocketAuth (overlay) — overlay:resync", () => {
-  test("recovers a missed credit update for the requesting token only", async () => {
+  test("recovers missed credit and QR updates for the requesting token only", async () => {
     const io = setupIo();
     const shown = { v: 1, theme: {}, widgetOptions: {}, credit: true };
-    const hidden = { ...shown, credit: false };
+    const hidden = { ...shown, credit: false, creditQr: true };
     const resolveOwnedOverlayProfile = jest.fn(async () => ({ profile: hidden, profileRevision: 5 }));
     const validateOverlayToken = jest.fn(async () => true);
     attachSocketAuth(io, {

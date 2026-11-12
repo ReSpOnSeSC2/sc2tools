@@ -8,13 +8,12 @@ const THEME_KEYS = new Set(["accent", "scale", "opacity", "radius", "font", "sty
 const plain = (/** @type {unknown} */ value) => !!value && typeof value === "object" && !Array.isArray(value)
   && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 const invalid = () => Object.assign(new Error("Use a valid overlay profile, theme, display time and widget placement."), { status: 400, code: "invalid_overlay_profile" });
-/** Optional token preferences. Absence preserves the defaults (credit shown,
- * Ghost voice off) and lets Settings migrate an older per-browser choice. */
-const FLAG_KEYS = /** @type {const} */ (["credit", "ghostVoice"]);
+/** Optional token preferences. Absence shows credit and leaves QR and voice off. */
+const FLAG_KEYS = /** @type {const} */ (["credit", "creditQr", "ghostVoice"]);
 const PROFILE_KEYS = new Set(["v", "theme", "widgetOptions", ...LAYOUT_KEYS, ...FLAG_KEYS]);
 /** @typedef {{anchor:"top"|"bottom",xPct:number,yPct:number,scale:number,zIndex:number}} WidgetPlacement */
 /** @typedef {Record<string,WidgetPlacement>} OverlayLayout */
-/** @typedef {{v:1,theme:Record<string,any>,widgetOptions:Record<string,{durationSec:number|null}>,layout?:OverlayLayout,layoutVertical?:OverlayLayout,credit?:boolean,ghostVoice?:boolean}} OverlayProfile */
+/** @typedef {{v:1,theme:Record<string,any>,widgetOptions:Record<string,{durationSec:number|null}>,layout?:OverlayLayout,layoutVertical?:OverlayLayout,credit?:boolean,creditQr?:boolean,ghostVoice?:boolean}} OverlayProfile */
 /** @returns {OverlayProfile} */
 function defaultOverlayProfile() { return { v: 1, theme: {}, widgetOptions: {} }; }
 
@@ -72,7 +71,7 @@ function validateLayout(raw) {
 
 /** A bounded allowlist on the existing token; null clears a timed override.
  * Persistent sources have no event timer and cannot acquire inert overrides.
- * `credit` and `ghostVoice` are optional booleans; anything else is rejected.
+ * Credit, its QR code and Ghost voice are optional booleans.
  * @param {unknown} raw @returns {OverlayProfile} */
 function validateOverlayProfile(raw) {
   if (!plain(raw)) throw invalid();
@@ -100,9 +99,21 @@ function validateOverlayProfile(raw) {
   return profile;
 }
 
-/** Missing/corrupt old records use safe defaults without a migration.
- * @param {unknown} raw */
-function overlayProfileForRead(raw) {
-  try { return validateOverlayProfile(raw); } catch { return defaultOverlayProfile(); }
+/** Keep stored v1 profiles readable by API versions that predate QR credit.
+ * @param {unknown} raw @param {unknown} [creditQr] */
+function overlayProfileForRead(raw, creditQr) {
+  try {
+    const profile = validateOverlayProfile(raw);
+    delete profile.creditQr;
+    if (typeof creditQr === "boolean") profile.creditQr = creditQr;
+    return profile;
+  } catch { return defaultOverlayProfile(); }
 }
-module.exports = { validateOverlayProfile, validateProfileTheme, defaultOverlayProfile, overlayProfileForRead };
+
+/** An omitted wire choice must leave the token's existing QR preference intact.
+ * @param {OverlayProfile} input */
+function overlayProfileForStorage({ creditQr, ...profile }) {
+  return { profile, ...(creditQr === undefined ? {} : { creditQr }) };
+}
+
+module.exports = { validateOverlayProfile, validateProfileTheme, defaultOverlayProfile, overlayProfileForRead, overlayProfileForStorage };

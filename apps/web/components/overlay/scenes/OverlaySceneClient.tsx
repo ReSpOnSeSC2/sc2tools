@@ -46,7 +46,7 @@ import {
   VARIANT_LAYOUT,
   type BackdropVariant,
 } from "./SC2BackdropScene";
-import { OverlayCredit } from "../OverlayCredit";
+import { OverlaySceneCredit } from "./OverlaySceneCredit";
 import { CinematicBackgroundScene } from "./CinematicBackgroundScene";
 import { STUDIO_SCENE_HEADLINES } from "@/lib/multichat/sceneModes";
 import { StreamSceneCanvas } from "../widgets/StreamSceneWidget";
@@ -88,6 +88,7 @@ export function OverlaySceneClient({
   scene,
   staticMode = false,
   demo = false,
+  demoCreditQr = false,
   showCredit = true,
   themeParam = null,
 }: {
@@ -95,6 +96,7 @@ export function OverlaySceneClient({
   scene: OverlaySceneVariant;
   staticMode?: boolean;
   demo?: boolean;
+  demoCreditQr?: boolean;
   /**
    * "Overlay by sc2tools.com" on the full-canvas Starting Soon / BRB /
    * Intermission cards (never on the Between Games frame, a virtual set,
@@ -117,19 +119,21 @@ export function OverlaySceneClient({
       scene={scene}
       staticMode={staticMode}
       demo={demo}
+      demoCreditQr={demoCreditQr}
       showCredit={showCredit}
       themeParam={themeParam}
     />
   );
 }
 
-type DockSceneProps = { token: string; scene: DockDrivenSceneVariant; staticMode: boolean; demo: boolean; showCredit: boolean; themeParam?: string | null };
+type DockSceneProps = { token: string; scene: DockDrivenSceneVariant; staticMode: boolean; demo: boolean; demoCreditQr: boolean; showCredit: boolean; themeParam?: string | null };
 function DockDrivenOverlaySceneClient(props: DockSceneProps) {
-  const { credit, themeVars, theme, receiveProfile } = useOverlayProfile(props.token, props.themeParam);
+  const { profile, credit, themeVars, theme, receiveProfile } = useOverlayProfile(props.token, props.themeParam);
   const showCredit = props.showCredit && (props.demo || credit);
-  return <div data-overlay-scene-frame style={themeVars as CSSProperties}><DockDrivenSceneContent {...props} showCredit={showCredit} theme={theme} receiveProfile={receiveProfile} /></div>;
+  const showQr = props.demo ? props.demoCreditQr : profile.creditQr === true;
+  return <div data-overlay-scene-frame style={themeVars as CSSProperties}><DockDrivenSceneContent {...props} showCredit={showCredit} showQr={showQr} theme={theme} receiveProfile={receiveProfile} /></div>;
 }
-function DockDrivenSceneContent({ token, scene, staticMode, demo, showCredit, theme, receiveProfile }: DockSceneProps & { theme: OverlayTheme; receiveProfile: (message: OverlayProfileConfig) => void }) {
+function DockDrivenSceneContent({ token, scene, staticMode, demo, showCredit, showQr, theme, receiveProfile }: DockSceneProps & { showQr: boolean; theme: OverlayTheme; receiveProfile: (message: OverlayProfileConfig) => void }) {
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const [studioEvent, setStudioEvent] = useState<unknown>(null);
@@ -255,7 +259,7 @@ function DockDrivenSceneContent({ token, scene, staticMode, demo, showCredit, th
           brollAudioOwner={brollAudioOwner}
           videoFormat="horizontal"
         />
-        <OverlayCredit placement="bottom-center" visible={showCredit} />
+        <OverlaySceneCredit visible={showCredit} qr={showQr} scene={scene} dockMode={dockScene.mode} />
       </>
     );
   }
@@ -273,7 +277,7 @@ function DockDrivenSceneContent({ token, scene, staticMode, demo, showCredit, th
         countdownMs={countdownMs}
         staticMode={staticMode}
       />
-      <OverlayCredit placement="bottom-center" visible={backdropCreditVisible(showCredit, variant)} />
+      <OverlaySceneCredit visible={backdropCreditVisible(showCredit, variant)} qr={showQr} scene={scene} dockMode={dockScene?.mode} />
     </>
   );
 }

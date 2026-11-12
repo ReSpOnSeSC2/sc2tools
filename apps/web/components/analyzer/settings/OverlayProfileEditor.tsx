@@ -23,7 +23,7 @@ const CONFLICT = "This overlay changed in another tab. Reload Settings to review
 
 /**
  * One draft spans Look and Widgets and saves through the Overlay tab's
- * SaveBar. The credit and Ghost voice switches are Instant: each change
+ * SaveBar. The credit, QR and Ghost voice switches are Instant: each change
  * saves right away into the same profile (without touching the draft), and
  * an older per-browser choice moves in once, silently.
  * Mount keyed by authenticated owner + token.
@@ -152,13 +152,15 @@ export function OverlayProfileEditor({ token, children, onSaved }: {
   }, [hydrated, userId, isSignedIn, token.token]);
 
   const credit = optimistic.credit ?? server.profile.credit ?? true;
+  const creditQr = optimistic.creditQr ?? server.profile.creditQr ?? false;
   const ghostVoice = optimistic.ghostVoice ?? server.profile.ghostVoice ?? false;
   const busy = saving || flagSaving || !hydrated;
   const flags = useMemo<OverlayFlags>(() => ({
-    credit, ghostVoice, busy,
+    credit, creditQr, ghostVoice, busy,
     setCredit: show => { void latestSaveFlags.current({ credit: show }); },
+    setCreditQr: show => { void latestSaveFlags.current({ creditQr: show }); },
     setGhostVoice: on => { void latestSaveFlags.current({ ghostVoice: on }); },
-  }), [credit, ghostVoice, busy]);
+  }), [credit, creditQr, ghostVoice, busy]);
 
   return <OverlayFlagsContext.Provider value={flags}>
     {legacyTheme ? <aside className="space-y-2 rounded-xl border border-accent/40 bg-accent/10 p-4" aria-label="Previous overlay theme">

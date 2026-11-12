@@ -4,7 +4,7 @@ import {
   isValidScene,
   VALID_SCENES,
 } from "@/components/overlay/scenes/sceneVariants";
-import { isOverlayCreditHidden, OVERLAY_CREDIT_PARAM } from "@/lib/overlayCredit";
+import { isOverlayCreditHidden, OVERLAY_CREDIT_PARAM, OVERLAY_CREDIT_QR_PARAM } from "@/lib/overlayCredit";
 import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
 import { closestOverlayName } from "@/components/overlay/overlayNames";
 
@@ -60,6 +60,7 @@ export default async function OverlayScenePage({
       themeParam={overlayThemeParamFromSearch(sp)}
       staticMode={staticMode}
       demo={demo}
+      demoCreditQr={demo && sp[OVERLAY_CREDIT_QR_PARAM] === "1"}
       showCredit={!isOverlayCreditHidden(sp[OVERLAY_CREDIT_PARAM])}
     />
   );
