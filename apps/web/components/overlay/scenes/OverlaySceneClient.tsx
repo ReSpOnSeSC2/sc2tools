@@ -125,8 +125,9 @@ export function OverlaySceneClient({
 
 type DockSceneProps = { token: string; scene: DockDrivenSceneVariant; staticMode: boolean; demo: boolean; showCredit: boolean; themeParam?: string | null };
 function DockDrivenOverlaySceneClient(props: DockSceneProps) {
-  const { themeVars, theme, receiveProfile } = useOverlayProfile(props.token, props.themeParam);
-  return <div data-overlay-scene-frame style={themeVars as CSSProperties}><DockDrivenSceneContent {...props} theme={theme} receiveProfile={receiveProfile} /></div>;
+  const { credit, themeVars, theme, receiveProfile } = useOverlayProfile(props.token, props.themeParam);
+  const showCredit = props.showCredit && (props.demo || credit);
+  return <div data-overlay-scene-frame style={themeVars as CSSProperties}><DockDrivenSceneContent {...props} showCredit={showCredit} theme={theme} receiveProfile={receiveProfile} /></div>;
 }
 function DockDrivenSceneContent({ token, scene, staticMode, demo, showCredit, theme, receiveProfile }: DockSceneProps & { theme: OverlayTheme; receiveProfile: (message: OverlayProfileConfig) => void }) {
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);

@@ -3,11 +3,8 @@
 import { createContext, useContext } from "react";
 
 /**
- * The account-wide overlay choices of the selected token (its overlay
- * profile), shared by every Settings section that hands out URLs. Both
- * save as soon as they change (they are Instant controls) and follow the
- * account to any browser; copied URLs carry them as `credit=0` and
- * `voice=1`, so existing OBS sources keep working unchanged.
+ * The selected token's Instant preferences. Live sources receive credit
+ * changes from the profile. Ghost voice uses the copied widget URL.
  */
 export interface OverlayFlags {
   /** Show the "Overlay by sc2tools.com" credit. */

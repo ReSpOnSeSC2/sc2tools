@@ -44,6 +44,13 @@ function fireSocket(event: string, ...args: unknown[]) {
   for (const [name, handler] of socket.on.mock.calls) if (name === event) handler(...args);
 }
 
+function receiveCreditProfile(profileRevision: number, credit?: boolean) {
+  act(() => fireSocket("overlay:config", {
+    profile: { v: 1, theme: {}, widgetOptions: {}, ...(credit === undefined ? {} : { credit }) },
+    profileRevision,
+  }));
+}
+
 it("attaches scene resync and heartbeat resilience and shows terminal token failures", () => {
   render(<OverlaySceneClient token="private-scene-token" scene="between-games" />);
   act(() => fireSocket("connect"));
@@ -251,6 +258,9 @@ describe("live mode", () => {
         container.querySelector('[data-scene-layout="broll"]'),
       ).toBeTruthy();
       expect(container.querySelector(".sc2bd")).toBeNull();
+      expect(screen.queryByTestId("overlay-credit")).toBeNull();
+      receiveCreditProfile(1, true);
+      expect(screen.getByTestId("overlay-credit").getAttribute("data-placement")).toBe("bottom-center");
     },
   );
 
@@ -330,12 +340,37 @@ describe("sc2tools.com credit", () => {
   });
 
   it("stays off the Between Games frame, which sits behind the camera", () => {
-    render(<OverlaySceneClient token="tok" scene="between-games" demo />);
+    render(<OverlaySceneClient token="tok" scene="between-games" />);
+    receiveCreditProfile(1, true);
     expect(screen.queryByTestId("overlay-credit")).toBeNull();
   });
 
-  it("is hidden when the Browser Source URL says credit=0", () => {
+  it("is hidden in a demo when the preview URL says credit=0", () => {
     render(<OverlaySceneClient token="tok" scene="brb" demo showCredit={false} />);
+    expect(screen.queryByTestId("overlay-credit")).toBeNull();
+  });
+
+  it("waits for the first profile and defaults legacy profiles to visible", () => {
+    render(<OverlaySceneClient token="tok" scene="starting-soon" staticMode />);
+    expect(screen.queryByTestId("overlay-credit")).toBeNull();
+    receiveCreditProfile(0);
+    expect(screen.getByTestId("overlay-credit").getAttribute("data-placement")).toBe("bottom-center");
+  });
+
+  it("updates the saved credit on live scenes", () => {
+    render(<OverlaySceneClient token="tok" scene="intermission" />);
+    receiveCreditProfile(1, false);
+    expect(screen.queryByTestId("overlay-credit")).toBeNull();
+    receiveCreditProfile(2, true);
+    expect(screen.getByTestId("overlay-credit")).toBeTruthy();
+    receiveCreditProfile(3, false);
+    receiveCreditProfile(2, true);
+    expect(screen.queryByTestId("overlay-credit")).toBeNull();
+  });
+
+  it("honors an explicit hidden URL on a live scene", () => {
+    render(<OverlaySceneClient token="tok" scene="brb" showCredit={false} />);
+    receiveCreditProfile(1, true);
     expect(screen.queryByTestId("overlay-credit")).toBeNull();
   });
 });

@@ -4,7 +4,6 @@ import { Sparkles, Square, Tv } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { fmtAgo } from "@/lib/format";
-import { appendOverlayCreditToUrl } from "@/lib/overlayCredit";
 import type { OverlayTheme } from "@/lib/overlayTheme";
 import type { OverlayProfile } from "@/lib/overlayProfile";
 import { AgentStatusIndicator } from "./AgentStatusIndicator";
@@ -110,10 +109,7 @@ export function AllInOneRow({
   // New copies follow the saved profile; old explicit theme URLs still work.
   void theme;
   const { credit: showCredit, setCredit, busy } = useOverlayFlags();
-  const url = appendOverlayCreditToUrl(
-    `${origin ?? ""}/overlay/${token.token}`,
-    showCredit,
-  );
+  const url = `${origin ?? ""}/overlay/${token.token}`;
   return (
     <div className="space-y-2 border-b border-border px-4 py-3">
       <div className="flex flex-wrap items-baseline gap-x-2">

@@ -2,9 +2,8 @@ import rules from "./overlayProfileRules.json";
 import { normalizeOverlayLayout, type OverlayLayout } from "./overlayLayout";
 import { normalizeOverlayTheme, type OverlayTheme } from "./overlayTheme";
 /**
- * Account-wide overlay choices Settings bakes into the URLs it hands out
- * (`credit=0`, `voice=1`). Missing means not chosen yet: the credit shows
- * and Ghost voice is off.
+ * Optional preferences on a token. Missing preserves the defaults of showing
+ * credit and leaving Ghost voice off.
  */
 export type OverlayProfileFlags = { credit?: boolean; ghostVoice?: boolean };
 export type OverlayProfile = { v: 1; theme: OverlayTheme; widgetOptions: Record<string, { durationSec: number | null }>; layout?: OverlayLayout; layoutVertical?: OverlayLayout } & OverlayProfileFlags;

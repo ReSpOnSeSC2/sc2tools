@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { appendOverlayCreditToUrl } from "@/lib/overlayCredit";
 import { LAYOUT_LIMITS, LAYOUT_WIDGETS, type OverlayCanvas, type OverlayLayout, type WidgetPlacement } from "@/lib/overlayLayout";
 import type { OverlayProfile } from "@/lib/overlayProfile";
 import { WIDGET_GUIDES } from "@/lib/streamStudioLearn";
@@ -10,7 +9,6 @@ import type { WidgetId } from "@/components/overlay/widgetLifecycle";
 import { OverlayLayoutCanvas, type PreviewBoxes } from "./OverlayLayoutCanvas";
 import { CANVAS_SIZE, changeWidgetAnchor, defaultWidgetPlacement } from "./overlayCanvasGeometry";
 import { UrlRow } from "./OverlayUrlRow";
-import { useOverlayFlags } from "./overlayFlags";
 
 const NAMES = new Map<WidgetId, string>(WIDGET_GUIDES.map(guide => [guide.id, guide.name]));
 const CONTROL = "min-h-11 w-full rounded-md border border-border bg-bg-surface px-3 text-body text-text";
@@ -23,7 +21,6 @@ export function OverlayLayoutEditor({ profile, onChange, token, origin, disabled
   const [selected, setSelected] = useState<WidgetId>("opponent");
   const [snap, setSnap] = useState(true);
   const [boxes, setBoxes] = useState<PreviewBoxes>({});
-  const { credit } = useOverlayFlags();
   const layout = canvas === "vertical" ? profile.layoutVertical : profile.layout;
   const placement = layout?.[selected] ?? defaultWidgetPlacement(boxes[selected]);
   const size = CANVAS_SIZE[canvas];
@@ -78,7 +75,7 @@ export function OverlayLayoutEditor({ profile, onChange, token, origin, disabled
     </div>
     {canvas === "vertical" ? <div className="space-y-2 border-t border-border pt-3">
       <p className="text-caption text-text-muted">Use a {size.width} × {size.height} Browser Source in OBS for this vertical URL.</p>
-      <UrlRow url={appendOverlayCreditToUrl(`${origin ?? ""}/overlay/${encodeURIComponent(token)}?canvas=vertical`, credit)} compact={false} />
+      <UrlRow url={`${origin ?? ""}/overlay/${encodeURIComponent(token)}?canvas=vertical`} compact={false} />
     </div> : null}
   </fieldset>;
 }

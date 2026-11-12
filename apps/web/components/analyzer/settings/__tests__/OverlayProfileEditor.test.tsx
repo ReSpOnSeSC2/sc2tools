@@ -5,7 +5,7 @@ import { OverlayThemeSection } from "../OverlayThemeSection";
 import { OverlayWidgetDisplay } from "../OverlayWidgetDisplay";
 import { SettingsContextProvider } from "../SettingsContext";
 import { SettingsSaveBar } from "../SettingsSaveBar";
-import type { OverlayToken } from "../OverlayTokenHeader";
+import { AllInOneRow, type OverlayToken } from "../OverlayTokenHeader";
 
 const auth = vi.hoisted(() => ({ userId: "owner-a", isLoaded: true, isSignedIn: true, getToken: vi.fn(async () => "synthetic-jwt") }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
@@ -75,6 +75,27 @@ describe("saved overlay display draft", () => {
     view.unmount();
     render(<Fixture value={value} />);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it("saves credit instantly while the All-in-one source URL stays stable", async () => {
+    const value = token();
+    render(<SettingsContextProvider onDirtyChange={dirties}>
+      <OverlayProfileEditor token={value} onSaved={saved}>{({ profile }) =>
+        <AllInOneRow token={value} origin="https://studio.example" theme={profile.theme} />
+      }</OverlayProfileEditor>
+    </SettingsContextProvider>);
+    const toggle = screen.getByRole("switch", { name: "Show “Overlay by sc2tools.com” on stream" });
+    const reveal = screen.getByRole("button", { name: "Reveal" });
+    const source = screen.getByLabelText("All-in-one Browser Source URL");
+    expect(source.textContent).not.toContain(value.token);
+    fireEvent.click(reveal);
+    expect(source.textContent).toBe("https://studio.example/overlay/synthetic-token");
+    fireEvent.click(toggle);
+    await waitFor(() => expect(saved).toHaveBeenCalledWith({
+      profile: { v: 1, theme: {}, widgetOptions: {}, credit: false },
+      profileRevision: 1,
+    }));
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(source.textContent).toBe("https://studio.example/overlay/synthetic-token");
   });
   it("keeps a stale draft on CAS conflict without overwriting a different tab's profile", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: { code: "overlay_profile_changed", message: "Changed" } }), { status: 409 }));
