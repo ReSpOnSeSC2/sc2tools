@@ -10,7 +10,7 @@
 // and chat-bot tokens, pairing codes, game share tokens) or a live game key
 // holding both players' names.
 const CREDENTIAL_PATH_SEGMENT =
-  /\/(multichat|chatbot|overlay-tokens|device-pairings|build-intents\/live|shares)\/[^/?#]+/giu;
+  /\/(multichat|chatbot|overlay-tokens|device-pairings|build-intents\/live|shares|match-rooms)\/[^/?#]+/giu;
 // OBS browser sources, the Stream Dock and shared-game pages authenticate
 // with the token in the URL.
 const TOKEN_PAGE_SEGMENT = /^\/(overlay|dock|g)\/[^/?#]+/iu;

@@ -25,6 +25,7 @@
  */
 
 import { PRACTICE_LINK_PATTERN, PRACTICE_LINK_ROUTE } from "../practice/practiceLinkPath";
+import { ROOM_ROUTE } from "../matchRoomRoute";
 
 /** Paths that are never sent to Google Analytics. */
 const UNTRACKED_PATHS: ReadonlyArray<RegExp> = [
@@ -32,6 +33,7 @@ const UNTRACKED_PATHS: ReadonlyArray<RegExp> = [
   /^\/overlay(?:\/|$)/,
   /^\/dock(?:\/|$)/,
   /^\/wrapped(?:\/|$)/,
+  ROOM_ROUTE,
   /^\/(?:p|players)\/[^/]+\/replays(?:\/|$)/,
 ];
 

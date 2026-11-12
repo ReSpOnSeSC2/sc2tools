@@ -150,6 +150,10 @@ const nextConfig = {
         source: "/devices",
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },
+      {
+        source: "/match/room",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
       ...engineAssetHeaders,
       ...dailyAssetHeaders,
     ];

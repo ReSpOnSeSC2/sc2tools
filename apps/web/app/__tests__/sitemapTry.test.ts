@@ -32,5 +32,7 @@ describe("sitemap", () => {
     expect(listed).not.toContain("/wrapped");
     expect(listed).toContain("/");
     expect(listed).toContain("/arcade");
+    expect(listed).toContain("/match");
+    expect(listed).not.toContain("/match/room");
   });
 });

@@ -17,6 +17,8 @@ describe("isUntrackedPath", () => {
     "/overlay/tok123/scene/between-games",
     "/dock/tok123",
     "/wrapped",
+    "/match/room",
+    "/match/%72oom",
     "/players/reaver-7a6b/replays",
     "/players/reaver-7a6b/replays/01J",
     "/p/legacy-share/replays",
@@ -24,7 +26,7 @@ describe("isUntrackedPath", () => {
     expect(isUntrackedPath(path)).toBe(true);
   });
 
-  it.each(["/", "/app", "/guides/pvz", "/administration", "/overlays", "/players/reaver/replays-archive"])(
+  it.each(["/", "/app", "/guides/pvz", "/match", "/administration", "/overlays", "/players/reaver/replays-archive"])(
     "reports %s",
     (path) => {
       expect(isUntrackedPath(path)).toBe(false);

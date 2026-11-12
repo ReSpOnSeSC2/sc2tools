@@ -100,6 +100,7 @@ const COLLECTIONS = Object.freeze({
   ADMIN_EVENTS: "admin_events",
   SUPPORT_EMAIL_SYNC: "support_email_sync",
   SITE_PRESENCE: "site_presence",
+  MATCH_ROOMS: "match_rooms",
   SITE_CONFIG: "site_config",
   GHOST_EXAMPLES: "ghost_examples",
   COACHING: "coaching_locker",
