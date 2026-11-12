@@ -1,6 +1,7 @@
-import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
-import { checkAccessibility } from "./accessibility-check";
+import { expect, test, type APIRequestContext, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { captureAccessibility, checkAccessibility } from "./accessibility-check";
 import { contrastRatio } from "./contrast";
+import { FALLBACK_LATEST_AGENT_VERSION } from "../../lib/agentNotice";
 
 /**
  * Public-page responsive smoke, run at 360 / 768 / 1280 via the
@@ -121,6 +122,48 @@ test("changelog filters updates and exposes its public RSS feed", async ({ page,
   expect(rss.status()).toBe(200); expect(rss.headers()["content-type"]).toContain("application/rss+xml");
   expect(await rss.text()).toContain("/changelog#personal-notifications-and-replies");
 });
+
+for (const theme of ["light", "dark"] as const) {
+  test(`changelog shows desktop release notes and a separate feed in ${theme}`, async ({ page, request }, info) => {
+    await verifyAgentReleaseHistory(page, request, info, theme);
+  });
+}
+
+async function verifyAgentReleaseHistory(
+  page: Page,
+  request: APIRequestContext,
+  info: TestInfo,
+  theme: "light" | "dark",
+) {
+  await page.emulateMedia({ colorScheme: theme });
+  const response = await page.goto("/changelog");
+  expect(response?.status()).toBe(200);
+  const history = page.getByRole("region", { name: "Agent release notes" });
+  await page.getByRole("link", { name: "Agent release notes", exact: true }).click();
+  await expect(page).toHaveURL(/\/changelog#agent-release-notes$/);
+  const latest = history.locator("details").first();
+  const summary = latest.locator("summary");
+  await expect(summary).toContainText(`Agent ${FALLBACK_LATEST_AGENT_VERSION}`);
+  await expect(latest).toHaveAttribute("open", "");
+  await captureAccessibility(page, info, `f3-${theme}-expanded`);
+  await summary.press("Space");
+  await expect(latest).not.toHaveAttribute("open");
+  await captureAccessibility(page, info, `f3-${theme}-collapsed`);
+  await summary.press("Enter");
+  await expect(latest).toHaveAttribute("open", "");
+  await expect(summary).toBeFocused();
+  await expect(history.getByRole("link", { name: "Agent RSS feed" })).toHaveAttribute("href", "/changelog/agent.xml");
+  await expect(page.locator('head link[rel="alternate"][type="application/rss+xml"]')).toHaveCount(2);
+
+  const rss = await request.get("/changelog/agent.xml");
+  expect(rss.status()).toBe(200);
+  expect(rss.headers()["content-type"]).toContain("application/rss+xml");
+  const feed = await rss.text();
+  expect(feed).toContain(`/changelog#agent-v${FALLBACK_LATEST_AGENT_VERSION}</guid>`);
+  const { scrollWidth, width } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, width: window.innerWidth }));
+  expect(scrollWidth).toBeLessThanOrEqual(width);
+  await checkAccessibility(page, info, "/changelog", theme);
+}
 
 test("missing shared replay archives return a real public-friendly 404", async ({ page }) => {
   const response = await page.goto("/players/missing-shared-player/replays");

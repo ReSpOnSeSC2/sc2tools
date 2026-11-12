@@ -4754,6 +4754,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Owner-curated Practice Links support a synchronized video, a spoken drill, and local one-replay grading on desktop Chromium. The first links require a verified build and video pairing.
 
+### Agent release notes
+
+- Browse desktop app release notes by version on the changelog and subscribe to a dedicated Agent RSS feed.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

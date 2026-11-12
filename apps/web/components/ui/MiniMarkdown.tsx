@@ -15,6 +15,7 @@ export function MiniMarkdown({ text, className = "" }: { text: string; className
     if (heading) { flush(); blocks.push(<p key={blocks.length} className="font-semibold text-text">{inline(heading[1])}</p>); }
     else if (bullet) { if (paragraph.length) flush(); list.push(bullet[1]); }
     else if (!line.trim()) flush();
+    else if (list.length && /^\s/.test(line)) list[list.length - 1] += ` ${line.trim()}`;
     else { if (list.length) flush(); paragraph.push(line); }
   }
   flush(); if (code) blocks.push(<pre key={blocks.length} className="whitespace-pre-wrap break-words"><code>{code.join("\n")}</code></pre>);
