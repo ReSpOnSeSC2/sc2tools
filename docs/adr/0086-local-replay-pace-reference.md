@@ -9,19 +9,21 @@ ADR 0022 privacy boundary. Report exports keep their existing fields.
 The 5,300-MMR reference describes the replay collection of one Protoss player
 whose replay-recorded rating rounds to 5,300 in each source game. Eligible
 directions are PvP, PvT, PvZ, TvP and ZvP. TvP and ZvP describe the opponent’s
-perspective in that collection. Each opponent’s rating can differ from the
-anchor rating.
+perspective in that collection. Those cards identify whose rating and pace
+they show.
 Eight-worker and twelve-worker starts are separate. The report checks the
 recorded patch era and starting worker count before comparing.
 
 For each curve, interpolate worker count and collection rates onto a 10-second
 grid for the first 4:30. Rates are resources per minute. Integrate the sum of
 mineral and gas rates with trapezoids. Reject gaps longer than 30 seconds or
-insufficient coverage. The reference contains pointwise medians over at least
+insufficient coverage. Samples beyond the recorded game duration are excluded.
+The reference contains pointwise medians over at least
 30 games against at least five distinct opponents in each cohort, following the
 scale of the ADR 0023 guide sample defaults. The displayed
 gap compares first crossing times of the reference’s 4:00 values. A value not
-reached by 4:30 has no estimated time. An explicitly labelled all-in is noted.
+reached by 4:30 has no estimated time. The report flags named all-ins and
+canonical builds explicitly documented as all-ins by the replay detector.
 
 ## Build an approved reference
 

@@ -21,6 +21,16 @@ export type PaceGap = { allIn: boolean } & (MissingGap | MeasuredGap);
 
 const REFERENCES = readPaceReference(reference);
 const ALL_IN = /\ball[- ]in\b/i;
+// The replay detector documents these openings as all-ins without naming them that way.
+const DETECTED_ALL_INS = new Set([
+  "terran - 3-4 rax marine rush",
+  "tvt - proxy 4 rax reaper", "tvt - 3 rax marine",
+  "tvz - proxy 4 rax reaper", "tvz - 3 rax marine",
+  "tvp - proxy 4 rax reaper", "tvp - 3 rax marine", "tvp - 1-1-1 one base",
+  "zvt - 2 base nydus", "zvp - 2 base nydus", "zvz - 2 base nydus",
+  "zvt - ling bane bust", "zvp - ling bane bust",
+  "zvz - 12 pool into baneling",
+]);
 
 function comparedSeconds(curve: readonly number[], reference: readonly number[]): number | null {
   const target = reference[PACE_CHECKPOINT_INDEX];
@@ -30,7 +40,8 @@ function comparedSeconds(curve: readonly number[], reference: readonly number[])
 }
 
 function hasAllInLabel(game: PaceGame): boolean {
-  return [game.myBuild, game.opponent?.strategy].some((label) => typeof label === "string" && ALL_IN.test(label));
+  return [game.myBuild, game.opponent?.strategy].some((label) =>
+    typeof label === "string" && (ALL_IN.test(label) || DETECTED_ALL_INS.has(label.trim().toLowerCase())));
 }
 
 export function gamePaceGap(game: PaceGame, references: readonly PaceBucket[] = REFERENCES): PaceGap {
@@ -43,7 +54,7 @@ export function gamePaceGap(game: PaceGame, references: readonly PaceBucket[] = 
   const era = patchEraForGame(game);
   const baseline = references.find((bucket) => bucket.era === era && bucket.matchup === matchup);
   if (!baseline) return { kind: "no-reference", matchup, allIn };
-  const curve = paceCurves(game.macroBreakdown?.stats_events ?? [], era);
+  const curve = paceCurves(game.macroBreakdown?.stats_events ?? [], era, game.durationSec);
   if (!curve) return { kind: "missing-samples", allIn };
   return { kind: "measured", matchup, era, games: baseline.games, opponents: baseline.opponents,
     workers: comparedSeconds(curve.workers, baseline.workers), income: comparedSeconds(curve.income, baseline.income), allIn };

@@ -33,9 +33,9 @@ function measure(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-function economyPoint(sample: PaceSample): EconomyPoint | null {
+function economyPoint(sample: PaceSample, durationSec: number): EconomyPoint | null {
   const { time, food_workers: workers, minerals_collection_rate: minerals, vespene_collection_rate: gas } = sample;
-  if (!measure(time) || !measure(workers) || !measure(minerals) || !measure(gas)) return null;
+  if (!measure(time) || time > durationSec || !measure(workers) || !measure(minerals) || !measure(gas)) return null;
   const rate = minerals + gas;
   return measure(rate) ? { time, workers, rate } : null;
 }
@@ -44,8 +44,8 @@ function interpolate(from: number, to: number, fraction: number): number {
   return from + (to - from) * fraction;
 }
 
-function orderedOpening(samples: readonly PaceSample[], era: PaceEra): EconomyPoint[] | null {
-  const points = samples.flatMap((sample) => economyPoint(sample) ?? []);
+function orderedOpening(samples: readonly PaceSample[], era: PaceEra, durationSec: number): EconomyPoint[] | null {
+  const points = samples.flatMap((sample) => economyPoint(sample, durationSec) ?? []);
   if (points[0]?.time !== 0 || points[0].workers !== startingWorkers(era)) return null;
   const ordered = points.every((point, i) => i === 0 || point.time > points[i - 1].time);
   return ordered ? points : null;
@@ -55,8 +55,8 @@ function orderedOpening(samples: readonly PaceSample[], era: PaceEra): EconomyPo
  * Rates are resources per minute. Integrate the sum of minerals and gas with
  * the trapezoid rule on the same game-clock grid as worker counts.
  */
-export function paceCurves(samples: readonly PaceSample[], era: PaceEra): PaceCurves | null {
-  const points = orderedOpening(samples, era);
+export function paceCurves(samples: readonly PaceSample[], era: PaceEra, durationSec: number): PaceCurves | null {
+  const points = orderedOpening(samples, era, durationSec);
   if (!points) return null;
 
   const workers = [points[0].workers];

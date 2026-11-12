@@ -14,6 +14,12 @@ function samples({ start = 12, workerDelay = 0, rate = 600 } = {}): PaceSample[]
   }));
 }
 
+function withFinalTick(): PaceSample[] {
+  return [...samples().slice(0, -1), {
+    time: 270, food_workers: 39, minerals_collection_rate: 540, vespene_collection_rate: 60,
+  }];
+}
+
 function sourceGame(index: number) {
   return {
     gameKey: `local-game-${index}`, opponentKey: `local-opponent-${index % 5}`,
@@ -37,7 +43,7 @@ function game(overrides: Record<string, unknown> = {}) {
 describe("opening pace curves", () => {
   it("interpolates irregular samples and integrates minerals plus gas in resources per minute", () => {
     const series = samples().map((point) => ({ ...point, minerals_collection_rate: 60 + point.time * 6 }));
-    const curve = paceCurves(series, "after");
+    const curve = paceCurves(series, "after", 300);
     expect(curve?.workers).toHaveLength(28);
     expect(curve?.workers[24]).toBe(36);
     expect(curve?.income[24]).toBeCloseTo(3360, 10);
@@ -45,11 +51,11 @@ describe("opening pace curves", () => {
   });
 
   it("rejects the wrong worker start, a hole, non-increasing time and extrapolation", () => {
-    expect(paceCurves(samples({ start: 8 }), "after")).toBeNull();
-    expect(paceCurves(samples().filter(({ time }) => time < 100 || time > 200), "after")).toBeNull();
-    expect(paceCurves([...samples(), samples()[0]], "after")).toBeNull();
-    expect(paceCurves(samples().slice(0, -1), "after")).toBeNull();
-    expect(paceCurves(samples().slice(1), "after")).toBeNull();
+    expect(paceCurves(samples({ start: 8 }), "after", 300)).toBeNull();
+    expect(paceCurves(samples().filter(({ time }) => time < 100 || time > 200), "after", 300)).toBeNull();
+    expect(paceCurves([...samples(), samples()[0]], "after", 300)).toBeNull();
+    expect(paceCurves(samples().slice(0, -1), "after", 300)).toBeNull();
+    expect(paceCurves(samples().slice(1), "after", 300)).toBeNull();
   });
 
   it("finds the first crossing despite later losses and never guesses past the series", () => {
@@ -83,10 +89,12 @@ describe("offline 5,300-MMR reference", () => {
   });
 
   it("excludes short games, out-of-band ratings and incomplete curves from the floor", () => {
-    for (const ineligible of [{ durationSec: 269.9 }, { anchorMmr: 5350 }, { samples: samples().slice(0, -1) }]) {
+    for (const ineligible of [{ durationSec: 269.9 }, { durationSec: 270 }, { anchorMmr: 5350 }, { samples: samples().slice(0, -1) }]) {
       expect(buildPaceReference([...source.slice(1), { ...source[0], ...ineligible }]).buckets).toEqual([]);
     }
-    expect(buildPaceReference(source.map((entry) => ({ ...entry, durationSec: 270, anchorMmr: 5250 }))).buckets).toHaveLength(1);
+    expect(buildPaceReference(source.map((entry) => ({
+      ...entry, durationSec: 270, anchorMmr: 5250, samples: withFinalTick(),
+    }))).buckets).toHaveLength(1);
   });
 
   it.each(PACE_MATCHUPS)("builds %s from a qualifying cohort", (matchup) => {
@@ -129,6 +137,14 @@ describe("local pace comparison", () => {
     expect(gamePaceGap(game({ myBuild: "PvT - 7 Gate Blink All-in" }), buckets).allIn).toBe(true);
   });
 
+  it("recognizes documented all-ins without guessing from the word proxy or rush", () => {
+    expect(gamePaceGap(game({ opponent: { race: "Terran", strategy: "TvP - Proxy 4 Rax Reaper" } }), buckets).allIn).toBe(true);
+    expect(gamePaceGap(game({ myRace: "Terran", myBuild: "TvP - 1-1-1 One Base" }), buckets).allIn).toBe(true);
+    expect(gamePaceGap(game({ opponent: { race: "Zerg", strategy: "ZvP - 2 Base Nydus" } }), buckets).allIn).toBe(true);
+    expect(gamePaceGap(game({ myBuild: "PvT - Proxy Robo" }), buckets).allIn).toBe(false);
+    expect(gamePaceGap(game({ opponent: { race: "Zerg", strategy: "ZvP - 12 Pool Rush" } }), buckets).allIn).toBe(false);
+  });
+
   it("never substitutes another era, race, non-ladder game or unsupported matchup", () => {
     for (const overrides of [
       { gameVersion: "5.0.16.97425" },
@@ -147,7 +163,8 @@ describe("local pace comparison", () => {
 
   it("reports short or incomplete games instead of manufacturing a gap", () => {
     expect(gamePaceGap(game({ durationSec: 269 }), buckets).kind).toBe("short");
-    expect(gamePaceGap(game({ durationSec: 270 }), buckets).kind).toBe("measured");
+    expect(gamePaceGap(game({ durationSec: 270 }), buckets).kind).toBe("missing-samples");
+    expect(gamePaceGap(game({ durationSec: 270, macroBreakdown: { stats_events: withFinalTick() } }), buckets).kind).toBe("measured");
     expect(gamePaceGap(game({ macroBreakdown: { stats_events: [] } }), buckets).kind).toBe("missing-samples");
   });
 });

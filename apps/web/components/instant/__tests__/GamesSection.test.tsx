@@ -14,6 +14,7 @@ import { GamesSection } from "../report/GamesSection";
 import { BUILD_TIMES_NOTE, GameMmr, NEXT_GAME_MMR_NOTE, gameTitle } from "../report/GameDetail";
 import { mmrPairLabel } from "../report/GameList";
 import { nextHover } from "../report/OfflineMacroChart";
+import { PaceGapCard } from "../report/PaceGapCard";
 
 // MOCK: a switch that makes the chart's series builder throw, to prove a
 // chart failure stays inside the chart. Off, the real builder runs.
@@ -70,6 +71,13 @@ function threeGames() {
   const [older, newer] = ladderPair();
   return buildReportGames([older, realWin(), newer]);
 }
+
+it.each([["TvP", "Terran"], ["ZvP", "Zerg"]])("identifies the rating anchor and pace perspective for %s", (matchup, race) => {
+  render(<PaceGapCard result={{ kind: "measured", matchup, era: "after", games: 30, opponents: 5, workers: 0, income: 0, allIn: false }} />);
+  const pace = screen.getByRole("region", { name: "Pace gap versus a 5,300-MMR reference" });
+  expect(within(pace).queryByText(new RegExp(`${race} opponents of a 5,300-MMR Protoss player`))).not.toBeNull();
+  expect(within(pace).queryByText(/30 reference games · 5 distinct opponents/)).not.toBeNull();
+});
 
 describe("GamesSection picker", () => {
   it("shows the newest game by default and switches on click", async () => {

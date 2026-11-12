@@ -10,10 +10,14 @@ function timing(seconds: number | null): string {
 
 function PaceMeasurements({ result }: { result: Extract<PaceGap, { kind: "measured" }> }) {
   const era = result.era === "before" ? "8-worker patch era" : "12-worker patch era";
+  const opponentRace = result.matchup === "TvP" ? "Terran" : result.matchup === "ZvP" ? "Zerg" : null;
   return <>
     <p className="text-caption text-text-muted">
       {result.matchup} · {era} · {result.games} reference games · {result.opponents} distinct opponents
     </p>
+    {opponentRace ? <p className="text-caption text-text-muted">
+      This reference measures {opponentRace} opponents of a 5,300-MMR Protoss player. The opponents’ ratings may differ.
+    </p> : null}
     <dl className="grid gap-2 sm:grid-cols-2">
       <div>
         <dt className="text-caption text-text-muted">Worker count</dt>

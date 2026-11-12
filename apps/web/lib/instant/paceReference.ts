@@ -95,7 +95,7 @@ function eligibleCurve(game: SourceGame): PaceCurves | null {
   // The anchor is the collection's Protoss player, including when the
   // sampled perspective is their Terran or Zerg opponent.
   if (Math.round(game.anchorMmr / 100) * 100 !== PACE_REFERENCE_MMR || game.durationSec < PACE_WINDOW) return null;
-  const curve = paceCurves(game.samples, game.era);
+  const curve = paceCurves(game.samples, game.era, game.durationSec);
   return curve && validIncome(curve.income) ? curve : null;
 }
 
