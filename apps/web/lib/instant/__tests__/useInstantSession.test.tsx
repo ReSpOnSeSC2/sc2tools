@@ -550,6 +550,28 @@ describe("useInstantSession: cancel and analytics", () => {
     expect(events("instant_parse_done")).toEqual([{ ok: 2, failed: 3, median_ms: 150 }]);
     expect(events("instant_error")).toEqual([{ kind: "ai_game" }, { kind: "corrupt_file" }]);
   });
+
+  it("omits local Grade intake, result and parse error analytics", async () => {
+    const engine = new MockEngine();
+    engine.scans.set("a.SC2Replay", scan("2-S2-1-1", { toonFromPath: ME }));
+    engine.scans.set("b.SC2Replay", { ok: false, errorKind: "corrupt_file" });
+    const { result } = mount(engine, { trackAnalytics: false });
+    await add(result, [replay("a.SC2Replay"), replay("b.SC2Replay")]);
+    await start(result);
+    expect(result.current.parsed).toHaveLength(1);
+    expect(result.current.failed).toHaveLength(1);
+    expect(gaEvent).not.toHaveBeenCalled();
+  });
+
+  it("omits a local Grade engine failure from analytics", async () => {
+    const engine = new MockEngine();
+    engine.bootError = new EngineError("worker_crashed", "fixture boot failure");
+    const { result } = mount(engine, { trackAnalytics: false });
+    await add(result, [replay("a.SC2Replay")]);
+    await start(result);
+    expect(result.current.error).toBe("worker_crashed");
+    expect(gaEvent).not.toHaveBeenCalled();
+  });
 });
 
 describe("useInstantSession: progress throttle", () => {
