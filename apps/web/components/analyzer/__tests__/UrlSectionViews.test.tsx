@@ -94,16 +94,43 @@ it("keeps Opponents URL sort above storage, debounces search without losing an i
   localStorage.setItem("analyzer.opponents.sort", JSON.stringify({ sortBy: "games", sortDir: "desc" }));
   navigate("/app/opponents?q=Alpha&sort=name%3Aasc&impact=tracked", "popstate");
   const { result } = renderHook(() => useOpponentUrlControls());
+  expect(result.current.search).toBe("Alpha");
   expect(result.current.sort.sortBy).toBe("name"); expect(result.current.sort.sortDir).toBe("asc"); expect(result.current.impact).toBe("tracked");
   act(() => result.current.setSearch("Beta"));
+  act(() => vi.advanceTimersByTime(299));
+  expect(route.replace).not.toHaveBeenCalled();
   act(() => result.current.sort.setSortExplicit("netMmr", "desc"));
   expect(result.current.search).toBe("Beta");
-  act(() => { vi.advanceTimersByTime(300); });
+  const sorted = new URLSearchParams(window.location.search);
+  expect(sorted.has("q")).toBe(false);
+  expect(sorted.get("opponentFilter")).toBe("Alpha");
+  act(() => { vi.advanceTimersByTime(1); });
   const params = new URLSearchParams(window.location.search);
-  expect(params.get("q")).toBe("Beta"); expect(params.get("sort")).toBe("netMmr:desc");
+  expect(params.has("q")).toBe(false); expect(params.get("opponentFilter")).toBe("Beta"); expect(params.get("sort")).toBe("netMmr:desc");
   expect(JSON.parse(localStorage.getItem("analyzer.opponents.sort")!)).toEqual({ sortBy: "netMmr", sortDir: "desc" });
   act(() => navigate("/app/opponents?q=Alpha&sort=wins%3Aasc&notes=1", "popstate"));
   expect(result.current.search).toBe("Alpha"); expect(result.current.sort.sortBy).toBe("wins"); expect(result.current.sort.sortDir).toBe("asc"); expect(result.current.hasNotes).toBe(true);
+});
+it("clears a legacy opponent filter and keeps unrelated paging and cohort state", () => {
+  vi.useFakeTimers();
+  navigate("/app/opponents?q=Legacy&cursor=page2&filters=1&map=Test+Map&future=keep", "popstate");
+  const { result } = renderHook(() => useOpponentUrlControls());
+  expect(result.current.search).toBe("Legacy");
+  act(() => result.current.setSearch(""));
+  act(() => vi.advanceTimersByTime(300));
+  expect(Object.fromEntries(new URLSearchParams(window.location.search))).toEqual({ cursor: "page2", filters: "1", map: "Test Map", future: "keep" });
+  expect(result.current.search).toBe("");
+});
+it("prefers even an empty new opponent filter and restores legacy Back over a queued edit", () => {
+  vi.useFakeTimers();
+  navigate("/app/opponents?opponentFilter=&q=Legacy", "popstate");
+  const { result } = renderHook(() => useOpponentUrlControls());
+  expect(result.current.search).toBe("");
+  act(() => result.current.setSearch("Later"));
+  act(() => navigate("/app/opponents?q=Previous", "popstate"));
+  act(() => vi.advanceTimersByTime(300));
+  expect(result.current.search).toBe("Previous");
+  expect(route.replace).not.toHaveBeenCalled();
 });
 it.each(["region", "lastResult", "lastGameLength", "avgGameLength", "map", "myBuild", "opponentBuild", "macroBreakdown", "avgMacroScore", "buildOrderDate"])("keeps controlled %s sorts compatible with saved preferences and passive Back", column => {
   const saved = { sortBy: "games", sortDir: "desc" }, storageKey = "analyzer.opponents.sort";

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { browserQueryLocation, queryLocation, UrlQueryNavigation, type QueryWriteGuard } from "./urlQueryNavigation";
+import { canonicalizeOpponentFilter, OPPONENT_LIST_PATH } from "./opponentListQuery";
 export type UrlHistoryMode = "replace" | "push";
 const navigation = new UrlQueryNavigation();
 export type SectionHistoryState = { sc2toolsStrategyDrill?: string };
@@ -33,7 +34,11 @@ export function useUrlQueryWriter() {
     const beforeEpoch = navigation.epoch;
     const pending = historyMetadata.get(navigation.expected);
     const previous = mode === "replace" ? pending?.epoch === navigation.epoch ? pending.value : { sc2toolsStrategyDrill: window.history.state?.sc2toolsStrategyDrill } : {};
-    const href = navigation.prepare(change, live, guard ?? undefined); if (!href) return false;
+    const href = navigation.prepare(params => {
+      if (live.path === OPPONENT_LIST_PATH) canonicalizeOpponentFilter(params);
+      return change(params);
+    }, live, guard ?? undefined);
+    if (!href) return false;
     const carried = navigation.epoch === beforeEpoch ? previous : { sc2toolsStrategyDrill: window.history.state?.sc2toolsStrategyDrill };
     const marker = (state ?? carried).sc2toolsStrategyDrill;
     historyMetadata.set(href, { epoch: navigation.epoch, value: typeof marker === "string" && marker.length <= 100 ? { sc2toolsStrategyDrill: marker } : {} });

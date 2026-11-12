@@ -17,16 +17,16 @@ it("reads explicit URL state over storage and debounces only the query while pre
   act(() => result.current.setSearch("Beta"));
   act(() => vi.advanceTimersByTime(299)); expect(location.replace).not.toHaveBeenCalled();
   act(() => vi.advanceTimersByTime(1));
-  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?q=Beta&sort=name%3Aasc&impact=tracked&notes=1&future=keep");
+  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?sort=name%3Aasc&impact=tracked&notes=1&future=keep&opponentFilter=Beta");
   act(() => result.current.sort.setSortExplicit("wins", "desc"));
-  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?q=Beta&sort=wins%3Adesc&impact=tracked&notes=1&future=keep");
+  expect(location.replace).toHaveBeenLastCalledWith("/app/opponents?sort=wins%3Adesc&impact=tracked&notes=1&future=keep&opponentFilter=Beta");
   expect(JSON.parse(localStorage.getItem("analyzer.opponents.sort")!)).toEqual({ sortBy: "wins", sortDir: "desc" });
 });
 it("applies browser Back URL state without briefly rewriting it with the previous controls", () => {
   vi.useFakeTimers();
   const first = route("q=Alpha&sort=name");
   const { result, rerender } = renderHook(({ location }) => useOpponentListNavigation(location), { initialProps: { location: first } });
-  const back = route("q=Beta&sort=games&dir=asc&notes=1");
+  const back = route("q=Old&opponentFilter=Beta&sort=games&dir=asc&notes=1");
   rerender({ location: back });
   expect(result.current.search).toBe("Beta"); expect(result.current.sort.sortBy).toBe("games"); expect(result.current.hasNotes).toBe(true);
   expect(back.replace).not.toHaveBeenCalled();
@@ -54,13 +54,19 @@ it("keeps URL hydration and Back read-only while intentional external setters pe
   expect(JSON.parse(localStorage.getItem(key)!)).toEqual({ sortBy: "wins", sortDir: "desc" });
 });
 it("flushes a pending search into the history entry and saves the exact render window before a dossier opens", () => {
-  const location = route("future=keep");
+  const location = route("future=keep&q=Old");
   const { result } = renderHook(() => useOpponentListNavigation(location));
   act(() => result.current.setSearch("Still typing"));
   act(() => result.current.remember({ renderWindow: 600, expandedGroups: ["123"] }));
   const stored = JSON.parse(sessionStorage.getItem("opponents:list-state")!);
-  expect(stored.listUrl).toBe("/app/opponents?future=keep&q=Still+typing"); expect(stored.renderWindow).toBe(600); expect(stored.expandedGroups).toEqual(["123"]);
-  expect(window.location.search).toBe("?future=keep&q=Still+typing"); expect(sessionStorage.getItem("opponents:from-list")).toBe("1");
+  expect(stored.listUrl).toBe("/app/opponents?future=keep&opponentFilter=Still+typing"); expect(stored.renderWindow).toBe(600); expect(stored.expandedGroups).toEqual(["123"]);
+  expect(window.location.search).toBe("?future=keep&opponentFilter=Still+typing"); expect(sessionStorage.getItem("opponents:from-list")).toBe("1");
+});
+it("reads a new opponent filter ahead of the legacy alias, including an explicit empty value", () => {
+  expect(readOpponentListQuery("q=Legacy+Fixture").q).toBe("Legacy Fixture");
+  expect(readOpponentListQuery("q=Legacy&opponentFilter=Canonical+Fixture").q).toBe("Canonical Fixture");
+  expect(readOpponentListQuery("q=Legacy&opponentFilter=").q).toBe("");
+  expect(writeOpponentListQuery("q=Legacy&opponentFilter=Old&cursor=page2", readOpponentListQuery(""))).toBe("cursor=page2");
 });
 it("omits defaults and ignores invalid URL enum values without removing future parameters", () => {
   expect(writeOpponentListQuery("q=gone&sort=bad&dir=bad&impact=bad&notes=0&future=keep", readOpponentListQuery(""))).toBe("future=keep");

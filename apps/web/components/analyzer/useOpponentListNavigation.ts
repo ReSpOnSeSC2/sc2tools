@@ -6,6 +6,7 @@ import { usePersistentSort } from "@/components/ui/SortableTh";
 import type { SortState } from "@/components/ui/SortableTh";
 import { OPPONENT_COMPARATORS } from "./opponentListSort";
 import { OPPONENT_DETAIL_SORT_KEYS } from "@/lib/opponentPresentation";
+import { canonicalizeOpponentFilter, LEGACY_OPPONENT_FILTER_KEY, OPPONENT_FILTER_KEY, OPPONENT_LIST_PATH } from "@/lib/opponentListQuery";
 
 export type MmrImpactFilter = "all" | "tracked" | "net-gain" | "net-loss";
 export type OpponentListLocation = {
@@ -22,7 +23,7 @@ export function readOpponentListQuery(query: string) {
   const impact = params.get("impact");
   const [column, direction] = (params.get("sort") || "").split(":");
   return {
-    q: (params.get("q") || "").slice(0, 200).replace(/[\u0000-\u001f\u007f]/g, ""),
+    q: (params.get(OPPONENT_FILTER_KEY) ?? params.get(LEGACY_OPPONENT_FILTER_KEY) ?? "").slice(0, 200).replace(/[\u0000-\u001f\u007f]/g, ""),
     sort: OPPONENT_SORTS.has(column) ? column : "lastPlayed",
     dir: (direction || params.get("dir")) === "asc" ? "asc" as const : "desc" as const,
     impact: (["tracked", "net-gain", "net-loss"].includes(impact || "") ? impact : "all") as MmrImpactFilter,
@@ -32,7 +33,14 @@ export function readOpponentListQuery(query: string) {
 type Query = ReturnType<typeof readOpponentListQuery>;
 export function writeOpponentListQuery(query: string, state: Query) {
   const params = new URLSearchParams(query);
-  const values = { q: state.q || null, sort: state.sort === "lastPlayed" && state.dir === "desc" ? null : `${state.sort}:${state.dir}`, dir: null, impact: state.impact === "all" ? null : state.impact, notes: state.notes ? "1" : null };
+  const values = {
+    [LEGACY_OPPONENT_FILTER_KEY]: null,
+    [OPPONENT_FILTER_KEY]: state.q || null,
+    sort: state.sort === "lastPlayed" && state.dir === "desc" ? null : `${state.sort}:${state.dir}`,
+    dir: null,
+    impact: state.impact === "all" ? null : state.impact,
+    notes: state.notes ? "1" : null,
+  };
   for (const [key, value] of Object.entries(values)) { if (value === null) params.delete(key); else params.set(key, value); }
   return params.toString();
 }
@@ -40,10 +48,13 @@ export type OpponentListSnapshot = { listUrl: string; scrollY: number; renderWin
 export function storedOpponentListUrl() {
   try {
     const stored = JSON.parse(sessionStorage.getItem("opponents:list-state") || "null");
-    const url = new URL(stored?.listUrl || "/app/opponents", window.location.origin);
-    if (url.origin === window.location.origin && url.pathname === "/app/opponents") return `${url.pathname}${url.search}`;
+    const url = new URL(stored?.listUrl || OPPONENT_LIST_PATH, window.location.origin);
+    if (url.origin === window.location.origin && url.pathname === OPPONENT_LIST_PATH) {
+      canonicalizeOpponentFilter(url.searchParams);
+      return `${url.pathname}${url.search}`;
+    }
   } catch { /* A malformed or unavailable entry falls back to the list. */ }
-  return "/app/opponents";
+  return OPPONENT_LIST_PATH;
 }
 
 export type OpponentListControls = { search: string; setSearch: (value: string) => void; impact: MmrImpactFilter; setImpact: (value: MmrImpactFilter) => void; hasNotes: boolean; setHasNotes: (value: boolean) => void; sort: SortState };
@@ -88,7 +99,7 @@ export function useOpponentListNavigation(location?: OpponentListLocation, contr
   const remember = useCallback((state: Pick<OpponentListSnapshot, "renderWindow" | "expandedGroups">) => {
     const route = locationRef.current;
     const query = writeOpponentListQuery(route?.queryForReturn?.() ?? route?.query ?? "", currentRef.current);
-    const listUrl = `${route?.pathname || "/app/opponents"}${query ? `?${query}` : ""}`;
+    const listUrl = `${route?.pathname || OPPONENT_LIST_PATH}${query ? `?${query}` : ""}`;
     try {
       // Flush a search still inside its debounce before leaving this history
       // entry, so browser Back and the saved scroll window refer to one URL.

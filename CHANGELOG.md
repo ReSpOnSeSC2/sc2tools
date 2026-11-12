@@ -4802,6 +4802,11 @@ release preparation, not a signed or published 0.24.9 installer.
 - Changing analytics consent updates other open SC2 Tools tabs, including the
   status page, without a reload.
 
+### Opponent filter links
+
+- New opponent list links keep filter text outside the query keys Google
+  Analytics Site search reads. Older opponent links still open their saved filter.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

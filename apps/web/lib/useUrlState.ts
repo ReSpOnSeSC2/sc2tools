@@ -19,6 +19,7 @@ export function sectionQueryKey(key: string) {
 export type UrlStateOptions<T> = {
   parse: (raw: string | null) => T; serialize: (value: T) => string | null;
   defaultValue: T; mode?: UrlHistoryMode; storageKey?: string; store?: (value: T) => unknown; debounceMs?: number;
+  legacyKey?: string;
 };
 type WriteSettings = { mode?: UrlHistoryMode; debounceMs?: number; historyState?: SectionHistoryState };
 
@@ -36,7 +37,8 @@ export function useUrlState<T>(key: string, options: UrlStateOptions<T>) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<{ patch: QueryPatch; guard: QueryWriteGuard | null } | null>(null);
   const parse = (raw: string | null) => { try { return options.parse(raw); } catch { return options.defaultValue; } };
-  const params = new URLSearchParams(writer.search), values = params.getAll(key);
+  const params = new URLSearchParams(writer.search);
+  const values = params.getAll(options.legacyKey && !params.has(key) ? options.legacyKey : key);
   const committedValue = values.length ? parse(values.length === 1 ? values[0] : null) : fallback;
   const hasDraft = draft?.epoch === writer.epoch && draft.path === writer.path;
   const value = hasDraft ? draft.value : committedValue;
