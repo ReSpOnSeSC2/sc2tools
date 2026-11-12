@@ -322,6 +322,9 @@ export async function renderSeasonRecapPng(
     ["Win rate", wr],
     ["MMR", cardMmrSummary(recap.mmrJourneys)],
   ];
+  const valueX = CARD_PAD + 240;
+  const storyX = CARD_W / 2 + 20;
+  const valueWidth = storyX - valueX - 20;
   let y = 190;
   for (const [label, value] of lines) {
     ctx.fillStyle = "#8a96a8";
@@ -329,7 +332,7 @@ export async function renderSeasonRecapPng(
     ctx.fillText(label, CARD_PAD, y);
     ctx.fillStyle = "#ffffff";
     ctx.font = `700 34px ${FONT_STACK}`;
-    ctx.fillText(value, CARD_PAD + 240, y - 4);
+    ctx.fillText(value, valueX, y - 4, valueWidth);
     y += 64;
   }
 
@@ -337,7 +340,7 @@ export async function renderSeasonRecapPng(
   ctx.font = `400 24px ${FONT_STACK}`;
   let sy = 190;
   for (const s of recapCardStory(recap)) {
-    sy = wrapText(ctx, s, CARD_W / 2 + 20, sy, CARD_W / 2 - CARD_PAD - 20, 32, 3) + 14;
+    sy = wrapText(ctx, s, storyX, sy, CARD_W - storyX - CARD_PAD, 32, 3) + 14;
   }
 
   drawCardFooter(ctx, { brand: "SC2 Tools · Season Recap" });
