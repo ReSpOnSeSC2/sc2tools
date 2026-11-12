@@ -109,6 +109,9 @@ async function analyse(page: Page, files: string[], player: RegExp): Promise<voi
 
 /** Both build orders and the (lazily loaded) macro chart of the selected game. */
 async function expectSelectedGameDetail(page: Page): Promise<void> {
+  const pace = page.getByRole("region", { name: "Pace gap versus a 5,300-MMR reference" });
+  await pace.scrollIntoViewIfNeeded();
+  await expect(pace.getByRole("heading")).toBeVisible();
   const builds = page.getByTestId("report-build-orders");
   await builds.scrollIntoViewIfNeeded();
   await expect(builds.getByTestId("build-column-me")).toBeVisible();

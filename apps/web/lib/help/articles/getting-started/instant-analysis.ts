@@ -6,7 +6,7 @@ const article: HelpArticle = {
   summary: "Try a private replay report, see a real example, follow opener guides and choose what to include in a shareable image.",
   category: "getting-started", audience: "all", order: 5,
   keywords: ["try", "instant analysis", "share report", "sample report", "PNG", "no download", "guide", "browser"],
-  updated: "2026-11-11",
+  updated: "2026-11-12",
   body: [
     { type: "paragraph", text: "When Instant Analysis is available, open [Analyze your replays](/try). Pick replay files, a zip or a folder. The analyzer scans the selection and analyzes up to 25 1v1 games, newest first. A game resumed from a replay can use an analysis slot before it is skipped. Choose your player when asked. Keep the tab open while the report is prepared. Your replay files stay on this device." },
     { type: "heading", text: "The home-page build editor demo", anchor: "home-demo" },
@@ -19,6 +19,8 @@ const article: HelpArticle = {
     { type: "paragraph", text: "Highlights appear when your games support them. You may see your longest win streak, biggest upset, favorite map or a recurring opponent. The map and game-length cards show where and when you win most often." },
     { type: "heading", text: "Watch a game", anchor: "watch" },
     { type: "paragraph", text: "Select a game in your report and choose **Watch this game** when playback is available. Use **Play** or the position slider. The map draws units and buildings from the positions recorded in your replay. Some movement may be missing. Watching a game does not upload it." },
+    { type: "heading", text: "Compare opening pace", anchor: "pace" },
+    { type: "paragraph", text: "In a game’s detail, **Pace gap versus a 5,300-MMR reference** compares the time to reach the reference’s 4:00 worker count and total resources collected. It needs a ranked game with at least 4:30 of opening economy data and a reference for the same matchup and worker-start patch era. The 5,300 MMR belongs to the Protoss player who supplied the reference. Terran and Zerg curves measure their opponents, whose ratings may differ. The report calls out all-ins when the replay identifies one." },
     { type: "heading", text: "Export your report", anchor: "export" },
     { type: "paragraph", text: "Open **Export**, then choose **Download games (CSV)** or **Copy summary**. The CSV contains your currently visible games and includes opponent names. The shareable summary uses the same filters and omits opponent names." },
     { type: "heading", text: "Share selected report rows", anchor: "share" },

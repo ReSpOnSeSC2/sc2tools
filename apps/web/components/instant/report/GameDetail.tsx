@@ -20,7 +20,9 @@ import { LocalReplayPanel } from "./LocalReplayPanel";
 import { gameBuilds, macroChartProps, type GameBuilds } from "@/lib/instant/reportGameDetail";
 import { formatMmr, mmrGapLabel, signedMmr } from "@/lib/instant/reportMmr";
 import { formatGameClock } from "@/lib/macro";
+import { gamePaceGap } from "@/lib/instant/gmGap";
 import { LazyMacroChart } from "./LazyMacroChart";
+import { PaceGapCard } from "./PaceGapCard";
 import { OutcomeMark, formatReportDate } from "./ReportBits";
 
 /** Why a next-game change is not "this game's" MMR change. */
@@ -144,10 +146,12 @@ export function GameBuildOrders({ builds, opponentName }: { builds: GameBuilds; 
 export function GameDetail({ game }: { game: ReportGame }) {
   const builds = useMemo(() => gameBuilds(game.payload), [game.payload]);
   const chart = useMemo(() => macroChartProps(game.payload, builds), [game.payload, builds]);
+  const pace = useMemo(() => gamePaceGap(game.payload), [game.payload]);
   return (
     <div className="min-w-0 space-y-4" data-testid="report-game-detail">
       <GameHeading game={game} />
       <GameMmr mmr={game.mmr} next={game.nextMmr} />
+      <PaceGapCard result={pace} />
       {game.payload.mapPlayback ? <LocalReplayPanel data={game.payload.mapPlayback} patchEra={patchEraForGame(game.payload)} /> : null}
       <GameBuildOrders builds={builds} opponentName={game.opponentName} />
       {chart ? (
