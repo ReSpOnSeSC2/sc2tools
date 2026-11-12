@@ -6,7 +6,7 @@ const { OverlayTokenRotation, replacementTargets } = require("./overlayTokenRota
 const { COLLECTIONS } = require("../config/constants");
 const { randomToken } = require("../util/hash");
 const { stampVersion } = require("../db/schemaVersioning");
-const { validateOverlayProfile, defaultOverlayProfile, overlayProfileForRead } = require("../validation/overlayProfile");
+const { validateOverlayProfile, defaultOverlayProfile, overlayProfileForRead, overlayProfileForStorage } = require("../validation/overlayProfile");
 
 /** @param {unknown} value */
 const profileRevision = value => Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : 0;
@@ -176,7 +176,7 @@ class OverlayTokensService {
       token: it.token, label: it.label, createdAt: it.createdAt,
       lastSeenAt: it.lastSeenAt ?? null, revokedAt: it.revokedAt ?? null,
       enabledWidgets: Array.isArray(it.enabledWidgets) ? it.enabledWidgets : [...DEFAULT_WIDGETS],
-      profile: overlayProfileForRead(it.profile), profileRevision: profileRevision(it.profileRevision),
+      profile: overlayProfileForRead(it.profile, it.creditQr), profileRevision: profileRevision(it.profileRevision),
       ...(it._rotation ? it._rotation.state === "complete" && ready.has(it._rotation.to)
         ? { replacedBy: it._rotation.to } : { rotationPending: true } : {}),
     }));
@@ -227,7 +227,7 @@ class OverlayTokensService {
           enabledWidgets: Array.isArray(row.enabledWidgets)
             ? row.enabledWidgets
             : [...DEFAULT_WIDGETS],
-          profile: overlayProfileForRead(row.profile),
+          profile: overlayProfileForRead(row.profile, row.creditQr),
           profileRevision: profileRevision(row.profileRevision),
         };
         if (this.resolveInflight.get(cacheKey) === pending) {
@@ -332,14 +332,15 @@ class OverlayTokensService {
    * @param {string} userId @param {string} token @param {unknown} raw
    * @param {unknown} expectedRevision */
   async setProfile(userId, token, raw, expectedRevision) {
-    const profile = validateOverlayProfile(raw);
+    const stored = overlayProfileForStorage(validateOverlayProfile(raw));
     if (!Number.isSafeInteger(expectedRevision) || Number(expectedRevision) < 0 || Number(expectedRevision) >= Number.MAX_SAFE_INTEGER) {
       throw Object.assign(new Error("Use the current overlay profile revision."), { status: 400, code: "invalid_overlay_profile_revision" });
     }
     const revision = Number(expectedRevision);
-    const row = await this.db.overlayTokens.findOneAndUpdate({ userId, token, revokedAt: null, _rotation: { $exists: false }, _rotationPending: { $ne: true },
+    const update = { ...stored, profileRevision: revision + 1 };
+    const row = await this.db.overlayTokens.findOneAndUpdate({ ...activeOwnedToken(userId, token),
       $or: [{ profileRevision: revision }, ...(revision === 0 ? [{ profileRevision: { $exists: false } }] : [])],
-    }, { $set: { profile, profileRevision: revision + 1 } }, { returnDocument: "after", projection: { _id: 0, profile: 1, profileRevision: 1 } });
+    }, { $set: update }, { returnDocument: "after", projection: { _id: 0, profile: 1, profileRevision: 1, creditQr: 1 } });
     if (!row) {
       const owned = await this.tokenBelongsToUser(userId, token);
       throw Object.assign(new Error(owned ? "overlay_profile_changed" : "not_found"), { status: owned ? 409 : 404, code: owned ? "overlay_profile_changed" : "not_found" });
@@ -348,7 +349,7 @@ class OverlayTokensService {
     this.resolveCache.delete(cacheKey);
     const pending = this.resolveInflight.get(cacheKey);
     if (pending) { this.invalidatedInflight.add(pending); this.profileChangedInflight.add(pending); }
-    return { profile: overlayProfileForRead(row.profile), profileRevision: profileRevision(row.profileRevision) };
+    return { profile: overlayProfileForRead(row.profile, row.creditQr), profileRevision: profileRevision(row.profileRevision) };
   }
 
   /**
@@ -368,9 +369,9 @@ class OverlayTokensService {
   async readOwnedProfile(userId, token) {
     const row = await this.db.overlayTokens.findOne(
       activeOwnedToken(userId, token),
-      { projection: { _id: 0, profile: 1, profileRevision: 1 } },
+      { projection: { _id: 0, profile: 1, profileRevision: 1, creditQr: 1 } },
     );
-    return row ? { profile: overlayProfileForRead(row.profile), profileRevision: profileRevision(row.profileRevision) } : null;
+    return row ? { profile: overlayProfileForRead(row.profile, row.creditQr), profileRevision: profileRevision(row.profileRevision) } : null;
   }
 
   /** Bounded device-heartbeat catch-up; private device auth is required by

@@ -60,6 +60,16 @@ test("preserves profile, authoritative studio and all token-owned data; repeat r
   expect(await db.overlayTokens.countDocuments({ userId: "owner" })).toBe(2);
 });
 
+test.each([true, false])("rotation keeps the saved QR choice %j outside the stored profile", async creditQr => {
+  const profile = { v: 1, theme: { accent: "#abc" }, widgetOptions: {}, credit: false };
+  await tokens.setProfile("owner", original.token, { ...profile, creditQr }, 0);
+  const result = await tokens.rotate("owner", original.token);
+  const row = await db.overlayTokens.findOne({ token: result.token });
+  expect(row.profile).toEqual(profile);
+  expect(row.creditQr).toBe(creditQr);
+  expect(await tokens.resolve(result.token)).toMatchObject({ profile: { ...profile, creditQr }, profileRevision: 0 });
+});
+
 test.each(["reserve", "destination", "studio", ...ENGAGEMENT, "revoke", "activate"])("recovers after an ambiguous %s write without losing or duplicating data", async stage => {
   const collection = stage === "studio" ? db.multichatStudio : ENGAGEMENT.includes(stage) ? db[stage] : db.overlayTokens;
   const method = ENGAGEMENT.includes(stage) ? "updateMany" : "updateOne";

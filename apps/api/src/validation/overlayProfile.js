@@ -99,9 +99,21 @@ function validateOverlayProfile(raw) {
   return profile;
 }
 
-/** Missing/corrupt old records use safe defaults without a migration.
- * @param {unknown} raw */
-function overlayProfileForRead(raw) {
-  try { return validateOverlayProfile(raw); } catch { return defaultOverlayProfile(); }
+/** Keep stored v1 profiles readable by API versions that predate QR credit.
+ * @param {unknown} raw @param {unknown} [creditQr] */
+function overlayProfileForRead(raw, creditQr) {
+  try {
+    const profile = validateOverlayProfile(raw);
+    delete profile.creditQr;
+    if (typeof creditQr === "boolean") profile.creditQr = creditQr;
+    return profile;
+  } catch { return defaultOverlayProfile(); }
 }
-module.exports = { validateOverlayProfile, validateProfileTheme, defaultOverlayProfile, overlayProfileForRead };
+
+/** An omitted wire choice must leave the token's existing QR preference intact.
+ * @param {OverlayProfile} input */
+function overlayProfileForStorage({ creditQr, ...profile }) {
+  return { profile, ...(creditQr === undefined ? {} : { creditQr }) };
+}
+
+module.exports = { validateOverlayProfile, validateProfileTheme, defaultOverlayProfile, overlayProfileForRead, overlayProfileForStorage };
