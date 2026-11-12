@@ -88,7 +88,7 @@ function pushFog(x: number, y: number, r: number): void {
   fogCount += 1;
 }
 
-export type MapFrameStyle = { entities: "dots"; palette?: { me?: string; opp?: string } };
+export type MapFrameStyle = { entities: "dots"; palette?: { me?: string; opp?: string } } | { entities: "icons" };
 
 export interface RenderFrameOptions {
   /** Whose sight reveals the map (lib/replayVision); default both. */
@@ -115,6 +115,8 @@ export function renderFrame(
   options?: RenderFrameOptions,
 ) {
   const dots = style?.entities === "dots";
+  const icons = style?.entities === "icons";
+  const sprites = !icons && !dots;
   const dpr = options?.dpr ?? (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
   const w = canvas.width / dpr;
   const h = canvas.height / dpr;
@@ -141,7 +143,7 @@ export function renderFrame(
   // Icon tokens keep the old power-of-two quantisation so their cache
   // stays tiny (≤3 sizes); sprite atlases bucket internally.
   const iconDpr = dpr * Math.min(4, Math.pow(2, Math.ceil(Math.log2(Math.max(1, view.z)))));
-  if (!dots) beginSpriteFrame(rasterScale);
+  if (sprites) beginSpriteFrame(rasterScale);
 
   // Visible scene rect, for culling. A scene point p is drawn at
   // ox + p*z, so the visible range is [-ox/z, (w-ox)/z].
@@ -170,7 +172,7 @@ export function renderFrame(
   // Neutral terrain furniture (v2 payloads): mineral lines, geysers,
   // rocks, towers — mined-out patches and broken rocks disappear at
   // their recorded death time.
-  const derived = derivedOf(playback);
+  const derived = derivedOf(playback, !icons);
   if (playback.creep) drawObservedCreep(ctx, bounds, proj, playback.creep, t);
   else drawEstimatedCreep(ctx, bounds, proj, derived.creepSources, t);
   const minFurniturePx = MIN_FURNITURE_SCREEN_PX / view.z;
@@ -261,7 +263,7 @@ export function renderFrame(
     // Actual weapon cycles trigger a single Attack clip. Otherwise use
     // observed movement to choose Walk or Stand.
     const walking = vx * vx + vy * vy > WALK_SPEED_THRESHOLD * WALK_SPEED_THRESHOLD;
-    const formSprite = name !== u.name ? resolveSprite(name, "unit") : null;
+    const formSprite = !icons && name !== u.name ? resolveSprite(name, "unit") : null;
     const sprite = name !== u.name ? formSprite : derived.unitStand[idx]?.sprite;
     const attackHandle = sprite?.meta.anims.Attack ? spriteAnim(sprite, "Attack") : null;
     const attack = attackAt(u, t, attackHandle ? Math.min(1, attackHandle.anim.frames / attackHandle.anim.fps) : 0.6);
@@ -320,7 +322,7 @@ export function renderFrame(
     // size comes from the same worldUnitsPerCell ladder as units, so
     // the old hard-coded town-hall size bump is gone.
     const name = unitNameAt(b, t);
-    const formSprite = name !== b.name ? resolveSprite(name, "building") : null;
+    const formSprite = !icons && name !== b.name ? resolveSprite(name, "building") : null;
     const sprite = name !== b.name ? formSprite : derived.buildingStand[bi]?.sprite;
     const attackHandle = sprite?.meta.anims.Attack ? spriteAnim(sprite, "Attack") : null;
     const attack = attackAt(b, t, attackHandle ? Math.min(1, attackHandle.anim.frames / attackHandle.anim.fps) : 0.6);
@@ -487,7 +489,7 @@ export function renderFrame(
     }
   }
   if (alpha !== 1) ctx.globalAlpha = 1;
-  if (!dots) endSpriteFrame();
+  if (sprites) endSpriteFrame();
   if (!dots && options?.selected) drawSelection(ctx, options.selected, view.z);
 
   if (!dots) { drawSpellEffects(ctx, playback, t, proj, view, w, h, "overlay", canSee); drawWeaponEffects(ctx, playback, t, proj, view, canSee); }

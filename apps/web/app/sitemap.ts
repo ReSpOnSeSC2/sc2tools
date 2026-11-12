@@ -40,6 +40,7 @@ type Route = {
 const ROUTES: Route[] = [
   { path: "/changelog", priority: 0.6, changeFrequency: "weekly", lastModified: "2026-10-23" },
   { path: "/", priority: 1.0, changeFrequency: "weekly", lastModified: "2026-09-29" },
+  { path: "/arcade", priority: 0.7, changeFrequency: "daily", lastModified: "2026-11-12" },
   { path: "/download", priority: 0.9, changeFrequency: "weekly", lastModified: "2026-09-29" },
   { path: "/stream-studio", priority: 0.9, changeFrequency: "monthly", lastModified: "2026-10-16" },
   { path: "/stream-studio/learn", priority: 0.8, changeFrequency: "monthly", lastModified: "2026-10-25" },

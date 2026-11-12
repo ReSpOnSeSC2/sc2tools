@@ -143,6 +143,17 @@ const iconPathCache = new Map<string, string | null>();
  * stops re-rendering every frame — a real battery cost on mobile —
  * while still picking up late-decoding assets. */
 export let assetsVersion = 0;
+const assetListeners = new Set<() => void>();
+
+export function subscribeMapCanvasAssets(listener: () => void): () => void {
+  assetListeners.add(listener);
+  return () => { assetListeners.delete(listener); };
+}
+
+function markAssetsChanged() {
+  assetsVersion += 1;
+  for (const listener of assetListeners) listener();
+}
 
 function resolveIconPath(name: string, kind: IconKind): string | null {
   const key = `${kind}:${name}`;
@@ -162,12 +173,10 @@ function readyIcon(name: string, kind: IconKind): HTMLImageElement | null {
     if (typeof Image === "undefined") return null; // non-DOM test envs
     img = new Image();
     img.decoding = "async";
-    img.onload = () => {
-      assetsVersion += 1;
-    };
+    img.onload = markAssetsChanged;
     img.onerror = () => {
       iconElementCache.set(path, null);
-      assetsVersion += 1;
+      markAssetsChanged();
     };
     img.src = path;
     iconElementCache.set(path, img);
@@ -329,8 +338,11 @@ interface Derived {
 
 const derivedCache = new WeakMap<MapPlayback, Derived>();
 
-export function derivedOf(playback: MapPlayback): Derived {
-  let d = derivedCache.get(playback);
+const flatDerivedCache = new WeakMap<MapPlayback, Derived>();
+
+export function derivedOf(playback: MapPlayback, sprites = true): Derived {
+  const cache = sprites ? derivedCache : flatDerivedCache;
+  let d = cache.get(playback);
   if (!d) {
     const n = playback.units.length;
     const trackBox = new Float32Array(n * 4);
@@ -342,7 +354,7 @@ export function derivedOf(playback: MapPlayback): Derived {
       const u = playback.units[i];
       const worker = isWorkerUnit(u.name);
       unitWorker[i] = worker ? 1 : 0;
-      const sprite = resolveSprite(u.name, "unit");
+      const sprite = sprites ? resolveSprite(u.name, "unit") : null;
       unitStand[i] = sprite ? spriteAnim(sprite, "Stand") : null;
       // Carrier, SiegeTank and Tempest have no walk cycle; spriteAnim
       // already falls back to Stand, so this is never null when the
@@ -374,7 +386,7 @@ export function derivedOf(playback: MapPlayback): Derived {
     const gasBuildings: PlaybackBuilding[] = [];
     for (let i = 0; i < bn; i += 1) {
       const b = playback.buildings[i];
-      const sprite = resolveSprite(b.name, "building");
+      const sprite = sprites ? resolveSprite(b.name, "building") : null;
       buildingStand[i] = sprite ? spriteAnim(sprite, "Stand") : null;
       buildingHall[i] = isTownHall(b.name) ? 1 : 0;
       buildingPhase[i] = phaseOffset(i * 2654435761);
@@ -392,7 +404,7 @@ export function derivedOf(playback: MapPlayback): Derived {
       buildingPhase,
       gasBuildings,
     };
-    derivedCache.set(playback, d);
+    cache.set(playback, d);
   }
   return d;
 }

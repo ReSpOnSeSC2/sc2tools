@@ -1,0 +1,6 @@
+.practice {
+  background-image:
+    linear-gradient(to right, rgb(var(--line) / 0.13) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(var(--line) / 0.13) 1px, transparent 1px);
+  background-size: 24px 24px;
+}

@@ -8,6 +8,7 @@ import { createHitBuffer } from "@/lib/replayInspect";
  * replaced by a recorder so every draw is observable without a canvas.
  */
 const draws = vi.hoisted(() => [] as { name: string; color: string; frame: number; alpha: number }[]);
+const resolved = vi.hoisted(() => [] as string[]);
 vi.mock("@/lib/spriteSheets", () => {
   const anim = { frames: 8, fps: 8, cols: 8, rows: 8, suffix: null, wupc: 2, ax: 128, ay: 128 };
   const sprites = new Map<string, unknown>();
@@ -17,7 +18,10 @@ vi.mock("@/lib/spriteSheets", () => {
   };
   return {
     beginSpriteFrame: () => {}, endSpriteFrame: () => {}, hasWalk: () => true, spriteAssetsVersion: () => 0,
-    resolveSprite: (name: string) => sprite(name),
+    resolveSprite: (name: string) => {
+      resolved.push(name);
+      return sprite(name);
+    },
     spriteAnim: (s: { name: string }, name: string) => ({ name, anim, sprite: s }),
     drawSprite: (ctx: CanvasRenderingContext2D, handle: { sprite: { name: string } }, color: string, _facing: number, frame: number) => {
       draws.push({ name: handle.sprite.name, color, frame, alpha: ctx.globalAlpha });
@@ -75,7 +79,15 @@ function frame(vision: "both" | "me" | "opp" | "off", t = 300) {
 }
 
 describe("vision modes at the renderer", () => {
-  beforeEach(() => { draws.length = 0; });
+  beforeEach(() => { draws.length = 0; resolved.length = 0; });
+
+  it("paints the icon stage without resolving or drawing a sprite", () => {
+    const hits = createHitBuffer();
+    renderFrame(ctx(), canvas, playback(), 300, null, view, undefined, { entities: "icons" }, { vision: "off", dpr: 1, hits });
+    expect(hits.count).toBe(6);
+    expect(resolved).toEqual([]);
+    expect(draws).toEqual([]);
+  });
 
   it("draws everything in both and off modes", () => {
     const all = ["CommandCenter", "Hatchery", "Reaper", "Roach", "SpawningPool", "Zergling"];
