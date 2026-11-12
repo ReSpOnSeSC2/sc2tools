@@ -4782,6 +4782,11 @@ release preparation, not a signed or published 0.24.9 installer.
 - Preview normalized ladder counts offline with sample sizes and Wilson intervals
   for separate same-tier and cross-tier matchups.
 
+### SC2 Daily
+
+- Call the trade in five StarCraft II fights at /arcade. Play a seven-day
+  practice set, keep a streak on this device and share a spoiler-free score.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isGuidesFlagOn } from "./lib/guides/guidesFlag.mjs";
-import { parseInstantImportMode } from "./lib/instant/instantImportFlag.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -103,27 +102,16 @@ function retiredToolRedirects(guidesOn) {
 }
 
 /** Marks visits that arrive from a share card, so they can be counted. */
-const SHARE_CARD_ATTRIBUTION = "utm_source=card&utm_medium=share&utm_campaign=arcade";
-
-/**
- * Every share card (Arcade rounds, Season Recap, battle cards) carries
- * sc2tools.com/arcade: as the link in the share text and as the watermark
- * drawn on the image (SHARE_LINK_URL in components/analyzer/arcade/
- * ShareCard.tsx). No page has ever lived at that address, so the link was
- * a 404. Until a public Arcade page exists, send it to the no-install
- * analyzer when that is open to everyone, and home otherwise: /try hides
- * itself unless NEXT_PUBLIC_INSTANT_IMPORT is "all".
- *
- * Temporary on purpose. Browsers keep a permanent redirect, and that
- * would outlive the day /arcade becomes a real page.
- *
- * @param {"off" | "admins" | "all"} instantMode
- * @returns {Array<{ source: string, destination: string, permanent: boolean }>}
- */
-function shareCardRedirects(instantMode) {
-  const landing = instantMode === "all" ? "/try" : "/";
-  return [{ source: "/arcade", destination: `${landing}?${SHARE_CARD_ATTRIBUTION}`, permanent: false }];
-}
+const dailyAssetHeaders = [
+  {
+    source: "/daily/v1/index.json",
+    headers: [{ key: "Cache-Control", value: "no-cache" }],
+  },
+  {
+    source: "/daily/v1/packs/:digest/:file*",
+    headers: [{ key: "Cache-Control", value: IMMUTABLE_CACHE }],
+  },
+];
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -148,8 +136,7 @@ const nextConfig = {
   },
   async redirects() {
     const guidesOn = isGuidesFlagOn(process.env.NEXT_PUBLIC_GUIDES_ENABLED);
-    const instantMode = parseInstantImportMode(process.env.NEXT_PUBLIC_INSTANT_IMPORT);
-    return [...metaRedirects(guidesOn), ...retiredToolRedirects(guidesOn), ...shareCardRedirects(instantMode)];
+    return [...metaRedirects(guidesOn), ...retiredToolRedirects(guidesOn)];
   },
   // Tighten the cache for the analyzer page so it always reflects the
   // user's latest data, but let the marketing routes use Vercel's edge.
@@ -164,6 +151,7 @@ const nextConfig = {
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },
       ...engineAssetHeaders,
+      ...dailyAssetHeaders,
     ];
   },
 };
