@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 const { spawnSync } = require("node:child_process");
@@ -7,6 +6,7 @@ const { summarizeBalance } = require("../src/services/pulseBalanceSummary");
 const fixture = require("./fixtures/pulseBalance.synthetic.json");
 
 const diamond = fixture.tiers[1];
+/** @param {...unknown} rows */
 const snapshotWithRows = (...rows) => ({ ...fixture, tiers: [{ ...diamond, rows }] });
 
 describe("ladder balance summary", () => {
