@@ -1,0 +1,25 @@
+{
+  "season": 1,
+  "asOf": "2026-01-02",
+  "tiers": [
+    {
+      "league": "gold",
+      "division": 2,
+      "rows": [
+        { "matchup": "PvT", "crossTier": false, "wins": 2, "games": 7, "endMinute": 5 }
+      ]
+    },
+    {
+      "league": "diamond",
+      "division": 1,
+      "rows": [
+        { "matchup": "PvT", "crossTier": false, "wins": 19, "games": 20, "endMinute": 4 },
+        { "matchup": "PvT", "crossTier": false, "wins": 34, "games": 70, "endMinute": 13 },
+        { "matchup": "PvT", "crossTier": false, "wins": 7, "games": 10, "endMinute": null },
+        { "matchup": "PvT", "crossTier": true, "wins": 3, "games": 50, "endMinute": 4 },
+        { "matchup": "PvZ", "crossTier": false, "wins": 4, "games": 9, "endMinute": 6 },
+        { "matchup": "TvZ", "crossTier": true, "wins": 12, "games": 21, "endMinute": 9 }
+      ]
+    }
+  ]
+}
