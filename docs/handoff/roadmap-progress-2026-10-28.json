@@ -2231,7 +2231,7 @@
       ],
       "implemented": "PR#873 delivers bounded full-account NDJSON, paged/throttled build-order CSV/NDJSON and bounded private replay-batch signing. PR#874 supplies owner-fenced browser downloads, store ZIP32/CRC32 in a lazy worker, actual-settlement admission and cleanup, exclusive selection of up to100 replays, descriptive result-aware templates, progress/cancel/partial results, Settings export cards and help. Individual JSON export and upload behavior remain available. Actual containing-main revision is bound only after successful UI delivery. The UI PR also contains a reviewed test-only Settings search rail correction; local implementation validation remains bound to106, with exact237 hosted acceptance required separately. Verified source slices are contained in delivered main 4256903f5b391058f0b4c5650aa7628675c4005d. Original replay exports retain a verified API fallback and bounded direct storage path when available.",
       "remainingRequirements": [
-        "Apply the optional R2 GET CORS rule for approved web origins. Verify original replay and ZIP fetch in a signed-in production browser."
+        "Complete a signed-in production replay-pack ZIP download and verify its contents."
       ],
       "evidence": [
         "apps/api/src/routes/me.js",
@@ -2244,7 +2244,8 @@
         "apps/api/src/services/replayDownloadBatch.js",
         "apps/web/lib/exports/replayPacks/downloadReplayPack.ts",
         "gameShares.test.js",
-        "docs/SETUP_GUIDE.md"
+        "docs/SETUP_GUIDE.md",
+        "Production acceptance receipt 2026-11-11: R2 GET preflight and owned original Chrome download verified."
       ],
       "mergedPrs": [
         873,
@@ -2394,7 +2395,8 @@
         "apps/api/src/routes/publicReplays.js",
         "apps/web/components/analyzer/game/ShareGameButton.tsx",
         "gameShares.test.js",
-        "R2 upload-generation race tests"
+        "R2 upload-generation race tests",
+        "Production acceptance receipt 2026-11-11: R2 GET and Range preflight verified; disposable shared playback unverified."
       ],
       "mergedPrs": [
         885,
@@ -2418,7 +2420,8 @@
         "apps/web/components/analyzer/game/replay/ReplaySettings.tsx",
         "apps/web/components/analyzer/game/MapReplayer.tsx",
         "Actual repository replay encoded in Chromium",
-        "Clip dialog and worker tests at both output sizes"
+        "Clip dialog and worker tests at both output sizes",
+        "Production acceptance receipt 2026-11-11: Chrome local clip cancellation, downloaded WebM and GIF, map frames, scoreboard and watermark verified."
       ],
       "mergedPrs": [
         896,
@@ -2612,12 +2615,13 @@
       ],
       "implemented": "Unified Sessions and in-app notifications are now available foundations. Weekly and stream reports use bounded claims, timezone and played-week attribution, fresh consent, VOD links and image sharing.",
       "remainingRequirements": [
-        "Configure VAPID and subscribe a test device to verify optional push delivery. Verify reports in a disposable production account."
+        "Verify actual weekly and stream reports and their configured delivery channels in a disposable production account."
       ],
       "evidence": [
         "apps/api/src/services/sessionHistory.js",
         "apps/api/src/services/notifications.js",
-        "Report delivery, late upload and claim tests"
+        "Report delivery, late upload and claim tests",
+        "Production acceptance receipt 2026-11-11: VAPID configuration and built-in Chrome push test verified."
       ],
       "mergedPrs": [
         896,
@@ -2663,12 +2667,13 @@
       ],
       "implemented": "In-app notification delivery and coaching bookings exist; service _push is an internal socket producer. Added push opt-in and reminders, revocable calendar feeds, and owner-and-hash-bound recovery for calendar links created with the existing encryption key.",
       "remainingRequirements": [
-        "Set WEB_PUSH_VAPID_PUBLIC_KEY, WEB_PUSH_VAPID_PRIVATE_KEY and WEB_PUSH_VAPID_SUBJECT, then verify subscribe, delivery and revoke. Verify private calendar export on a production account."
+        "Verify optional push categories on real report or reminder delivery and verify private calendar export on a production account."
       ],
       "evidence": [
         "apps/api/src/services/notifications.js",
         "apps/api/src/services/coaching.js",
-        "Push, calendar revocation and private account export tests"
+        "Push, calendar revocation and private account export tests",
+        "Production acceptance receipt 2026-11-11: VAPID configuration, Chrome subscription, one-device test acceptance and unsubscribe verified."
       ],
       "mergedPrs": [
         896,
@@ -2716,12 +2721,13 @@
       ],
       "implemented": "Admin Build Studio edits detector policies; that is distinct from a correction-derived accuracy console. Classifier correction cohorts, bounded drill-down and admin quality views use recorded corrections and sample floors.",
       "remainingRequirements": [
-        "Run the production quality job against qualifying corrections and verify the populated console."
+        "Verify the detailed drill-down when a real production pair meets the minimum contributor rule."
       ],
       "evidence": [
         "apps/web/app/admin/build-studio/page.tsx",
         "docs/handoff/admin-build-studio-checkpoint.md",
-        "Classifier quality job and console tests"
+        "Classifier quality job and console tests",
+        "Production acceptance receipt 2026-11-11: fresh scheduled classifier cohort observed; detailed pairs withheld."
       ],
       "mergedPrs": [
         900
@@ -8642,6 +8648,121 @@
         194,
         195,
         197
+      ],
+      "remainingCount": 39
+    },
+    "productionAcceptance20261111": {
+      "date": "2026-11-11",
+      "timeZone": "America/New_York",
+      "qualification": "Scoped owner-authorized production receipts. Historical item rows through line 1966 are preserved as written. The receipts below update the operational evidence for those rows. Native-provider, Discord, and private-calendar acceptance remain pending. Roadmap item statuses and totals stay as previously reconciled.",
+      "items": [
+        {
+          "ordinal": 12,
+          "id": "db-offsite-backups",
+          "evidence": [
+            "Atlas production showed 43 snapshots across two regions. Newest completed snapshot: 2026-11-11T23:09:42Z. Next scheduled snapshot: 2026-11-12T05:06:14Z.",
+            "Observed retention: six-hourly and daily snapshots for 7 days each, weekly for 4 weeks, monthly for 12 months, yearly for 1 year. Point-in-time restore window: 7 days."
+          ],
+          "remainingAcceptance": [
+            "No restore history was observed and no isolated restore target was approved. Complete and record a successful isolated restore drill."
+          ]
+        },
+        {
+          "ordinal": 22,
+          "id": "snapshots-safe-restore",
+          "evidence": [
+            "A read-only production MongoDB count of user_backups rows with an embedded payload returned zero. No legacy migration was needed."
+          ],
+          "remainingAcceptance": [
+            "Verify preview, revision fencing and restore with a disposable account."
+          ]
+        },
+        {
+          "ordinal": 25,
+          "id": "retire-server-ml",
+          "evidence": [
+            "The owner-approved production dry run found ml_models and ml_jobs with zero documents in each. The forward-only migration removed exactly those two collections, and the post-run audit confirmed both absent.",
+            "The post-cleanup API /v1/health returned HTTP 200. An owned map replay passed its smoke check. Map Intel loaded proxy sample data and displayed the fight controls."
+          ],
+          "remainingAcceptance": [
+            "Verify the live authenticated /v1/ml compatibility response returns HTTP 410."
+          ]
+        },
+        {
+          "ordinal": 64,
+          "id": "public-pages-seo-and-cache",
+          "evidence": [
+            "The existing Guides sender was invoked manually, and its signed request was accepted by the receiver with HTTP 200. Two production page reads returned private, no-store and Vercel MISS.",
+            "The unsigned empty POST to the Community revalidation receiver returned HTTP 503 and private, no-store. Optional Community revalidation remained unconfigured and its sender environment variable pair was absent.",
+            "Signed-out /community returned HTTP 200, private, no-store and Vercel MISS. The decorated Community API response was no-store."
+          ],
+          "remainingAcceptance": [
+            "Verify scheduled or job-triggered Guides edge invalidation. Verify Community revalidation end to end if it is configured. Preserve the documented privacy-safe no-store exceptions."
+          ]
+        },
+        {
+          "ordinal": 78,
+          "id": "export-center",
+          "evidence": [
+            "A separate GET rule permitting Range was saved on the existing private production replay bucket. The PUT rules were preserved.",
+            "Live OPTIONS returned 204 for https://sc2tools.com, https://www.sc2tools.com and https://sc2tools.vercel.app, and 403 for an unrelated origin.",
+            "An owned original replay download completed in Chrome. The replay-pack save returned Export cancelled on both attempts."
+          ],
+          "remainingAcceptance": [
+            "Complete a signed-in production replay-pack ZIP download and verify its contents."
+          ]
+        },
+        {
+          "ordinal": 84,
+          "id": "per-game-share-link",
+          "evidence": [
+            "The production R2 GET and Range rule passed the preflight checks recorded for item 78."
+          ],
+          "remainingAcceptance": [
+            "Verify playback and revocation with a disposable production share."
+          ]
+        },
+        {
+          "ordinal": 85,
+          "id": "replayer-studio",
+          "evidence": [
+            "Chrome local clip export cancellation was verified. A 3-second WebM downloaded with 84 frames and a final timestamp of 2987 ms. A 2-second GIF downloaded with 24 frames. Map frames, scoreboard and watermark were verified."
+          ],
+          "remainingAcceptance": [
+            "Verify an export across an accurate-playback section boundary."
+          ]
+        },
+        {
+          "ordinal": 93,
+          "id": "reports-weekly-and-stream",
+          "evidence": [
+            "The production VAPID configuration and built-in browser push test were verified as recorded for item 95."
+          ],
+          "remainingAcceptance": [
+            "Verify actual weekly and stream reports and their configured delivery channels in a disposable production account."
+          ]
+        },
+        {
+          "ordinal": 95,
+          "id": "push-notifications-calendar",
+          "evidence": [
+            "The three VAPID settings were saved in Render and the production deployment went live.",
+            "Chrome subscribed successfully. The built-in test accepted one device. Unsubscribe left no registered devices. The browser permission stayed enabled at the owner's request."
+          ],
+          "remainingAcceptance": [
+            "Verify optional push categories on real report or reminder delivery and verify private calendar export on a production account."
+          ]
+        },
+        {
+          "ordinal": 97,
+          "id": "classifier-console",
+          "evidence": [
+            "A fresh scheduled classifier snapshot showed a production cohort with 204 check-ins, 39 disagreements and four contributors. Every detailed pair row was withheld by the minimum cohort rule."
+          ],
+          "remainingAcceptance": [
+            "Verify the detailed drill-down when a real production pair meets the minimum contributor rule."
+          ]
+        }
       ],
       "remainingCount": 39
     }
