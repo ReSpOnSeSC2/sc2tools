@@ -14,6 +14,13 @@ const SEARCH = "https://api.sc2tools.com/v1/replays?search=Private%20Rival&limit
 const SCRUBBED = "/v1/replays?search=%5Bredacted%5D&limit=5&sort=date_desc&enrich=none&window=recent";
 
 describe("browser Sentry keeps no typed search text or credential path", () => {
+  it.each(["/b/local-alias", "/%62/local-alias"])("normalizes Practice Link telemetry from %s", path => {
+    const url = `https://sc2tools.com${path}?state=private#private`;
+    expect(scrubBreadcrumb({ category: "navigation", data: { from: url, to: "/try" } }).data)
+      .toEqual({ from: "/b/:alias", to: "/try" });
+    expect(scrubBreadcrumb({ category: "fetch", data: { url } }).data?.url).toBe("/b/:alias");
+    expect(scrubSpan({ description: `GET ${url}`, data: { url } })).toEqual({ description: "GET /b/:alias", data: { url: "/b/:alias" } });
+  });
   it("scrubs fetch and XHR breadcrumb URLs and leaves other breadcrumbs alone", () => {
     expect(scrubBreadcrumb({ category: "fetch", data: { method: "GET", url: SEARCH, status_code: 200 } }))
       .toEqual({ category: "fetch", data: { method: "GET", url: SCRUBBED, status_code: 200 } });

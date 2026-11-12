@@ -24,6 +24,8 @@
  *   // -> "https://sc2tools.com/app/game/:gameId?utm_source=reddit"
  */
 
+import { PRACTICE_LINK_PATTERN, PRACTICE_LINK_ROUTE } from "../practice/practiceLinkPath";
+
 /** Paths that are never sent to Google Analytics. */
 const UNTRACKED_PATHS: ReadonlyArray<RegExp> = [
   /^\/admin(?:\/|$)/,
@@ -42,6 +44,7 @@ const DYNAMIC_ROUTES: ReadonlyArray<readonly [RegExp, string]> = [
   [/^\/community\/opponents\/[^/]+/, "/community/opponents/:pulseId"],
   [/^\/community\/authors\/[^/]+/, "/community/authors/:userId"],
   [/^\/card(?:\/.*)?$/, "/card/:type/:class"],
+  [PRACTICE_LINK_ROUTE, PRACTICE_LINK_PATTERN],
   // A share link's token is the page's credential.
   [/^\/g\/[^/]+/, "/g/:token"],
 ];

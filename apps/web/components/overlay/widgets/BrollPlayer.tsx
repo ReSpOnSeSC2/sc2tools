@@ -15,6 +15,7 @@ import type {
   StudioBrollConfig,
   StudioBrollVideoFormat,
 } from "@/lib/multichat/useStudioState";
+import { loadYouTubeApi, type YouTubePlayer } from "@/lib/youtubeIframeApi";
 import { STREAM_BACKGROUNDS } from "@/lib/streamBackgrounds";
 import {
   effectiveBrollPlayback,
@@ -22,8 +23,6 @@ import {
   type BrollTimelinePosition,
 } from "./brollTimeline";
 
-const YOUTUBE_IFRAME_API = "https://www.youtube.com/iframe_api";
-const API_READY_TIMEOUT_MS = 12_000;
 const FAILED_CYCLE_RETRY_MS = 3_000;
 const PLAYBACK_BOUNDARY_SLOP_MS = 25;
 const DRIFT_CHECK_MS = 2_000;
@@ -43,58 +42,6 @@ export interface BrollPlayerProps extends StudioBrollConfig {
 }
 
 type PlaybackStatus = "empty" | "loading" | "playing" | "fallback";
-
-interface YouTubePlayer {
-  destroy(): void;
-  getCurrentTime?(): number;
-  loadVideoById(options: {
-    videoId: string;
-    startSeconds: number;
-    endSeconds: number;
-  }): void;
-  mute(): void;
-  playVideo(): void;
-  seekTo?(seconds: number, allowSeekAhead: boolean): void;
-  setVolume(volume: number): void;
-  stopVideo(): void;
-  unMute(): void;
-}
-
-interface YouTubeEvent {
-  target: YouTubePlayer;
-}
-
-interface YouTubeStateEvent extends YouTubeEvent {
-  data: number;
-}
-
-interface YouTubeApi {
-  Player: new (
-    element: HTMLElement,
-    options: {
-      width: string;
-      height: string;
-      playerVars: Record<string, number | string>;
-      events: {
-        onReady(event: YouTubeEvent): void;
-        onStateChange(event: YouTubeStateEvent): void;
-        onError(event: YouTubeEvent): void;
-      };
-    },
-  ) => YouTubePlayer;
-  PlayerState: {
-    ENDED: number;
-    PLAYING: number;
-  };
-}
-
-type YouTubeWindow = Window &
-  typeof globalThis & {
-    YT?: YouTubeApi;
-    onYouTubeIframeAPIReady?: () => void;
-  };
-
-let youtubeApiPromise: Promise<YouTubeApi> | null = null;
 
 /**
  * Full-canvas YouTube highlight reel for OBS Browser Sources.
@@ -680,65 +627,6 @@ function clampVolume(volume: number): number {
   const parsed = Number(volume);
   if (!Number.isFinite(parsed)) return 20;
   return Math.min(100, Math.max(0, Math.round(parsed)));
-}
-
-function readYouTubeApi(): YouTubeApi | null {
-  if (typeof window === "undefined") return null;
-  const api = (window as YouTubeWindow).YT;
-  return api?.Player && api.PlayerState ? api : null;
-}
-
-function loadYouTubeApi(): Promise<YouTubeApi> {
-  const ready = readYouTubeApi();
-  if (ready) return Promise.resolve(ready);
-  if (youtubeApiPromise) return youtubeApiPromise;
-
-  youtubeApiPromise = new Promise<YouTubeApi>((resolve, reject) => {
-    const ytWindow = window as YouTubeWindow;
-    let settled = false;
-    let timeoutId = 0;
-    const finish = () => {
-      const api = readYouTubeApi();
-      if (!api || settled) return;
-      settled = true;
-      window.clearTimeout(timeoutId);
-      resolve(api);
-    };
-    const fail = () => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timeoutId);
-      reject(new Error("YouTube iframe API did not become ready"));
-    };
-
-    const previousReady = ytWindow.onYouTubeIframeAPIReady;
-    ytWindow.onYouTubeIframeAPIReady = () => {
-      try {
-        previousReady?.();
-      } finally {
-        finish();
-      }
-    };
-
-    let script = document.querySelector<HTMLScriptElement>(
-      `script[src="${YOUTUBE_IFRAME_API}"]`,
-    );
-    if (!script) {
-      script = document.createElement("script");
-      script.src = YOUTUBE_IFRAME_API;
-      script.async = true;
-      script.dataset.sc2Broll = "youtube-api";
-      document.head.appendChild(script);
-    }
-    script.addEventListener("load", finish, { once: true });
-    script.addEventListener("error", fail, { once: true });
-    timeoutId = window.setTimeout(fail, API_READY_TIMEOUT_MS);
-  }).catch((error) => {
-    youtubeApiPromise = null;
-    throw error;
-  });
-
-  return youtubeApiPromise;
 }
 
 const brollCss = `
