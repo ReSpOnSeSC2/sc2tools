@@ -5,7 +5,7 @@ import Link from "next/link";
 import { canReturnFocus } from "@/lib/a11y/focusScopes";
 import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { NotificationItem } from "./NotificationItem";
-import { CATEGORY_LABELS, NOTIFICATION_CATEGORIES, notificationCategory, notificationFocus, type NotificationCategory, type NotificationRow } from "./notificationModel";
+import { CATEGORY_LABELS, NOTIFICATION_CATEGORIES, notificationCategory, notificationCategoryName, notificationFocus, type NotificationCategory, type NotificationRow } from "./notificationModel";
 
 type Props = {
   items: NotificationRow[]; ready: boolean; loading: boolean;
@@ -59,14 +59,14 @@ export default function NotificationPanel(p: Props) {
         onClick={() => { setCategory("all"); p.selectView(mode); }}
         className={`flex-1 rounded-md px-2 py-1 text-caption font-semibold ${notificationFocus} ${p.view === mode ? "bg-accent/15 text-accent-cyan" : "text-text-muted hover:bg-bg-elevated"}`}>{mode === "unread" ? "Unread" : "All notifications"}</button>)}
     </div>
-    <div className="mb-2 flex flex-wrap gap-1 px-1" aria-label="Notification kinds">
-      {NOTIFICATION_CATEGORIES.filter((kind) => kind === "all" || p.items.some((row) => notificationCategory(row.kind) === kind)).map((kind) => <button key={kind} type="button" aria-pressed={category === kind} onClick={() => setCategory(kind)} className={`rounded-full px-2 py-1 text-micro ${notificationFocus} ${category === kind ? "bg-accent/15 text-accent-cyan" : "text-text-muted hover:bg-bg-elevated"}`}>{CATEGORY_LABELS[kind]}</button>)}
+    <div className="mb-2 flex flex-wrap gap-1 px-1" role="group" aria-label="Notification kinds">
+      {NOTIFICATION_CATEGORIES.filter((kind) => kind === "all" || p.items.some((row) => notificationCategory(row.kind) === kind)).map((kind) => <button key={kind} type="button" aria-pressed={category === kind} onClick={() => setCategory(kind)} className={`min-h-11 min-w-11 rounded-full px-2 py-1 text-micro ${notificationFocus} ${category === kind ? "bg-accent/15 text-accent-cyan" : "text-text-muted hover:bg-bg-elevated"}`}>{CATEGORY_LABELS[kind]}</button>)}
     </div>
     {p.unreadError ? <ErrorRow message="Couldn't load notifications ·" retry={p.retryUnread} /> : null}
     {p.readError ? <ErrorRow message="Could not mark notifications as read." retry={p.retryRead} /> : null}
     {p.listError ? <ErrorRow message="Could not load notifications." retry={p.retryList} label="Try again" /> : null}
     {(!p.ready || p.loading) && !p.listError && !p.items.length ? <SkeletonRegion label="Loading notifications" className="space-y-1">{[0, 1, 2].map((i) => <div key={i} className="space-y-2 p-2"><SkeletonBar className="h-3 w-3/5" /><SkeletonBar className="h-2.5 w-4/5" /></div>)}</SkeletonRegion>
-      : !items.length && !p.listError ? <p className="p-3 text-caption text-text-muted">{category !== "all" ? `No ${CATEGORY_LABELS[category].toLowerCase()} notifications in this view.` : p.view === "unread" ? "No unread notifications." : "No notifications yet."}</p>
+      : !items.length && !p.listError ? <p className="p-3 text-caption text-text-muted">{category !== "all" ? `No ${notificationCategoryName(category)} notifications in this view.` : p.view === "unread" ? "No unread notifications." : "No notifications yet."}</p>
         : <ul className="max-h-[60vh] space-y-1 overflow-y-auto">{items.map((row, i) => {
           const today = new Date(row.createdAt).toDateString() === new Date().toDateString();
           const previousToday = i > 0 && new Date(items[i - 1].createdAt).toDateString() === new Date().toDateString();

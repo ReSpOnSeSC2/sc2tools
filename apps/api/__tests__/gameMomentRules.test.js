@@ -65,9 +65,11 @@ describe("recorded victory moment rules", () => {
     expect(kinds({ game: current, history: [previous] })).not.toContain("revengeWin");
     expect(kinds({ game: current, history: [prior({ ...previous, opponent: { pulseCharacterId: "77", pulseId: "1-S2-1-90" } })] })).toContain("revengeWin");
   });
-  test("giant killer compares replay ratings only and requires a win and at least200 MMR", () => {
+  test("giant killer requires a win and a replay rating gap of at least 200 MMR, and rounds the displayed gap", () => {
     const opponent = { pulseCharacterId: "77", mmr: 4201, mmrSource: "replay" };
     expect(kinds({ game: game({ opponent }), history: [] })).toContain("giantKiller");
+    const rounded = deriveGameMoments({ game: game({ opponent: { ...opponent, mmr: 4451 } }), history: [] });
+    expect(rounded.find(moment => moment.kind === "giantKiller")?.detail).toBe("Opponent started about 500 MMR higher.");
     for (const patch of [{ result: "Defeat" }, { opponent: { ...opponent, mmr: 4200 } }, { opponent: { ...opponent, mmr: null } }, { opponent: { ...opponent, mmrSource: "pulse" } }]) {
       expect(kinds({ game: game({ opponent, ...patch }), history: [] })).not.toContain("giantKiller");
     }

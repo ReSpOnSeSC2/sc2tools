@@ -6,7 +6,7 @@ Notifications remain in the existing collection with its 90-day TTL. The server 
 
 ## Event delivery and grouping
 
-`NotificationsService.notify()` reads only the recipient's notification preferences and skips muted kinds. New event-driven producers pass both `groupKey` and `eventKey`. An unread group folds distinct deliveries together, while the unique `(userId, deliveryKeys)` multikey index prevents retries from incrementing a group or creating another row after it was marked read. Delivery keys are not serialized to clients. Retention bounds their lifetime to the existing notification lifetime.
+`NotificationsService.notify()` reads only the recipient's notification preferences and skips muted kinds. Event-driven producers pass an `eventKey`, and producers that fold distinct deliveries into one unread row also pass a `groupKey`. The unique `(userId, deliveryKeys)` multikey index prevents retries from incrementing a group or creating another row after it was marked read. Delivery keys are not serialized to clients. Retention bounds their lifetime to the existing notification lifetime.
 
 | Producer | Kind | Delivery identity |
 | --- | --- | --- |
@@ -26,7 +26,16 @@ Admins update a report through `PATCH /v1/admin/messages/:eventId` with `{expect
 
 ## Preferences and UI
 
-`GET/PUT /v1/me/preferences/notifications` stores `{muted: string[]}` separately from Misc and onboarding preferences. Settings Misc has per-kind controls and its own save/recovery state. Muting affects future deliveries only.
+`GET/PUT /v1/me/preferences/notifications` stores `{muted: string[], milestones: boolean}` separately from Misc and onboarding preferences. Settings Misc has per-kind controls and a single Milestones opt-in. Missing milestone consent defaults to off. Muting affects future deliveries only.
+
+Private `moment.*` rows appear under **Milestones**. Each links to the owner's
+game and uses `gameId:kind` as its event key. Delivery requires a newly inserted,
+fresh competitive game, an owner/game receipt and current opt-in. The bell
+stores a separate row for each qualifying milestone and skips muted kinds.
+An interrupted write remains pending on the private game receipt and can finish
+on a fresh reupload. The event key deduplicates retries.
+The shared socket room gets a generic refresh ping. Only the authenticated
+inbox response includes the milestone kind and details.
 
 The bell preserves its cursor and read-acknowledgement behavior. Its presentation is loaded on demand to protect route budgets. Opening marks visible rows read but retains their per-open New tint. Unread/All is a visible segmented control, categories filter loaded rows, and the full `/notifications` page uses server-side category filtering plus compound cursors. Focus enters the first row or empty header and returns to the bell on close. The bell remains available on count errors with Retry. Coaching alerts and build check-ins remain actionable queues and use the same compact chip/badge visual treatment.
 

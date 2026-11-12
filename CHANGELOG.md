@@ -4771,6 +4771,12 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Change the credit for connected All-in-one sources and full-screen scenes from Overlay settings. A Browser Source URL with `credit=0` always hides the credit.
 
+### Private ladder milestones
+
+- Turn on **Milestones** in notification settings to receive private bell
+  updates for newly synced ladder games, including recorded MMR marks, win
+  streaks and marathon wins.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:
