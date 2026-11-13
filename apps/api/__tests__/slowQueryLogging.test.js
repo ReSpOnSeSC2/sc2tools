@@ -121,22 +121,29 @@ describe("attachSlowQueryLogging", () => {
     expect(logger.warns[0].fields.collection).toBeUndefined();
   });
 
-  test.each(["known", "evicted", "unknown", "daily vote"])("private or %s metadata failures retain only a fixed code", mode => {
+  test.each(["known", "evicted", "unknown"])("private or %s metadata failures retain only a fixed code", mode => {
     const client = new EventEmitter(), logger = makeLogger();
     attachSlowQueryLogging(client, logger, 100);
-    if (mode === "daily vote") client.emit("commandStarted", { requestId: 1, commandName: "update", command: { update: "daily_tally" } });
-    else if (mode !== "unknown") client.emit("commandStarted", { requestId: 1, commandName: "aggregate",
+    if (mode !== "unknown") client.emit("commandStarted", { requestId: 1, commandName: "aggregate",
       command: { aggregate: "opponents", comment: "sc2tools-private-search-v2", pipeline: ["private-name"] } });
     if (mode === "evicted") for (let i = 2; i <= 1002; i++) client.emit("commandStarted", {
       requestId: i, commandName: "find", command: { find: "games" },
     });
-    client.emit("commandFailed", { requestId: 1, commandName: mode === "daily vote" ? "update" : "aggregate", duration: 10,
+    client.emit("commandFailed", { requestId: 1, commandName: "aggregate", duration: 10,
       failure: new Error("private-name private-query private-build") });
     expect(logger.warns).toHaveLength(1);
     expect(logger.warns[0].fields.code).toBe("mongo_command_failed");
     expect(logger.warns[0].fields.err).toBeUndefined();
     expect(JSON.stringify(logger.warns)).not.toContain("private-name");
   });
+});
+
+test("failed Daily tally commands keep receipt details out of diagnostics", () => {
+  const client = new EventEmitter(), logger = makeLogger();
+  attachSlowQueryLogging(client, logger, 100);
+  client.emit("commandStarted", { requestId: 1, commandName: "update", command: { update: "daily_tally" } });
+  client.emit("commandFailed", { requestId: 1, commandName: "update", duration: 10, failure: new Error("private-receipt") });
+  expect(logger.warns[0].fields).toEqual({ commandName: "update", collection: "daily_tally", code: "mongo_command_failed" });
 });
 
 describe("attachSlowQueryLogging and typed search (ADR 0069 amendment)", () => {

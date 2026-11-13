@@ -24,9 +24,12 @@ function isBallot(value) {
   const fields = Object.keys(value);
   if (fields.length !== KEYS.size || fields.some(key => !KEYS.has(key))) return false;
   const { day, pack, answers, attempt } = /** @type {Ballot} */ (value);
-  return Number.isSafeInteger(day) && day > 0 && typeof pack === "string" && PACK_DIGEST.test(pack)
-    && validAnswers(answers) && typeof attempt === "string" && ATTEMPT.test(attempt);
+  return Number.isSafeInteger(day) && day > 0 && isToken(pack, PACK_DIGEST)
+    && validAnswers(answers) && isToken(attempt, ATTEMPT);
 }
+
+/** @param {unknown} value @param {RegExp} pattern */
+const isToken = (value, pattern) => typeof value === "string" && pattern.test(value);
 
 /** @param {unknown} value */
 function validAnswers(value) {

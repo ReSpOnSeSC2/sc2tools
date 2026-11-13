@@ -129,10 +129,9 @@ function sanitiseRequestUrl(value) {
  * @returns {Record<string, unknown>}
  */
 function sanitiseRequestForLog(req) {
-  if (isDailyCallsRequest(req.originalUrl || req.url)) return { method: req.method, url: "/v1/daily/calls" };
-  if (isDiscordInteractionsRequest(req.originalUrl || req.url)) {
-    return { method: req.method, url: "/v1/discord/interactions" };
-  }
+  const raw = req.originalUrl || req.url;
+  if (isDailyCallsRequest(raw)) return { method: req.method, url: "/v1/daily/calls" };
+  if (isDiscordInteractionsRequest(raw)) return { method: req.method, url: "/v1/discord/interactions" };
   /** @type {Record<string, string|string[]>} */
   const headers = {};
   for (const name of SAFE_HEADER_NAMES) {
@@ -144,7 +143,7 @@ function sanitiseRequestForLog(req) {
   return {
     id: req.id,
     method: req.method,
-    url: sanitiseRequestUrl(req.originalUrl || req.url),
+    url: sanitiseRequestUrl(raw),
     headers,
     remoteAddress: req.socket?.remoteAddress,
     remotePort: req.socket?.remotePort,
