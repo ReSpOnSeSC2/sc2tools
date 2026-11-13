@@ -9,11 +9,10 @@ const { ALL_LADDER_MAPS, normalizeMapName } = require("../util/isLadderMap");
 const { outcome } = require("./reportFacts");
 
 const MIN_DELAY = 5, MAX_DELAY = 60, MINUTE_MS = 60_000;
-const CACHE_MS = 15_000, CACHE_LIMIT = 128;
 const GAME_LIMIT = 30, TOKEN_LIMIT = 100;
 const MAP_NAMES = new Map(ALL_LADDER_MAPS.map(name => [normalizeMapName(name), name]));
 const OPTIONS = { maxTimeMS: 2000 };
-const OWNER_FIELDS = { _id: 0, userId: 1, streamViewer: 1, streamSession: 1,
+const OWNER_FIELDS = { _id: 0, userId: 1, streamViewer: 1, streamSession: 1, streamReportPublicEpoch: 1,
   "publicProfile.enabled": 1, "publicProfile.revision": 1, "replaySharing.slug": 1 };
 const AVAILABLE_OWNER = { _gdprMutation: { $exists: false } };
 const DECIDED = ["Victory", "Defeat"];
@@ -28,6 +27,9 @@ const revision = value => typeof value === "number" && Number.isSafeInteger(valu
 const validRevision = value => typeof value === "number" && value === revision(value);
 /** @param {unknown} value */
 const dateMs = value => value instanceof Date ? value.getTime() : NaN;
+
+/** @param {import("mongodb").Document} user */
+const consentEpoch = user => user.streamReportPublicEpoch ?? null;
 
 /** @param {unknown} raw */
 function settingsInput(raw) {
@@ -47,7 +49,7 @@ function settingsOf(user) {
   const row = user.streamViewer || {};
   const slug = validPlayerSlug(user.replaySharing?.slug);
   return { eligible: Boolean(slug && user.publicProfile?.enabled === true), slug,
-    tokenId: typeof row.tokenId === "string" && validId(row.tokenId) ? row.tokenId : null,
+    tokenId: row.publicEpoch === consentEpoch(user) && validId(row.tokenId) ? String(row.tokenId) : null,
     delayMinutes: validDelay(row.delayMinutes) ? Number(row.delayMinutes) : MIN_DELAY, revision: revision(row.revision) };
 }
 
@@ -61,7 +63,7 @@ function viewerSettingsMatch(user, current) {
 /** @param {import("mongodb").Document} user @param {string|null} slug */
 function consentMatch(user, slug) {
   return { "publicProfile.enabled": true, "publicProfile.revision": user.publicProfile?.revision ?? { $exists: false },
-    "replaySharing.slug": slug };
+    "replaySharing.slug": slug, streamReportPublicEpoch: consentEpoch(user) };
 }
 
 /** @param {unknown} value @returns {"Protoss"|"Terran"|"Zerg"|"Random"|null} */
@@ -75,12 +77,19 @@ function opponentRace(value) {
   }
 }
 
+/** @param {import("mongodb").Document} row @param {number} start @param {number} end */
+function completedInSession(row, start, end) {
+  const began = typeof row.startedAt === "string" ? Date.parse(row.startedAt) : dateMs(row.startedAt);
+  const duration = row.durationSec;
+  return typeof duration === "number" && Number.isFinite(duration) && duration > 0
+    && began >= start && began < end;
+}
+
 /** Explicit projection from recorded replay end timestamps.
  * @param {import("mongodb").Document} row @param {number} start @param {number} cutoff */
 function publicGame(row, start, cutoff) {
-  const end = dateMs(row.date), duration = row.durationSec, result = outcome(row);
-  if (!result || !Number.isFinite(end) || typeof duration !== "number" || !Number.isFinite(duration)
-    || duration <= 0 || end - duration * 1000 < start || end > cutoff) return null;
+  const end = dateMs(row.date), result = outcome(row);
+  if (!result || end > cutoff || !completedInSession(row, start, end)) return null;
   return { result, opponentRace: opponentRace(row.opponent?.race), map: MAP_NAMES.get(normalizeMapName(row.map)) ?? null };
 }
 
@@ -91,7 +100,6 @@ class StreamViewerService {
   /** @param {Pick<import("../db/connect").DbContext,"users"|"overlayTokens"|"games">} db @param {()=>number} [now] */
   constructor(db, now = Date.now) {
     this.db = db; this.now = now;
-    /** @type {Map<string,{key:string,readAt:number,value:ViewerPage}>} */ this.cache = new Map();
   }
 
   /** @param {string} userId */
@@ -129,7 +137,7 @@ class StreamViewerService {
     if (input.tokenId && !sources.some(source => source.id === input.tokenId)) {
       throw playerError(404, "viewer_source_unavailable", "This Browser Source is no longer available.");
     }
-    const next = { ...input, revision: current.revision + 1 };
+    const next = { ...input, revision: current.revision + 1, publicEpoch: consentEpoch(user) };
     const admission = input.tokenId ? consentMatch(user, current.slug) : {};
     const saved = await this.db.users.findOneAndUpdate({ ...viewerSettingsMatch(user, current), ...admission },
       { $set: { streamViewer: next } }, { ...OPTIONS, projection: OWNER_FIELDS, returnDocument: "after" });
@@ -154,7 +162,7 @@ class StreamViewerService {
     if (typeof token?.token !== "string" || !token.token) return null;
     const start = user.streamSession?.viewerSource === sha256(token.token) ? dateMs(user.streamSession.startAt) : NaN;
     return { owner: user.userId, start, delay: settings.delayMinutes,
-      key: JSON.stringify([user.userId, settings.revision, settings.tokenId, settings.delayMinutes, start]) };
+      key: JSON.stringify([user.userId, consentEpoch(user), settings.revision, settings.tokenId, settings.delayMinutes, start]) };
   }
 
   /** @param {unknown} slug @returns {Promise<ViewerPage|null>} */
@@ -162,22 +170,12 @@ class StreamViewerService {
     if (typeof slug !== "string" || !validPlayerSlug(slug)) return null;
     const current = await this.admit(slug);
     if (!current) return null;
-    const now = this.now();
-    const cached = this.cached(slug, current.key, now);
-    const value = cached ?? { key: current.key, readAt: now, value: await this.load(current, now) };
+    // Read current visibility on every request so a hidden or deleted replay
+    // cannot survive in a public cache.
+    const value = await this.load(current, this.now());
     // Consent, session and the exact token can change during an awaited game read.
     if ((await this.admit(slug))?.key !== current.key) return null;
-    this.cache.delete(slug);
-    this.cache.set(slug, value);
-    if (this.cache.size > CACHE_LIMIT) this.cache.delete(this.cache.keys().next().value || "");
-    return value.value;
-  }
-
-  /** @param {string} slug @param {string} key @param {number} now */
-  cached(slug, key, now) {
-    const entry = this.cache.get(slug);
-    if (!entry || entry.key !== key || entry.readAt > now || entry.readAt + CACHE_MS <= now) return null;
-    return entry;
+    return value;
   }
 
   /** @param {{owner:string,start:number,delay:number}} current @param {number} now @returns {Promise<ViewerPage>} */
@@ -186,7 +184,7 @@ class StreamViewerService {
     const rows = Number.isFinite(start) && start <= cutoff ? await this.db.games.find({
       ...gamesMatchStage(owner, { since: new Date(start), until: new Date(cutoff), gameSize: "1v1" }),
       result: { $in: DECIDED },
-    }, { ...OPTIONS, projection: { _id: 0, date: 1, durationSec: 1, result: 1, "opponent.race": 1, map: 1 } })
+    }, { ...OPTIONS, projection: { _id: 0, date: 1, startedAt: 1, durationSec: 1, result: 1, "opponent.race": 1, map: 1 } })
       .sort({ date: -1, _id: -1 }).limit(GAME_LIMIT * 2).toArray() : [];
     const games = rows.map(row => publicGame(row, start, cutoff)).filter(game => game !== null).slice(0, GAME_LIMIT);
     const wins = games.filter(game => game.result === "win").length;

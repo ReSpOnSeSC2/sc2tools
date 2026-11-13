@@ -33,14 +33,17 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.use
 
 describe("stream viewer", () => {
   it("polls the direct anonymous endpoint every 60 seconds only while visible", async () => {
-    fetcher.mockResolvedValue(Response.json(empty));
-    render(<StreamViewer handle={HANDLE} initial={initial} />);
+    fetcher.mockImplementationOnce(async () => Response.json(initial)).mockImplementation(async () => Response.json(empty));
+    render(<StreamViewer handle={HANDLE} />);
+    expect(screen.getByRole("status", { name: "Checking the viewer page" })).toBeTruthy();
+    expect(screen.queryByText("vs. Protoss")).toBeNull();
+    await advance(0);
     expect(screen.getByText("vs. Protoss")).toBeTruthy();
     await advance(59_999);
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledTimes(1);
     setVisibility("hidden");
     await advance(60_001);
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledTimes(1);
     setVisibility("visible");
     expect(screen.getByRole("status", { name: "Checking the viewer page" })).toBeTruthy();
     expect(screen.queryByText("vs. Protoss")).toBeNull();
@@ -49,14 +52,17 @@ describe("stream viewer", () => {
       expect.objectContaining({ cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer" }));
     expect(screen.getByText("No delayed results are available for this session yet.")).toBeTruthy();
     await advance(59_999);
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    await advance(1);
     expect(fetcher).toHaveBeenCalledTimes(2);
+    await advance(1);
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
   it("clears results after a 404 and restores them only after a successful retry", async () => {
-    fetcher.mockResolvedValueOnce(new Response(null, { status: 404 })).mockResolvedValueOnce(Response.json(initial));
-    render(<StreamViewer handle={HANDLE} initial={initial} />);
+    fetcher.mockResolvedValueOnce(Response.json(initial)).mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(Response.json(initial));
+    render(<StreamViewer handle={HANDLE} />);
+    await advance(0);
+    expect(screen.getByText("vs. Protoss")).toBeTruthy();
     await advance(60_000);
     expect(screen.getByText("This page is no longer shared.")).toBeTruthy();
     expect(screen.queryByText("vs. Protoss")).toBeNull();
@@ -71,8 +77,7 @@ describe("stream viewer", () => {
       .mockImplementationOnce((_url: string, { signal }: RequestInit) => new Promise((_, reject) => {
         signal?.addEventListener("abort", () => reject(new DOMException("Timed out", "AbortError")));
       }));
-    render(<StreamViewer handle={HANDLE} initial={initial} />);
-    await advance(60_000);
+    render(<StreamViewer handle={HANDLE} />);
     const first = fetcher.mock.calls[0][1].signal as AbortSignal;
     setVisibility("hidden");
     expect(first.aborted).toBe(true);
@@ -82,6 +87,31 @@ describe("stream viewer", () => {
     await advance(8000);
     expect(screen.getByText("The latest results couldn't load.")).toBeTruthy();
     expect(screen.queryByText("vs. Protoss")).toBeNull();
+  });
+
+  it("clears the saved document before back-forward cache and rechecks on restore", async () => {
+    fetcher.mockResolvedValueOnce(Response.json(initial)).mockResolvedValueOnce(new Response(null, { status: 404 }));
+    render(<StreamViewer handle={HANDLE} />);
+    await advance(0);
+    expect(screen.getByText("vs. Protoss")).toBeTruthy();
+    fireEvent(window, new PageTransitionEvent("pagehide", { persisted: true }));
+    expect(screen.queryByText("vs. Protoss")).toBeNull();
+    fireEvent(window, new PageTransitionEvent("pageshow", { persisted: true }));
+    await advance(0);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("This page is no longer shared.")).toBeTruthy();
+  });
+
+  it("waits to check publication when mounted in a hidden tab", async () => {
+    visibility = "hidden";
+    fetcher.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    render(<StreamViewer handle={HANDLE} />);
+    await advance(60_000);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(screen.queryByText("vs. Protoss")).toBeNull();
+    setVisibility("visible");
+    await advance(0);
+    expect(screen.getByText("This page is no longer shared.")).toBeTruthy();
   });
 });
 

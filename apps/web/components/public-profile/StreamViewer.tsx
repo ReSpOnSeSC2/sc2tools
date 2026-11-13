@@ -6,8 +6,8 @@ import { StatCard } from "@/components/ui/Stat";
 import type { StreamViewerPage } from "@/lib/streamViewer";
 import { useStreamViewer } from "./useStreamViewer";
 
-export function StreamViewer({ handle, initial }: { handle: string; initial: StreamViewerPage }) {
-  const { state, refresh } = useStreamViewer(handle, initial);
+export function StreamViewer({ handle }: { handle: string }) {
+  const { state, refresh } = useStreamViewer(handle);
   return <div className="min-h-64 space-y-5">
     {state.kind === "ready" ? <CompletedGames page={state.page} /> : state.kind === "loading"
       ? <div role="status" aria-label="Checking the viewer page"><Skeleton rows={4} /></div>

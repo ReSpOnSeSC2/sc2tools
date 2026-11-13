@@ -2,6 +2,7 @@
 "use strict";
 
 const express = require("express");
+const { randomUUID } = require("crypto");
 const request = require("supertest");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const { ObjectId } = require("mongodb");
@@ -40,7 +41,8 @@ function ownerRequest(method, data) {
 }
 
 function game(end, overrides = {}) {
-  return { userId: OWNER, date: new Date(end), durationSec: 90, matchFormat: "1v1",
+  return { userId: OWNER, date: new Date(end), startedAt: new Date(end - 90_000).toISOString(),
+    durationSec: 90, matchFormat: "1v1",
     gameId: `private-game-${new ObjectId()}`, result: "Victory", myToonHandle: "private-toon",
     map: "deathaura le", opponent: { race: "P", name: "private-opponent", mmr: 4217 },
     ...overrides };
@@ -119,7 +121,34 @@ test("legacy, ended and other-source sessions cannot supply rows", async () => {
   }
 });
 
-test("profile opt-out, source rotation and revocation bypass a warm result cache", async () => {
+test("uses a valid exact replay start, including the session boundary, instead of rounded duration", async () => {
+  await ownerRequest("put", input()).expect(200);
+  await db.games.insertMany([
+    game(START + 90_000, { startedAt: new Date(START - 1).toISOString() }),
+    game(START + 89_999, { startedAt: new Date(START), result: "Defeat" }),
+    game(CUTOFF, { startedAt: undefined }),
+    game(CUTOFF, { startedAt: "malformed" }),
+    game(CUTOFF, { startedAt: new Date(CUTOFF + 1) }),
+  ]);
+  const response = await request(app).get(PUBLIC).expect(200);
+  expect(response.body).toEqual({ games: [{ result: "loss", opponentRace: "Protoss", map: "Deathaura LE" }],
+    wins: 0, losses: 1, delayMinutes: 5 });
+});
+
+test("immediately omits hidden and deleted replays after a prior public read", async () => {
+  await ownerRequest("put", input()).expect(200);
+  const hidden = game(CUTOFF, { opponent: { race: "P" } });
+  const removed = game(CUTOFF - 1, { opponent: { race: "T" } });
+  await db.games.insertMany([hidden, removed]);
+  expect((await request(app).get(PUBLIC).expect(200)).body.wins).toBe(2);
+  await db.games.updateOne({ userId: OWNER, gameId: hidden.gameId }, { $set: { excluded: true } });
+  const hiddenResponse = await request(app).get(PUBLIC).expect(200);
+  expect(hiddenResponse.body.games.map(row => row.opponentRace)).toEqual(["Terran"]);
+  await db.games.deleteOne({ userId: OWNER, gameId: removed.gameId });
+  expect((await request(app).get(PUBLIC).expect(200)).body.games).toEqual([]);
+});
+
+test("profile opt-out, source rotation and revocation retire prior public results", async () => {
   await ownerRequest("put", input()).expect(200);
   await db.games.insertOne(game(CUTOFF));
   await request(app).get(PUBLIC).expect(200);
@@ -138,6 +167,38 @@ test("profile opt-out, source rotation and revocation bypass a warm result cache
   expect((await ownerRequest("get").expect(200)).body.tokenId).toBeNull();
 });
 
+test("profile consent changes through the preceding API require a fresh viewer opt-in", async () => {
+  await ownerRequest("put", input()).expect(200);
+  expect((await db.users.findOne({ userId: OWNER })).streamViewer.publicEpoch).toBeNull();
+  await request(app).get(PUBLIC).expect(200);
+  // S4 replaces the public profile and rotates the epoch only when disabling it.
+  // It does not know about the separate viewer setting or its revision.
+  const epoch = randomUUID();
+  await db.users.updateOne({ userId: OWNER }, { $set: {
+    publicProfile: { enabled: false, revision: 1 }, "replaySharing.slug": SLUG, streamReportPublicEpoch: epoch,
+  } });
+  await db.users.updateOne({ userId: OWNER }, { $set: {
+    publicProfile: { enabled: true, revision: 2 }, "replaySharing.slug": SLUG,
+  } });
+  expect((await db.users.findOne({ userId: OWNER })).streamViewer.tokenId).toBe(SOURCE.toHexString());
+  await request(app).get(PUBLIC).expect(404);
+  expect((await ownerRequest("get").expect(200)).body).toMatchObject({ eligible: true, tokenId: null, revision: 1, href: null });
+  await ownerRequest("put", input(SOURCE.toHexString(), 1)).expect(200);
+  expect((await db.users.findOne({ userId: OWNER })).streamViewer.publicEpoch).toBe(epoch);
+  await request(app).get(PUBLIC).expect(200);
+});
+
+test("rejects an enable when the public epoch changes during source validation", async () => {
+  const sources = viewer.sources.bind(viewer);
+  jest.spyOn(viewer, "sources").mockImplementationOnce(async (...args) => {
+    const result = await sources(...args);
+    await db.users.updateOne({ userId: OWNER }, { $set: { streamReportPublicEpoch: randomUUID() } });
+    return result;
+  });
+  await ownerRequest("put", input()).expect(409);
+  await request(app).get(PUBLIC).expect(404);
+});
+
 test("revocation during a data read discards results before the response", async () => {
   await ownerRequest("put", input()).expect(200);
   await db.games.insertOne(game(CUTOFF));
@@ -148,7 +209,6 @@ test("revocation during a data read discards results before the response", async
     return result;
   });
   await request(app).get(PUBLIC).expect(404);
-  expect(viewer.cache.size).toBe(0);
 });
 
 test("public failures are redacted and limited independently of authenticated settings", async () => {

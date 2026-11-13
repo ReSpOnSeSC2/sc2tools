@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { parseStreamViewer, type StreamViewerPage } from "@/lib/streamViewer";
 import { streamViewerApiPath } from "@/lib/streamViewerRoute";
 
@@ -17,8 +18,10 @@ async function latest(url: string, signal: AbortSignal): Promise<State> {
   return page ? { kind: "ready", page } : { kind: "error" };
 }
 
-export function useStreamViewer(handle: string, initial: StreamViewerPage) {
-  const [state, setState] = useState<State>({ kind: "ready", page: initial });
+export function useStreamViewer(handle: string) {
+  // Next can restore the page from its router cache. The cached tree carries
+  // only the loading state until the API has checked publication again.
+  const [state, setState] = useState<State>({ kind: "loading" });
   const retry = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -58,16 +61,20 @@ export function useStreamViewer(handle: string, initial: StreamViewerPage) {
     const onPageShow = (event: PageTransitionEvent) => {
       if (event.persisted) { pause(); onVisibility(); }
     };
+    const onPageHide = () => {
+      pause();
+      flushSync(() => setState({ kind: "loading" }));
+    };
     retry.current = () => void refresh(true);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pageshow", onPageShow);
-    window.addEventListener("pagehide", pause);
-    schedule();
+    window.addEventListener("pagehide", onPageHide);
+    void refresh(false);
     return () => {
       pause(); retry.current = null;
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pageshow", onPageShow);
-      window.removeEventListener("pagehide", pause);
+      window.removeEventListener("pagehide", onPageHide);
     };
   }, [handle]);
 

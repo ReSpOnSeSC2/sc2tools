@@ -16,6 +16,7 @@ for (const theme of themes) {
     expect(response?.status()).toBe(200);
     expect(response?.headers()["cache-control"]).toContain("no-store");
     expect(response?.headers()["referrer-policy"]).toBe("no-referrer");
+    expect(await response?.text()).not.toContain("Deathaura LE");
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
     await expect(page.getByRole("heading", { name: "Stream viewer", exact: true })).toBeVisible();
     await expect(page.getByText("Results appear at least 5 minutes after each game ends.")).toBeVisible();
@@ -84,13 +85,16 @@ test("reports empty and 404, then clears visible results on a revoked poll", asy
   await expect(page.getByText("No delayed results are available for this session yet.")).toBeVisible();
   await page.clock.install();
   const pattern = "**/v1/public/players/fixture-viewer-ready-0123456789/live";
+  let revoked = false;
   await page.route(pattern, async route => {
     expect(route.request().headers().authorization).toBeUndefined();
     expect(route.request().headers().referer).toBeUndefined();
-    await route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*", "cache-control": "no-store" }, json: {} });
+    if (revoked) await route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*", "cache-control": "no-store" }, json: {} });
+    else await route.continue();
   });
   await page.goto(viewer("ready"));
   await expect(page.getByText("vs. Zerg")).toBeVisible();
+  revoked = true;
   const poll = page.waitForResponse(pattern);
   await page.clock.fastForward(61_000);
   expect((await poll).status()).toBe(404);
@@ -100,4 +104,34 @@ test("reports empty and 404, then clears visible results on a revoked poll", asy
   await retry.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("This page is no longer shared.")).toBeVisible();
+});
+
+test("revalidates before displaying results after client-side Back", async ({ page }) => {
+  await page.goto(viewer("ready"));
+  await expect(page.getByText("vs. Zerg")).toBeVisible();
+  await page.evaluate(() => { document.documentElement.dataset.spaProof = "same-document"; });
+  await page.getByRole("banner").getByRole("link", { name: "SC2 Tools — home" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator("html")).toHaveAttribute("data-spa-proof", "same-document");
+
+  const pattern = "**/v1/public/players/fixture-viewer-ready-0123456789/live";
+  let finish = () => {};
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  await page.route(pattern, async route => {
+    await pending;
+    await route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*", "cache-control": "no-store" }, json: {} });
+  });
+  try {
+    const recheck = page.waitForRequest(pattern);
+    await page.goBack();
+    await recheck;
+    await expect(page).toHaveURL(new RegExp(viewer("ready") + "$"));
+    await expect(page.locator("html")).toHaveAttribute("data-spa-proof", "same-document");
+    await expect(page.getByRole("status", { name: "Checking the viewer page" })).toBeVisible();
+    await expect(page.getByText("vs. Zerg")).toHaveCount(0);
+  } finally {
+    finish();
+  }
+  await expect(page.getByText("This page is no longer shared.")).toBeVisible();
+  await expect(page.getByText("vs. Zerg")).toHaveCount(0);
 });
