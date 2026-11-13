@@ -49,7 +49,7 @@ function DiscordSettingsPanel() {
     finally { setBusy(false); }
   }
   const data = state.data;
-  return <Section id="discord" className="scroll-mt-28" title="Post to Discord" description="Send your results, session summaries, weekly recap, MMR peaks and promotions to a channel in your Discord server. Nothing is posted until you turn a channel on.">
+  return <Section id="discord" className="scroll-mt-28" title="Post to Discord" description="Choose which results, summaries and ladder milestones to post to a channel in your Discord server. Turn the channel on when it is ready.">
     {state.error && !data ? <RequestError error={state.error} onRetry={() => state.mutate()} /> : !data ? <Skeleton rows={4} /> : <div className="space-y-4">
       {failure ? <RequestError error={failure.error} onRetry={() => run(failure.retry)} /> : null}
       {!data.available ? <Card><p className="text-caption text-text-muted">Posting to Discord isn&apos;t available on this server yet.</p></Card> : <>

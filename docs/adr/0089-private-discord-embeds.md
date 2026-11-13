@@ -4,7 +4,7 @@
 
 - Discord channel posts contain text embeds with known races, bounded rating values and measured records. Automatic posts omit opponent identity and rating, raw map/build labels, precise replay timestamps and game links.
 - A channel's previous MMR boolean could be an implicit default. Store a separate consent generation when the owner actively selects **Share my MMR**. A queued rating post needs that same generation at dispatch.
-- **Ladder milestones from your inbox** starts off per channel. Only stored ladder bell rows with a recognized kind and exact safe headline can enqueue. Dispatch rechecks the private milestone preference and mute list. Existing promotion, personal peak, weekly and completed-session events keep their own keys.
+- **Ladder milestones from your inbox** starts off per channel. Only stored ladder bell rows with a recognized kind and exact safe headline can enqueue. Dispatch rechecks the private milestone preference and mute list. Existing promotion, lifetime peak, weekly and completed-session events keep their own keys. A game can set both a season and lifetime peak. Both post only when their separate event settings are enabled.
 - Manual battle report posting retains the active public share link. The API checks ownership and current consent and supplies fixed embed text. Existing clients may still send a headline and paragraph, which are ignored.
 - Pending rows created before this policy lack the embed policy marker. The new drainer retires them and keeps their dedupe receipts until the existing TTL. Already delivered Discord messages remain on Discord.
 

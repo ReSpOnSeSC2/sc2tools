@@ -248,12 +248,10 @@ class DiscordWebhooksService {
     if (kind !== undefined && !EVENTS.includes(/** @type {string} */ (kind))) throw discordError(400, "invalid_preview_kind", `Preview one of: ${EVENTS.join(", ")}.`);
     const hook = await this.ownHook(userId, hookId);
     const options = templates.hookOptions(hook);
+    const names = kind === undefined ? EVENTS : [/** @type {string} */ (kind)];
     const previews = [];
-    for (const name of EVENTS) {
-      if (kind !== undefined && kind !== name) continue;
-      previews.push({ kind: name, ...(await this.previewOne(userId, name, options)) });
-    }
-    await this.db.discordHooks.updateOne({ _id: hook._id }, { $set: { previewedAt: new Date(this.now()) } });
+    for (const name of names) previews.push({ kind: name, ...(await this.previewOne(userId, name, options)) });
+    await this.db.discordHooks.updateOne({ _id: hook._id, userId }, { $set: { previewedAt: new Date(this.now()) } });
     return { previews };
   }
 
@@ -482,23 +480,31 @@ class DiscordWebhooksService {
     if (claimed.modifiedCount !== 1) return "dropped";
     const outcome = await this.withLease(row.userId, async (lease) => {
       if (row.embedPolicy !== EMBED_POLICY) return null;
-      // Resolve the shared game's existence before the final consent reads so
-      // a slow game lookup cannot leave old channel settings in memory.
+      // Resolve the game before the final consent reads.
       const game = row.shareToken ? await this.sharedReportGame(row.userId, row.shareToken) : null;
       if (row.shareToken && !game) return null;
       try { await lease.assert(); } catch { return null; }
-      const [hook, user, share] = await Promise.all([
-        this.db.discordHooks.findOne({ _id: row.hookId, userId: row.userId }),
-        this.db.users.findOne({ userId: row.userId, _gdprMutation: { $exists: false } }, { projection: { _id: 0, "preferences.notifications": 1 } }),
-        game ? this.db.gameShares.findOne({ _id: row.shareToken, userId: row.userId, gameId: game.gameId, revokedAt: null }, { projection: { _id: 1 } }) : null,
-      ]);
-      if (!user || (row.shareToken && !share) || !this.canDeliver(row, hook) || !bellStillAllowed(row.bellKind, user)) return null;
+      const hook = await this.deliveryHook(row, game?.gameId);
+      if (!hook) return null;
       const response = await this.postWithDetails(hook, row.payload);
       return this.settle(row, hook, response);
     });
     if (outcome) return outcome;
     await this.retireRow(row, "dropped");
     return "dropped";
+  }
+
+  /** @param {any} row @param {string|undefined} gameId */
+  async deliveryHook(row, gameId) {
+    const [hook, user, share] = await Promise.all([
+      this.db.discordHooks.findOne({ _id: row.hookId, userId: row.userId }),
+      this.db.users.findOne({ userId: row.userId, _gdprMutation: { $exists: false } },
+        { projection: { _id: 0, "preferences.notifications": 1 } }),
+      gameId ? this.db.gameShares.findOne({ _id: row.shareToken, userId: row.userId, gameId, revokedAt: null },
+        { projection: { _id: 1 } }) : null,
+    ]);
+    if (!user || (row.shareToken && !share) || !this.canDeliver(row, hook) || !bellStillAllowed(row.bellKind, user)) return null;
+    return hook;
   }
 
   /** A queued payload uses the privacy choices approved when it was made. @param {any} row @param {any} hook */
