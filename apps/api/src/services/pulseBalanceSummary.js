@@ -122,4 +122,4 @@ function summarizeBalance(input) {
   return { season, asOf, tiers };
 }
 
-module.exports = { summarizeBalance };
+module.exports = { LEAGUES, MATCHUPS, summarizeBalance };

@@ -4883,6 +4883,13 @@ release preparation, not a signed or published 0.24.9 installer.
 - Copy a Browser Source link from a Match Room to show the map veto and
   series score with neutral seat labels. The overlay credit is optional.
 
+### Ladder balance
+
+- Compare the three non-mirror matchups by league tier on the free Balance
+  page. Each same-tier win rate includes a game count, an uncertainty interval
+  and the snapshot date. The page credits SC2Pulse and lists cross-tier
+  results separately.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

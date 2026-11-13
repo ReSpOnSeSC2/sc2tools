@@ -29,6 +29,8 @@ class SeasonsService {
     this.now = opts.now || (() => Date.now());
     /** @type {{ items: SeasonEntry[], fetchedAt: number } | null} */
     this._cache = null;
+    /** @type {Promise<void> | null} */
+    this._refreshingCatalog = null;
     // Composition over inheritance — the map-pool catalog is its own
     // service so the refresh cron can reach it without coupling to
     // season-list concerns.
@@ -70,35 +72,10 @@ class SeasonsService {
    * }>}
    */
   async list() {
-    const now = this.now();
     // Map pool is fetched in parallel with the season catalog so a slow
     // Liquipedia response doesn't add latency to a cached seasons read.
     const mapPoolPromise = this._safeMapPool();
-    /** @type {{ items: SeasonEntry[], current: number | null, source: 'pulse' | 'fallback', fetchedAt: number | null }} */
-    let payload;
-    if (
-      this._cache
-      && now - this._cache.fetchedAt < CACHE_TTL_MS
-      && this._cache.items.length > 0
-    ) {
-      payload = this._respondBase(this._cache.items, this._cache.fetchedAt, "pulse");
-    } else {
-      const items = await this._fetchFromPulse();
-      if (items && items.length > 0) {
-        this._cache = { items, fetchedAt: now };
-        payload = this._respondBase(items, now, "pulse");
-      } else if (this._cache && this._cache.items.length > 0) {
-        // Stale-while-error: serve previous payload.
-        payload = this._respondBase(this._cache.items, this._cache.fetchedAt, "pulse");
-      } else {
-        payload = {
-          items: [],
-          current: null,
-          source: "fallback",
-          fetchedAt: null,
-        };
-      }
-    }
+    const payload = await this.catalog();
     const mapPool = await mapPoolPromise;
     return {
       ...payload,
@@ -106,6 +83,27 @@ class SeasonsService {
       mapPoolSource: mapPool.source,
       mapPoolFetchedAt: mapPool.fetchedAt,
     };
+  }
+
+  /**
+   * Refresh the shared SC2Pulse catalog without fetching the map pool.
+   * The balance job requests a fresh catalog and skips the nightly refresh
+   * if the upstream is unavailable. Public season reads retain their fallback.
+   * @param {{freshOnly?:boolean,userAgent?:string}} [options]
+   */
+  async catalog(options = {}) {
+    const now = this.now();
+    if (!this._cache || now - this._cache.fetchedAt >= CACHE_TTL_MS) {
+      this._refreshingCatalog ??= this._fetchFromPulse(options.userAgent).then(items => {
+        if (items?.length) this._cache = { items, fetchedAt: now };
+      }).finally(() => { this._refreshingCatalog = null; });
+      await this._refreshingCatalog;
+    }
+    const cache = this._cache;
+    if (!cache || (options.freshOnly && now - cache.fetchedAt >= CACHE_TTL_MS)) {
+      return this._respondBase([], null, "fallback");
+    }
+    return this._respondBase(cache.items, cache.fetchedAt, "pulse");
   }
 
   /** Cache-only boundary lookup for chat. Never refreshes a catalog or map pool.
@@ -173,15 +171,15 @@ class SeasonsService {
     };
   }
 
-  /** @returns {Promise<SeasonEntry[] | null>} */
-  async _fetchFromPulse() {
+  /** @param {string} [userAgent] @returns {Promise<SeasonEntry[] | null>} */
+  async _fetchFromPulse(userAgent) {
     if (!this.fetchImpl) return null;
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : null;
     try {
       const res = await this.fetchImpl(`${PULSE_API_ROOT}/season/list/all`, {
         signal: controller ? controller.signal : undefined,
-        headers: { accept: "application/json" },
+        headers: { accept: "application/json", ...(userAgent ? { "user-agent": userAgent } : {}) },
       });
       if (!res.ok) return null;
       const raw = await res.json();

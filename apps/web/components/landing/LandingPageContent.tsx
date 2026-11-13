@@ -43,6 +43,7 @@ const WRAPPING_CTA = "h-auto min-h-12 py-2 text-center";
 const HOME_TOOL_LINKS = [
   { href: "/arcade", label: "SC2 Daily" },
   { href: "/match", label: "Match Rooms" },
+  { href: "/balance", label: "Ladder Balance" },
   { href: "/wrapped", label: "Wrapped" },
   { href: "/changelog", label: "Release notes" },
 ] as const;

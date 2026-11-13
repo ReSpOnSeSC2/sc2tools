@@ -7,7 +7,7 @@ import { isPublicReplayReference, legacyReplayArchivePath } from "./lib/replayRo
 import { isPublicStatusRequest, statusHostRedirect } from "./lib/publicStatusRoute";
 
 const PERMANENT_REDIRECT = 308;
-const SESSIONLESS_PAGES = new Set(["/wrapped", "/wrapped/opengraph-image", "/career", "/arcade/scout"]);
+const SESSIONLESS_PAGES = new Set(["/wrapped", "/wrapped/opengraph-image", "/career", "/arcade/scout", "/balance"]);
 
 /**
  * A mixed-case guide URL ("/guides/PvZ/Stargate-into-Glaives") → 308 to

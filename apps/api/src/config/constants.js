@@ -142,6 +142,8 @@ const COLLECTIONS = Object.freeze({
   // admin-only ``admin_events`` feed above.
   NOTIFICATIONS: "notifications",
   JOB_RUNS: "job_runs",
+  PULSE_BALANCE_CURRENT: "pulse_balance_current",
+  PULSE_BALANCE_DAILY: "pulse_balance_daily",
   // Nightly check-in correction aggregates for the admin classifier console
   // (services/classifierQuality.js). Counts only: no user or game ids.
   CLASSIFIER_QUALITY: "classifier_quality",

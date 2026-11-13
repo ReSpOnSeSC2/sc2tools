@@ -50,6 +50,8 @@ const VERSION_KEY = "_schemaVersion";
 const REGISTRY = Object.freeze({
   [COLLECTIONS.GHOST_EXAMPLES]: { collection: COLLECTIONS.GHOST_EXAMPLES, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.JOB_RUNS]: { collection: COLLECTIONS.JOB_RUNS, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.PULSE_BALANCE_CURRENT]: { collection: COLLECTIONS.PULSE_BALANCE_CURRENT, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.PULSE_BALANCE_DAILY]: { collection: COLLECTIONS.PULSE_BALANCE_DAILY, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.CLASSIFIER_QUALITY]: { collection: COLLECTIONS.CLASSIFIER_QUALITY, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.ADMIN_AUDIT]: { collection: COLLECTIONS.ADMIN_AUDIT, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.SUPPORTERS]: { collection: COLLECTIONS.SUPPORTERS, currentVersion: 1, versionKey: VERSION_KEY },
