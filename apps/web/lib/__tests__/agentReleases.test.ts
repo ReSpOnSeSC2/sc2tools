@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { GET, dynamic } from "@/app/changelog/agent.xml/route";
+import { GET as productFeed } from "@/app/changelog/rss.xml/route";
 import { FALLBACK_LATEST_AGENT_VERSION } from "../agentNotice";
 import { agentReleaseAnchor, agentReleaseMarkdown, getAgentReleaseNotes, parseAgentChangelog } from "../agentReleases";
 import { rssResponse } from "../rss";
@@ -15,13 +16,24 @@ describe("Agent release history", () => {
     ]);
   });
 
+  it("omits a single leading Unreleased section while keeping published notes", () => {
+    const changelog = "# Changelog\r\n\r\n## [Unreleased]\r\n### Added\r\n- Draft note\r\n\r\n## 0.25.1\r\n- Published note\r\n";
+    expect(parseAgentChangelog(changelog)).toEqual([
+      { version: "0.25.1", date: undefined, notes: "- Published note" },
+    ]);
+  });
+
   it.each([
     ["# Changelog\nNo versions", /no version sections/],
+    ["# Changelog\n## [Unreleased]\n- Draft note", /no version sections/],
+    ["## [Unreleased]\n- Draft\n## [Unreleased]\n- Duplicate\n## 0.25.1\n- Note", /Invalid Agent release heading/],
+    ["## 0.25.1\n- Note\n## [Unreleased]\n- Late draft", /Invalid Agent release heading/],
+    ["## [Unreleased] - 2026-11-12\n- Draft\n## 0.25.1\n- Note", /Invalid Agent release heading/],
     ["## 0.24.11\n- Note\n## 0.24.next\n- Note", /Invalid Agent release heading/],
     ["## 0.24.11 - 2026-02-30\n- Note", /Invalid date/],
     ["## 0.24.11\n\n## 0.24.9\n- Note", /Missing release notes/],
-    ["## 0.24.9\n- Note\n## 0.24.11\n- Note", /newest first/],
-    ["## 0.24.9\n- Note\n## 0.24.9\n- Repeat", /unique/],
+    ["## [Unreleased]\n- Draft\n## 0.24.9\n- Note\n## 0.24.11\n- Note", /newest first/],
+    ["## [Unreleased]\n- Draft\n## 0.24.9\n- Note\n## 0.24.9\n- Repeat", /unique/],
   ] as const)("fails on invalid release content %s", (markdown, reason) => {
     expect(() => parseAgentChangelog(markdown)).toThrow(reason);
   });
@@ -57,6 +69,14 @@ describe("Agent release history", () => {
     expect(items.map(item => item.querySelector("title")?.textContent)).toEqual(releases.map(({ version }) => `SC2 Tools Agent ${version}`));
     expect(items.map(item => item.querySelector("guid")?.textContent?.split("#")[1])).toEqual(releases.map(({ version }) => agentReleaseAnchor(version)));
     expect(items.map(item => Boolean(item.querySelector("pubDate")))).toEqual(releases.map(({ date }) => Boolean(date)));
+  });
+
+  it("only emits announcement entries in the product feed", async () => {
+    const xml = new DOMParser().parseFromString(await productFeed().text(), "application/xml");
+    const items = [...xml.querySelectorAll("item")];
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every(item => !item.querySelector("guid")?.textContent?.includes("#agent-v"))).toBe(true);
+    expect(items.some(item => item.querySelector("guid")?.textContent?.endsWith("#personal-notifications-and-replies"))).toBe(true);
   });
 
   it("escapes text and serializes only dates that were supplied", async () => {

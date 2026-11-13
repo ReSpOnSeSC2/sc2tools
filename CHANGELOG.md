@@ -4843,6 +4843,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Choose which private notifications can alert your phone or browser, including individual ladder milestones. New choices start off, and device alerts open the private inbox.
 
+### Agent weekly report reminders
+
+- Turn on weekly report reminders in Agent Settings. The tray waits until play ends and points you to your private Notifications inbox.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

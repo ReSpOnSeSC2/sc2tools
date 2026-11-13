@@ -350,6 +350,12 @@ class AgentState:
     last_known_race_at: Optional[str] = None
     companion_panel_positions: Dict[str, List[int]] = field(default_factory=dict)
 
+    notify_weekly_report: bool = False
+    """Opt-in reminder for unread weekly reports in the private bell."""
+
+    weekly_notice_weeks: Dict[str, str] = field(default_factory=dict)
+    """Latest delivered ISO week for each hashed owner."""
+
     @property
     def is_paired(self) -> bool:
         return bool(self.device_token)
@@ -536,6 +542,8 @@ def _state_from_raw(raw):
         notify_every_game=raw.get("notify_every_game") is True,
         notify_milestones=raw.get("notify_milestones") is True,
         milestone_notice_receipts=_coerce_str_map(raw.get("milestone_notice_receipts")),
+        notify_weekly_report=raw.get("notify_weekly_report") is True,
+        weekly_notice_weeks=_coerce_str_map(raw.get("weekly_notice_weeks")),
         notifications_muted=raw.get("notifications_muted") is True,
         close_to_tray=raw.get("close_to_tray") is not False,
         companion_preferences={
@@ -966,6 +974,7 @@ def _snapshot(state: AgentState) -> dict:
         companion_ghost=dict(state.companion_ghost),
         release_seen=dict(state.release_seen),
         milestone_notice_receipts=dict(state.milestone_notice_receipts),
+        weekly_notice_weeks=dict(state.weekly_notice_weeks),
         replay_folders_override=list(state.replay_folders_override),
         replay_folders_excluded=list(state.replay_folders_excluded),
         obs_website_add_enabled=state.obs_website_add_enabled is True,

@@ -786,6 +786,9 @@ class ApiClient:
     def get_unread_milestones(self) -> Dict[str, Any]:
         return self._interactive("GET", "/v1/me/notifications?kind=milestones&unread=true&limit=20")
 
+    def get_unread_weekly_report(self) -> Dict[str, Any]:
+        return self._interactive("GET", "/v1/me/notifications?kind=report.weekly&unread=true&limit=1")
+
     def put_opponent_note(self, pulse_id: str, notes: str) -> Dict[str, Any]:
         """Save a private note; desktop entry never opts it into read-aloud."""
         return self._interactive("PUT", "/v1/agent/opponents/" + quote(pulse_id, safe="") + "/notes",

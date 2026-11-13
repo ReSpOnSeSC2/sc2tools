@@ -572,6 +572,11 @@ def build_settings_page(
     window._milestones_check.setToolTip(milestone_help)
     window._milestones_check.setAccessibleDescription(milestone_help)
     form.addRow(window._milestones_check)
+    window._weekly_report_check = QtWidgets.QCheckBox("Show weekly reports in the tray")
+    weekly_help = "Get a private weekly report reminder after play. Choose Important or Every game above."
+    window._weekly_report_check.setToolTip(weekly_help)
+    window._weekly_report_check.setAccessibleDescription(weekly_help)
+    form.addRow(window._weekly_report_check)
     window._close_behavior_combo = QtWidgets.QComboBox()
     window._close_behavior_combo.addItem("Keep syncing in the tray", True)
     window._close_behavior_combo.addItem("Quit SC2 Tools", False)
@@ -644,6 +649,7 @@ def build_settings_page(
         (window._minimized_check, SAVED_WITH_SAVE),
         (window._notifications_combo, SAVED_WITH_SAVE),
         (window._milestones_check, SAVED_WITH_SAVE),
+        (window._weekly_report_check, SAVED_WITH_SAVE),
         (window._close_behavior_combo, SAVED_WITH_SAVE),
     ))
     updates, _ = section("Updates", ((window._autoupdate_check, SAVED_WITH_SAVE),))

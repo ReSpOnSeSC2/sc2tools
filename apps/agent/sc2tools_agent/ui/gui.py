@@ -154,6 +154,7 @@ class SettingsPayload:
         "start_minimized",
         "notify_every_game",
         "notify_milestones",
+        "notify_weekly_report",
         "notifications_muted",
         "close_to_tray",
         "show_summary",
@@ -195,6 +196,7 @@ class SettingsPayload:
         start_minimized: Optional[bool] = None,
         notify_every_game: Optional[bool] = None,
         notify_milestones: Optional[bool] = None,
+        notify_weekly_report: Optional[bool] = None,
         notifications_muted: Optional[bool] = None,
         close_to_tray: Optional[bool] = None,
         show_summary: bool = True,
@@ -237,6 +239,7 @@ class SettingsPayload:
         self.start_minimized = start_minimized
         self.notify_every_game = notify_every_game
         self.notify_milestones = notify_milestones
+        self.notify_weekly_report = notify_weekly_report
         self.notifications_muted = notifications_muted
         self.close_to_tray = close_to_tray
         self.show_summary = show_summary
@@ -3521,6 +3524,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 start_minimized=self._minimized_check.isChecked(),
                 notify_every_game=self._notifications_combo.currentData() == "all",
                 notify_milestones=self._milestones_check.isChecked(),
+                notify_weekly_report=self._weekly_report_check.isChecked(),
                 notifications_muted=self._notifications_combo.currentData() == "off",
                 close_to_tray=self._close_behavior_combo.currentData() is True,
                 auto_update_enabled=self._autoupdate_check.isChecked(),
@@ -4193,6 +4197,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             notification_mode = "off" if initial.notifications_muted else "all" if initial.notify_every_game else "important"
             self._notifications_combo.setCurrentIndex(self._notifications_combo.findData(notification_mode))
             self._milestones_check.setChecked(initial.notify_milestones is True)
+            self._weekly_report_check.setChecked(initial.notify_weekly_report is True)
             self._close_to_tray_last_saved = initial.close_to_tray is not False
             self._close_behavior_combo.setCurrentIndex(self._close_behavior_combo.findData(self._close_to_tray_last_saved))
             # Default ON when the runner didn't say otherwise — matches

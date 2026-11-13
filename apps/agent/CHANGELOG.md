@@ -2,6 +2,11 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## [Unreleased]
+
+### Added
+- Opt in to a weekly report reminder in the tray after play.
+
 ## 0.25.1
 
 ### Added

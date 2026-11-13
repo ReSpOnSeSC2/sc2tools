@@ -613,6 +613,7 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
             overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
             session_enabled=state.companion_session_enabled,
             on_connection=ui.health.set_socket,
+            on_weekly_report=_weekly_report_signal(recovery_cell, state),
         )
 
     live_transport: Optional[FanOutTransport] = None
@@ -785,6 +786,7 @@ def _run_with_gui(
         start_minimized=state.start_minimized,
         notify_every_game=state.notify_every_game,
         notify_milestones=state.notify_milestones,
+        notify_weekly_report=state.notify_weekly_report,
         notifications_muted=state.notifications_muted,
         close_to_tray=state.close_to_tray,
         # Only an explicit override attributed to this account is prefilled.
@@ -1318,6 +1320,7 @@ def _gui_boot_worker(
                 overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
                 session_enabled=state.companion_session_enabled,
                 on_connection=ui.health.set_socket,
+                on_weekly_report=_weekly_report_signal(cell, state),
                 on_build_intent_changed=intent_changed,
                 on_scouting_brief=lambda brief: (
                     cell.build_checkin.on_scouting_brief(brief)
@@ -1506,6 +1509,17 @@ def _handle_resync(
     if upload:
         upload.request_full_resync()
     logging.getLogger(__name__).info("agent_resync_requested")
+
+
+def _weekly_report_signal(cell, state):
+    def received(socket, token):
+        with _STATE_SAVE_LOCK:
+            if cell.socket_client is not socket or not token or token != state.device_token:
+                return
+            notices = cell.ui._milestone_notices
+            if notices is not None:
+                notices.on_weekly_report(replay_ticket(state))
+    return received
 
 
 def _start_milestone_notices(cfg, state, ui, tray, stop_event):
@@ -3037,7 +3051,7 @@ def _apply_obs_settings(state, payload, cell, log, *, state_dir):
         previous_connection = _effective_obs_connection(state)
         with _STATE_SAVE_LOCK:
             # Delivery checks these preferences under the same lock.
-            notices = ("notify_milestones", "notifications_muted")
+            notices = ("notify_milestones", "notify_weekly_report", "notifications_muted")
             names = ("obs_scene_switch_enabled", "obs_host", "obs_port", "obs_scene_map",
                 "obs_switch_debounce_sec", "obs_switch_on_replays", "obs_website_add_enabled", *notices)
             previous = {name: dict(getattr(state, name)) if name == "obs_scene_map" else getattr(state, name) for name in names}
@@ -3060,6 +3074,8 @@ def _apply_obs_settings(state, payload, cell, log, *, state_dir):
                         setattr(state, name, value)
                 raise
             revision = credential_revision(state, "obs")
+            weekly_catch_up = (state.notify_weekly_report and not state.notifications_muted
+                               and (not previous["notify_weekly_report"] or previous["notifications_muted"]))
         result = _activate_obs_settings(state, cell, log, previous_connection, revision)
         socket = getattr(cell, "socket_client", None)
         if socket is not None and _obs_revision_current(state, revision):
@@ -3067,6 +3083,8 @@ def _apply_obs_settings(state, payload, cell, log, *, state_dir):
                 socket.publish_obs_capabilities()
             except Exception:
                 log.warning("obs_capability_publication_unavailable")
+            if weekly_catch_up and callable(request := getattr(socket, "request_weekly_report", None)):
+                request()
         service = getattr(cell, "stream_service", None)
         reader = getattr(service, "reader", None) if service is not None else None
         if reader is not None and previous_connection != _effective_obs_connection(state):
