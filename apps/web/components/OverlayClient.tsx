@@ -2,6 +2,7 @@
 import dynamic from "next/dynamic";
 import { useOverlaySeriesState } from "@/components/overlay/useOverlaySeriesState";
 const LocalCompositePreview = dynamic(() => import("@/components/overlay/LocalCompositePreview").then(module => module.LocalCompositePreview), { ssr: false });
+const OverlaySetupCard = dynamic(() => import("@/components/overlay/OverlaySetupCard").then(module => module.OverlaySetupCard), { ssr: false });
 
 import {
   useCallback,
@@ -52,7 +53,7 @@ import {
   hasActiveOverlayGame,
   type OverlayConnectionStatus,
 } from "@/components/overlay/overlayResilience";
-import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
+import { OverlayCheckBadge } from "@/components/overlay/OverlayCheckBadge";
 import { ReconnectDot } from "@/components/overlay/ReconnectDot";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
 import { OverlayCredit } from "@/components/overlay/OverlayCredit";

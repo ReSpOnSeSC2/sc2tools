@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { OverlayCredit } from "@/components/overlay/OverlayCredit";
 import { OverlayPlacement } from "@/components/overlay/OverlayPlacement";
 import { WidgetShell } from "@/components/overlay/WidgetShell";
@@ -9,10 +9,12 @@ import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { parseMatchRoomObsInvite, seatLabel, SEATS, type RoomInvite } from "@/lib/matchRoom";
 import { roomObsState } from "@/lib/matchRoomObs";
 import { isOverlayCreditHidden, OVERLAY_CREDIT_PARAM } from "@/lib/overlayCredit";
+import { getThemeMode, subscribeTheme, systemPreference, THEME_ATTRIBUTE } from "@/lib/theme";
 import { useMatchRoom } from "./useMatchRoom";
 import { useVetoCountdown } from "./useVetoCountdown";
 
 type ObsState = ReturnType<typeof roomObsState>;
+type LadderTitles = { ladderTitles: readonly string[] };
 const PLACEMENT = { anchor: "top", xPct: 50, yPct: 5, scale: 1, zIndex: 1 } as const;
 
 function observeFragment(callback: () => void) {
@@ -32,7 +34,7 @@ function ObsVetoBoard({ state, seconds }: { state: ObsState; seconds: number | n
         ? seatLabel(turn.seat) + " to " + turn.kind : readyCount + "/2 players ready"}</p>
       {seconds !== null && <p role="timer" aria-label="Veto time remaining" className="text-caption tabular-nums">{seconds}s</p>}
     </div>
-    <ul className="grid grid-cols-2 gap-1.5">
+    <ul className={"grid grid-cols-2 gap-1.5" + (maps.length > 10 ? " sm:grid-cols-4" : "")}>
       {maps.map(({ label, move }, index) => <li key={index} className="min-w-0 rounded border border-line px-2 py-1 text-caption">
         <p className="break-words font-semibold">{label}</p>
         <p className="text-text-muted">{move ? (move.kind === "ban" ? "Banned by " : "Picked by ") + seatLabel(move.seat) : "Available"}</p>
@@ -54,10 +56,10 @@ function ObsScore({ state }: { state: ObsState }) {
   </section>;
 }
 
-function ObsMatch({ frame }: { frame: NonNullable<ReturnType<typeof useMatchRoom>["frame"]> }) {
+function ObsMatch({ frame, ladderTitles }: LadderTitles & { frame: NonNullable<ReturnType<typeof useMatchRoom>["frame"]> }) {
   const { room, receivedAt } = frame;
   const seconds = useVetoCountdown(room.deadline, room.serverTime, receivedAt);
-  const state = roomObsState(room);
+  const state = roomObsState(room, ladderTitles);
   const scoring = state.phase === "play" || state.phase === "complete";
   return <>
     <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -83,26 +85,58 @@ function ObsLoading() {
   </SkeletonRegion>;
 }
 
-function ObsConnection({ invite, showCredit }: { invite: Extract<RoomInvite, { role: "watch" }>; showCredit: boolean }) {
-  const { frame, reading, retry } = useMatchRoom(invite, "obs");
-  if (reading.gone) return <ObsStatus title="Room unavailable" detail="This room expired or was deleted." />;
-  if (reading.error) return <ObsStatus title="Connection lost" detail="Reconnecting to the match room." retry={retry} />;
-  if (!frame) return <ObsLoading />;
-  return <><ObsMatch frame={frame} /><OverlayCredit placement="inline" visible={showCredit} /></>;
+function ObsPanel({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
+  const width = wide ? "min(576px, calc(100vw - 24px))" : "min(328px, calc(100vw - 24px))";
+  return <WidgetShell width={width}>{children}</WidgetShell>;
 }
 
-function ObsSource({ source }: { source: string }) {
+function ObsConnection({ invite, showCredit, ladderTitles }: LadderTitles & {
+  invite: Extract<RoomInvite, { role: "watch" }>;
+  showCredit: boolean;
+}) {
+  const { frame, reading, retry } = useMatchRoom(invite, "obs");
+  if (reading.gone) return <ObsPanel><ObsStatus title="Room unavailable" detail="This room expired or was deleted." /></ObsPanel>;
+  if (reading.error) return <ObsPanel><ObsStatus title="Connection lost" detail="Reconnecting to the match room." retry={retry} /></ObsPanel>;
+  if (!frame) return <ObsPanel><ObsLoading /></ObsPanel>;
+  const { phase, config } = frame.room;
+  return <ObsPanel wide={(phase === "lobby" || phase === "veto") && config.maps.length > 10}>
+    <ObsMatch frame={frame} ladderTitles={ladderTitles} /><OverlayCredit placement="inline" visible={showCredit} />
+  </ObsPanel>;
+}
+
+function ObsSource({ source, ladderTitles }: LadderTitles & { source: string }) {
   const hashAt = source.indexOf("#");
   const invite = hashAt === -1 ? null : parseMatchRoomObsInvite(source.slice(hashAt));
-  if (!invite) return <ObsStatus title="Open an OBS source link"
-    detail="Copy the OBS Browser Source link from the host's Match Room." />;
+  if (!invite) return <ObsPanel><ObsStatus title="Open an OBS source link"
+    detail="Copy the OBS Browser Source link from the host's Match Room." /></ObsPanel>;
   const query = new URLSearchParams(source.slice(0, hashAt));
-  return <ObsConnection key={invite.id} invite={invite} showCredit={!isOverlayCreditHidden(query.get(OVERLAY_CREDIT_PARAM))} />;
+  return <ObsConnection key={invite.id} invite={invite} ladderTitles={ladderTitles}
+    showCredit={!isOverlayCreditHidden(query.get(OVERLAY_CREDIT_PARAM))} />;
 }
 
-export function MatchRoomObs() {
+function useBroadcastTheme() {
+  useEffect(() => {
+    const root = document.documentElement;
+    const forceDark = () => {
+      root.setAttribute(THEME_ATTRIBUTE, "dark");
+      root.style.colorScheme = "dark";
+    };
+    const unsubscribe = subscribeTheme(forceDark);
+    forceDark();
+    return () => {
+      unsubscribe();
+      const mode = getThemeMode();
+      const theme = mode === "system" ? systemPreference() : mode;
+      root.setAttribute(THEME_ATTRIBUTE, theme);
+      root.style.colorScheme = theme;
+    };
+  }, []);
+}
+
+export function MatchRoomObs({ ladderTitles }: LadderTitles) {
+  useBroadcastTheme();
   const source = useSyncExternalStore(observeFragment, () => window.location.search + window.location.hash, () => null);
   return <OverlayPlacement placement={PLACEMENT}>
-    <WidgetShell width={328}>{source === null ? <ObsLoading /> : <ObsSource source={source} />}</WidgetShell>
+    {source === null ? <ObsPanel><ObsLoading /></ObsPanel> : <ObsSource source={source} ladderTitles={ladderTitles} />}
   </OverlayPlacement>;
 }

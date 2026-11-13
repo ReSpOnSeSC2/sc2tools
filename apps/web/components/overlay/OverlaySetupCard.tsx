@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { OverlayConnectionStatus } from "./overlayResilience";
 
 export function OverlaySetupCard({ reason, name, suggestion }: {
   reason: "invalid-token" | "unknown-widget" | "unknown-scene" | (string & {});
@@ -15,15 +14,4 @@ export function OverlaySetupCard({ reason, name, suggestion }: {
       {reason.startsWith("unknown-") && suggestion ? <p className="mt-1">There&apos;s no {reason === "unknown-widget" ? "widget" : "scene"} called &quot;{name}&quot;. Did you mean &quot;{suggestion}&quot;?</p> : null}
       <p className="mt-1">{reason === "invalid-token" ? "It was revoked or mistyped. " : ""}Copy a fresh URL from sc2tools.com → Settings → Overlay.</p></>}
   </div>;
-}
-
-export function OverlayCheckBadge({ status, live = false }: { status: OverlayConnectionStatus; live?: boolean }) {
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("check") !== "1") return;
-    setVisible(true); const timer = setTimeout(() => setVisible(false), 10_000); return () => clearTimeout(timer);
-  }, []);
-  if (!visible) return null;
-  const label = status === "replaced" ? "URL replaced — update OBS" : status === "invalid" ? "Link invalid" : status === "connected" ? `Connected · ${live ? "live game" : "waiting for a game"}` : "Reconnecting…";
-  return <div role="status" className="fixed left-3 top-3 z-50 rounded bg-slate-950/95 px-3 py-2 font-sans text-sm text-white">{label}</div>;
 }

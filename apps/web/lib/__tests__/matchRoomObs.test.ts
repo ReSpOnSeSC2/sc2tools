@@ -4,6 +4,7 @@ import { matchRoomObsPath, parseMatchRoomObsInvite, type Room } from "@/lib/matc
 import { obsMapLabel, roomObsState } from "@/lib/matchRoomObs";
 
 const id = "abcdefghijklmnopqrstuvwx12345678";
+const titles = ["Alcyone LE"];
 
 const veto: Room = {
   config: { format: 1, preset: "standard", maps: ["Alcyone LE", "Secret Player Alias"], practice: false },
@@ -39,19 +40,19 @@ describe("Match Room Browser Source links", () => {
 
 describe("neutral OBS room model", () => {
   it("projects only public catalog labels, neutral seats and veto decisions", () => {
-    expect(roomObsState(veto)).toEqual({
+    expect(roomObsState(veto, titles)).toEqual({
       phase: "veto", bestOf: 1, readyCount: 2, score: { a: 0, b: 0 },
       turn: { seat: "b", kind: "ban" }, nextMap: null,
       maps: [{ label: "Alcyone LE", move: undefined }, { label: "Map 2", move: { seat: "a", kind: "pick" } }],
     });
-    expect(obsMapLabel(" Alcyone LE", 2)).toBe("Map 3");
-    expect(obsMapLabel("Alcyone LE - Secret", 3)).toBe("Map 4");
+    expect(obsMapLabel(" Alcyone LE", 2, titles)).toBe("Map 3");
+    expect(obsMapLabel("Alcyone LE - Secret", 3, titles)).toBe("Map 4");
   });
 
   it("displays the safe next map during play and removes it once the series completes", () => {
     const playing = { ...veto, phase: "play", order: [1], turn: null } satisfies Room;
-    expect(roomObsState(playing)).toMatchObject({ maps: [], nextMap: "Map 2" });
-    expect(roomObsState({ ...playing, phase: "complete", winners: ["a"], score: { a: 1, b: 0 } }))
+    expect(roomObsState(playing, titles)).toMatchObject({ maps: [], nextMap: "Map 2" });
+    expect(roomObsState({ ...playing, phase: "complete", winners: ["a"], score: { a: 1, b: 0 } }, titles))
       .toMatchObject({ maps: [], nextMap: null, score: { a: 1, b: 0 } });
   });
 });

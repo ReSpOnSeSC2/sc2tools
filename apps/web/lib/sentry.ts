@@ -53,10 +53,11 @@ function clientSentry(): Promise<Sentry | null> {
         beforeBreadcrumb: (crumb: Parameters<typeof privacy.scrubBreadcrumb>[0]) =>
           onPrivateSurface() ? null : privacy.scrubBreadcrumb(crumb),
         beforeSend: (event: Parameters<typeof privacy.scrubErrorContext>[0]) =>
-          onPrivateSurface() ? null : privacy.scrubErrorContext(event),
+          onPrivateSurface() || privacy.isRoomObsTelemetry(event.request?.url) ? null : privacy.scrubErrorContext(event),
         beforeSendSpan: privacy.scrubSpan,
         beforeSendTransaction: (event: Parameters<typeof privacy.scrubTransaction>[0]) =>
-          onPrivateSurface() ? null : privacy.scrubTransaction(event),
+          onPrivateSurface() || privacy.isRoomObsTelemetry(event.transaction) || privacy.isRoomObsTelemetry(event.request?.url)
+            ? null : privacy.scrubTransaction(event),
       });
       return s;
     } catch {

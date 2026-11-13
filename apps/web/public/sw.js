@@ -25,11 +25,19 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith("sc2tools-offline-") && key !== OFFLINE_CACHE).map((key) => caches.delete(key)))),
   ]));
 });
+function isDetachedSource(path) {
+  try {
+    path = decodeURI(path).toLowerCase();
+  } catch {
+    // Keep the existing bypass for a literal prefix with malformed encoding.
+  }
+  return path.startsWith("/overlay") || path.startsWith("/dock");
+}
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET" || request.mode !== "navigate") return;
   const path = new URL(request.url).pathname;
-  if (path.startsWith("/overlay") || path.startsWith("/dock")) return;
+  if (isDetachedSource(path)) return;
   event.respondWith(fetch(request).catch(() => caches.match("/offline.html").then((page) => page || Response.error())));
 });
 

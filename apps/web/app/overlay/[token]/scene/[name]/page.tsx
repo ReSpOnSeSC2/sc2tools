@@ -5,7 +5,8 @@ import {
   VALID_SCENES,
 } from "@/components/overlay/scenes/sceneVariants";
 import { isOverlayCreditHidden, OVERLAY_CREDIT_PARAM, OVERLAY_CREDIT_QR_PARAM } from "@/lib/overlayCredit";
-import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
+import { OverlayCheckBadge } from "@/components/overlay/OverlayCheckBadge";
+import { OverlaySetupCard } from "@/components/overlay/OverlaySetupCard";
 import { closestOverlayName } from "@/components/overlay/overlayNames";
 
 export const metadata = {
