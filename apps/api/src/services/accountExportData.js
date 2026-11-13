@@ -2,6 +2,7 @@
 
 const { calendarExportRecord } = require("./calendarFeed");
 const { REWARD_ACTIVITY_PROJECTION } = require("./twitchRewardReceipts");
+const { safePushEndpoint } = require("./pushNotifications");
 
 const { USER_SCOPED_COLLECTIONS, publicCoachingParty, publicCoachedStudent,
   exportedCoachingAssignment, exportedCoachingCalendar } = require("./accountExportPolicy");
@@ -107,6 +108,13 @@ async function* coachingRecords(db, userId, signal) {
   }
 }
 
+/** @param {{label?: string, endpoint?: unknown, createdAt?: Date, updatedAt?: Date, lastOkAt?: Date|null, expiresAt?: Date|null}} row */
+function pushDeviceMetadata(row) {
+  const endpoint = safePushEndpoint(row.endpoint);
+  const { label, createdAt, updatedAt, lastOkAt, expiresAt } = row;
+  return { label, createdAt, updatedAt, lastOkAt, expiresAt, endpointHost: endpoint ? new URL(endpoint).hostname : null };
+}
+
 /** Shared source for legacy JSON and NDJSON: one privacy policy, no archive-sized arrays.
  * @param {any} db @param {string} userId
  * @param {{includeSharedCoaching?:boolean,reviews?:boolean,signal?:AbortSignal,calendarFeed?:import("./calendarFeed").CalendarFeedService|null}} [options]
@@ -121,12 +129,11 @@ async function* accountExportRecords(db, userId, options = {}) {
   yield* collectionRecords(db, "multichatSounds", { userId }, { _id: 0, data: 0 }, signal);
   yield* collectionRecords(db, "playerGoals", { userId }, { _id: 0, slot: 0, criteriaRevision: 0 }, signal);
   yield* collectionRecords(db, "supporters", { userId }, { _id: 0, editId: 0, reviewedBy: 0 }, signal);
-  // Delivery channels: a Discord webhook URL is a credential for someone
-  // else's server, so only its last four characters leave; push endpoints
-  // and their keys are the caller's own device registrations.
+  // Delivery channel exports describe registrations without their credentials.
   yield* collectionRecords(db, "streamSessions", { userId }, { _id: 0 }, signal);
   yield* collectionRecords(db, "discordHooks", { userId }, { _id: 0, enc: 0 }, signal);
-  yield* collectionRecords(db, "pushSubscriptions", { userId }, { _id: 0, endpointHash: 0 }, signal);
+  yield* collectionRecords(db, "pushSubscriptions", { userId },
+    { _id: 0, label: 1, endpoint: 1, createdAt: 1, updatedAt: 1, lastOkAt: 1, expiresAt: 1 }, signal, pushDeviceMetadata);
   // Receipt data can include transient viewer input until dispatch completes.
   yield* collectionRecords(db, "twitchRewardReceipts", { userId, kind: "redemption" }, REWARD_ACTIVITY_PROJECTION, signal);
   // The link token is a bearer credential for the public page: the archive

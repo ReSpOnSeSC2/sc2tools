@@ -44,12 +44,13 @@ function buildPushRouter(deps) {
     } catch (err) { next(err); }
   });
 
-  router.get("/me/push", deps.auth, owned((_req, owner) => deps.push.status(owner)));
-  router.post("/me/push/subscriptions", deps.auth, owned((req, owner) => deps.push.subscribe(owner, body(req))));
-  router.delete("/me/push/subscriptions/:id", deps.auth, owned((req, owner) => deps.push.removeDevice(owner, String(req.params.id))));
-  router.post("/me/push/unsubscribe", deps.auth, owned((req, owner) => deps.push.unsubscribe(owner, body(req).endpoint)));
-  router.put("/me/push/preferences", deps.auth, owned((req, owner) => deps.push.setGroups(owner, body(req).groups)));
-  router.post("/me/push/test", deps.auth, owned((_req, owner) => deps.push.sendTest(owner)));
+  router.use("/me/push", (_req, res, next) => { res.set("Cache-Control", "private, no-store"); next(); }, deps.auth, requirePushOwner);
+  router.get("/me/push", owned((_req, owner) => deps.push.status(owner)));
+  router.post("/me/push/subscriptions", owned((req, owner) => deps.push.subscribe(owner, body(req))));
+  router.delete("/me/push/subscriptions/:id", owned((req, owner) => deps.push.removeDevice(owner, String(req.params.id))));
+  router.post("/me/push/unsubscribe", owned((req, owner) => deps.push.unsubscribe(owner, body(req).endpoint)));
+  router.put("/me/push/preferences", owned((req, owner) => deps.push.setGroups(owner, body(req).groups)));
+  router.post("/me/push/test", owned((_req, owner) => deps.push.sendTest(owner)));
   router.post("/push/subscription-change", rotateLimit, async (req, res, next) => {
     try { res.set("Cache-Control", "no-store"); res.json(await deps.push.rotate(body(req))); } catch (err) { next(err); }
   });
@@ -73,6 +74,12 @@ function buildPushRouter(deps) {
 /** @param {import('express').Request} req */
 function body(req) {
   return req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+}
+
+/** @type {import('express').RequestHandler} */
+function requirePushOwner(req, res, next) {
+  if (req.auth?.source === "clerk") next();
+  else res.status(403).json({ error: { code: "clerk_session_required" } });
 }
 
 /** @param {import('express').Request} req */

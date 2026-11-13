@@ -8,7 +8,7 @@ jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 
 const { createHarness } = require("./helpers/reviewsHarness");
 const { generateVapidKeys } = require("../src/services/webPushCrypto");
-const { PushNotificationsService } = require("../src/services/pushNotifications");
+const { PushNotificationsService, pushMessage } = require("../src/services/pushNotifications");
 const { CalendarFeedService } = require("../src/services/calendarFeed");
 const CALENDAR_KEY = "a1".repeat(32);
 
@@ -41,6 +41,7 @@ beforeEach(async () => {
   statuses = {}; sends = [];
   await h.db.pushSubscriptions.deleteMany({});
   await h.db.notifications.deleteMany({});
+  await h.db.users.updateMany({}, { $unset: { "preferences.push": "", "preferences.notifications": "" } });
   h.services.pushNotifications.lastTest.clear();
 });
 afterAll(async () => { await h.close(); });
@@ -50,7 +51,7 @@ test("push is inert without VAPID keys: nothing subscribes or sends", async () =
   expect(inert.enabled).toBe(false);
   await expect(inert.subscribe("u_ann", device("x"))).rejects.toMatchObject({ status: 503, code: "push_unavailable" });
   expect(await inert.deliver("u_ann", { kind: "review.new", title: "t" })).toEqual({ sent: 0, removed: 0 });
-  expect((await as("ann").get("/v1/me/push")).body).toMatchObject({ enabled: true, publicKey: vapid.publicKey });
+  expect((await as("ann").get("/v1/me/push")).body).toMatchObject({ enabled: true, publicKey: vapid.publicKey, groups: [] });
 });
 
 test("subscription lifecycle: validated, deduplicated per browser, moved between accounts and capped", async () => {
@@ -77,6 +78,8 @@ test("bell writes fan out to devices for enabled groups only, never for muted ki
   await as("ann").post("/v1/me/push/subscriptions", gone).expect(200);
   statuses[gone.endpoint] = 410;
   const push = h.services.pushNotifications;
+  expect(await push.deliver("u_ann", { kind: "review.new", title: "Not yet chosen" })).toEqual({ sent: 0, removed: 0 });
+  await as("ann").put("/v1/me/push/preferences", { groups: ["review-requests"] }).expect(200);
   const spy = jest.spyOn(push, "deliver");
   await as("ann").put("/v1/me/preferences/notifications", { muted: ["review.reply"] }).expect(200);
   expect(await h.services.notifications.notify("u_ann", { kind: "review.reply", title: "Muted reply" })).toBeNull();
@@ -101,9 +104,16 @@ test("bell writes fan out to devices for enabled groups only, never for muted ki
 
 test("split push choices preserve legacy settings and allow separate goal and unlink controls", async () => {
   await as("bob").post("/v1/me/push/subscriptions", device("split")).expect(200);
-  await h.db.users.updateOne({ userId: "u_bob" }, { $set: { "preferences.push": { groups: ["desktop", "other"] } } });
+  await h.db.users.updateOne({ userId: "u_bob" }, { $set: { "preferences.push": { groups: ["desktop", "other", "coaching"] } } });
   const status = await as("bob").get("/v1/me/push").expect(200);
-  expect(status.body.groups).toEqual(expect.arrayContaining(["desktop", "other", "goals", "agent-unlinked"]));
+  expect(status.body.groups).toEqual(expect.arrayContaining([
+    "desktop", "other", "goals", "agent-unlinked", "coaching-booked", "coaching-cancelled", "coaching-assigned",
+  ]));
+  expect(status.body.groups).not.toEqual(expect.arrayContaining(["import.done"]));
+  expect(status.body.groups).not.toEqual(expect.arrayContaining(["support.reply"]));
+  expect(status.body.groups).not.toEqual(expect.arrayContaining(["moment.win_streak"]));
+  await h.db.users.updateOne({ userId: "u_bob" }, { $set: { "preferences.push": { groups: ["other"], groupVersion: 2 } } });
+  expect((await as("bob").get("/v1/me/push").expect(200)).body.groups).toEqual(["other"]);
   expect(status.body.available).toEqual(expect.arrayContaining([
     { id: "goals", label: "Goal met" }, { id: "agent-unlinked", label: "Desktop app unlinked" },
   ]));
@@ -132,12 +142,137 @@ test("this browser can turn push off, remove a device, rotate its subscription a
   expect(await h.db.pushSubscriptions.countDocuments({ userId: "u_ann" })).toBe(0);
 });
 
-test("account export includes the caller's own push devices", async () => {
-  await as("ann").post("/v1/me/push/subscriptions", device("export")).expect(200);
-  const archive = await h.services.gdpr.export("u_ann");
-  expect(archive.data.pushSubscriptions).toHaveLength(1);
-  expect(archive.data.pushSubscriptions[0]).toMatchObject({ endpoint: "https://fcm.googleapis.com/fcm/send/export", label: "Chrome on Windows" });
-  expect(archive.data.pushSubscriptions[0].endpointHash).toBeUndefined();
+test("account JSON and NDJSON export only caller-owned push metadata", async () => {
+  const sub = device("private-export-path");
+  await as("ann").post("/v1/me/push/subscriptions", sub).expect(200);
+  await as("bob").post("/v1/me/push/subscriptions", { ...device("other"), label: "Other browser" }).expect(200);
+  const legacy = await as("ann").get("/v1/me/export").expect(200);
+  const ndjson = await as("ann").get("/v1/me/export?format=ndjson").expect(200);
+  const rows = ndjson.text.trim().split("\n").map(JSON.parse)
+    .filter((entry) => entry.collection === "pushSubscriptions").map((entry) => entry.row);
+  expect(rows).toHaveLength(1);
+  expect(rows).toEqual(legacy.body.data.pushSubscriptions);
+  expect(rows[0]).toEqual({ endpointHost: "fcm.googleapis.com", label: "Chrome on Windows",
+    createdAt: expect.any(String), updatedAt: expect.any(String), lastOkAt: null, expiresAt: null });
+  for (const secret of [sub.endpoint, sub.keys.auth, sub.keys.p256dh, "Other browser", "endpointHash"]) {
+    expect(legacy.text).not.toContain(secret);
+    expect(ndjson.text).not.toContain(secret);
+  }
+});
+
+test("a notification requires its own opt-in and the lock screen never gets the bell row", async () => {
+  await as("ann").post("/v1/me/push/subscriptions", device("moment")).expect(200);
+  const push = h.services.pushNotifications;
+  const transport = jest.spyOn(push, "_fanOut");
+  try {
+    await as("ann").put("/v1/me/push/preferences", { groups: ["moment.win_streak"] }).expect(200);
+    const input = { kind: "moment.win_streak", title: "Private title", body: "Private opponent", href: "/app/game/private-game", eventKey: "event-1" };
+    expect(await h.services.notifications.notify("u_ann", input)).toBeNull();
+    expect(transport).not.toHaveBeenCalled();
+    await as("ann").put("/v1/me/preferences/notifications", { milestones: true, muted: [] }).expect(200);
+    const delivery = jest.spyOn(push, "deliver");
+    try {
+      const row = await h.services.notifications.notify("u_ann", input);
+      expect(row).toMatchObject({ title: input.title, body: input.body, href: input.href });
+      await delivery.mock.results[0].value;
+      expect(delivery).toHaveBeenCalledWith("u_ann", { _id: row._id, groupKey: undefined, kind: input.kind });
+      expect(transport).toHaveBeenCalledWith("u_ann", {
+        title: "SC2 Tools", body: "You have a new notification.", href: "/notifications", tag: expect.stringMatching(/^n:[\w-]{43}$/),
+      }, { group: "moment.win_streak", kind: "moment.win_streak" });
+      expect(await h.services.notifications.notify("u_ann", input)).toBeNull();
+      expect(delivery).toHaveBeenCalledTimes(1);
+      expect(await push.deliver("u_ann", { kind: "moment.revenge_win", title: "Another milestone" })).toMatchObject({ sent: 0 });
+    } finally { delivery.mockRestore(); }
+  } finally { transport.mockRestore(); }
+});
+
+test("folds reuse an opaque tag only for the same owner and group", async () => {
+  await as("ann").post("/v1/me/push/subscriptions", device("group")).expect(200);
+  await as("ann").put("/v1/me/push/preferences", { groups: ["reviews"] }).expect(200);
+  const push = h.services.pushNotifications;
+  const transport = jest.spyOn(push, "_fanOut");
+  const delivery = jest.spyOn(push, "deliver");
+  try {
+    const groupKey = "reviews:private-review-id";
+    const event = { kind: "review.reply", title: "Private content", href: "/reviews/private-review-id", groupKey };
+    const first = await h.services.notifications.notify("u_ann", { ...event, eventKey: "one" });
+    await delivery.mock.results[0].value;
+    const fold = await h.services.notifications.notify("u_ann", { ...event, eventKey: "two" });
+    await delivery.mock.results[1].value;
+    expect(fold.count).toBe(2);
+    const [, firstMessage] = transport.mock.calls[0];
+    const [, secondMessage] = transport.mock.calls[1];
+    expect(firstMessage.tag).toBe(secondMessage.tag);
+    expect(firstMessage.tag).toBe(pushMessage("u_ann", { ...first, _id: "replacement-row" }).tag);
+    expect(firstMessage.tag).not.toBe(pushMessage("u_bob", first).tag);
+    expect(firstMessage.tag).not.toBe(pushMessage("u_ann", { ...first, groupKey: "other" }).tag);
+    expect(JSON.stringify(firstMessage)).not.toContain("private-review-id");
+    await h.services.notifications.notify("u_ann", { ...event, kind: "support.reply", eventKey: "three" });
+    await delivery.mock.results[2].value;
+    expect(transport).toHaveBeenCalledTimes(2);
+  } finally { delivery.mockRestore(); transport.mockRestore(); }
+});
+
+test.each(["choice", "bell mute"])("changing the %s during fanout prevents sends to later devices", async (change) => {
+  const push = h.services.pushNotifications;
+  await as("ann").post("/v1/me/push/subscriptions", device("fanout-one")).expect(200);
+  await as("ann").post("/v1/me/push/subscriptions", device("fanout-two")).expect(200);
+  await as("ann").put("/v1/me/push/preferences", { groups: ["reviews"] }).expect(200);
+  let firstSent = false;
+  push.fetchImpl.mockImplementationOnce(async () => {
+    firstSent = true;
+    if (change === "choice") await as("ann").put("/v1/me/push/preferences", { groups: [] }).expect(200);
+    else await as("ann").put("/v1/me/preferences/notifications", { muted: ["review.reply"] }).expect(200);
+    return { status: 201 };
+  });
+  expect(await push.deliver("u_ann", { kind: "review.reply" })).toEqual({ sent: 1, removed: 0 });
+  expect(firstSent).toBe(true);
+  expect(sends).toEqual([]);
+});
+
+test("an old endpoint cannot replace a browser already registered by another account", async () => {
+  const previous = device("old-browser");
+  const current = device("new-browser");
+  await as("ann").post("/v1/me/push/subscriptions", previous).expect(200);
+  const saved = await as("bob").post("/v1/me/push/subscriptions", current).expect(200);
+  expect((await request(h.app).post("/v1/push/subscription-change")
+    .send({ oldEndpoint: previous.endpoint, subscription: current })).body).toEqual({ rotated: false });
+  expect((await as("bob").get("/v1/me/push")).body.devices).toEqual([expect.objectContaining({ id: saved.body.id })]);
+});
+
+test("an in-flight provider failure cannot delete a transferred device", async () => {
+  const sub = device("shared");
+  const saved = await as("ann").post("/v1/me/push/subscriptions", sub).expect(200);
+  const push = h.services.pushNotifications;
+  await as("ann").put("/v1/me/push/preferences", { groups: ["reviews"] }).expect(200);
+  expect(await push.deliver("u_ann", { kind: "review.reply" })).toMatchObject({ sent: 1 });
+  push.fetchImpl.mockImplementationOnce(async () => {
+    await as("bob").post("/v1/me/push/subscriptions", sub).expect(200);
+    return { status: 410 };
+  });
+  expect(await push.deliver("u_ann", { kind: "review.reply" })).toMatchObject({ removed: 0 });
+  expect((await as("bob").get("/v1/me/push")).body.devices).toEqual([expect.objectContaining({ id: saved.body.id, lastOkAt: null })]);
+});
+
+test("a service-worker rotation does not cross an account erasure fence", async () => {
+  const previous = device("before-erasure");
+  const current = device("during-erasure");
+  await as("ann").post("/v1/me/push/subscriptions", previous).expect(200);
+  await h.db.users.updateOne({ userId: "u_ann" }, { $set: { _gdprMutation: { operation: "fixture" } } });
+  try {
+    await request(h.app).post("/v1/push/subscription-change")
+      .send({ oldEndpoint: previous.endpoint, subscription: current }).expect(409);
+    expect(await h.db.pushSubscriptions.findOne({ endpoint: current.endpoint })).toBeNull();
+  } finally { await h.db.users.updateOne({ userId: "u_ann" }, { $unset: { _gdprMutation: "" } }); }
+});
+
+test("an agent credential cannot change browser push settings", async () => {
+  const token = `sc2d_${"q".repeat(43)}`;
+  await h.db.deviceTokens.insertOne({ userId: "u_ann", tokenHash: crypto.createHash("sha256").update(token).digest("hex"), revokedAt: null });
+  const result = await request(h.app).post("/v1/me/push/subscriptions").set("authorization", `Bearer ${token}`).send(device("agent"));
+  expect(result.status).toBe(403);
+  expect(result.body.error.code).toBe("clerk_session_required");
+  expect(await h.db.pushSubscriptions.countDocuments({ userId: "u_ann" })).toBe(0);
 });
 
 async function seedCalendar() {

@@ -70,9 +70,15 @@ test("push endpoints are limited to browser push services over https", () => {
   expect(pushGroupFor("review.reply")).toBe("reviews");
   expect(pushGroupFor("coaching.reminder")).toBe("coaching-reminders");
   expect(pushGroupFor("report.weekly")).toBe("reports");
-  expect(pushGroupFor("import.done")).toBe("other");
+  expect(pushGroupFor("import.done")).toBe("import.done");
+  expect(pushGroupFor("support.reply")).toBe("support.reply");
+  expect(pushGroupFor("coaching.booked")).toBe("coaching-booked");
+  expect(pushGroupFor("coaching.cancelled")).toBe("coaching-cancelled");
+  expect(pushGroupFor("coaching.assigned")).toBe("coaching-assigned");
+  expect(pushGroupFor("moment.win_streak")).toBe("moment.win_streak");
+  expect(pushGroupFor("moment.unknown")).toBeUndefined();
   expect(sanitizePushGroups(["reports", "nope", "reports"])).toEqual(["reports"]);
-  expect(sanitizePushGroups(undefined)).not.toContain("other");
+  expect(sanitizePushGroups(undefined)).toEqual([]);
 });
 
 test("only Discord webhook URLs are accepted", () => {

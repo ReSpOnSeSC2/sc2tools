@@ -43,10 +43,10 @@ const GDPR_CLASSIFICATION = Object.freeze({
   JOB_RUNS: "global", ADMIN_AUDIT: "purge_only", CLASSIFIER_QUALITY: "global",
   GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
   GHOST_EXAMPLES: "purge_only", PLAYER_GOALS: "purge_only", SUPPORTERS: "purge_only", DONATION_MONTHS: "global",
-  // Reports and delivery channels: exported explicitly (Discord URLs
-  // redacted, push endpoints/keys included) and purged with the owner.
+  // Reports and delivery channels are exported explicitly and purged with the owner.
+  // Push devices export metadata only and are never revived by snapshot restore.
   STREAM_SESSIONS: "purge_only", DISCORD_HOOKS: "purge_only", DISCORD_OUTBOX: "purge_only",
-  PUSH_SUBSCRIPTIONS: "purge_only",
+  PUSH_SUBSCRIPTIONS: "user_scoped",
   // Share links are exported (without their tokens) and deleted, but never
   // restored: a snapshot must not revive a link revoked after it was taken.
   GAME_SHARES: "purge_only",

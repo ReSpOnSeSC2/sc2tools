@@ -26,6 +26,14 @@ function worker(windows: Array<{ url: string; focus: ReturnType<typeof vi.fn>; n
 }
 const waitFor = () => { let done: Promise<unknown> = Promise.resolve(); return { waitUntil: (p: Promise<unknown>) => { done = p; }, get done() { return done; } }; };
 
+it("answers the push protocol challenge on the transferred message port", () => {
+  const w = worker();
+  const reply = vi.fn();
+  w.handlers.get("message")!({ data: { type: "PUSH_PROBE" }, ports: [{ postMessage: reply }] });
+  expect(reply).toHaveBeenCalledWith({ type: "PUSH_READY", version: 1 });
+  expect(w.cache.put).not.toHaveBeenCalled();
+});
+
 it("shows a push as a notification that keeps only a same-site destination", async () => {
   const w = worker(); const ev = waitFor();
   w.handlers.get("push")!({ ...ev, data: { json: () => ({ title: "Week 46: 23 games, 13–10", body: "Best map: Alcyone", href: "/app/reports/weekly/2026-W46", tag: "n:1" }) } });

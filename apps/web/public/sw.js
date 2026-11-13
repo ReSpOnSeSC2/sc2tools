@@ -6,10 +6,14 @@ const OFFLINE_CACHE = "sc2tools-offline-v1";
 // one-entry cache so a restarted worker can still reach the API.
 const PUSH_CONFIG_CACHE = "sc2tools-push-v1";
 const PUSH_CONFIG_URL = "/__sc2tools_push_config";
+const PUSH_WORKER_PROTOCOL = 1;
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(OFFLINE_CACHE).then((cache) => cache.addAll(["/offline.html"])).catch(() => {}));
 });
 self.addEventListener("message", (event) => {
+  if (event.data?.type === "PUSH_PROBE") {
+    event.ports[0]?.postMessage({ type: "PUSH_READY", version: PUSH_WORKER_PROTOCOL });
+  }
   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
   if (event.data && event.data.type === "PUSH_CONFIG" && typeof event.data.api === "string" && /^https?:\/\/[^/]+$/.test(event.data.api)) {
     event.waitUntil(caches.open(PUSH_CONFIG_CACHE).then((cache) => cache.put(PUSH_CONFIG_URL, new Response(JSON.stringify({ api: event.data.api })))).catch(() => {}));
