@@ -16,11 +16,12 @@
 import type { CSSProperties } from "react";
 import { OVERLAY_CREDIT_TEXT } from "@/lib/overlayCredit";
 
-export type OverlayCreditPlacement = "top-left" | "bottom-center";
+export type OverlayCreditPlacement = "top-left" | "bottom-center" | "inline";
 
 const PLACEMENT_STYLE: Record<OverlayCreditPlacement, CSSProperties> = {
   "top-left": { top: 10, left: 12 },
   "bottom-center": { bottom: 18, left: "50%", transform: "translateX(-50%)" },
+  inline: { position: "static", display: "inline-block", marginTop: 8 },
 };
 
 const BASE_STYLE: CSSProperties = {

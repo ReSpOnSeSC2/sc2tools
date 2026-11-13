@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { OverlayCredit } from "@/components/overlay/OverlayCredit";
+import { OverlayPlacement } from "@/components/overlay/OverlayPlacement";
 import { WidgetShell } from "@/components/overlay/WidgetShell";
 import { Button } from "@/components/ui/Button";
 import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
@@ -12,6 +13,7 @@ import { useMatchRoom } from "./useMatchRoom";
 import { useVetoCountdown } from "./useVetoCountdown";
 
 type ObsState = ReturnType<typeof roomObsState>;
+const PLACEMENT = { anchor: "top", xPct: 50, yPct: 5, scale: 1, zIndex: 1 } as const;
 
 function observeFragment(callback: () => void) {
   window.addEventListener("hashchange", callback);
@@ -86,7 +88,7 @@ function ObsConnection({ invite, showCredit }: { invite: Extract<RoomInvite, { r
   if (reading.gone) return <ObsStatus title="Room unavailable" detail="This room expired or was deleted." />;
   if (reading.error) return <ObsStatus title="Connection lost" detail="Reconnecting to the match room." retry={retry} />;
   if (!frame) return <ObsLoading />;
-  return <><ObsMatch frame={frame} /><OverlayCredit visible={showCredit} /></>;
+  return <><ObsMatch frame={frame} /><OverlayCredit placement="inline" visible={showCredit} /></>;
 }
 
 function ObsSource({ source }: { source: string }) {
@@ -100,5 +102,7 @@ function ObsSource({ source }: { source: string }) {
 
 export function MatchRoomObs() {
   const source = useSyncExternalStore(observeFragment, () => window.location.search + window.location.hash, () => null);
-  return <WidgetShell width={328}>{source === null ? <ObsLoading /> : <ObsSource source={source} />}</WidgetShell>;
+  return <OverlayPlacement placement={PLACEMENT}>
+    <WidgetShell width={328}>{source === null ? <ObsLoading /> : <ObsSource source={source} />}</WidgetShell>
+  </OverlayPlacement>;
 }

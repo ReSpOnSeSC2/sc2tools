@@ -77,8 +77,11 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.locator("body")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(page.locator(".widget-shell")).toHaveCSS("pointer-events", "none");
     const panel = await page.locator(".widget-shell").boundingBox();
+    const credit = await page.getByTestId("overlay-credit").boundingBox();
     expect(panel?.x).toBeGreaterThanOrEqual(0);
     expect((panel?.x ?? 0) + (panel?.width ?? 0)).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
+    const board = await page.getByRole("region", { name: "Map veto" }).boundingBox();
+    expect(credit?.y).toBeGreaterThanOrEqual((board?.y ?? 0) + (board?.height ?? 0));
     await noPrivateContent(page);
     await checkAccessibility(page, info, PATH, theme);
     await captureAccessibility(page, info, "obs-veto-" + theme);
