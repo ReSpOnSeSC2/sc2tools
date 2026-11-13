@@ -38,6 +38,8 @@ function compareVersions(left: string, right: string): number {
 
 export function parseAgentChangelog(markdown: string): AgentRelease[] {
   const sections = markdown.replace(/\r\n?/g, "\n").split(/^##(?!#)/m).slice(1);
+  // Only a leading draft section is allowed. Every subsequent heading must be a release.
+  if (sections[0]?.split("\n", 1)[0].trimEnd() === " [Unreleased]") sections.shift();
   if (!sections.length) throw new Error("The Agent changelog has no version sections");
 
   const releases = sections.map(parseRelease);
