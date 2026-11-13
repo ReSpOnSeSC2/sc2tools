@@ -65,24 +65,29 @@ function createDailySchedule({ fetchImpl = fetch, now = Date.now } = {}) {
   let pinned = null;
   /** @type {{day:number, promise:Promise<string|null>}|null} */
   let pending = null;
-  return function schedule(day) {
+  /** @param {number} day */
+  async function refresh(day) {
+    const response = await fetchImpl(SCHEDULE_URL, { cache: "no-cache", redirect: "error", signal: AbortSignal.timeout(2_500) });
+    const index = await readIndex(response);
+    if (day !== currentDay(now())) return null;
+    const digest = recordedPack(index, day);
+    if (digest && pinned?.day !== day) pinned = { day, digest };
+    const published = digest === pinned?.digest ? digest : null;
+    cached = { day, digest: published, expiresAt: now() + 30_000 };
+    return published;
+  }
+
+  /** @param {number} day @returns {Promise<string|null>} */
+  function schedule(day) {
     if (day !== currentDay(now())) return Promise.resolve(null);
     if (cached?.day === day && cached.expiresAt > now()) return Promise.resolve(cached.digest);
     if (pending?.day === day) return pending.promise;
-    const promise = fetchImpl(SCHEDULE_URL, { cache: "no-cache", redirect: "error", signal: AbortSignal.timeout(2_500) })
-      .then(readIndex)
-      .then(index => {
-        if (day !== currentDay(now())) return null;
-        const digest = recordedPack(index, day);
-        if (digest && pinned?.day !== day) pinned = { day, digest };
-        const published = digest === pinned?.digest ? digest : null;
-        cached = { day, digest: published, expiresAt: now() + 30_000 };
-        return published;
-      })
+    const promise = refresh(day)
       .finally(() => { if (pending?.day === day) pending = null; });
     pending = { day, promise };
     return promise;
-  };
+  }
+  return schedule;
 }
 
 module.exports = { currentDay, createDailySchedule, DAY_MS, PACK_DIGEST };
