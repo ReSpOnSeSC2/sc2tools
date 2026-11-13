@@ -16,8 +16,9 @@ SC2 Tools account linking is unnecessary.
   generation. It refreshes every ten minutes and invalidates on local
   guide revalidation, including after a recompute. A failed scheduled
   refresh can keep the previous public snapshot for up to twenty minutes
-  from its last successful read. Disabled guides,
-  empty, expired or warming caches return a guide link without stats.
+  from its last successful read. An empty, expired or warming cache
+  returns the public guide link without stats. When guides are disabled,
+  the command reports that they are unavailable without a guide link.
 - Replies include up to five ranked, published rows with public page
   floors, at least five distinct ladder users, canonical guide links
   and aggregate win rates, intervals and game counts. Commands use

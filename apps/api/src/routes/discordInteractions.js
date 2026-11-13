@@ -99,8 +99,9 @@ function buildResponse(matchup, cache) {
   const data = { flags: EPHEMERAL, allowed_mentions: { parse: [] } };
   const slug = matchup ? matchupSlug(matchup) : null;
   if (!matchup || !slug) return { type: 4, data: { ...data, content: "Choose a matchup in the /build command." } };
+  if (!cache) return { type: 4, data: { ...data, content: "Build guides are unavailable right now." } };
   const url = SITE + "/guides/" + slug;
-  const snapshot = cache?.get(matchup);
+  const snapshot = cache.get(matchup);
   const components = [{ type: 1, components: [linkButton("All openers", url), linkButton("Grade my replay", SITE + "/try")] }];
   if (!snapshot) {
     return { type: 4, data: { ...data, content: "Published opener stats are unavailable right now. Check the matchup guide.", components } };

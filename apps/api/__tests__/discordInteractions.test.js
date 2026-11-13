@@ -101,7 +101,7 @@ test("a stalled interaction body cannot wait past the inline Discord deadline", 
   }
 });
 
-test("cold and disabled guide data respond with a private guide link, using an independent IP bucket", async () => {
+test("a cold guide cache gives a private reply with the public guide link", async () => {
   const reply = await signed(h.app, command()).expect(200);
   expect(reply.body).toEqual({ type: 4, data: {
     flags: 64, allowed_mentions: { parse: [] },
@@ -111,9 +111,14 @@ test("cold and disabled guide data respond with a private guide link, using an i
       { type: 2, style: 5, label: "Grade my replay", url: "https://sc2tools.com/try" },
     ] }],
   } });
+});
+
+test("disabled guides give a private reply without links, using an independent IP bucket", async () => {
   const app = express();
   app.use("/v1", buildDiscordInteractionsRouter(config, null, { maxPerMinute: 1 }));
-  await signed(app, command()).expect(200, reply.body);
+  await signed(app, command()).expect(200, { type: 4, data: {
+    flags: 64, allowed_mentions: { parse: [] }, content: "Build guides are unavailable right now.",
+  } });
   await signed(app, { type: 1 }).expect(429);
   const disabled = express();
   disabled.use("/v1", buildDiscordInteractionsRouter(null, null));
@@ -187,6 +192,11 @@ test("serves at most five canonical published floor-clearing openers from a comp
   expect(aging.get(matchup)).toBeDefined();
   clock += 20 * 60_000;
   expect(aging.get(matchup)).toBeUndefined();
+  const app = express();
+  app.use("/v1", buildDiscordInteractionsRouter(config, aging));
+  const expired = await signed(app, command()).expect(200);
+  expect(expired.body.data.embeds).toBeUndefined();
+  expect(expired.body.data.components[0].components[0].url).toBe("https://sc2tools.com/guides/pvt");
 });
 
 test("logs a fixed route without Discord header, query, request ID, IP or body data", () => {
