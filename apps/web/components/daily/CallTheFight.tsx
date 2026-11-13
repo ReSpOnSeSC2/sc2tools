@@ -83,13 +83,14 @@ type Props = {
   fight: DailyFight;
   slot: number;
   terrain?: string;
-  onNext: (correct: boolean) => void;
+  onNext?: (correct: boolean, call: FightCall) => void;
+  focusOpening?: boolean;
 };
 
 type Round = { phase: "frozen" } | { phase: "playing" | "result"; call: FightCall };
 const NUMBER = new Intl.NumberFormat("en");
 
-export function CallTheFight({ fight, slot, terrain, onNext }: Props) {
+export function CallTheFight({ fight, slot, terrain, onNext, focusOpening = slot > 0 }: Props) {
   const [round, setRound] = useState<Round>({ phase: "frozen" });
   const title = useRef<HTMLHeadingElement>(null);
   const action = useRef<HTMLButtonElement>(null);
@@ -103,8 +104,8 @@ export function CallTheFight({ fight, slot, terrain, onNext }: Props) {
       if (round.phase === "playing") action.current?.focus();
       if (round.phase === "result") title.current?.focus();
       previousPhase.current = round.phase;
-    } else if (slot > 0 && round.phase === "frozen") title.current?.focus();
-  }, [round.phase, slot]);
+    } else if (focusOpening && round.phase === "frozen") title.current?.focus();
+  }, [round.phase, focusOpening]);
 
   return (
     <section className="overflow-hidden rounded-xl border border-line bg-bg-surface" aria-label={"Fight " + (slot + 1)}>
@@ -153,9 +154,9 @@ function TradeResult({ fight, call, slot, onNext }: Props & { call: FightCall })
     <>
       <p className="text-body font-bold text-text">{CALLS[answer]}. {correct ? "Correct call." : "Your call was " + CALLS[call].toLowerCase() + "."}</p>
       <p className="text-caption text-text-muted">Resources lost: Blue {NUMBER.format(blue)}, Red {NUMBER.format(red)}.</p>
-      <Button className="min-h-11" onClick={() => onNext(correct)}>
+      {onNext && <Button className="min-h-11" onClick={() => onNext(correct, call)}>
         {slot + 1 === FIGHTS_PER_DAY ? "See results" : "Next fight"}
-      </Button>
+      </Button>}
     </>
   );
 }

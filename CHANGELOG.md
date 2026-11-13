@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### SC2 Daily
+
+- After completing a recorded Daily, choose to send your five calls anonymously
+  and see the crowd split once there are 20 votes. Share a link to any fight
+  that opens before the result.
+
 ### Coaching Content Studio
 
 - Create guided notes, voice memos, videos, annotated screenshots, replay

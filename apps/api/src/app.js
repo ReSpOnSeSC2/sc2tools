@@ -266,6 +266,8 @@ const { buildMlRouter } = require("./routes/ml");
 const { buildAgentVersionRouter } = require("./routes/agentVersion");
 const { buildSiteStatsRouter } = require("./routes/siteStats");
 const { buildMatchRoomsRouter } = require("./routes/matchRooms");
+const { buildDailyCrowdRouter } = require("./routes/dailyCrowd");
+const { DailyCrowdService } = require("./services/dailyCrowd");
 const { buildCommunityRouter } = require("./routes/community");
 const { buildSeasonsRouter } = require("./routes/seasons");
 const { buildClerkWebhookRouter } = require("./routes/clerkWebhook");
@@ -1264,6 +1266,7 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
   // ordinary API's per-IP bucket for every visible browser tab.
   app.use(SERVICE.ROUTE_PREFIX, buildSiteStatsRouter({ siteStats, auth }));
   app.use(SERVICE.ROUTE_PREFIX, buildMatchRoomsRouter(new MatchRoomsService(deps.db.matchRooms)));
+  app.use(SERVICE.ROUTE_PREFIX, buildDailyCrowdRouter(new DailyCrowdService(deps.db.dailyTally)));
   const isSignedProviderWebhook = (/** @type {import('express').Request} */ req) =>
     req.method === "POST"
     && (

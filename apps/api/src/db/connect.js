@@ -65,6 +65,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   supportEmailSync: import('mongodb').Collection<any>,
  *   sitePresence: import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>,
  *   matchRooms: import('mongodb').Collection<import('../services/matchRooms').MatchRoomDoc>,
+ *   dailyTally: import('mongodb').Collection<import('../services/dailyCrowd').Tally>,
  *   siteConfig: import('mongodb').Collection<any>,
  *   ghostExamples: import('mongodb').Collection<any>,
  *   pulseAccounts: import('mongodb').Collection,
@@ -198,6 +199,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     matchRooms: /** @type {import('mongodb').Collection<import('../services/matchRooms').MatchRoomDoc>} */ (
       db.collection(COLLECTIONS.MATCH_ROOMS)
     ),
+    dailyTally: db.collection(COLLECTIONS.DAILY_TALLY),
     coaching: db.collection(COLLECTIONS.COACHING),
     pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
     pulseCharacterLinks: db.collection(COLLECTIONS.PULSE_CHARACTER_LINKS),
@@ -677,6 +679,8 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.matchRooms.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await ctx.matchRooms.createIndex({ slot: 1 }, { unique: true, sparse: true });
   await ctx.matchRooms.createIndex({ creationDigest: 1 }, { unique: true });
+  await ctx.dailyTally.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await ctx.dailyTally.createIndex({ day: 1, pack: 1 });
 
   await ensureBrowserIngestDailyIndexes(ctx);
 

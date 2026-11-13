@@ -41,6 +41,7 @@ const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|toke
 const SPATIAL_PATH = /^\/v1\/spatial\//iu;
 const STREAM_VIEWER_PUBLIC = /^\/(?:v1\/)?public\/players\/[^/]+\/live\/?$/i;
 const STREAM_VIEWER_OWNER = /^\/(?:v1\/)?me\/stream-viewer\/?$/i;
+const DAILY_CALLS = /^\/(?:v1\/)?daily\/calls\/?$/i;
 const OAUTH_CALLBACK_PATH =
   /^\/v1\/integrations\/(?:twitch|kick|youtube)\/callback\/?$/iu;
 const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set([
@@ -62,10 +63,16 @@ function streamViewerLogPath(value) {
 /** @param {unknown} value */
 function isStreamViewerRequest(value) { return streamViewerLogPath(value) !== null; }
 
+/** @param {unknown} value */
+function isDailyCallsRequest(value) {
+  return typeof value === "string" && DAILY_CALLS.test(value.split(/[?#]/u, 1)[0].replace(/^https?:\/\/[^/]+(?=\/)/i, ""));
+}
+
 /** @param {string} raw */
 function privateOperationalPath(raw) {
   if (isReplayDownloadBatchPath(raw)) return "/v1/replays/download-batch";
   if (isPrivateSearchPath(raw)) return privateSearchLogUrl(raw);
+  if (isDailyCallsRequest(raw)) return "/v1/daily/calls";
   return streamViewerLogPath(raw);
 }
 
@@ -120,6 +127,7 @@ function sanitiseRequestUrl(value) {
  * @returns {Record<string, unknown>}
  */
 function sanitiseRequestForLog(req) {
+  if (isDailyCallsRequest(req.originalUrl || req.url)) return { method: req.method, url: "/v1/daily/calls" };
   /** @type {Record<string, string|string[]>} */
   const headers = {};
   for (const name of SAFE_HEADER_NAMES) {
@@ -162,4 +170,5 @@ module.exports = {
   sanitiseResponseForLog,
   sanitiseRequestUrl,
   isStreamViewerRequest,
+  isDailyCallsRequest,
 };
