@@ -67,7 +67,7 @@ The owner can publish each report at `/players/<slug>/streams/<public-id>` while
 
 `GET /v1/calendar/<secret>.ics` serves booked and cancelled sessions from 30 days back to a year ahead: a coach sees "Coaching session" without student names, a student their own sessions with the coach's name. Feed requests look up the SHA-256 of the 256-bit secret (`users.calendarFeed.hash`). With `PLATFORM_TOKEN_ENCRYPTION_KEY` configured, newly created links also store an owner-bound AES-GCM copy for account export after signing in directly. Settings shows the new link once. **Regenerate** replaces the link and **Turn off** removes it. Request logs redact the path segment. Each booking card also offers a client-side one-event `.ics` file.
 
-Desktop Agent Settings can opt in to a weekly report reminder. On socket connection or a weekly report ping, the linked device reads one unread report through the same private bell endpoint. The tray waits until the game ends, and shows fixed reminder text. The Agent keeps the latest delivered week for each hashed owner in local state. The report itself remains in the bell if the Agent closes before a claimed reminder appears.
+Desktop Agent Settings can opt in to a weekly report reminder. On socket connection or a weekly report ping, the linked device reads one unread report through the same private bell endpoint. If play interrupts delivery, the Agent checks again after the match before showing fixed reminder text. The Agent keeps the latest delivered week for each hashed owner in local state. It releases an unsent reservation when a match interrupts dispatch. A crash between saving the receipt and showing the reminder can miss the toast. The report remains in the private bell.
 
 ### Discord
 

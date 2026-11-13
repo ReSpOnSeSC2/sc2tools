@@ -114,6 +114,10 @@ def _recent_week(week, today):
         return False
 
 
+def _recent_week_receipts(receipts, today):
+    return {owner: week for owner, week in receipts.items() if _recent_week(week, today)}
+
+
 class MilestoneNotices:
     """Fetch on one advisory worker instead of the upload or live threads."""
 
@@ -128,6 +132,7 @@ class MilestoneNotices:
         # Wait for the live poller's first observation, including at startup
         # when an upload can finish before an already-running game is detected.
         self._between_games = False
+        self._match_starts = 0
         self._closed = False
         self._worker = threading.Thread(target=self._run, name="sc2tools-milestone-notices", daemon=True)
 
@@ -147,6 +152,8 @@ class MilestoneNotices:
             between_games = event.phase in _BETWEEN_GAMES
             if between_games != self._between_games:
                 self._between_games = between_games
+                if not between_games:
+                    self._match_starts += 1
                 self._changed.notify_all()
 
     def on_game_synced(self, summary, owner_epoch):
@@ -224,7 +231,7 @@ class MilestoneNotices:
         with self._changed:
             self._changed.wait_for(interrupted, timeout=delay)
             self._changed.wait_for(lambda: interrupted() or self._between_games)
-            return not interrupted()
+            return None if interrupted() else self._match_starts
 
     def _check_for_notice(self, game):
         def interrupted():
@@ -236,7 +243,7 @@ class MilestoneNotices:
         # Give each newly observed candidate a quiet interval to settle.
         candidate = None
         for delay in (*_RETRY_DELAYS, _SETTLE_DELAY):
-            if not self._wait_between_games(interrupted, _SETTLE_DELAY if candidate else delay) or not self._eligible(game):
+            if self._wait_between_games(interrupted, _SETTLE_DELAY if candidate else delay) is None or not self._eligible(game):
                 return
             try:
                 notice = _read_notice(client, game.href)
@@ -260,7 +267,8 @@ class MilestoneNotices:
 
         client = ApiClient(base_url=self._api_base, device_token=ticket.token, _auth_guard=enabled)
         for delay in _WEEKLY_RETRY_DELAYS:
-            if not self._wait_between_games(interrupted, delay) or not enabled():
+            match_starts = self._wait_between_games(interrupted, delay)
+            if match_starts is None or not enabled():
                 return
             try:
                 payload = client.get_unread_weekly_report()
@@ -272,38 +280,51 @@ class MilestoneNotices:
                 continue
             today = datetime.now(timezone.utc).date()
             week = _weekly_report_week(payload, today)
-            if not week:
-                return
-            claimed = self._claim_week(ticket, week, today)
-            if claimed is None:
-                return
-            if claimed:
-                notice = _Notice(None, "SC2 Tools weekly report", _WEEKLY_NOTICE)
-                self._show_when_between_games(notice, enabled, interrupted)
+            if not week or self._dispatch_week(ticket, week, today, match_starts, interrupted):
                 return
 
-    def _claim_week(self, ticket, week, today):
+    def _dispatch_week(self, ticket, week, today, match_starts, interrupted):
+        """Finish this attempt, or retry the unread lookup after a match or write failure."""
+        owner = sha256(f"weekly\0{ticket.owner}".encode("utf-8")).hexdigest()
+
+        def canceled():
+            return interrupted() or not self._weekly_enabled(ticket)
+
         with _STATE_SAVE_LOCK:
-            if not self._weekly_enabled(ticket):
-                return None
+            with self._changed:
+                if canceled():
+                    return True
+                if self._match_starts != match_starts:
+                    return False
             previous = self._state.weekly_notice_weeks
-            owner = sha256(f"weekly\0{ticket.owner}".encode("utf-8")).hexdigest()
             delivered = previous.get(owner, "")
             if _recent_week(delivered, today) and delivered >= week:
-                return None
-            self._state.weekly_notice_weeks = {
-                key: value for key, value in previous.items() if _recent_week(value, today)
-            }
-            self._state.weekly_notice_weeks[owner] = week
-            # As with milestones, persistence precedes dispatch. A crash here
-            # can miss a toast, but the private bell still has the report.
-            try:
-                save_state(self._state_dir, self._state)
-            except Exception:
-                self._state.weekly_notice_weeks = previous
-                log.warning("weekly_report_notice_save_failed")
+                return True
+            claimed = _recent_week_receipts(previous, today)
+            claimed[owner] = week
+            if not self._save_weekly_weeks(claimed):
                 return False
-            return True
+            with self._changed:
+                retired = canceled()
+                if not retired and self._match_starts == match_starts:
+                    self._show_notice(_Notice(None, "SC2 Tools weekly report", _WEEKLY_NOTICE))
+                    return True
+            # A match can start during the disk write. Release the unsent
+            # reservation before waiting and re-read after play. A crash in
+            # this window can miss a toast, but never repeat one.
+            restored = self._save_weekly_weeks(previous)
+            return retired or not restored
+
+    def _save_weekly_weeks(self, weeks):
+        previous = self._state.weekly_notice_weeks
+        self._state.weekly_notice_weeks = weeks
+        try:
+            save_state(self._state_dir, self._state)
+        except Exception:
+            self._state.weekly_notice_weeks = previous
+            log.warning("weekly_report_notice_save_failed")
+            return False
+        return True
 
     def _claim(self, game):
         with _STATE_SAVE_LOCK:
@@ -328,7 +349,7 @@ class MilestoneNotices:
             return True
 
     def _show_when_between_games(self, notice, enabled, interrupted):
-        while self._wait_between_games(interrupted):
+        while self._wait_between_games(interrupted) is not None:
             # The live poller must publish phase changes even during a slow
             # state write. Hold its condition only for the final dispatch.
             with _STATE_SAVE_LOCK, self._changed:
@@ -336,9 +357,12 @@ class MilestoneNotices:
                     return
                 if not self._between_games:
                     continue
-                try:
-                    self._notify(notice.body or notice.title,
-                                 title=notice.title if notice.body else "SC2 Tools Agent")
-                except Exception:
-                    log.warning("bell_notice_display_failed")
+                self._show_notice(notice)
                 return
+
+    def _show_notice(self, notice):
+        try:
+            self._notify(notice.body or notice.title,
+                         title=notice.title if notice.body else "SC2 Tools Agent")
+        except Exception:
+            log.warning("bell_notice_display_failed")

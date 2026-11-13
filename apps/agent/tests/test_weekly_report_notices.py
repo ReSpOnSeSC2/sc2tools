@@ -185,6 +185,7 @@ def test_only_reads_one_row_and_retries_bounded_transport_error(make_worker, mon
 
 
 def test_match_start_during_weekly_receipt_write_defers_dispatch(make_worker, monkeypatch):
+    monkeypatch.setattr(milestone_notices, "_WEEKLY_RETRY_DELAYS", (0, 0, 0))
     entered, release = Event(), Event()
     state = AgentState(user_id="owner-a", device_token="fake-device-a", notify_weekly_report=True)
     app = make_worker(lambda _: response(items=[weekly_row()]), settings=state)
@@ -206,7 +207,80 @@ def test_match_start_during_weekly_receipt_write_defers_dispatch(make_worker, mo
     assert not app.toasts
     app.phase(LiveLifecyclePhase.MATCH_ENDED)
     wait_settled(app)
-    assert len(app.toasts) == 1
+    assert len(app.calls) == 2 and len(app.toasts) == 1
+
+
+def test_disable_during_match_releases_undelivered_week(make_worker, monkeypatch):
+    monkeypatch.setattr(milestone_notices, "_WEEKLY_RETRY_DELAYS", (0, 0, 0))
+    state = AgentState(user_id="owner-a", device_token="fake-device-a", notify_weekly_report=True)
+    candidate = weekly_row(weeks_ago=2)
+    app = make_worker(lambda _: response(items=[candidate]), settings=state)
+    app.phase(LiveLifecyclePhase.MENU)
+    _cell, socket = asyncio.run(attach_socket(app))
+    wait_settled(app)
+    older_receipts = dict(state.weekly_notice_weeks)
+
+    entered, release = Event(), Event()
+    save = milestone_notices.save_state
+
+    def slow_save(*args):
+        entered.set()
+        assert release.wait(3)
+        save(*args)
+
+    monkeypatch.setattr(milestone_notices, "save_state", slow_save)
+    candidate = weekly_row()
+    socket.request_weekly_report()
+    assert entered.wait(3)
+    try:
+        app.phase(LiveLifecyclePhase.MATCH_LOADING)
+    finally:
+        release.set()
+    with _STATE_SAVE_LOCK:
+        state.notify_weekly_report = False
+        save(app.worker._state_dir, state)
+    app.phase(LiveLifecyclePhase.MATCH_ENDED)
+    wait_settled(app, 2)
+    assert len(app.calls) == 2 and len(app.toasts) == 1
+    assert app.reload().weekly_notice_weeks == older_receipts
+
+    with _STATE_SAVE_LOCK:
+        state.notify_weekly_report = True
+    socket.request_weekly_report()
+    wait_settled(app, 3)
+    assert len(app.calls) == 3 and len(app.toasts) == 2
+    socket.request_weekly_report()
+    wait_settled(app, 4)
+    assert len(app.toasts) == 2
+
+
+@pytest.mark.parametrize("finish_before_response", [False, True])
+def test_rechecks_week_read_during_match(make_worker, monkeypatch, finish_before_response):
+    monkeypatch.setattr(milestone_notices, "_WEEKLY_RETRY_DELAYS", (0, 0, 0))
+    entered, release = Event(), Event()
+
+    def send(index):
+        if index == 1:
+            entered.set()
+            assert release.wait(3)
+            return response(items=[weekly_row()])
+        return response()
+
+    state = AgentState(user_id="owner-a", device_token="fake-device-a", notify_weekly_report=True)
+    app = make_worker(send, settings=state)
+    app.phase(LiveLifecyclePhase.MENU)
+    asyncio.run(attach_socket(app))
+    assert entered.wait(3)
+    try:
+        app.phase(LiveLifecyclePhase.MATCH_LOADING)
+        if finish_before_response:
+            app.phase(LiveLifecyclePhase.MATCH_ENDED)
+    finally:
+        release.set()
+    if not finish_before_response:
+        app.phase(LiveLifecyclePhase.MATCH_ENDED)
+    wait_settled(app)
+    assert len(app.calls) == 2 and not app.toasts and not app.reload().weekly_notice_weeks
 
 
 def test_latest_delivery_fences_older_reports_but_keeps_owner_choice(make_worker):
