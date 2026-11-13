@@ -43,4 +43,12 @@ describe("privacy policy backups", () => {
     expect(rights?.textContent).toMatch(/keyed guard for 30 days/);
     expect(rights?.textContent).toMatch(/private support message text and replies are removed/);
   });
+
+  it("explains what the Discord command receives and how to make a privacy request", () => {
+    render(<PrivacyPage />);
+    const heading = screen.getByRole("heading", { name: "Discord build command" });
+    expect(heading).toHaveAttribute("id", "discord-build-command");
+    expect(heading.nextElementSibling?.textContent).toMatch(/do not store the payload or log its\s+contents/);
+    expect(heading.nextElementSibling?.nextElementSibling?.querySelector('a[href^="mailto:"]')).not.toBeNull();
+  });
 });

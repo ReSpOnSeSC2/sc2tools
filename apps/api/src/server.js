@@ -122,6 +122,7 @@ async function main() {
       games: import('./services/types').GamesService,
       opponents: import('./services/opponents').OpponentsService,
       gameStatsWrites: import('./services/gameStatsWrites').GameStatsWrites,
+      discordBuildCache: import('./services/discordBuildCache').DiscordBuildCache|null,
       [k: string]: unknown,
     },
     adminClerkIds: Set<string>,
@@ -395,6 +396,7 @@ async function main() {
   // started with GUIDES_ENABLED; built (never started) in makeServices.
   const guideStatsJob = /** @type {any} */ (services).guideStatsJob;
   if (config.guidesEnabled) guideStatsJob.start();
+  services.discordBuildCache?.start();
 
   // Nightly hard-delete of builds past the 30-day "Recently deleted" window.
   const customBuildTrashPurgeJob = buildCustomBuildTrashPurgeJob({ jobLedger: /** @type {any} */ (services).jobLedger, db, logger });
@@ -501,6 +503,7 @@ async function main() {
     await /** @type {any} */ (services).gdpr.backups?.drain();
     await /** @type {any} */ (services).dataRepairs.drain();
     await guideVideosJob.stop();
+    await services.discordBuildCache?.stop();
     await /** @type {any} */ (services).customBuilds.stopReclassifications();
     await restAuthDrain;
     // Erasure may still need membership writes after HTTP close. Drain its

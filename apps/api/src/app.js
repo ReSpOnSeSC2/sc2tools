@@ -23,6 +23,7 @@ const {
 const { captureSignedWebhookRawBody } = require("./middleware/jsonBody");
 const { buildSyncActionJsonParser } = require("./middleware/syncActionJson");
 const { sanitiseRequestForLog, sanitiseResponseForLog, isStreamViewerRequest } = require("./middleware/requestLogging");
+const { isDiscordInteractionsRequest } = require("./config/discordInteractions");
 const { privateSearchNoStore, buildPrivateSearchJsonParser,
   privateSearchErrorBoundary, isPrivateSearchRequest } = require("./middleware/privateSearchBoundary");
 const { replayDownloadBatchNoStore, buildReplayDownloadBatchJsonParser,
@@ -149,6 +150,8 @@ const { buildGuideSamplesBackfillJob } = require("./jobs/guideSamplesBackfillJob
 const { GuideStatsService } = require("./services/guideStats");
 const { buildGuideRevalidator } = require("./services/guideRevalidate");
 const { GuideFreshnessService } = require("./services/guideFreshness");
+const { createDiscordBuildCache } = require("./services/discordBuildCache");
+const { buildDiscordInteractionsRouter } = require("./routes/discordInteractions");
 const { buildCommunityRevalidator } = require("./services/communityRevalidate");
 const { buildGuideStatsRecomputeJob } = require("./jobs/guideStatsRecomputeJob");
 const { GuideVideosService } = require("./services/guideVideos");
@@ -386,7 +389,7 @@ function buildApp(deps) {
     getDeviceToken: (hash) => services.pairings.findTokenByHash(hash),
     ensureUser: (clerkUserId) => services.users.ensureFromClerk(clerkUserId),
   }), deps.db.users);
-  applyBaseMiddleware(app, deps, auth, services.siteStats);
+  applyBaseMiddleware(app, deps, auth, services.siteStats, services.discordBuildCache);
   // Live admin allowlist — seeded from SC2TOOLS_ADMIN_USER_IDS and
   // mutated in place by the email-allowlist + admin-grant paths. The
   // REST ``isAdmin`` gate and the socket layer both read this live set;
@@ -924,12 +927,14 @@ function makeServices(deps, clerk, adminClerkIds) {
   // admin "Recompute now" route calls guideStatsJob.runOnce({ force: true }).
   const guideStats = new GuideStatsService(deps.db, { logger: deps.logger });
   const guideFreshness = new GuideFreshnessService(deps.db);
+  const discordBuildCache = createDiscordBuildCache(deps.config, deps.db.guideStats, deps.logger);
   const revalidateGuidePages = buildGuideRevalidator({
     url: deps.config.guidesRevalidateUrl || null,
     secret: deps.config.guidesRevalidateSecret || null,
     logger: deps.logger,
   });
   const revalidateGuides = async () => {
+    discordBuildCache?.invalidate();
     const result = await revalidateGuidePages();
     if (result.ok) {
       try {
@@ -1184,6 +1189,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     guideSamplesBackfill,
     guideStats,
     guideStatsJob,
+    discordBuildCache,
     revalidateGuides,
     guideFreshness,
     guideVideos,
@@ -1223,8 +1229,9 @@ function withOwnerDataServices(services, deps, gameDetails) {
  * @param {AppDeps} deps
  * @param {import('express').RequestHandler} auth
  * @param {import('./services/siteStats').SiteStatsService} siteStats
+ * @param {ReturnType<typeof createDiscordBuildCache>} discordBuildCache
  */
-function applyBaseMiddleware(app, deps, auth, siteStats) {
+function applyBaseMiddleware(app, deps, auth, siteStats, discordBuildCache) {
   app.use(replayDownloadBatchNoStore, privateSearchNoStore, privateSearchRequestScope);
   app.use((req, res, next) => {
     if (isStreamViewerRequest(req.originalUrl)) res.set("Cache-Control", "private, no-store");
@@ -1253,11 +1260,15 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
       serializers: { req: sanitiseRequestForLog, res: sanitiseResponseForLog },
       autoLogging: { ignore: (/** @type {import("http").IncomingMessage} */ req) => {
         const { res, originalUrl } = /** @type {import("express").Request} */ (req);
+        if (isDiscordInteractionsRequest(originalUrl || req.url)) return true;
         return req.method === "GET" && res?.statusCode === 204
           && /^\/v1\/match-rooms\//iu.test(originalUrl || "");
       } },
     }),
   );
+  // Discord verifies the original bytes before parsing and has a dedicated
+  // admission bucket. No browser or account context is needed here.
+  app.use(SERVICE.ROUTE_PREFIX, buildDiscordInteractionsRouter(deps.config.discordInteractions, discordBuildCache));
   app.use(requestId);
   // Presence traffic comes through the web server's shared egress IP. Its
   // own signed-visitor/issuance limits and 1KB parser avoid consuming the

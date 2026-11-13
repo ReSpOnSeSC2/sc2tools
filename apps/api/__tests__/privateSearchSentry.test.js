@@ -64,6 +64,21 @@ test("never keeps the device heartbeat body, whose sync report carries players' 
   expect(options.beforeSend(other).request.data).toEqual({ keep: true });
 });
 
+test("keeps Discord interactions out of Sentry bodies, events and transactions", () => {
+  process.env.SENTRY_DSN = "https://example.invalid/fixture";
+  const sentry = load();
+  expect(sentry.init()).toBe(true);
+  const options = mockSdk.init.mock.calls.at(-1)[0];
+  options.integrations([]);
+  const http = mockSdk.httpIntegration.mock.calls.at(-1)[0];
+  const path = "/V1/DISCORD/INTERACTIONS/?secret=fixture";
+  expect(http.ignoreIncomingRequestBody(path)).toBe(true);
+  expect(http.ignoreIncomingRequests(path)).toBe(true);
+  expect(http.ignoreIncomingRequests("/v1/discord/interactions/other")).toBe(false);
+  expect(options.beforeSend({ request: { url: path, data: { token: "secret" } } })).toBeNull();
+  expect(options.beforeSendTransaction({ transaction: "POST " + path })).toBeNull();
+});
+
 test.each(["/v1/me/sync-health/identity", "/V1/ME/SYNC-HEALTH/IDENTITY/?ignored=1", "https://api.example/v1/me/sync-health/retry?ignored=1"])("sync action %s never captures private JSON before parsing or in either Sentry request copy", path => {
   process.env.SENTRY_DSN = "https://example.invalid/fixture";
   const sentry = load(); expect(sentry.init()).toBe(true);
