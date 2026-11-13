@@ -39,6 +39,7 @@ beforeEach(async () => {
   await db.dailyTally.deleteMany({});
   crowd = new DailyCrowdService(db.dailyTally, { now: () => now, schedule: async () => pack });
   const app = express();
+  app.set("trust proxy", 1);
   app.use("/v1", buildDailyCrowdRouter(crowd));
   api = request(app);
 });
@@ -74,7 +75,7 @@ test("keeps the same vote through concurrent retries and ignores changed calls o
   const responses = await Promise.all(Array.from({ length: 6 }, () => submit(ballot(1))));
   expect(responses.map(response => response.status)).toEqual(Array(6).fill(200));
   await submit(ballot(1, [4, 3, 2, 1, 0])).expect(200, { state: "waiting" });
-  const rows = await db.dailyTally.find({}).toArray();
+  const rows = await db.dailyTally.find({ pack }).toArray();
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatchObject({ total: 1, counts: { 0: 1, 6: 1, 12: 1, 18: 1, 24: 1 } });
   expect(rows[0]._schemaVersion).toBe(1);
@@ -87,6 +88,27 @@ test("keeps the same vote through concurrent retries and ignores changed calls o
   ]));
 });
 
+test("pins one pack across racing API instances and rejects a replacement after restart", async () => {
+  const candidate = { ...ballot(2), pack: other };
+  const processFor = digest => new DailyCrowdService(db.dailyTally, { now: () => now, schedule: async () => digest });
+  const votes = [ballot(1), candidate];
+  const responses = await Promise.allSettled(votes.map(vote => processFor(vote.pack).submit(vote)));
+  const accepted = responses.findIndex(response => response.status === "fulfilled");
+  expect(accepted).toBeGreaterThanOrEqual(0);
+  const winner = votes[accepted];
+  const loser = votes[1 - accepted];
+  expect(responses[1 - accepted]).toMatchObject({ status: "rejected", reason: { status: 404 } });
+  const restarted = processFor(loser.pack);
+  await expect(restarted.submit(loser)).rejects.toMatchObject({ status: 404 });
+  await expect(processFor(winner.pack).submit(winner)).resolves.toEqual({ state: "waiting" });
+  expect(await db.dailyTally.findOne({ _id: `pin:${day}` })).toEqual({
+    _id: `pin:${day}`, _schemaVersion: 1, day, pinnedPack: winner.pack, expiresAt: new Date((day + 2) * DAY_MS),
+  });
+  expect(await db.dailyTally.find({ pack: { $exists: true } }).toArray()).toEqual([
+    expect.objectContaining({ pack: winner.pack, total: 1 }),
+  ]);
+});
+
 test("only reveals the exact aggregate at twenty votes and below capacity on each bucket", async () => {
   await Promise.all(Array.from({ length: 19 }, (_, index) => crowd.submit(ballot(index))));
   expect(await crowd.submit(ballot(0))).toEqual({ state: "waiting" });
@@ -95,7 +117,7 @@ test("only reveals the exact aggregate at twenty votes and below capacity on eac
     state: "ready", total: 20,
     fights: [[19, 0, 0, 0, 1], [0, 19, 0, 1, 0], [0, 0, 20, 0, 0], [0, 1, 0, 19, 0], [1, 0, 0, 0, 19]],
   });
-  await db.dailyTally.updateMany({}, { $set: { total: BUCKET_CAP } });
+  await db.dailyTally.updateMany({ pack }, { $set: { total: BUCKET_CAP } });
   await expect(crowd.record("full", "old", ballot(20))).resolves.toBeUndefined();
   await db.dailyTally.updateOne({ _id: "full" }, { $set: { total: BUCKET_CAP } });
   await expect(crowd.record("full", "new", ballot(21))).rejects.toMatchObject({ status: 503 });
@@ -107,6 +129,18 @@ test("bounds anonymous POSTs independently", async () => {
   const limited = await submit(ballot(9)).expect(429);
   expect(limited.headers["cache-control"]).toBe("no-store");
   expect(limited.body).toEqual({ error: { code: "rate_limited" } });
+});
+
+test.each([
+  ["IPv6 prefix", index => `2001:DB8:0:1234::${index + 1}`, "2001:db8:0000:1234::9", "2001:db8:0:1235::9"],
+  ["native IPv6 near the mapped range", index => `::ffff:1:2:${index + 1}`, "::ffff:1:2:9", "0:0:0:1::9"],
+  ["mapped IPv4", () => "192.0.2.9", "::ffff:c000:209", "192.0.2.10"],
+])("shares the anonymous quota by %s", async (_case, addressAt, sameSource, anotherSource) => {
+  for (let index = 0; index < 8; index++) {
+    await submit(ballot(index)).set("X-Forwarded-For", addressAt(index)).expect(200);
+  }
+  await submit(ballot(9)).set("X-Forwarded-For", sameSource).expect(429);
+  await submit(ballot(10)).set("X-Forwarded-For", anotherSource).expect(200);
 });
 
 test("reports schedule failure as retryable without exposing its details or writing a ballot", async () => {

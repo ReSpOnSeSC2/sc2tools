@@ -2,9 +2,24 @@
 
 const express = require("express");
 const { randomBytes } = require("node:crypto");
+const { isIP, SocketAddress } = require("node:net");
 const { rateLimit } = require("express-rate-limit");
 const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
 const { hmac } = require("../util/hash");
+
+/** @param {string} [ip] */
+function sourceSubnet(ip = "") {
+  const version = isIP(ip);
+  if (version !== 6) return version === 4 ? ip : "";
+  const address = new SocketAddress({ address: ip, family: "ipv6" }).address;
+  const mapped = "::ffff:";
+  const mappedHost = address.slice(mapped.length);
+  if (address.startsWith(mapped) && isIP(mappedHost) === 4) return mappedHost;
+  const [before, after] = address.split("::");
+  const prefix = before ? before.split(":") : [];
+  const suffix = after ? after.split(":") : [];
+  return [...prefix, ...Array(8 - prefix.length - suffix.length).fill("0"), ...suffix].slice(0, 4).join(":");
+}
 
 const parseBallot = express.json({ limit: "1kb", inflate: false });
 /** @type {import("express").RequestHandler} */
@@ -21,7 +36,7 @@ function buildDailyCrowdRouter(crowd) {
   const router = express.Router();
   const limiterSecret = randomBytes(32);
   const limiter = rateLimit({ windowMs: 60_000, max: 8, standardHeaders: "draft-7", legacyHeaders: false,
-    keyGenerator: req => hmac(limiterSecret, req.ip ?? ""),
+    keyGenerator: req => hmac(limiterSecret, sourceSubnet(req.ip)),
     store: new BoundedRateLimitStore({ maxEntries: 4096 }), message: { error: { code: "rate_limited" } } });
   router.post("/daily/calls", (_req, res, next) => {
     res.set("Cache-Control", "no-store");

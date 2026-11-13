@@ -17,6 +17,8 @@ const ATTEMPT = /^[0-9a-f]{32}$/u;
 /** @typedef {{day:number, pack:string, answers:number[], attempt:string}} Ballot */
 /** @typedef {{_id:string, _schemaVersion:number, day:number, pack:string, expiresAt:Date,
  * total:number, receipts:string[], counts:Record<string,number>}} Tally */
+/** @typedef {{_id:string, _schemaVersion:number, day:number, pinnedPack:string, expiresAt:Date}} DayPin */
+/** @typedef {DayPin | Tally} TallyRow */
 
 /** @param {unknown} value @returns {value is Ballot} */
 function isBallot(value) {
@@ -55,7 +57,7 @@ function crowdSplit(rows) {
 }
 
 class DailyCrowdService {
-  /** @param {import("mongodb").Collection<Tally>} tally
+  /** @param {import("mongodb").Collection<TallyRow>} tally
    * @param {{now?:() => number, schedule?:(day:number) => Promise<string|null>}} [options] */
   constructor(tally, { now = Date.now, schedule = createDailySchedule({ now }) } = {}) {
     this.tally = tally;
@@ -69,11 +71,32 @@ class DailyCrowdService {
     const { day, pack, attempt } = input;
     if (day !== currentDay(this.now()) || await this.schedule(day) !== pack
       || day !== currentDay(this.now())) throw dailyError(404, "daily_calls_unavailable");
+    if (!await this.matchesPinnedPack(day, pack) || day !== currentDay(this.now())) {
+      throw dailyError(404, "daily_calls_unavailable");
+    }
     const receipt = sha256(`daily:${day}:${attempt}`);
     const bucket = Number.parseInt(receipt.slice(0, 2), 16) % BUCKETS;
     await this.record(`${day}:${pack}:${bucket}`, receipt, input);
     const rows = await this.tally.find({ day, pack }, { projection: { _id: 0, total: 1, counts: 1 } }).limit(BUCKETS).toArray();
-    return crowdSplit(rows);
+    return crowdSplit(/** @type {Pick<Tally, "total" | "counts">[]} */ (rows));
+  }
+
+  /** @param {number} day @param {string} pack */
+  async matchesPinnedPack(day, pack) {
+    const filter = { _id: `pin:${day}` };
+    const pin = stampVersion({ day, pinnedPack: pack, expiresAt: new Date((day + 2) * DAY_MS) }, COLLECTIONS.DAILY_TALLY);
+    const projection = { _id: 0, pinnedPack: 1 };
+    // The immutable pin shares the TTL index. It has no pack field, so tally reads skip it.
+    let stored;
+    try {
+      stored = await this.tally.findOneAndUpdate(filter, { $setOnInsert: pin }, {
+        upsert: true, returnDocument: "after", projection,
+      });
+    } catch (error) {
+      if (!isDuplicateKey(error)) throw error;
+      stored = await this.tally.findOne(filter, { projection });
+    }
+    return stored && "pinnedPack" in stored && stored.pinnedPack === pack;
   }
 
   /** @param {string} id @param {string} receipt @param {Ballot} ballot */

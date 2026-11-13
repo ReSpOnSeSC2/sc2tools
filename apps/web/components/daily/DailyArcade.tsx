@@ -79,7 +79,7 @@ export function DailyArcade() {
     </section>
   );
   return link ? <StandaloneFight key={loaded.day + ":" + link.slot} data={loaded.data} slot={link.slot} /> :
-    <DaySession key={loaded.day + ":" + loaded.data.directory} day={loaded.day} data={loaded.data} />;
+    <DaySession key={loaded.day + ":" + loaded.data.directory} day={loaded.day} data={loaded.data} focusOpening={hash === "#daily-set"} />;
 }
 
 function DailySetLink() {
@@ -102,12 +102,13 @@ function initialProgress(kind: DailyKind) {
   return storage ? readResults(storage, kind) : {};
 }
 
-function DaySession({ day, data }: { day: number; data: LoadedDay }) {
+function DaySession({ day, data, focusOpening }: { day: number; data: LoadedDay; focusOpening: boolean }) {
   const practice = data.kind === "practice";
   const [saved, setSaved] = useState(() => initialProgress(data.kind));
   const [calls, setCalls] = useState<GradedCall[]>([]);
   const [ballot, setBallot] = useState(() => practice ? null : readBallot(browserStorage(), day, data.digest));
   const completed = saved[day], slot = calls.length;
+  const focus = focusOpening || slot > 0;
   const fight = data.pack.fights[slot];
   const streak = streakOn(saved, day);
   async function advance(correct: boolean, call: FightCall) {
@@ -126,9 +127,10 @@ function DaySession({ day, data }: { day: number; data: LoadedDay }) {
         <p className="text-text-muted">{practice ? "Practice week \u00b7 sample fights" : "Today\u2019s recorded fights"}</p>
         <p className="font-semibold text-text">Streak: {streak} {streak === 1 ? "day" : "days"}</p>
       </div>
-      {completed ? <CompletedSet day={day} practice={practice} results={completed} focus={slot > 0} ballot={ballot} /> : (
+      {completed ? <CompletedSet day={day} practice={practice} results={completed} focus={focus} ballot={ballot} /> : (
         <CallTheFight key={slot} fight={fight} slot={slot}
           terrain={terrainFor(data, slot)}
+          focusOpening={focus}
           onNext={(correct, call) => void advance(correct, call)} />
       )}
     </div>

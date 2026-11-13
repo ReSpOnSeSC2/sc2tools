@@ -33,7 +33,31 @@ async function completeDaily(page: Page) {
   await expect(page.getByRole("heading", { name: "Set complete" })).toBeFocused();
 }
 
-async function verifySharedFight(page: Page) {
+async function returnToSet(page: Page, heading: string) {
+  const held = Promise.withResolvers<void>();
+  await page.route("**/daily/v1/index.json", async route => {
+    await held.promise;
+    await route.fallback();
+  }, { times: 1 });
+  try {
+    await page.getByRole("link", { name: "Play today's set" }).press("Enter");
+    await expect(page.getByRole("status", { name: "Loading the Daily" })).toBeVisible();
+  } finally {
+    held.resolve();
+  }
+  await expect(page.getByRole("heading", { name: heading })).toBeFocused();
+}
+
+test("returns from a linked fight to the opening call after a delayed load", async ({ page }) => {
+  await page.clock.setFixedTime(DATE);
+  await useSyntheticSchedule(page);
+  await page.goto(`/arcade#fight=${DAY}-3`);
+  await expect(page.getByText("Fight 3 of 5")).toBeVisible();
+  await returnToSet(page, "Call the fight");
+  await expect(page.getByText("Fight 1 of 5")).toBeVisible();
+});
+
+async function verifySharedFight(page: Page, capture: (state: string) => Promise<void>) {
   const crowd = page.getByRole("region", { name: "Crowd split" });
   const copy = page.getByRole("button", { name: "Copy fight 3 link" });
   const expectedLink = `/arcade#fight=${DAY}-3`;
@@ -55,14 +79,44 @@ async function verifySharedFight(page: Page) {
   await expect(page.getByText("Resources lost:", { exact: false })).toHaveCount(0);
   await expect(crowd).toHaveCount(0);
   await expect(page.getByText("Streak:", { exact: false })).toHaveCount(0);
+  await capture("linked");
   await page.reload();
   await expect(page.getByText("Fight 3 of 5")).toBeVisible();
   await page.getByRole("button", { name: "Even trade" }).click();
   await expect(page.getByRole("heading", { name: "Trade result" })).toBeFocused();
   await expect(page.getByRole("button", { name: "Next fight" })).toHaveCount(0);
-  await page.getByRole("link", { name: "Play today's set" }).click();
-  await expect(page.getByRole("heading", { name: "Set complete" })).toBeVisible();
+  await returnToSet(page, "Set complete");
   await expect(page.getByText("Streak: 1 day")).toBeVisible();
+  await capture("returned");
+}
+
+async function captureClosedVoting(page: Page, capture: (state: string) => Promise<void>) {
+  await page.route(CALL_PATH, route => route.fulfill({ status: route.request().method() === "OPTIONS" ? 204 : 404, headers: CORS }));
+  await page.goto("/arcade");
+  const crowd = page.getByRole("region", { name: "Crowd split" });
+  await crowd.getByRole("button", { name: "See crowd split" }).press("Enter");
+  await expect(crowd.getByRole("status")).toHaveText("Crowd voting is closed for this set.");
+  await capture("closed");
+}
+
+async function mockCrowdResponses(page: Page) {
+  const received: unknown[] = [];
+  const firstCall = Promise.withResolvers<void>();
+  await page.route(CALL_PATH, async route => {
+    if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().headers().cookie).toBeUndefined();
+    received.push(route.request().postDataJSON());
+    if (received.length === 1) {
+      await firstCall.promise;
+      return route.fulfill({ status: 503, headers: CORS, body: "" });
+    }
+    const result = received.length === 2 ? { state: "waiting" } : {
+      state: "ready", total: 20, fights: Array.from({ length: 5 }, () => [1, 2, 12, 4, 1]),
+    };
+    return route.fulfill({ headers: CORS, json: result });
+  });
+  return { received, releaseFirstCall: firstCall.resolve };
 }
 
 for (const theme of ["light", "dark"] as const) {
@@ -70,18 +124,8 @@ for (const theme of ["light", "dark"] as const) {
     await page.clock.setFixedTime(DATE);
     await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
     await useSyntheticSchedule(page);
-    const received: unknown[] = [];
-    await page.route(CALL_PATH, route => {
-      if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
-      expect(route.request().method()).toBe("POST");
-      expect(route.request().headers().cookie).toBeUndefined();
-      received.push(route.request().postDataJSON());
-      if (received.length === 1) return route.fulfill({ status: 503, headers: CORS, body: "" });
-      const result = received.length === 2 ? { state: "waiting" } : {
-        state: "ready", total: 20, fights: Array.from({ length: 5 }, () => [1, 2, 12, 4, 1]),
-      };
-      return route.fulfill({ headers: CORS, json: result });
-    });
+    const capture = (state: string) => captureAccessibility(page, info, "sc2-daily-crowd-" + state + "-" + theme, true);
+    const { received, releaseFirstCall } = await mockCrowdResponses(page);
 
     await page.goto("/arcade");
     await expect(page.getByText("Today\u2019s recorded fights")).toBeVisible();
@@ -92,13 +136,20 @@ for (const theme of ["light", "dark"] as const) {
     await completeDaily(page);
     expect(received).toEqual([]);
     const submit = crowd.getByRole("button", { name: "See crowd split" });
-    await submit.focus();
-    await page.keyboard.press("Enter");
+    await capture("offer");
+    try {
+      await submit.press("Enter");
+      await expect(crowd.getByRole("status", { name: "Loading crowd split" })).toBeVisible();
+      await capture("loading");
+    } finally {
+      releaseFirstCall();
+    }
     await expect(crowd.getByRole("alert")).toContainText("retry without adding another vote");
+    await capture("retry");
     await crowd.getByRole("button", { name: "Retry crowd split" }).click();
     await expect(crowd.getByRole("status")).toContainText("after 20 votes");
     await expect(crowd.getByText("%", { exact: false })).toHaveCount(0);
-    await captureAccessibility(page, info, "sc2-daily-crowd-waiting-" + theme, true);
+    await capture("waiting");
     await crowd.getByRole("button", { name: "Check crowd split" }).click();
     await expect(crowd.getByRole("status")).toHaveText("20 votes for this set.");
     await expect(crowd.getByRole("status")).toBeFocused();
@@ -108,9 +159,9 @@ for (const theme of ["light", "dark"] as const) {
       await page.evaluate(() => document.documentElement.clientWidth),
     );
     await checkAccessibility(page, info, "/arcade#crowd", theme);
-    await captureAccessibility(page, info, "sc2-daily-crowd-ready-" + theme, true);
+    await capture("ready");
 
-    await verifySharedFight(page);
+    await verifySharedFight(page, capture);
     expect(received).toHaveLength(3);
     await crowd.getByRole("button", { name: "See crowd split" }).click();
     await expect(crowd.getByRole("status")).toHaveText("20 votes for this set.");
@@ -123,5 +174,6 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByText("Fight 1 of 5")).toBeVisible();
     await expect(crowd).toHaveCount(0);
     expect(received).toHaveLength(4);
+    await captureClosedVoting(page, capture);
   });
 }

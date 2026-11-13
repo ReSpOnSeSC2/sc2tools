@@ -65,7 +65,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   supportEmailSync: import('mongodb').Collection<any>,
  *   sitePresence: import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>,
  *   matchRooms: import('mongodb').Collection<import('../services/matchRooms').MatchRoomDoc>,
- *   dailyTally: import('mongodb').Collection<import('../services/dailyCrowd').Tally>,
+ *   dailyTally: import('mongodb').Collection<import('../services/dailyCrowd').TallyRow>,
  *   siteConfig: import('mongodb').Collection<any>,
  *   ghostExamples: import('mongodb').Collection<any>,
  *   pulseAccounts: import('mongodb').Collection,
