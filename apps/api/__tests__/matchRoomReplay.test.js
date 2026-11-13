@@ -59,6 +59,16 @@ test("a different winner, swapped pair or reused receipt with changed metadata c
   expect(snapshot(reported).reports).toEqual([{ submittedBy: "a", confirmed: false }]);
 });
 
+test("the other seat can confirm an earlier replay after a later game has been scored", () => {
+  const room = openRoom();
+  const firstReplay = report(room);
+  const first = act(room, "a", firstReplay);
+  const second = act(first, "a", report(first, { winnerSeat: "b", endedAt: END + 1 }));
+  const confirmed = act(second, "b", firstReplay);
+  expect(snapshot(confirmed)).toMatchObject({ winners: ["a", "b"],
+    reports: [{ submittedBy: "a", confirmed: true }, { submittedBy: "a", confirmed: false }] });
+});
+
 test("only the next map is playable with a later end time and matching seat digests", () => {
   const room = openRoom();
   expect(() => act(room, "a", report(room, { mapKey: "sanctuaryii" }))).toThrow("replay_map_mismatch");

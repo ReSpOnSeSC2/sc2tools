@@ -79,6 +79,26 @@ test("keeps Discord interactions out of Sentry bodies, events and transactions",
   expect(options.beforeSendTransaction({ transaction: "POST " + path })).toBeNull();
 });
 
+test("keeps Match Room credentials and replay reports out of Sentry", () => {
+  process.env.SENTRY_DSN = "https://example.invalid/fixture";
+  expect(load().init()).toBe(true);
+  const options = mockSdk.init.mock.calls.at(-1)[0];
+  options.integrations([]);
+  const http = mockSdk.httpIntegration.mock.calls.at(-1)[0];
+  const paths = ["/v1/match-rooms", "/V1/MATCH-ROOMS/private-locator?rev=5",
+    "https://api.example/v1/match-rooms/private-locator/actions"];
+  for (const path of paths) {
+    expect(http.ignoreIncomingRequestBody(path)).toBe(true);
+    expect(http.ignoreIncomingRequests(path)).toBe(true);
+    const request = { url: path, data: { key: "private", action: { receipt: "private", endedAt: 12 } } };
+    expect(options.beforeSend({ request })).toBeNull();
+    expect(options.beforeSend({ sdkProcessingMetadata: { normalizedRequest: request } })).toBeNull();
+    expect(options.beforeSendTransaction({ transaction: "POST " + path })).toBeNull();
+  }
+  expect(http.ignoreIncomingRequests("/v1/match-rooms-extra")).toBe(false);
+  expect(http.ignoreIncomingRequestBody("/v1/match-rooms-extra")).toBe(false);
+});
+
 test.each(["/v1/me/sync-health/identity", "/V1/ME/SYNC-HEALTH/IDENTITY/?ignored=1", "https://api.example/v1/me/sync-health/retry?ignored=1"])("sync action %s never captures private JSON before parsing or in either Sentry request copy", path => {
   process.env.SENTRY_DSN = "https://example.invalid/fixture";
   const sentry = load(); expect(sentry.init()).toBe(true);

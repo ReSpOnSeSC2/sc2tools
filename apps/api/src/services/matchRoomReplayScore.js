@@ -127,4 +127,15 @@ function replayScoreSummary(state) {
   return { replayScoring: canReportReplay(state), reports, undoBy: state.undoBy ?? null };
 }
 
-module.exports = { reportReplay, addManualScore, undoScore, replayScoreSummary };
+/** @param {RoomState} state @returns {RoomState} */
+function withoutReplayHistory(state) {
+  const manualRoom = { ...state };
+  delete manualRoom.vetoCompletedAt;
+  delete manualRoom.replaySeats;
+  delete manualRoom.scoreDetails;
+  delete manualRoom.replayCutoffs;
+  delete manualRoom.undoBy;
+  return manualRoom;
+}
+
+module.exports = { reportReplay, addManualScore, undoScore, replayScoreSummary, withoutReplayHistory };

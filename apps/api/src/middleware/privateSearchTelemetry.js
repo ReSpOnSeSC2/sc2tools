@@ -12,8 +12,8 @@ const PRIVATE_SEARCH_TAG = "sc2tools.private_search";
 const HEARTBEAT_PATH = /^\/v1\/devices\/heartbeat\/?$/i;
 const CREDENTIAL_BODY_PATH = /^\/(?:v1\/)?(?:me\/integrations\/discord\/hooks(?:\/[^/]+\/battle-report)?|me\/push\/(?:subscriptions|unsubscribe)|push\/subscription-change|me\/replay-sharing\/reference)\/?$/i;
 
-// Feed and shared replay paths carry bearer credentials, even for failed lookups.
-const BEARER_PATH = /^\/(?:v1\/)?(?:calendar\/[^/]+\/?$|shares\/[^/]+(?:\/|$))/i;
+// Feed, shared replay and Match Room paths carry bearer credentials, even for failed lookups.
+const BEARER_PATH = /^\/(?:v1\/)?(?:calendar\/[^/]+\/?$|shares\/[^/]+(?:\/|$)|match-rooms(?:\/|$))/i;
 
 /** @param {unknown} value */
 function isBearerPath(value) {

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { matchReplayErrorText, readMatchReplay, replayAction, type MatchReplay } from "@/lib/matchRoomReplay";
+import { matchReplayErrorText, readMatchReplay, replayAction, type MatchReplay, type ReplayOutcome } from "@/lib/matchRoomReplay";
 import type { RoomAction, Seat } from "@/lib/matchRoom";
 
-type ReplayState = { kind: "idle" } | { kind: "reading" } | { kind: "error"; message: string } | { kind: "ready"; replay: MatchReplay };
+type ReplayState = { kind: "idle" } | { kind: "reading" } | { kind: "error"; message: string }
+  | { kind: "ready"; replay: MatchReplay; failed?: boolean };
 
 type ReplayOptions = { roomId: string; seat: Seat; send: (action: RoomAction) => Promise<boolean> };
 
@@ -40,16 +41,19 @@ export function useRoomReplay({ roomId, seat, send }: ReplayOptions) {
     }
   }
 
-  async function report(index: 0 | 1) {
+  async function report(outcome: ReplayOutcome) {
     const controller = pending.current;
     if (state.kind !== "ready" || !controller || reportPending.current) return;
     reportPending.current = true;
     setSending(true);
+    setState({ ...state, failed: false });
     try {
-      const action = await replayAction(state.replay, seat, index);
+      const action = await replayAction(state.replay, seat, outcome);
       if (controller.signal.aborted) return;
-      await send(action);
-      if (!controller.signal.aborted) close();
+      const saved = await send(action);
+      if (controller.signal.aborted) return;
+      if (saved) close();
+      else setState({ ...state, failed: true });
     } catch (error) {
       if (!controller.signal.aborted) setState({ kind: "error", message: matchReplayErrorText(error) });
     } finally {

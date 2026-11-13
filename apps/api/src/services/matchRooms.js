@@ -5,6 +5,7 @@ const { randomToken, sha256 } = require("../util/hash");
 const { isDuplicateKey } = require("../util/jobLock");
 const { MatchRoomError, roomConfig, initialRoom, advanceExpiredTurns,
   reduceMatchRoom, roomSnapshot } = require("./matchRoomModel");
+const { withoutReplayHistory } = require("./matchRoomReplayScore");
 
 const LIFE_MS = 14 * 24 * 60 * 60 * 1000;
 const CREATE_RETRY_MS = 10 * 60 * 1000;
@@ -18,7 +19,7 @@ const WRITE_ROLES = /** @type {const} */ (["host", "a", "b"]);
 /** @typedef {RoomState["config"]} RoomConfig */
 /** @typedef {typeof WRITE_ROLES[number]} WriteRole */
 /** @typedef {{_id: string, _schemaVersion: number, creationDigest: string, expiresAt: Date}} ClosedRoomDoc */
-/** @typedef {ClosedRoomDoc & {slot: number, rev: number, creationSalt: string,
+/** @typedef {ClosedRoomDoc & {slot: number, rev: number, replayRevision?: number, creationSalt: string,
  * credentials: Record<WriteRole, string>, state: RoomState}} ActiveRoomDoc */
 /** @typedef {ActiveRoomDoc | ClosedRoomDoc} MatchRoomDoc */
 
@@ -73,6 +74,11 @@ function writeRole(doc, key) {
   throw new MatchRoomError(403, "invalid_room_key");
 }
 
+/** An older API can change the winners without updating replay history. @param {ActiveRoomDoc} doc */
+function currentState(doc) {
+  return doc.replayRevision === doc.rev ? doc.state : withoutReplayHistory(doc.state);
+}
+
 class MatchRoomsService {
   /** @param {import("mongodb").Collection<MatchRoomDoc>} rooms
    * @param {{now?: () => number, capacity?: number}} [options] */
@@ -92,7 +98,7 @@ class MatchRoomsService {
     if (existing) return creationInvite(attempt, existing);
     const creationSalt = randomToken(24);
     const { id, hostKey } = creationInvite(attempt, creationSalt);
-    const base = { _id: sha256(id), _schemaVersion: 1, rev: 0, expiresAt: new Date(now + LIFE_MS),
+    const base = { _id: sha256(id), _schemaVersion: 1, rev: 0, replayRevision: 0, expiresAt: new Date(now + LIFE_MS),
       creationDigest, creationSalt, credentials: roomCredentials(hostKey), state: initialRoom(config, randomToken(24)) };
     return creationInvite(attempt, await this.#claimSlot(base, now));
   }
@@ -132,19 +138,21 @@ class MatchRoomsService {
 
   /** @param {ActiveRoomDoc} doc @param {RoomState} state @param {number} now */
   async save(doc, state, now) {
+    const rev = doc.rev + 1;
     const result = await this.rooms.updateOne(
       { _id: doc._id, rev: doc.rev, expiresAt: { $gt: new Date(now) } },
-      { $set: { state }, $inc: { rev: 1 } },
+      { $set: { state, replayRevision: rev }, $inc: { rev: 1 } },
     );
-    return result.matchedCount === 1 ? { ...doc, state, rev: doc.rev + 1 } : null;
+    return result.matchedCount === 1 ? { ...doc, state, rev, replayRevision: rev } : null;
   }
 
   /** @param {string} id @param {number} now */
   async current(id, now) {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const doc = await this.load(id, now);
-      const state = advanceExpiredTurns(doc.state, now);
-      if (state === doc.state) return doc;
+      const before = currentState(doc);
+      const state = advanceExpiredTurns(before, now);
+      if (state === before) return doc;
       const advanced = await this.save(doc, state, now);
       if (advanced) return advanced;
     }
@@ -162,7 +170,7 @@ class MatchRoomsService {
       if (unchanged) return null;
     }
     const doc = await this.current(id, now);
-    return doc.rev === rev ? null : roomSnapshot(doc.state, doc.rev, doc.expiresAt, now);
+    return doc.rev === rev ? null : roomSnapshot(currentState(doc), doc.rev, doc.expiresAt, now);
   }
 
   /** @param {string} id @param {unknown} key @param {unknown} rev @param {unknown} action */
@@ -177,8 +185,9 @@ class MatchRoomsService {
       ? await this.current(id, now)
       : original;
     if (doc.rev !== rev) throw new MatchRoomError(409, "match_room_changed");
-    const state = reduceMatchRoom(doc.state, role, action, now);
-    if (state === doc.state) return roomSnapshot(state, doc.rev, doc.expiresAt, now);
+    const before = currentState(doc);
+    const state = reduceMatchRoom(before, role, action, now);
+    if (state === before) return roomSnapshot(state, doc.rev, doc.expiresAt, now);
     const updated = await this.save(doc, state, now);
     if (!updated) throw new MatchRoomError(409, "match_room_changed");
     return roomSnapshot(updated.state, updated.rev, updated.expiresAt, now);

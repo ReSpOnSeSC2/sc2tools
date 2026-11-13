@@ -107,6 +107,37 @@ test("concurrent submissions score once and the other seat can confirm at the cu
   await mutate(room, secondKey, 4, report).expect(200).expect(result => expect(result.body.rev).toBe(4));
 });
 
+test.each(["a", "b"])("drops stale replay history after the old API replaces a score with %s", async winner => {
+  const { body } = await postRoom(newAttempt(), { ...config, format: 1, maps: ["Alpha"] }).expect(201);
+  const room = { ...body, path: "/v1/match-rooms/" + body.id };
+  const [a, b] = ["a", "b"].map(seat => seatKey(room.hostKey, seat));
+  await mutate(room, a, 0, { type: "ready", value: true }).expect(200);
+  await mutate(room, b, 1, { type: "ready", value: true }).expect(200);
+  now += 190_000;
+  const toonDigests = { a: "a".repeat(64), b: "b".repeat(64) };
+  const report = { type: "report_replay", mapKey: "alpha", winnerSeat: "a", durationSec: 180,
+    endedAt: now, receipt: replayReceipt("alpha", now, 180, toonDigests), toonDigests };
+  await mutate(room, a, 2, report).expect(200);
+  await mutate(room, b, 3, report).expect(200);
+
+  const _id = sha256(room.id);
+  // The M1 reducer spreads state and only changes phase/winners. Its CAS
+  // increments the room revision without advancing M2's replay revision.
+  await ctx.matchRooms.updateOne({ _id, rev: 4 }, { $set: { "state.winners": [], "state.phase": "play" }, $inc: { rev: 1 } });
+  await ctx.matchRooms.updateOne({ _id, rev: 5 }, { $set: { "state.winners": [winner], "state.phase": "complete" }, $inc: { rev: 1 } });
+  await api.get(room.path + "?rev=4").expect(200).expect(result => {
+    expect(result.body).toMatchObject({ rev: 6, winners: [winner], reports: [null], replayScoring: false });
+  });
+  await mutate(room, a, 6, report).expect(409, { error: { code: "replay_scoring_unavailable" } });
+  await mutate(room, room.hostKey, 6, { type: "undo" }).expect(200);
+  await mutate(room, b, 7, { type: "score", winner }).expect(200);
+  const stored = await ctx.matchRooms.findOne({ _id });
+  expect(stored.replayRevision).toBe(8);
+  expect(stored.state.replaySeats).toBeUndefined();
+  expect(stored.state.vetoCompletedAt).toBeUndefined();
+  expect(stored.state.scoreDetails).toEqual([{ source: "manual", recordedAt: now }]);
+});
+
 test("a stale revision rejects a write that would otherwise be legal", async () => {
   const room = await create();
   await mutate(room, seatKey(room.hostKey, "a"), 0, { type: "name", value: "Blue" }).expect(200);

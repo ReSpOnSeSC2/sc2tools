@@ -2,10 +2,10 @@ import { currentMapPoolKey } from "./currentMapPool";
 import type { PlayersResult, ReplayPlayer } from "./instant/types";
 import { roomDigest, type ReportReplay, type Seat } from "./matchRoom";
 
-type Player = Pick<ReplayPlayer, "pid" | "name" | "result"> & { digest: string };
 type Header = Extract<PlayersResult, { ok: true }>;
+export type ReplayOutcome = "Win" | "Loss";
 export type MatchReplay = {
-  mapKey: string; endedAt: number; durationSec: number; players: [Player, Player];
+  mapKey: string; endedAt: number; durationSec: number; digests: Record<ReplayOutcome, string>;
 };
 
 const TOON = /^\d+-s2-\d+-\d+$/iu;
@@ -44,15 +44,14 @@ function validPlayers(players: ReplayPlayer[]) {
   return a.pid !== b.pid && outcomes.has("Win") && outcomes.has("Loss");
 }
 
-async function preparePlayer(player: ReplayPlayer, roomId: string): Promise<Player> {
+async function playerDigest(player: ReplayPlayer, roomId: string) {
   if (!player.toon || !TOON.test(player.toon)) {
     throw new MatchReplayError("Both players need a replay with a StarCraft II account identifier. Use manual scoring for this game.");
   }
-  const digest = await roomDigest(JSON.stringify(["match-room/toon/v1", roomId, player.toon.toLowerCase()]));
-  return { pid: player.pid, name: player.name, result: player.result, digest };
+  return roomDigest(JSON.stringify(["match-room/toon/v1", roomId, player.toon.toLowerCase()]));
 }
 
-function replayGame({ map, date, durationSec }: Header): Omit<MatchReplay, "players"> {
+function replayGame({ map, date, durationSec }: Header): Omit<MatchReplay, "digests"> {
   const mapKey = currentMapPoolKey(map);
   const endedAt = date && UTC_END_TIME.test(date) ? Date.parse(date) : NaN;
   if (!mapKey || mapKey.length > 128 || !Number.isSafeInteger(endedAt) || endedAt <= 0
@@ -69,20 +68,20 @@ export async function prepareMatchReplay(result: PlayersResult | undefined, room
     throw new MatchReplayError("Choose a finished one-on-one replay between two human players.");
   }
   const game = replayGame(result);
-  const [a, b] = await Promise.all([preparePlayer(players[0], roomId), preparePlayer(players[1], roomId)]);
-  if (a.digest === b.digest) throw new MatchReplayError("Choose a replay with two different StarCraft II accounts.");
-  return { ...game, players: [a, b] };
+  const [first, second] = await Promise.all([playerDigest(players[0], roomId), playerDigest(players[1], roomId)]);
+  if (first === second) throw new MatchReplayError("Choose a replay with two different StarCraft II accounts.");
+  const digests = players[0].result === "Win" ? { Win: first, Loss: second } : { Win: second, Loss: first };
+  return { ...game, digests };
 }
 
-export async function replayAction(replay: MatchReplay, seat: Seat, index: 0 | 1): Promise<ReportReplay> {
-  const { mapKey, endedAt, durationSec, players } = replay;
-  const mine = players[index];
-  const opponent = players[index === 0 ? 1 : 0];
+export async function replayAction(replay: MatchReplay, seat: Seat, outcome: ReplayOutcome): Promise<ReportReplay> {
+  const { mapKey, endedAt, durationSec, digests } = replay;
+  const mine = digests[outcome];
+  const opponent = digests[outcome === "Win" ? "Loss" : "Win"];
   const other = seat === "a" ? "b" : "a";
-  const toonDigests = { a: seat === "a" ? mine.digest : opponent.digest,
-    b: seat === "b" ? mine.digest : opponent.digest };
+  const toonDigests = { a: seat === "a" ? mine : opponent, b: seat === "b" ? mine : opponent };
   const receipt = await roomDigest(JSON.stringify(["match-room/replay/v1", mapKey, endedAt, durationSec,
     ...Object.values(toonDigests).sort()]));
   return { type: "report_replay", mapKey, endedAt, durationSec, receipt, toonDigests,
-    winnerSeat: mine.result === "Win" ? seat : other };
+    winnerSeat: outcome === "Win" ? seat : other };
 }

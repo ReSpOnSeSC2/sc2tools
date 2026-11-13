@@ -17,8 +17,9 @@ describe("match-room replay reports", () => {
   it("produces the same allow-listed receipt from reversed player order and alternate map suffixes", async () => {
     const a = await prepareMatchReplay(header, "room-a");
     const b = await prepareMatchReplay({ ...header, map: "Cafe and Dawn LE", players: header.players.toReversed() }, "room-a");
-    const payload = await replayAction(a, "a", 0);
-    expect(payload).toEqual(await replayAction(b, "b", 0));
+    expect(JSON.stringify(a)).not.toMatch(/Fixture|S2|name/);
+    const payload = await replayAction(a, "a", "Win");
+    expect(payload).toEqual(await replayAction(b, "b", "Loss"));
     expect(payload).toEqual({
       type: "report_replay", mapKey: "cafeanddawn", winnerSeat: "a", durationSec: 235,
       endedAt: Date.parse(header.date ?? ""), receipt: expect.stringMatching(/^[a-f0-9]{64}$/),
@@ -28,8 +29,8 @@ describe("match-room replay reports", () => {
   });
 
   it("scopes both player digests and the receipt to each room", async () => {
-    const first = await replayAction(await prepareMatchReplay(header, "room-a"), "a", 0);
-    const second = await replayAction(await prepareMatchReplay(header, "room-b"), "a", 0);
+    const first = await replayAction(await prepareMatchReplay(header, "room-a"), "a", "Win");
+    const second = await replayAction(await prepareMatchReplay(header, "room-b"), "a", "Win");
     expect(second.toonDigests.a).not.toBe(first.toonDigests.a);
     expect(second.toonDigests.b).not.toBe(first.toonDigests.b);
     expect(second.receipt).not.toBe(first.receipt);

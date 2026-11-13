@@ -6,7 +6,7 @@ const READ_ERROR_CODES = new Set([400, 404, 409]);
 const REPLAY_ERRORS = {
   invalid_match_replay: "This replay report could not be read. Choose the replay again.",
   replay_scoring_unavailable: "This room can only score games manually.",
-  replay_seats_changed: "The selected players do not match the room seats. Check which player you chose.",
+  replay_seats_changed: "This replay does not match the players assigned to the room seats. Check your result and replay.",
   replay_result_conflict: "This report disagrees with the recorded winner. Check the score before trying again.",
   replay_map_mismatch: "This replay is not from the next unplayed map. Check the map order or use manual scoring.",
   replay_time_mismatch: "This replay must end after the veto and the previous game, and cannot be from the future.",

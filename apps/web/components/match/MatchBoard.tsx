@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SEATS, seatLabel, type Role, type Room, type RoomAction, type Seat } from "@/lib/matchRoom";
-import { ReplayReportControl } from "./ReplayReportControl";
+import { ReplayReportControl, type ReplayReportFeedback } from "./ReplayReportControl";
 
 type Send = (action: RoomAction) => Promise<boolean>;
 type BoardProps = { room: Room; role: Role; blocked: boolean; send: Send };
@@ -113,9 +113,9 @@ function ReplayScoreSource({ report }: { report: NonNullable<Room["replay"]>["re
   </span>;
 }
 
-type ScoreBoardProps = BoardProps & { roomId: string };
+type ScoreBoardProps = BoardProps & { roomId: string; replayFeedback: ReplayReportFeedback };
 
-function ReplayControls({ room, role, roomId, blocked, send }: ScoreBoardProps) {
+function ReplayControls({ room, role, roomId, blocked, send, replayFeedback }: ScoreBoardProps) {
   if (role !== "a" && role !== "b") return null;
   const playing = room.phase === "play";
   if (!room.replay?.replayScoring) return playing && !room.config.practice
@@ -123,13 +123,13 @@ function ReplayControls({ room, role, roomId, blocked, send }: ScoreBoardProps) 
     : null;
   const canConfirm = room.replay.reports.some(report => report && !report.confirmed && report.submittedBy !== role);
   if (!playing && !canConfirm) return null;
-  return <ReplayReportControl roomId={roomId} seat={role} blocked={blocked} send={send} />;
+  return <ReplayReportControl roomId={roomId} seat={role} blocked={blocked} send={send} feedback={replayFeedback} />;
 }
 
-function ScoreControls({ room, role, roomId, blocked, send }: ScoreBoardProps) {
+function ScoreControls({ room, role, roomId, blocked, send, replayFeedback }: ScoreBoardProps) {
   if (role === "watch") return null;
   return <div className="space-y-3">
-    <ReplayControls room={room} role={role} roomId={roomId} blocked={blocked} send={send} />
+    <ReplayControls room={room} role={role} roomId={roomId} blocked={blocked} send={send} replayFeedback={replayFeedback} />
     <div className="flex flex-wrap gap-2">
       {room.phase === "play" && SEATS.map(winner => <Button key={winner} variant="secondary" disabled={blocked}
         onClick={() => { void send({ type: "score", winner }); }}>{seatLabel(winner)} won</Button>)}
@@ -151,7 +151,7 @@ function UndoScoreControl({ room, role, blocked, send }: BoardProps) {
   </Button>;
 }
 
-export function ScoreBoard({ room, roomId, role, blocked, send }: ScoreBoardProps) {
+export function ScoreBoard({ room, roomId, role, blocked, send, replayFeedback }: ScoreBoardProps) {
   if (room.phase === "lobby" || room.phase === "veto") return null;
   const complete = room.phase === "complete";
   const next = room.winners.length;
@@ -173,7 +173,7 @@ export function ScoreBoard({ room, roomId, role, blocked, send }: ScoreBoardProp
           </div>
         </li>)}
       </ol>
-      <ScoreControls room={room} roomId={roomId} role={role} blocked={blocked} send={send} />
+      <ScoreControls room={room} roomId={roomId} role={role} blocked={blocked} send={send} replayFeedback={replayFeedback} />
     </section>
   );
 }
