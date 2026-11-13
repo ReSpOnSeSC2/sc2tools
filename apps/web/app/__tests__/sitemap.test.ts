@@ -42,6 +42,11 @@ afterEach(() => {
 });
 
 describe("sitemap", () => {
+  it("lists Daily Scout with a daily update frequency", async () => {
+    const rows = await sitemap();
+    expect(rows.find(row => row.url === `${SITE}/arcade/scout`)?.changeFrequency).toBe("daily");
+  });
+
   it("checks player consent on every request and never lists the retired /meta", async () => {
     expect(dynamic).toBe("force-dynamic"); expect(revalidate).toBe(0);
     vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");

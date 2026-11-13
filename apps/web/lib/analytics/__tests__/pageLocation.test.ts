@@ -19,6 +19,7 @@ describe("isUntrackedPath", () => {
     "/dock/tok123",
     "/wrapped",
     "/career",
+    "/arcade/scout",
     "/match/room",
     "/match/%72oom",
     "/players/reaver-7a6b/replays",

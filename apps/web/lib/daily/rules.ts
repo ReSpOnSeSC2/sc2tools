@@ -1,4 +1,5 @@
-export const FIGHTS_PER_DAY = 5;
+export const DAILY_ROUNDS = 5;
+export const FIGHTS_PER_DAY = DAILY_ROUNDS;
 export const PRACTICE_DAYS = 7;
 export const DAY_MS = 86_400_000;
 
@@ -38,10 +39,10 @@ export function unambiguousTrade(blueLost: number, redLost: number): boolean {
   return Number.isFinite(share) && CUTS.every(cut => Math.abs(cut - share) >= 0.03);
 }
 
-export function shareDaily(day: number, practice: boolean, correct: readonly boolean[]): string {
+export function shareDaily(day: number, practice: boolean, correct: readonly boolean[], game = { title: "SC2 Daily", path: "/arcade" }): string {
   const date = new Date(day * DAY_MS).toISOString().slice(0, 10);
   const marks = correct.map(hit => hit ? "\u25a0" : "\u25a1").join("");
   const score = correct.filter(Boolean).length;
-  return ["SC2 Daily" + (practice ? " practice" : "") + " \u00b7 " + date,
-    marks + "  " + score + "/" + FIGHTS_PER_DAY, "https://sc2tools.com/arcade"].join("\n");
+  return [game.title + (practice ? " practice" : "") + " \u00b7 " + date,
+    marks + "  " + score + "/" + correct.length, "https://sc2tools.com" + game.path].join("\n");
 }

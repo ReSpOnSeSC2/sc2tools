@@ -29,7 +29,7 @@ import { ROOM_ROUTE } from "../matchRoomRoute";
 import { SITE_NAME } from "../siteTitle";
 
 /** Paths that are never sent to Google Analytics. */
-const UNTRACKED_ROUTE = /^\/(?:admin|overlay|dock|wrapped|career|(?:p|players)\/[^/]+\/(?:replays|live))(?:\/|$)/;
+const UNTRACKED_ROUTE = /^\/(?:admin|overlay|dock|wrapped|career|arcade\/scout|(?:p|players)\/[^/]+\/(?:replays|live))(?:\/|$)/;
 
 /** Per-record screens, collapsed to their route pattern. */
 const DYNAMIC_ROUTES: ReadonlyArray<readonly [RegExp, string]> = [

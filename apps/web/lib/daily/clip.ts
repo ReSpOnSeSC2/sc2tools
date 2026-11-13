@@ -150,8 +150,8 @@ export function readDailyIndex(value: unknown): DailyIndex | null {
   return { version: DAILY_VERSION, days: Object.fromEntries(entries) as Record<string, string>, practice };
 }
 
-export function packDirectory(hash: string): string {
-  return DAILY_ROOT + "/packs/" + hash;
+export function packDirectory(hash: string, root = DAILY_ROOT): string {
+  return root + "/packs/" + hash;
 }
 
 function playbackGaps(unit: DailyUnit): number[] | undefined {

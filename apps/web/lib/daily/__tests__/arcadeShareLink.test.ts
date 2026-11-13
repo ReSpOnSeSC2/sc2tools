@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import nextConfig from "../../../next.config.mjs";
 import { SHARE_LINK_LABEL, SHARE_LINK_URL } from "@/components/analyzer/arcade/ShareCard";
 import { DAILY_ROOT } from "../clip";
+import { SCOUT_ROOT } from "../scout";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -14,10 +15,10 @@ describe("Arcade share destination", () => {
     expect((await nextConfig.redirects!()).some(rule => rule.source === share.pathname)).toBe(false);
   });
 
-  test("revalidates the schedule but lets versioned pack files be cached", async () => {
+  test.each([DAILY_ROOT, SCOUT_ROOT])("revalidates %s schedule but lets versioned packs be cached", async root => {
     expect(await nextConfig.headers!()).toEqual(expect.arrayContaining([
-      { source: DAILY_ROOT + "/index.json", headers: [{ key: "Cache-Control", value: "no-cache" }] },
-      { source: DAILY_ROOT + "/packs/:digest/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      { source: root + "/index.json", headers: [{ key: "Cache-Control", value: "no-cache" }] },
+      { source: root + "/packs/:digest/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
     ]));
   });
 });
