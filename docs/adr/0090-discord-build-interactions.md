@@ -23,7 +23,7 @@ SC2 Tools account linking is unnecessary.
   and aggregate win rates, intervals and game counts. Commands use
   in-memory data only. The route never uses player, channel or server
   identity, stores interaction data, sends follow-ups or calls Discord.
-  Access logs and Sentry skip the route.
+  API access logs and Sentry skip the route.
 
 ## Owner setup
 

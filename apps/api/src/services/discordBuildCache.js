@@ -28,20 +28,26 @@ function canPublish(row) {
     && 0 <= row.ci.low && row.ci.low <= row.winRate && row.winRate <= row.ci.high && row.ci.high <= 1;
 }
 
-/** Reuse the public matchup sort and floors. A DB-provided label or URL is never authoritative.
- * @param {string} matchup @param {import("./guidesPayloads").Doc} doc @returns {BuildSnapshot|null} */
-function buildSnapshot(matchup, doc) {
-  if (doc.matchup !== matchup || !(doc.computedAt instanceof Date) || !Number.isFinite(+doc.computedAt)) return null;
-  const payload = shapeMatchupPayload({ matchup, era: GUIDE_CURRENT_ERA, band: null, doc, buildDocs: [], videos: [] });
-  if (!payload.published) return null;
+/** @param {string} matchup @param {GuideOpener[]} openers */
+function publishedOpeners(matchup, openers) {
   const rows = new Map();
-  for (const row of payload.openers) {
+  for (const row of openers) {
     const slug = buildSlug(matchup, row.buildKey);
     if (!slug || slug !== row.buildSlug || rows.has(slug) || !canPublish(row)) continue;
     rows.set(slug, { slug, name: row.name, games: row.games, winRate: row.winRate, ci: row.ci });
     if (rows.size === 5) break;
   }
-  return rows.size ? { date: doc.computedAt.toISOString().slice(0, 10), openers: [...rows.values()] } : null;
+  return [...rows.values()];
+}
+
+/** Reuse the public matchup sort and floors. A DB-provided label or URL is never authoritative.
+ * @param {string} matchup @param {import("./guidesPayloads").Doc} doc @returns {BuildSnapshot|null} */
+function buildSnapshot(matchup, doc) {
+  if (!(doc.computedAt instanceof Date) || !Number.isFinite(+doc.computedAt)) return null;
+  const payload = shapeMatchupPayload({ matchup, era: GUIDE_CURRENT_ERA, band: null, doc, buildDocs: [], videos: [] });
+  if (!payload.published) return null;
+  const openers = publishedOpeners(matchup, payload.openers);
+  return openers.length ? { date: doc.computedAt.toISOString().slice(0, 10), openers } : null;
 }
 
 /** @param {import("../db/connect").DbContext["guideStats"]} stats */
@@ -65,7 +71,7 @@ async function readSnapshots(stats) {
 class DiscordBuildCache {
   /** @param {import("../db/connect").DbContext["guideStats"]} stats
    * @param {{logger?:Pick<import("pino").Logger,"warn">,now?:()=>number}} [opts] */
-  constructor(stats, { logger, now = Date.now } = {}) {
+  constructor(stats, { logger, now = () => performance.now() } = {}) {
     this.stats = stats;
     this.logger = logger;
     this.now = now;

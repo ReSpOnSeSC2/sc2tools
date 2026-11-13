@@ -3,6 +3,7 @@
 
 jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 const { generateKeyPairSync, sign } = require("node:crypto");
+const { once } = require("node:events");
 const http = require("node:http");
 const express = require("express");
 const request = require("supertest");
@@ -80,6 +81,7 @@ test("verifies exact raw timestamp and body before decoding, and replies to PING
 test("a stalled interaction body cannot wait past the inline Discord deadline", async () => {
   const server = h.app.listen(0, "127.0.0.1");
   try {
+    await once(server, "listening");
     const response = await new Promise((resolve, reject) => {
       const raw = http.request({
         host: "127.0.0.1", port: server.address().port, method: "POST", path,

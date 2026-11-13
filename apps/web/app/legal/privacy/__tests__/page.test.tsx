@@ -47,7 +47,7 @@ describe("privacy policy backups", () => {
   it("explains what the Discord command receives and how to make a privacy request", () => {
     render(<PrivacyPage />);
     const heading = screen.getByRole("heading", { name: "Discord build command" });
-    expect(heading).toHaveAttribute("id", "discord-build-command");
+    expect(heading.id).toBe("discord-build-command");
     expect(heading.nextElementSibling?.textContent).toMatch(/do not store the payload or log its\s+contents/);
     expect(heading.nextElementSibling?.nextElementSibling?.querySelector('a[href^="mailto:"]')).not.toBeNull();
   });
