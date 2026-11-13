@@ -27,7 +27,7 @@ type WidgetShellProps = {
   /** When set, takes precedence over `accent` and tints by race. */
   race?: string;
   visible?: boolean;
-  width?: number;
+  width?: CSSProperties["width"];
   /** Adds a soft pulsing cyan halo behind the panel for primary widgets. */
   halo?: boolean;
   children: ReactNode;
@@ -118,7 +118,7 @@ export function WidgetShell({
 
 function shellStyle(
   placement: CSSProperties,
-  width: number,
+  width: NonNullable<CSSProperties["width"]>,
   visible: boolean,
   haloColor: string,
 ): CSSProperties {

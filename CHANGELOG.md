@@ -4878,6 +4878,11 @@ release preparation, not a signed or published 0.24.9 installer.
   the same replay result, the room marks it confirmed by both players. Keep
   scoring manually when needed, and undo the last score as host or by agreement.
 
+### Match Rooms in OBS
+
+- Copy a Browser Source link from a Match Room to show the map veto and
+  series score with neutral seat labels. The overlay credit is optional.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

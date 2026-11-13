@@ -18,7 +18,9 @@ it("falls back only on failed GET document navigation; never caches the page", a
   const network = { live: true }; w.fetch.mockResolvedValueOnce(network); respondWith.mockClear(); w.handlers.get("fetch")!({ request, respondWith });
   expect(await respondWith.mock.calls[0][0]).toBe(network);
 });
-it.each([["GET", "cors", "/v1/me"], ["POST", "navigate", "/app"], ["GET", "navigate", "/overlay/token"], ["GET", "navigate", "/dock/token"]])("passes through %s %s %s", (method, mode, pathname) => {
+it.each([["GET", "cors", "/v1/me"], ["POST", "navigate", "/app"], ["GET", "navigate", "/overlay/token"],
+  ["GET", "navigate", "/dock/token"], ["GET", "navigate", "/%6Fverlay/%6datch-room"],
+  ["GET", "navigate", "/overlay/%ab"]])("passes through %s %s %s", (method, mode, pathname) => {
   const w = worker(); const respondWith = vi.fn(); w.handlers.get("fetch")!({ request: { method, mode, url: `https://sc2tools.com${pathname}` }, respondWith });
   expect(respondWith).not.toHaveBeenCalled(); expect(w.fetch).not.toHaveBeenCalled();
 });

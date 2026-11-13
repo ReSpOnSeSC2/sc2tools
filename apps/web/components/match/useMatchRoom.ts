@@ -5,6 +5,9 @@ import { pollDelay, type Room, type RoomAction, type RoomInvite } from "@/lib/ma
 import { deleteRoom, readRoom, RoomRequestError, roomErrorText, writeRoom } from "@/lib/matchRoomClient";
 
 type Frame = { room: Room; receivedAt: number };
+type PollMode = "room" | "obs";
+type PollOptions = { mode: PollMode; publish: (frame: Frame | null) => void; status: (error: string, gone: boolean) => void };
+const MAX_ROOM_LIFE_MS = 14 * 86_400_000;
 type RoomSession = {
   stop: AbortController;
   frame: Frame | null;
@@ -17,62 +20,89 @@ type RoomSession = {
 };
 
 /** A session owns its polling timer and abort signal until its invite is retired. */
-function pollRoom(id: string, publish: (frame: Frame | null) => void, status: (error: string, gone: boolean) => void) {
+function pollRoom(id: string, { mode, publish, status }: PollOptions) {
   const stop = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let retryMs = 0;
+  let retryAt = 0;
+  const clear = () => clearTimeout(timer);
+  const expiry = watchExpiry(stop.signal, mode);
   const session: RoomSession = {
-    stop, frame: null, gone: false, reading: false, refreshAgain: false,
-    retry: refresh,
-    finish: () => {
-      session.gone = true;
-      session.frame = null;
-      clearTimeout(timer);
-      publish(null);
-      status("", true);
-    },
-    accept: room => {
-      if (stop.signal.aborted || session.gone || !isNewerFrame(session.frame, room)) return;
-      session.frame = { room, receivedAt: Date.now() };
-      publish(session.frame);
-    },
+    stop, frame: null, gone: false, reading: false, refreshAgain: false, retry: refresh, finish, accept,
   };
+
+  function finish() {
+    session.gone = true;
+    clear();
+    expiry.clear();
+    session.frame = null;
+    publish(null);
+    status("", true);
+  }
+  function accept(room: Room) { publishRoomFrame(session, room, expiry, publish); }
   function schedule() {
+    clear();
     if (stop.signal.aborted || session.gone) return;
-    const delay = pollDelay(session.frame?.room.phase, document.visibilityState === "hidden");
-    timer = setTimeout(refresh, session.refreshAgain ? 0 : Math.max(delay, retryMs));
+    const delay = roomPollDelay(mode, session.frame?.room.phase);
+    timer = setTimeout(refresh, session.refreshAgain ? 0 : Math.max(delay, retryAt - Date.now()));
     session.refreshAgain = false;
   }
   function failed(error: unknown, startedAtRev: number | undefined) {
     if (!isCurrentReadError(session, error, startedAtRev)) return;
-    retryMs = error instanceof RoomRequestError ? error.retryMs : 0;
+    retryAt = error instanceof RoomRequestError && error.retryMs > 0 ? Date.now() + error.retryMs : 0;
     session.refreshAgain = false;
     status(roomErrorText(error, "read"), false);
   }
   function refresh() {
-    if (stop.signal.aborted || session.gone) return;
+    if (stop.signal.aborted || session.gone || (mode === "obs" && retryAt > Date.now())) return;
     if (session.reading) { session.refreshAgain = true; return; }
-    clearTimeout(timer);
+    clear();
     session.reading = true;
     const rev = session.frame?.room.rev;
     void readRoom(id, rev, stop.signal).then(room => {
       if (stop.signal.aborted || session.gone) return;
       if (room) session.accept(room);
-      retryMs = 0;
-      status("", false);
+      retryAt = 0;
+      if (!session.gone) status("", false);
     }, error => failed(error, rev)).finally(() => {
       session.reading = false;
       schedule();
     });
   }
   observeVisibility(stop.signal, () => {
-    clearTimeout(timer);
-    if (document.visibilityState === "visible" && retryMs === 0) refresh();
+    clear();
+    if (document.visibilityState === "visible" && retryAt <= Date.now()) refresh();
     else if (!session.reading) schedule();
   });
-  stop.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
+  stop.signal.addEventListener("abort", clear, { once: true });
   refresh();
   return session;
+}
+
+function publishRoomFrame(session: RoomSession, room: Room, expiry: ReturnType<typeof watchExpiry>, publish: PollOptions["publish"]) {
+  if (session.stop.signal.aborted || session.gone || !isNewerFrame(session.frame, room)) return;
+  if (!expiry.arm(room, session.finish)) return;
+  session.frame = { room, receivedAt: Date.now() };
+  publish(session.frame);
+}
+
+function roomPollDelay(mode: PollMode, phase: Room["phase"] | undefined) {
+  const hidden = document.visibilityState === "hidden";
+  return mode === "obs" && !hidden ? 5_000 : pollDelay(phase, hidden);
+}
+
+function watchExpiry(signal: AbortSignal, mode: PollMode) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const clear = () => clearTimeout(timer);
+  signal.addEventListener("abort", clear, { once: true });
+  function arm(room: Room, finish: () => void) {
+    if (mode !== "obs") return true;
+    const remaining = room.expiresAt - room.serverTime;
+    if (remaining <= 0) { finish(); return false; }
+    clear();
+    timer = setTimeout(finish, Math.min(remaining, MAX_ROOM_LIFE_MS));
+    return true;
+  }
+  return { arm, clear };
 }
 
 function observeVisibility(signal: AbortSignal, callback: () => void) {
@@ -98,7 +128,7 @@ function hasWritableRoom(session: RoomSession | null, busy: boolean): session is
   return Boolean(session?.frame) && !session?.gone && !busy;
 }
 
-export function useMatchRoom(invite: RoomInvite) {
+export function useMatchRoom(invite: RoomInvite, mode: PollMode = "room") {
   const [frame, setFrame] = useState<Frame | null>(null);
   const [reading, setReading] = useState({ error: "", gone: false });
   const [actionError, setActionError] = useState("");
@@ -107,10 +137,10 @@ export function useMatchRoom(invite: RoomInvite) {
   const current = useRef<RoomSession | null>(null);
 
   useEffect(() => {
-    const session = pollRoom(invite.id, setFrame, (error, gone) => setReading({ error, gone }));
+    const session = pollRoom(invite.id, { mode, publish: setFrame, status: (error, gone) => setReading({ error, gone }) });
     current.current = session;
     return () => session.stop.abort();
-  }, [invite.id]);
+  }, [invite.id, mode]);
 
   async function mutate(action: RoomAction | "delete", displayedRev: number) {
     const session = current.current;

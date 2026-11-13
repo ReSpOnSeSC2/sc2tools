@@ -13,7 +13,8 @@ afterEach(() => {
 
 describe("browser Sentry", () => {
   it.each(["/wrapped", "/career", "/card/report/summary#LocalData", "/card/r%65port/%73ummary#LocalData", "/b/opening", "/%62/opening",
-    "/match/%72oom#r=private"])("does not initialize or report errors on %s", async pathname => {
+    "/match/%72oom#r=private", "/overlay/match-room#r=private", "/%6Fverlay/match%2Droom#r=private"])(
+    "does not initialize or report errors on %s", async pathname => {
     window.history.replaceState(null, "", pathname);
     vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@example.ingest/1");
     const { captureException, initClientSentry } = await import("../sentry");
@@ -23,7 +24,7 @@ describe("browser Sentry", () => {
   });
 
   it.each(["/wrapped", "/career", "/card/report/summary#LocalData", "/card/r%65port/%73ummary#LocalData", "/b/opening",
-    "/match/room#r=private"])("drops events and breadcrumbs after navigating to %s", async pathname => {
+    "/match/room#r=private", "/overlay/%6datch-room#r=private"])("drops events and breadcrumbs after navigating to %s", async pathname => {
     window.history.replaceState(null, "", "/help");
     vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@example.ingest/1");
     const { initClientSentry } = await import("../sentry");
@@ -44,6 +45,26 @@ describe("browser Sentry", () => {
     expect(sdk.calls).toEqual(["init", "capture"]);
     expect(sdk.options).toMatchObject({ beforeBreadcrumb: expect.any(Function), beforeSendSpan: expect.any(Function),
       beforeSendTransaction: expect.any(Function) });
+  });
+
+  it("drops queued OBS transactions after leaving the source", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@example.ingest/1");
+    const { initClientSentry } = await import("../sentry");
+    await initClientSentry();
+    window.history.replaceState(null, "", "/help");
+    const transaction = sdk.options?.beforeSendTransaction;
+    const send = sdk.options?.beforeSend;
+    if (typeof transaction !== "function" || typeof send !== "function") throw new Error("Sentry hooks were not installed");
+    const source = "https://sc2tools.com/%6fverlay/match-room?credit=0#r=private";
+    expect(transaction({ transaction: "GET /overlay/%6datch-room" })).toBeNull();
+    expect(transaction({ transaction: "/help", request: { url: source } })).toBeNull();
+    expect(send({ request: { url: source } })).toBeNull();
+    const ordinary = { transaction: "/help", spans: [{ description: "resource.script" }] };
+    const mixed = { ...ordinary, spans: [
+      ...ordinary.spans, { description: "GET " + source }, { data: { "http.target": source } },
+    ] };
+    expect(transaction(mixed)).toEqual(ordinary);
+    expect(transaction({ transaction: "/overlay/another-source" })).toEqual({ transaction: "/overlay/another-source" });
   });
 
   it("scrubs opponent filters from the SDK's error URL and referrer", async () => {

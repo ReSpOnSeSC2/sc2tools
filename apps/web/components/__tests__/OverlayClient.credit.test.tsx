@@ -111,7 +111,9 @@ describe("OverlayClient credit", () => {
     expect(screen.queryByTestId("overlay-credit")).toBeNull();
   });
 
-  it("resets both the old snapshot and terminal status when switching tokens", () => {
+  it("resets both the old snapshot and terminal status when switching tokens", async () => {
+    // Await the terminal card's dynamic import with Testing Library's real clock.
+    vi.useRealTimers();
     const view = render(<OverlayClient token="old-token" />);
     act(() => {
       startMatch(activeSocket!);
@@ -119,7 +121,7 @@ describe("OverlayClient credit", () => {
     });
     expect(screen.getByTestId("overlay-credit")).toBeTruthy();
     act(() => activeSocket!.fire("connect_error", new Error("invalid_overlay_token")));
-    expect(screen.getByText("This overlay link no longer works")).toBeTruthy();
+    expect(await screen.findByText("This overlay link no longer works")).toBeTruthy();
     view.rerender(<OverlayClient token="new-token" />);
     expect(screen.queryByText("This overlay link no longer works")).toBeNull();
     act(() => startMatch(activeSocket!));

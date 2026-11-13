@@ -52,7 +52,8 @@ import {
   hasActiveOverlayGame,
   type OverlayConnectionStatus,
 } from "@/components/overlay/overlayResilience";
-import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
+import { OverlayCheckBadge } from "@/components/overlay/OverlayCheckBadge";
+import { OverlaySetupCard } from "@/components/overlay/OverlaySetupCard";
 import { ReconnectDot } from "@/components/overlay/ReconnectDot";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
 import { useScoutingVoiceClaim } from "@/components/overlay/useScoutingVoiceClaim";

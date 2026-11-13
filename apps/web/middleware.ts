@@ -2,6 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
 import { lowercaseGuidePath } from "./lib/guides/canonicalPath";
 import { isReportCardPath, isReportCardPreviewPath } from "./lib/instant/reportCardRoute";
+import { isRoomObsPath, ROOM_OBS_PATH } from "./lib/matchRoomRoute";
 import { isPublicReplayReference, legacyReplayArchivePath } from "./lib/replayRouteAccess";
 import { isPublicStatusRequest, statusHostRedirect } from "./lib/publicStatusRoute";
 
@@ -19,6 +20,20 @@ function guideCaseRedirect(req: NextRequest): NextResponse | null {
   const url = req.nextUrl.clone();
   url.pathname = lowercase;
   return NextResponse.redirect(url, PERMANENT_REDIRECT);
+}
+
+function matchRoomObsResponse(req: NextRequest): NextResponse {
+  if (req.nextUrl.pathname === ROOM_OBS_PATH) return NextResponse.next();
+  const canonical = req.nextUrl.clone();
+  canonical.pathname = ROOM_OBS_PATH;
+  return NextResponse.redirect(canonical, {
+    status: PERMANENT_REDIRECT,
+    headers: {
+      "Cache-Control": "private, no-store",
+      "Referrer-Policy": "no-referrer",
+      "X-Robots-Tag": "noindex, nofollow",
+    },
+  });
 }
 
 const isProtected = createRouteMatcher([
@@ -66,7 +81,8 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const statusRedirect = statusHostRedirect(req.url);
   if (statusRedirect) return NextResponse.redirect(statusRedirect, PERMANENT_REDIRECT);
   const pathname = req.nextUrl.pathname;
-  // Static replay views and Daily Scout work without a Clerk session handshake.
+  if (isRoomObsPath(pathname)) return matchRoomObsResponse(req);
+  // Static replay views work without a Clerk handshake.
   if (isPublicStatusRequest(pathname) || SESSIONLESS_PAGES.has(pathname)
     || isReportCardPath(pathname) || isReportCardPreviewPath(pathname)) {
     return NextResponse.next();

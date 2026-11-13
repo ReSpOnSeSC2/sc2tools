@@ -41,3 +41,17 @@ test("a composite overlay sample keeps its card order without connecting", async
   ]);
   expect(connections).toBe(0);
 });
+
+test("a composite source loads the recovery card after a terminal handshake", async ({ page }) => {
+  await page.routeWebSocket(/\/socket\.io\//u, socket => {
+    socket.onMessage(message => {
+      if (typeof message === "string" && message.startsWith("40")) {
+        socket.send('44{"message":"invalid_overlay_token"}');
+      }
+    });
+    socket.send('0{"sid":"fixture","upgrades":[],"pingInterval":25000,"pingTimeout":20000,"maxPayload":1000000}');
+  });
+  await page.goto("/overlay/fixture-invalid?check=1");
+  await expect(page.getByText("This overlay link no longer works")).toBeVisible();
+  await expect(page.getByText("Link invalid", { exact: true })).toBeVisible();
+});

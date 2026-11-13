@@ -52,6 +52,9 @@ describe("browser Sentry keeps no typed search text or credential path", () => {
     const from = "https://sc2tools.com/match/%72oom#r=private&key=private";
     expect(scrubBreadcrumb({ category: "navigation", data: { from, to: "/match" } }).data)
       .toEqual({ from: "/match/room", to: "/match" });
+    const source = "https://sc2tools.com/overlay/%6datch-room?credit=0#r=private&key=private";
+    expect(scrubBreadcrumb({ category: "navigation", data: { from: "/match", to: source } }).data)
+      .toEqual({ from: "/match", to: "/overlay/match-room" });
     const url = "https://api.sc2tools.com/v1/match-rooms/private?rev=2";
     expect(scrubSpan({ description: `GET ${url}`, data: { url } })).toEqual({
       description: "GET /v1/match-rooms/[redacted]?rev=2",

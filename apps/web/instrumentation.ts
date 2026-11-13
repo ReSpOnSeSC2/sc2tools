@@ -8,12 +8,16 @@
  */
 
 import { streamViewerTelemetryPath } from "@/lib/streamViewerRoute";
+import { isRoomObsPath } from "@/lib/matchRoomRoute";
 
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
-function isStreamViewerUrl(value: unknown): boolean {
+function isPrivateRequest(value: unknown): boolean {
   if (typeof value !== "string") return false;
-  try { return streamViewerTelemetryPath(new URL(value.replace(/^\S+\s+/, ""), "https://sc2tools.com").pathname) !== null; }
+  try {
+    const { pathname } = new URL(value.replace(/^\S+\s+/, ""), "https://sc2tools.com");
+    return isRoomObsPath(pathname) || streamViewerTelemetryPath(pathname) !== null;
+  }
   catch { return false; }
 }
 
@@ -25,8 +29,8 @@ export async function register(): Promise<void> {
       dsn: DSN,
       tracesSampleRate: 0.1,
       environment: process.env.NEXT_PUBLIC_SC2TOOLS_ENV || "production",
-      beforeSend: event => isStreamViewerUrl(event.request?.url) ? null : event,
-      beforeSendTransaction: event => isStreamViewerUrl(event.request?.url) || isStreamViewerUrl(event.transaction) ? null : event,
+      beforeSend: event => isPrivateRequest(event.request?.url) ? null : event,
+      beforeSendTransaction: event => isPrivateRequest(event.request?.url) || isPrivateRequest(event.transaction) ? null : event,
     });
   } catch {
     // Missing/broken dep must never take the server down.
@@ -37,7 +41,7 @@ export async function onRequestError(
   ...args: unknown[]
 ): Promise<void> {
   const request = args[1] as { path?: unknown } | undefined;
-  if (!DSN || isStreamViewerUrl(request?.path)) return;
+  if (!DSN || isPrivateRequest(request?.path)) return;
   try {
     const Sentry = await import("@sentry/nextjs");
     (

@@ -1,6 +1,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { OverlayCheckBadge, OverlaySetupCard } from "../OverlaySetupCard";
+import { OverlayCheckBadge } from "../OverlayCheckBadge";
+import { OverlaySetupCard } from "../OverlaySetupCard";
 import { closestOverlayName } from "../overlayNames";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); window.history.replaceState(null, "", "/"); });

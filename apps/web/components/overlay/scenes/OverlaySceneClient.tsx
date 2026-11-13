@@ -31,7 +31,8 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { useOverlayProfile, type OverlayProfileConfig } from "@/lib/useOverlayProfile";
 import type { OverlayTheme } from "@/lib/overlayTheme";
 import { attachOverlayResilience, createOverlaySocket, hasActiveOverlayGame, type OverlayConnectionStatus } from "../overlayResilience";
-import { OverlayCheckBadge, OverlaySetupCard } from "../OverlaySetupCard";
+import { OverlayCheckBadge } from "../OverlayCheckBadge";
+import { OverlaySetupCard } from "../OverlaySetupCard";
 import { ReconnectDot } from "../ReconnectDot";
 import { useStudioState } from "@/lib/multichat/useStudioState";
 import type {

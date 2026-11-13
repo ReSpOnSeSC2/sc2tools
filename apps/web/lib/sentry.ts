@@ -12,7 +12,7 @@
  */
 
 import { isReportCardPath } from "./instant/reportCardRoute";
-import { ROOM_ROUTE } from "./matchRoomRoute";
+import { isRoomObsPath, ROOM_ROUTE } from "./matchRoomRoute";
 
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
@@ -24,10 +24,10 @@ type Sentry = {
 
 let client: Promise<Sentry | null> | null = null;
 
-function onLocalReplaySurface(): boolean {
+function onPrivateSurface(): boolean {
   const pathname = globalThis.location?.pathname;
   return pathname === "/wrapped" || pathname === "/career" || isReportCardPath(pathname)
-    || /^\/(?:b|%62)(?:\/|$)/.test(pathname ?? "") || ROOM_ROUTE.test(pathname ?? "");
+    || /^\/(?:b|%62)(?:\/|$)/.test(pathname ?? "") || ROOM_ROUTE.test(pathname ?? "") || isRoomObsPath(pathname);
 }
 
 /**
@@ -36,7 +36,7 @@ function onLocalReplaySurface(): boolean {
  * anything can report, so no event is captured unscrubbed or before init.
  */
 function clientSentry(): Promise<Sentry | null> {
-  if (onLocalReplaySurface()) return Promise.resolve(null);
+  if (onPrivateSurface()) return Promise.resolve(null);
   client ??= (async () => {
     if (!DSN) return null;
     try {
@@ -51,12 +51,13 @@ function clientSentry(): Promise<Sentry | null> {
         replaysSessionSampleRate: 0.0,
         environment: process.env.NEXT_PUBLIC_SC2TOOLS_ENV || "production",
         beforeBreadcrumb: (crumb: Parameters<typeof privacy.scrubBreadcrumb>[0]) =>
-          onLocalReplaySurface() ? null : privacy.scrubBreadcrumb(crumb),
+          onPrivateSurface() ? null : privacy.scrubBreadcrumb(crumb),
         beforeSend: (event: Parameters<typeof privacy.scrubErrorContext>[0]) =>
-          onLocalReplaySurface() ? null : privacy.scrubErrorContext(event),
+          onPrivateSurface() || privacy.isRoomObsTelemetry(event.request?.url) ? null : privacy.scrubErrorContext(event),
         beforeSendSpan: privacy.scrubSpan,
         beforeSendTransaction: (event: Parameters<typeof privacy.scrubTransaction>[0]) =>
-          onLocalReplaySurface() ? null : privacy.scrubTransaction(event),
+          onPrivateSurface() || privacy.isRoomObsTelemetry(event.transaction) || privacy.isRoomObsTelemetry(event.request?.url)
+            ? null : privacy.scrubTransaction(event),
       });
       return s;
     } catch {
@@ -76,7 +77,7 @@ export async function initClientSentry(): Promise<void> {
  * is off (no DSN) and the error only went to the console.
  */
 export async function captureException(err: unknown): Promise<string | null> {
-  if (onLocalReplaySurface()) return null;
+  if (onPrivateSurface()) return null;
   const s = await clientSentry();
   if (s) {
     const eventId = s.captureException(err);

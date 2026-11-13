@@ -2,7 +2,8 @@ import { localOverlaySample } from "@/lib/overlayDemo.server";
 import { OverlayWidgetSource } from "@/components/overlay/OverlayWidgetSource";
 import { overlayThemeParamFromSearch } from "@/lib/overlayTheme";
 import { GHOST_BUILD_PARAM } from "@/lib/ghostBuild";
-import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
+import { OverlayCheckBadge } from "@/components/overlay/OverlayCheckBadge";
+import { OverlaySetupCard } from "@/components/overlay/OverlaySetupCard";
 import { closestOverlayName } from "@/components/overlay/overlayNames";
 
 export const metadata = {

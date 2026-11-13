@@ -1,7 +1,7 @@
 import { OPPONENT_LIST_REPORT_PATH, sanitiseRequestPath } from "./feedback/sanitise";
 import { canonicalReportCardPath } from "./instant/reportCardRoute";
 import { PRACTICE_LINK_PATTERN, PRACTICE_LINK_ROUTE } from "./practice/practiceLinkPath";
-import { ROOM_PATH, ROOM_ROUTE } from "./matchRoomRoute";
+import { isRoomObsPath, ROOM_OBS_PATH, ROOM_PATH, ROOM_ROUTE } from "./matchRoomRoute";
 import { streamViewerTelemetryPath } from "./streamViewerRoute";
 
 // Browser Sentry keeps no typed search text or credential path (ADR 0069,
@@ -18,6 +18,7 @@ const URL_FIELDS = ["url", "http.url", "url.full", "http.target", "url.path"] as
 // The query again on its own; the scrubbed URL keeps its safe parameters.
 const QUERY_FIELDS = ["http.query", "url.query", "http.fragment", "url.fragment"] as const;
 const REQUEST_NAME = /^([A-Z]+\s+)(\S+)$/u;
+const NAMED_ROUTE = /^(?:\w+\s+)?(\S+)$/u;
 
 function scrubUrl(value: unknown): unknown {
   return typeof value === "string" ? sanitizeTelemetryPath(value) ?? (sanitiseRequestPath(value) || "[redacted]") : value;
@@ -28,6 +29,7 @@ function sanitizeTelemetryPath(value: string): string | null {
     const { pathname } = new URL(value, "https://sc2tools.com");
     if (OPPONENT_LIST_REPORT_PATH.test(pathname)) return "/app/opponents";
     if (ROOM_ROUTE.test(pathname)) return ROOM_PATH;
+    if (isRoomObsPath(pathname)) return ROOM_OBS_PATH;
     return streamViewerTelemetryPath(pathname) ?? (PRACTICE_LINK_ROUTE.test(pathname) ? PRACTICE_LINK_PATTERN : canonicalReportCardPath(pathname));
   } catch {
     return null;
@@ -36,6 +38,23 @@ function sanitizeTelemetryPath(value: string): string | null {
 
 function scrubNavigation<T>(value: T): T | string {
   return typeof value === "string" ? sanitizeTelemetryPath(value) ?? value : value;
+}
+
+/** A queued event can finish after navigation away from the private source. */
+export function isRoomObsTelemetry(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const url = NAMED_ROUTE.exec(value)?.[1];
+  if (!url) return false;
+  try {
+    return isRoomObsPath(new URL(url, "https://sc2tools.com").pathname);
+  } catch {
+    return false;
+  }
+}
+
+function isRoomObsSpan(span: Span): boolean {
+  if (isRoomObsTelemetry(span.description)) return true;
+  return URL_FIELDS.some(key => isRoomObsTelemetry(span.data?.[key]));
 }
 
 /** Example: a fetch breadcrumb for "https://api/v1/replays?search=Bob" keeps "/v1/replays?search=%5Bredacted%5D". */
@@ -81,5 +100,5 @@ export function scrubTransaction<T extends Transaction>(event: T): T {
   const name = safe.transaction && /^(?:(?:\w+)\s+)?(\/\S+)$/.exec(safe.transaction);
   const path = name && streamViewerTelemetryPath(name[1]);
   return { ...safe, ...(path ? { transaction: path } : {}),
-    ...(Array.isArray(safe.spans) ? { spans: safe.spans.map(scrubSpan) } : {}) };
+    ...(Array.isArray(safe.spans) ? { spans: safe.spans.filter(span => !isRoomObsSpan(span)).map(scrubSpan) } : {}) };
 }
