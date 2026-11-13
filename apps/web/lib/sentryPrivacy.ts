@@ -2,6 +2,7 @@ import { OPPONENT_LIST_REPORT_PATH, sanitiseRequestPath } from "./feedback/sanit
 import { canonicalReportCardPath } from "./instant/reportCardRoute";
 import { PRACTICE_LINK_PATTERN, PRACTICE_LINK_ROUTE } from "./practice/practiceLinkPath";
 import { ROOM_PATH, ROOM_ROUTE } from "./matchRoomRoute";
+import { streamViewerTelemetryPath } from "./streamViewerRoute";
 
 // Browser Sentry keeps no typed search text or credential path (ADR 0069,
 // 2026-11-01 amendment). Request URLs in fetch and XHR breadcrumbs and in
@@ -12,7 +13,7 @@ import { ROOM_PATH, ROOM_ROUTE } from "./matchRoomRoute";
 type Breadcrumb = { category?: string; data?: Record<string, unknown> };
 type Span = { description?: string; data?: Record<string, unknown> };
 type ErrorContext = { request?: { url?: string; headers?: Record<string, unknown> } };
-type Transaction = ErrorContext & { spans?: Span[] };
+type Transaction = ErrorContext & { transaction?: string; spans?: Span[] };
 const URL_FIELDS = ["url", "http.url", "url.full", "http.target", "url.path"] as const;
 // The query again on its own; the scrubbed URL keeps its safe parameters.
 const QUERY_FIELDS = ["http.query", "url.query", "http.fragment", "url.fragment"] as const;
@@ -27,7 +28,7 @@ function sanitizeTelemetryPath(value: string): string | null {
     const { pathname } = new URL(value, "https://sc2tools.com");
     if (OPPONENT_LIST_REPORT_PATH.test(pathname)) return "/app/opponents";
     if (ROOM_ROUTE.test(pathname)) return ROOM_PATH;
-    return PRACTICE_LINK_ROUTE.test(pathname) ? PRACTICE_LINK_PATTERN : canonicalReportCardPath(pathname);
+    return streamViewerTelemetryPath(pathname) ?? (PRACTICE_LINK_ROUTE.test(pathname) ? PRACTICE_LINK_PATTERN : canonicalReportCardPath(pathname));
   } catch {
     return null;
   }
@@ -77,5 +78,8 @@ export function scrubErrorContext<T extends ErrorContext>(event: T): T {
 /** Every child span of a transaction event, in case a span skipped beforeSendSpan. */
 export function scrubTransaction<T extends Transaction>(event: T): T {
   const safe = scrubErrorContext(event);
-  return Array.isArray(safe.spans) ? { ...safe, spans: safe.spans.map(scrubSpan) } : safe;
+  const name = safe.transaction && /^(?:(?:\w+)\s+)?(\/\S+)$/.exec(safe.transaction);
+  const path = name && streamViewerTelemetryPath(name[1]);
+  return { ...safe, ...(path ? { transaction: path } : {}),
+    ...(Array.isArray(safe.spans) ? { spans: safe.spans.map(scrubSpan) } : {}) };
 }

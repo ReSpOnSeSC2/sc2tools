@@ -8,6 +8,13 @@ const { cleanDisplayName } = require("../util/contentFilter");
 const OPTIONS = { maxTimeMS: 3000 };
 const PROJECTION = { _id: 0, userId: 1, displayName: 1, publicProfile: 1, "replaySharing.slug": 1, "replaySharing.enabled": 1 };
 
+/** @param {import("mongodb").Document} $set @param {boolean} enabled */
+function publicationUpdate($set, enabled) {
+  if (enabled) return { $set };
+  return { $set: { ...$set, streamReportPublicEpoch: randomUUID() },
+    $unset: { "streamViewer.tokenId": "" }, $inc: { "streamViewer.revision": 1 } };
+}
+
 /** Owner controls never enable replay sharing, publish builds, or change names. */
 class PublicPlayerPreferencesService {
   /** @param {import('../db/connect').DbContext} db @param {{community:any,onPublicChanged?:()=>unknown,resolveLegacy?:(userId:string)=>Promise<unknown>}} opts */
@@ -72,7 +79,7 @@ class PublicPlayerPreferencesService {
       ...(renamed ? [{ "replaySharing.enabled": { $ne: true } }] : []),
     ] };
     let result;
-    try { result = await this.db.users.updateOne(filter, { $set: { publicProfile: next, "replaySharing.slug": slug, ...(!value.enabled ? { streamReportPublicEpoch: randomUUID() } : {}) } }, OPTIONS); }
+    try { result = await this.db.users.updateOne(filter, publicationUpdate({ publicProfile: next, "replaySharing.slug": slug }, value.enabled), OPTIONS); }
     catch (error) { if (/** @type {any} */ (error)?.code === 11000) throw playerError(409, "player_slug_unavailable", "That player link is unavailable."); throw error; }
     if (!result.matchedCount) throw playerError(409, "public_profile_conflict", "Profile settings changed elsewhere. Refresh before saving.");
     // The optional existing signed cache purge is best effort. API admission

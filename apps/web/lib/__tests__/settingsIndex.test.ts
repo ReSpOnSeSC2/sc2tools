@@ -39,6 +39,7 @@ describe("Settings section catalog", () => {
     ["TTS volume", "chat", "tts"], ["Kick chatroom", "chat", "platforms"],
     ["Pulse ID", "profile", "pulse-ids"], ["Delete account", "backups", "gdpr"],
     ["Session inactivity gap", "profile", "profile-details"],
+    ["Stream viewer page", "profile", "public-profile"],
     ["Overlay theme", "overlay", "theme"], ["Reset overlay URLs", "overlay", "tokens"],
   ])("resolves canonical field query %s without a private lookup", (query, tab, section) => {
     const matches = SETTINGS_FIELDS.filter(field => [field.label, ...field.synonyms].some(label => label.toLowerCase().includes(query.toLowerCase())));

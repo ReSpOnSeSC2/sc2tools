@@ -17,6 +17,18 @@ it("uses the Clipboard API only after a click and announces success outside any 
   expect(screen.queryByRole("textbox")).toBeNull();
 });
 
+it("resolves browser-dependent text only when the user asks to copy it", async () => {
+  const writeText = vi.fn(async () => undefined);
+  const text = vi.fn(() => "https://example.test/delayed");
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  render(<CopyButton text={text}>Copy viewer link</CopyButton>);
+  expect(text).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Copy viewer link" }));
+  expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy();
+  expect(text).toHaveBeenCalledOnce();
+  expect(writeText).toHaveBeenCalledWith("https://example.test/delayed");
+});
+
 it("shows a labeled visible readonly selected fallback, and Escape returns focus to Copy", async () => {
   vi.stubGlobal("navigator", {});
   render(<CopyButton text="Exact copy value" fallbackLabel="Replay link">Copy replay link</CopyButton>);

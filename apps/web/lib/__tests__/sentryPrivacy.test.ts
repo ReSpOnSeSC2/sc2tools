@@ -14,6 +14,15 @@ const SEARCH = "https://api.sc2tools.com/v1/replays?search=Private%20Rival&limit
 const SCRUBBED = "/v1/replays?search=%5Bredacted%5D&limit=5&sort=date_desc&enrich=none&window=recent";
 
 describe("browser Sentry keeps no typed search text or credential path", () => {
+  it("removes viewer handles and query values from navigation, request, span and transaction context", () => {
+    const page = "/p/private-handle-0123456789/live";
+    const url = "https://api.sc2tools.com/v1/public/players/private-handle-0123456789/live?private=value";
+    const expected = "/v1/public/players/:slug/live";
+    expect(scrubBreadcrumb({ category: "navigation", data: { from: page, to: "/try" } }).data?.from).toBe("/p/:handle/live");
+    expect(scrubSpan({ description: `GET ${url}`, data: { url } })).toEqual({ description: `GET ${expected}`, data: { url: expected } });
+    expect(scrubTransaction({ transaction: `pageload ${page}`, request: { url: page, headers: { Referer: page } } }))
+      .toEqual({ transaction: "/p/:handle/live", request: { url: "/p/:handle/live", headers: { Referer: "/p/:handle/live" } } });
+  });
   it("keeps only the opponent list route in navigation, fetch and span URLs", () => {
     const url = "https://sc2tools.com/app/opponents?opponentFilter=Fixture+Rival&q=Legacy&sort=name";
     const other = "/app/opponents/rival?q=keep";

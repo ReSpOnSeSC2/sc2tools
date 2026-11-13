@@ -22,7 +22,7 @@ const {
 } = require("./middleware/replayIngestAdmission");
 const { captureSignedWebhookRawBody } = require("./middleware/jsonBody");
 const { buildSyncActionJsonParser } = require("./middleware/syncActionJson");
-const { sanitiseRequestForLog, sanitiseResponseForLog } = require("./middleware/requestLogging");
+const { sanitiseRequestForLog, sanitiseResponseForLog, isStreamViewerRequest } = require("./middleware/requestLogging");
 const { privateSearchNoStore, buildPrivateSearchJsonParser,
   privateSearchErrorBoundary, isPrivateSearchRequest } = require("./middleware/privateSearchBoundary");
 const { replayDownloadBatchNoStore, buildReplayDownloadBatchJsonParser,
@@ -181,6 +181,8 @@ const { buildPublicProfileRouter } = require("./routes/publicProfile");
 const { PublicPlayerService } = require("./services/publicPlayer");
 const { PublicPlayerPreferencesService } = require("./services/publicPlayerPreferences");
 const { buildPublicPlayersRouter } = require("./routes/publicPlayers");
+const { buildStreamViewerRouter } = require("./routes/streamViewer");
+const { StreamViewerService } = require("./services/streamViewer");
 const { buildPublicReplaysRouter } = require("./routes/publicReplays");
 const { ChatbotService } = require("./services/chatbot");
 const { buildChatbotRouter } = require("./routes/chatbot");
@@ -1191,6 +1193,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     publicProfile,
     publicPlayers,
     publicPlayerPreferences,
+    streamViewer: new StreamViewerService(deps.db),
     chatbot,
     pulseDirectory,
     playerChannels,
@@ -1223,6 +1226,10 @@ function withOwnerDataServices(services, deps, gameDetails) {
  */
 function applyBaseMiddleware(app, deps, auth, siteStats) {
   app.use(replayDownloadBatchNoStore, privateSearchNoStore, privateSearchRequestScope);
+  app.use((req, res, next) => {
+    if (isStreamViewerRequest(req.originalUrl)) res.set("Cache-Control", "private, no-store");
+    next();
+  });
   app.use(helmet());
   app.use(
     cors({
@@ -1697,6 +1704,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildPublicProfileRouter({ publicProfile: services.publicProfile, players: services.publicPlayers }),
   );
   app.use(SERVICE.ROUTE_PREFIX, buildPublicPlayersRouter({ players: services.publicPlayers, preferences: services.publicPlayerPreferences, auth }));
+  app.use(SERVICE.ROUTE_PREFIX, buildStreamViewerRouter({ viewer: services.streamViewer, auth }));
   // Separate default-off publication surface for replay rows, per-game
   // analysis, matched stream POVs and short-lived original-replay downloads.
   // It must mount in the public bundle before auth-eager routers.

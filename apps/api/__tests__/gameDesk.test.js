@@ -16,6 +16,7 @@ const { OverlayTokensService } = require("../src/services/overlayTokens");
 const { SessionPolicyService } = require("../src/services/sessionPolicy");
 const { OwnerRevisions } = require("../src/util/gameVisibility");
 const { StreamReportsService } = require("../src/services/streamReports");
+const { sha256 } = require("../src/util/hash");
 let mongo, db, svc, engagement, studio, games, live, verified, app, directory, channels, events, bot;
 const TOKEN = "desk-token", OWNER = "desk-owner";
 beforeAll(async () => { mongo = await MongoMemoryServer.create(); db = await connect({ uri: mongo.getUri(), dbName: "game_desk" }); });
@@ -428,6 +429,7 @@ test("Start new session opens a stream and End stream closes it with its report"
   expect((await post({ action: "sessionReset" })).status).toBe(200);
   const opened = await db.users.findOne({ userId: OWNER });
   expect(opened.streamSession.startAt).toBeInstanceOf(Date);
+  expect(opened.streamSession.viewerSource).toBe(sha256(TOKEN));
   await db.games.insertOne({ userId: OWNER, gameId: "stream-game", date: new Date(), result: "Victory", myRace: "Protoss", map: "Map", opponent: { race: "Zerg" } });
   expect((await post({ action: "streamEnd", extra: true })).status).toBe(400);
   const ended = await post({ action: "streamEnd" });

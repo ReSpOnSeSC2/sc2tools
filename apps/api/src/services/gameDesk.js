@@ -9,7 +9,7 @@ function deskError(status, code) { return Object.assign(new Error(code), { statu
 /** Token-authenticated controls; the enclosing route holds its owner's data lease. */
 class GameDeskService {
   /** @param {{users:import('mongodb').Collection,studio:import('./multichatStudio').MultichatStudioService,engagement:import('./multichatEngagement').MultichatEngagementService,games:import('./games').GamesService,broker:import('./liveGameBroker').LiveGameBroker,channels:import('./opponentChannels').OpponentChannelsCache,tokens:import('./overlayTokens').OverlayTokensService,bot:import('./twitchChatBot').TwitchChatBotService,io?:import('socket.io').Server,onSessionReset?:(owner:string)=>void,now?:()=>number,
-   *   streams?:{start:(userId:string,startMs:number)=>Promise<void>,end:(userId:string)=>Promise<unknown>}}} deps */
+   *   streams?:{start:(userId:string,startMs:number,sourceToken:string)=>Promise<void>,end:(userId:string)=>Promise<unknown>}}} deps */
   constructor(deps) { this.deps = deps; this.now = deps.now || Date.now; }
 
   /** @param {string} userId @param {string} token @param {Record<string,any>} body */
@@ -92,7 +92,7 @@ class GameDeskService {
     const state = await studio.advanceStreamStart(token, anchor);
     // A Dock session is a stream: open it for the post-stream report. Optional;
     // the committed session reset stands even if this bookkeeping fails.
-    try { await this.deps.streams?.start(userId, anchor); } catch { /* report bookkeeping only */ }
+    try { await this.deps.streams?.start(userId, anchor, token); } catch { /* report bookkeeping only */ }
     // Owner invalidation only: no private session DTO or replay insertion.
     io?.to(`user:${userId}`).emit("games:changed", { count: 0, inserted: 0, bulk: false, reason: "session-reset" });
     try {

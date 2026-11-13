@@ -7,7 +7,8 @@ import { Input } from "./Input";
 import { useToastOptional } from "./Toast";
 
 export interface CopyButtonProps extends Omit<ButtonProps, "onClick" | "loading" | "children"> {
-  text: string;
+  /** Resolve a browser-dependent value when the user clicks. */
+  text: string | (() => string);
   /** Optional owner/resource identity in addition to the copied text. */
   scopeKey?: string | number | null;
   children?: ReactNode;
@@ -39,7 +40,7 @@ export function CopyButton({
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); dismissFallback(); }
   };
   return <div className="relative min-w-0 space-y-2">
-    <Button {...props} ref={buttonRef} variant={variant} loading={clipboard.pending} onClick={() => { void clipboard.copy(text); }}>
+    <Button {...props} ref={buttonRef} variant={variant} loading={clipboard.pending} onClick={() => { void clipboard.copy(typeof text === "function" ? text() : text); }}>
       {clipboard.copied ? copiedLabel : children}
     </Button>
     <span className="sr-only" role="status" aria-live="polite">

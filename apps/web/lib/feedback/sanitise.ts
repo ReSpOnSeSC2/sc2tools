@@ -13,7 +13,7 @@ const CREDENTIAL_PATH_SEGMENT =
   /\/(multichat|chatbot|overlay-tokens|device-pairings|build-intents\/live|shares|match-rooms)\/[^/?#]+/giu;
 // OBS browser sources, the Stream Dock and shared-game pages authenticate
 // with the token in the URL.
-const TOKEN_PAGE_SEGMENT = /^\/(overlay|dock|g)\/[^/?#]+/iu;
+const TOKEN_PAGE_SEGMENT = /^\/(overlay|dock|g|p(?=\/[^/]+\/live\/?$))\/[^/?#]+/iu;
 const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|token)/iu;
 const OAUTH_CALLBACK_PATH = /^\/v1\/integrations\/(?:twitch|kick|youtube)\/callback\/?$/iu;
 const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set(["code", "state", "error", "error_description", "error_uri"]);

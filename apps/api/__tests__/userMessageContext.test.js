@@ -50,6 +50,7 @@ describe("report context sanitiser", () => {
     expect(sanitiseReportPagePath("/overlay/secret-token/widget/scout?x=1"))
       .toBe("/overlay/[redacted]/widget/scout");
     expect(sanitiseReportPagePath("/dock/secret-token")).toBe("/dock/[redacted]");
+    expect(sanitiseReportPagePath("/p/private-handle-0123456789/live?ignored=1")).toBe("/p/:handle/live");
     expect(sanitiseReportPagePath("https://evil.test/x")).toBe("");
   });
 

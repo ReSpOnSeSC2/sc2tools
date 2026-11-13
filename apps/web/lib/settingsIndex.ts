@@ -102,6 +102,7 @@ export const SETTINGS_FIELDS = [
   { id: "pulse-ids", tab: "profile", section: "pulse-ids", label: "Pulse IDs", synonyms: ["Pulse ID", "SC2Pulse", "identity", "regions"] },
   { id: "player-channels", tab: "profile", section: "player-channels", label: "Twitch & YouTube channels", synonyms: ["recording links", "player channels", "channel review"] },
   { id: "public-profile", tab: "profile", section: "public-profile", label: "Public player page", synonyms: ["profile privacy", "player link", "public profile", "slug"] },
+  { id: "stream-viewer", tab: "profile", section: "public-profile", label: "Stream viewer page", synonyms: ["delayed game results", "broadcast delay"] },
   { id: "replay-archive", tab: "backups", section: "replay-archive", label: "Cloud Replay Archive", synonyms: ["original replays", "replay backups", "download replay", "archive storage"] },
   { id: "snapshots", tab: "backups", section: "snapshots", label: "Account snapshots", synonyms: ["restore point", "snapshot", "backup account"] },
   { id: "repair-data", tab: "backups", section: "repair-data", label: "Repair my data", synonyms: ["recalculate", "wrong counts", "repair records", "archive recheck"] },

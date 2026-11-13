@@ -11,6 +11,8 @@ describe("request log sanitisation", () => {
     ["/v1/search/quick?q=private-name&unknown=private-build#private-map", "/v1/search/quick"],
     ["https://api.example.test/V1/SEARCH/QUICK/?other=private-name", "/v1/search/quick"],
     ["/v1/search/quick/other?limit=5", "/v1/search/quick/other?limit=5"],
+    ["/v1/public/players/private-player-0123456789/live?secret=private", "/v1/public/players/[redacted]/live"],
+    ["/v1/me/stream-viewer?private=source", "/v1/me/stream-viewer"],
     ["/v1/spatial/battle?opponent=private-id&map=Goldenaura", "/v1/spatial/battle?opponent=%5Bredacted%5D&map=Goldenaura"],
     [
       "/v1/multichat/overlay-secret/youtube/poll?token=query-secret&channel=abc",

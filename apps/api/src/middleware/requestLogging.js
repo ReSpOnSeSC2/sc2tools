@@ -39,6 +39,8 @@ const CREDENTIAL_PATH_SEGMENT =
 // ``review_tag`` is owner-authored review-queue text (routes/replays.js).
 const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|token|review_tag)/iu;
 const SPATIAL_PATH = /^\/v1\/spatial\//iu;
+const STREAM_VIEWER_PUBLIC = /^\/(?:v1\/)?public\/players\/[^/]+\/live\/?$/i;
+const STREAM_VIEWER_OWNER = /^\/(?:v1\/)?me\/stream-viewer\/?$/i;
 const OAUTH_CALLBACK_PATH =
   /^\/v1\/integrations\/(?:twitch|kick|youtube)\/callback\/?$/iu;
 const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set([
@@ -49,6 +51,24 @@ const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set([
   "error_uri",
 ]);
 
+/** @param {unknown} value */
+function streamViewerLogPath(value) {
+  if (typeof value !== "string") return null;
+  const path = value.replace(/^https?:\/\/[^/]+(?=\/)/i, "").split(/[?#]/u, 1)[0];
+  if (STREAM_VIEWER_PUBLIC.test(path)) return "/v1/public/players/[redacted]/live";
+  return STREAM_VIEWER_OWNER.test(path) ? "/v1/me/stream-viewer" : null;
+}
+
+/** @param {unknown} value */
+function isStreamViewerRequest(value) { return streamViewerLogPath(value) !== null; }
+
+/** @param {string} raw */
+function privateOperationalPath(raw) {
+  if (isReplayDownloadBatchPath(raw)) return "/v1/replays/download-batch";
+  if (isPrivateSearchPath(raw)) return privateSearchLogUrl(raw);
+  return streamViewerLogPath(raw);
+}
+
 /**
  * Preserve route shape and useful filters while removing credentials.
  * @param {unknown} value
@@ -57,8 +77,8 @@ const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set([
 function sanitiseRequestUrl(value) {
   const raw = typeof value === "string" ? value : "";
   if (!raw) return "";
-  if (isReplayDownloadBatchPath(raw)) return "/v1/replays/download-batch";
-  if (isPrivateSearchPath(raw)) return privateSearchLogUrl(raw);
+  const operational = privateOperationalPath(raw);
+  if (operational) return operational;
   let redacted = raw.replace(
     CREDENTIAL_PATH_SEGMENT,
     (_match, route) => `/${route}/[redacted]`,
@@ -141,4 +161,5 @@ module.exports = {
   sanitiseRequestForLog,
   sanitiseResponseForLog,
   sanitiseRequestUrl,
+  isStreamViewerRequest,
 };
