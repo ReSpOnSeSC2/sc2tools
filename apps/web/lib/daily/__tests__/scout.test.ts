@@ -6,7 +6,7 @@ import { readDailyIndex } from "../clip";
 import { loadDailySlot } from "../loadDaily";
 import { completeDay, readResults, streakOn } from "../progress";
 import { practiceDay, shareDaily, utcDay } from "../rules";
-import { readScoutPack, SCOUT_END, SCOUT_ROOT, scoutChoices } from "../scout";
+import { readScoutPack, MAX_SCOUT_PACK_BYTES, SCOUT_END, SCOUT_ROOT, scoutChoices } from "../scout";
 import { scoutPracticeWeek } from "../scoutPractice";
 import { detectorLabelsMatch, SCOUT_DETECTOR_FILES, scoutPuzzleFrom } from "../scoutSource";
 
@@ -105,9 +105,8 @@ describe("Daily Scout publication", () => {
     expect(readScoutPack({ ...pack, map: "canary" })).toBeNull();
   });
 
-  it("commits seven deterministic practice sets and no Tracker days", () => {
+  it("commits seven deterministic practice sets", () => {
     const index = readDailyIndex(JSON.parse(readFileSync(resolve(assets, "index.json"), "utf8")));
-    expect(index?.days).toEqual({});
     const week = scoutPracticeWeek();
     expect(new Set(index?.practice).size).toBe(7);
     week.forEach((pack, day) => {
@@ -117,6 +116,17 @@ describe("Daily Scout publication", () => {
       expect(readScoutPack(JSON.parse(json))).toEqual(pack);
       for (const puzzle of pack.puzzles) expect(scoutChoices(puzzle.strategy)).toHaveLength(3);
     });
+  });
+
+  it("commits a valid content-addressed pack for every scheduled Tracker day", () => {
+    const index = readDailyIndex(JSON.parse(readFileSync(resolve(assets, "index.json"), "utf8")));
+    if (!index) throw new Error("Invalid Scout index");
+    for (const digest of Object.values(index.days)) {
+      const json = readFileSync(resolve(assets, "packs", digest, "pack.json"));
+      expect(json.length).toBeLessThanOrEqual(MAX_SCOUT_PACK_BYTES);
+      expect(createHash("sha256").update(json).digest("hex")).toBe(digest);
+      expect(readScoutPack(JSON.parse(json.toString("utf8")))).not.toBeNull();
+    }
   });
 });
 
