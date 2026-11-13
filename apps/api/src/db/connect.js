@@ -65,6 +65,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   supportEmailSync: import('mongodb').Collection<any>,
  *   sitePresence: import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>,
  *   matchRooms: import('mongodb').Collection<import('../services/matchRooms').MatchRoomDoc>,
+ *   dailyTally: import('mongodb').Collection<import('../services/dailyCrowd').TallyRow>,
  *   siteConfig: import('mongodb').Collection<any>,
  *   ghostExamples: import('mongodb').Collection<any>,
  *   pulseAccounts: import('mongodb').Collection,
@@ -104,6 +105,15 @@ function adminCollections(db) {
     classifierQuality: db.collection(COLLECTIONS.CLASSIFIER_QUALITY),
     adminAudit: db.collection(COLLECTIONS.ADMIN_AUDIT),
     supportEmailSync: db.collection(COLLECTIONS.SUPPORT_EMAIL_SYNC),
+  };
+}
+
+/** @param {import('mongodb').Db} db @returns {Pick<DbContext, "sitePresence"|"matchRooms"|"dailyTally">} */
+function publicLiveCollections(db) {
+  return {
+    sitePresence: db.collection(COLLECTIONS.SITE_PRESENCE),
+    matchRooms: db.collection(COLLECTIONS.MATCH_ROOMS),
+    dailyTally: db.collection(COLLECTIONS.DAILY_TALLY),
   };
 }
 
@@ -192,12 +202,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     ...adminCollections(db),
     siteConfig: db.collection(COLLECTIONS.SITE_CONFIG),
     ghostExamples: db.collection(COLLECTIONS.GHOST_EXAMPLES),
-    sitePresence: /** @type {import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>} */ (
-      db.collection(COLLECTIONS.SITE_PRESENCE)
-    ),
-    matchRooms: /** @type {import('mongodb').Collection<import('../services/matchRooms').MatchRoomDoc>} */ (
-      db.collection(COLLECTIONS.MATCH_ROOMS)
-    ),
+    ...publicLiveCollections(db),
     coaching: db.collection(COLLECTIONS.COACHING),
     pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
     pulseCharacterLinks: db.collection(COLLECTIONS.PULSE_CHARACTER_LINKS),
@@ -268,7 +273,7 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
     targets.set(
       ev.requestId,
       { collection: typeof target === "string" ? target : "",
-        private: PRIVATE_COMMENTS.has(ev.command?.comment) },
+        private: target === COLLECTIONS.DAILY_TALLY || PRIVATE_COMMENTS.has(ev.command?.comment) },
     );
     // Bound the map so a burst of long-running commands can't grow it
     // unchecked if a terminal event is ever missed.
@@ -326,6 +331,18 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
 async function ensureBrowserIngestDailyIndexes(ctx) {
   await ctx.browserIngestDaily.createIndex({ userId: 1, day: 1 }, { unique: true });
   await ctx.browserIngestDaily.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+}
+
+/** @param {DbContext} ctx */
+async function ensurePublicLiveIndexes(ctx) {
+  // Presence queries enforce expiry independently of MongoDB's TTL sweep.
+  await ctx.sitePresence.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await ctx.sitePresence.createIndex({ lastSeenAt: -1, identityKey: 1 });
+  await ctx.matchRooms.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await ctx.matchRooms.createIndex({ slot: 1 }, { unique: true, sparse: true });
+  await ctx.matchRooms.createIndex({ creationDigest: 1 }, { unique: true });
+  await ctx.dailyTally.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await ctx.dailyTally.createIndex({ day: 1, pack: 1 });
 }
 
 /**
@@ -670,14 +687,7 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.deviceTokens.createIndex({ userId: 1, lastSeenAt: -1 });
   await ctx.deviceTokens.createIndex({ revokedAt: 1, lastSeenAt: -1 });
 
-  // Current browser presence is short-lived. Queries also enforce expiry so
-  // MongoDB's asynchronous TTL sweep can never inflate the public counter.
-  await ctx.sitePresence.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-  await ctx.sitePresence.createIndex({ lastSeenAt: -1, identityKey: 1 });
-  await ctx.matchRooms.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-  await ctx.matchRooms.createIndex({ slot: 1 }, { unique: true, sparse: true });
-  await ctx.matchRooms.createIndex({ creationDigest: 1 }, { unique: true });
-
+  await ensurePublicLiveIndexes(ctx);
   await ensureBrowserIngestDailyIndexes(ctx);
 
   await ctx.overlayTokens.createIndex({ token: 1 }, { unique: true });

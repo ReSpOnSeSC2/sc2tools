@@ -138,6 +138,14 @@ describe("attachSlowQueryLogging", () => {
   });
 });
 
+test("failed Daily tally commands keep receipt details out of diagnostics", () => {
+  const client = new EventEmitter(), logger = makeLogger();
+  attachSlowQueryLogging(client, logger, 100);
+  client.emit("commandStarted", { requestId: 1, commandName: "update", command: { update: "daily_tally" } });
+  client.emit("commandFailed", { requestId: 1, commandName: "update", duration: 10, failure: new Error("private-receipt") });
+  expect(logger.warns[0].fields).toEqual({ commandName: "update", collection: "daily_tally", durationMs: 10, code: "mongo_command_failed" });
+});
+
 describe("attachSlowQueryLogging and typed search (ADR 0069 amendment)", () => {
   test.each([
     ["aggregate", "games", "sc2tools-replay-search-v1"],

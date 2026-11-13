@@ -36,6 +36,7 @@ const GDPR_CLASSIFICATION = Object.freeze({
   COMMUNITY_REPORTS: "purge_only", USER_BACKUPS: "user_scoped", BACKUP_RESTORE_STAGING: "ttl_ephemeral",
   PENDING_IDENTITY_DELETIONS: "ttl_ephemeral", ARCADE_LEADERBOARD: "purge_only", ADMIN_EVENTS: "purge_only",
   SUPPORT_EMAIL_SYNC: "global", SITE_PRESENCE: "ttl_ephemeral", MATCH_ROOMS: "ttl_ephemeral", COACHING: "user_scoped",
+  DAILY_TALLY: "ttl_ephemeral",
   PULSE_ACCOUNTS: "global", PULSE_CHARACTER_LINKS: "global", PLAYER_CHANNELS: "purge_only", PLAYER_IDENTITIES: "global",
   PLAYER_IDENTITY_SUBMISSIONS: "purge_only", PLAYER_IDENTITY_DIRECTORY: "global", REVIEW_REQUESTS: "user_scoped",
   REVIEW_COMMENTS: "user_scoped", REVIEW_KARMA_EVENTS: "purge_only", REVIEW_BLOCKS: "purge_only", NOTIFICATIONS: "purge_only",

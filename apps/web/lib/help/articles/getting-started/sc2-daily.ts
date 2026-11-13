@@ -9,7 +9,7 @@ const article: HelpArticle = {
   signedInOnly: false,
   order: 31,
   keywords: ["daily", "arcade", "fight", "trade", "streak"],
-  updated: "2026-11-12",
+  updated: "2026-11-13",
   related: ["arcade", "getting-started"],
   body: [
     { type: "heading", text: "Play five fights", anchor: "play" },
@@ -18,6 +18,9 @@ const article: HelpArticle = {
     { type: "heading", text: "Keep a streak and share your score", anchor: "share" },
     { type: "paragraph", text: "Everyone gets the same set for the UTC day. When a recorded set is unavailable, the practice week rotates through sample fights. Recorded sets and practice sets have separate streaks." },
     { type: "paragraph", text: "Completing all five fights saves your score and streak in this browser. Copy your result to share your score without revealing the answers." },
+    { type: "heading", text: "See how the crowd called each fight", anchor: "crowd" },
+    { type: "paragraph", text: "After finishing today's five recorded fights, choose See crowd split to send your calls anonymously. The split appears at 20 votes. You can check again before midnight UTC without adding another vote. Practice sets keep your calls on this device." },
+    { type: "paragraph", text: "Copy a fight link to let someone play that recorded fight before seeing the result. Playing one shared fight leaves the daily score and streak unchanged." },
   ],
 };
 

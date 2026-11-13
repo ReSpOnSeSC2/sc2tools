@@ -42,6 +42,7 @@ const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|toke
 const SPATIAL_PATH = /^\/v1\/spatial\//iu;
 const STREAM_VIEWER_PUBLIC = /^\/(?:v1\/)?public\/players\/[^/]+\/live\/?$/i;
 const STREAM_VIEWER_OWNER = /^\/(?:v1\/)?me\/stream-viewer\/?$/i;
+const DAILY_CALLS = /^\/(?:v1\/)?daily\/calls\/?$/i;
 const OAUTH_CALLBACK_PATH =
   /^\/v1\/integrations\/(?:twitch|kick|youtube)\/callback\/?$/iu;
 const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set([
@@ -63,11 +64,17 @@ function streamViewerLogPath(value) {
 /** @param {unknown} value */
 function isStreamViewerRequest(value) { return streamViewerLogPath(value) !== null; }
 
+/** @param {unknown} value */
+function isDailyCallsRequest(value) {
+  return typeof value === "string" && DAILY_CALLS.test(value.split(/[?#]/u, 1)[0].replace(/^https?:\/\/[^/]+(?=\/)/i, ""));
+}
+
 /** @param {string} raw */
 function privateOperationalPath(raw) {
   if (isDiscordInteractionsRequest(raw)) return "/v1/discord/interactions";
   if (isReplayDownloadBatchPath(raw)) return "/v1/replays/download-batch";
   if (isPrivateSearchPath(raw)) return privateSearchLogUrl(raw);
+  if (isDailyCallsRequest(raw)) return "/v1/daily/calls";
   return streamViewerLogPath(raw);
 }
 
@@ -122,9 +129,9 @@ function sanitiseRequestUrl(value) {
  * @returns {Record<string, unknown>}
  */
 function sanitiseRequestForLog(req) {
-  if (isDiscordInteractionsRequest(req.originalUrl || req.url)) {
-    return { method: req.method, url: "/v1/discord/interactions" };
-  }
+  const raw = req.originalUrl || req.url;
+  if (isDailyCallsRequest(raw)) return { method: req.method, url: "/v1/daily/calls" };
+  if (isDiscordInteractionsRequest(raw)) return { method: req.method, url: "/v1/discord/interactions" };
   /** @type {Record<string, string|string[]>} */
   const headers = {};
   for (const name of SAFE_HEADER_NAMES) {
@@ -136,7 +143,7 @@ function sanitiseRequestForLog(req) {
   return {
     id: req.id,
     method: req.method,
-    url: sanitiseRequestUrl(req.originalUrl || req.url),
+    url: sanitiseRequestUrl(raw),
     headers,
     remoteAddress: req.socket?.remoteAddress,
     remotePort: req.socket?.remotePort,
@@ -152,13 +159,15 @@ function sanitiseRequestForLog(req) {
  * @returns {Record<string, unknown>}
  */
 function sanitiseResponseForLog(res) {
+  const statusCode = res.headersSent ? res.statusCode : null;
+  if (isDailyCallsRequest(res.req?.url)) return { statusCode };
   /** @type {Record<string, string|string[]|number>} */
   const headers = {};
   for (const name of SAFE_RESPONSE_HEADER_NAMES) {
     const value = res.getHeader(name);
     if (typeof value === "string" || typeof value === "number" || Array.isArray(value)) headers[name] = value;
   }
-  return { statusCode: res.headersSent ? res.statusCode : null, headers };
+  return { statusCode, headers };
 }
 
 module.exports = {
@@ -167,4 +176,5 @@ module.exports = {
   sanitiseResponseForLog,
   sanitiseRequestUrl,
   isStreamViewerRequest,
+  isDailyCallsRequest,
 };

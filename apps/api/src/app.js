@@ -269,6 +269,8 @@ const { buildMlRouter } = require("./routes/ml");
 const { buildAgentVersionRouter } = require("./routes/agentVersion");
 const { buildSiteStatsRouter } = require("./routes/siteStats");
 const { buildMatchRoomsRouter } = require("./routes/matchRooms");
+const { buildDailyCrowdRouter } = require("./routes/dailyCrowd");
+const { DailyCrowdService } = require("./services/dailyCrowd");
 const { buildCommunityRouter } = require("./routes/community");
 const { buildSeasonsRouter } = require("./routes/seasons");
 const { buildClerkWebhookRouter } = require("./routes/clerkWebhook");
@@ -1211,6 +1213,19 @@ function withOwnerDataServices(services, deps, gameDetails) {
  * @param {AppDeps} deps
  * @param {import('express').RequestHandler} auth
  * @param {import('./services/siteStats').SiteStatsService} siteStats
+ */
+function mountLimitedPublicRoutes(app, deps, auth, siteStats) {
+  // These routes own their admission limits and body parsers.
+  app.use(SERVICE.ROUTE_PREFIX, buildSiteStatsRouter({ siteStats, auth }));
+  app.use(SERVICE.ROUTE_PREFIX, buildMatchRoomsRouter(new MatchRoomsService(deps.db.matchRooms)));
+  app.use(SERVICE.ROUTE_PREFIX, buildDailyCrowdRouter(new DailyCrowdService(deps.db.dailyTally)));
+}
+
+/**
+ * @param {import('express').Express} app
+ * @param {AppDeps} deps
+ * @param {import('express').RequestHandler} auth
+ * @param {import('./services/siteStats').SiteStatsService} siteStats
  * @param {ReturnType<typeof createDiscordBuildCache>} discordBuildCache
  */
 function applyBaseMiddleware(app, deps, auth, siteStats, discordBuildCache) {
@@ -1236,11 +1251,7 @@ function applyBaseMiddleware(app, deps, auth, siteStats, discordBuildCache) {
   // admission bucket. No browser or account context is needed here.
   app.use(SERVICE.ROUTE_PREFIX, buildDiscordInteractionsRouter(deps.config.discordInteractions, discordBuildCache));
   app.use(requestId);
-  // Presence traffic comes through the web server's shared egress IP. Its
-  // own signed-visitor/issuance limits and 1KB parser avoid consuming the
-  // ordinary API's per-IP bucket for every visible browser tab.
-  app.use(SERVICE.ROUTE_PREFIX, buildSiteStatsRouter({ siteStats, auth }));
-  app.use(SERVICE.ROUTE_PREFIX, buildMatchRoomsRouter(new MatchRoomsService(deps.db.matchRooms)));
+  mountLimitedPublicRoutes(app, deps, auth, siteStats);
   const isSignedProviderWebhook = (/** @type {import('express').Request} */ req) =>
     req.method === "POST"
     && (
