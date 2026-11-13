@@ -50,8 +50,8 @@ function DiscordSettingsPanel() {
   }
   const data = state.data;
   return <Section id="discord" className="scroll-mt-28" title="Post to Discord" description="Choose which results, summaries and ladder milestones to post to a channel in your Discord server. Turn the channel on when it is ready.">
-    {state.error && !data ? <RequestError error={state.error} onRetry={() => state.mutate()} /> : !data ? <Skeleton rows={4} /> : <div className="space-y-4">
-      {failure ? <RequestError error={failure.error} onRetry={() => run(failure.retry)} /> : null}
+    {state.error && !data ? <RequestError className="[&_button]:min-h-11" error={state.error} onRetry={() => state.mutate()} /> : !data ? <Skeleton rows={4} /> : <div className="space-y-4">
+      {failure ? <RequestError className="[&_button]:min-h-11" error={failure.error} onRetry={() => run(failure.retry)} /> : null}
       {!data.available ? <Card><p className="text-caption text-text-muted">Posting to Discord isn&apos;t available on this server yet.</p></Card> : <>
         {data.hooks.map((hook) => <HookCard key={hook.id} hook={hook} busy={busy} run={run} call={call}
           privateEmbeds={data.privateEmbeds === true} />)}
@@ -74,10 +74,10 @@ function ConnectForm({ busy, onConnect }: { busy: boolean; onConnect: (url: stri
   }
   return <Card><form onSubmit={submit} className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] sm:items-end">
     <Field label="Webhook URL" hint="Starts with https://discord.com/api/webhooks/">
-      <Input type="url" inputMode="url" autoComplete="off" spellCheck={false} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://discord.com/api/webhooks/…" required />
+      <Input className="min-h-11" type="url" inputMode="url" autoComplete="off" spellCheck={false} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://discord.com/api/webhooks/…" required />
     </Field>
     <Field label="Name (optional)" hint="Shown only to you">
-      <Input value={label} maxLength={40} onChange={(e) => setLabel(e.target.value)} placeholder="Clan chat" />
+      <Input className="min-h-11" value={label} maxLength={40} onChange={(e) => setLabel(e.target.value)} placeholder="Clan chat" />
     </Field>
     <Button type="submit" className="min-h-11" disabled={busy || !url.trim()}>Connect channel</Button>
   </form></Card>;
@@ -104,7 +104,7 @@ function HookCard({ hook, busy, run, call, privateEmbeds }: { hook: DiscordHook;
   return <Card>
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0"><h3 className="break-words text-body font-semibold text-text">{hook.label}</h3><p className="text-caption text-text-muted">Webhook ending in …{hook.last4}{hook.lastPostAt ? ` · last post ${formatDateTime(new Date(hook.lastPostAt))}` : ""}</p></div>
-      <div className="flex items-center gap-3">{status}<Toggle checked={hook.enabled} disabled={busy || (!hook.enabled && (!hook.previewed || !privateEmbeds))} onChange={(enabled) => void patch({ enabled })} label={`Post to ${hook.label}`} /></div>
+      <div className="flex min-h-11 items-center gap-3">{status}<Toggle className="before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']" checked={hook.enabled} disabled={busy || (!hook.enabled && (!hook.previewed || !privateEmbeds))} onChange={(enabled) => void patch({ enabled })} label={`Post to ${hook.label}`} /></div>
     </div>
     {!hook.previewed ? <p className="mt-2 text-caption text-text-muted">Preview the posts below before turning this channel on.</p> : null}
     {privateEmbeds ? <HookChoices hook={hook} busy={busy} patch={patch} /> :
