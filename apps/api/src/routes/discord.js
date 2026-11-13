@@ -30,17 +30,22 @@ function buildDiscordRouter(deps) {
   });
   /** @param {import('express').Request} req */
   const body = (req) => (req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {});
+  /** @param {(req: import('express').Request, owner: string) => Promise<unknown>} handler */
+  const browserOwned = (handler) => owned(async (req, owner) => {
+    if (req.auth?.source !== "clerk") {
+      throw Object.assign(new Error("Sign in on the website to manage Discord posts."), { status: 403, code: "browser_session_required" });
+    }
+    return handler(req, owner);
+  });
   const base = "/me/integrations/discord";
   router.get(base, deps.auth, owned((_req, owner) => deps.discord.list(owner)));
-  router.post(`${base}/hooks`, deps.auth, owned((req, owner) => deps.discord.create(owner, body(req))));
-  router.patch(`${base}/hooks/:id`, deps.auth, owned((req, owner) => deps.discord.update(owner, String(req.params.id), body(req))));
-  router.delete(`${base}/hooks/:id`, deps.auth, owned((req, owner) => deps.discord.remove(owner, String(req.params.id))));
-  router.post(`${base}/hooks/:id/test`, deps.auth, owned((req, owner) => deps.discord.test(owner, String(req.params.id))));
-  router.post(`${base}/hooks/:id/preview`, deps.auth, owned((req, owner) => deps.discord.preview(owner, String(req.params.id), body(req).kind)));
-  router.post(`${base}/hooks/:id/battle-report`, deps.auth, owned((req, owner) => {
-    if (req.auth?.source !== "clerk") throw Object.assign(new Error("Sign in on the website to post a report."), { status: 403, code: "browser_session_required" });
-    return deps.discord.queueBattleReport(owner, String(req.params.id), body(req));
-  }));
+  router.post(`${base}/hooks`, deps.auth, browserOwned((req, owner) => deps.discord.create(owner, body(req))));
+  router.patch(`${base}/hooks/:id`, deps.auth, browserOwned((req, owner) => deps.discord.update(owner, String(req.params.id), body(req))));
+  router.delete(`${base}/hooks/:id`, deps.auth, browserOwned((req, owner) => deps.discord.remove(owner, String(req.params.id))));
+  router.post(`${base}/hooks/:id/test`, deps.auth, browserOwned((req, owner) => deps.discord.test(owner, String(req.params.id))));
+  router.post(`${base}/hooks/:id/preview`, deps.auth, browserOwned((req, owner) => deps.discord.preview(owner, String(req.params.id), body(req).kind)));
+  router.post(`${base}/hooks/:id/battle-report`, deps.auth, browserOwned((req, owner) =>
+    deps.discord.queueBattleReport(owner, String(req.params.id), body(req))));
   return router;
 }
 

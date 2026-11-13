@@ -12,6 +12,7 @@ const URL_A = "https://discord.com/api/webhooks/123456789012345678/secret-token-
 let hooks: DiscordHook[];
 let available: boolean;
 let privateEmbeds: boolean;
+let loseConnectResponse: boolean;
 let requests: Array<{ path: string; method: string; body: unknown }>;
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 const mount = () => render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, shouldRetryOnError: false }}><DiscordSettings /></SWRConfig>);
@@ -27,14 +28,14 @@ function applyPatch(body: { options?: Partial<DiscordHook["options"]>; events?: 
 }
 
 beforeEach(() => {
-  hooks = []; available = true; privateEmbeds = true; requests = [];
+  hooks = []; available = true; privateEmbeds = true; loseConnectResponse = false; requests = [];
   vi.stubGlobal("fetch", vi.fn(async (raw: string, init?: RequestInit) => {
     const path = new URL(raw, "http://localhost").pathname;
     const method = init?.method || "GET";
     const body = init?.body ? JSON.parse(String(init.body)) : null;
     requests.push({ path, method, body });
     if (path.endsWith("/integrations/discord")) return json({ available, privateEmbeds, maxHooks: 3, hooks });
-    if (path.endsWith("/hooks") && method === "POST") { hooks = [hook({ label: body.label || "Discord channel" })]; return json(hooks[0]); }
+    if (path.endsWith("/hooks") && method === "POST") return connect(body.label);
     if (path.endsWith("/preview")) { hooks = [{ ...hooks[0], previewed: true }]; return json({ previews: [{ kind: "result", example: false, payload: { embeds: [{ title: "Victory · PvZ", color: 3129201, fields: [{ name: "Opponent", value: "Zerg", inline: true }] }] } }] }); }
     if (path.endsWith("/test")) return json({ result: "webhook_gone" });
     if (method === "PATCH") return applyPatch(body);
@@ -43,6 +44,15 @@ beforeEach(() => {
   }));
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+function connect(label: string) {
+  hooks = [hook({ label: label || "Discord channel" })];
+  if (loseConnectResponse) {
+    loseConnectResponse = false;
+    throw new TypeError("Network request failed");
+  }
+  return json(hooks[0]);
+}
 
 it("is unavailable without server storage", async () => {
   available = false; mount();
@@ -95,4 +105,17 @@ it("connects once and forgets the URL, keeps the channel off until previewed, an
   expect(requests.find((r) => r.method === "PATCH")?.body).toEqual({ enabled: true });
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send test" })));
   expect(await screen.findByText(/no longer exists/)).toBeTruthy();
+});
+
+it("clears the webhook URL when a lost connection response is recovered through Retry", async () => {
+  loseConnectResponse = true;
+  mount();
+  const field = await screen.findByLabelText(/Webhook URL/) as HTMLInputElement;
+  fireEvent.change(field, { target: { value: URL_A } });
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Connect channel" })));
+  expect(field.value).toBe(URL_A);
+  await act(async () => fireEvent.click(await screen.findByRole("button", { name: /retry/i })));
+  await screen.findByRole("heading", { name: "Discord channel" });
+  expect(field.value).toBe("");
+  expect(requests.filter(row => row.method === "POST" && row.path.endsWith("/hooks"))).toHaveLength(2);
 });

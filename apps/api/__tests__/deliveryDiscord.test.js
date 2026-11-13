@@ -2,6 +2,7 @@
 "use strict";
 
 const request = require("supertest");
+const { createHash } = require("node:crypto");
 
 jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 
@@ -11,6 +12,7 @@ const { DiscordWebhooksService } = require("../src/services/discordWebhooks");
 const KEY = "ab".repeat(32);
 const TOKEN = "Zx9-".repeat(17);
 const URL_A = `https://discord.com/api/webhooks/123456789012345678/${TOKEN}`;
+const hookUrl = (id) => `https://discord.com/api/webhooks/${id}/${TOKEN}`;
 let h; let discord; let calls; let responses;
 let seq = 0;
 
@@ -78,10 +80,49 @@ test("connecting validates the URL strictly, stores it encrypted and never shows
   for (const value of [created.text, (await as("ann").get("/v1/me/integrations/discord")).text, JSON.stringify(stored), JSON.stringify(await h.services.gdpr.export("u_ann"))]) {
     expect(value).not.toContain(TOKEN.slice(0, 20));
   }
-  expect((await h.services.gdpr.export("u_ann")).data.discordHooks[0]).toMatchObject({ last4: TOKEN.slice(-4), label: "Clan chat" });
-  await as("ann").post("/v1/me/integrations/discord/hooks", { url: URL_A }).expect(200);
-  await as("ann").post("/v1/me/integrations/discord/hooks", { url: URL_A }).expect(200);
-  expect((await as("ann").post("/v1/me/integrations/discord/hooks", { url: URL_A })).body.error.code).toBe("discord_hook_limit");
+  const exported = (await h.services.gdpr.export("u_ann")).data.discordHooks[0];
+  expect(exported).toMatchObject({ last4: TOKEN.slice(-4), label: "Clan chat" });
+  expect(exported).not.toHaveProperty("connectIdentity");
+  expect(exported).not.toHaveProperty("connectSlot");
+  await as("ann").post("/v1/me/integrations/discord/hooks", { url: hookUrl(12345) }).expect(200);
+  await as("ann").post("/v1/me/integrations/discord/hooks", { url: hookUrl(12346) }).expect(200);
+  expect((await as("ann").post("/v1/me/integrations/discord/hooks", { url: hookUrl(12347) })).body.error.code).toBe("discord_hook_limit");
+  const retry = await as("ann").post("/v1/me/integrations/discord/hooks", { url: URL_A, label: "Changed label" }).expect(200);
+  expect(retry.body).toMatchObject({ id: created.body.id, label: "Clan chat" });
+});
+
+test("concurrent connects keep one hook per Discord webhook and at most three slots", async () => {
+  const userId = await h.seedUser("discordconnect");
+  const name = "discordconnect";
+  const path = "/v1/me/integrations/discord/hooks";
+  const twins = await Promise.all([
+    as(name).post(path, { url: URL_A }),
+    as(name).post(path, { url: URL_A.replace("discord.com", "ptb.discordapp.com") }),
+  ]);
+  expect(twins.map(res => res.status)).toEqual([200, 200]);
+  expect(new Set(twins.map(res => res.body.id)).size).toBe(1);
+  await h.db.discordHooks.updateOne({ userId }, { $unset: { connectIdentity: "", connectSlot: "" } });
+  const legacy = await as(name).post(path, { url: URL_A }).expect(200);
+  expect(legacy.body.id).toBe(twins[0].body.id);
+  const distinct = await Promise.all([12345, 12346, 12347].map(id => as(name).post(path, { url: hookUrl(id) })));
+  expect(distinct.map(res => res.status).sort()).toEqual([200, 200, 409]);
+  expect(await h.db.discordHooks.countDocuments({ userId })).toBe(3);
+});
+
+test("same-owner Agent credentials cannot mutate Discord disclosure or send a test", async () => {
+  const userId = await h.seedUser("discorddevice");
+  const id = await connected("discorddevice");
+  const token = `sc2d_${"d".repeat(43)}`;
+  await h.db.deviceTokens.insertOne({ userId, tokenHash: createHash("sha256").update(token).digest("hex"), revokedAt: null });
+  const path = `/v1/me/integrations/discord/hooks/${id}`;
+  const auth = `Bearer ${token}`;
+  const blocked = await request(h.app).patch(path).set("authorization", auth).send({ shareMmr: true, events: { ladderMilestone: true } }).expect(403);
+  expect(blocked.body.error.code).toBe("browser_session_required");
+  await request(h.app).post(`${path}/test`).set("authorization", auth).expect(403);
+  const saved = await h.db.discordHooks.findOne({ _id: id });
+  expect(saved.mmrConsent).toBeUndefined();
+  expect(saved.events.ladderMilestone).toBe(false);
+  expect(calls).toHaveLength(0);
 });
 
 test("a channel turns on only after its posts were previewed; previews hide opponent names by default", async () => {
@@ -335,6 +376,33 @@ test("weekly Discord receipts prevent replay after the first post was drained", 
   expect(receipt.expiresAt).toBeInstanceOf(Date);
 });
 
+test("retries a failed Discord enqueue from the stored bell row without repeating socket or push delivery", async () => {
+  const name = "discordsinkretry";
+  const userId = await promotionRecipient(name);
+  const hook = await h.db.discordHooks.findOne({ userId });
+  await as(name).patch(`/v1/me/integrations/discord/hooks/${hook._id}`, { events: { ladderMilestone: true } }).expect(200);
+  await h.db.users.updateOne({ userId }, { $set: { "preferences.notifications.milestones": true } });
+  const notifications = h.services.notifications;
+  const socket = jest.spyOn(notifications, "_push");
+  const push = jest.spyOn(notifications.push, "deliver");
+  const insert = jest.spyOn(h.db.discordOutbox, "insertOne").mockRejectedValueOnce(new Error("fixture lost outbox write"));
+  const input = { kind: "moment.win_streak", title: "5 wins in a row", eventKey: "stored-streak" };
+  try {
+    await expect(notifications.notify(userId, input)).rejects.toThrow("fixture lost outbox write");
+    expect(await h.db.notifications.countDocuments({ userId, discordPending: true })).toBe(1);
+    expect(await h.db.discordOutbox.countDocuments({ userId })).toBe(0);
+    await expect(notifications.notify(userId, { ...input, title: "10 wins in a row" })).resolves.toBeNull();
+    await expect(notifications.notify(userId, input)).resolves.toBeNull();
+    expect(await h.db.notifications.countDocuments({ userId })).toBe(1);
+    expect(await h.db.notifications.countDocuments({ userId, discordPending: true })).toBe(0);
+    expect(await h.db.discordOutbox.countDocuments({ userId })).toBe(1);
+    expect(await h.db.discordOutbox.findOne({ userId })).toMatchObject({ payload: { embeds: [{ title: "5 wins in a row" }] } });
+    expect(socket).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledTimes(2);
+  } finally { socket.mockRestore(); push.mockRestore(); insert.mockRestore(); }
+});
+
 
 test("ranked ingest uses committed eligibility and excludes raw build names and private ratings", async () => {
   const userId = await promotionRecipient("rankupload");
@@ -516,4 +584,26 @@ test("a battle report revoked during the game lookup cannot be dispatched", asyn
   expect(receipt).toMatchObject({ status: "dropped", dedupeKey: queued.dedupeKey });
   expect(receipt.shareToken).toBeUndefined();
   expect(receipt.payload).toBeUndefined();
+});
+
+test("disabling a channel during the final share read prevents the provider handoff", async () => {
+  const name = "discordlateoff";
+  const userId = await promotionRecipient(name);
+  const hook = await h.db.discordHooks.findOne({ userId });
+  const path = `/v1/me/integrations/discord/hooks/${hook._id}`;
+  await as(name).patch(path, { options: { replayLink: true } }).expect(200);
+  const ranked = game(userId);
+  const token = "BattleReport6543";
+  await h.db.games.insertOne(ranked);
+  await h.db.gameShares.insertOne({ _id: token, userId, gameId: ranked.gameId, revokedAt: null });
+  expect(await discord.queueBattleReport(userId, hook._id, { token })).toEqual({ queued: 1 });
+  const queued = await h.db.discordOutbox.findOne({ userId });
+  const findShare = h.db.gameShares.findOne.bind(h.db.gameShares);
+  const read = jest.spyOn(h.db.gameShares, "findOne").mockImplementation(async (filter, options) => {
+    const share = await findShare(filter, options);
+    if (options?.projection?._id === 1) await as(name).patch(path, { enabled: false }).expect(200);
+    return share;
+  });
+  try { expect(await discord.deliverRow(queued)).toBe("dropped"); } finally { read.mockRestore(); }
+  expect(calls).toHaveLength(0);
 });

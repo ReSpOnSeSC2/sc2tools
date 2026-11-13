@@ -7,6 +7,9 @@
 - **Ladder milestones from your inbox** starts off per channel. Only stored ladder bell rows with a recognized kind and exact safe headline can enqueue. Dispatch rechecks the private milestone preference and mute list. Existing promotion, lifetime peak, weekly and completed-session events keep their own keys. A game can set both a season and lifetime peak. Both post only when their separate event settings are enabled.
 - Manual battle report posting retains the active public share link. The API checks ownership and current consent and supplies fixed embed text. Existing clients may still send a headline and paragraph, which are ignored.
 - Pending rows created before this policy lack the embed policy marker. The new drainer retires them and keeps their dedupe receipts until the existing TTL. Already delivered Discord messages remain on Discord.
+- Discord changes and test posts require a browser session. Connecting the same webhook again returns the existing channel without replacing its label, credential or preferences. A keyed per-owner identity and unique slots enforce retry and capacity rules. Older channels still count toward capacity.
+- A stored bell row records whether its Discord enqueue is pending. Retrying the event can resume the database enqueue without repeating socket or device delivery. The outbox still deduplicates per channel.
+- Dispatch reads channel consent after checking the share and notification preference. An HTTP request already handed to Discord cannot be recalled.
 
 ## Rollout
 

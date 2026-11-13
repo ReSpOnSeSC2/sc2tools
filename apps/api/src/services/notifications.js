@@ -113,7 +113,7 @@ class NotificationsService {
     const milestone = input.kind.startsWith("moment.");
     if (!user || prefs.muted.includes(input.kind) || (milestone && !prefs.milestones)) return null;
     const eventKey = deliveryKey(input.eventKey);
-    if (eventKey && await this.db.notifications.findOne({ userId, deliveryKeys: eventKey }, { projection: { _id: 1 } })) return null;
+    if (await this._resumeStoredEvent(userId, input.kind, eventKey)) return null;
     const now = new Date();
     const href = safeHref(input.href);
     /** @type {Record<string, any> | null} */
@@ -135,14 +135,14 @@ class NotificationsService {
           createdAt: now,
           ...(input.groupKey ? { groupKey: String(input.groupKey).slice(0, GROUP_KEY_MAX) } : {}),
           ...(eventKey ? { deliveryKeys: [eventKey] } : {}),
+          ...(milestone && this.discord ? { discordPending: true } : {}),
         },
         COLLECTIONS.NOTIFICATIONS,
       );
       try {
         await this.db.notifications.insertOne(row);
       } catch (err) {
-        if (eventKey && isDuplicateKey(err)
-          && await this.db.notifications.findOne({ userId, deliveryKeys: eventKey }, { projection: { _id: 1 } })) return null;
+        if (isDuplicateKey(err) && await this._resumeStoredEvent(userId, input.kind, eventKey)) return null;
         // Lost a race with a concurrent first event for the same group:
         // the other writer created the unread row, so fold into it.
         if (!(input.groupKey && isDuplicateKey(err))) throw err;
@@ -152,18 +152,27 @@ class NotificationsService {
     }
     if (!row) return null;
     // The shared socket room includes OBS tokens. The bell refetches details over authenticated REST.
-    this._deliverStored(userId, row, input.kind, milestone);
+    this._push(userId, milestone ? { kind: "refresh" } : row);
+    this._notifyDevices(userId, row, input.kind);
+    await this._enqueueMilestone(userId, row);
     return row;
   }
 
-  /** @param {string} userId @param {Record<string, any>} row @param {string} kind @param {boolean} milestone */
-  _deliverStored(userId, row, kind, milestone) {
-    this._push(userId, milestone ? { kind: "refresh" } : row);
-    this._notifyDevices(userId, row, kind);
-    if (milestone) {
-      void this.discord?.onLadderMilestone(userId, /** @type {{kind:string,title:string,_id:string}} */ (row))
-        .catch(() => this.logger?.warn("discord_milestone_enqueue_failed"));
-    }
+  /** Retry only the pending sink for a stored event. Socket and push were
+   * handled by the original writer. @param {string} userId @param {string} kind @param {string|null} eventKey */
+  async _resumeStoredEvent(userId, kind, eventKey) {
+    if (!eventKey) return false;
+    const row = await this.db.notifications.findOne({ userId, deliveryKeys: eventKey },
+      { projection: { _id: 1, kind: 1, title: 1, discordPending: 1 } });
+    if (row?.kind === kind) await this._enqueueMilestone(userId, row);
+    return Boolean(row);
+  }
+
+  /** @param {string} userId @param {Record<string, any>} row */
+  async _enqueueMilestone(userId, row) {
+    if (!this.discord || row.discordPending !== true) return;
+    await this.discord.onLadderMilestone(userId, /** @type {{kind:string,title:string,_id:string}} */ (row));
+    await this.db.notifications.updateOne({ _id: row._id, userId }, { $unset: { discordPending: "" } });
   }
 
   /** Device delivery uses the stored identity and the triggering kind, including after a fold.

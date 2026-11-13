@@ -11,6 +11,7 @@ const article: HelpArticle = {
       "In Discord, open **Server Settings → Integrations → Webhooks**. You need the Manage Webhooks permission.",
       "Choose **New Webhook**, pick the channel, then press **Copy Webhook URL**.",
       "In SC2 Tools, open [Settings → Integrations](/settings?tab=integrations), paste the URL, give it a name only you see, and press **Connect channel**.",
+      "Connecting the same webhook again keeps your existing channel and settings. If you replaced its URL in Discord, remove the old connection before pasting the new URL.",
       "Press **Preview posts** to see exactly what each kind of post will look like, then switch the channel on. **Send test** posts a short hello to check the connection.",
     ] },
     { type: "paragraph", text: "Only Discord webhook links are accepted. The link is stored encrypted and shown afterwards only as its last four characters. It is never included in your data export. You can connect up to three channels." },

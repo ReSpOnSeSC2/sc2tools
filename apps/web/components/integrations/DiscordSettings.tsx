@@ -44,8 +44,16 @@ function DiscordSettingsPanel() {
     if (busy) return false;
     setBusy(true);
     setFailure(null);
-    try { await work(); await state.mutate(); return true; }
-    catch (cause) { setFailure({ error: cause as ClientApiError, retry: work }); return false; }
+    let retry = work;
+    try {
+      await work();
+      retry = state.mutate;
+      await retry();
+      return true;
+    } catch (cause) {
+      setFailure({ error: cause as ClientApiError, retry });
+      return retry !== work;
+    }
     finally { setBusy(false); }
   }
   const data = state.data;
@@ -55,7 +63,10 @@ function DiscordSettingsPanel() {
       {!data.available ? <Card><p className="text-caption text-text-muted">Posting to Discord isn&apos;t available on this server yet.</p></Card> : <>
         {data.hooks.map((hook) => <HookCard key={hook.id} hook={hook} busy={busy} run={run} call={call}
           privateEmbeds={data.privateEmbeds === true} />)}
-        {data.hooks.length < data.maxHooks ? <ConnectForm busy={busy} onConnect={(url, label) => run(() => call("/v1/me/integrations/discord/hooks", { method: "POST", body: JSON.stringify({ url, label }) }))} />
+        {data.hooks.length < data.maxHooks ? <ConnectForm busy={busy} onConnect={(url, label, clear) => run(async () => {
+          await call("/v1/me/integrations/discord/hooks", { method: "POST", body: JSON.stringify({ url, label }) });
+          clear();
+        })} />
           : <p className="text-caption text-text-muted">You have connected the maximum of {data.maxHooks} channels.</p>}
       </>}
       <p className="text-caption text-text-muted">Create a webhook in Discord under Server Settings, Integrations, Webhooks, then Copy Webhook URL. <LazyHelpLink slug="discord">Post your games to Discord</LazyHelpLink></p>
@@ -63,14 +74,14 @@ function DiscordSettingsPanel() {
   </Section>;
 }
 
-function ConnectForm({ busy, onConnect }: { busy: boolean; onConnect: (url: string, label: string) => Promise<boolean> }) {
+function ConnectForm({ busy, onConnect }: { busy: boolean; onConnect: (url: string, label: string, clear: () => void) => Promise<boolean> }) {
   const [url, setUrl] = useState("");
   const [label, setLabel] = useState("");
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!url.trim()) return;
     // The URL leaves the page once; it is never kept after a successful connect.
-    if (await onConnect(url.trim(), label.trim())) { setUrl(""); setLabel(""); }
+    await onConnect(url.trim(), label.trim(), () => { setUrl(""); setLabel(""); });
   }
   return <Card><form onSubmit={submit} className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] sm:items-end">
     <Field label="Webhook URL" hint="Starts with https://discord.com/api/webhooks/">

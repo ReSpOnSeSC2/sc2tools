@@ -10,7 +10,7 @@ const { LIVE_GAME_MATCH, STATS_GAME_MATCH } = require("../util/gameVisibility");
 const { SHARE_TOKEN_RE } = require("./gameShares");
 const { bandFromId } = require("../util/leagueBands");
 const { sanitizeNotificationPrefs } = require("./notificationPrefs");
-const { buildJobLock } = require("../util/jobLock");
+const { buildJobLock, isDuplicateKey } = require("../util/jobLock");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { encryptSecret, decryptSecret, parseTokenEncryptionKey } = require("./platformCredentialVault");
 const templates = require("./discordTemplates");
@@ -67,6 +67,14 @@ function validWebhookUrl(raw) {
   if (typeof raw !== "string") return null;
   const value = raw.trim();
   return value.length <= 300 && URL_RE.test(value) ? value : null;
+}
+
+/** Discord aliases and regenerated credentials can refer to the same webhook. @param {string} url */
+function webhookId(url) { return url.split("/")[5]; }
+
+/** @param {Buffer} key @param {string} userId @param {string} id */
+function webhookIdentity(key, userId, id) {
+  return crypto.createHmac("sha256", key).update(JSON.stringify(["discord-hook:v1", userId, id])).digest("hex");
 }
 
 /** @param {unknown} raw */
@@ -204,18 +212,47 @@ class DiscordWebhooksService {
     if (!this.key) throw discordError(503, "discord_unavailable", "Posting to Discord is not available on this server yet.");
     const url = validWebhookUrl(body.url);
     if (!url) throw discordError(400, "invalid_webhook_url", "Paste a Discord webhook URL: https://discord.com/api/webhooks/… (Server Settings → Integrations → Webhooks → Copy Webhook URL).");
-    if (await this.db.discordHooks.countDocuments({ userId }, { limit: MAX_HOOKS }) >= MAX_HOOKS) {
-      throw discordError(409, "discord_hook_limit", `You can connect up to ${MAX_HOOKS} Discord channels. Remove one first.`);
+    const id = webhookId(url);
+    const identity = webhookIdentity(this.key, userId, id);
+    const hook = this.newHook(userId, url, body.label, identity);
+    // Separate unique keys guard the webhook identity and the owner's three
+    // slots. Concurrent writers retry from the newly committed state.
+    for (let attempt = 0; attempt <= MAX_HOOKS; attempt += 1) {
+      const hooks = await this.db.discordHooks.find({ userId }).sort({ createdAt: 1 }).limit(MAX_HOOKS).toArray();
+      const existing = hooks.find(row => this.matchesWebhook(row, identity, id));
+      if (existing) return publicHook(existing);
+      if (hooks.length >= MAX_HOOKS) throw discordError(409, "discord_hook_limit", `You can connect up to ${MAX_HOOKS} Discord channels. Remove one first.`);
+      const used = new Set(hooks.map(row => row.connectSlot));
+      const connectSlot = [0, 1, 2].find(slot => !used.has(slot));
+      try {
+        await this.db.discordHooks.insertOne({ ...hook, connectSlot });
+        return publicHook(hook);
+      } catch (error) { if (!isDuplicateKey(error)) throw error; }
     }
+    throw discordError(409, "discord_connect_busy", "Discord channels changed. Try connecting again.");
+  }
+
+  /** @param {any} row @param {string} identity @param {string} id */
+  matchesWebhook(row, identity, id) {
+    if (row.connectIdentity === identity) return true;
+    // Older records and records created under another vault key have no
+    // comparable identity. Check only the bounded list of the owner's rows.
+    try {
+      const url = validWebhookUrl(decryptSecret(row.enc, /** @type {Buffer} */ (this.key), this.aad(row.userId, row._id)));
+      return url !== null && webhookId(url) === id;
+    } catch { return false; }
+  }
+
+  /** @param {string} userId @param {string} url @param {unknown} label @param {string} connectIdentity */
+  newHook(userId, url, label, connectIdentity) {
     const hookId = `dh_${crypto.randomBytes(12).toString("base64url")}`;
     const now = new Date(this.now());
-    const hook = stampVersion({
-      _id: hookId, userId, label: cleanLabel(body.label), enc: encryptSecret(url, this.key, this.aad(userId, hookId)), last4: url.slice(-4),
+    return stampVersion({
+      _id: hookId, userId, connectIdentity, label: cleanLabel(label),
+      enc: encryptSecret(url, /** @type {Buffer} */ (this.key), this.aad(userId, hookId)), last4: url.slice(-4),
       events: cleanEvents(null), options: { ...templates.DEFAULT_OPTIONS }, enabled: false, status: "active", disabledReason: null,
       failureCount: 0, previewedAt: null, enabledAt: null, lastPostAt: null, lastResult: null, createdAt: now, updatedAt: now,
     }, COLLECTIONS.DISCORD_HOOKS);
-    await this.db.discordHooks.insertOne(hook);
-    return publicHook(hook);
   }
 
   /** @param {string} userId @param {string} hookId @param {Record<string, unknown>} patch */
@@ -378,14 +415,14 @@ class DiscordWebhooksService {
     await this.enqueue(userId, "weekly", `weekly:${report.week}`, (options) => templates.weeklyMessage(report, options));
   }
 
-  /** Queue only a stored, allow-listed bell headline.
+  /** Queue a stored bell headline under the caller's user-data lease.
    * @param {string} userId @param {{kind:string,title:string,_id:string}} row */
   async onLadderMilestone(userId, row) {
     if (!this.available) return;
     const headline = templates.ladderHeadline(row.kind, row.title);
     if (!headline) return;
-    await this.withLease(userId, () => this.enqueue(userId, "ladderMilestone", `ladder:${row._id}`,
-      options => templates.ladderMessage(row.kind, headline, options), { bellKind: row.kind }));
+    await this.enqueue(userId, "ladderMilestone", `ladder:${row._id}`,
+      options => templates.ladderMessage(row.kind, headline, options), { bellKind: row.kind });
   }
 
   /** The active share grants access to the report. Embed text is fixed.
@@ -510,15 +547,15 @@ class DiscordWebhooksService {
 
   /** @param {any} row @param {string|undefined} gameId */
   async deliveryHook(row, gameId) {
-    const [hook, user, share] = await Promise.all([
-      this.db.discordHooks.findOne({ _id: row.hookId, userId: row.userId }),
-      this.db.users.findOne({ userId: row.userId, _gdprMutation: { $exists: false } },
-        { projection: { _id: 0, "preferences.notifications": 1 } }),
-      gameId ? this.db.gameShares.findOne({ _id: row.shareToken, userId: row.userId, gameId, revokedAt: null },
-        { projection: { _id: 1 } }) : null,
-    ]);
-    if (!user || (row.shareToken && !share) || !this.canDeliver(row, hook) || !bellStillAllowed(row.bellKind, user)) return null;
-    return hook;
+    if (row.shareToken && !await this.db.gameShares.findOne(
+      { _id: row.shareToken, userId: row.userId, gameId, revokedAt: null }, { projection: { _id: 1 } })) return null;
+    const user = await this.db.users.findOne({ userId: row.userId, _gdprMutation: { $exists: false } },
+      { projection: { _id: 0, "preferences.notifications": 1 } });
+    if (!user || !bellStillAllowed(row.bellKind, user)) return null;
+    // Check channel consent last, after reads that could outlast a settings
+    // change. An already handed-off Discord request cannot be recalled.
+    const hook = await this.db.discordHooks.findOne({ _id: row.hookId, userId: row.userId });
+    return this.canDeliver(row, hook) ? hook : null;
   }
 
   /** A queued payload uses the privacy choices approved when it was made. @param {any} row @param {any} hook */
