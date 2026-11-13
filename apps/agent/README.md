@@ -295,7 +295,10 @@ set **Settings → Desktop notifications** to **Every game** and Save. History
 imports stay quiet. To get an unread milestone after a game, enable
 **Show game milestones in the tray** beside that setting and turn on
 **Milestones** under **Settings → Preferences** on the web. The agent waits
-until you finish playing before showing it.
+until you finish playing before showing it. To get a weekly report reminder,
+turn on **Show weekly reports in the tray** and choose **Important** or
+**Every game**. The reminder waits until play ends and the details stay in
+your private [Notifications inbox](https://sc2tools.com/notifications).
 See [Your recent games](https://sc2tools.com/help/desktop-app-recent-games)
 and [Importing your replay history](https://sc2tools.com/help/desktop-app-import).
 

@@ -76,6 +76,7 @@ class SocketClient:
         overlay_token_provider: Optional[Callable[[str], Optional[str]]] = None,
         session_enabled: bool = False,
         on_connection: Optional[Callable[[bool], None]] = None,
+        on_weekly_report: Optional[Callable[["SocketClient", str], None]] = None,
         on_sync_retry: Optional[Callable] = None,
         on_reanalyze: Optional[Callable] = None,
         on_reanalyze_cancel: Optional[Callable] = None,
@@ -108,6 +109,7 @@ class SocketClient:
         self._overlay_token_provider = overlay_token_provider
         self._session_enabled = session_enabled is True
         self._on_connection = on_connection
+        self._on_weekly_report = on_weekly_report
         self._on_sync_retry = on_sync_retry
         # Managed re-analysis (sc2tools_agent.reanalysis). Advertised in the
         # handshake only when wired, so older servers never send batches.
@@ -134,7 +136,7 @@ class SocketClient:
                  "reanalyze", "reanalyze_cancel")
         callbacks = {"on_" + name: getattr(self, "_on_" + name) for name in names}
         return SocketClient(base_url=self._account_base_url, device_token=token,
-            on_connection=self._on_connection,
+            on_connection=self._on_connection, on_weekly_report=self._on_weekly_report,
             overlay_token_provider=self._overlay_token_provider,
             session_enabled=self._session_enabled, obs_add_enabled_provider=self._obs_add_enabled_provider, **callbacks)
 
@@ -244,6 +246,14 @@ class SocketClient:
             except Exception:
                 log.debug("socket_health_callback_failed")
 
+    def request_weekly_report(self):
+        """Queue a catch-up on this connected socket without performing network I/O here."""
+        if self._on_weekly_report and self._device_connected and not self._stop.is_set():
+            try:
+                self._on_weekly_report(self, self._device_token)
+            except Exception:
+                log.debug("socket_weekly_report_callback_failed")
+
     async def _reanalyze_batch(self, payload):
         """Accept a batch meant for this exact socket session."""
         from .reanalysis import ack
@@ -276,6 +286,7 @@ class SocketClient:
                 self._invalidate_session()
             log.info("socket_client_connected base=%s", self._base_url)
             self._notify_connection(self._device_connected)
+            self.request_weekly_report()
 
         @sio.event
         async def disconnect() -> None:  # noqa: ARG001
@@ -288,6 +299,11 @@ class SocketClient:
             if session_sio is not None:
                 await session_sio.disconnect()
             log.info("socket_client_disconnected")
+
+        @sio.on("notifications:changed")
+        async def _notification_changed(payload):
+            if isinstance(payload, dict) and payload.get("kind") == "report.weekly":
+                self.request_weekly_report()
 
         @sio.on("sync:retry-ready")
         async def _sync_ready(payload):
