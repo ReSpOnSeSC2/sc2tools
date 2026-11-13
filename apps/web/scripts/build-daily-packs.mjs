@@ -62,7 +62,7 @@ async function collectDay(sources, used, helpers) {
 
 async function build(values, out, helpers) {
   const indexPath = join(out, "index.json");
-  const index = await readIndex(indexPath, helpers.readDailyIndex);
+  const index = await readIndex(indexPath, helpers.readDailyIndex, helpers.readDailyPack);
   const previousDays = { ...index.days };
   if (values.practice) {
     index.practice = [];

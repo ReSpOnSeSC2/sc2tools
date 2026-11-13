@@ -1,7 +1,7 @@
 import { DAILY_ROUNDS } from "./rules";
 
 export const SCOUT_ROOT = "/daily/scout/v1";
-export const SCOUT_END = 360;
+export const SCOUT_END = 450;
 export const MAX_SCOUT_PACK_BYTES = 32_000;
 export const MAX_SCOUT_BUILDINGS = 40;
 
@@ -59,6 +59,7 @@ function validBuilding(value: unknown, width: number, height: number, previousTi
   if (!Array.isArray(value) || value.length !== 4) return false;
   const [name, time, x, y] = value;
   return isScoutBuildingName(name) && inRange(time, previousTime, SCOUT_END)
+    && Number(time.toFixed(3)) === time
     && inRange(x, 0, width) && inRange(y, 0, height);
 }
 

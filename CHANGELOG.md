@@ -4867,8 +4867,10 @@ release preparation, not a signed or published 0.24.9 installer.
 ### Daily Scout
 
 - Open **Daily Scout** from the public Arcade and identify five StarCraft II
-  openings from building positions and timings. Play a rotating practice week,
-  keep a streak on this browser, and copy a score that hides the answers.
+  openings from building positions and timings. Select a timeline row to
+  highlight its exact placement, including buildings that share a spot.
+  Play a rotating practice week, keep a streak in this browser, and copy
+  a score that hides the answers.
 
 ## [agent-v0.5.13] - 2026-05-09
 

@@ -22,7 +22,7 @@ const article: HelpArticle = {
     { type: "paragraph", text: "After finishing today's five recorded fights, choose See crowd split to send your calls anonymously. The split appears at 20 votes. You can check again before midnight UTC without adding another vote. Practice sets keep your calls on this device." },
     { type: "paragraph", text: "Copy a fight link to let someone play that recorded fight before seeing the result. Playing one shared fight leaves the daily score and streak unchanged." },
     { type: "heading", text: "Identify the opening in Daily Scout", anchor: "scout" },
-    { type: "paragraph", text: "Open [Daily Scout](/arcade/scout). The numbered map markers match the building timeline. Drag the game-time slider or use its arrow keys to see when each structure appeared. Pick a strategy to reveal the answer, then move to the next opening." },
+    { type: "paragraph", text: "Open [Daily Scout](/arcade/scout). Drag the game-time slider or use its arrow keys to see when each structure appeared. Select a building in the timeline to bring its marker to the front and see its exact grid position. Pick a strategy to reveal the answer, then move to the next opening." },
     { type: "paragraph", text: "Daily Scout rotates a practice week of sample openings until a Tracker set is scheduled. Tracker sets use building placements from reviewed replays. Play all five openings to save a score and streak in this browser. Copy a result without giving away the answers." },
   ],
 };
