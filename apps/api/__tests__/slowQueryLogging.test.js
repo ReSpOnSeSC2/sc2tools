@@ -143,7 +143,7 @@ test("failed Daily tally commands keep receipt details out of diagnostics", () =
   attachSlowQueryLogging(client, logger, 100);
   client.emit("commandStarted", { requestId: 1, commandName: "update", command: { update: "daily_tally" } });
   client.emit("commandFailed", { requestId: 1, commandName: "update", duration: 10, failure: new Error("private-receipt") });
-  expect(logger.warns[0].fields).toEqual({ commandName: "update", collection: "daily_tally", code: "mongo_command_failed" });
+  expect(logger.warns[0].fields).toEqual({ commandName: "update", collection: "daily_tally", durationMs: 10, code: "mongo_command_failed" });
 });
 
 describe("attachSlowQueryLogging and typed search (ADR 0069 amendment)", () => {
