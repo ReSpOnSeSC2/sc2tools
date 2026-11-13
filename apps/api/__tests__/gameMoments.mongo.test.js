@@ -129,7 +129,7 @@ describe("private milestone sink", () => {
     expect(await db.collection("notifications").find({}).toArray()).toEqual([expect.objectContaining({ kind })]);
   });
 
-  test("one scan feeds independent stream filters and a private rounded bell without Web Push", async () => {
+  test("one scan feeds independent stream filters and private bell rows for opt-in Web Push", async () => {
     const opponent = { pulseCharacterId: "77", mmr: 4422, mmrSource: "replay" };
     const current = game({ opponent });
     await db.collection("games").insertMany([current, game({
@@ -140,7 +140,7 @@ describe("private milestone sink", () => {
     const value = fixture(true);
     value.configure({ moments: { leagueChange: { enabled: true }, giantKiller: { enabled: true }, streamerOpponentWin: { enabled: true }, marathonWin: { enabled: true } } });
     value.deps.channels.forGame.mockResolvedValue(/** @type {Record<string,unknown>} */ ({ twitch: { login: "synthetic-channel" } }));
-    const push = jest.fn(async () => {});
+    const push = jest.fn(async (/** @type {string} */ _owner = "", /** @type {{kind: string}} */ _row = { kind: "" }) => {});
     value.notifications.push = { deliver: push };
     const read = jest.spyOn(value.service.db.games, "find");
     await run(value.service, current, { rank: { source: "pulse", league: "Master" } });
@@ -153,7 +153,7 @@ describe("private milestone sink", () => {
     ]);
     expect(bell.find(row => row.kind === "moment.giant_killer")?.body).toBe("Opponent started about 400 MMR higher.");
     expect(value.events.find(event => event.payload.kind === "giantKiller")?.payload.detail).toBe("Opponent started about 400 MMR higher.");
-    expect(push).not.toHaveBeenCalled();
+    expect(push.mock.calls.map(([owner, row]) => [owner, row?.kind]).sort()).toEqual(bell.map(row => [OWNER, row.kind]).sort());
   });
 
   test("a personal receipt stays independent when every stream token is rotating", async () => {

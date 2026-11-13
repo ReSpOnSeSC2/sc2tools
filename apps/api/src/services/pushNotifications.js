@@ -3,6 +3,9 @@
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { isDuplicateKey } = require("../util/jobLock");
+const { claimUserDataLease } = require("../middleware/userDataWriteFence");
+const { sanitizeNotificationPrefs } = require("./notificationPrefs");
 const { parseVapidKeys, vapidAuthorization, encryptPushPayload, decodeKey } = require("./webPushCrypto");
 
 /**
@@ -16,13 +19,18 @@ const { parseVapidKeys, vapidAuthorization, encryptPushPayload, decodeKey } = re
  * server into a request proxy.
  *
  * Fan-out follows the bell: ``NotificationsService`` calls ``deliver``
- * only for rows it actually stored, so muted kinds never push. A device
+ * only for rows it actually stored, so muted kinds never push. New or
+ * unset preferences do not select any kinds. A device
  * answering 404/410 (gone) or 401/403 (VAPID keys rotated) is removed.
  */
 
 const MAX_DEVICES = 10;
+const PUSH_ENROLLMENT_VERSION = 1;
 const ENDPOINT_MAX = 1024;
 const LABEL_MAX = 80;
+
+/** @typedef {{_id: string, userId: string, endpoint: string, endpointHash: string, keys: {p256dh: string, auth: string},
+ *   expiresAt?: Date|null, updatedAt?: Date|null, failures?: number}} DeliveryDevice */
 const PUSH_TTL_SEC = 24 * 60 * 60;
 const SEND_TIMEOUT_MS = 10_000;
 const TEST_COOLDOWN_MS = 10_000;
@@ -38,40 +46,56 @@ const PUSH_GROUPS = Object.freeze([
   { id: "reviews", label: "Review answers", match: (/** @type {string} */ kind) => kind === "review.reply" },
   { id: "review-requests", label: "New reviews", match: (/** @type {string} */ kind) => kind === "review.new" },
   { id: "coaching-reminders", label: "Coaching reminders", match: (/** @type {string} */ kind) => kind === "coaching.reminder" },
-  { id: "coaching", label: "Coaching bookings and assignments", match: (/** @type {string} */ kind) => kind.startsWith("coaching.") },
+  { id: "coaching-booked", label: "Coaching bookings", match: (/** @type {string} */ kind) => kind === "coaching.booked" },
+  { id: "coaching-cancelled", label: "Coaching cancellations", match: (/** @type {string} */ kind) => kind === "coaching.cancelled" },
+  { id: "coaching-assigned", label: "New practice assignments", match: (/** @type {string} */ kind) => kind === "coaching.assigned" },
+  { id: "coaching", label: "Other coaching updates", match: (/** @type {string} */ kind) => kind.startsWith("coaching.") },
   { id: "playback", label: "Accurate playback ready", match: (/** @type {string} */ kind) => kind === "playback_ready" },
   { id: "reports", label: "Weekly report", match: (/** @type {string} */ kind) => kind === "report.weekly" },
   { id: "stream-reports", label: "Stream reports", match: (/** @type {string} */ kind) => kind === "report.stream" },
   { id: "goals", label: "Goal met", match: (/** @type {string} */ kind) => kind === "goal_met" },
   { id: "agent-unlinked", label: "Desktop app unlinked", match: (/** @type {string} */ kind) => kind === "agent.unlinked" },
   { id: "desktop", label: "Desktop app updates and integrations", match: (/** @type {string} */ kind) => kind.startsWith("agent.") || kind.startsWith("integration.") },
-  { id: "other", label: "Everything else", match: () => true },
+  { id: "moment.crossed_mmr_mark", label: "Rating mark reached" },
+  { id: "moment.new_season_peak", label: "Season rating peak" },
+  { id: "moment.win_streak", label: "Win streak" },
+  { id: "moment.loss_streak_broken", label: "Loss streak broken" },
+  { id: "moment.revenge_win", label: "Revenge win" },
+  { id: "moment.giant_killer", label: "Giant-killer win" },
+  { id: "moment.marathon_win", label: "Marathon win" },
+  { id: "support.reply", label: "Replies to reports" },
+  { id: "import.done", label: "Import finished" },
+  { id: "other", label: "Other notifications", match: (/** @type {string} */ kind) => !kind.startsWith("moment.") },
 ]);
 const GROUP_IDS = new Set(PUSH_GROUPS.map((group) => group.id));
-const GROUP_VERSION = 2;
-const DEFAULT_GROUPS = ["reviews", "review-requests", "coaching", "coaching-reminders", "playback", "reports", "stream-reports", "agent-unlinked", "desktop"];
-const SPLIT_GROUPS = new Map([
-  ["reviews", "review-requests"], ["coaching", "coaching-reminders"], ["reports", "stream-reports"], ["desktop", "agent-unlinked"], ["other", "goals"],
+const GROUP_VERSION = 3;
+const LEGACY_GROUPS = new Map([
+  ["reviews", ["review-requests"]],
+  ["coaching", ["coaching-reminders"]],
+  ["reports", ["stream-reports"]],
+  ["desktop", ["agent-unlinked"]],
+  ["other", ["goals"]],
 ]);
+const COACHING_GROUPS = ["coaching-booked", "coaching-cancelled", "coaching-assigned"];
 
 /** @param {string} kind */
 function pushGroupFor(kind) {
-  return (PUSH_GROUPS.find((group) => group.match(kind)) || PUSH_GROUPS[PUSH_GROUPS.length - 1]).id;
+  return PUSH_GROUPS.find((group) => group.match ? group.match(kind) : group.id === kind)?.id;
 }
 
 /** @param {unknown} input @returns {string[]} */
 function sanitizePushGroups(input) {
-  if (!Array.isArray(input)) return [...DEFAULT_GROUPS];
+  if (!Array.isArray(input)) return [];
   return [...new Set(input.filter((id) => typeof id === "string" && GROUP_IDS.has(id)))];
 }
 
 /** Expand legacy groups before they are first edited, keeping each prior choice. @param {{groups?: unknown, groupVersion?: unknown}|undefined} preferences */
 function storedPushGroups(preferences) {
   const groups = sanitizePushGroups(preferences?.groups);
-  if (!Array.isArray(preferences?.groups) || preferences.groupVersion === GROUP_VERSION) return groups;
-  const expanded = new Set(groups);
-  for (const [oldGroup, newGroup] of SPLIT_GROUPS) if (expanded.has(oldGroup)) expanded.add(newGroup);
-  return [...expanded];
+  if (!preferences || (typeof preferences.groupVersion === "number" && preferences.groupVersion >= GROUP_VERSION)) return groups;
+  const legacy = preferences.groupVersion === 2 ? [] : groups.flatMap((group) => LEGACY_GROUPS.get(group) ?? []);
+  const coaching = groups.includes("coaching") ? COACHING_GROUPS : [];
+  return [...new Set([...groups, ...legacy, ...coaching])];
 }
 
 /**
@@ -143,24 +167,56 @@ class PushNotificationsService {
 
   /**
    * Register (or re-register) this browser. One endpoint belongs to one
-   * account: signing in as someone else on the same browser moves it.
+   * account. Explicit registration from a new account transfers it.
    * @param {string} userId
-   * @param {{endpoint?: unknown, keys?: {p256dh?: unknown, auth?: unknown}, expirationTime?: unknown, label?: unknown}} body
+   * @param {{endpoint?: unknown, keys?: {p256dh?: unknown, auth?: unknown}, expirationTime?: unknown, label?: unknown, enrollmentVersion?: unknown}} body
    */
   async subscribe(userId, body) {
     if (!this.enabled) throw pushError(503, "push_unavailable", "Push notifications are not available on this server yet.");
     const { endpoint, keys } = parseSubscription(body);
     const now = new Date(this.now());
-    const expires = typeof body.expirationTime === "number" && Number.isFinite(body.expirationTime) ? new Date(body.expirationTime) : null;
     const hash = endpointHash(endpoint);
-    await this.db.pushSubscriptions.updateOne({ endpointHash: hash }, {
-      $set: stampVersion({ userId, endpoint, keys, label: cleanLabel(body.label), expiresAt: expires, failures: 0, updatedAt: now }, COLLECTIONS.PUSH_SUBSCRIPTIONS),
-      $setOnInsert: { _id: `ps_${crypto.randomBytes(12).toString("base64url")}`, createdAt: now, lastOkAt: null },
-    }, { upsert: true });
-    const extra = await this.db.pushSubscriptions.find({ userId }, { projection: { _id: 1 } }).sort({ createdAt: -1 }).skip(MAX_DEVICES).toArray();
-    if (extra.length) await this.db.pushSubscriptions.deleteMany({ userId, _id: { $in: extra.map((row) => row._id) } });
-    const saved = await this.db.pushSubscriptions.findOne({ endpointHash: hash }, { projection: { _id: 1 } });
-    return { id: String(saved?._id || ""), key: hash.slice(0, 16) };
+    const filter = { endpointHash: hash };
+    const values = stampVersion({ userId, endpoint, keys, label: cleanLabel(body.label), expiresAt: subscriptionExpiry(body.expirationTime),
+      failures: 0, updatedAt: now }, COLLECTIONS.PUSH_SUBSCRIPTIONS);
+    await this._saveSubscription(filter, values, now, body.enrollmentVersion === PUSH_ENROLLMENT_VERSION);
+    await this._capDevices(userId);
+    const saved = await this.db.pushSubscriptions.findOne({ userId, ...filter }, { projection: { _id: 1 } });
+    if (!saved) throw pushError(409, "push_device_changed", "This device changed while it was being registered. Try again.");
+    return { id: String(saved._id), key: hash.slice(0, 16) };
+  }
+
+  /** @param {{endpointHash: string}} filter @param {{userId: string}} values @param {Date} now @param {boolean} enroll */
+  async _saveSubscription(filter, values, now, enroll) {
+    if (!enroll) {
+      // Older Settings bundles re-register on load. They may refresh their own device.
+      const refreshed = await this.db.pushSubscriptions.updateOne({ ...filter, userId: values.userId }, { $set: values });
+      if (!refreshed.matchedCount) {
+        throw pushError(409, "push_enrollment_required", "Update SC2 Tools and choose Turn on for this device.");
+      }
+      return;
+    }
+    const transfer = [{ $set: {
+      ...Object.fromEntries(Object.entries(values).map(([name, value]) => [name, { $literal: value }])),
+      createdAt: { $cond: [{ $eq: ["$userId", { $literal: values.userId }] }, "$createdAt", now] },
+      lastOkAt: { $cond: [{ $eq: ["$userId", { $literal: values.userId }] }, { $ifNull: ["$lastOkAt", null] }, null] },
+      enrollment: { $cond: [{ $eq: ["$userId", { $literal: values.userId }] }, "$enrollment", crypto.randomUUID()] },
+    } }];
+    if ((await this.db.pushSubscriptions.updateOne(filter, transfer)).matchedCount) return;
+    try {
+      await this.db.pushSubscriptions.insertOne({ ...filter, ...values,
+        _id: `ps_${crypto.randomBytes(12).toString("base64url")}`, createdAt: now, lastOkAt: null, enrollment: crypto.randomUUID() });
+    } catch (error) {
+      if (!isDuplicateKey(error) || !(await this.db.pushSubscriptions.updateOne(filter, transfer)).matchedCount) throw error;
+    }
+  }
+
+  /** @param {string} userId */
+  async _capDevices(userId) {
+    // Rotation refreshes the endpoint within the same enrollment. A transfer creates a new enrollment.
+    const extra = await this.db.pushSubscriptions.find({ userId }, { projection: { _id: 1, enrollment: 1 } })
+      .sort({ createdAt: -1, _id: -1 }).skip(MAX_DEVICES).toArray();
+    if (extra.length) await this.db.pushSubscriptions.deleteMany({ userId, $or: extra.map((row) => ({ _id: row._id, enrollment: row.enrollment ?? null })) });
   }
 
   /** @param {string} userId @param {string} id */
@@ -169,32 +225,46 @@ class PushNotificationsService {
     return { removed: res.deletedCount || 0 };
   }
 
-  /** Turning push off in this browser. @param {string} userId @param {unknown} endpoint */
-  async unsubscribe(userId, endpoint) {
+  /** Turning push off in this browser. @param {string} userId @param {unknown} endpoint @param {unknown} [enrollmentVersion] */
+  async unsubscribe(userId, endpoint, enrollmentVersion) {
     if (typeof endpoint !== "string" || endpoint.length > ENDPOINT_MAX) return { removed: 0 };
-    const res = await this.db.pushSubscriptions.deleteOne({ userId, endpointHash: endpointHash(endpoint) });
-    return { removed: res.deletedCount || 0 };
+    const filter = { endpointHash: endpointHash(endpoint) };
+    const { deletedCount: removed } = await this.db.pushSubscriptions.deleteOne({ userId, ...filter });
+    if (enrollmentVersion !== PUSH_ENROLLMENT_VERSION) return { removed };
+    // A retry may follow a lost response. Leave another account's browser registration alone.
+    const remaining = await this.db.pushSubscriptions.findOne(filter, { projection: { _id: 1 } });
+    return { removed, canDeactivate: !remaining };
   }
 
   /**
    * ``pushsubscriptionchange`` from the service worker, which holds no
    * session: the previous endpoint (known only to that browser and this
    * server) proves ownership of the row it replaces.
-   * @param {{oldEndpoint?: unknown, subscription?: any}} body
+   * @param {{oldEndpoint?: unknown, subscription?: {endpoint?: unknown, keys?: {p256dh?: unknown, auth?: unknown}, expirationTime?: unknown}}} body
    */
   async rotate(body) {
     if (!this.enabled) throw pushError(503, "push_unavailable", "Push notifications are not available on this server yet.");
-    if (typeof body.oldEndpoint !== "string" || body.oldEndpoint.length > ENDPOINT_MAX) throw pushError(400, "invalid_subscription", "Invalid subscription.");
+    const oldEndpoint = safePushEndpoint(body.oldEndpoint);
+    if (!oldEndpoint) throw pushError(400, "invalid_subscription", "Invalid subscription.");
     const { endpoint, keys } = parseSubscription(body.subscription || {});
-    const previous = await this.db.pushSubscriptions.findOne({ endpointHash: endpointHash(body.oldEndpoint) }, { projection: { _id: 1 } });
-    if (!previous) return { rotated: false };
+    const previousHash = endpointHash(oldEndpoint);
     const hash = endpointHash(endpoint);
-    // The browser may already have registered the new endpoint itself.
-    await this.db.pushSubscriptions.deleteMany({ endpointHash: hash, _id: { $ne: previous._id } });
-    const res = await this.db.pushSubscriptions.updateOne({ _id: previous._id }, {
-      $set: { endpoint, endpointHash: hash, keys, failures: 0, updatedAt: new Date(this.now()) },
-    });
-    return { rotated: res.modifiedCount === 1 };
+    if (previousHash === hash) return { rotated: false };
+    const previous = await this.db.pushSubscriptions.findOne({ endpointHash: previousHash }, { projection: { _id: 1, userId: 1 } });
+    if (!previous) return { rotated: false };
+    const filter = { _id: previous._id, userId: previous.userId, endpointHash: previousHash };
+    const lease = await claimUserDataLease(this.db.users, previous.userId);
+    try {
+      const res = await this.db.pushSubscriptions.updateOne(filter, {
+        $set: { endpoint, endpointHash: hash, keys, failures: 0, updatedAt: new Date(this.now()),
+          expiresAt: subscriptionExpiry(body.subscription?.expirationTime) },
+      });
+      return { rotated: res.modifiedCount === 1 };
+    } catch (error) {
+      // An explicit registration of the replacement takes precedence.
+      if (!isDuplicateKey(error)) throw error;
+      return { rotated: false };
+    } finally { await lease.release(); }
   }
 
   /** @param {string} userId @param {unknown} groups */
@@ -218,27 +288,38 @@ class PushNotificationsService {
   /**
    * Called after the bell stored ``row``. Never throws.
    * @param {string} userId
-   * @param {{_id?: unknown, kind: string, title: string, body?: string, href?: string|null}} row
+   * @param {{_id?: unknown, kind: string, groupKey?: unknown}} row
    */
   async deliver(userId, row) {
     if (!this.enabled) return { sent: 0, removed: 0 };
     try {
-      const user = await this.db.users.findOne({ userId }, { projection: { _id: 0, "preferences.push": 1, _gdprMutation: 1 } });
-      if (!user || user._gdprMutation) return { sent: 0, removed: 0 };
-      if (!storedPushGroups(user.preferences?.push).includes(pushGroupFor(row.kind))) return { sent: 0, removed: 0 };
-      return await this._fanOut(userId, { title: row.title, body: row.body || "", href: row.href || "/notifications", tag: `n:${String(row._id || row.kind)}` });
+      const group = pushGroupFor(row.kind);
+      const choice = group ? { group, kind: row.kind } : null;
+      if (!choice || !await this._mayDeliver(userId, choice)) return { sent: 0, removed: 0 };
+      return await this._fanOut(userId, pushMessage(userId, row), choice);
     } catch (err) {
       this.logger?.warn({ code: errorCode(err) }, "push_delivery_failed");
       return { sent: 0, removed: 0 };
     }
   }
 
-  /** @param {string} userId @param {{title: string, body: string, href: string, tag: string}} message */
-  async _fanOut(userId, message) {
-    const rows = await this.db.pushSubscriptions.find({ userId }).limit(MAX_DEVICES).toArray();
+  /** @param {string} userId @param {{group: string, kind: string}} choice */
+  async _mayDeliver(userId, { group, kind }) {
+    const user = await this.db.users.findOne({ userId, _gdprMutation: { $exists: false } },
+      { projection: { _id: 0, "preferences.push": 1, "preferences.notifications": 1 } });
+    if (!user || !storedPushGroups(user.preferences?.push).includes(group)) return false;
+    const prefs = sanitizeNotificationPrefs(user.preferences?.notifications);
+    return !prefs.muted.includes(kind) && (!kind.startsWith("moment.") || prefs.milestones);
+  }
+
+  /** @param {string} userId @param {{title: string, body: string, href: string, tag: string}} message
+   * @param {{group: string, kind: string}} [choice] */
+  async _fanOut(userId, message, choice) {
+    const rows = await this.db.pushSubscriptions.find({ userId }).sort({ createdAt: -1 }).limit(MAX_DEVICES).toArray();
     const payload = JSON.stringify({ title: message.title.slice(0, 140), body: message.body.slice(0, 280), href: message.href, tag: message.tag.slice(0, 64) });
     let sent = 0; let removed = 0;
     for (const row of rows) {
+      if (choice && !await this._mayDeliver(userId, choice)) break;
       const outcome = await this._sendOne(row, payload);
       if (outcome === "ok") sent += 1;
       if (outcome === "gone") removed += 1;
@@ -246,39 +327,74 @@ class PushNotificationsService {
     return { sent, removed };
   }
 
-  /** @param {any} row @param {string} payload @returns {Promise<"ok"|"gone"|"failed">} */
+  /** @param {DeliveryDevice} row @param {string} payload @returns {Promise<"ok"|"gone"|"failed">} */
   async _sendOne(row, payload) {
     const now = this.now();
-    const endpoint = safePushEndpoint(row.endpoint);
-    if (!endpoint || (row.expiresAt && new Date(row.expiresAt).getTime() <= now) || !this.vapid) {
-      await this.db.pushSubscriptions.deleteOne({ _id: row._id });
-      return "gone";
+    const current = deliveryDeviceFilter(row);
+    const endpoint = availableEndpoint(row, now);
+    const vapid = this.vapid;
+    if (!endpoint || !vapid) return await this._removeDeliveryDevice(current);
+    if (!await this.db.pushSubscriptions.findOne(current, { projection: { _id: 1 } })) return "failed";
+    const status = await this._sendPayload(row, payload, endpoint, now, vapid);
+    if (status >= 200 && status < 300) {
+      await this.db.pushSubscriptions.updateOne(current, { $set: { lastOkAt: new Date(now), failures: 0 } });
+      return "ok";
     }
-    let status = 0;
+    if ([401, 403, 404, 410].includes(status) || (row.failures || 0) >= 9) return await this._removeDeliveryDevice(current);
+    await this.db.pushSubscriptions.updateOne(current, { $inc: { failures: 1 } });
+    return "failed";
+  }
+
+  /** @param {{_id: string, userId: string, endpointHash: string|null, updatedAt: Date|null}} filter @returns {Promise<"gone"|"failed">} */
+  async _removeDeliveryDevice(filter) {
+    const result = await this.db.pushSubscriptions.deleteOne(filter);
+    return result.deletedCount === 1 ? "gone" : "failed";
+  }
+
+  /** @param {Pick<DeliveryDevice, "_id"|"keys">} row @param {string} payload
+   * @param {string} endpoint @param {number} now @param {NonNullable<ReturnType<typeof parseVapidKeys>>} vapid */
+  async _sendPayload(row, payload, endpoint, now, vapid) {
     try {
       const res = await this.fetchImpl(endpoint, {
         method: "POST", redirect: "error", signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
         headers: {
-          Authorization: vapidAuthorization({ endpoint, subject: this.subject, vapid: this.vapid, nowSec: Math.floor(now / 1000) }),
+          Authorization: vapidAuthorization({ endpoint, subject: this.subject, vapid, nowSec: Math.floor(now / 1000) }),
           "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", TTL: String(PUSH_TTL_SEC), Urgency: "normal",
         },
-        body: new Uint8Array(encryptPushPayload(payload, row.keys || {})),
+        body: new Uint8Array(encryptPushPayload(payload, row.keys)),
       });
-      status = res.status;
+      return res.status;
     } catch (err) {
       this.logger?.warn({ code: errorCode(err), device: String(row._id) }, "push_send_failed");
+      return 0;
     }
-    if (status >= 200 && status < 300) {
-      await this.db.pushSubscriptions.updateOne({ _id: row._id }, { $set: { lastOkAt: new Date(now), failures: 0 } });
-      return "ok";
-    }
-    if ([401, 403, 404, 410].includes(status) || (row.failures || 0) >= 9) {
-      await this.db.pushSubscriptions.deleteOne({ _id: row._id });
-      return "gone";
-    }
-    await this.db.pushSubscriptions.updateOne({ _id: row._id }, { $inc: { failures: 1 } });
-    return "failed";
   }
+}
+
+/** @param {DeliveryDevice} row */
+function deliveryDeviceFilter(row) {
+  return { _id: row._id, userId: row.userId, endpointHash: row.endpointHash ?? null, updatedAt: row.updatedAt ?? null };
+}
+
+/** @param {DeliveryDevice} row @param {number} now */
+function availableEndpoint(row, now) {
+  return row.expiresAt && new Date(row.expiresAt).getTime() <= now ? null : safePushEndpoint(row.endpoint);
+}
+
+/** Lock-screen copy contains no bell text or private destination.
+ * @param {string} userId @param {{_id?: unknown, kind: string, groupKey?: unknown}} row */
+function pushMessage(userId, row) {
+  const grouped = typeof row.groupKey === "string" && row.groupKey.length > 0;
+  const identity = grouped ? ["group", row.groupKey] : ["row", String(row._id || row.kind)];
+  const digest = crypto.createHash("sha256").update(JSON.stringify([userId, ...identity])).digest("base64url");
+  return { title: "SC2 Tools", body: "You have a new notification.", href: "/notifications", tag: `n:${digest}` };
+}
+
+/** @param {unknown} value */
+function subscriptionExpiry(value) {
+  if (typeof value !== "number") return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
 }
 
 /** @param {{endpoint?: unknown, keys?: {p256dh?: unknown, auth?: unknown}}} body */
@@ -298,4 +414,4 @@ function errorCode(err) {
   return typeof code === "string" && /^[A-Za-z0-9_]{1,48}$/.test(code) ? code : "push_error";
 }
 
-module.exports = { PushNotificationsService, PUSH_GROUPS, DEFAULT_GROUPS, pushGroupFor, sanitizePushGroups, safePushEndpoint };
+module.exports = { PushNotificationsService, pushGroupFor, sanitizePushGroups, safePushEndpoint, pushMessage };

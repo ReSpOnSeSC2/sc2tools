@@ -4839,6 +4839,10 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Share completed games from one Browser Source's Dock session from **Settings → Profile → Stream viewer page**. Sharing starts off. Choose a delay of 5–60 minutes, and viewers can see recent wins, losses, opponent races and known ladder maps.
 
+### Browser notification choices
+
+- Choose which private notifications can alert your phone or browser, including individual ladder milestones. New choices start off, and device alerts open the private inbox.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

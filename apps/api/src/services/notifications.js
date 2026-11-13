@@ -151,10 +151,14 @@ class NotificationsService {
     if (!row) return null;
     // The shared socket room includes OBS tokens. The bell refetches details over authenticated REST.
     this._push(userId, milestone ? { kind: "refresh" } : row);
-    // Devices are best effort and never delay or fail the stored row. Only
-    // rows that were stored reach here, so muted kinds never push.
-    if (this.push && !milestone) void this.push.deliver(userId, row).catch(() => {});
+    this._notifyDevices(userId, row, input.kind);
     return row;
+  }
+
+  /** Device delivery uses the stored identity and the triggering kind, including after a fold.
+   * @param {string} userId @param {{_id?: unknown, groupKey?: unknown}} row @param {string} kind */
+  _notifyDevices(userId, { _id, groupKey }, kind) {
+    void this.push?.deliver(userId, { _id, groupKey, kind }).catch(() => {});
   }
 
   /**

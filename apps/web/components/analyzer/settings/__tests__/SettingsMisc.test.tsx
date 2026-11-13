@@ -48,7 +48,8 @@ vi.mock("next/link", () => ({
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: mocks.ownerId, getToken: async () => "token" }) }));
 
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/clientApi")>()),
   useApi: (url: string) => ({ data: url.endsWith("/notifications") ? mocks.notifications : mocks.misc, isLoading: false, error: null, mutate: async () => mocks.misc }),
   apiCall: mocks.apiCall,
 }));
