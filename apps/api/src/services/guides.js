@@ -182,7 +182,7 @@ class GuidesService {
         ? this._softList(communityBuildLinks(this.db.communityBuilds, matchup, buildKey), "guide_community_links_failed")
         : [],
       published && doc
-        ? this._softList(verifyExamples(this.db.users, doc.examples), "guide_examples_verify_failed")
+        ? this._softList(verifyExamples(this.db.users, this.db.games, matchup, buildKey, doc.examples), "guide_examples_verify_failed")
         : [],
     ]);
     const notes = note && note.body.trim() ? { body: note.body, updatedAt: note.updatedAt } : null;

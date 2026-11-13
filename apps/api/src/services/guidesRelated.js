@@ -10,19 +10,20 @@
  *     community build that literally says it is this build;
  *   - ``verifyExamples``: the nightly example replays re-checked against
  *     the users' CURRENT replay-sharing state, because the nightly docs
- *     can be up to a day stale. A user who stopped sharing (or deleted
- *     the account) disappears from the next API response; the display
- *     name is re-read. Rendered web pages may keep a cached copy for up to
+ *     can be up to a day stale. Replays also have to still qualify for the
+ *     guide and have a stored file. Rendered web pages may keep a cached copy for up to
  *     GUIDE_REVALIDATE_SEC (6 h, apps/web/lib/guides/api.ts). GDPR deletes
  *     and history wipes also pull the user's examples from guide_stats
  *     (services/gdpr.js ``_scrubGuideExamples``).
  *
- * Both return public-safe fields only (slug/title; handle/displayName/
- * result/map/length/date) — never a userId, gameId or opponent field.
+ * The replay links use opaque references. Raw game IDs and opponent names
+ * are kept out of the guide response.
  */
 
 const { displayName } = require("../config/guideSlugs");
-const { publicDisplayName } = require("./guideStatsExamples");
+const { GUIDE_EXAMPLES_MAX } = require("../config/guides");
+const { publicReplayObjectId } = require("../util/publicReplayReference");
+const { publicDisplayName, exampleGamesMatch, EXAMPLE_FIELDS, toExample } = require("./guideStatsExamples");
 
 /** Community-build links per guide. */
 const COMMUNITY_LINKS_MAX = 3;
@@ -36,14 +37,7 @@ const SHARE_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*-[a-f0-9]{10}$/;
 const REGEX_SPECIALS_RE = /[.*+?^${}()|[\]\\]/g;
 
 /**
- * @typedef {object} GuideExampleLink
- * @property {string} handle
- * @property {string} displayName
- * @property {string} result
- * @property {string|null} map
- * @property {number|null} durationSec
- * @property {Date} playedAt
- * @property {string} href "/players/<handle>/replays" (the public list)
+ * @typedef {import('./guideStatsExamples').GuideExample & {href: string}} GuideExampleLink
  */
 
 /**
@@ -131,58 +125,79 @@ function exactLink(row, wanted) {
  */
 function storedExamples(list) {
   if (!Array.isArray(list)) return [];
-  return list.filter((ex) => ex && typeof ex.handle === "string" && SHARE_SLUG_RE.test(ex.handle)
-    && ex.playedAt instanceof Date && typeof ex.result === "string");
+  return list.filter((ex) => ex && typeof ex.handle === "string" && ex.handle.length <= 64
+    && SHARE_SLUG_RE.test(ex.handle) && ex.playedAt instanceof Date && typeof ex.result === "string")
+    .slice(0, GUIDE_EXAMPLES_MAX);
 }
 
 /**
- * Keep the examples whose users still share replays, with their current
- * display names.
+ * Keep the examples whose owners still share, using current replay metadata.
  *
  * @param {import('mongodb').Collection|undefined} users
+ * @param {import('mongodb').Collection|undefined} games
+ * @param {string} matchup
+ * @param {string} buildKey
  * @param {unknown} examples the build doc's ``examples``
  * @returns {Promise<GuideExampleLink[]>}
  */
-async function verifyExamples(users, examples) {
+async function verifyExamples(users, games, matchup, buildKey, examples) {
   const stored = storedExamples(examples);
-  if (!users || stored.length === 0) return [];
+  if (!users || !games || stored.length === 0) return [];
   const handles = [...new Set(stored.map((ex) => ex.handle))];
   const rows = await users
     .find(
       { "replaySharing.slug": { $type: "string", $in: handles }, "replaySharing.enabled": true },
-      { projection: { _id: 0, displayName: 1, "replaySharing.slug": 1 }, maxTimeMS: QUERY_MAX_MS },
+      { projection: { _id: 0, userId: 1, displayName: 1, "replaySharing.slug": 1 }, maxTimeMS: QUERY_MAX_MS },
     )
     .toArray();
-  /** @type {Map<string, string>} */
+  /** @type {Map<string, {userId: string, handle: string, displayName: string}>} */
   const live = new Map();
   for (const row of rows) {
     const slug = row.replaySharing && row.replaySharing.slug;
-    if (typeof slug === "string") live.set(slug, publicDisplayName(row.displayName));
+    if (typeof slug === "string" && typeof row.userId === "string") {
+      live.set(slug, { userId: row.userId, handle: slug, displayName: publicDisplayName(row.displayName) });
+    }
   }
-  /** @type {GuideExampleLink[]} */
-  const out = [];
-  for (const ex of stored) {
-    const name = live.get(ex.handle);
-    if (name !== undefined) out.push(exampleLink(ex, name));
-  }
-  return out;
+  const eligible = exampleGamesMatch(matchup, [buildKey]);
+  const links = await Promise.all(stored.map(async (ex) => {
+    const profile = live.get(ex.handle);
+    if (!profile) return null;
+    const example = await resolveExample(games, ex, eligible, profile);
+    return example ? {
+      ...example, href: `/players/${example.handle}/replays/${example.replayRef}`,
+    } : null;
+  }));
+  return links.filter((link) => link !== null);
 }
 
 /**
- * @param {Record<string, any>} ex a well-formed stored example
- * @param {string} displayName the sharer's current public name
- * @returns {GuideExampleLink}
+ * Old snapshots have metadata only. Resolve them through the owner/build/date
+ * index while the next nightly run is pending. A match must be unambiguous.
+ * @param {import('mongodb').Collection} games
+ * @param {Record<string, any>} ex
+ * @param {Record<string, any>} eligible
+ * @param {{userId: string, handle: string, displayName: string}} profile
  */
-function exampleLink(ex, displayName) {
-  return {
-    handle: ex.handle,
-    displayName,
+async function resolveExample(games, ex, eligible, profile) {
+  const ownerGames = { ...eligible, userId: profile.userId };
+  const options = { projection: EXAMPLE_FIELDS, maxTimeMS: QUERY_MAX_MS };
+  if (ex.replayRef !== undefined) {
+    const _id = publicReplayObjectId(ex.replayRef);
+    const game = _id ? await games.findOne({ ...ownerGames, _id }, options) : null;
+    return game && toExample(game, profile);
+  }
+  const candidates = await games.find({
+    ...ownerGames,
+    date: ex.playedAt,
     result: ex.result,
-    map: typeof ex.map === "string" ? ex.map : null,
-    durationSec: typeof ex.durationSec === "number" && Number.isFinite(ex.durationSec) ? ex.durationSec : null,
-    playedAt: ex.playedAt,
-    href: `/players/${ex.handle}/replays`,
-  };
+    ...(typeof ex.map === "string" ? { map: ex.map } : {}),
+    ...(Number.isFinite(ex.durationSec) ? {
+      durationSec: { $gte: Math.max(0, ex.durationSec - 0.5), $lt: ex.durationSec + 0.5 },
+    } : {}),
+  }, options).limit(2).toArray();
+  if (candidates.length !== 1) return null;
+  const candidate = toExample(candidates[0], profile);
+  return candidate && candidate.map === ex.map && candidate.durationSec === ex.durationSec ? candidate : null;
 }
 
 module.exports = { communityBuildLinks, verifyExamples, exactNameRegex };

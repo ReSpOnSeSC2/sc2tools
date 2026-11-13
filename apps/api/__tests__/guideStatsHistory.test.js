@@ -152,11 +152,13 @@ describe("GuideStatsService — history, examples and privacy", () => {
     expect(doc.published).toBe(true);
     expect(doc.examples).toEqual([
       {
-        handle: SHARER_SLUG, displayName: "Sharer One", result: "Victory", map: "Site Delta LE",
+        handle: SHARER_SLUG, replayRef: expect.stringMatching(/^r-[a-f0-9]{24}$/),
+        displayName: "Sharer One", result: "Victory", map: "Site Delta LE",
         durationSec: 612, playedAt: new Date(NOW_MS - DAY_MS),
       },
       {
-        handle: SECOND_SLUG, displayName: "Second", result: "Tie", map: "Alcyone LE",
+        handle: SECOND_SLUG, replayRef: expect.stringMatching(/^r-[a-f0-9]{24}$/),
+        displayName: "Second", result: "Tie", map: "Alcyone LE",
         durationSec: 640, playedAt: new Date(NOW_MS - 2 * DAY_MS),
       },
     ]);

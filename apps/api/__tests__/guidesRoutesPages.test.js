@@ -101,10 +101,15 @@ describe("guide pages", () => {
       { slug: "build-exact-name", title: "My SG opener" },
       { slug: "build-exact-title", title: "Stargate into Glaives" },
     ]);
+    const game = await h.db.games.findOne({ userId: "gl-0", "replayFile.storedAt": { $exists: true } });
+    const replayRef = `r-${game._id.toHexString()}`;
     expect(b.examples).toEqual([{
       handle: SHARER_SLUG, displayName: "Sharer One", result: "Victory", map: "Site Delta LE", durationSec: 612,
-      playedAt: expect.any(String), href: `/players/${SHARER_SLUG}/replays`,
+      playedAt: game.date.toISOString(), replayRef, href: `/players/${SHARER_SLUG}/replays/${replayRef}`,
     }]);
+    const preview = await get(`/v1/public/replays/${SHARER_SLUG}/${replayRef}/card`);
+    expect(preview.status).toBe(200);
+    expect(preview.body.game).toMatchObject({ myBuild: GLAIVES, result: "Victory", map: "Site Delta LE" });
     expect(b.notes).toEqual({ body: "### Plan\nHide the **Twilight**.", updatedAt: "2026-09-20T10:00:00.000Z" });
     expect(b.videos.map((v) => v.youtubeId)).toEqual(["YcTMc_Ee11w"]);
     expect(b.videos[0].eightWorkerPatch).toBe(true);
@@ -140,6 +145,22 @@ describe("guide pages", () => {
     const healthy = await get("/v1/guides/pvz/stargate-into-glaives");
     expect(healthy.body.communityBuilds).toHaveLength(2);
     expect(healthy.body.examples).toHaveLength(1);
+  });
+
+  test("resolves a legacy example to its exact game and drops it if the file marker is removed", async () => {
+    const key = "build:after:PvZ:stargate-into-glaives";
+    const game = await h.db.games.findOne({ userId: "gl-0", "replayFile.storedAt": { $exists: true } });
+    await h.db.guideStats.updateOne({ key }, { $unset: { "examples.0.replayRef": "" } });
+    try {
+      const legacy = await get("/v1/guides/pvz/stargate-into-glaives");
+      expect(legacy.body.examples).toEqual([expect.objectContaining({ replayRef: `r-${game._id.toHexString()}` })]);
+      await h.db.games.updateOne({ _id: game._id }, { $unset: { replayFile: "" } });
+      const missing = await get("/v1/guides/pvz/stargate-into-glaives");
+      expect(missing.body.examples).toEqual([]);
+    } finally {
+      await h.db.games.updateOne({ _id: game._id }, { $set: { replayFile: game.replayFile } });
+      await h.db.guideStats.updateOne({ key }, { $set: { "examples.0.replayRef": `r-${game._id.toHexString()}` } });
+    }
   });
 
   test("examples are re-verified at serve time: a user who stops sharing disappears", async () => {

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -23,7 +23,10 @@ vi.mock("next/navigation", () => ({
   permanentRedirect: mocks.permanentRedirect,
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false }) }));
-vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: undefined, error: undefined, isLoading: false }) }));
+vi.mock("@/lib/clientApi", () => ({
+  API_BASE: "https://api.example.test",
+  useApi: () => ({ data: undefined, error: undefined, isLoading: false }),
+}));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
 
 import BuildGuidePage, {
@@ -68,6 +71,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   mocks.fetchGuideBuild.mockReset();
   mocks.fetchPublishedGuidePaths.mockReset();
@@ -238,12 +243,59 @@ describe("/guides/[matchup]/[build] page sections", () => {
     expect(screen.getByRole("link", { name: "PvZ - Stargate into Glaives" }).getAttribute("href")).toBe(
       "/community/builds/pvz-stargate-into-glaives-7f3k",
     );
-    expect(screen.getByRole("link", { name: "FixturePlayer" }).getAttribute("href")).toBe(
-      "/players/fixture-player/replays",
-    );
     expect(screen.getByRole("heading", { level: 3, name: "Game plan" })).toBeTruthy();
     expect(screen.getByText("From the video by ReSpOnSe")).toBeTruthy();
     expect(container.querySelector("iframe")).toBeNull();
+  });
+
+  it("opens and downloads the exact example replay", async () => {
+    mocks.fetchGuideBuild.mockResolvedValue(ok(FIXTURE_BUILD_PUBLISHED));
+    const replayPath = "/players/fixture-player-0123456789/replays/r-0123456789abcdef01234567";
+    const apiPath = "/v1/public/replays/fixture-player-0123456789/r-0123456789abcdef01234567";
+    const signedPath = `${apiPath}/file?token=1794560000000.${"A".repeat(43)}`;
+    const fetchDownload = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: signedPath, filename: "guide-example.SC2Replay", expiresIn: 60 }),
+    });
+    vi.stubGlobal("fetch", fetchDownload);
+    const downloads: HTMLAnchorElement[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      downloads.push(this);
+    });
+    await renderPage();
+
+    expect(screen.getByRole("heading", { name: "Example replays" })).toBeTruthy();
+    const open = screen.getByRole("link", { name: "View replay — FixturePlayer on Old Sun Temple" });
+    expect(open.getAttribute("href")).toBe(replayPath);
+    expect(open.textContent?.trim()).toBe("View replay");
+    const download = screen.getByRole("button", { name: "Download replay — FixturePlayer on Old Sun Temple" });
+    expect(download.textContent).toBe("Download replay");
+    expect(fetchDownload).not.toHaveBeenCalled();
+
+    fireEvent.click(download);
+    await waitFor(() => expect(downloads).toHaveLength(1));
+    expect(fetchDownload).toHaveBeenCalledWith(
+      `https://api.example.test${apiPath}/download`,
+      { headers: { accept: "application/json" }, cache: "no-store" },
+    );
+    expect(downloads[0].href).toBe(`https://api.example.test${signedPath}`);
+    expect(downloads[0].download).toBe("guide-example.SC2Replay");
+  });
+
+  it("omits Related and its navigation link when replay links are stale or malformed", async () => {
+    const [example] = FIXTURE_BUILD_PUBLISHED.examples;
+    mocks.fetchGuideBuild.mockResolvedValue(ok({
+      ...FIXTURE_BUILD_PUBLISHED,
+      related: [],
+      communityBuilds: [],
+      examples: [
+        { ...example, replayRef: undefined, href: `/players/${example.handle}/replays` },
+        { ...example, href: `${example.href}-wrong` },
+      ],
+    }));
+    await renderPage();
+    expect(screen.queryByRole("heading", { name: "Related" })).toBeNull();
+    expect(within(screen.getByRole("navigation", { name: "On this page" })).queryByRole("link", { name: "Related" })).toBeNull();
   });
 
   it("links only the maps whose map guide is published (the rest are plain names)", async () => {

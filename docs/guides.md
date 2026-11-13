@@ -210,12 +210,12 @@ not announced as new again.
   `apps/api/__tests__/guidesNoPii.test.js` seeds known names and ids and
   asserts none of them appear in any public response.
 - **Example replays** come only from users who enabled public replay
-  sharing. The API re-checks sharing (and the current display name) on
-  every read, so a user who stops sharing or deletes their account drops
-  out of API responses at once. Rendered guide pages reuse cached API data,
-  so they can keep showing that user for up to 6 hours, or until the next
-  nightly revalidation ping. Examples link to that user's public replay
-  list, never to a game id (game ids embed the opponent's name).
+  sharing. The API checks current sharing, replay eligibility and the
+  stored-file marker on every read. The guide links to each replay using an
+  opaque reference because raw game IDs can contain opponent names. Anyone
+  can open the replay preview or download the file. Detailed analysis requires
+  sign-in. Preview and download requests check current sharing even when the
+  guide page is cached.
 
 ## Slugs
 

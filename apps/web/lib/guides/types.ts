@@ -368,12 +368,14 @@ export interface GuideCommunityBuildLink {
 
 export interface GuideExampleReplay {
   handle: string;
+  /** Opaque reference to the shared replay. */
+  replayRef: string;
   displayName: string | null;
   result: GuideGameResult;
   map: string | null;
   durationSec: number | null;
   playedAt: string;
-  /** "/players/<handle>/replays". */
+  /** "/players/<handle>/replays/<replayRef>". */
   href: string;
 }
 
@@ -427,7 +429,7 @@ export interface GuideBuildPublished extends GuideBuildBase {
   related: GuideRelatedBuild[];
   /** ≤ 3 exact-name community builds. */
   communityBuilds: GuideCommunityBuildLink[];
-  /** ≤ 3, re-verified sharing users only. */
+  /** ≤ 3, verified shared replays with an archived file. */
   examples: GuideExampleReplay[];
   notes: GuideNotes | null;
 }

@@ -4,12 +4,10 @@
  * Example replays for published guide build pages.
  *
  * Only users who opted into public replay sharing (``users.replaySharing``
- * enabled with a canonical slug) can appear, and only through what their
- * public library already shows: handle (the sharing slug), display name,
- * result, map, length and date. No gameId and no opponent field is ever
- * read into an example, so a guide page cannot deep-link a private game
- * or name an opponent. The read layer re-verifies ``enabled`` at serve
- * time, so a user who stops sharing disappears before the next run.
+ * enabled with a canonical slug) can appear. Each example stores an opaque
+ * replay reference and public match metadata. Raw game IDs can contain
+ * opponent names and are never projected into an example. The read layer
+ * checks current sharing and replay eligibility before exposing a link.
  *
  * Query plan: sharing users come from the partial ``replaySharing.slug``
  * index; their games from ``{ userId, myBuild, date }`` (hinted) with the
@@ -17,7 +15,8 @@
  */
 
 const { GUIDE_EXAMPLES_MAX, GUIDE_CURRENT_ERA } = require("../config/guides");
-const { eraExpression } = require("../util/patchEra");
+const { buildEraMatch } = require("../util/patchEra");
+const { publicReplayReference } = require("../util/publicReplayReference");
 const { guideGamesMatch } = require("./guideRules");
 const { GUIDE_PIPELINE_MAX_MS } = require("./guideStatsPipelines");
 
@@ -33,10 +32,12 @@ const MAX_SHARING_USERS = 5000;
 const MAP_MAX_CHARS = 200;
 const RESULTS = new Set(["Victory", "Defeat", "Tie"]);
 const EXAMPLES_INDEX = Object.freeze({ userId: 1, myBuild: 1, date: -1 });
+const EXAMPLE_FIELDS = Object.freeze({ date: 1, result: 1, map: 1, durationSec: 1 });
 
 /**
  * @typedef {object} GuideExample
- * @property {string} handle         replay-sharing slug (/players/<handle>/replays)
+ * @property {string} handle replay-sharing slug
+ * @property {string} replayRef opaque reference to one game
  * @property {string} displayName
  * @property {"Victory"|"Defeat"|"Tie"} result
  * @property {string|null} map
@@ -83,6 +84,23 @@ async function loadSharingUsers(users) {
 }
 
 /**
+ * @param {string} matchup
+ * @param {string[]} buildKeys published builds
+ */
+function exampleGamesMatch(matchup, buildKeys) {
+  return {
+    ...guideGamesMatch(matchup),
+    ...buildEraMatch(GUIDE_CURRENT_ERA),
+    _id: { $type: "objectId" },
+    myBuild: { $type: "string", $in: buildKeys },
+    date: { $type: "date" },
+    result: { $in: [...RESULTS] },
+    "replayFile.storedAt": { $type: "date" },
+    "replayFile.sizeBytes": { $gt: 0, $lte: Number.MAX_SAFE_INTEGER },
+  };
+}
+
+/**
  * Newest current-era game per (build, sharing user), newest users first,
  * GUIDE_EXAMPLES_MAX per build.
  *
@@ -95,21 +113,18 @@ function buildExamplesPipeline(matchup, buildKeys, userIds) {
   return [
     {
       $match: {
-        ...guideGamesMatch(matchup),
-        myBuild: { $type: "string", $in: buildKeys },
+        ...exampleGamesMatch(matchup, buildKeys),
         userId: { $in: userIds },
-        "replayFile.storedAt": { $exists: true },
       },
     },
     {
       $project: {
-        _id: 0, userId: 1, build: "$myBuild", date: 1, result: 1, map: 1, durationSec: 1, era: eraExpression(),
+        userId: 1, build: "$myBuild", ...EXAMPLE_FIELDS,
       },
     },
-    { $match: { era: GUIDE_CURRENT_ERA, date: { $type: "date" } } },
-    { $sort: { date: -1 } },
+    { $sort: { date: -1, _id: -1 } },
     { $group: { _id: { build: "$build", userId: "$userId" }, game: { $first: "$$ROOT" } } },
-    { $sort: { "game.date": -1 } },
+    { $sort: { "game.date": -1, "game._id": -1 } },
     { $group: { _id: "$_id.build", games: { $push: "$game" } } },
     { $project: { _id: 0, build: "$_id", games: { $slice: ["$games", GUIDE_EXAMPLES_MAX] } } },
   ];
@@ -121,7 +136,8 @@ function buildExamplesPipeline(matchup, buildKeys, userIds) {
  * @returns {GuideExample|null}
  */
 function toExample(game, profile) {
-  if (!RESULTS.has(game.result) || !(game.date instanceof Date)) return null;
+  const replayRef = publicReplayReference(game._id);
+  if (!replayRef || !RESULTS.has(game.result) || !(game.date instanceof Date)) return null;
   const map = typeof game.map === "string" && game.map.length > 0 && game.map.length <= MAP_MAX_CHARS
     ? game.map
     : null;
@@ -130,6 +146,7 @@ function toExample(game, profile) {
     : null;
   return {
     handle: profile.handle,
+    replayRef,
     displayName: profile.displayName,
     result: game.result,
     map,
@@ -175,4 +192,4 @@ async function examplesForMatchup(games, matchup, buildKeys, profiles) {
   return byBuild;
 }
 
-module.exports = { loadSharingUsers, examplesForMatchup, publicDisplayName };
+module.exports = { loadSharingUsers, examplesForMatchup, publicDisplayName, exampleGamesMatch, EXAMPLE_FIELDS, toExample };

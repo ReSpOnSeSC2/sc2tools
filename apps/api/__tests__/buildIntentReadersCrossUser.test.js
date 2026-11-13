@@ -151,7 +151,7 @@ describe("guide eligibility and samples", () => {
     // The disagreeing row is the newest STARGATE-labelled replay.
     await seedAll((row) => ({
       ...row,
-      replayFile: { storedAt: new Date("2026-10-20T00:00:00Z") },
+      replayFile: { storedAt: new Date("2026-10-20T00:00:00Z"), sizeBytes: 1000 },
       ...(row.gameId === "disagree" ? { date: new Date("2026-10-19T18:00:00.000Z") } : {}),
     }));
     const profiles = new Map([[USER, { handle: "owner-0123456789", displayName: "Owner" }]]);

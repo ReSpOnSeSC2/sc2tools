@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { GuideMarkdown } from "@/lib/guides/markdown";
 import { WinRateCell } from "@/components/guides/WinRateCell";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS } from "@/components/guides/guideUi";
+import { PublicReplayDownloadButton } from "@/components/public-profile/PublicReplayDownloadButton";
 import { fmtClock, fmtCount, fmtCountNoun, fmtGuideDate, fmtPct } from "@/lib/guides/format";
 import type {
   GuideCommunityBuildLink,
@@ -13,6 +15,7 @@ import type {
   GuideNotes,
   GuideRelatedBuild,
 } from "@/lib/guides/types";
+import { hasCommunityBuildLink, hasExampleReplayLink } from "./buildGuideSections";
 
 /**
  * Build guide sections 8 (common macro leaks), 9 (related openers,
@@ -20,9 +23,6 @@ import type {
  * itself when its data is empty.
  */
 
-/** Example replays only ever link to the sharing player's public replay list. */
-const PLAYER_REPLAYS_HREF_RE = /^\/players\/[A-Za-z0-9_-]{1,64}\/replays$/;
-const COMMUNITY_SLUG_RE = /^[A-Za-z0-9-]{1,120}$/;
 const MACRO_SCORE_DECIMALS = 1;
 
 export function BuildLeaksSection({ leaks, macro }: { leaks: GuideLeaks | null; macro: GuideMacro | null }) {
@@ -87,13 +87,12 @@ function RelatedOpeners({ related, matchupSlug }: { related: ReadonlyArray<Guide
 }
 
 function CommunityBuilds({ builds }: { builds: ReadonlyArray<GuideCommunityBuildLink> }) {
-  const safe = builds.filter((build) => COMMUNITY_SLUG_RE.test(build.slug));
-  if (safe.length === 0) return null;
+  if (builds.length === 0) return null;
   return (
     <div className="space-y-1">
       <h3 className="text-caption font-semibold uppercase tracking-wider text-text-dim">Community builds</h3>
       <ul className="space-y-1 text-caption">
-        {safe.map((build) => (
+        {builds.map((build) => (
           <li key={build.slug}>
             <Link href={`/community/builds/${build.slug}`} className={GUIDE_LINK_CLASS}>
               {build.title}
@@ -106,25 +105,43 @@ function CommunityBuilds({ builds }: { builds: ReadonlyArray<GuideCommunityBuild
 }
 
 function ExampleReplays({ examples }: { examples: ReadonlyArray<GuideExampleReplay> }) {
-  const safe = examples.filter((example) => PLAYER_REPLAYS_HREF_RE.test(example.href));
-  if (safe.length === 0) return null;
+  if (examples.length === 0) return null;
   return (
-    <div className="space-y-1">
-      <h3 className="text-caption font-semibold uppercase tracking-wider text-text-dim">Example replays</h3>
-      <ul className="space-y-1 text-caption">
-        {safe.map((example) => (
-          <li key={`${example.handle}-${example.playedAt}`}>
-            <Link href={example.href} className={GUIDE_LINK_CLASS}>
-              {example.displayName ?? example.handle}
-            </Link>{" "}
-            <span className="text-text-muted">
-              · {example.result}
-              {example.map ? ` on ${example.map}` : ""}
-              {example.durationSec !== null ? ` · ${fmtClock(example.durationSec)}` : ""}
-              {` · ${fmtGuideDate(example.playedAt)}`}
-            </span>
-          </li>
-        ))}
+    <div className={`${GUIDE_PANEL_CLASS} min-w-0 p-4`}>
+      <h3 className="mb-1 font-display text-h4 font-bold text-text">Example replays</h3>
+      <ul className="divide-y divide-border text-caption">
+        {examples.map((example) => {
+          const player = example.displayName ?? example.handle;
+          const replayLabel = example.map ? `${player} on ${example.map}` : player;
+          return (
+            <li key={`${example.handle}-${example.replayRef}`} className="space-y-2 py-3">
+              <p className="break-words font-semibold text-text">{player}</p>
+              <p className="break-words text-text-muted">
+                {example.result}
+                {example.map ? ` on ${example.map}` : ""}
+                {example.durationSec !== null ? ` · ${fmtClock(example.durationSec)}` : ""}
+                {` · ${fmtGuideDate(example.playedAt)}`}
+              </p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <Link
+                  href={example.href}
+                  prefetch={false}
+                  aria-label={`View replay — ${replayLabel}`}
+                  className={`${GUIDE_LINK_CLASS} inline-flex min-h-11 items-center gap-1.5`}
+                >
+                  View replay <ArrowRight className="h-4 w-4" aria-hidden />
+                </Link>
+                <PublicReplayDownloadButton
+                  handle={example.handle}
+                  gameId={example.replayRef}
+                  available
+                  showLabel
+                  contextLabel={replayLabel}
+                />
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -141,15 +158,20 @@ export function BuildRelatedSection({
   examples: ReadonlyArray<GuideExampleReplay>;
   matchupSlug: string;
 }) {
-  if (related.length === 0 && communityBuilds.length === 0 && examples.length === 0) return null;
+  const communityLinks = communityBuilds.filter(hasCommunityBuildLink);
+  const replayLinks = examples.filter(hasExampleReplayLink);
+  const hasLinks = communityLinks.length > 0 || replayLinks.length > 0;
+  if (related.length === 0 && !hasLinks) return null;
   return (
     <Section id="related" title="Related">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className={`grid items-start gap-4${related.length > 0 && hasLinks ? " md:grid-cols-2" : ""}`}>
         <RelatedOpeners related={related} matchupSlug={matchupSlug} />
-        <div className="space-y-4">
-          <CommunityBuilds builds={communityBuilds} />
-          <ExampleReplays examples={examples} />
-        </div>
+        {hasLinks ? (
+          <div className="min-w-0 space-y-4">
+            <ExampleReplays examples={replayLinks} />
+            <CommunityBuilds builds={communityLinks} />
+          </div>
+        ) : null}
       </div>
     </Section>
   );

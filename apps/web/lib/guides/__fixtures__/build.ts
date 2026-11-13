@@ -238,13 +238,14 @@ export const FIXTURE_BUILD_PUBLISHED: GuideBuildPublished = {
   communityBuilds: [{ slug: "pvz-stargate-into-glaives-7f3k", title: STARGATE_GLAIVES }],
   examples: [
     {
-      handle: "fixture-player",
+      handle: "fixture-player-0123456789",
+      replayRef: "r-0123456789abcdef01234567",
       displayName: "FixturePlayer",
       result: "Victory",
       map: "Old Sun Temple",
       durationSec: 604,
       playedAt: "2026-09-25T20:41:09.000Z",
-      href: "/players/fixture-player/replays",
+      href: "/players/fixture-player-0123456789/replays/r-0123456789abcdef01234567",
     },
   ],
   notes: {
