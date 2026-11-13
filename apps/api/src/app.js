@@ -273,6 +273,8 @@ const { buildDailyCrowdRouter } = require("./routes/dailyCrowd");
 const { DailyCrowdService } = require("./services/dailyCrowd");
 const { buildCommunityRouter } = require("./routes/community");
 const { buildSeasonsRouter } = require("./routes/seasons");
+const { buildPulseBalanceRouter } = require("./routes/pulseBalance");
+const { PulseBalanceStore } = require("./services/pulseBalanceStore");
 const { buildClerkWebhookRouter } = require("./routes/clerkWebhook");
 const { buildAdminRouter } = require("./routes/admin");
 const { buildMessagesRouter } = require("./routes/messages");
@@ -735,6 +737,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   // the overlay token in the URL path is the credential, same trust
   // model as the OBS Browser Source.
   const seasons = new SeasonsService();
+  const pulseBalance = new PulseBalanceStore({ current: deps.db.pulseBalanceCurrent, daily: deps.db.pulseBalanceDaily });
   const chatStats = new ChatStatsService(deps.db, { seasons });
   const chatbot = new ChatbotService(deps.db, {
     overlayTokens,
@@ -1148,6 +1151,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     dataRepairs,
     community,
     seasons,
+    pulseBalance,
     arcade,
     tickerFacts,
     twitchChatBot,
@@ -1527,6 +1531,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     );
   }
   app.use(SERVICE.ROUTE_PREFIX, buildSeasonsRouter({ seasons: services.seasons }));
+  app.use(SERVICE.ROUTE_PREFIX, buildPulseBalanceRouter({ pulseBalance: services.pulseBalance }));
   // Public, corpus-wide, k-anonymous meta report (no user data) — read
   // by the web's Ladder Pulse without a token; mounts with the public
   // routers.

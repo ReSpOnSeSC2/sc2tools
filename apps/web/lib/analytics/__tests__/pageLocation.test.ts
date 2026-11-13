@@ -21,6 +21,7 @@ describe("isUntrackedPath", () => {
     "/dock/tok123",
     "/wrapped",
     "/career",
+    "/balance",
     "/arcade/scout",
     "/match/room",
     "/match/%72oom",

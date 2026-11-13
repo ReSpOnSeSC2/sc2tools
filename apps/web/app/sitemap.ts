@@ -42,6 +42,7 @@ const ROUTES: Route[] = [
   { path: "/", priority: 1.0, changeFrequency: "weekly", lastModified: "2026-09-29" },
   { path: "/arcade", priority: 0.7, changeFrequency: "daily", lastModified: "2026-11-12" },
   { path: "/arcade/scout", priority: 0.7, changeFrequency: "daily", lastModified: "2026-11-13" },
+  { path: "/balance", priority: 0.7, changeFrequency: "daily" },
   { path: "/match", priority: 0.6, changeFrequency: "monthly", lastModified: "2026-11-12" },
   { path: "/download", priority: 0.9, changeFrequency: "weekly", lastModified: "2026-09-29" },
   { path: "/stream-studio", priority: 0.9, changeFrequency: "monthly", lastModified: "2026-10-16" },

@@ -47,6 +47,11 @@ describe("sitemap", () => {
     expect(rows.find(row => row.url === `${SITE}/arcade/scout`)?.changeFrequency).toBe("daily");
   });
 
+  it("lists the public ladder balance page", async () => {
+    const rows = await sitemap();
+    expect(rows.find(row => row.url === `${SITE}/balance`)?.changeFrequency).toBe("daily");
+  });
+
   it("keeps the OBS watch source out of search", async () => {
     expect(await urls()).not.toContain(`${SITE}/overlay/match-room`);
   });

@@ -122,6 +122,9 @@ services:
         # batch size. Client-side Retry-After + adaptive batching remain as
         # the belt-and-suspenders bound on server load.
         value: "600"
+      # Dashboard-managed rollout for the SC2Pulse aggregate snapshot job.
+      - key: SC2TOOLS_PULSE_BALANCE_ENABLED
+        sync: false
       # Official creator-account notifications. Values stay dashboard-managed:
       # sync:false preserves them across Blueprint redeploys and never stores a
       # credential in Git. Callback defaults already target api.sc2tools.com;

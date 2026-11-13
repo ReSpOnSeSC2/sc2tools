@@ -18,6 +18,7 @@
     "/career": 215,
     "/arcade": 215,
     "/arcade/scout": 215,
+    "/balance": 130,
     "/match": 215,
     "/match/room": 215,
     "/p/[handle]/live": 200,

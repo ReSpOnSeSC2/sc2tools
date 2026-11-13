@@ -38,6 +38,7 @@ const {
 const {
   buildLadderMetaRecomputeJob,
 } = require("./jobs/ladderMetaRecomputeJob");
+const { buildPulseBalanceSnapshotJob } = require("./jobs/pulseBalanceSnapshotJob");
 const { buildReviewDigestJob } = require("./jobs/reviewDigestJob");
 const { buildCustomBuildTrashPurgeJob } = require("./jobs/customBuildTrashPurgeJob");
 const { buildBackupHealthJob } = require("./jobs/backupHealthJob");
@@ -412,6 +413,14 @@ async function main() {
     logger,
   });
   ladderMetaJob.start();
+  const pulseBalanceJob = buildPulseBalanceSnapshotJob({
+    db,
+    store: /** @type {import("./services/pulseBalanceStore").PulseBalanceStore} */ (services.pulseBalance),
+    seasons: /** @type {import("./services/seasons").SeasonsService} */ (services.seasons),
+    jobLedger: /** @type {import("./util/jobLedger").JobLedger} */ (services.jobLedger),
+    logger,
+  });
+  pulseBalanceJob.start();
 
   // SC2 Tools Guides nightly guide_stats rebuild (+ web ISR revalidation).
   // First check 15 min after boot (after ladderMeta's boot rebuild), then
@@ -506,6 +515,7 @@ async function main() {
     await classifierQualityJob.stop();
     await fingerprintPopulationCalibrationJob.stop();
     await ladderMetaJob.stop();
+    await pulseBalanceJob.stop();
     await reviewDigestJob.stop();
     await backupHealthJob.stop();
     await identityDeletionJob.stop(); await deliveryJobs.stop();

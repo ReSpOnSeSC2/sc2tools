@@ -28,7 +28,7 @@ import { applyAppearanceAttributes, readStoredAppearance } from "@/lib/appearanc
 
 const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
-const STANDALONE_SURFACES = new Set(["/wrapped", "/career", "/arcade/scout"]);
+const STANDALONE_SURFACES = new Set(["/wrapped", "/career", "/arcade/scout", "/balance"]);
 
 /**
  * Chooses the browser surface before mounting Clerk or normal site chrome.

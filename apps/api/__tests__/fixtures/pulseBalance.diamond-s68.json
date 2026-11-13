@@ -1,0 +1,841 @@
+{
+  "maps": {
+    "55370": {
+      "id": 55370,
+      "name": "Lockdown LE"
+    },
+    "55371": {
+      "id": 55371,
+      "name": "Sanctuary III LE"
+    },
+    "55372": {
+      "id": 55372,
+      "name": "Rainfall LE"
+    },
+    "55373": {
+      "id": 55373,
+      "name": "Blackrock LE"
+    },
+    "55374": {
+      "id": 55374,
+      "name": "Old Sun Temple LE"
+    },
+    "55375": {
+      "id": 55375,
+      "name": "Fear and Faith LE"
+    },
+    "55376": {
+      "id": 55376,
+      "name": "At Eternity's Edge LE"
+    },
+    "55377": {
+      "id": 55377,
+      "name": "Washout LE"
+    },
+    "55378": {
+      "id": 55378,
+      "name": "Rorschach LE"
+    }
+  },
+  "seasons": {
+    "143825": {
+      "number": 3,
+      "year": 2026,
+      "start": "2026-07-19T06:00:00Z",
+      "end": "2026-11-10T08:00:00Z",
+      "id": 143825,
+      "battlenetId": 68,
+      "region": "US"
+    },
+    "143826": {
+      "number": 3,
+      "year": 2026,
+      "start": "2026-07-19T06:00:00Z",
+      "end": "2026-11-10T00:00:00Z",
+      "id": 143826,
+      "battlenetId": 68,
+      "region": "EU"
+    },
+    "143827": {
+      "number": 3,
+      "year": 2026,
+      "start": "2026-07-20T06:00:00Z",
+      "end": "2026-11-09T15:00:00Z",
+      "id": 143827,
+      "battlenetId": 68,
+      "region": "KR"
+    }
+  },
+  "leagues": {
+    "4237296": {
+      "type": 4,
+      "queueType": 201,
+      "teamType": 0,
+      "id": 4237296,
+      "seasonId": 143825
+    },
+    "4237432": {
+      "type": 4,
+      "queueType": 201,
+      "teamType": 0,
+      "id": 4237432,
+      "seasonId": 143826
+    },
+    "4237489": {
+      "type": 4,
+      "queueType": 201,
+      "teamType": 0,
+      "id": 4237489,
+      "seasonId": 143827
+    }
+  },
+  "tiers": {
+    "11998154": {
+      "type": 0,
+      "minRating": 3773,
+      "maxRating": 4120,
+      "id": 11998154,
+      "leagueId": 4237296
+    },
+    "11998562": {
+      "type": 0,
+      "minRating": 3867,
+      "maxRating": 4240,
+      "id": 11998562,
+      "leagueId": 4237432
+    },
+    "11998803": {
+      "type": 0,
+      "minRating": 4120,
+      "maxRating": 4560,
+      "id": 11998803,
+      "leagueId": 4237489
+    }
+  },
+  "specs": {
+    "1": {
+      "id": 1,
+      "race": "RANDOM",
+      "versusRace": "TERRAN",
+      "frameDuration": "PT1M"
+    },
+    "2": {
+      "id": 2,
+      "race": "RANDOM",
+      "versusRace": "PROTOSS",
+      "frameDuration": "PT1M"
+    },
+    "3": {
+      "id": 3,
+      "race": "RANDOM",
+      "versusRace": "ZERG",
+      "frameDuration": "PT1M"
+    },
+    "4": {
+      "id": 4,
+      "race": "TERRAN",
+      "versusRace": "ZERG",
+      "frameDuration": "PT1M"
+    },
+    "5": {
+      "id": 5,
+      "race": "PROTOSS",
+      "versusRace": "TERRAN",
+      "frameDuration": "PT1M"
+    },
+    "6": {
+      "id": 6,
+      "race": "ZERG",
+      "versusRace": "PROTOSS",
+      "frameDuration": "PT1M"
+    }
+  },
+  "films": {
+    "76609": {
+      "id": 76609,
+      "mapId": 55370,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 4,
+      "crossTier": false
+    },
+    "76610": {
+      "id": 76610,
+      "mapId": 55370,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 4,
+      "crossTier": true
+    },
+    "76611": {
+      "id": 76611,
+      "mapId": 55370,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 5,
+      "crossTier": false
+    },
+    "76612": {
+      "id": 76612,
+      "mapId": 55370,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 6,
+      "crossTier": false
+    },
+    "76613": {
+      "id": 76613,
+      "mapId": 55370,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 6,
+      "crossTier": true
+    },
+    "76648": {
+      "id": 76648,
+      "mapId": 55370,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 5,
+      "crossTier": true
+    },
+    "76741": {
+      "id": 76741,
+      "mapId": 55371,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 4,
+      "crossTier": false
+    },
+    "76742": {
+      "id": 76742,
+      "mapId": 55371,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 5,
+      "crossTier": false
+    },
+    "76743": {
+      "id": 76743,
+      "mapId": 55371,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 6,
+      "crossTier": false
+    },
+    "76744": {
+      "id": 76744,
+      "mapId": 55371,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 6,
+      "crossTier": true
+    },
+    "76757": {
+      "id": 76757,
+      "mapId": 55371,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 5,
+      "crossTier": false
+    },
+    "76822": {
+      "id": 76822,
+      "mapId": 55372,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 1,
+      "crossTier": true
+    },
+    "76823": {
+      "id": 76823,
+      "mapId": 55372,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 3,
+      "crossTier": false
+    },
+    "76827": {
+      "id": 76827,
+      "mapId": 55372,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 5,
+      "crossTier": true
+    },
+    "76885": {
+      "id": 76885,
+      "mapId": 55372,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 6,
+      "crossTier": false
+    },
+    "76886": {
+      "id": 76886,
+      "mapId": 55372,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 6,
+      "crossTier": true
+    },
+    "76944": {
+      "id": 76944,
+      "mapId": 55373,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 2,
+      "crossTier": false
+    },
+    "76988": {
+      "id": 76988,
+      "mapId": 55373,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 4,
+      "crossTier": true
+    },
+    "77062": {
+      "id": 77062,
+      "mapId": 55374,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 4,
+      "crossTier": false
+    },
+    "77107": {
+      "id": 77107,
+      "mapId": 55375,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 1,
+      "crossTier": false
+    },
+    "77444": {
+      "id": 77444,
+      "mapId": 55378,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 5,
+      "crossTier": true
+    },
+    "77740": {
+      "id": 77740,
+      "mapId": 55374,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 1,
+      "crossTier": false
+    },
+    "77919": {
+      "id": 77919,
+      "mapId": 55377,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 4,
+      "crossTier": true
+    },
+    "78048": {
+      "id": 78048,
+      "mapId": 55370,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 3,
+      "crossTier": true
+    },
+    "78081": {
+      "id": 78081,
+      "mapId": 55371,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 2,
+      "crossTier": false
+    },
+    "78441": {
+      "id": 78441,
+      "mapId": 55372,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 3,
+      "crossTier": true
+    },
+    "78454": {
+      "id": 78454,
+      "mapId": 55372,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 1,
+      "crossTier": true
+    },
+    "78704": {
+      "id": 78704,
+      "mapId": 55370,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 3,
+      "crossTier": false
+    },
+    "78733": {
+      "id": 78733,
+      "mapId": 55371,
+      "leagueTierId": 11998154,
+      "mapStatsFilmSpecId": 2,
+      "crossTier": true
+    },
+    "78866": {
+      "id": 78866,
+      "mapId": 55375,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 2,
+      "crossTier": false
+    },
+    "79163": {
+      "id": 79163,
+      "mapId": 55376,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 2,
+      "crossTier": true
+    },
+    "79410": {
+      "id": 79410,
+      "mapId": 55376,
+      "leagueTierId": 11998562,
+      "mapStatsFilmSpecId": 3,
+      "crossTier": true
+    },
+    "79899": {
+      "id": 79899,
+      "mapId": 55370,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 1,
+      "crossTier": true
+    },
+    "79944": {
+      "id": 79944,
+      "mapId": 55372,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 2,
+      "crossTier": true
+    },
+    "80084": {
+      "id": 80084,
+      "mapId": 55371,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 1,
+      "crossTier": false
+    },
+    "80168": {
+      "id": 80168,
+      "mapId": 55375,
+      "leagueTierId": 11998803,
+      "mapStatsFilmSpecId": 3,
+      "crossTier": false
+    }
+  },
+  "frames": [
+    {
+      "mapStatsFilmId": 77107,
+      "number": null,
+      "wins": 3,
+      "games": 10
+    },
+    {
+      "mapStatsFilmId": 77107,
+      "number": 9,
+      "wins": 7,
+      "games": 12
+    },
+    {
+      "mapStatsFilmId": 77740,
+      "number": null,
+      "wins": 12,
+      "games": 29
+    },
+    {
+      "mapStatsFilmId": 77740,
+      "number": 13,
+      "wins": 6,
+      "games": 16
+    },
+    {
+      "mapStatsFilmId": 80084,
+      "number": null,
+      "wins": 9,
+      "games": 18
+    },
+    {
+      "mapStatsFilmId": 80084,
+      "number": 15,
+      "wins": 2,
+      "games": 3
+    },
+    {
+      "mapStatsFilmId": 76822,
+      "number": null,
+      "wins": 11,
+      "games": 28
+    },
+    {
+      "mapStatsFilmId": 76822,
+      "number": 0,
+      "wins": 12,
+      "games": 30
+    },
+    {
+      "mapStatsFilmId": 78454,
+      "number": null,
+      "wins": 8,
+      "games": 14
+    },
+    {
+      "mapStatsFilmId": 78454,
+      "number": 7,
+      "wins": 7,
+      "games": 13
+    },
+    {
+      "mapStatsFilmId": 79899,
+      "number": null,
+      "wins": 3,
+      "games": 5
+    },
+    {
+      "mapStatsFilmId": 79899,
+      "number": 19,
+      "wins": 1,
+      "games": 2
+    },
+    {
+      "mapStatsFilmId": 76944,
+      "number": null,
+      "wins": 15,
+      "games": 29
+    },
+    {
+      "mapStatsFilmId": 76944,
+      "number": 2,
+      "wins": 12,
+      "games": 16
+    },
+    {
+      "mapStatsFilmId": 78081,
+      "number": null,
+      "wins": 17,
+      "games": 29
+    },
+    {
+      "mapStatsFilmId": 78081,
+      "number": 8,
+      "wins": 14,
+      "games": 25
+    },
+    {
+      "mapStatsFilmId": 78866,
+      "number": null,
+      "wins": 0,
+      "games": 1
+    },
+    {
+      "mapStatsFilmId": 78866,
+      "number": 6,
+      "wins": 1,
+      "games": 2
+    },
+    {
+      "mapStatsFilmId": 78733,
+      "number": null,
+      "wins": 11,
+      "games": 24
+    },
+    {
+      "mapStatsFilmId": 78733,
+      "number": 9,
+      "wins": 12,
+      "games": 21
+    },
+    {
+      "mapStatsFilmId": 79163,
+      "number": null,
+      "wins": 8,
+      "games": 15
+    },
+    {
+      "mapStatsFilmId": 79163,
+      "number": 11,
+      "wins": 7,
+      "games": 13
+    },
+    {
+      "mapStatsFilmId": 79944,
+      "number": null,
+      "wins": 4,
+      "games": 5
+    },
+    {
+      "mapStatsFilmId": 79944,
+      "number": 0,
+      "wins": 6,
+      "games": 12
+    },
+    {
+      "mapStatsFilmId": 76823,
+      "number": null,
+      "wins": 19,
+      "games": 54
+    },
+    {
+      "mapStatsFilmId": 76823,
+      "number": 0,
+      "wins": 11,
+      "games": 69
+    },
+    {
+      "mapStatsFilmId": 78704,
+      "number": null,
+      "wins": 14,
+      "games": 41
+    },
+    {
+      "mapStatsFilmId": 78704,
+      "number": 20,
+      "wins": 7,
+      "games": 13
+    },
+    {
+      "mapStatsFilmId": 80168,
+      "number": null,
+      "wins": 3,
+      "games": 3
+    },
+    {
+      "mapStatsFilmId": 80168,
+      "number": 4,
+      "wins": 1,
+      "games": 5
+    },
+    {
+      "mapStatsFilmId": 78441,
+      "number": null,
+      "wins": 8,
+      "games": 27
+    },
+    {
+      "mapStatsFilmId": 78441,
+      "number": 19,
+      "wins": 4,
+      "games": 8
+    },
+    {
+      "mapStatsFilmId": 79410,
+      "number": null,
+      "wins": 5,
+      "games": 12
+    },
+    {
+      "mapStatsFilmId": 79410,
+      "number": 13,
+      "wins": 12,
+      "games": 18
+    },
+    {
+      "mapStatsFilmId": 78048,
+      "number": null,
+      "wins": 2,
+      "games": 8
+    },
+    {
+      "mapStatsFilmId": 78048,
+      "number": 12,
+      "wins": 3,
+      "games": 5
+    },
+    {
+      "mapStatsFilmId": 76609,
+      "number": null,
+      "wins": 86,
+      "games": 156
+    },
+    {
+      "mapStatsFilmId": 76609,
+      "number": 12,
+      "wins": 135,
+      "games": 243
+    },
+    {
+      "mapStatsFilmId": 76741,
+      "number": null,
+      "wins": 86,
+      "games": 164
+    },
+    {
+      "mapStatsFilmId": 76741,
+      "number": 1,
+      "wins": 19,
+      "games": 33
+    },
+    {
+      "mapStatsFilmId": 77062,
+      "number": null,
+      "wins": 12,
+      "games": 23
+    },
+    {
+      "mapStatsFilmId": 77062,
+      "number": 11,
+      "wins": 17,
+      "games": 30
+    },
+    {
+      "mapStatsFilmId": 76610,
+      "number": null,
+      "wins": 39,
+      "games": 85
+    },
+    {
+      "mapStatsFilmId": 76610,
+      "number": 8,
+      "wins": 37,
+      "games": 54
+    },
+    {
+      "mapStatsFilmId": 77919,
+      "number": null,
+      "wins": 42,
+      "games": 85
+    },
+    {
+      "mapStatsFilmId": 77919,
+      "number": 17,
+      "wins": 28,
+      "games": 62
+    },
+    {
+      "mapStatsFilmId": 76988,
+      "number": null,
+      "wins": 11,
+      "games": 23
+    },
+    {
+      "mapStatsFilmId": 76988,
+      "number": 17,
+      "wins": 7,
+      "games": 16
+    },
+    {
+      "mapStatsFilmId": 76611,
+      "number": null,
+      "wins": 59,
+      "games": 97
+    },
+    {
+      "mapStatsFilmId": 76611,
+      "number": 44,
+      "wins": 2,
+      "games": 5
+    },
+    {
+      "mapStatsFilmId": 76742,
+      "number": null,
+      "wins": 50,
+      "games": 104
+    },
+    {
+      "mapStatsFilmId": 76742,
+      "number": 10,
+      "wins": 79,
+      "games": 158
+    },
+    {
+      "mapStatsFilmId": 76757,
+      "number": null,
+      "wins": 21,
+      "games": 41
+    },
+    {
+      "mapStatsFilmId": 76757,
+      "number": 10,
+      "wins": 26,
+      "games": 54
+    },
+    {
+      "mapStatsFilmId": 76827,
+      "number": null,
+      "wins": 35,
+      "games": 68
+    },
+    {
+      "mapStatsFilmId": 76827,
+      "number": 11,
+      "wins": 39,
+      "games": 92
+    },
+    {
+      "mapStatsFilmId": 77444,
+      "number": null,
+      "wins": 12,
+      "games": 25
+    },
+    {
+      "mapStatsFilmId": 77444,
+      "number": 6,
+      "wins": 36,
+      "games": 62
+    },
+    {
+      "mapStatsFilmId": 76648,
+      "number": null,
+      "wins": 13,
+      "games": 32
+    },
+    {
+      "mapStatsFilmId": 76648,
+      "number": 2,
+      "wins": 4,
+      "games": 9
+    },
+    {
+      "mapStatsFilmId": 76612,
+      "number": null,
+      "wins": 66,
+      "games": 115
+    },
+    {
+      "mapStatsFilmId": 76612,
+      "number": 4,
+      "wins": 72,
+      "games": 96
+    },
+    {
+      "mapStatsFilmId": 76743,
+      "number": null,
+      "wins": 56,
+      "games": 117
+    },
+    {
+      "mapStatsFilmId": 76743,
+      "number": 9,
+      "wins": 125,
+      "games": 223
+    },
+    {
+      "mapStatsFilmId": 76885,
+      "number": null,
+      "wins": 21,
+      "games": 49
+    },
+    {
+      "mapStatsFilmId": 76885,
+      "number": 18,
+      "wins": 14,
+      "games": 26
+    },
+    {
+      "mapStatsFilmId": 76613,
+      "number": null,
+      "wins": 33,
+      "games": 57
+    },
+    {
+      "mapStatsFilmId": 76613,
+      "number": 18,
+      "wins": 15,
+      "games": 38
+    },
+    {
+      "mapStatsFilmId": 76744,
+      "number": null,
+      "wins": 35,
+      "games": 53
+    },
+    {
+      "mapStatsFilmId": 76744,
+      "number": 10,
+      "wins": 44,
+      "games": 86
+    },
+    {
+      "mapStatsFilmId": 76886,
+      "number": null,
+      "wins": 20,
+      "games": 55
+    },
+    {
+      "mapStatsFilmId": 76886,
+      "number": 1,
+      "wins": 4,
+      "games": 21
+    }
+  ]
+}

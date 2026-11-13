@@ -116,6 +116,7 @@ describe("isolated broadcast and local recap routes", () => {
     "/dock/public-token",
     "/wrapped",
     "/career",
+    "/balance",
     "/card/report/summary",
     "/card/r%65port/%73ummary",
   ])("renders %s without Clerk or normal site chrome", (pathname) => {
