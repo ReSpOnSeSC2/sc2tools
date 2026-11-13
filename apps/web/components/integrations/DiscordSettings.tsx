@@ -127,7 +127,7 @@ function HookHeading({ hook, busy, privateEmbeds, onEnabled }: {
       <p className="text-caption text-text-muted">Webhook ending in …{hook.last4}{hook.lastPostAt ? ` · last post ${formatDateTime(new Date(hook.lastPostAt))}` : ""}</p>
     </div>
     <div className="flex min-h-11 items-center gap-3">{status}<Toggle
-      className="before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']" checked={hook.enabled}
+      className="before:absolute before:inset-x-0 before:-inset-y-3 before:content-['']" checked={hook.enabled}
       disabled={busy || (!hook.enabled && (!hook.previewed || !privateEmbeds))}
       onChange={onEnabled} label={`Post to ${hook.label}`} /></div>
   </div>;
