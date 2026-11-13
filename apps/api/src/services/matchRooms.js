@@ -178,6 +178,7 @@ class MatchRoomsService {
       : original;
     if (doc.rev !== rev) throw new MatchRoomError(409, "match_room_changed");
     const state = reduceMatchRoom(doc.state, role, action, now);
+    if (state === doc.state) return roomSnapshot(state, doc.rev, doc.expiresAt, now);
     const updated = await this.save(doc, state, now);
     if (!updated) throw new MatchRoomError(409, "match_room_changed");
     return roomSnapshot(updated.state, updated.rev, updated.expiresAt, now);

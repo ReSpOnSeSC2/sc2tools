@@ -16,17 +16,23 @@ export type RoomConfig = { format: Format; preset: Preset; maps: string[]; pract
 export type RoomInvite = { id: string; role: "watch" } | { id: string; role: Exclude<Role, "watch">; key: string };
 type Turn = { seat: Seat; kind: "pick" | "ban" };
 type Move = Turn & { map: number; automatic: boolean };
+type ReplayReport = { submittedBy: Seat; confirmed: boolean };
+type ReplayScore = { replayScoring: boolean; reports: (ReplayReport | null)[]; undoBy: Seat | null };
 export type Room = {
   config: RoomConfig; rev: number; expiresAt: number; serverTime: number; phase: "lobby" | "veto" | "play" | "complete";
   names: Record<Seat, string>; ready: Record<Seat, boolean>; score: Record<Seat, number>;
   first: Seat; turn: Turn | null; deadline: number | null; moves: Move[]; order: number[]; winners: Seat[];
+  replay?: ReplayScore;
 };
+export type ReportReplay = { type: "report_replay"; mapKey: string; winnerSeat: Seat; durationSec: number;
+  endedAt: number; receipt: string; toonDigests: Record<Seat, string> };
 export type RoomAction =
   | { type: "name"; value: string; as: Seat }
   | { type: "ready"; value: boolean; as: Seat }
   | { type: "veto"; map: number; as: Seat }
   | { type: "score"; winner: Seat }
-  | { type: "undo" };
+  | { type: "undo" }
+  | ReportReplay;
 
 export const SEATS = ["a", "b"] as const;
 const ID = /^[A-Za-z0-9_-]{32}$/;
@@ -64,7 +70,11 @@ export function invitePath(invite: RoomInvite): string {
 
 /** Derive the same seat key as the API so hosts can recover links after reload. */
 export async function deriveSeatKey(hostKey: string, seat: Seat) {
-  const input = new TextEncoder().encode("match-room/seat-" + seat + ":" + hostKey);
+  return roomDigest("match-room/seat-" + seat + ":" + hostKey);
+}
+
+export async function roomDigest(value: string) {
+  const input = new TextEncoder().encode(value);
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", input));
   return Array.from(digest, byte => byte.toString(16).padStart(2, "0")).join("");
 }
@@ -148,6 +158,17 @@ function roomProgress(value: Record<string, unknown>, mapCount: number) {
   return { phase, turn: isTurn(turn) ? turn : null, moves, order, winners };
 }
 
+function replayReport(value: unknown): ReplayReport | null {
+  return isRecord(value) && isSeat(value.submittedBy) && isBoolean(value.confirmed)
+    ? { submittedBy: value.submittedBy, confirmed: value.confirmed } : null;
+}
+
+function replayScore(value: Record<string, unknown>, gameCount: number): Pick<Room, "replay"> {
+  const { replayScoring, reports, undoBy } = value;
+  if (!isBoolean(replayScoring) || !Array.isArray(reports) || reports.length !== gameCount) return {};
+  return { replay: { replayScoring, reports: reports.map(replayReport), undoBy: isSeat(undoBy) ? undoBy : null } };
+}
+
 export function parseRoom(value: unknown): Room | null {
   if (!isRecord(value) || !validTiming(value)) return null;
   const { names, ready, score, first } = value;
@@ -156,7 +177,7 @@ export function parseRoom(value: unknown): Room | null {
   if (!config) return null;
   const progress = roomProgress(value, config.maps.length);
   if (!progress) return null;
-  return { config, names, ready, score, first, ...progress, rev: Number(value.rev),
+  return { config, names, ready, score, first, ...progress, ...replayScore(value, progress.winners.length), rev: Number(value.rev),
     expiresAt: Number(value.expiresAt), serverTime: Number(value.serverTime),
     deadline: value.deadline === null ? null : Number(value.deadline) };
 }

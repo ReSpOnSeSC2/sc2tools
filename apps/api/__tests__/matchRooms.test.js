@@ -8,6 +8,7 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 const { connect } = require("../src/db/connect");
 const { sha256 } = require("../src/util/hash");
 const { MatchRoomsService, LIFE_MS } = require("../src/services/matchRooms");
+const { replayReceipt } = require("../src/services/matchRoomReplayInput");
 const { buildMatchRoomsRouter } = require("../src/routes/matchRooms");
 const { sanitiseRequestUrl, sanitiseRequestForLog } = require("../src/middleware/requestLogging");
 
@@ -83,6 +84,27 @@ test("one revision wins concurrent writes from the two seats", async () => {
   expect(res.body.rev).toBe(1);
   expect(Object.values(res.body.names).filter(Boolean)).toHaveLength(1);
   await mutate(room, room.id, 1, { type: "name", value: "Watch" }).expect(403);
+});
+
+test("concurrent submissions score once and the other seat can confirm at the current revision", async () => {
+  const { body } = await postRoom(newAttempt(), { ...config, format: 1, maps: ["Alpha"] }).expect(201);
+  const room = { ...body, path: "/v1/match-rooms/" + body.id };
+  const keys = ["a", "b"].map(seat => seatKey(room.hostKey, seat));
+  await mutate(room, keys[0], 0, { type: "ready", value: true }).expect(200);
+  await mutate(room, keys[1], 1, { type: "ready", value: true }).expect(200);
+  now += 190_000;
+  const toonDigests = { a: "a".repeat(64), b: "b".repeat(64) };
+  const report = { type: "report_replay", mapKey: "alpha", winnerSeat: "b", durationSec: 180,
+    endedAt: now, receipt: replayReceipt("alpha", now, 180, toonDigests), toonDigests };
+  const writes = await Promise.all(keys.map(key => mutate(room, key, 2, report)));
+  expect(writes.map(result => result.status).sort()).toEqual([200, 409]);
+  const first = writes.find(result => result.status === 200);
+  const secondKey = keys[writes.findIndex(result => result.status === 409)];
+  const confirmed = await mutate(room, secondKey, first.body.rev, report).expect(200);
+  expect(confirmed.body).toMatchObject({ rev: 4, winners: ["b"], reports: [{ confirmed: true }] });
+  expect(JSON.stringify(confirmed.body)).not.toContain(report.receipt);
+  expect(JSON.stringify((await api.get(room.path).expect(200)).body)).not.toContain(toonDigests.a);
+  await mutate(room, secondKey, 4, report).expect(200).expect(result => expect(result.body.rev).toBe(4));
 });
 
 test("a stale revision rejects a write that would otherwise be legal", async () => {

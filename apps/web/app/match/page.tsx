@@ -14,7 +14,7 @@ export default function MatchPage() {
       <header className="space-y-2">
         <h1 className="font-display text-display-lg font-bold leading-tight text-text">Match Rooms</h1>
         <p className="max-w-prose text-body text-text-muted">
-          Run a StarCraft II map veto and keep score. Share a seat link with each player and a watch link with spectators.
+          Run a StarCraft II map veto and score games manually or from replays. Share a seat link with each player and a watch link with spectators.
         </p>
       </header>
       <MatchCreate />
