@@ -28,6 +28,7 @@ import { applyAppearanceAttributes, readStoredAppearance } from "@/lib/appearanc
 
 const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
+const STANDALONE_SURFACES = new Set(["/wrapped", "/career", "/arcade/scout"]);
 
 /**
  * Chooses the browser surface before mounting Clerk or normal site chrome.
@@ -82,7 +83,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Reachability checks must work even when authentication or app APIs fail.
   if (isPublicStatusRoute(pathname)) return <>{children}</>;
 
-  if (isTokenSurface || pathname === "/wrapped" || pathname === "/career" || isReportCardPath(pathname)) {
+  if (isTokenSurface || (pathname && STANDALONE_SURFACES.has(pathname)) || isReportCardPath(pathname)) {
     return (
       <ToastProvider>
         <main id="main-content" className={MAIN_CLASS}>

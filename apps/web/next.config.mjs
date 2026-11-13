@@ -102,16 +102,16 @@ function retiredToolRedirects(guidesOn) {
 }
 
 /** Marks visits that arrive from a share card, so they can be counted. */
-const dailyAssetHeaders = [
+const dailyAssetHeaders = ["/daily/v1", "/daily/scout/v1"].flatMap(root => [
   {
-    source: "/daily/v1/index.json",
+    source: root + "/index.json",
     headers: [{ key: "Cache-Control", value: "no-cache" }],
   },
   {
-    source: "/daily/v1/packs/:digest/:file*",
+    source: root + "/packs/:digest/:file*",
     headers: [{ key: "Cache-Control", value: IMMUTABLE_CACHE }],
   },
-];
+]);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

@@ -17,6 +17,10 @@ export default function ArcadePage() {
           Five StarCraft II fights. Pick which side trades better, then watch it play out.
         </p>
       </header>
+      <Link href="/arcade/scout" prefetch={false} className="block rounded-xl border border-line bg-bg-surface p-4 focus-visible:ring-2 focus-visible:ring-accent">
+        <span className="block font-semibold text-accent underline">Play Daily Scout</span>
+        <span className="text-body text-text-muted">Identify the opening from building locations and timings.</span>
+      </Link>
       <DailyArcade />
       <footer className="flex flex-wrap gap-x-6 gap-y-1 border-t border-line pt-2 text-caption">
         <Link href="/help/sc2-daily" prefetch={false} className="inline-flex min-h-11 items-center font-semibold text-accent underline focus-visible:ring-2 focus-visible:ring-accent">

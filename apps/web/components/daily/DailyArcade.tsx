@@ -6,35 +6,16 @@ import { CopyButton } from "@/components/ui/CopyButton";
 import { useCopy } from "@/lib/useCopy";
 import { loadDaily, type LoadedDay } from "@/lib/daily/loadDaily";
 import { browserStorage, completeDay, readResults, streakOn, type DailyKind } from "@/lib/daily/progress";
-import { DAY_MS, FIGHTS_PER_DAY, shareDaily, utcDay, type FightCall } from "@/lib/daily/rules";
+import { FIGHTS_PER_DAY, shareDaily, type FightCall } from "@/lib/daily/rules";
 import { readBallot, saveBallot, type DailyBallot } from "@/lib/daily/crowd";
 import { dailyFightLink, readFightLink } from "@/lib/daily/fightLink";
 import { CallTheFight, FightSkeleton } from "./CallTheFight";
 import { DailyCrowd } from "./DailyCrowd";
+import { useUtcDay } from "./useUtcDay";
 
 type Load = { day: number; standalone: boolean; attempt: number; data?: LoadedDay };
 type GradedCall = { correct: boolean; call: FightCall };
 type ResultsProps = { day: number; practice: boolean; results: boolean[]; focus: boolean };
-
-function useUtcDay(): number | null {
-  const [day, setDay] = useState<number | null>(null);
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const sync = () => {
-      clearTimeout(timer);
-      const now = Date.now(), current = utcDay(now);
-      setDay(current);
-      timer = setTimeout(sync, (current + 1) * DAY_MS - now + 25);
-    };
-    sync();
-    document.addEventListener("visibilitychange", sync);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("visibilitychange", sync);
-    };
-  }, []);
-  return day;
-}
 
 function useFightHash() {
   const [hash, setHash] = useState("");

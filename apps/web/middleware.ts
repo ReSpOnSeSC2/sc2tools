@@ -6,6 +6,7 @@ import { isPublicReplayReference, legacyReplayArchivePath } from "./lib/replayRo
 import { isPublicStatusRequest, statusHostRedirect } from "./lib/publicStatusRoute";
 
 const PERMANENT_REDIRECT = 308;
+const SESSIONLESS_PAGES = new Set(["/wrapped", "/wrapped/opengraph-image", "/career", "/arcade/scout"]);
 
 /**
  * A mixed-case guide URL ("/guides/PvZ/Stargate-into-Glaives") → 308 to
@@ -65,8 +66,8 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const statusRedirect = statusHostRedirect(req.url);
   if (statusRedirect) return NextResponse.redirect(statusRedirect, PERMANENT_REDIRECT);
   const pathname = req.nextUrl.pathname;
-  // Static replay views must work without a Clerk session handshake.
-  if (isPublicStatusRequest(pathname) || pathname === "/wrapped" || pathname === "/wrapped/opengraph-image" || pathname === "/career"
+  // Static replay views and Daily Scout work without a Clerk session handshake.
+  if (isPublicStatusRequest(pathname) || SESSIONLESS_PAGES.has(pathname)
     || isReportCardPath(pathname) || isReportCardPreviewPath(pathname)) {
     return NextResponse.next();
   }

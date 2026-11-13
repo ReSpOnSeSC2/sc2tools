@@ -1,48 +1,19 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
-import { link, mkdir, mkdtemp, open, readFile, rm, unlink, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { mkdir, open, readFile, unlink } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { publishIndex, readIndex } from "./daily/packIndex.mjs";
 import { recordingFights, resolveRecording } from "./daily/recordings.mjs";
+import { compileDailyHelpers, utcDate, writeImmutable } from "./daily/buildFiles.mjs";
 
-const require = createRequire(import.meta.url);
 const web = fileURLToPath(new URL("..", import.meta.url));
 const options = {
   practice: { type: "boolean" },
   plan: { type: "string" },
   out: { type: "string" },
 };
-
-async function loadHelpers() {
-  const tempRoot = resolve(tmpdir());
-  const prefix = "sc2-daily-build-";
-  const folder = await mkdtemp(join(tempRoot, prefix));
-  try {
-    execFileSync(process.execPath, [require.resolve("typescript/bin/tsc"),
-      "lib/daily/fixtureWeek.ts", "lib/segmentedPlayback.ts", "--strict", "--skipLibCheck", "--module", "commonjs",
-      "--target", "es2022", "--esModuleInterop", "--resolveJsonModule", "--outDir", folder],
-    { cwd: web, stdio: "inherit" });
-    const compiled = createRequire(join(folder, "loader.cjs"));
-    return Object.assign({}, ...["daily/buildPack", "daily/clip", "daily/fixtureWeek", "daily/rules", "segmentedPlayback"]
-      .map(module => compiled("./" + module + ".js")));
-  } finally {
-    if (dirname(folder) === tempRoot && basename(folder).startsWith(prefix)) {
-      await rm(folder, { recursive: true, force: true });
-    }
-  }
-}
-
-function utcDate(value) {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Use a UTC day in YYYY-MM-DD form.");
-  const instant = Date.parse(value + "T00:00:00Z");
-  if (!Number.isFinite(instant) || new Date(instant).toISOString().slice(0, 10) !== value) throw new Error("Invalid UTC day.");
-  return instant;
-}
 
 async function readPlan(path, helpers) {
   const plan = JSON.parse(await readFile(path, "utf8"));
@@ -55,18 +26,6 @@ async function readPlan(path, helpers) {
     if (!Array.isArray(value.sources) || !value.sources.length) throw new Error("Every UTC day needs a source list.");
     return { day, sources: value.sources.map(source => resolveRecording(dirname(path), source)) };
   }).sort((a, b) => a.day - b.day);
-}
-
-async function writeImmutable(path, bytes) {
-  const temporary = path + "." + randomUUID() + ".tmp";
-  try {
-    await writeFile(temporary, bytes, { flag: "wx" });
-    await link(temporary, path);
-  } catch (error) {
-    if (error.code !== "EEXIST" || !(await readFile(path)).equals(bytes)) throw error;
-  } finally {
-    await rm(temporary, { force: true });
-  }
 }
 
 async function publishPack(out, pack, terrain, helpers) {
@@ -128,7 +87,8 @@ async function main() {
     throw new Error("Usage: node scripts/build-daily-packs.mjs (--practice | --plan plan.json) [--out folder]");
   }
   const out = values.out ? resolve(values.out) : join(web, "public", "daily", "v1");
-  const helpers = await loadHelpers();
+  const helpers = await compileDailyHelpers(web, ["lib/daily/fixtureWeek.ts", "lib/segmentedPlayback.ts"],
+    ["daily/buildPack", "daily/clip", "daily/fixtureWeek", "daily/rules", "segmentedPlayback"]);
   await mkdir(out, { recursive: true });
   const lockPath = join(out, ".build.lock");
   const lock = await open(lockPath, "wx");

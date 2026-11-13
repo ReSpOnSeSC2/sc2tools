@@ -12,7 +12,7 @@ export async function readIndex(path, parseIndex) {
   }
 }
 
-export async function publishIndex(path, index, previousDays, utcDay) {
+export async function publishIndex(path, index, previousDays, utcDay, { futureOnly = false } = {}) {
   const temporary = path + "." + randomUUID() + ".tmp";
   try {
     await writeFile(temporary, JSON.stringify(index, null, 2) + "\n", { flag: "wx" });
@@ -22,6 +22,9 @@ export async function publishIndex(path, index, previousDays, utcDay) {
       if (Number(day) <= today && index.days[day] !== digest) {
         throw new Error("A recorded UTC day that has started must keep its published pack.");
       }
+    }
+    if (futureOnly && Object.keys(index.days).some(day => Number(day) <= today && !Object.hasOwn(previousDays, day))) {
+      throw new Error("The scheduled UTC day started while building the pack.");
     }
     await rename(temporary, path);
   } finally {

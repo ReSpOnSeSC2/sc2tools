@@ -24,11 +24,13 @@ test("pins started UTC days and atomically promotes only compatible changes", as
     const { [day - 2]: missing, ...withoutPast } = adjusted;
     expect(missing).toBeDefined();
     await expect(publishIndex(path, index(withoutPast), adjusted, utcDay)).rejects.toThrow("must keep its published pack");
+    const newlyStarted = { ...adjusted, [day - 1]: "a".repeat(64) };
+    await expect(publishIndex(path, index(newlyStarted), adjusted, utcDay, { futureOnly: true })).rejects.toThrow("started while building");
     expect(await readFile(path, "utf8")).toBe(before);
     expect(await readdir(folder)).toEqual(["index.json"]);
 
     const future = { ...adjusted, [day + 1]: "e".repeat(64) };
-    await publishIndex(path, index(future), adjusted, utcDay);
+    await publishIndex(path, index(future), adjusted, utcDay, { futureOnly: true });
     await publishIndex(path, index(future), future, utcDay);
     expect(JSON.parse(await readFile(path, "utf8")).days).toEqual(future);
   } finally {
