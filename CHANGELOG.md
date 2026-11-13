@@ -4872,6 +4872,12 @@ release preparation, not a signed or published 0.24.9 installer.
   Play a rotating practice week, keep a streak in this browser, and copy
   a score that hides the answers.
 
+### Replay scoring in Match Rooms
+
+- Choose a replay to report a game from your device. If the other seat reports
+  the same replay result, the room marks it confirmed by both players. Keep
+  scoring manually when needed, and undo the last score as host or by agreement.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

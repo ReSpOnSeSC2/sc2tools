@@ -2,7 +2,20 @@ import { API_BASE } from "@/lib/clientApi";
 import { parseCreatedRoom, parseRoom, type RoomAction, type RoomConfig, type RoomInvite } from "./matchRoom";
 
 const PATH = API_BASE + "/v1/match-rooms";
-type RoomErrorCode = "match_room_missing" | "match_room_attempt_closed" | "match_room_attempt_mismatch";
+const READ_ERROR_CODES = new Set([400, 404, 409]);
+const REPLAY_ERRORS = {
+  invalid_match_replay: "This replay report could not be read. Choose the replay again.",
+  replay_scoring_unavailable: "This room can only score games manually.",
+  replay_seats_changed: "This replay does not match the players assigned to the room seats. Check your result and replay.",
+  replay_result_conflict: "This report disagrees with the recorded winner. Check the score before trying again.",
+  replay_map_mismatch: "This replay is not from the next unplayed map. Check the map order or use manual scoring.",
+  replay_time_mismatch: "This replay must end after the veto and the previous game, and cannot be from the future.",
+};
+type RoomErrorCode = "match_room_missing" | "match_room_attempt_closed" | "match_room_attempt_mismatch" | keyof typeof REPLAY_ERRORS;
+
+function isReplayError(code: unknown): code is keyof typeof REPLAY_ERRORS {
+  return typeof code === "string" && Object.hasOwn(REPLAY_ERRORS, code);
+}
 
 export class RoomRequestError extends Error {
   constructor(readonly status: number, readonly retryMs = 0, readonly code?: RoomErrorCode) {
@@ -19,10 +32,11 @@ function record(value: unknown): Record<string, unknown> | undefined {
 }
 
 async function knownErrorCode(response: Response): Promise<RoomErrorCode | undefined> {
-  if (response.status !== 404 && response.status !== 409) return;
+  if (!READ_ERROR_CODES.has(response.status)) return;
   const body = record(await response.json().catch(() => null));
   const code = record(body?.error)?.code;
   if (response.status === 404) return code === "match_room_missing" ? code : undefined;
+  if (isReplayError(code)) return code;
   if (code === "match_room_attempt_closed" || code === "match_room_attempt_mismatch") return code;
 }
 
@@ -86,6 +100,7 @@ const REQUEST_FAILED = {
 export function roomErrorText(error: unknown, action: keyof typeof REQUEST_FAILED) {
   if (error instanceof RoomRequestError) {
     if (error.creationAttemptEnded) return "This creation attempt has ended. Try creating the room again.";
+    if (isReplayError(error.code)) return REPLAY_ERRORS[error.code];
     if (error.status === 429) return "Too many requests. Wait a moment and try again.";
     if (error.status === 409) return "The room changed. Check the current turn or score, then try again.";
     if (error.status === 403) return "This link cannot make that change. Open the original host or seat link.";

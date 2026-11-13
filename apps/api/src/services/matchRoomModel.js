@@ -3,6 +3,8 @@
 const { cleanDisplayName, containsBlockedTerm } = require("../util/contentFilter");
 const { sha256 } = require("../util/hash");
 const { FORMATS, MAX_SERIES_MAPS } = require("./streamSeriesModel");
+const { MatchRoomError } = require("./matchRoomError");
+const { reportReplay, addManualScore, undoScore, replayScoreSummary } = require("./matchRoomReplayScore");
 
 const PRESETS = ["standard", "pick-first", "ban-only"];
 const TURN_MS = 30_000;
@@ -15,16 +17,7 @@ const TURN_MS = 30_000;
 /** @typedef {{seat: Seat, kind: MoveKind}} Step */
 /** @typedef {{config: RoomConfig, seed: string, first: Seat, phase: "lobby"|"veto"|"play"|"complete",
  * names: Record<Seat, string>, ready: Record<Seat, boolean>, steps: Step[], moves: Move[],
- * order: number[], winners: Seat[], deadline: number|null}} RoomState */
-
-class MatchRoomError extends Error {
-  /** @param {number} status @param {string} code */
-  constructor(status, code) {
-    super(code);
-    this.status = status;
-    this.code = code;
-  }
-}
+ * order: number[], winners: Seat[], deadline: number|null} & import("./matchRoomReplayScore").ScoreHistory} RoomState */
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -101,20 +94,21 @@ function availableMaps(state) {
   return state.config.maps.map((_, index) => index).filter(index => !used.has(index));
 }
 
-/** @param {RoomState} state @returns {RoomState} */
-function openScoring(state) {
+/** @param {RoomState} state @param {number} now @returns {RoomState} */
+function openScoring(state, now) {
   const picks = state.moves.filter(move => move.kind === "pick").map(move => move.map);
   const remaining = availableMaps(state)
     .map(map => ({ map, rank: draw(state.seed, "order:" + map) }))
     .sort((a, b) => a.rank - b.rank || a.map - b.map);
-  return { ...state, phase: "play", order: [...picks, ...remaining.map(({ map }) => map)], deadline: null };
+  return { ...state, phase: "play", order: [...picks, ...remaining.map(({ map }) => map)],
+    deadline: null, vetoCompletedAt: now };
 }
 
 /** @param {RoomState} state @param {number} map @param {number} now @param {boolean} automatic */
 function addMove(state, map, now, automatic) {
   const step = state.steps[state.moves.length];
   const next = { ...state, moves: [...state.moves, { ...step, map, automatic }], deadline: now + TURN_MS };
-  return next.moves.length === next.steps.length ? openScoring(next) : next;
+  return next.moves.length === next.steps.length ? openScoring(next, now) : next;
 }
 
 /** @param {RoomState} state @param {number} now */
@@ -140,7 +134,7 @@ function setReady(state, seat, value, now) {
   if (state.phase !== "lobby" || typeof value !== "boolean") throw new MatchRoomError(400, "invalid_ready");
   const next = { ...state, ready: { ...state.ready, [seat]: value } };
   if (!next.ready.a || !next.ready.b) return next;
-  return next.steps.length > 0 ? { ...next, phase: "veto", deadline: now + TURN_MS } : openScoring(next);
+  return next.steps.length > 0 ? { ...next, phase: "veto", deadline: now + TURN_MS } : openScoring(next, now);
 }
 
 /** @param {RoomState} state @param {Seat} seat @param {unknown} map @param {number} now */
@@ -181,12 +175,12 @@ function reduceMatchRoom(state, role, action, now) {
     case "veto":
       return takeTurn(state, actingSeat(state, role, action.as), action.map, now);
     case "score":
-      return recordGame(state, action.winner);
+      return addManualScore(state, recordGame(state, action.winner), now);
+    case "report_replay":
+      if (!isSeat(role)) throw new MatchRoomError(403, "seat_required");
+      return reportReplay(state, role, action, now, recordGame);
     case "undo":
-      if (role === "host" && state.winners.length) {
-        return { ...state, phase: "play", winners: state.winners.slice(0, -1) };
-      }
-      break;
+      return undoScore(state, role);
     default:
       break;
   }
@@ -197,7 +191,7 @@ function reduceMatchRoom(state, role, action, now) {
 function roomSnapshot(state, rev, expiresAt, now) {
   const { config, names, ready, first, moves, order, winners, phase, deadline } = state;
   return { config, rev, expiresAt: expiresAt.getTime(), serverTime: now, names, ready, first, moves,
-    order, winners, phase, deadline, score: roomScore(state),
+    order, winners, phase, deadline, score: roomScore(state), ...replayScoreSummary(state),
     turn: phase === "veto" ? state.steps[moves.length] : null };
 }
 

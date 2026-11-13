@@ -77,7 +77,8 @@ function ActiveRoom({ invite, session, frame }: {
       {actionError && <p role="alert" className="rounded-lg border border-line p-3 text-body text-danger">{actionError}</p>}
       <RoomSeats room={room} role={role} blocked={blocked} send={send} />
       <VetoBoard room={room} role={role} blocked={blocked} send={send} receivedAt={receivedAt} />
-      <ScoreBoard room={room} role={role} blocked={blocked} send={send} />
+      <ScoreBoard room={room} roomId={invite.id} role={role} blocked={blocked} send={send}
+        replayFeedback={{ actionError, connectionError: reading.error, reconnect: session.retry }} />
       {room.phase === "complete" && <MatchResultExport room={room} />}
       {invite.role === "host" && !room.config.practice && <InviteLinks invite={invite} />}
       {host && <Button variant="danger" disabled={busy} onClick={() => { void removeRoom(); }}>Delete room now</Button>}

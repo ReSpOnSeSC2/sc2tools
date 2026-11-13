@@ -70,14 +70,17 @@ test("sanitizes labels and only the corresponding seat can rename itself", () =>
   expect(() => roomConfig({ ...room.config, maps: ["Alpha"] })).toThrow("invalid_room");
 });
 
-test("scores only after veto, stops at the majority and lets only the host undo", () => {
+test("scores only after veto and stops at the majority, with host and two-seat undo", () => {
   const lobby = initialRoom(config(3), "seed");
   expect(() => act(lobby, "host", "score", { winner: "a" })).toThrow("score_changed");
   const open = advanceExpiredTurns(ready(lobby), 999_000);
   const complete = act(act(open, "host", "score", { winner: "b" }), "a", "score", { winner: "b" });
   expect(complete.phase).toBe("complete");
   expect(() => act(complete, "b", "score", { winner: "b" })).toThrow("score_changed");
-  expect(() => act(complete, "b", "undo")).toThrow("invalid_room_action");
+  const proposed = act(complete, "b", "undo");
+  expect(proposed).toMatchObject({ phase: "complete", undoBy: "b", winners: ["b", "b"] });
+  expect(act(proposed, "b", "undo")).toBe(proposed);
+  expect(act(proposed, "a", "undo")).toMatchObject({ phase: "play", undoBy: null, winners: ["b"] });
   expect(act(complete, "host", "undo")).toMatchObject({ phase: "play", winners: ["b"] });
   const snapshot = roomSnapshot(complete, 8, new Date(3000), 2000);
   expect(snapshot).toMatchObject({ rev: 8, score: { a: 0, b: 2 }, expiresAt: 3000, serverTime: 2000 });
