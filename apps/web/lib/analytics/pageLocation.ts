@@ -25,7 +25,7 @@
  */
 
 import { PRACTICE_LINK_PATTERN, PRACTICE_LINK_ROUTE } from "../practice/practiceLinkPath";
-import { ROOM_ROUTE } from "../matchRoomRoute";
+import { isRoomObsPath, ROOM_ROUTE } from "../matchRoomRoute";
 import { SITE_NAME } from "../siteTitle";
 
 /** Paths that are never sent to Google Analytics. */
@@ -74,7 +74,7 @@ const ATTRIBUTION_PARAMS: ReadonlySet<string> = new Set([
  */
 export function isUntrackedPath(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
-  return UNTRACKED_ROUTE.test(pathname) || ROOM_ROUTE.test(pathname);
+  return UNTRACKED_ROUTE.test(pathname) || ROOM_ROUTE.test(pathname) || isRoomObsPath(pathname);
 }
 
 /**

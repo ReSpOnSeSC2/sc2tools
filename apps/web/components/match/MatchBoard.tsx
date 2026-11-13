@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SEATS, seatLabel, type Role, type Room, type RoomAction, type Seat } from "@/lib/matchRoom";
 import { ReplayReportControl, type ReplayReportFeedback } from "./ReplayReportControl";
+import { useVetoCountdown } from "./useVetoCountdown";
 
 type Send = (action: RoomAction) => Promise<boolean>;
 type BoardProps = { room: Room; role: Role; blocked: boolean; send: Send };
@@ -57,21 +58,9 @@ export function RoomSeats({ room, role, blocked, send }: BoardProps) {
   );
 }
 
-function useCountdown(deadline: number | null, serverTime: number, receivedAt: number) {
-  const [now, setNow] = useState(receivedAt);
-  useEffect(() => {
-    if (deadline === null) return;
-    const refresh = () => setNow(Date.now());
-    refresh();
-    const timer = setInterval(refresh, 250);
-    return () => clearInterval(timer);
-  }, [deadline, receivedAt]);
-  return deadline === null ? null : Math.max(0, Math.ceil((deadline - serverTime - Math.max(0, now - receivedAt)) / 1000));
-}
-
 export function VetoBoard({ room, role, blocked, send, receivedAt }: BoardProps & { receivedAt: number }) {
   const { turn, deadline } = room;
-  const remaining = useCountdown(deadline, room.serverTime, receivedAt);
+  const remaining = useVetoCountdown(deadline, room.serverTime, receivedAt);
   const byMap = new Map(room.moves.map(move => [move.map, move]));
   const canVeto = turn !== null && remaining !== 0 && canPlay(room, role, turn.seat);
   if (room.phase === "play" || room.phase === "complete") return null;

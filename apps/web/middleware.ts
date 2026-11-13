@@ -2,6 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
 import { lowercaseGuidePath } from "./lib/guides/canonicalPath";
 import { isReportCardPath, isReportCardPreviewPath } from "./lib/instant/reportCardRoute";
+import { isRoomObsPath } from "./lib/matchRoomRoute";
 import { isPublicReplayReference, legacyReplayArchivePath } from "./lib/replayRouteAccess";
 import { isPublicStatusRequest, statusHostRedirect } from "./lib/publicStatusRoute";
 
@@ -66,8 +67,8 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const statusRedirect = statusHostRedirect(req.url);
   if (statusRedirect) return NextResponse.redirect(statusRedirect, PERMANENT_REDIRECT);
   const pathname = req.nextUrl.pathname;
-  // Static replay views and Daily Scout work without a Clerk session handshake.
-  if (isPublicStatusRequest(pathname) || SESSIONLESS_PAGES.has(pathname)
+  // Static replay views and the Match Room source work without a Clerk handshake.
+  if (isPublicStatusRequest(pathname) || SESSIONLESS_PAGES.has(pathname) || isRoomObsPath(pathname)
     || isReportCardPath(pathname) || isReportCardPreviewPath(pathname)) {
     return NextResponse.next();
   }

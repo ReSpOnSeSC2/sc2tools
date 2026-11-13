@@ -47,6 +47,10 @@ describe("sitemap", () => {
     expect(rows.find(row => row.url === `${SITE}/arcade/scout`)?.changeFrequency).toBe("daily");
   });
 
+  it("keeps the OBS watch source out of search", async () => {
+    expect(await urls()).not.toContain(`${SITE}/overlay/match-room`);
+  });
+
   it("checks player consent on every request and never lists the retired /meta", async () => {
     expect(dynamic).toBe("force-dynamic"); expect(revalidate).toBe(0);
     vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");

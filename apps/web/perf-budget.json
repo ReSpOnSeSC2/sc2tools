@@ -27,6 +27,7 @@
     "/guides/[matchup]/[build]": 175,
     "/stream-studio": 130,
     "/dock/[token]": 225,
+    "/overlay/match-room": 175,
     "/overlay/[token]": 240,
     "/overlay/[token]/widget/[name]": 325
   }

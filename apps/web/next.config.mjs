@@ -155,6 +155,14 @@ const nextConfig = {
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },
       {
+        source: "/overlay/match-room",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
+      {
         source: "/p/:handle/live",
         headers: [
           { key: "Cache-Control", value: "private, no-store" },

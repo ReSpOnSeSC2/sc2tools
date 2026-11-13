@@ -16,6 +16,8 @@ describe("isUntrackedPath", () => {
     "/admin/users/346d2a86/opponents",
     "/overlay/tok123",
     "/overlay/tok123/scene/between-games",
+      "/overlay/match-room",
+      "/%6Fverlay/match%2Droom",
     "/dock/tok123",
     "/wrapped",
     "/career",

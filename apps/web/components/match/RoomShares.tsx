@@ -3,8 +3,37 @@
 import { useState, type Ref } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { deriveSeatKey, invitePath, matchResultCard, resultText, type Room, type RoomInvite, type Seat } from "@/lib/matchRoom";
+import { Select } from "@/components/ui/Select";
+import { deriveSeatKey, invitePath, matchResultCard, matchRoomObsPath, resultText, type Room, type RoomInvite, type Seat } from "@/lib/matchRoom";
 import { useCopy } from "@/lib/useCopy";
+
+function RoomObsLink({ roomId }: { roomId: string }) {
+  const [showCredit, setShowCredit] = useState(true);
+  const source = matchRoomObsPath(roomId, showCredit);
+  const copy = useCopy({ scopeKey: source });
+
+  return (
+    <div className="space-y-2 border-t border-line pt-3">
+      <h3 className="font-display text-body-lg font-semibold text-text">OBS Browser Source</h3>
+      <p className="text-caption text-text-muted">Paste this link into OBS to show the veto and score with neutral seat labels.</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="w-44 max-w-full space-y-1 text-caption text-text-muted">
+          <label htmlFor="match-obs-credit">Overlay credit</label>
+          <Select id="match-obs-credit" selectSize="lg" value={showCredit ? "show" : "hide"}
+            onChange={event => setShowCredit(event.target.value === "show")}>
+            <option value="show">Show</option><option value="hide">Hide</option>
+          </Select>
+        </div>
+        <Button variant="secondary" disabled={copy.pending}
+          onClick={() => { void copy.copy(new URL(source, window.location.origin).href); }}>
+          Copy OBS source
+        </Button>
+      </div>
+      {copy.copied && <p role="status" className="text-caption text-text-muted">OBS source copied.</p>}
+      {copy.fallbackText && <Input aria-label="OBS source URL" readOnly value={copy.fallbackText} ref={copy.inputRef as Ref<HTMLInputElement>} />}
+    </div>
+  );
+}
 
 export function InviteLinks({ invite }: { invite: Extract<RoomInvite, { key: string }> }) {
   const copy = useCopy();
@@ -39,6 +68,7 @@ export function InviteLinks({ invite }: { invite: Extract<RoomInvite, { key: str
       {copy.copied && <p role="status" className="text-caption text-text-muted">{label} copied.</p>}
       {copy.fallbackText && <Input aria-label={label} readOnly value={copy.fallbackText} ref={copy.inputRef as Ref<HTMLInputElement>} />}
       {error && <p role="alert" className="text-caption text-danger">The invite could not be prepared. Try copying the link again.</p>}
+      <RoomObsLink roomId={invite.id} />
     </section>
   );
 }

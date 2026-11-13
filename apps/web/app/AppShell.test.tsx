@@ -111,6 +111,8 @@ describe("isolated broadcast and local recap routes", () => {
     "/overlay",
     "/overlay/public-token",
     "/overlay/public-token/scene/starting-soon",
+    "/overlay/match-room",
+    "/%6Fverlay/match%2Droom",
     "/dock",
     "/dock/public-token",
     "/wrapped",

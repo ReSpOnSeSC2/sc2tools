@@ -1,5 +1,6 @@
 import type { MatchResultShareCard } from "./personalShareCards";
-import { ROOM_PATH } from "./matchRoomRoute";
+import { ROOM_OBS_PATH, ROOM_PATH } from "./matchRoomRoute";
+import { appendOverlayCreditToUrl } from "./overlayCredit";
 
 export const FORMATS = [1, 3, 5, 7] as const;
 export const PRESETS = [
@@ -66,6 +67,16 @@ export function invitePath(invite: RoomInvite): string {
     params.set("key", invite.key);
   }
   return ROOM_PATH + "#" + params.toString();
+}
+
+export function matchRoomObsPath(id: string, showCredit: boolean): string {
+  return appendOverlayCreditToUrl(ROOM_OBS_PATH + "#r=" + encodeURIComponent(id), showCredit);
+}
+
+export function parseMatchRoomObsInvite(hash: string): Extract<RoomInvite, { role: "watch" }> | null {
+  if (hash.length !== 35 || !hash.startsWith("#r=")) return null;
+  const id = hash.slice(3);
+  return ID.test(id) ? { id, role: "watch" } : null;
 }
 
 /** Derive the same seat key as the API so hosts can recover links after reload. */

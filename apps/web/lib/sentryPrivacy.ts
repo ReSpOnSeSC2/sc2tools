@@ -1,7 +1,7 @@
 import { OPPONENT_LIST_REPORT_PATH, sanitiseRequestPath } from "./feedback/sanitise";
 import { canonicalReportCardPath } from "./instant/reportCardRoute";
 import { PRACTICE_LINK_PATTERN, PRACTICE_LINK_ROUTE } from "./practice/practiceLinkPath";
-import { ROOM_PATH, ROOM_ROUTE } from "./matchRoomRoute";
+import { isRoomObsPath, ROOM_OBS_PATH, ROOM_PATH, ROOM_ROUTE } from "./matchRoomRoute";
 import { streamViewerTelemetryPath } from "./streamViewerRoute";
 
 // Browser Sentry keeps no typed search text or credential path (ADR 0069,
@@ -28,6 +28,7 @@ function sanitizeTelemetryPath(value: string): string | null {
     const { pathname } = new URL(value, "https://sc2tools.com");
     if (OPPONENT_LIST_REPORT_PATH.test(pathname)) return "/app/opponents";
     if (ROOM_ROUTE.test(pathname)) return ROOM_PATH;
+    if (isRoomObsPath(pathname)) return ROOM_OBS_PATH;
     return streamViewerTelemetryPath(pathname) ?? (PRACTICE_LINK_ROUTE.test(pathname) ? PRACTICE_LINK_PATTERN : canonicalReportCardPath(pathname));
   } catch {
     return null;

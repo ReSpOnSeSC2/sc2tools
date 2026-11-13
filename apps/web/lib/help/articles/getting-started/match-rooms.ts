@@ -3,12 +3,12 @@ import type { HelpArticle } from "@/lib/help/types";
 const article: HelpArticle = {
   slug: "match-rooms",
   title: "Run and score a series in Match Rooms",
-  summary: "Invite two players, run the map veto and score a StarCraft II series manually or from replays.",
+  summary: "Invite players, run the map veto, score a StarCraft II series and show it on stream.",
   category: "getting-started",
   audience: "player",
   signedInOnly: false,
   order: 32,
-  keywords: ["match rooms", "veto", "maps", "series", "best of", "replay score"],
+  keywords: ["match rooms", "veto", "maps", "series", "best of", "replay score", "OBS browser source"],
   updated: "2026-11-13",
   related: ["getting-started"],
   body: [
@@ -23,6 +23,9 @@ const article: HelpArticle = {
     { type: "paragraph", text: "Ask the other player to report the same game from their seat link, even after the series ends. A matching report marks the score confirmed by both players. These are player reports. SC2 Tools does not verify the replay itself." },
     { type: "paragraph", text: "If the room rejects the replay, check the map order, your result, and when the game ended. You can retry from the open dialog. Use manual scoring for older rooms, practice rooms or a replay the browser cannot read." },
     { type: "paragraph", text: "After the match, copy the score for Discord or Reddit, or share an image with neutral seat labels." },
+    { type: "heading", text: "Show the room in OBS", anchor: "obs" },
+    { type: "paragraph", text: "On the host page, choose whether to show the overlay credit, then select **Copy OBS source**. Add a Browser Source in OBS and paste that URL. It shows the veto before play and the score once play begins. Use the ordinary watch link to follow the room in a browser." },
+    { type: "paragraph", text: "The source uses Seat A and Seat B. It shows known ladder map names and uses numbered labels for other maps. Keep the source link within your broadcast setup. Anyone with it can watch the room until it expires or you delete it." },
     { type: "paragraph", text: "A room expires 14 days after creation. The host can delete it immediately from the room page." },
   ],
 };
