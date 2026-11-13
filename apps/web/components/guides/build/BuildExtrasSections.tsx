@@ -5,7 +5,6 @@ import { GuideMarkdown } from "@/lib/guides/markdown";
 import { WinRateCell } from "@/components/guides/WinRateCell";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS } from "@/components/guides/guideUi";
-import { PublicReplayDownloadButton } from "@/components/public-profile/PublicReplayDownloadButton";
 import { fmtClock, fmtCount, fmtCountNoun, fmtGuideDate, fmtPct } from "@/lib/guides/format";
 import type {
   GuideCommunityBuildLink,
@@ -16,6 +15,7 @@ import type {
   GuideRelatedBuild,
 } from "@/lib/guides/types";
 import { hasCommunityBuildLink, hasExampleReplayLink } from "./buildGuideSections";
+import { GuideReplayDownloadButton } from "./GuideReplayDownloadButton";
 
 /**
  * Build guide sections 8 (common macro leaks), 9 (related openers,
@@ -131,13 +131,7 @@ function ExampleReplays({ examples }: { examples: ReadonlyArray<GuideExampleRepl
                 >
                   View replay <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
-                <PublicReplayDownloadButton
-                  handle={example.handle}
-                  gameId={example.replayRef}
-                  available
-                  showLabel
-                  contextLabel={replayLabel}
-                />
+                <GuideReplayDownloadButton handle={example.handle} replayRef={example.replayRef} label={replayLabel} />
               </div>
             </li>
           );
