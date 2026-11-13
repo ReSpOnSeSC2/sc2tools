@@ -14,6 +14,7 @@ import useSWR, {
   type SWRResponse,
 } from "swr";
 import { recordFailedRequest } from "@/lib/feedback/failedRequests";
+import { API_BASE } from "./apiBase";
 import { networkUnavailableError } from "./requestErrors";
 import {
   conditionalRoute, createConditionalLoader, noteConditionalCapability, rejectConditionalAuth, useConditionalApiScope,
@@ -21,8 +22,7 @@ import {
 
 const conditionalResponses = createConditionalLoader(() => import("./conditionalApiResponses"));
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080";
+export { API_BASE } from "./apiBase";
 
 export type ClientApiError = {
   status: number;

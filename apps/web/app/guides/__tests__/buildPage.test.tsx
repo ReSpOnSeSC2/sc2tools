@@ -23,6 +23,7 @@ vi.mock("next/navigation", () => ({
   permanentRedirect: mocks.permanentRedirect,
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false }) }));
+vi.mock("@/lib/apiBase", () => ({ API_BASE: "https://api.example.test" }));
 vi.mock("@/lib/clientApi", () => ({
   API_BASE: "https://api.example.test",
   useApi: () => ({ data: undefined, error: undefined, isLoading: false }),

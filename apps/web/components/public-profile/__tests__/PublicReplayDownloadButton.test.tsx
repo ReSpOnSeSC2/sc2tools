@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
 }));
 
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/apiBase", () => ({
   API_BASE: "https://api.example.test",
 }));
 
