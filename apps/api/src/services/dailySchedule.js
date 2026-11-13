@@ -9,8 +9,12 @@ const currentDay = (time = Date.now()) => Math.floor(time / DAY_MS);
 
 /** @param {Response} response @returns {Promise<unknown>} */
 async function readIndex(response) {
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error("daily_schedule_unavailable");
+  }
   const reader = response.body?.getReader();
-  if (!response.ok || !reader) throw new Error("daily_schedule_unavailable");
+  if (!reader) throw new Error("daily_schedule_unavailable");
   const chunks = [];
   let bytes = 0;
   try {

@@ -270,7 +270,7 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
     targets.set(
       ev.requestId,
       { collection: typeof target === "string" ? target : "",
-        private: PRIVATE_COMMENTS.has(ev.command?.comment) },
+        private: target === COLLECTIONS.DAILY_TALLY || PRIVATE_COMMENTS.has(ev.command?.comment) },
     );
     // Bound the map so a burst of long-running commands can't grow it
     // unchecked if a terminal event is ever missed.
