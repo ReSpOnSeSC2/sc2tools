@@ -96,4 +96,4 @@ class DailyCrowdService {
   }
 }
 
-module.exports = { DailyCrowdService, isBallot, crowdSplit, BUCKET_CAP };
+module.exports = { DailyCrowdService, BUCKET_CAP };

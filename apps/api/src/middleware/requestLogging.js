@@ -155,13 +155,15 @@ function sanitiseRequestForLog(req) {
  * @returns {Record<string, unknown>}
  */
 function sanitiseResponseForLog(res) {
+  const statusCode = res.headersSent ? res.statusCode : null;
+  if (isDailyCallsRequest(res.req?.url)) return { statusCode };
   /** @type {Record<string, string|string[]|number>} */
   const headers = {};
   for (const name of SAFE_RESPONSE_HEADER_NAMES) {
     const value = res.getHeader(name);
     if (typeof value === "string" || typeof value === "number" || Array.isArray(value)) headers[name] = value;
   }
-  return { statusCode: res.headersSent ? res.statusCode : null, headers };
+  return { statusCode, headers };
 }
 
 module.exports = {

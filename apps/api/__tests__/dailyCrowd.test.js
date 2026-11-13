@@ -8,7 +8,7 @@ const { connect } = require("../src/db/connect");
 const { buildDailyCrowdRouter } = require("../src/routes/dailyCrowd");
 const { DailyCrowdService, BUCKET_CAP } = require("../src/services/dailyCrowd");
 const { currentDay, createDailySchedule, DAY_MS } = require("../src/services/dailySchedule");
-const { sanitiseRequestForLog } = require("../src/middleware/requestLogging");
+const { sanitiseRequestForLog, sanitiseResponseForLog } = require("../src/middleware/requestLogging");
 const { privateSearchHttpOptions, beforeSendPrivateSearch } = require("../src/middleware/privateSearchTelemetry");
 
 const pack = "a".repeat(64);
@@ -109,11 +109,22 @@ test("bounds anonymous POSTs independently", async () => {
   expect(limited.body).toEqual({ error: { code: "rate_limited" } });
 });
 
+test("reports schedule failure as retryable without exposing its details or writing a ballot", async () => {
+  crowd.schedule = async () => { throw new Error("private fixture"); };
+  const response = await submit(ballot(1)).expect(503);
+  expect(response.body).toEqual({ error: { code: "daily_calls_unavailable" } });
+  expect(response.headers["cache-control"]).toBe("no-store");
+  expect(await db.dailyTally.countDocuments()).toBe(0);
+  await api.get("/v1/daily/calls").expect(404);
+});
+
 test("retains only anonymous route metadata in app logs and keeps ballots out of Sentry", () => {
   const url = "/v1/daily/calls?attempt=raw-receipt";
   const req = { method: "POST", id: "caller", originalUrl: url, socket: { remoteAddress: "127.0.0.1" },
     headers: { "x-forwarded-for": "127.0.0.1", "user-agent": "device" } };
   expect(sanitiseRequestForLog(req)).toEqual({ method: "POST", url: "/v1/daily/calls" });
+  const res = { req: { url }, statusCode: 200, headersSent: true, getHeader: () => "caller" };
+  expect(sanitiseResponseForLog(res)).toEqual({ statusCode: 200 });
   expect(privateSearchHttpOptions().ignoreIncomingRequestBody(url)).toBe(true);
   expect(privateSearchHttpOptions().ignoreIncomingRequests(url)).toBe(true);
   expect(beforeSendPrivateSearch({ request: { url, data: ballot(1) } })).toBeNull();
