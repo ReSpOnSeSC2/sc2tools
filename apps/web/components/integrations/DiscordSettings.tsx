@@ -100,12 +100,8 @@ function HookCard({ hook, busy, run, call, privateEmbeds }: { hook: DiscordHook;
   });
   const preview = () => run(async () => { const res = await call<{ previews: DiscordPreview[] }>(`${base}/preview`, { method: "POST", body: "{}" }); setPreviews(res.previews); });
   const test = () => run(async () => { const res = await call<{ result: string }>(`${base}/test`, { method: "POST", body: "{}" }); setNote(RESULT_TEXT[res.result] || RESULT_TEXT.failed); });
-  const status = hook.status === "disabled" ? <Badge variant="danger">Turned off: Discord rejected the webhook</Badge> : hook.enabled ? <Badge variant="success">On</Badge> : <Badge variant="neutral">Off</Badge>;
   return <Card>
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0"><h3 className="break-words text-body font-semibold text-text">{hook.label}</h3><p className="text-caption text-text-muted">Webhook ending in …{hook.last4}{hook.lastPostAt ? ` · last post ${formatDateTime(new Date(hook.lastPostAt))}` : ""}</p></div>
-      <div className="flex min-h-11 items-center gap-3">{status}<Toggle className="before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']" checked={hook.enabled} disabled={busy || (!hook.enabled && (!hook.previewed || !privateEmbeds))} onChange={(enabled) => void patch({ enabled })} label={`Post to ${hook.label}`} /></div>
-    </div>
+    <HookHeading hook={hook} busy={busy} privateEmbeds={privateEmbeds} onEnabled={(enabled) => void patch({ enabled })} />
     {!hook.previewed ? <p className="mt-2 text-caption text-text-muted">Preview the posts below before turning this channel on.</p> : null}
     {privateEmbeds ? <HookChoices hook={hook} busy={busy} patch={patch} /> :
       <p className="mt-2 text-caption text-text-muted">Discord posting options will be available after the server update.</p>}
@@ -118,6 +114,23 @@ function HookCard({ hook, busy, run, call, privateEmbeds }: { hook: DiscordHook;
     {note ? <p role="status" className="mt-2 text-caption text-text-muted">{note}</p> : null}
     {privateEmbeds && previews ? <div className="mt-3 grid gap-3 lg:grid-cols-2">{previews.map((row) => <DiscordEmbedPreview key={row.kind} preview={row} />)}</div> : null}
   </Card>;
+}
+
+function HookHeading({ hook, busy, privateEmbeds, onEnabled }: {
+  hook: DiscordHook; busy: boolean; privateEmbeds: boolean; onEnabled: (enabled: boolean) => void;
+}) {
+  const status = hook.status === "disabled" ? <Badge variant="danger">Turned off: Discord rejected the webhook</Badge>
+    : hook.enabled ? <Badge variant="success">On</Badge> : <Badge variant="neutral">Off</Badge>;
+  return <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="min-w-0">
+      <h3 className="break-words text-body font-semibold text-text">{hook.label}</h3>
+      <p className="text-caption text-text-muted">Webhook ending in …{hook.last4}{hook.lastPostAt ? ` · last post ${formatDateTime(new Date(hook.lastPostAt))}` : ""}</p>
+    </div>
+    <div className="flex min-h-11 items-center gap-3">{status}<Toggle
+      className="before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']" checked={hook.enabled}
+      disabled={busy || (!hook.enabled && (!hook.previewed || !privateEmbeds))}
+      onChange={onEnabled} label={`Post to ${hook.label}`} /></div>
+  </div>;
 }
 
 type HookPatch = (body: { events?: Partial<Events>; options?: Partial<Options>; shareMmr?: boolean }) => Promise<boolean>;

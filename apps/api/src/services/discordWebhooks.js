@@ -52,6 +52,8 @@ const PEAK_MIN_HISTORY = 20;
 const EMBED_POLICY = 1;
 // The old drainer uses this independent marker to admit verified peak rows.
 const REPLAY_RATING_POLICY = 1;
+/** @typedef {{hookId?: string, shareToken?: string, bellKind?: string, sessionStartAt?: Date}} DiscordDelivery */
+/** @typedef {(options: ReturnType<typeof templates.hookOptions>) => Record<string, unknown>} BuildDiscordMessage */
 const RANKED_RESULT_PROJECTION = {
   _id: 0, gameId: 1, date: 1, result: 1, myRace: 1, myLadderRace: 1, myToonHandle: 1,
   matchFormat: 1, playerCount: 1, myLeagueId: 1, myMmr: 1, myMmrSource: 1,
@@ -132,6 +134,23 @@ function bellStillAllowed(kind, user) {
 function retireUpdate(status, details = {}) {
   const unset = { payload: "", options: "", shareToken: "", replaySlug: "", ratingPolicy: "", bellKind: "", embedPolicy: "", mmrConsent: "" };
   return { $set: { status, ...details }, $unset: unset };
+}
+
+/** @param {any} hook @param {string} kind @param {string} eventKey
+ * @param {BuildDiscordMessage} build @param {DiscordDelivery} delivery @param {number} now */
+function makeOutboxRow(hook, kind, eventKey, build, delivery, now) {
+  const options = templates.hookOptions(hook);
+  return stampVersion({
+    _id: `do_${crypto.randomBytes(12).toString("base64url")}`, userId: hook.userId, hookId: hook._id, kind,
+    dedupeKey: crypto.createHash("sha256").update(`${hook._id}:${eventKey}`).digest("base64url"),
+    payload: build(options), options, embedPolicy: EMBED_POLICY, hookEnabledAt: hook.enabledAt || null,
+    hookActivationId: hook.activationId || null, attempts: 0, status: "queued",
+    ...(delivery.shareToken ? { shareToken: delivery.shareToken } : {}),
+    ...(options.mmr ? { mmrConsent: templates.mmrConsent(hook.mmrConsent) } : {}),
+    ...(kind === "milestone" ? { ratingPolicy: REPLAY_RATING_POLICY } : {}),
+    ...(delivery.bellKind ? { bellKind: delivery.bellKind } : {}),
+    nextAttemptAt: new Date(now), createdAt: new Date(now), expiresAt: new Date(now + OUTBOX_TTL_MS),
+  }, COLLECTIONS.DISCORD_OUTBOX);
 }
 
 /** @param {number} attempts */
@@ -265,20 +284,22 @@ class DiscordWebhooksService {
     }
     if (kind === "milestone") return { example: true, payload: templates.milestoneMessage({ mmr: 4001, previousPeak: 4000, race: "Protoss" }, options) };
     if (kind === "ladderMilestone") return { example: true, payload: templates.ladderMessage("moment.win_streak", "5 wins in a row", options) };
-    if (kind === "weekly" && this.weekly) {
-      const report = await this.weekly.report(userId, {}).catch(() => null);
-      if (report && report.totals.games) return { example: false, payload: templates.weeklyMessage(report, options) };
-    }
-    if (kind === "weekly") return { example: true, payload: templates.weeklyMessage(exampleWeek(), options) };
+    if (kind === "weekly") return this.previewWeekly(userId, options);
     const session = await this.lastSession(userId, Infinity);
     return { example: !session, payload: templates.sessionMessage(session || exampleSession(this.now()), options) };
+  }
+
+  /** @param {string} userId @param {ReturnType<typeof templates.hookOptions>} options */
+  async previewWeekly(userId, options) {
+    const report = await this.weekly?.report(userId, {}).catch(() => null);
+    if (report?.totals.games) return { example: false, payload: templates.weeklyMessage(report, options) };
+    return { example: true, payload: templates.weeklyMessage(exampleWeek(), options) };
   }
 
   /**
    * Queue one post for every enabled hook subscribed to ``kind``.
    * @param {string} userId @param {string} kind @param {string} eventKey
-   * @param {(options: ReturnType<typeof templates.hookOptions>) => Record<string, unknown>} build
-   * @param {{hookId?: string, shareToken?: string, bellKind?: string, sessionStartAt?: Date}} [delivery]
+   * @param {BuildDiscordMessage} build @param {DiscordDelivery} [delivery]
    */
   async enqueue(userId, kind, eventKey, build, delivery = {}) {
     if (!this.available) return 0;
@@ -288,19 +309,7 @@ class DiscordWebhooksService {
     }).limit(MAX_HOOKS).toArray();
     let queued = 0;
     for (const hook of hooks) {
-      const now = this.now();
-      const options = templates.hookOptions(hook);
-      const row = stampVersion({
-        _id: `do_${crypto.randomBytes(12).toString("base64url")}`, userId, hookId: hook._id, kind,
-        dedupeKey: crypto.createHash("sha256").update(`${hook._id}:${eventKey}`).digest("base64url"),
-        payload: build(options), options, embedPolicy: EMBED_POLICY, hookEnabledAt: hook.enabledAt || null,
-        hookActivationId: hook.activationId || null, attempts: 0, status: "queued",
-        ...(delivery.shareToken ? { shareToken: delivery.shareToken } : {}),
-        ...(options.mmr ? { mmrConsent: templates.mmrConsent(hook.mmrConsent) } : {}),
-        ...(kind === "milestone" ? { ratingPolicy: REPLAY_RATING_POLICY } : {}),
-        ...(delivery.bellKind ? { bellKind: delivery.bellKind } : {}),
-        nextAttemptAt: new Date(now), createdAt: new Date(now), expiresAt: new Date(now + OUTBOX_TTL_MS),
-      }, COLLECTIONS.DISCORD_OUTBOX);
+      const row = makeOutboxRow(hook, kind, eventKey, build, delivery, this.now());
       try { await this.db.discordOutbox.insertOne(row); queued += 1; }
       catch (err) { if (/** @type {any} */ (err)?.code !== 11000) throw err; }
     }
@@ -326,14 +335,19 @@ class DiscordWebhooksService {
 
   /** @param {string} userId @param {any} game */
   async queueGame(userId, game) {
-    const ownMmr = recordedRating(game);
-    const cohort = rankedHistoryCohort(userId, game);
-    const ratedHistory = ownMmr !== null && cohort ? { ...cohort.match, myMmrSource: "replay", myMmr: { $type: "number", $gt: 0, $lte: 9999 } } : null;
-    const projection = { _id: 0, myMmr: 1, myMmrSource: 1 };
     // The replay rating is observed at match start. A change from the
     // previous start belongs to an earlier game, not the result being posted.
     await this.enqueue(userId, "result", `result:${game.gameId}`, (options) => templates.resultMessage(game, options));
-    if (await this.queuePromotion(userId, game, cohort) || !ratedHistory || !cohort || ownMmr === null) return;
+    const cohort = rankedHistoryCohort(userId, game);
+    if (!cohort || await this.queuePromotion(userId, game, cohort)) return;
+    const ownMmr = recordedRating(game);
+    if (ownMmr !== null) await this.queuePeak(userId, cohort, ownMmr);
+  }
+
+  /** @param {string} userId @param {NonNullable<ReturnType<typeof rankedHistoryCohort>>} cohort @param {number} ownMmr */
+  async queuePeak(userId, cohort, ownMmr) {
+    const ratedHistory = { ...cohort.match, myMmrSource: "replay", myMmr: { $type: "number", $gt: 0, $lte: 9999 } };
+    const projection = { _id: 0, myMmr: 1, myMmrSource: 1 };
     // Avoid the historical sort for ordinary results below an existing peak.
     const higher = await this.db.games.findOne({ ...ratedHistory, myMmr: { ...ratedHistory.myMmr, $gte: ownMmr } }, { projection: { _id: 1 } });
     if (higher) return;

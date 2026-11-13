@@ -133,12 +133,15 @@ function promotionMessage(milestone, options) {
 /** @param {string} kind @param {unknown} title */
 function ladderHeadline(kind, title) {
   if (kind === "moment.win_streak") return title === "5 wins in a row" || title === "10 wins in a row" ? title : null;
-  if (kind === "moment.crossed_mmr_mark") {
-    const mark = typeof title === "string" ? /^Recorded ([1-9][0-9]{2,3}) MMR$/.exec(title) : null;
-    const rating = safeRating(Number(mark?.[1]));
-    return mark && mark[0] === title && rating !== null && (rating % 100 === 0 || rating % 250 === 0) ? title : null;
-  }
+  if (kind === "moment.crossed_mmr_mark") return ratingHeadline(title);
   return Object.hasOwn(LADDER_HEADLINES, kind) && title === LADDER_HEADLINES[kind] ? LADDER_HEADLINES[kind] : null;
+}
+
+/** @param {unknown} title */
+function ratingHeadline(title) {
+  const mark = typeof title === "string" ? /^Recorded ([1-9][0-9]{2,3}) MMR$/.exec(title) : null;
+  const rating = safeRating(Number(mark?.[1]));
+  return mark && mark[0] === title && rating !== null && (rating % 100 === 0 || rating % 250 === 0) ? title : null;
 }
 
 /** @param {string} kind @param {string} headline @param {Options} options */

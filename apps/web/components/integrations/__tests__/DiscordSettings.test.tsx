@@ -19,6 +19,13 @@ function hook(extra: Partial<DiscordHook> = {}): DiscordHook {
   return { id: "dh_1", label: "Clan chat", last4: "mnop", events: { result: true, session: true, weekly: true, milestone: true }, options: { mmr: false, replayLink: false },
     enabled: false, status: "active", disabledReason: null, failureCount: 0, previewed: false, lastPostAt: null, lastResult: null, createdAt: "2026-11-10T00:00:00.000Z", ...extra };
 }
+function applyPatch(body: { options?: Partial<DiscordHook["options"]>; events?: Partial<DiscordHook["events"]>; shareMmr?: boolean }) {
+  const saved = hooks[0];
+  hooks = [{ ...saved, ...body, events: { ...saved.events, ...body.events },
+    options: { ...saved.options, ...body.options, mmr: body.shareMmr ?? saved.options.mmr } }];
+  return json(hooks[0]);
+}
+
 beforeEach(() => {
   hooks = []; available = true; privateEmbeds = true; requests = [];
   vi.stubGlobal("fetch", vi.fn(async (raw: string, init?: RequestInit) => {
@@ -30,7 +37,7 @@ beforeEach(() => {
     if (path.endsWith("/hooks") && method === "POST") { hooks = [hook({ label: body.label || "Discord channel" })]; return json(hooks[0]); }
     if (path.endsWith("/preview")) { hooks = [{ ...hooks[0], previewed: true }]; return json({ previews: [{ kind: "result", example: false, payload: { embeds: [{ title: "Victory · PvZ", color: 3129201, fields: [{ name: "Opponent", value: "Zerg", inline: true }] }] } }] }); }
     if (path.endsWith("/test")) return json({ result: "webhook_gone" });
-    if (method === "PATCH") { hooks = [{ ...hooks[0], ...body, events: { ...hooks[0].events, ...(body.events || {}) }, options: { ...hooks[0].options, ...(body.options || {}), mmr: body.shareMmr ?? hooks[0].options.mmr } }]; return json(hooks[0]); }
+    if (method === "PATCH") return applyPatch(body);
     if (method === "DELETE") { hooks = []; return json({ removed: 1 }); }
     return json({});
   }));
@@ -49,8 +56,8 @@ it("keeps unsafe settings and previews off until the new server is available", a
   mount();
   expect(await screen.findByText(/options will be available after the server update/)).toBeTruthy();
   expect(screen.queryByRole("checkbox", { name: /Share my MMR/ })).toBeNull();
-  expect(screen.getByRole("button", { name: "Preview posts" })).toBeDisabled();
-  expect(screen.getByRole("switch", { name: "Post to Clan chat" })).toBeDisabled();
+  expect((screen.getByRole("button", { name: "Preview posts" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("switch", { name: "Post to Clan chat" }) as HTMLButtonElement).disabled).toBe(true);
 });
 
 it("sends a distinct MMR opt-in and refreshes stale previews", async () => {
@@ -61,7 +68,7 @@ it("sends a distinct MMR opt-in and refreshes stale previews", async () => {
   await act(async () => fireEvent.click(screen.getByRole("checkbox", { name: /Share my MMR/ })));
   expect(requests.find((row) => row.method === "PATCH")?.body).toEqual({ shareMmr: true });
   expect(screen.queryByText("Victory · PvZ")).toBeNull();
-  await waitFor(() => expect(screen.getByRole("checkbox", { name: /Share my MMR/ })).toBeChecked());
+  await waitFor(() => expect((screen.getByRole("checkbox", { name: /Share my MMR/ }) as HTMLInputElement).checked).toBe(true));
 });
 
 it("connects once and forgets the URL, keeps the channel off until previewed, and shows privacy defaults", async () => {

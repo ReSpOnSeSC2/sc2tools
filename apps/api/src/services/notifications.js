@@ -152,16 +152,18 @@ class NotificationsService {
     }
     if (!row) return null;
     // The shared socket room includes OBS tokens. The bell refetches details over authenticated REST.
-    this._push(userId, milestone ? { kind: "refresh" } : row);
-    this._notifyDevices(userId, row, input.kind);
-    if (milestone) this._queueDiscordMilestone(userId, row);
+    this._deliverStored(userId, row, input.kind, milestone);
     return row;
   }
 
-  /** @param {string} userId @param {Record<string, any>} row */
-  _queueDiscordMilestone(userId, row) {
-    void this.discord?.onLadderMilestone(userId, /** @type {{kind:string,title:string,_id:string}} */ (row))
-      .catch(() => this.logger?.warn("discord_milestone_enqueue_failed"));
+  /** @param {string} userId @param {Record<string, any>} row @param {string} kind @param {boolean} milestone */
+  _deliverStored(userId, row, kind, milestone) {
+    this._push(userId, milestone ? { kind: "refresh" } : row);
+    this._notifyDevices(userId, row, kind);
+    if (milestone) {
+      void this.discord?.onLadderMilestone(userId, /** @type {{kind:string,title:string,_id:string}} */ (row))
+        .catch(() => this.logger?.warn("discord_milestone_enqueue_failed"));
+    }
   }
 
   /** Device delivery uses the stored identity and the triggering kind, including after a fold.
