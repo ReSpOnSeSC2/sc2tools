@@ -385,9 +385,13 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
-### Agent 0.25.1
+### Agent 0.25.2
 
 - Opt in to tray notifications for unread game milestones after playing.
+- Turn on weekly report reminders in Agent Settings. The tray waits until play ends and points you to your private Notifications inbox.
+
+### Agent 0.25.1
+
 - Make the Standard Companion window taller so the Scouting report shows more
   of both build orders above the Ghost buttons.
 
@@ -4842,10 +4846,6 @@ release preparation, not a signed or published 0.24.9 installer.
 ### Browser notification choices
 
 - Choose which private notifications can alert your phone or browser, including individual ladder milestones. New choices start off, and device alerts open the private inbox.
-
-### Agent weekly report reminders
-
-- Turn on weekly report reminders in Agent Settings. The tray waits until play ends and points you to your private Notifications inbox.
 
 ### Discord post privacy
 
