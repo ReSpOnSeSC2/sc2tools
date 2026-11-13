@@ -11,35 +11,74 @@ import { DiscordSettings } from "../DiscordSettings";
 const URL_A = "https://discord.com/api/webhooks/123456789012345678/secret-token-value-abcdefghijklmnop";
 let hooks: DiscordHook[];
 let available: boolean;
+let privateEmbeds: boolean;
+let loseConnectResponse: boolean;
 let requests: Array<{ path: string; method: string; body: unknown }>;
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 const mount = () => render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, shouldRetryOnError: false }}><DiscordSettings /></SWRConfig>);
 function hook(extra: Partial<DiscordHook> = {}): DiscordHook {
-  return { id: "dh_1", label: "Clan chat", last4: "mnop", events: { result: true, session: true, weekly: true, milestone: true }, options: { opponentNames: false, mmr: true, replayLink: false },
+  return { id: "dh_1", label: "Clan chat", last4: "mnop", events: { result: true, session: true, weekly: true, milestone: true }, options: { mmr: false, replayLink: false },
     enabled: false, status: "active", disabledReason: null, failureCount: 0, previewed: false, lastPostAt: null, lastResult: null, createdAt: "2026-11-10T00:00:00.000Z", ...extra };
 }
+function applyPatch(body: { options?: Partial<DiscordHook["options"]>; events?: Partial<DiscordHook["events"]>; shareMmr?: boolean }) {
+  const saved = hooks[0];
+  hooks = [{ ...saved, ...body, events: { ...saved.events, ...body.events },
+    options: { ...saved.options, ...body.options, mmr: body.shareMmr ?? saved.options.mmr } }];
+  return json(hooks[0]);
+}
+
 beforeEach(() => {
-  hooks = []; available = true; requests = [];
+  hooks = []; available = true; privateEmbeds = true; loseConnectResponse = false; requests = [];
   vi.stubGlobal("fetch", vi.fn(async (raw: string, init?: RequestInit) => {
     const path = new URL(raw, "http://localhost").pathname;
     const method = init?.method || "GET";
     const body = init?.body ? JSON.parse(String(init.body)) : null;
     requests.push({ path, method, body });
-    if (path.endsWith("/integrations/discord")) return json({ available, maxHooks: 3, hooks });
-    if (path.endsWith("/hooks") && method === "POST") { hooks = [hook({ label: body.label || "Discord channel" })]; return json(hooks[0]); }
-    if (path.endsWith("/preview")) { hooks = [{ ...hooks[0], previewed: true }]; return json({ previews: [{ kind: "result", example: false, payload: { embeds: [{ title: "Victory · PvZ on Alcyone LE", color: 3129201, fields: [{ name: "Opponent", value: "Zerg · 3,990 MMR", inline: true }] }] } }] }); }
+    if (path.endsWith("/integrations/discord")) return json({ available, privateEmbeds, maxHooks: 3, hooks });
+    if (path.endsWith("/hooks") && method === "POST") return connect(body.label);
+    if (path.endsWith("/preview")) { hooks = [{ ...hooks[0], previewed: true }]; return json({ previews: [{ kind: "result", example: false, payload: { embeds: [{ title: "Victory · PvZ", color: 3129201, fields: [{ name: "Opponent", value: "Zerg", inline: true }] }] } }] }); }
     if (path.endsWith("/test")) return json({ result: "webhook_gone" });
-    if (method === "PATCH") { hooks = [{ ...hooks[0], ...body, events: { ...hooks[0].events, ...(body.events || {}) }, options: { ...hooks[0].options, ...(body.options || {}) } }]; return json(hooks[0]); }
+    if (method === "PATCH") return applyPatch(body);
     if (method === "DELETE") { hooks = []; return json({ removed: 1 }); }
     return json({});
   }));
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+function connect(label: string) {
+  hooks = [hook({ label: label || "Discord channel" })];
+  if (loseConnectResponse) {
+    loseConnectResponse = false;
+    throw new TypeError("Network request failed");
+  }
+  return json(hooks[0]);
+}
+
 it("is unavailable without server storage", async () => {
   available = false; mount();
   expect(await screen.findByText(/isn't available on this server yet/)).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Connect channel" })).toBeNull();
+});
+
+it("keeps unsafe settings and previews off until the new server is available", async () => {
+  privateEmbeds = false;
+  hooks = [hook({ previewed: true, options: { mmr: true, replayLink: true } })];
+  mount();
+  expect(await screen.findByText(/options will be available after the server update/)).toBeTruthy();
+  expect(screen.queryByRole("checkbox", { name: /Share my MMR/ })).toBeNull();
+  expect((screen.getByRole("button", { name: "Preview posts" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("switch", { name: "Post to Clan chat" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it("sends a distinct MMR opt-in and refreshes stale previews", async () => {
+  hooks = [hook({ previewed: true })];
+  mount();
+  await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Preview posts" })));
+  expect(await screen.findByText("Victory · PvZ")).toBeTruthy();
+  await act(async () => fireEvent.click(screen.getByRole("checkbox", { name: /Share my MMR/ })));
+  expect(requests.find((row) => row.method === "PATCH")?.body).toEqual({ shareMmr: true });
+  expect(screen.queryByText("Victory · PvZ")).toBeNull();
+  await waitFor(() => expect((screen.getByRole("checkbox", { name: /Share my MMR/ }) as HTMLInputElement).checked).toBe(true));
 });
 
 it("connects once and forgets the URL, keeps the channel off until previewed, and shows privacy defaults", async () => {
@@ -55,14 +94,28 @@ it("connects once and forgets the URL, keeps the channel off until previewed, an
   expect(screen.getByText(/Webhook ending in …mnop/)).toBeTruthy();
   const toggle = screen.getByRole("switch", { name: "Post to Clan chat" }) as HTMLButtonElement;
   expect(toggle.disabled).toBe(true);
-  expect((screen.getByRole("checkbox", { name: /Show opponent names/ }) as HTMLInputElement).checked).toBe(false);
-  expect((screen.getByRole("checkbox", { name: /Show MMR/ }) as HTMLInputElement).checked).toBe(true);
+  expect(screen.queryByRole("checkbox", { name: /Show opponent names/ })).toBeNull();
+  expect((screen.getByRole("checkbox", { name: /Share my MMR/ }) as HTMLInputElement).checked).toBe(false);
+  expect((screen.getByRole("checkbox", { name: /Ladder milestones/ }) as HTMLInputElement).checked).toBe(false);
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Preview posts" })));
-  const figure = await screen.findByText("Victory · PvZ on Alcyone LE");
-  expect(within(figure.closest("figure")!).getByText("Zerg · 3,990 MMR")).toBeTruthy();
+  const figure = await screen.findByText("Victory · PvZ");
+  expect(within(figure.closest("figure")!).getByText("Zerg")).toBeTruthy();
   await waitFor(() => expect((screen.getByRole("switch", { name: "Post to Clan chat" }) as HTMLButtonElement).disabled).toBe(false));
   await act(async () => fireEvent.click(screen.getByRole("switch", { name: "Post to Clan chat" })));
   expect(requests.find((r) => r.method === "PATCH")?.body).toEqual({ enabled: true });
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send test" })));
   expect(await screen.findByText(/no longer exists/)).toBeTruthy();
+});
+
+it("clears the webhook URL when a lost connection response is recovered through Retry", async () => {
+  loseConnectResponse = true;
+  mount();
+  const field = await screen.findByLabelText(/Webhook URL/) as HTMLInputElement;
+  fireEvent.change(field, { target: { value: URL_A } });
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Connect channel" })));
+  expect(field.value).toBe(URL_A);
+  await act(async () => fireEvent.click(await screen.findByRole("button", { name: /retry/i })));
+  await screen.findByRole("heading", { name: "Discord channel" });
+  expect(field.value).toBe("");
+  expect(requests.filter(row => row.method === "POST" && row.path.endsWith("/hooks"))).toHaveLength(2);
 });

@@ -974,6 +974,8 @@ async function ensureDeliveryIndexes(ctx) {
   await ctx.users.createIndex({ "calendarFeed.hash": 1 }, { unique: true, sparse: true });
   await ctx.discordHooks.createIndex({ userId: 1, createdAt: 1 });
   await ctx.discordHooks.createIndex({ enabled: 1, status: 1 });
+  await ctx.discordHooks.createIndex({ userId: 1, connectIdentity: 1 }, { unique: true, partialFilterExpression: { connectIdentity: { $type: "string" } } });
+  await ctx.discordHooks.createIndex({ userId: 1, connectSlot: 1 }, { unique: true, partialFilterExpression: { connectSlot: { $type: "number" } } });
   await ctx.discordOutbox.createIndex({ dedupeKey: 1 }, { unique: true });
   await ctx.discordOutbox.createIndex({ status: 1, nextAttemptAt: 1 });
   await ctx.discordOutbox.createIndex({ hookId: 1 });

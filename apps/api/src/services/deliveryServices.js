@@ -31,6 +31,7 @@ function buildNotificationServices(deps) {
   const weeklyReports = new WeeklyReportService(deps.db, { notifications, logger });
   const discordWebhooks = new DiscordWebhooksService(deps.db, { encryptionKey: deps.config.delivery?.discordEncryptionKey || null,
     notifications, weekly: weeklyReports, logger });
+  notifications.discord = discordWebhooks;
   weeklyReports.onWeekly = (userId, report) => discordWebhooks.onWeekly(userId, report);
   return {
     notifications,

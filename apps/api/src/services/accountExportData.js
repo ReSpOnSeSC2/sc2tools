@@ -131,7 +131,7 @@ async function* accountExportRecords(db, userId, options = {}) {
   yield* collectionRecords(db, "supporters", { userId }, { _id: 0, editId: 0, reviewedBy: 0 }, signal);
   // Delivery channel exports describe registrations without their credentials.
   yield* collectionRecords(db, "streamSessions", { userId }, { _id: 0 }, signal);
-  yield* collectionRecords(db, "discordHooks", { userId }, { _id: 0, enc: 0 }, signal);
+  yield* collectionRecords(db, "discordHooks", { userId }, { _id: 0, enc: 0, connectIdentity: 0, connectSlot: 0 }, signal);
   yield* collectionRecords(db, "pushSubscriptions", { userId },
     { _id: 0, label: 1, endpoint: 1, createdAt: 1, updatedAt: 1, lastOkAt: 1, expiresAt: 1 }, signal, pushDeviceMetadata);
   // Receipt data can include transient viewer input until dispatch completes.

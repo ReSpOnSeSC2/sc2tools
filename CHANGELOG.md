@@ -4847,6 +4847,11 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Turn on weekly report reminders in Agent Settings. The tray waits until play ends and points you to your private Notifications inbox.
 
+### Discord post privacy
+
+- Discord embeds keep opponent names, ratings and replay identifiers private. Your own MMR starts off and needs a separate choice for each channel.
+- Opt in to ladder milestones from the inbox, or manually post an active public battle report link with a short description.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

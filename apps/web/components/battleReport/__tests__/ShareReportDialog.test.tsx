@@ -34,7 +34,7 @@ beforeEach(() => {
     if (path === `/v1/games/${encodeURIComponent(GAME_ID)}/shares` && init?.method === "POST") { h.live = true; return json({ share, created: true }, 201); }
     if (path === `/v1/games/${encodeURIComponent(GAME_ID)}/shares`) return json({ shares: h.live ? [share] : [], activeCount: h.live ? 1 : 0, limit: 200 });
     if (path === `/v1/shares/${TOKEN}`) return json(SHARED);
-    if (path === "/v1/me/integrations/discord") return json({ available: true, hooks: [
+    if (path === "/v1/me/integrations/discord") return json({ available: true, privateEmbeds: true, hooks: [
       { id: "channel", label: "Team chat", enabled: true, status: "active", events: { result: true }, options: { replayLink: true } },
       { id: "no-link", label: "Results only", enabled: true, status: "active", events: { result: true }, options: { replayLink: false } },
     ] });
@@ -59,21 +59,16 @@ describe("ShareReportDialog", () => {
     await waitFor(() => expect(h.writeText).toHaveBeenCalledWith(`${window.location.origin}/g/${TOKEN}#battle-report`));
   });
 
-  it("posts only the displayed anonymous report to the chosen eligible channel after a click", async () => {
+  it("posts only the active share token to the chosen eligible channel after a click", async () => {
     h.live = true;
     render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><ShareReportDialog gameId={GAME_ID} open onClose={vi.fn()} /></SWRConfig>);
     const post = await screen.findByRole("button", { name: "Post to Team chat" });
     expect(screen.queryByRole("button", { name: "Post to Results only" })).toBeNull();
     expect(h.fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
-    const expected = planBattleReport(battleReportFacts(sharedReportInput(SHARED, `share-${TOKEN}`)), "battle");
     fireEvent.click(post);
     expect(await screen.findByText("Report queued for Team chat.")).toBeTruthy();
     const [, init] = h.fetch.mock.calls.find(([url]) => new URL(url).pathname === "/v1/me/integrations/discord/hooks/channel/battle-report")!;
-    expect(JSON.parse(init?.body as string)).toEqual({
-      token: TOKEN,
-      headline: expected.headline,
-      paragraph: expected.paragraphs[0].sentences.map((sentence) => sentence.text).join(" "),
-    });
+    expect(JSON.parse(init?.body as string)).toEqual({ token: TOKEN });
     expect(init?.body).not.toMatch(/SecretFoe|4100|4200/);
   });
 });
