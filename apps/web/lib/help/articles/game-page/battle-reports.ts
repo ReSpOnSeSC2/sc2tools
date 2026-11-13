@@ -42,7 +42,7 @@ const article: HelpArticle = {
       "A shared report is written for readers who are not you: it says \"the player\" and \"the opponent\", names no one and leaves out ratings, your build check-in and corrections. The wording can differ slightly from your own copy; the facts are the same.",
       "When the link is posted in a chat or forum, its preview card shows the result, matchup, the report's headline and the turning point using recorded replay positions when available, with army-value lines as the fallback.",
       "**Save as image** downloads the headline, the first paragraph and two snapshots as a picture. It is made in your browser and names no one, whoever saves it.",
-      "In **Post to Discord**, choose a connected channel to send the preview and report link. The channel must be on with ranked results and replay links enabled in [Settings → Integrations](/settings?tab=integrations#discord). Turning the share link off removes access to the report page. Discord keeps any excerpt it already received.",
+      "In **Post to Discord**, choose a connected channel to send the report link with a short description. Enable ranked results and **Allow shared report links** on the channel in [Settings → Integrations](/settings?tab=integrations#discord). Turning the share link off removes access to the report page.",
       "To stop sharing the report, turn the link off in **Share → Manage share links…**. The shared page and report stop working immediately. Chat apps may keep a preview they already loaded. A saved image or copied text stays with the recipient.",
     ] },
   ],

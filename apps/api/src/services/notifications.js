@@ -65,6 +65,8 @@ class NotificationsService {
     /** Web Push fan-out (services/pushNotifications.js), attached by app.js.
      * @type {{deliver: (userId: string, row: any) => Promise<unknown>}|null} */
     this.push = null;
+    /** @type {{onLadderMilestone: (userId: string, row: {kind:string,title:string,_id:string}) => Promise<void>}|null} */
+    this.discord = null;
   }
 
   /**
@@ -152,7 +154,14 @@ class NotificationsService {
     // The shared socket room includes OBS tokens. The bell refetches details over authenticated REST.
     this._push(userId, milestone ? { kind: "refresh" } : row);
     this._notifyDevices(userId, row, input.kind);
+    if (milestone) this._queueDiscordMilestone(userId, row);
     return row;
+  }
+
+  /** @param {string} userId @param {Record<string, any>} row */
+  _queueDiscordMilestone(userId, row) {
+    void this.discord?.onLadderMilestone(userId, /** @type {{kind:string,title:string,_id:string}} */ (row))
+      .catch(() => this.logger?.warn("discord_milestone_enqueue_failed"));
   }
 
   /** Device delivery uses the stored identity and the triggering kind, including after a fold.

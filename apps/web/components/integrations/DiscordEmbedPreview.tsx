@@ -3,10 +3,10 @@
 /** The parts of a Discord webhook message the preview renders. */
 export type DiscordEmbed = { title?: string; description?: string; color?: number; url?: string; fields?: Array<{ name: string; value: string; inline?: boolean }> };
 export type DiscordMessage = { embeds?: DiscordEmbed[] };
-export type DiscordPreview = { kind: "result" | "session" | "weekly" | "milestone"; example: boolean; payload: DiscordMessage };
+export type DiscordPreview = { kind: "result" | "session" | "weekly" | "milestone" | "ladderMilestone"; example: boolean; payload: DiscordMessage };
 
 export const PREVIEW_LABELS: Record<DiscordPreview["kind"], string> = {
-  result: "Ranked result", session: "Session summary", weekly: "Weekly recap", milestone: "New MMR peak",
+  result: "Ranked result", session: "Session summary", weekly: "Weekly recap", milestone: "New MMR peak", ladderMilestone: "Ladder milestone",
 };
 
 /** Discord markdown escapes ("\*") read as plain text here. */

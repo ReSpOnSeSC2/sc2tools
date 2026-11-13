@@ -96,21 +96,32 @@ test("only Discord webhook URLs are accepted", () => {
   expect(backoffMs(50)).toBe(30 * 60_000);
 });
 
-test("Discord posts hide opponent names by default, never ping, and escape user text", () => {
+test("Discord renders text embeds from allowed values and never posts raw replay fields", () => {
   const game = { gameId: "g1", result: "Defeat", myRace: "Protoss", map: "Alcyone LE", myBuild: "@everyone **2 base**", myMmr: 4100, myMmrSource: "replay", durationSec: 754,
     date: "2026-11-10T12:00:00.000Z", opponent: { race: "Zerg", mmr: 4050, displayName: "SecretOppZed" } };
-  const hidden = templates.resultMessage(game, { options: undefined, replaySlug: "me" });
-  const text = JSON.stringify(hidden);
+  const legacy = templates.hookOptions({ options: { opponentNames: true, mmr: true, replayLink: true } });
+  const hidden = templates.resultMessage(game, legacy);
   expect(hidden.allowed_mentions).toEqual({ parse: [] });
-  expect(text).not.toContain("SecretOppZed");
-  expect(hidden.embeds[0].fields).toContainEqual({ name: "MMR", value: "4,100", inline: true });
-  expect(text).toContain("\\\\@everyone \\\\*\\\\*2 base\\\\*\\\\*");
-  expect(hidden.embeds[0].url).toBeUndefined();
-  const shown = templates.resultMessage(game, { options: { opponentNames: true, mmr: false, replayLink: true }, replaySlug: "me" });
-  expect(JSON.stringify(shown)).toContain("SecretOppZed");
-  expect(JSON.stringify(shown)).not.toContain("4,100");
-  expect(shown.embeds[0].url).toBe("https://sc2tools.com/p/me/replays/g1");
-  expect(templates.battleReportMessage({ headline: "H", paragraph: "P", token: "AbCdEfGhIjKlMnOp", url: "https://evil.test/x" }).embeds[0].url).toBe("https://sc2tools.com/g/AbCdEfGhIjKlMnOp#battle-report");
+  expect(hidden.embeds[0]).toMatchObject({ title: "Defeat · PvZ", fields: [{ name: "Opponent", value: "Zerg", inline: true }] });
+  expect(JSON.stringify(hidden)).not.toMatch(/SecretOppZed|4,100|4,050|Alcyone|everyone|T12:00|g1|https:/);
+  const shown = templates.resultMessage(game, templates.hookOptions({ mmrConsent: "a".repeat(32) }));
+  expect(shown.embeds[0].fields).toContainEqual({ name: "Recorded starting MMR", value: "4,100", inline: true });
+  expect(JSON.stringify(shown)).not.toMatch(/SecretOppZed|4,050/);
+  const unknown = templates.resultMessage({ ...game, opponent: { race: "Zerg SecretOppZed" } }, legacy);
+  expect(unknown.embeds[0].fields).toEqual([]);
+  expect(templates.battleReportMessage({ token: "AbCdEfGhIjKlMnOp" }).embeds[0].url).toBe("https://sc2tools.com/g/AbCdEfGhIjKlMnOp#battle-report");
+});
+
+test("Discord validates stored ladder headlines and suppresses rating values without consent", () => {
+  const { ladderHeadline, ladderMessage, DEFAULT_OPTIONS } = templates;
+  expect(ladderHeadline("moment.win_streak", "5 wins in a row")).toBe("5 wins in a row");
+  expect(ladderHeadline("moment.revenge_win", "Revenge win over SecretOppZed")).toBeNull();
+  expect(ladderHeadline("moment.revenge_win", "Giant-killer win")).toBeNull();
+  expect(ladderHeadline("moment.crossed_mmr_mark", "Recorded 5,000 MMR")).toBeNull();
+  expect(ladderHeadline("moment.crossed_mmr_mark", "Recorded 5001 MMR")).toBeNull();
+  expect(ladderHeadline("moment.crossed_mmr_mark", "Recorded 5000 MMR")).toBe("Recorded 5000 MMR");
+  expect(ladderMessage("moment.crossed_mmr_mark", "Recorded 5000 MMR", DEFAULT_OPTIONS).embeds[0].title).toBe("Recorded rating milestone");
+  expect(ladderMessage("moment.crossed_mmr_mark", "Recorded 5000 MMR", { ...DEFAULT_OPTIONS, mmr: true }).embeds[0].title).toBe("Recorded 5000 MMR");
 });
 
 test("ICS feed lines use CRLF, escape text and fold at 75 octets", () => {

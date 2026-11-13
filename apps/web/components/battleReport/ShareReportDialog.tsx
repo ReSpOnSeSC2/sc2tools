@@ -93,7 +93,7 @@ export function ShareReportDialog({ gameId, open, onClose }: { gameId: string; o
             <Button size="sm" variant="secondary" loading={saving} disabled={!report} iconLeft={<ImageDown className="h-4 w-4" aria-hidden />}
               onClick={() => void saveImage()}>Save as image</Button>
           </div>
-          {open && report && paragraph ? <DiscordReportActions key={live.token} token={live.token} headline={report.headline} paragraph={paragraph} /> : null}
+          {open && report && paragraph ? <DiscordReportActions key={live.token} token={live.token} /> : null}
         </>}
     </div>
     <CopyRecoveryDialog text={copier.fallbackText} inputRef={copier.inputRef} triggerRef={copyButton} scopeKey={scope}
@@ -103,14 +103,14 @@ export function ShareReportDialog({ gameId, open, onClose }: { gameId: string; o
 
 const DISCORD_PATH = "/v1/me/integrations/discord";
 
-function DiscordReportActions({ token, headline, paragraph }: { token: string; headline: string; paragraph: string }) {
+function DiscordReportActions({ token }: { token: string }) {
   const { getToken } = useAuth();
-  const { data } = useApi<{ available: boolean; hooks: DiscordHook[] }>(DISCORD_PATH, { revalidateOnFocus: false, shouldRetryOnError: false });
+  const { data } = useApi<{ available: boolean; privateEmbeds?: boolean; hooks: DiscordHook[] }>(DISCORD_PATH, { revalidateOnFocus: false, shouldRetryOnError: false });
   const [posting, setPosting] = useState<string | null>(null);
   const [posted, setPosted] = useState<string[]>([]);
   const [status, setStatus] = useState("");
   const [failed, setFailed] = useState(false);
-  const channels = data?.available ? data.hooks.filter((hook) => hook.enabled && hook.status === "active" && hook.events.result && hook.options.replayLink) : [];
+  const channels = data?.available && data.privateEmbeds === true ? data.hooks.filter((hook) => hook.enabled && hook.status === "active" && hook.events.result && hook.options.replayLink) : [];
   if (!channels.length) return null;
 
   async function post(channel: DiscordHook) {
@@ -119,7 +119,7 @@ function DiscordReportActions({ token, headline, paragraph }: { token: string; h
     setFailed(false);
     try {
       const result = await apiCall<{ queued: number }>(getToken, `${DISCORD_PATH}/hooks/${encodeURIComponent(channel.id)}/battle-report`, {
-        method: "POST", body: JSON.stringify({ token, headline: headline.slice(0, 120), paragraph: paragraph.slice(0, 750) }),
+        method: "POST", body: JSON.stringify({ token }),
       });
       setPosted((current) => [...current, channel.id]);
       setStatus(result.queued ? `Report queued for ${channel.label}.` : `This report was already queued or posted to ${channel.label}.`);
@@ -133,7 +133,7 @@ function DiscordReportActions({ token, headline, paragraph }: { token: string; h
 
   return <fieldset className="space-y-2">
     <legend className="text-caption font-semibold text-text">Post to Discord</legend>
-    <p className="text-caption text-text-muted">Send the preview and report link to a connected channel.</p>
+    <p className="text-caption text-text-muted">Post the public report link with a short description to a connected channel.</p>
     <div className="flex flex-wrap gap-2">
       {channels.map((channel) => <Button key={channel.id} size="sm" variant="secondary" className="min-h-11"
         loading={posting === channel.id} disabled={posting !== null || posted.includes(channel.id)}
