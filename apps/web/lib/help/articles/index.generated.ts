@@ -54,6 +54,7 @@ import builds_buildOrderPaste from "./builds/build-order-paste";
 import builds_buildOrdersExport from "./builds/build-orders-export";
 import builds_communityBuilds from "./builds/community-builds";
 import builds_customBuilds from "./builds/custom-builds";
+import builds_discordBuildCommand from "./builds/discord-build-command";
 import builds_practiceGhostBuild from "./builds/practice-ghost-build";
 import builds_practiceHud from "./builds/practice-hud";
 import builds_practiceLog from "./builds/practice-log";
@@ -187,6 +188,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_buildOrdersExport,
   builds_communityBuilds,
   builds_customBuilds,
+  builds_discordBuildCommand,
   builds_practiceGhostBuild,
   builds_practiceHud,
   builds_practiceLog,

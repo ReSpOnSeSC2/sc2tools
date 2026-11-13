@@ -3,6 +3,7 @@
 const { isPrivateSearchPath, privateSearchLogUrl } = require("./privateSearchBoundary");
 const { isSearchQueryUrl, redactSearchQuery } = require("./searchQueryPrivacy");
 const { isReplayDownloadBatchPath } = require("./replayDownloadBatchBoundary");
+const { isDiscordInteractionsRequest } = require("../config/discordInteractions");
 
 // Request logs are operational telemetry, not a copy of the incoming
 // request.  In particular, Clerk/device bearer tokens and overlay tokens are
@@ -64,6 +65,7 @@ function isStreamViewerRequest(value) { return streamViewerLogPath(value) !== nu
 
 /** @param {string} raw */
 function privateOperationalPath(raw) {
+  if (isDiscordInteractionsRequest(raw)) return "/v1/discord/interactions";
   if (isReplayDownloadBatchPath(raw)) return "/v1/replays/download-batch";
   if (isPrivateSearchPath(raw)) return privateSearchLogUrl(raw);
   return streamViewerLogPath(raw);
@@ -120,6 +122,9 @@ function sanitiseRequestUrl(value) {
  * @returns {Record<string, unknown>}
  */
 function sanitiseRequestForLog(req) {
+  if (isDiscordInteractionsRequest(req.originalUrl || req.url)) {
+    return { method: req.method, url: "/v1/discord/interactions" };
+  }
   /** @type {Record<string, string|string[]>} */
   const headers = {};
   for (const name of SAFE_HEADER_NAMES) {
