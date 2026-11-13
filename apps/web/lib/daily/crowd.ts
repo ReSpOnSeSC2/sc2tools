@@ -14,14 +14,17 @@ function validAnswers(value: unknown): value is FightCall[] {
     value.every(answer => typeof answer === "number" && Number.isInteger(answer) && answer >= 0 && answer < 5);
 }
 
+function validAttempt(value: unknown): value is string {
+  return typeof value === "string" && BALLOT_ATTEMPT.test(value);
+}
+
 export function readBallot(storage: DailyStorage | null, day: number, pack: string): DailyBallot | null {
   try {
     if (!storage) return null;
     const value: unknown = JSON.parse(storage.getItem(BALLOT_KEY) ?? "null");
     if (!value || typeof value !== "object") return null;
     const { day: storedDay, pack: storedPack, answers, attempt } = value as Record<string, unknown>;
-    if (storedDay !== day || storedPack !== pack || !validAnswers(answers) ||
-      typeof attempt !== "string" || !BALLOT_ATTEMPT.test(attempt)) return null;
+    if (storedDay !== day || storedPack !== pack || !validAnswers(answers) || !validAttempt(attempt)) return null;
     return { day, pack, answers, attempt };
   } catch {
     return null;
