@@ -14,12 +14,17 @@ def test_save_preserves_runner_summary_and_one_timer(tmp_path):
         win._click_save_settings()
         wait_saved(win)
         assert win._settings_status.text() == "Saved."
+        timer = win._settings_toast_timer
+        expired = QtTest.QSignalSpy(timer.timeout)
         win._show_settings_toast("First", ms=40)
-        QtTest.QTest.qWait(20)
+        assert timer.isActive() and timer.interval() == 40
         win._show_settings_toast("Second", ms=100)
-        QtTest.QTest.qWait(40)
+        assert win._settings_toast_timer is timer
+        assert timer.isActive() and timer.isSingleShot() and timer.interval() == 100
         assert win._settings_status.text() == "Second"
-        QtTest.QTest.qWait(100)
+        assert expired.count() == 0
+        assert expired.wait(2000), "The replacement toast timer did not expire"
+        assert expired.count() == 1 and not timer.isActive()
         assert win._settings_status.text() == ""
     ''')
 
