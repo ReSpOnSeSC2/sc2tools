@@ -21,16 +21,18 @@ const ENDPOINT = "https://fcm.googleapis.com/fcm/send/this-device";
 let status: PushStatus;
 let requests: Array<{ path: string; method: string; body: unknown; owner: string | null }>;
 let rejectRegistration: boolean;
+let deviceOwnedByAnotherAccount: boolean;
 const json = (value: unknown) => new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
 const panel = () => <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, shouldRetryOnError: false }}><SettingsSaveScope tabId="preferences"><PushPreferences /></SettingsSaveScope></SWRConfig>;
 const mount = () => render(panel());
 
 function installBrowser(permission: NotificationPermission, options: { existing?: boolean; wrongKey?: boolean; version?: number } = {}) {
+  const unsubscribe = vi.fn(async () => { current = null; return true; });
   let current: ReturnType<typeof subscription> | null = options.existing ? subscription(options.wrongKey) : null;
   function subscription(wrongKey = false) {
     return { endpoint: ENDPOINT, options: { applicationServerKey: wrongKey ? new ArrayBuffer(65) : vapidKeyBytes(status.publicKey!).buffer },
       toJSON: () => ({ endpoint: ENDPOINT, keys: { p256dh: "p", auth: "a" } }),
-      unsubscribe: vi.fn(async () => { current = null; return true; }) };
+      unsubscribe };
   }
   let version = options.version ?? 1;
   type ReplyPort = { onmessage: ((event: { data: unknown }) => void) | null; close: () => void };
@@ -52,7 +54,7 @@ function installBrowser(permission: NotificationPermission, options: { existing?
   Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { getRegistration: vi.fn(async () => registration), register: vi.fn(async () => registration) } });
   vi.stubGlobal("PushManager", function PushManager() {});
   vi.stubGlobal("Notification", notice);
-  return { pushManager, postMessage, registration, notice, setVersion: (value: number) => { version = value; } };
+  return { pushManager, postMessage, registration, notice, unsubscribe, setVersion: (value: number) => { version = value; } };
 }
 async function registerDevice(body: { label: string; endpoint: string }) {
   if (rejectRegistration) {
@@ -63,9 +65,16 @@ async function registerDevice(body: { label: string; endpoint: string }) {
   return json({ id: "ps_1" });
 }
 
+function deactivateDevice() {
+  const removed = status.devices.length;
+  status = { ...status, devices: [] };
+  return json({ removed: deviceOwnedByAnotherAccount ? 0 : removed, canDeactivate: !deviceOwnedByAnotherAccount });
+}
+
 beforeEach(() => {
   requests = [];
   rejectRegistration = false;
+  deviceOwnedByAnotherAccount = false;
   auth.userId = "ann";
   auth.hold = false;
   auth.release = null;
@@ -78,7 +87,7 @@ beforeEach(() => {
     requests.push({ path, method, body, owner });
     if (path === "/v1/me/push") return json(status);
     if (path === "/v1/me/push/subscriptions") return registerDevice(body);
-    if (path === "/v1/me/push/subscriptions/ps_1") { status = { ...status, devices: [] }; return json({ removed: 1 }); }
+    if (path === "/v1/me/push/unsubscribe") return deactivateDevice();
     if (path.endsWith("/push/preferences")) { status = { ...status, groups: body.groups }; return json({ groups: body.groups }); }
     return json({});
   }));
@@ -101,15 +110,39 @@ it("turns this device on and off, tells the worker the API origin, and saves pus
   expect(browser.postMessage).toHaveBeenCalledWith({ type: "PUSH_CONFIG", api: expect.stringMatching(/^https?:\/\/[^/]+$/) });
   expect(browser.postMessage).toHaveBeenCalledWith({ type: "PUSH_PROBE" }, expect.any(Array));
   expect(browser.postMessage.mock.invocationCallOrder[0]).toBeLessThan(browser.pushManager.subscribe.mock.invocationCallOrder[0]);
-  expect(requests.find((r) => r.path.endsWith("/push/subscriptions"))?.body).toMatchObject({ endpoint: ENDPOINT, keys: { p256dh: "p", auth: "a" } });
+  expect(requests.find((r) => r.path.endsWith("/push/subscriptions"))?.body).toMatchObject({ endpoint: ENDPOINT, keys: { p256dh: "p", auth: "a" }, enrollmentVersion: 1 });
   expect(await screen.findByText("This device")).toBeTruthy();
   fireEvent.click(screen.getByRole("checkbox", { name: "Everything else" }));
   fireEvent.click(screen.getByRole("button", { name: "Save push choices" }));
   await waitFor(() => expect(requests.find((r) => r.path.endsWith("/push/preferences"))?.body).toEqual({ groups: ["reviews", "coaching", "other"] }));
   fireEvent.click(screen.getByRole("button", { name: "Turn off for this device" }));
-  await waitFor(() => expect(requests).toContainEqual({ path: "/v1/me/push/subscriptions/ps_1", method: "DELETE", body: null, owner: "Bearer fixture-ann" }));
+  await waitFor(() => expect(requests).toContainEqual({ path: "/v1/me/push/unsubscribe", method: "POST", body: { endpoint: ENDPOINT, enrollmentVersion: 1 }, owner: "Bearer fixture-ann" }));
   expect(await screen.findByRole("button", { name: "Turn on for this device" })).toBeTruthy();
   expect(browser.notice.requestPermission).not.toHaveBeenCalled();
+  expect(browser.unsubscribe).toHaveBeenCalledTimes(1);
+});
+
+it("leaves the browser subscription alone when a stale device row has transferred", async () => {
+  const browser = installBrowser("granted", { existing: true });
+  status = { ...status, devices: [{ id: "ps_1", key: await endpointKey(ENDPOINT), label: "Browser",
+    createdAt: new Date().toISOString(), lastOkAt: null }] };
+  mount();
+  deviceOwnedByAnotherAccount = true;
+  fireEvent.click(await screen.findByRole("button", { name: "Turn off for this device" }));
+  await screen.findByText(/This device registration changed/);
+  expect(browser.unsubscribe).not.toHaveBeenCalled();
+});
+
+it("retries local deactivation after the server row has already been removed", async () => {
+  const browser = installBrowser("granted", { existing: true });
+  status = { ...status, devices: [{ id: "ps_1", key: await endpointKey(ENDPOINT), label: "Browser",
+    createdAt: new Date().toISOString(), lastOkAt: null }] };
+  browser.unsubscribe.mockRejectedValueOnce(new Error("Browser unavailable"));
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Turn off for this device" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Retry turning off this device" }));
+  expect(await screen.findByText("Notifications are off for this device.")).toBeTruthy();
+  expect(browser.unsubscribe).toHaveBeenCalledTimes(2);
 });
 
 it("does not subscribe on an older active worker and retries after the worker is updated", async () => {

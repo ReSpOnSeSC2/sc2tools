@@ -48,7 +48,7 @@ function buildPushRouter(deps) {
   router.get("/me/push", owned((_req, owner) => deps.push.status(owner)));
   router.post("/me/push/subscriptions", owned((req, owner) => deps.push.subscribe(owner, body(req))));
   router.delete("/me/push/subscriptions/:id", owned((req, owner) => deps.push.removeDevice(owner, String(req.params.id))));
-  router.post("/me/push/unsubscribe", owned((req, owner) => deps.push.unsubscribe(owner, body(req).endpoint)));
+  router.post("/me/push/unsubscribe", owned((req, owner) => deps.push.unsubscribe(owner, body(req).endpoint, body(req).enrollmentVersion)));
   router.put("/me/push/preferences", owned((req, owner) => deps.push.setGroups(owner, body(req).groups)));
   router.post("/me/push/test", owned((_req, owner) => deps.push.sendTest(owner)));
   router.post("/push/subscription-change", rotateLimit, async (req, res, next) => {

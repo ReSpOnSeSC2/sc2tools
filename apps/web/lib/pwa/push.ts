@@ -8,6 +8,7 @@ export type PushSupport = "ok" | "ios-install" | "unsupported";
 
 const PUSH_WORKER_PROTOCOL = 1;
 const HANDSHAKE_TIMEOUT_MS = 1_500;
+const PUSH_DEVICE_LOCK = "sc2tools-push-device";
 
 export type PushWorkerCheck =
   | { state: "ready"; registration: ServiceWorkerRegistration; worker: ServiceWorker }
@@ -110,6 +111,12 @@ export async function currentSubscription(): Promise<PushSubscription | null> {
   if (pushSupport() !== "ok" || Notification.permission !== "granted") return null;
   const reg = await container()?.getRegistration("/");
   return (await reg?.pushManager.getSubscription()) ?? null;
+}
+
+/** Serialize server registration and local unsubscribe across Settings tabs. */
+export async function withPushDeviceLock<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> {
+  signal.throwIfAborted();
+  return navigator.locks ? navigator.locks.request(PUSH_DEVICE_LOCK, { signal }, work) : work();
 }
 
 /** The Push API requests permission from the click that calls subscribe. */

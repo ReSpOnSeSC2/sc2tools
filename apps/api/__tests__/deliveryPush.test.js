@@ -20,7 +20,7 @@ let sends;
 function device(name) {
   const ecdh = crypto.createECDH("prime256v1");
   ecdh.generateKeys();
-  return { endpoint: `https://fcm.googleapis.com/fcm/send/${name}`, keys: { p256dh: ecdh.getPublicKey().toString("base64url"), auth: crypto.randomBytes(16).toString("base64url") }, label: "Chrome on Windows" };
+  return { endpoint: `https://fcm.googleapis.com/fcm/send/${name}`, keys: { p256dh: ecdh.getPublicKey().toString("base64url"), auth: crypto.randomBytes(16).toString("base64url") }, label: "Chrome on Windows", enrollmentVersion: 1 };
 }
 const as = (name) => ({
   get: (path) => request(h.app).get(path).set("authorization", h.bearer(name)),
@@ -124,6 +124,50 @@ test("split push choices preserve legacy settings and allow separate goal and un
   await as("bob").put("/v1/me/push/preferences", { groups: ["agent-unlinked"] }).expect(200);
   expect(await push.deliver("u_bob", { kind: "agent.unlinked", title: "Desktop app unlinked" })).toMatchObject({ sent: 1 });
   expect(await push.deliver("u_bob", { kind: "goal_met", title: "Goal met" })).toMatchObject({ sent: 0 });
+});
+
+test("legacy enrollment can refresh the same owner without creating or transferring a device", async () => {
+  const { enrollmentVersion, ...legacy } = device("existing");
+  const path = "/v1/me/push/subscriptions";
+  expect((await as("ann").post(path, legacy).expect(409)).body.error.code).toBe("push_enrollment_required");
+  const saved = await as("ann").post(path, { ...legacy, enrollmentVersion }).expect(200);
+  await as("ann").post(path, { ...legacy, label: "Renamed browser" }).expect(200);
+  expect((await as("bob").post(path, legacy).expect(409)).body.error.code).toBe("push_enrollment_required");
+  expect(await h.db.pushSubscriptions.findOne({ _id: saved.body.id })).toMatchObject({ userId: "u_ann", label: "Renamed browser" });
+  await as("bob").post(path, { ...legacy, enrollmentVersion: 2 }).expect(409);
+  await as("bob").post(path, { ...legacy, enrollmentVersion }).expect(200);
+  expect(await h.db.pushSubscriptions.findOne({ _id: saved.body.id })).toMatchObject({ userId: "u_bob" });
+});
+
+test("the device cap reconciles an oldest enrollment that rotates during cleanup", async () => {
+  const path = "/v1/me/push/subscriptions";
+  const oldest = device("oldest");
+  const saved = await as("ann").post(path, oldest).expect(200);
+  await h.db.pushSubscriptions.updateOne({ _id: saved.body.id }, { $set: { createdAt: new Date(0), updatedAt: new Date(0) } });
+  for (let i = 0; i < 9; i += 1) await as("ann").post(path, device(`active-${i}`)).expect(200);
+  const collection = h.services.pushNotifications.db.pushSubscriptions;
+  const realDelete = collection.deleteMany.bind(collection);
+  const cleanup = jest.spyOn(collection, "deleteMany").mockImplementationOnce(async (filter) => {
+    expect(await h.services.pushNotifications.rotate({ oldEndpoint: oldest.endpoint, subscription: device("rotated-oldest") }))
+      .toEqual({ rotated: true });
+    return realDelete(filter);
+  });
+  try {
+    await as("ann").post(path, device("eleventh")).expect(200);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(await h.db.pushSubscriptions.countDocuments({ userId: "u_ann" })).toBe(10);
+    expect(await h.db.pushSubscriptions.findOne({ _id: saved.body.id })).toBeNull();
+  } finally { cleanup.mockRestore(); }
+});
+
+test("versioned deactivation can be retried without deactivating a different owner's endpoint", async () => {
+  const sub = device("shared-off");
+  const path = "/v1/me/push/unsubscribe";
+  const payload = { endpoint: sub.endpoint, enrollmentVersion: 1 };
+  await as("bob").post("/v1/me/push/subscriptions", sub).expect(200);
+  expect((await as("ann").post(path, payload).expect(200)).body).toEqual({ removed: 0, canDeactivate: false });
+  expect((await as("bob").post(path, payload).expect(200)).body).toEqual({ removed: 1, canDeactivate: true });
+  expect((await as("bob").post(path, payload).expect(200)).body).toEqual({ removed: 0, canDeactivate: true });
 });
 
 test("this browser can turn push off, remove a device, rotate its subscription and send a test", async () => {

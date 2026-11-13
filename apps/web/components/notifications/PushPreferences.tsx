@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { API_BASE, apiCall, useApi, useOwnerRequestScope, type ClientApiError } from "@/lib/clientApi";
-import { checkPushWorker, currentSubscription, deviceLabel, endpointKey, hasPushKey, isReadyWorker, pushSupport, subscribeThisDevice, type PushWorkerCheck } from "@/lib/pwa/push";
+import { checkPushWorker, currentSubscription, deviceLabel, endpointKey, hasPushKey, isReadyWorker, pushSupport, subscribeThisDevice, withPushDeviceLock, type PushWorkerCheck } from "@/lib/pwa/push";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
@@ -17,7 +17,7 @@ import { formatDate, formatDateTime } from "@/lib/i18n/format";
 
 type Device = { id: string; label: string; key: string; createdAt: string; lastOkAt: string | null };
 export type PushStatus = { enabled: boolean; publicKey: string | null; groups: string[]; available: Array<{ id: string; label: string }>; devices: Device[] };
-type DeviceState = "checking" | "on" | "off" | "denied" | "unsupported" | "ios-install" | "update" | "retry" | "reset";
+type DeviceState = "checking" | "on" | "off" | "denied" | "unsupported" | "ios-install" | "update" | "retry" | "reset" | "finish-off";
 type ReadyWorker = Extract<PushWorkerCheck, { state: "ready" }>;
 type ThisBrowser = { state: DeviceState; key: string | null; ready?: ReadyWorker; subscription?: PushSubscription | null };
 
@@ -69,7 +69,9 @@ function usePushAction(refresh: () => Promise<unknown>) {
   return { run, busy, error, message, clearError: () => setError(null) };
 }
 
-function useBrowserActions(data: PushStatus | undefined, call: (path: string, init: RequestInit) => Promise<unknown>) {
+type PushRequest = <T>(path: string, init: RequestInit) => Promise<T>;
+
+function useBrowserActions(data: PushStatus | undefined, call: PushRequest) {
   const { device, setDevice, checkAgain } = useThisBrowser(data);
   const remove = (id: string, signal: AbortSignal) =>
     call(`/v1/me/push/subscriptions/${encodeURIComponent(id)}`, { method: "DELETE", signal });
@@ -85,8 +87,14 @@ function useBrowserActions(data: PushStatus | undefined, call: (path: string, in
     const key = await endpointKey(subscription.endpoint);
     signal.throwIfAborted();
     setDevice({ ...device, subscription });
-    await call("/v1/me/push/subscriptions", { method: "POST", signal,
-      body: JSON.stringify({ ...subscription.toJSON(), label: deviceLabel(navigator.userAgent) }) });
+    await withPushDeviceLock(signal, async () => {
+      if ((await currentSubscription())?.endpoint !== subscription.endpoint) {
+        checkAgain();
+        throw new Error("This device changed. Check it again before turning on notifications.");
+      }
+      await call("/v1/me/push/subscriptions", { method: "POST", signal,
+        body: JSON.stringify({ ...subscription.toJSON(), label: deviceLabel(navigator.userAgent), enrollmentVersion: 1 }) });
+    });
     signal.throwIfAborted();
     setDevice({ state: "on", key, subscription });
     return "Notifications are on for this device.";
@@ -94,12 +102,30 @@ function useBrowserActions(data: PushStatus | undefined, call: (path: string, in
 
   async function turnOff(signal: AbortSignal, reset = false) {
     const row = data?.devices.find((entry) => entry.key === device.key);
-    if (row) await remove(row.id, signal);
+    const subscription = device.subscription;
+    const deactivation = Boolean(row) || device.state === "finish-off";
+    if (!subscription) { checkAgain(); return; }
+    const removed = await withPushDeviceLock(signal, async () => {
+      const result = deactivation && await call<{ canDeactivate?: boolean; removed: number }>("/v1/me/push/unsubscribe", { method: "POST", signal,
+        body: JSON.stringify({ endpoint: subscription.endpoint, enrollmentVersion: 1 }) });
+      signal.throwIfAborted();
+      if (!(result ? result.canDeactivate ?? result.removed === 1 : reset)) return false;
+      if ((await currentSubscription())?.endpoint === subscription.endpoint) {
+        signal.throwIfAborted();
+        try {
+          await subscription.unsubscribe();
+          if ((await currentSubscription())?.endpoint === subscription.endpoint) throw new Error();
+        } catch {
+          signal.throwIfAborted();
+          setDevice({ ...device, state: "finish-off" });
+          throw new Error("This browser could not turn off notifications. Try again.");
+        }
+      }
+      return true;
+    });
     signal.throwIfAborted();
-    if (reset) await device.subscription?.unsubscribe();
-    signal.throwIfAborted();
-    // The browser can keep its grant while this account stops receiving alerts.
     checkAgain();
+    if (!removed) return "This device registration changed. Check its status before trying again.";
     return reset ? "Device reset. Turn on notifications again when ready." : "Notifications are off for this device.";
   }
   return { device, checkAgain, turnOn, turnOff, remove };
@@ -125,7 +151,11 @@ function PushPreferencesPanel({ owner }: { owner: string }) {
         {message ? <p role="status" className="mt-2 text-caption text-text-muted">{message}</p> : null}
         <PushGroups status={data} disabled={busy} onSave={(groups) => run(async (signal) => { await call("/v1/me/push/preferences", { method: "PUT", signal, body: JSON.stringify({ groups }) }); return "Push choices saved."; })} />
         <DeviceList devices={data.devices} currentKey={device.key} disabled={busy}
-          onRemove={(id) => run(async (signal) => { await remove(id, signal); return "Device removed."; })}
+          onRemove={(id) => run(async (signal) => {
+            if (data.devices.some((row) => row.id === id && row.key === device.key)) return turnOff(signal);
+            await remove(id, signal);
+            return "Device removed.";
+          })}
           onTest={() => run(async (signal) => { const res = await call<{ sent: number }>("/v1/me/push/test", { method: "POST", signal, body: "{}" }); return res.sent ? `Test sent to ${res.sent} device${res.sent === 1 ? "" : "s"}.` : "No device accepted the test. Turn notifications on for this device first."; })} />
       </>}
       <p className="mt-4 text-caption text-text-muted">On iPhone or iPad, add SC2 Tools to your Home Screen first (Share, then Add to Home Screen), open it from there, then turn notifications on. <LazyHelpLink slug="notifications-on-your-phone">Notifications on your phone</LazyHelpLink></p>
@@ -157,10 +187,12 @@ function ThisDevice({ state, busy, onOn, onOff, onRetry, onReset }: {
     update: "Install the available SC2 Tools update, then check this device again.",
     retry: "This device could not be checked. Make sure you’re online and SC2 Tools is up to date.",
     reset: "This device uses an older notification key. Reset it before turning on notifications.",
+    "finish-off": "Finish turning off notifications in this browser.",
   };
   const actions: Partial<Record<DeviceState, { label: string; click: () => void }>> = {
     off: { label: "Turn on for this device", click: onOn },
     on: { label: "Turn off for this device", click: onOff },
+    "finish-off": { label: "Retry turning off this device", click: onOff },
     update: { label: "Check this device again", click: onRetry },
     retry: { label: "Check this device again", click: onRetry },
     reset: { label: "Reset notifications on this device", click: onReset },

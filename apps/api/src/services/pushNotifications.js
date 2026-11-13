@@ -25,6 +25,7 @@ const { parseVapidKeys, vapidAuthorization, encryptPushPayload, decodeKey } = re
  */
 
 const MAX_DEVICES = 10;
+const PUSH_ENROLLMENT_VERSION = 1;
 const ENDPOINT_MAX = 1024;
 const LABEL_MAX = 80;
 
@@ -168,7 +169,7 @@ class PushNotificationsService {
    * Register (or re-register) this browser. One endpoint belongs to one
    * account. Explicit registration from a new account transfers it.
    * @param {string} userId
-   * @param {{endpoint?: unknown, keys?: {p256dh?: unknown, auth?: unknown}, expirationTime?: unknown, label?: unknown}} body
+   * @param {{endpoint?: unknown, keys?: {p256dh?: unknown, auth?: unknown}, expirationTime?: unknown, label?: unknown, enrollmentVersion?: unknown}} body
    */
   async subscribe(userId, body) {
     if (!this.enabled) throw pushError(503, "push_unavailable", "Push notifications are not available on this server yet.");
@@ -178,24 +179,33 @@ class PushNotificationsService {
     const filter = { endpointHash: hash };
     const values = stampVersion({ userId, endpoint, keys, label: cleanLabel(body.label), expiresAt: subscriptionExpiry(body.expirationTime),
       failures: 0, updatedAt: now }, COLLECTIONS.PUSH_SUBSCRIPTIONS);
-    await this._saveSubscription(filter, values, now);
+    await this._saveSubscription(filter, values, now, body.enrollmentVersion === PUSH_ENROLLMENT_VERSION);
     await this._capDevices(userId);
     const saved = await this.db.pushSubscriptions.findOne({ userId, ...filter }, { projection: { _id: 1 } });
     if (!saved) throw pushError(409, "push_device_changed", "This device changed while it was being registered. Try again.");
     return { id: String(saved._id), key: hash.slice(0, 16) };
   }
 
-  /** @param {{endpointHash: string}} filter @param {{userId: string}} values @param {Date} now */
-  async _saveSubscription(filter, values, now) {
+  /** @param {{endpointHash: string}} filter @param {{userId: string}} values @param {Date} now @param {boolean} enroll */
+  async _saveSubscription(filter, values, now, enroll) {
+    if (!enroll) {
+      // Older Settings bundles re-register on load. They may refresh their own device.
+      const refreshed = await this.db.pushSubscriptions.updateOne({ ...filter, userId: values.userId }, { $set: values });
+      if (!refreshed.matchedCount) {
+        throw pushError(409, "push_enrollment_required", "Update SC2 Tools and choose Turn on for this device.");
+      }
+      return;
+    }
     const transfer = [{ $set: {
       ...Object.fromEntries(Object.entries(values).map(([name, value]) => [name, { $literal: value }])),
       createdAt: { $cond: [{ $eq: ["$userId", { $literal: values.userId }] }, "$createdAt", now] },
       lastOkAt: { $cond: [{ $eq: ["$userId", { $literal: values.userId }] }, { $ifNull: ["$lastOkAt", null] }, null] },
+      enrollment: { $cond: [{ $eq: ["$userId", { $literal: values.userId }] }, "$enrollment", crypto.randomUUID()] },
     } }];
     if ((await this.db.pushSubscriptions.updateOne(filter, transfer)).matchedCount) return;
     try {
       await this.db.pushSubscriptions.insertOne({ ...filter, ...values,
-        _id: `ps_${crypto.randomBytes(12).toString("base64url")}`, createdAt: now, lastOkAt: null });
+        _id: `ps_${crypto.randomBytes(12).toString("base64url")}`, createdAt: now, lastOkAt: null, enrollment: crypto.randomUUID() });
     } catch (error) {
       if (!isDuplicateKey(error) || !(await this.db.pushSubscriptions.updateOne(filter, transfer)).matchedCount) throw error;
     }
@@ -203,9 +213,10 @@ class PushNotificationsService {
 
   /** @param {string} userId */
   async _capDevices(userId) {
-    const extra = await this.db.pushSubscriptions.find({ userId }, { projection: { _id: 1, updatedAt: 1 } })
+    // Rotation refreshes the endpoint within the same enrollment. A transfer creates a new enrollment.
+    const extra = await this.db.pushSubscriptions.find({ userId }, { projection: { _id: 1, enrollment: 1 } })
       .sort({ createdAt: -1, _id: -1 }).skip(MAX_DEVICES).toArray();
-    if (extra.length) await this.db.pushSubscriptions.deleteMany({ userId, $or: extra.map((row) => ({ _id: row._id, updatedAt: row.updatedAt ?? null })) });
+    if (extra.length) await this.db.pushSubscriptions.deleteMany({ userId, $or: extra.map((row) => ({ _id: row._id, enrollment: row.enrollment ?? null })) });
   }
 
   /** @param {string} userId @param {string} id */
@@ -214,11 +225,15 @@ class PushNotificationsService {
     return { removed: res.deletedCount || 0 };
   }
 
-  /** Turning push off in this browser. @param {string} userId @param {unknown} endpoint */
-  async unsubscribe(userId, endpoint) {
+  /** Turning push off in this browser. @param {string} userId @param {unknown} endpoint @param {unknown} [enrollmentVersion] */
+  async unsubscribe(userId, endpoint, enrollmentVersion) {
     if (typeof endpoint !== "string" || endpoint.length > ENDPOINT_MAX) return { removed: 0 };
-    const res = await this.db.pushSubscriptions.deleteOne({ userId, endpointHash: endpointHash(endpoint) });
-    return { removed: res.deletedCount || 0 };
+    const filter = { endpointHash: endpointHash(endpoint) };
+    const { deletedCount: removed } = await this.db.pushSubscriptions.deleteOne({ userId, ...filter });
+    if (enrollmentVersion !== PUSH_ENROLLMENT_VERSION) return { removed };
+    // A retry may follow a lost response. Leave another account's browser registration alone.
+    const remaining = await this.db.pushSubscriptions.findOne(filter, { projection: { _id: 1 } });
+    return { removed, canDeactivate: !remaining };
   }
 
   /**
