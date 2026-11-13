@@ -33,6 +33,6 @@ const article: HelpArticle = {
     { type: "heading", text: "When a channel stops", anchor: "stopped" },
     { type: "paragraph", text: "If Discord rejects a webhook three times in a row (usually because it was deleted or its channel removed), SC2 Tools switches that channel off and sends you a notification. Create a new webhook and connect it again. Nothing is posted while your account is being deleted, and deleting your account removes every connected channel." },
   ],
-  related: ["weekly-report", "stream-reports", "notifications", "public-profile"],
+  related: ["discord-build-command", "weekly-report", "stream-reports", "notifications", "public-profile"],
 };
 export default article;

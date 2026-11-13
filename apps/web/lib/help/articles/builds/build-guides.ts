@@ -28,6 +28,6 @@ const article: HelpArticle = {
     { type: "heading", text: "The map pool table", anchor: "map-pool" },
     { type: "paragraph", text: "On [Map guides](/guides/maps), switch **Gallery / Table** when matchup cells are available. Each cell is that row's map win rate for the race on the left of the matchup; PvZ means Protoss against Zerg. Mirrors and cells without enough players or games are omitted. Pick **I play** to show your race's two matchups, find a map by name, or sort a matchup column. Missing cells stay last. The browser remembers this view when storage is available." },
     { type: "paragraph", text: "Build guides keep their best three and toughest three maps. When more than six maps qualify, open **Show all maps** for the complete sortable list. Map names link only when their map guide is available." },
-  ], related: ["custom-builds", "rules-explained"],
+  ], related: ["discord-build-command", "custom-builds", "rules-explained"],
 };
 export default article;

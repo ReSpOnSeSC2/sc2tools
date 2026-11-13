@@ -4852,6 +4852,12 @@ release preparation, not a signed or published 0.24.9 installer.
 - Discord embeds keep opponent names, ratings and replay identifiers private. Your own MMR starts off and needs a separate choice for each channel.
 - Opt in to ladder milestones from the inbox, or manually post an active public battle report link with a short description.
 
+### Discord build guides
+
+- The Discord `/build` command shows published ladder openers for a chosen
+  matchup in a private reply. The public help page explains how to add the
+  command once the application is available.
+
 ### SC2 Daily crowd split
 
 - After completing a recorded Daily, choose to send your five calls anonymously

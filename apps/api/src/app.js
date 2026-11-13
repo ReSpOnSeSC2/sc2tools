@@ -23,6 +23,7 @@ const {
 const { captureSignedWebhookRawBody } = require("./middleware/jsonBody");
 const { buildSyncActionJsonParser } = require("./middleware/syncActionJson");
 const { sanitiseRequestForLog, sanitiseResponseForLog, isStreamViewerRequest } = require("./middleware/requestLogging");
+const { isDiscordInteractionsRequest } = require("./config/discordInteractions");
 const { privateSearchNoStore, buildPrivateSearchJsonParser,
   privateSearchErrorBoundary, isPrivateSearchRequest } = require("./middleware/privateSearchBoundary");
 const { replayDownloadBatchNoStore, buildReplayDownloadBatchJsonParser,
@@ -149,6 +150,8 @@ const { buildGuideSamplesBackfillJob } = require("./jobs/guideSamplesBackfillJob
 const { GuideStatsService } = require("./services/guideStats");
 const { buildGuideRevalidator } = require("./services/guideRevalidate");
 const { GuideFreshnessService } = require("./services/guideFreshness");
+const { createDiscordBuildCache } = require("./services/discordBuildCache");
+const { buildDiscordInteractionsRouter } = require("./routes/discordInteractions");
 const { buildCommunityRevalidator } = require("./services/communityRevalidate");
 const { buildGuideStatsRecomputeJob } = require("./jobs/guideStatsRecomputeJob");
 const { GuideVideosService } = require("./services/guideVideos");
@@ -388,7 +391,7 @@ function buildApp(deps) {
     getDeviceToken: (hash) => services.pairings.findTokenByHash(hash),
     ensureUser: (clerkUserId) => services.users.ensureFromClerk(clerkUserId),
   }), deps.db.users);
-  applyBaseMiddleware(app, deps, auth, services.siteStats);
+  applyBaseMiddleware(app, deps, auth, services.siteStats, services.discordBuildCache);
   // Live admin allowlist — seeded from SC2TOOLS_ADMIN_USER_IDS and
   // mutated in place by the email-allowlist + admin-grant paths. The
   // REST ``isAdmin`` gate and the socket layer both read this live set;
@@ -925,23 +928,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   // is built here but only started by server.js when GUIDES_ENABLED; the
   // admin "Recompute now" route calls guideStatsJob.runOnce({ force: true }).
   const guideStats = new GuideStatsService(deps.db, { logger: deps.logger });
-  const guideFreshness = new GuideFreshnessService(deps.db);
-  const revalidateGuidePages = buildGuideRevalidator({
-    url: deps.config.guidesRevalidateUrl || null,
-    secret: deps.config.guidesRevalidateSecret || null,
-    logger: deps.logger,
-  });
-  const revalidateGuides = async () => {
-    const result = await revalidateGuidePages();
-    if (result.ok) {
-      try {
-        await guideFreshness.markChanged();
-      } catch {
-        deps.logger.warn("guide_revision_write_failed");
-      }
-    }
-    return result;
-  };
+  const { guideFreshness, discordBuildCache, revalidateGuides } = makeGuideRefresh(deps);
   const guideStatsJob = buildGuideStatsRecomputeJob({
     jobLedger, enabled: deps.config.guidesEnabled,
     db: deps.db,
@@ -1186,6 +1173,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     guideSamplesBackfill,
     guideStats,
     guideStatsJob,
+    discordBuildCache,
     revalidateGuides,
     guideFreshness,
     guideVideos,
@@ -1238,8 +1226,9 @@ function mountLimitedPublicRoutes(app, deps, auth, siteStats) {
  * @param {AppDeps} deps
  * @param {import('express').RequestHandler} auth
  * @param {import('./services/siteStats').SiteStatsService} siteStats
+ * @param {ReturnType<typeof createDiscordBuildCache>} discordBuildCache
  */
-function applyBaseMiddleware(app, deps, auth, siteStats) {
+function applyBaseMiddleware(app, deps, auth, siteStats, discordBuildCache) {
   app.use(replayDownloadBatchNoStore, privateSearchNoStore, privateSearchRequestScope);
   app.use((req, res, next) => {
     if (isStreamViewerRequest(req.originalUrl)) res.set("Cache-Control", "private, no-store");
@@ -1257,22 +1246,10 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
       exposedHeaders: ["Retry-After", "X-Export-Truncated", "Content-Disposition", "ETag", "X-Export-Has-More", "X-Export-Continuation-Token"],
     }),
   );
-  app.use(
-    pinoHttp({
-      logger: deps.logger,
-      customProps: () => ({ service: SERVICE.NAME }),
-      // Work with the raw IncomingMessage and emit a small, fail-closed
-      // header allowlist. Bearer/device credentials and path-carried overlay
-      // tokens must never be copied into Render logs.
-      wrapSerializers: false,
-      serializers: { req: sanitiseRequestForLog, res: sanitiseResponseForLog },
-      autoLogging: { ignore: (/** @type {import("http").IncomingMessage} */ req) => {
-        const { res, originalUrl } = /** @type {import("express").Request} */ (req);
-        return req.method === "GET" && res?.statusCode === 204
-          && /^\/v1\/match-rooms\//iu.test(originalUrl || "");
-      } },
-    }),
-  );
+  app.use(buildAccessLogger(deps.logger));
+  // Discord verifies the original bytes before parsing and has a dedicated
+  // admission bucket. No browser or account context is needed here.
+  app.use(SERVICE.ROUTE_PREFIX, buildDiscordInteractionsRouter(deps.config.discordInteractions, discordBuildCache));
   app.use(requestId);
   mountLimitedPublicRoutes(app, deps, auth, siteStats);
   const isSignedProviderWebhook = (/** @type {import('express').Request} */ req) =>
@@ -1347,6 +1324,47 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
         ? coachingJson
         : ordinaryJson;
     parser(req, res, next);
+  });
+}
+
+/** @param {AppDeps} deps */
+function makeGuideRefresh(deps) {
+  const guideFreshness = new GuideFreshnessService(deps.db);
+  const discordBuildCache = createDiscordBuildCache(deps.config, deps.db.guideStats, deps.logger);
+  const revalidateGuidePages = buildGuideRevalidator({
+    url: deps.config.guidesRevalidateUrl || null,
+    secret: deps.config.guidesRevalidateSecret || null,
+    logger: deps.logger,
+  });
+  const revalidateGuides = async () => {
+    discordBuildCache?.invalidate();
+    const result = await revalidateGuidePages();
+    if (result.ok) {
+      try {
+        await guideFreshness.markChanged();
+      } catch {
+        deps.logger.warn("guide_revision_write_failed");
+      }
+    }
+    return result;
+  };
+  return { guideFreshness, discordBuildCache, revalidateGuides };
+}
+
+/** @param {import("pino").Logger} logger */
+function buildAccessLogger(logger) {
+  return pinoHttp({
+    logger,
+    customProps: () => ({ service: SERVICE.NAME }),
+    // Keep credentials and path-carried tokens out of operational logs.
+    wrapSerializers: false,
+    serializers: { req: sanitiseRequestForLog, res: sanitiseResponseForLog },
+    autoLogging: { ignore: (/** @type {import("http").IncomingMessage} */ req) => {
+      const { res, originalUrl } = /** @type {import("express").Request} */ (req);
+      if (isDiscordInteractionsRequest(originalUrl || req.url)) return true;
+      return req.method === "GET" && res?.statusCode === 204
+        && /^\/v1\/match-rooms\//iu.test(originalUrl || "");
+    } },
   });
 }
 

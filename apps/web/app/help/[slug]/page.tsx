@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
+import { DiscordBuildInstall } from "@/components/help/DiscordBuildInstall";
 import { HelpArticleBody } from "@/components/help/HelpArticleBody";
 import { HelpJsonLd } from "@/components/help/HelpJsonLd";
 import { HelpSignInNote } from "@/components/help/HelpSignInNote";
@@ -25,6 +26,7 @@ import { helpArticleCrumbs, helpArticleJsonLd } from "@/lib/help/jsonLd";
 import { siteTitle } from "@/lib/siteTitle";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { siteOrigin } from "@/lib/seo/absoluteUrl";
+import { DISCORD_BUILD_HELP_SLUG } from "@/lib/discordBuildInstall";
 
 const SITE_URL = siteOrigin();
 
@@ -98,6 +100,9 @@ export default async function HelpArticlePage({ params }: Params) {
           </p>
           {article.signedInOnly ? <HelpSignInNote /> : null}
 
+          {slug === DISCORD_BUILD_HELP_SLUG ? (
+            <DiscordBuildInstall applicationId={process.env.NEXT_PUBLIC_DISCORD_BUILD_INSTALL_APPLICATION_ID} />
+          ) : null}
           <Card>
             <HelpArticleBody article={article} />
           </Card>

@@ -1,6 +1,7 @@
 "use strict";
 
 const { DEFAULTS } = require("./constants");
+const { parseDiscordInteractions } = require("./discordInteractions");
 
 const HEX_64_REGEX = /^[0-9a-fA-F]{64}$/;
 
@@ -84,6 +85,7 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *   },
  *   platformIntegrations: ReturnType<typeof parsePlatformIntegrationsConfig>,
  *   delivery: ReturnType<typeof parseDeliveryConfig>,
+ *   discordInteractions?: ReturnType<typeof parseDiscordInteractions>,
  *   twitchAutomationEnabled: boolean,
  *   reviewsEnabled: "off" | "admins" | "on",
  *   guidesEnabled: boolean,
@@ -159,6 +161,7 @@ function loadConfig(env = process.env) {
     analytics: parseAnalyticsConfig(env),
     platformIntegrations: parsePlatformIntegrationsConfig(env),
     delivery: parseDeliveryConfig(env),
+    discordInteractions: parseDiscordInteractions(env),
     // Separate from configured credentials and explicit user opt-ins.
     // This implementation never changes the operator's environment.
     twitchAutomationEnabled: env.TWITCH_AUTOMATION_ENABLED === "true",

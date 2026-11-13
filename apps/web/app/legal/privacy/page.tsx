@@ -14,6 +14,7 @@ import Link from "next/link";
 import { LegalLayout, LegalHeading, legalSectionId } from "@/components/legal/LegalLayout";
 import { CookieSettingsButton } from "@/components/legal/CookieSettingsButton";
 import { ISSUES_URL } from "@/lib/siteLinks";
+import { HELP_SUPPORT_EMAIL } from "@/lib/help/support";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 export const metadata = pageMetadata({
@@ -23,7 +24,7 @@ export const metadata = pageMetadata({
     "How SC2 Tools processes replay data, connected streaming accounts, and private StarCraft II replay files.",
 });
 
-const LAST_UPDATED = "2026-10-31";
+const LAST_UPDATED = "2026-11-13";
 /** Settings tab with export, history deletion and account deletion. */
 const DATA_SETTINGS_HREF = "/settings?tab=backups";
 const LIST_CLASS = "list-disc space-y-2 pl-6";
@@ -334,7 +335,29 @@ function ConnectedStreamAccounts() {
         <DataSettingsLink /> removes its server connections and creation
         records. Deleting only replay history does not remove them.
       </p>
+      <DiscordCommandPrivacy />
     </PolicySection>
+  );
+}
+
+function DiscordCommandPrivacy() {
+  return (
+    <>
+      <h3 id="discord-build-command" className="text-h4 font-semibold">Discord build command</h3>
+      <p>
+        When you use <code>/build</code>, Discord sends the selected matchup
+        and an interaction payload that can contain account, server and
+        channel identifiers and an interaction token. SC2 Tools checks
+        Discord&apos;s signature and uses the matchup to return public guide
+        statistics in the same request. We do not store the payload or log its
+        contents or link it to a SC2 Tools account. We send the reply to
+        Discord for display only to the person who ran the command.
+      </p>
+      <p>
+        To report a problem or ask about access, correction or deletion for
+        this command, email <a className="underline" href={`mailto:${HELP_SUPPORT_EMAIL}`}>{HELP_SUPPORT_EMAIL}</a>.
+      </p>
+    </>
   );
 }
 
