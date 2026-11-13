@@ -11,12 +11,6 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
-### SC2 Daily
-
-- After completing a recorded Daily, choose to send your five calls anonymously
-  and see the crowd split once there are 20 votes. Share a link to any fight
-  that opens before the result.
-
 ### Coaching Content Studio
 
 - Create guided notes, voice memos, videos, annotated screenshots, replay
@@ -4857,6 +4851,12 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Discord embeds keep opponent names, ratings and replay identifiers private. Your own MMR starts off and needs a separate choice for each channel.
 - Opt in to ladder milestones from the inbox, or manually post an active public battle report link with a short description.
+
+### SC2 Daily crowd split
+
+- After completing a recorded Daily, choose to send your five calls anonymously
+  and see the crowd split once there are 20 votes. Share a link to any fight
+  that opens before the result.
 
 ## [agent-v0.5.13] - 2026-05-09
 

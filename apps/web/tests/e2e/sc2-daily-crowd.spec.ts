@@ -17,7 +17,7 @@ async function useSyntheticSchedule(page: Page) {
   // presents it under a recorded slot, with a distinct fixture digest.
   const index = JSON.parse(await readFile("public/daily/v1/index.json", "utf8"));
   await page.route("**/daily/v1/index.json", route =>
-    route.fulfill({ json: { ...index, days: { [DAY]: SYNTHETIC_RECORDED } } }));
+    route.fulfill({ json: { ...index, days: { [DAY]: SYNTHETIC_RECORDED, [DAY - 1]: SYNTHETIC_RECORDED } } }));
   await page.route("**/daily/v1/packs/" + SYNTHETIC_RECORDED + "/*", route =>
     route.continue({ url: route.request().url().replace(SYNTHETIC_RECORDED, index.practice[0]) }));
 }
@@ -31,6 +31,38 @@ async function completeDaily(page: Page) {
     await page.getByRole("button", { name: slot < 4 ? "Next fight" : "See results" }).click();
   }
   await expect(page.getByRole("heading", { name: "Set complete" })).toBeFocused();
+}
+
+async function verifySharedFight(page: Page) {
+  const crowd = page.getByRole("region", { name: "Crowd split" });
+  const copy = page.getByRole("button", { name: "Copy fight 3 link" });
+  const expectedLink = `/arcade#fight=${DAY}-3`;
+  await page.evaluate(() => {
+    const record = (value: string) => {
+      document.documentElement.dataset.copiedFight = value;
+      return Promise.resolve();
+    };
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: record } });
+  });
+  await copy.click();
+  await expect(page.locator("html")).toHaveAttribute("data-copied-fight", "https://sc2tools.com" + expectedLink);
+  const link = crowd.getByRole("link", { name: "Play fight 3" });
+  await expect(link).toHaveAttribute("href", expectedLink);
+  await link.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Fight 3 of 5")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Call the fight" })).toBeFocused();
+  await expect(page.getByText("Resources lost:", { exact: false })).toHaveCount(0);
+  await expect(crowd).toHaveCount(0);
+  await expect(page.getByText("Streak:", { exact: false })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByText("Fight 3 of 5")).toBeVisible();
+  await page.getByRole("button", { name: "Even trade" }).click();
+  await expect(page.getByRole("heading", { name: "Trade result" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Next fight" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Play today's set" }).click();
+  await expect(page.getByRole("heading", { name: "Set complete" })).toBeVisible();
+  await expect(page.getByText("Streak: 1 day")).toBeVisible();
 }
 
 for (const theme of ["light", "dark"] as const) {
@@ -78,34 +110,7 @@ for (const theme of ["light", "dark"] as const) {
     await checkAccessibility(page, info, "/arcade#crowd", theme);
     await captureAccessibility(page, info, "sc2-daily-crowd-ready-" + theme, true);
 
-    const copy = page.getByRole("button", { name: "Copy fight 3 link" });
-    const expectedLink = `/arcade#fight=${DAY}-3`;
-    await page.evaluate(() => {
-      const record = (value: string) => {
-        document.documentElement.dataset.copiedFight = value;
-        return Promise.resolve();
-      };
-      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: record } });
-    });
-    await copy.click();
-    await expect(page.locator("html")).toHaveAttribute("data-copied-fight", "https://sc2tools.com" + expectedLink);
-    const link = crowd.getByRole("link", { name: "Play fight 3" });
-    await expect(link).toHaveAttribute("href", expectedLink);
-    await link.focus();
-    await page.keyboard.press("Enter");
-    await expect(page.getByText("Fight 3 of 5")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Call the fight" })).toBeFocused();
-    await expect(page.getByText("Resources lost:", { exact: false })).toHaveCount(0);
-    await expect(crowd).toHaveCount(0);
-    await expect(page.getByText("Streak:", { exact: false })).toHaveCount(0);
-    await page.reload();
-    await expect(page.getByText("Fight 3 of 5")).toBeVisible();
-    await page.getByRole("button", { name: "Even trade" }).click();
-    await expect(page.getByRole("heading", { name: "Trade result" })).toBeFocused();
-    await expect(page.getByRole("button", { name: "Next fight" })).toHaveCount(0);
-    await page.getByRole("link", { name: "Play today's set" }).click();
-    await expect(page.getByRole("heading", { name: "Set complete" })).toBeVisible();
-    await expect(page.getByText("Streak: 1 day")).toBeVisible();
+    await verifySharedFight(page);
     expect(received).toHaveLength(3);
     await crowd.getByRole("button", { name: "See crowd split" }).click();
     await expect(crowd.getByRole("status")).toHaveText("20 votes for this set.");
@@ -113,5 +118,10 @@ for (const theme of ["light", "dark"] as const) {
     expect(received[0]).toEqual({
       day: DAY, pack: SYNTHETIC_RECORDED, answers: [2, 2, 2, 2, 2], attempt: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
+    await page.goto(`/arcade#fight=${DAY - 1}-1`);
+    await expect(page.getByRole("heading", { name: "Call the fight" })).toBeFocused();
+    await expect(page.getByText("Fight 1 of 5")).toBeVisible();
+    await expect(crowd).toHaveCount(0);
+    expect(received).toHaveLength(4);
   });
 }

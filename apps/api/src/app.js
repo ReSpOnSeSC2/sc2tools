@@ -1226,6 +1226,19 @@ function withOwnerDataServices(services, deps, gameDetails) {
  * @param {import('express').RequestHandler} auth
  * @param {import('./services/siteStats').SiteStatsService} siteStats
  */
+function mountLimitedPublicRoutes(app, deps, auth, siteStats) {
+  // These routes own their admission limits and body parsers.
+  app.use(SERVICE.ROUTE_PREFIX, buildSiteStatsRouter({ siteStats, auth }));
+  app.use(SERVICE.ROUTE_PREFIX, buildMatchRoomsRouter(new MatchRoomsService(deps.db.matchRooms)));
+  app.use(SERVICE.ROUTE_PREFIX, buildDailyCrowdRouter(new DailyCrowdService(deps.db.dailyTally)));
+}
+
+/**
+ * @param {import('express').Express} app
+ * @param {AppDeps} deps
+ * @param {import('express').RequestHandler} auth
+ * @param {import('./services/siteStats').SiteStatsService} siteStats
+ */
 function applyBaseMiddleware(app, deps, auth, siteStats) {
   app.use(replayDownloadBatchNoStore, privateSearchNoStore, privateSearchRequestScope);
   app.use((req, res, next) => {
@@ -1261,12 +1274,7 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
     }),
   );
   app.use(requestId);
-  // Presence traffic comes through the web server's shared egress IP. Its
-  // own signed-visitor/issuance limits and 1KB parser avoid consuming the
-  // ordinary API's per-IP bucket for every visible browser tab.
-  app.use(SERVICE.ROUTE_PREFIX, buildSiteStatsRouter({ siteStats, auth }));
-  app.use(SERVICE.ROUTE_PREFIX, buildMatchRoomsRouter(new MatchRoomsService(deps.db.matchRooms)));
-  app.use(SERVICE.ROUTE_PREFIX, buildDailyCrowdRouter(new DailyCrowdService(deps.db.dailyTally)));
+  mountLimitedPublicRoutes(app, deps, auth, siteStats);
   const isSignedProviderWebhook = (/** @type {import('express').Request} */ req) =>
     req.method === "POST"
     && (
