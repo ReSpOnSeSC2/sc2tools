@@ -137,8 +137,9 @@ async function inspectReport(page: Page, info: TestInfo, theme: "light" | "dark"
   expect((await trigger.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   await trigger.focus();
   await choose(page, "x");
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.getByRole("alert")).toContainText("This replay could not be read");
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("alert")).toContainText("This replay could not be read");
   await captureAccessibility(page, info, "match-replay-error-" + theme, true);
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
@@ -165,7 +166,7 @@ async function confirmAndUndo(a: Page, b: Page, info: TestInfo, theme: "light" |
   await checkAccessibility(b, info, PATH, theme);
   await captureAccessibility(b, info, "match-replay-confirmed-" + theme, true);
   await b.getByRole("button", { name: "Request score undo" }).click();
-  await expect(b.getByRole("status")).toContainText("Waiting for the other player");
+  await expect(b.getByRole("region", { name: "Series score" }).getByRole("status")).toContainText("Waiting for the other player");
   await a.bringToFront();
   await a.reload();
   await a.getByRole("button", { name: "Agree to undo last score" }).click();
@@ -225,6 +226,6 @@ async function verifyConflict(page: Page, info: TestInfo, theme: "light" | "dark
   await choose(page, "synthetic replay bytes");
   nextConflict();
   await page.getByRole("button", { name: "Fixture Blue (winner)" }).click();
-  await expect(page.getByRole("alert")).toContainText("This report disagrees with the recorded winner.");
+  await expect(page.getByRole("alert").filter({ hasText: "This report disagrees with the recorded winner." })).toBeVisible();
   await captureAccessibility(page, info, "match-replay-conflict-" + theme, true);
 }
