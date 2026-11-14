@@ -17,7 +17,7 @@ export function RailLink({ entry, active, pinned, onNavigate }: { entry: NavEntr
   const [tooltip, setTooltip] = useState({ active: false, top: 0 });
   const show = (element: HTMLElement) => setTooltip({ active: true, top: Math.max(8, element.getBoundingClientRect().top) });
   const hide = () => setTooltip((value) => ({ ...value, active: false }));
-  return <><Link href={entry.href} onNavigate={onNavigate} aria-current={active ? "page" : undefined} aria-describedby={pinned ? undefined : id}
+  return <><Link href={entry.href} prefetch={entry.ownChrome ? false : undefined} onNavigate={onNavigate} aria-current={active ? "page" : undefined} aria-describedby={pinned ? undefined : id}
     onMouseEnter={(event) => show(event.currentTarget)} onMouseLeave={hide} onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) show(event.currentTarget); }} onBlur={hide}
     onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); hide(); } }}
     className={`flex h-10 items-center gap-3 rounded-lg border-2 px-2.5 motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${active ? "border-accent-cyan/40 bg-accent-cyan/10 text-accent" : "border-transparent text-text-muted hover:bg-bg-elevated hover:text-text"}`}>

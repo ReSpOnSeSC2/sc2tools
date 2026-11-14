@@ -1,7 +1,7 @@
 import entries from "../../api/src/data/whatsNew.json";
 
 export type AnnouncementAudience = "website" | "agent" | "stream-studio" | "guides";
-export type WhatsNewEntry = { id: string; date: string; title: string; summary: string; audience: AnnouncementAudience; highlights: string[]; helpSlug?: string; agentVersion?: string; major?: boolean };
+export type WhatsNewEntry = { id: string; date: string; title: string; summary: string; audience: AnnouncementAudience; highlights: string[]; helpSlug?: string; link?: { href: string; label: string }; agentVersion?: string; major?: boolean };
 export const WHATS_NEW = entries as WhatsNewEntry[];
 export const WHATS_NEW_CATEGORIES: AnnouncementAudience[] = ["agent", "website", "stream-studio", "guides"];
 export const AUDIENCE_LABELS = { agent: "Agent", website: "Website", "stream-studio": "Stream Studio", guides: "Guides" };

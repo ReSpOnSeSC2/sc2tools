@@ -57,6 +57,7 @@ function hrefsFor(options: Options, signedIn: boolean): string[] {
 describe("headerNavLinks", () => {
   it("gives signed-in players their own links and no Dashboard link", () => {
     expect(hrefsFor({ guides: true, reviews: false, isAdmin: false }, true)).toEqual([
+      "/tools",
       "/builds",
       "/guides",
       "/community",
@@ -69,6 +70,7 @@ describe("headerNavLinks", () => {
   it("gives visitors Analyze replays, Stream Studio and Download, never an account page", () => {
     expect(hrefsFor({ guides: true, reviews: true, isAdmin: false, tryPage: true }, false)).toEqual([
       "/try",
+      "/tools",
       "/stream-studio",
       "/guides",
       "/community",
@@ -83,6 +85,7 @@ describe("headerNavLinks", () => {
 
   it("lists /try only while Instant Analysis is open to everyone", () => {
     expect(hrefsFor({ guides: false, reviews: false, isAdmin: false, tryPage: false }, false)).toEqual([
+      "/tools",
       "/stream-studio",
       "/community",
       "/help",
@@ -94,6 +97,7 @@ describe("headerNavLinks", () => {
 
   it("keeps Reviews after Community, Help before Settings and Admin last", () => {
     expect(hrefsFor({ guides: true, reviews: true, isAdmin: true }, true)).toEqual([
+      "/tools",
       "/builds",
       "/guides",
       "/community",
@@ -189,11 +193,11 @@ describe("headerLinkCommands", () => {
   it("keys each header link like the app's NAV_ENTRY for the same page", () => {
     const signedIn = headerLinkCommands(headerNavLinks(options), { signedIn: true, isAdmin: false });
     expect(signedIn.map((row) => [row.key, row.href])).toEqual([
-      ["builds-library", "/builds"], ["guides", "/guides"], ["community", "/community"], ["reviews", "/reviews"],
+      ["tools", "/tools"], ["builds-library", "/builds"], ["guides", "/guides"], ["community", "/community"], ["reviews", "/reviews"],
       ["help", "/help"], ["settings", "/settings"],
     ]);
     const visitor = headerLinkCommands(headerNavLinks(options), { signedIn: false, isAdmin: false });
-    expect(visitor.map((row) => row.key)).toEqual(["try", "stream-studio-page", "guides", "community", "reviews", "help", "download"]);
+    expect(visitor.map((row) => row.key)).toEqual(["try", "tools", "stream-studio-page", "guides", "community", "reviews", "help", "download"]);
     const admin = headerLinkCommands(headerNavLinks({ ...options, isAdmin: true }), { signedIn: true, isAdmin: true });
     expect(admin.at(-1)).toEqual({ key: "admin", href: "/admin", label: "Admin" });
   });

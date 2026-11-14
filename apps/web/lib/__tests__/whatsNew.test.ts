@@ -18,6 +18,11 @@ describe("curated product updates", () => {
     expect(matchesGoals(stream, ["improve"])).toBe(false); expect(matchesGoals(stream, ["stream"])).toBe(true);
     expect(matchesGoals(stream)).toBe(true); expect(matchesGoals(stream, [])).toBe(true); expect(matchesGoals(stream, ["improve", "stream"])).toBe(true);
   });
+  it("links the public navigation update to the directory without requesting an inbox announcement", () => {
+    const entry = WHATS_NEW.find(item => item.id === "find-all-tools");
+    expect(entry?.link).toEqual({ href: "/tools", label: "Explore all tools" });
+    expect(entry?.major).toBeUndefined();
+  });
   it("publishes a static escaped RSS item for every curated update", async () => {
     const response = GET(); const xml = await response.text(); const parsed = new DOMParser().parseFromString(xml, "application/xml");
     expect(response.headers.get("Content-Type")).toContain("application/rss+xml"); expect(parsed.querySelector("parsererror")).toBeNull();

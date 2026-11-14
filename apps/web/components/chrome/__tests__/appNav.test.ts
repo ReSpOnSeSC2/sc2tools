@@ -40,6 +40,7 @@ describe("app surface matching", () => {
     "/players/reaver-7a6b5c4d3e/replays",
     "/players/reaver-7a6b5c4d3e/replays/game-1",
     "/definitions",
+    "/tools",
     "/sign-in",
     "/overlay/token",
     "/guides",
@@ -131,6 +132,13 @@ describe("app surface matching", () => {
     }
     expect(surfaceTitle("/guides")).toBe("SC2 Tools");
     expect(MOBILE_TAB_KEYS).not.toContain("guides");
+  });
+
+  it("links the tools directory without claiming it for the account shell", () => {
+    expect(NAV_ENTRIES.find(entry => entry.key === "tools")).toMatchObject({ href: "/tools", publicRoute: true, ownChrome: true });
+    expect(isProtectedSurfacePath("/tools")).toBe(false);
+    expect(matchSurface("/tools")).toBeNull();
+    expect(MOBILE_TAB_KEYS).not.toContain("tools");
   });
 
   it("links Stream Studio as a shortcut that never claims a route", () => {

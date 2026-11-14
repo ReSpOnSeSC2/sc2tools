@@ -45,6 +45,7 @@ const HOME_TOOL_LINKS = [
   { href: "/match", label: "Match Rooms" },
   { href: "/balance", label: "Ladder Balance" },
   { href: "/wrapped", label: "Wrapped" },
+  { href: "/career", label: "Replay Career" },
   { href: "/changelog", label: "Release notes" },
 ] as const;
 
@@ -117,10 +118,13 @@ function LandingHero() {
 
 function LandingToolLinks() {
   const browserPublic = getInstantImportMode() === "all";
-  const links = HOME_TOOL_LINKS.filter(({ href }) => href !== "/wrapped" || browserPublic);
+  const links = HOME_TOOL_LINKS.filter(({ href }) => browserPublic || (href !== "/wrapped" && href !== "/career"));
 
   return (
     <nav aria-label="More SC2 Tools" className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-line bg-bg-surface p-1">
+      <Link href="/tools" prefetch={false} className={buttonClassName({ variant: "secondary", size: "sm", className: "col-span-2 min-h-11" })}>
+        Explore all tools <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      </Link>
       {links.map(({ href, label }) => (
         <Link
           key={href}

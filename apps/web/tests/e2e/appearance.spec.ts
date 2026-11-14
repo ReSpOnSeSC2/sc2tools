@@ -90,6 +90,9 @@ for (const theme of ["light", "dark"] as const) {
       await page.setViewportSize({ width, height: 900 });
       for (const audience of ["out", "player"] as const) {
         await page.evaluate(mode => (window as MobileFixtureWindow).fixtureMobileAuth(mode), audience);
+        const tools = header.getByRole("link", { name: "Tools", exact: true });
+        await expect(tools).toBeVisible();
+        await expect(tools).toHaveAttribute("href", "/tools");
         const names = audience === "out" ? ["Sign in", "Get started"] : ["Open app"];
         for (const name of names) {
           const link = header.getByRole("link", { name, exact: true });
@@ -157,7 +160,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(home).toHaveAttribute("href", "/");
       await expect(sheet.getByRole("link", { name: "Guides", exact: true })).toHaveAttribute("aria-current", "page");
       expect(await sheet.getByRole("navigation", { name: "Primary", exact: true }).locator("ul a").evaluateAll(nodes => nodes.map(node => node.getAttribute("href"))))
-        .toEqual(["/try", "/stream-studio", "/guides", "/community", "/reviews", "/help", "/download"]);
+        .toEqual(["/try", "/tools", "/stream-studio", "/guides", "/community", "/reviews", "/help", "/download"]);
       await expect(sheet.getByRole("link", { name: "Sign in", exact: true })).toHaveAttribute("href", "/sign-in?redirect_url=%2Fguides%2Fpvz");
       await expect(sheet.getByRole("link", { name: "Get started", exact: true })).toHaveAttribute("href", "/sign-up?redirect_url=%2Fguides%2Fpvz");
       await expect(sheet.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
@@ -401,6 +404,7 @@ for (const theme of ["light", "dark"] as const) {
     await more.focus(); await page.keyboard.press("Enter");
     const sheet = page.getByRole("dialog", { name: "More sections", exact: true });
     await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole("link", { name: "Explore tools" })).toHaveAttribute("href", "/tools");
     const close = sheet.getByRole("button", { name: "Close", exact: true });
     await expect(close).toBeFocused();
     await sheet.evaluate(node => { node.dataset.fixtureMounted = "same-more"; });

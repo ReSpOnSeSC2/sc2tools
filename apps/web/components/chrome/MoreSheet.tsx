@@ -15,11 +15,16 @@ function beginNavigation(href: string) {
   if (target.pathname + target.search !== window.location.pathname + window.location.search) startNavProgress();
 }
 export function MoreSheet({ entries, activeKey, onClose, onReport, onSearch }: { entries: readonly NavEntry[]; activeKey: string | null; onClose: () => void; onReport: (type: ReportType) => void; onSearch?: () => void }) {
+  const explore = entries.find((entry) => entry.group === "explore");
+  const ExploreIcon = explore?.icon;
   return <Sheet open side="bottom" title="More sections" onClose={onClose}>
     <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border-strong" aria-hidden />
     {onSearch ? <button type="button" onClick={onSearch} aria-haspopup="dialog" className={ROW}>
       <Search className="h-5 w-5" aria-hidden />Search
     </button> : null}
+    {explore && ExploreIcon && <Link href={explore.href} prefetch={false} onNavigate={() => beginNavigation(explore.href)} onClick={onClose} className={ROW}>
+      <ExploreIcon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />{explore.label}
+    </Link>}
     {([['section', 'Analysis'], ['utility', 'Your setup']] as const).map(([group, label]) => <section key={group} aria-label={label}><h3 className={CAPTION}>{label}</h3>{entries.filter((entry) => entry.group === group).map((entry) => { const Icon = entry.icon; return <Link key={entry.key} href={entry.href} onNavigate={() => beginNavigation(entry.href)} onClick={onClose} aria-current={activeKey === entry.key ? "page" : undefined} className={`${ROW} ${activeKey === entry.key ? "bg-accent-cyan/10 text-accent-cyan" : ""}`}><Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />{entry.label}</Link>; })}</section>)}
     <section aria-label="Help & support"><h3 className={CAPTION}>Help &amp; support</h3>{helpMenuItems(true).map((item) => <HelpRow key={item.key} item={item} onClose={onClose} onReport={onReport} />)}
       <Link href="/status" prefetch={false} onClick={onClose} className={ROW}>System status</Link>

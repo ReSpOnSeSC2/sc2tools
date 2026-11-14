@@ -30,11 +30,13 @@ it("puts the public tool links in the hero without replacing the main or streami
   render(<LandingPageContent />);
   const hero = screen.getByRole("heading", { level: 1 }).closest("section")!;
   const tools = within(hero).getByRole("navigation", { name: "More SC2 Tools" });
-  expect(within(tools).getAllByRole("link").map(link => [link.textContent, link.getAttribute("href")])).toEqual([
+  expect(within(tools).getAllByRole("link").map(link => [link.textContent?.trim(), link.getAttribute("href")])).toEqual([
+    ["Explore all tools", "/tools"],
     ["SC2 Daily", "/arcade"],
     ["Match Rooms", "/match"],
     ["Ladder Balance", "/balance"],
     ["Wrapped", "/wrapped"],
+    ["Replay Career", "/career"],
     ["Release notes", "/changelog"],
   ]);
   const heroLinks = within(hero).getAllByRole("link");
@@ -50,7 +52,7 @@ it.each(["admins", "off"])("keeps the always-public tool links when Wrapped acce
   const tools = screen.getByRole("navigation", { name: "More SC2 Tools" });
   expect(within(tools).queryByRole("link", { name: "Wrapped" })).toBeNull();
   expect(within(tools).getAllByRole("link").map(link => link.getAttribute("href"))).toEqual([
-    "/arcade", "/match", "/balance", "/changelog",
+    "/tools", "/arcade", "/match", "/balance", "/changelog",
   ]);
 });
 

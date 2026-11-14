@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Website navigation
+
+- Find Daily Scout, Match Rooms, the balance tools, Wrapped, and Replay Career
+  from Tools on the homepage and site menu, and Explore tools in the dashboard.
+
 ### Coaching Content Studio
 
 - Create guided notes, voice memos, videos, annotated screenshots, replay

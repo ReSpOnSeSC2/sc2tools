@@ -19,6 +19,7 @@
     "/arcade": 215,
     "/arcade/scout": 215,
     "/balance": 130,
+    "/tools": 140,
     "/balance/claim": 140,
     "/balance/[matchup]": 140,
     "/balance/league/[tier]": 140,

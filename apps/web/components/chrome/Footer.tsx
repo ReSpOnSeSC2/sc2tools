@@ -39,6 +39,7 @@ const TRY_LINK: FooterLink = { href: "/try", label: "Analyze replays in your bro
 const PRODUCT_LINKS: readonly FooterLink[] = [
   { href: "/#analyze", label: "Analyze" },
   { href: "/#practice", label: "Practice" },
+  { href: "/tools", label: "Explore tools" },
   // The dedicated page (SEO landing for "sc2 overlay"), not the homepage anchor.
   { href: "/stream-studio", label: "Stream Studio" },
   { href: "/builds", label: "Build library" },

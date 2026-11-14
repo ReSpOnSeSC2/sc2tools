@@ -3,6 +3,7 @@ import {
   Bell,
   BookOpen,
   CalendarClock,
+  Compass,
   Cpu,
   Crosshair,
   Library,
@@ -15,6 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { TABS, hrefForTab, type TabId } from "@/components/analyzer/tabs";
+import { TOOLS_PATH, TOOLS_SEARCH_DESCRIPTION } from "@/lib/tools/navigation";
 
 /* ------------------------------------------------------------------
  * One nav model, shared by the desktop rail, the mobile tab bar and
@@ -45,7 +47,7 @@ export type NavEntry = {
   description?: string;
   icon: NavIcon;
   /** Analyzer sections sit in the rail's top group. */
-  group: "section" | "utility";
+  group: "section" | "utility" | "explore";
   /** Only rendered when /v1/me reports an admin. */
   adminOnly?: boolean;
   /** Only rendered for a real admin, linked coach, or linked student. */
@@ -85,6 +87,12 @@ const SECTION_ENTRIES: NavEntry[] = TABS.map((tab) => ({
   icon: tab.icon,
   group: "section" as const,
 }));
+
+const EXPLORE_ENTRY: NavEntry = {
+  key: "tools", href: TOOLS_PATH, label: "Explore tools", shortLabel: "Tools",
+  description: TOOLS_SEARCH_DESCRIPTION,
+  icon: Compass, group: "explore", publicRoute: true, ownChrome: true,
+};
 
 const UTILITY_ENTRIES: NavEntry[] = [
   { key: "builds-library", href: "/builds", label: "Build library", description: "Your saved build orders and rules", icon: Library, group: "utility" },
@@ -131,6 +139,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   ...SECTION_ENTRIES,
   { key: "sessions", href: "/app/sessions", label: "Sessions", description: "Review complete sessions and recorded ratings", icon: CalendarClock, group: "section" },
   { key: "goals", href: "/app/goals", label: "Goals", description: "Targets that track themselves from your replays", icon: Target, group: "section" },
+  EXPLORE_ENTRY,
   ...UTILITY_ENTRIES,
 ];
 
