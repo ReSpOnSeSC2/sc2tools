@@ -24,6 +24,7 @@
  *   <TryPage mode="all" />
  */
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { AlertTriangle, FlaskConical, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -45,11 +46,13 @@ import { ParseProgress } from "./ParseProgress";
 import { PlayerChooser } from "./PlayerChooser";
 import { ReplayIntake } from "./ReplayIntake";
 import { SaveGamesCta, TryResume, useTryUpload, type TryUpload } from "./TryResume";
-import { FilteredInstantReport } from "./report/FilteredInstantReport";
 import type { TryGuideProps } from "@/lib/instant/reportGuideTypes";
 import { reportGuideFocus } from "@/lib/instant/reportGuideTypes";
 import { SampleReportButton } from "./SampleReportButton";
 import { useSearchParams } from "next/navigation";
+
+const ReplayBalanceCourt = dynamic(() => import("@/components/balance/ReplayBalanceCourt").then(module => module.ReplayBalanceCourt));
+const FilteredInstantReport = dynamic(() => import("./report/FilteredInstantReport").then(module => module.FilteredInstantReport));
 
 export const PRIVACY_LINE =
   "Your replays are analyzed on this device. Nothing leaves your browser unless you choose to save the games to an account.";
@@ -227,7 +230,7 @@ function TryTool({ session, onCancelAdding, intakeFocusKey }: TryToolProps) {
     [addFiles, start],
   );
   return (
-    <section aria-label="Analyze replays" className="space-y-4">
+    <section id="try-replay-intake" aria-label="Analyze replays" className="scroll-mt-24 space-y-4">
       <ToolBody session={session} onFiles={onFiles} intakeFocusKey={intakeFocusKey} />
       {onCancelAdding && !session.busy && session.phase !== "choosing" ? (
         <Button variant="ghost" onClick={onCancelAdding}>
@@ -473,6 +476,9 @@ function Workspace(props: TryGuideProps) {
       ) : (
         <RunFailures session={ws.session} />
       )}
+      <div id="balance-court" className="scroll-mt-24">
+        <ReplayBalanceCourt payloads={ws.reportPayloads} intakeVisible={ws.showTool} onAdd={ws.startAdding} />
+      </div>
       <ReportArea ws={ws} {...props} />
       <SampleReportButton />
       <BrowserVsAgentTable />

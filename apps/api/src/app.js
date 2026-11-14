@@ -737,7 +737,9 @@ function makeServices(deps, clerk, adminClerkIds) {
   // the overlay token in the URL path is the credential, same trust
   // model as the OBS Browser Source.
   const seasons = new SeasonsService();
-  const pulseBalance = new PulseBalanceStore({ current: deps.db.pulseBalanceCurrent, daily: deps.db.pulseBalanceDaily });
+  const pulseBalance = new PulseBalanceStore({
+    current: deps.db.pulseBalanceCurrent, daily: deps.db.pulseBalanceDaily, archive: deps.db.pulseBalanceArchive,
+  });
   const chatStats = new ChatStatsService(deps.db, { seasons });
   const chatbot = new ChatbotService(deps.db, {
     overlayTokens,

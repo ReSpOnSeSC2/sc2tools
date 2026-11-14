@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { BALANCE_LEAGUES, BALANCE_MATCHUPS } from "@/lib/balance/bundle";
 import { getJson } from "@/lib/serverApi";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import { reviewsRollout } from "@/lib/reviews";
@@ -43,6 +44,10 @@ const ROUTES: Route[] = [
   { path: "/arcade", priority: 0.7, changeFrequency: "daily", lastModified: "2026-11-12" },
   { path: "/arcade/scout", priority: 0.7, changeFrequency: "daily", lastModified: "2026-11-13" },
   { path: "/balance", priority: 0.7, changeFrequency: "daily" },
+  { path: "/balance/claim", priority: 0.7, changeFrequency: "daily" },
+  { path: "/permit", priority: 0.7, changeFrequency: "daily" },
+  ...BALANCE_MATCHUPS.map(matchup => ({ path: `/balance/${matchup.toLowerCase()}`, priority: 0.6, changeFrequency: "daily" as const })),
+  ...BALANCE_LEAGUES.map(league => ({ path: `/balance/league/${league}`, priority: 0.6, changeFrequency: "daily" as const })),
   { path: "/match", priority: 0.6, changeFrequency: "monthly", lastModified: "2026-11-12" },
   { path: "/download", priority: 0.9, changeFrequency: "weekly", lastModified: "2026-09-29" },
   { path: "/stream-studio", priority: 0.9, changeFrequency: "monthly", lastModified: "2026-10-16" },

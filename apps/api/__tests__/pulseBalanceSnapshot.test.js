@@ -11,6 +11,7 @@ const { createBackupStore } = require("./helpers/userBackupsStore");
 const { REGIONS, TIER_REQUESTS, readBalanceTier } = require("../src/services/pulseBalanceAdapter");
 const { USER_AGENT, RESPONSE_MAX_BYTES, balanceSeason, buildPulseBalanceCollector } = require("../src/services/pulseBalanceCollector");
 const { PulseBalanceStore } = require("../src/services/pulseBalanceStore");
+const { encodeBalanceEvidence } = require("../src/services/pulseBalanceEvidence");
 const { summarizeBalance } = require("../src/services/pulseBalanceSummary");
 const { buildPulseBalanceSnapshotJob } = require("../src/jobs/pulseBalanceSnapshotJob");
 const fixture = require("./fixtures/pulseBalance.diamond-s68.json");
@@ -129,7 +130,10 @@ describe("nightly SC2Pulse collection", () => {
 
 describe("publishing and serving balance snapshots", () => {
   test("retries a transient publication failure with the same complete day", async () => {
-    const current = { replaceOne: jest.fn().mockRejectedValueOnce(new MongoNetworkError("write interrupted")).mockResolvedValue({}) };
+    const current = {
+      findOne: jest.fn().mockResolvedValue(null),
+      replaceOne: jest.fn().mockRejectedValueOnce(new MongoNetworkError("write interrupted")).mockResolvedValue({}),
+    };
     const daily = { updateOne: jest.fn().mockResolvedValue({ matchedCount: 1 }) };
     const store = new PulseBalanceStore({ current, daily });
     const value = snapshot();
@@ -142,6 +146,28 @@ describe("publishing and serving balance snapshots", () => {
     expect(packed.tiers[0].maps[0]).toHaveLength(2);
     expect(packed.tiers[0].rows[0]).toHaveLength(7);
     expect(daily.updateOne.mock.calls[0][1].$set.tiers[0].rows[0]).toHaveLength(5);
+  });
+
+  test("reads current evidence using only the compact Mongo projection", async () => {
+    const payload = { season: 68, asOf: DAY, maps: [], tiers: [] };
+    const current = { findOne: jest.fn().mockResolvedValue({ _id: 68, asOf: DAY, evidence: encodeBalanceEvidence(payload) }) };
+    const store = new PulseBalanceStore({ current });
+    await expect(store.evidence()).resolves.toEqual(payload);
+    await expect(store.evidence({ season: 68, asOf: DAY })).resolves.toEqual(payload);
+    expect(current.findOne.mock.calls).toEqual([
+      [{}, { sort: { _id: -1 }, projection: { asOf: 1, evidence: 1, _schemaVersion: 1 } }],
+      [{ _id: 68, asOf: DAY }, { sort: { _id: -1 }, projection: { asOf: 1, evidence: 1, _schemaVersion: 1 } }],
+    ]);
+  });
+
+  test("resolves the exact old archive if legacy current changes between reads", async () => {
+    const prior = { season: 68, asOf: "2026-11-12", maps: [], tiers: [] };
+    const current = { findOne: jest.fn().mockResolvedValueOnce({ _id: prior.season, asOf: prior.asOf }).mockResolvedValueOnce(null) };
+    const archive = { findOne: jest.fn().mockResolvedValue({ evidence: encodeBalanceEvidence(prior) }) };
+    const store = new PulseBalanceStore({ current, archive });
+    await expect(store.evidence()).resolves.toEqual(prior);
+    expect(current.findOne.mock.calls[1][0]).toEqual({ _id: prior.season, asOf: prior.asOf });
+    expect(archive.findOne).toHaveBeenCalledWith({ _id: "68/2026-11-12" });
   });
 
   test("serves only a complete persisted bundle through the public application route", async () => {
@@ -161,17 +187,38 @@ describe("publishing and serving balance snapshots", () => {
       const old = snapshot(oldDay);
       const today = snapshot();
       const response = () => request(app).get("/v1/ladder/balance");
+      const evidence = () => request(app).get("/v1/ladder/balance/evidence");
       await response().expect(503).expect("Cache-Control", "no-store")
         .expect({ error: { code: "balance_snapshot_unavailable" } });
+      await evidence().expect(503).expect("Cache-Control", "no-store");
+      await evidence().query({ season: 68 }).expect(400).expect("Cache-Control", "no-store");
+      await evidence().query({ season: 68, asOf: "2026-02-30" }).expect(400);
       expect(await Promise.all([pulseBalance.claim(oldDay, NOW), pulseBalance.claim(oldDay, NOW)]))
         .toEqual(expect.arrayContaining([true, false]));
       await pulseBalance.publish(old);
+      const oldPin = { season: 68, asOf: oldDay };
+      const oldEvidence = (await evidence().query(oldPin).expect(200)).body;
+      expect(oldEvidence).toEqual((await evidence().expect(200)).body);
+      const diamond = oldEvidence.tiers.find(tier => tier.league === "diamond" && tier.division === 1);
+      expect(diamond.matchups[1]).toEqual({ matchup: "PvZ", wins: 272, games: 626 });
+      const cells = diamond.mapMatchups.filter(cell => cell.matchup === "PvZ");
+      expect(cells.reduce((sum, cell) => sum + cell.games, 0)).toBe(626);
+      expect(cells.reduce((sum, cell) => sum + cell.wins, 0)).toBe(272);
+      expect(diamond.bounds.map(bound => bound.region).sort()).toEqual([...REGIONS].sort());
+      // A B1 worker wrote the same shape minus the compact evidence projection.
+      await db.pulseBalanceCurrent.updateOne({ _id: 68 }, { $unset: { evidence: "" } });
+      await evidence().query(oldPin).expect(200).expect(oldEvidence);
       await pulseBalance.claim(DAY, NOW);
       await expect(pulseBalance.publish({ ...today, tiers: today.tiers.slice(1) })).rejects.toThrow("tier coverage");
       await response().expect(200).expect(old.bundle);
+      await evidence().query({ season: 68, asOf: DAY }).expect(404).expect("Cache-Control", "no-store");
       await pulseBalance.publish(today);
+      expect((await db.pulseBalanceCurrent.findOne({ _id: 68 })).evidence).toBeDefined();
       await expect(pulseBalance.publish(old)).resolves.toBe(false);
       await response().expect(200).expect("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400").expect(today.bundle);
+      await evidence().query(oldPin).expect(200).expect("Cache-Control", "public, max-age=31536000, immutable").expect(oldEvidence);
+      await evidence().query({ ...oldPin, season: 67 }).expect(404);
+      expect(await db.pulseBalanceArchive.countDocuments()).toBe(1);
       const daily = await db.pulseBalanceDaily.findOne({ _id: DAY });
       expect(daily).toMatchObject({ season: 68, _schemaVersion: 1 });
       expect(daily.tiers).toHaveLength(19);
