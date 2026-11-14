@@ -4,8 +4,11 @@ import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 export const dynamic = "force-static";
 
+const title = "Balance Court verdict";
+
 export const metadata: Metadata = {
-  ...pageMetadata({ title: "Balance Court verdict", description: "An anonymous StarCraft II ladder balance verdict with matchup evidence from SC2Pulse.", canonical: "/balance/verdict", routeOgImage: true }),
+  ...pageMetadata({ title, description: "An anonymous StarCraft II ladder balance verdict with matchup evidence from SC2Pulse.", canonical: "/balance/verdict", routeOgImage: true }),
+  title,
   robots: { index: false, follow: true },
 };
 
