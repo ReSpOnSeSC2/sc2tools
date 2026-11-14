@@ -39,8 +39,9 @@ type Route = {
 // too until its signed-out intro is server-rendered: today a crawler
 // gets an empty client shell there.
 const ROUTES: Route[] = [
-  { path: "/changelog", priority: 0.6, changeFrequency: "weekly", lastModified: "2026-10-23" },
+  { path: "/changelog", priority: 0.6, changeFrequency: "weekly", lastModified: "2026-11-14" },
   { path: "/", priority: 1.0, changeFrequency: "weekly", lastModified: "2026-09-29" },
+  { path: "/tools", priority: 0.8, changeFrequency: "weekly", lastModified: "2026-11-14" },
   { path: "/arcade", priority: 0.7, changeFrequency: "daily", lastModified: "2026-11-12" },
   { path: "/arcade/scout", priority: 0.7, changeFrequency: "daily", lastModified: "2026-11-13" },
   { path: "/balance", priority: 0.7, changeFrequency: "daily" },

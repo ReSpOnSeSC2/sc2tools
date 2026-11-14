@@ -218,6 +218,18 @@ describe("AppChrome navigation", () => {
     ).toBe("/guides");
   });
 
+  it("puts Explore tools ahead of the analysis links on the rail and in More", () => {
+    render(<AppChrome>content</AppChrome>);
+    const rail = screen.getByRole("navigation", { name: "App navigation" });
+    const tools = within(rail).getByRole("link", { name: "Explore tools" });
+    expect(tools.getAttribute("href")).toBe("/tools");
+    expect(tools.compareDocumentPosition(within(rail).getByRole("link", { name: "Today" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /More/ }));
+    const sheet = within(screen.getByRole("dialog", { name: "More sections" }));
+    expect(sheet.getByRole("link", { name: "Explore tools" }).getAttribute("href")).toBe("/tools");
+  });
+
   it("adds Admin and Coaching immediately when /v1/me grants admin access", () => {
     harness.me = { userId: "u1", isAdmin: true, games: { total: 1, latest: null } };
     harness.coachingMe = undefined;
@@ -409,7 +421,7 @@ describe("AppChrome for signed-out visitors", () => {
     expect(screen.getByRole("navigation", { name: "App navigation" })).toBeTruthy();
     expect(screen.getByTestId("app-chrome-main")).toBeTruthy();
 
-    expect(railHrefs()).toEqual(["/", "/community"]);
+    expect(railHrefs()).toEqual(["/", "/tools", "/community"]);
     expect(railHrefs()).not.toContain("/coaching");
 
     const header = screen.getByRole("banner");
@@ -426,7 +438,7 @@ describe("AppChrome for signed-out visitors", () => {
     const bar = screen.getByRole("navigation", { name: "Quick sections" });
     expect(
       Array.from(bar.querySelectorAll("a")).map((a) => a.getAttribute("href")),
-    ).toEqual(["/community", "/sign-in?redirect_url=%2Fcommunity%2Fbuilds%2Fshared-slug"]);
+    ).toEqual(["/tools", "/community", "/sign-in?redirect_url=%2Fcommunity%2Fbuilds%2Fshared-slug"]);
   });
 
   it("offers the build guides to signed-out visitors while their flag is on", () => {
@@ -436,7 +448,7 @@ describe("AppChrome for signed-out visitors", () => {
     harness.pathname = "/community";
     render(<AppChrome>content</AppChrome>);
 
-    expect(railHrefs()).toEqual(["/", "/guides", "/community"]);
+    expect(railHrefs()).toEqual(["/", "/tools", "/guides", "/community"]);
   });
 });
 

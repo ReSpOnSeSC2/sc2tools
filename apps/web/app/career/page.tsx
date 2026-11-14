@@ -17,7 +17,7 @@ export default function CareerPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <header className="space-y-3">
-        <Link href="/" prefetch={false} className="inline-flex min-h-11 items-center rounded-md font-display font-bold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">SC2 Tools</Link>
+        <Link href="/tools" prefetch={false} className="inline-flex min-h-11 items-center rounded-md font-display font-bold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Explore all tools</Link>
         <h1 className="font-display text-display-lg font-bold leading-tight text-text">{TITLE}</h1>
         <p className="max-w-prose text-body text-text-muted">{DESCRIPTION} No account needed.</p>
       </header>

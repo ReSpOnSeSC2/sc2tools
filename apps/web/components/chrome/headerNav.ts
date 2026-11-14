@@ -1,5 +1,6 @@
 import type { MobileNavLink } from "./MobileNav";
 import type { CommandNavigation } from "./CommandSearchContext";
+import { TOOLS_PATH, TOOLS_SEARCH_DESCRIPTION } from "@/lib/tools/navigation";
 
 /**
  * The marketing header's link list (desktop nav + MobileNav drawer),
@@ -8,14 +9,15 @@ import type { CommandNavigation } from "./CommandSearchContext";
  *
  * Signed out, the list leads with what a visitor can use without an
  * account: Analyze replays (/try, only while Instant Analysis is open to
- * everyone), Stream Studio, Guides, Community, Reviews, Help and
- * Download. Signed in, it is Build library, Guides, Community, Reviews,
+ * everyone), Tools, Stream Studio, Guides, Community, Reviews, Help and
+ * Download. Signed in, it is Tools, Build library, Guides, Community, Reviews,
  * Help, Settings, then Admin for admins. The app itself is reached from
  * the header's "Open app" pill, so "Today" stays the only in-app name
  * for /app. Guides took the slot of the retired Meta radar.
  */
 
 export const TRY_NAV_LINK: MobileNavLink = { href: "/try", label: "Analyze replays", auth: "out" };
+const TOOLS_NAV_LINK: MobileNavLink = { href: TOOLS_PATH, label: "Tools", auth: "any" };
 const STREAM_STUDIO_NAV_LINK: MobileNavLink = { href: "/stream-studio", label: "Stream Studio", auth: "out" };
 const BUILDS_NAV_LINK: MobileNavLink = { href: "/builds", label: "Build library", auth: "in" };
 export const GUIDES_NAV_LINK: MobileNavLink = { href: "/guides", label: "Guides", auth: "any" };
@@ -45,11 +47,12 @@ export interface HeaderNavOptions {
  * the matching Clerk gate.
  *
  * Example: `headerNavLinks({ guides: true, reviews: false, isAdmin: false })`
- * → Stream Studio, Build library, Guides, Community, Help, Download, Settings.
+ * → Tools, Stream Studio, Build library, Guides, Community, Help, Download, Settings.
  */
 export function headerNavLinks(options: HeaderNavOptions): readonly MobileNavLink[] {
   return [
     ...(options.tryPage ? [TRY_NAV_LINK] : []),
+    TOOLS_NAV_LINK,
     STREAM_STUDIO_NAV_LINK,
     BUILDS_NAV_LINK,
     ...(options.guides ? [GUIDES_NAV_LINK] : []),
@@ -76,5 +79,7 @@ const COMMAND_KEYS: Readonly<Record<string, string>> = { "/builds": "builds-libr
 export function headerLinkCommands(links: readonly MobileNavLink[], viewer: { signedIn: boolean; isAdmin: boolean }): CommandNavigation[] {
   return links.filter((link) => link.auth === "any" || (link.auth === "in" && viewer.signedIn)
     || (link.auth === "out" && !viewer.signedIn) || (link.auth === "admin" && viewer.signedIn && viewer.isAdmin))
-    .map((link) => ({ key: COMMAND_KEYS[link.href] ?? link.href.slice(1), href: link.href, label: link.label }));
+    .map((link) => ({ key: COMMAND_KEYS[link.href] ?? link.href.slice(1), href: link.href, label: link.label,
+      ...(link.href === TOOLS_PATH ? { description: TOOLS_SEARCH_DESCRIPTION } : {}),
+    }));
 }

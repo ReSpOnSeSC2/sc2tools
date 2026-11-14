@@ -176,6 +176,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
     isAdmin: isAdmin === true, coaching: hasCoachingAccess, reviews: reviewsVisible(isAdmin), guides: guidesEnabled(),
   }), [isAdmin, hasCoachingAccess]);
   const sections = entries.filter((e) => e.group === "section");
+  const explore = entries.find((e) => e.group === "explore");
   const utilities = entries.filter((e) => e.group === "utility");
   const publicEntries = useMemo(() => entries.filter((e) => e.publicRoute), [entries]);
   const commandSearch = useCommandSearch(), commandOwner = commandSearch?.ownerKey ?? null;
@@ -224,6 +225,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
 
           <ClerkLoading><div aria-hidden className="space-y-1">{Array.from({ length: 8 }, (_, index) => <div key={index} className="flex h-10 items-center px-2.5"><span className="h-[18px] w-[18px] rounded bg-bg-elevated motion-safe:animate-pulse" /></div>)}</div></ClerkLoading>
           <SignedIn>
+            {explore && <RailLink entry={explore} active={false} pinned={pinned} onNavigate={() => beginNavigation(explore.href)} />}
             <RailGroup label="Analysis">{sections.map((entry) => (
               <RailLink
                 key={entry.key}

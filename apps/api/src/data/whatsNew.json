@@ -1,5 +1,14 @@
 [
   {
+    "id": "find-all-tools",
+    "date": "2026-11-14",
+    "title": "Find the new tools in one place",
+    "summary": "Open Tools in the website menu or Explore tools in the signed-in dashboard to find released features.",
+    "audience": "website",
+    "highlights": ["Play SC2 Daily or Daily Scout, or run a series in Match Rooms.", "Open Ladder Balance, check a claim with Balance Receipts or compare a record with Whine Permit.", "Find Balance Court, 2026 Wrapped and Replay Career under Analyze your replays when browser analysis is available."],
+    "link": { "href": "/tools", "label": "Explore all tools" }
+  },
+  {
     "id": "one-session-definition",
     "date": "2026-10-27",
     "title": "Choose when your play session ends",

@@ -20,7 +20,7 @@ export default function BalancePage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-8">
       <header className="space-y-2">
-        <Link href="/" prefetch={false} className={LINK_CLASS}>SC2 Tools home</Link>
+        <Link href="/tools" prefetch={false} className={LINK_CLASS}>Explore all tools</Link>
         <h1 className="font-display text-display-lg font-bold leading-tight text-text">Ladder Balance</h1>
         <p className="max-w-prose text-body text-text-muted">
           Compare StarCraft II ranked 1v1 win rates for Protoss, Terran, and Zerg by league tier.

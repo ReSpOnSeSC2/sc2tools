@@ -55,6 +55,13 @@ describe("sitemap", () => {
     expect(list).not.toContain(`${SITE}/balance/verdict`);
   });
 
+  it("lists the public tool directory even with browser analysis off", async () => {
+    vi.stubEnv("NEXT_PUBLIC_INSTANT_IMPORT", "off");
+    const list = await urls();
+    expect(list).toContain(`${SITE}/tools`);
+    expect(list).not.toContain(`${SITE}/career`);
+  });
+
   it("keeps the OBS watch source out of search", async () => {
     expect(await urls()).not.toContain(`${SITE}/overlay/match-room`);
   });
