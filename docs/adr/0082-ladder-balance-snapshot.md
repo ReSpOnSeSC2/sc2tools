@@ -14,6 +14,12 @@ Enable collection on the API service with `SC2TOOLS_PULSE_BALANCE_ENABLED=1`. Th
 
 The collector identifies SC2 Tools and requests the 19 tiers serially, with at least two seconds between requests. It stores the latest complete snapshot per season, including tier, map, region, duration band and cohort. The daily rollup pools maps and regions. A failed fetch or invalid response leaves the previous complete bundle available. `GET /v1/ladder/balance` serves that bundle with public cache headers. The static `/balance` page displays the season, snapshot date, counts, intervals and SC2Pulse credit.
 
+## Receipts and replay verdicts
+
+`GET /v1/ladder/balance/evidence` returns all-duration, same-tier counts for each matchup and map, plus regional rating bounds. Add both `season` and `asOf` to retrieve an exact snapshot. When a nightly refresh supersedes a published snapshot, it retains an immutable compressed evidence projection in `pulse_balance_archive`. The final snapshot of each completed season stays in the current collection. Dates superseded before this archive was enabled return 404. Public reads never call SC2Pulse.
+
+The browser pools counts before calculating an interval. Claims, permits and verdicts use 95% intervals for all maps, and claims and verdicts use 99% for a single map. Claim and verdict links keep their selections in the URL fragment. Typed permit records, replay identifiers and local replay exhibits stay out of those links and API requests.
+
 ## Run the offline preview
 
 From the repository root, run:

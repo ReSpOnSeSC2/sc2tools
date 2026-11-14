@@ -27,9 +27,10 @@
 import { PRACTICE_LINK_PATTERN, PRACTICE_LINK_ROUTE } from "../practice/practiceLinkPath";
 import { isRoomObsPath, ROOM_ROUTE } from "../matchRoomRoute";
 import { SITE_NAME } from "../siteTitle";
+import { isBalanceToolPath } from "../balance/routes";
 
 /** Paths that are never sent to Google Analytics. */
-const UNTRACKED_ROUTE = /^\/(?:admin|overlay|dock|wrapped|career|arcade\/scout|balance|(?:p|players)\/[^/]+\/(?:replays|live))(?:\/|$)/;
+const UNTRACKED_ROUTE = /^\/(?:admin|overlay|dock|wrapped|career|arcade\/scout|(?:p|players)\/[^/]+\/(?:replays|live))(?:\/|$)/;
 
 /** Per-record screens, collapsed to their route pattern. */
 const DYNAMIC_ROUTES: ReadonlyArray<readonly [RegExp, string]> = [
@@ -74,7 +75,7 @@ const ATTRIBUTION_PARAMS: ReadonlySet<string> = new Set([
  */
 export function isUntrackedPath(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
-  return UNTRACKED_ROUTE.test(pathname) || ROOM_ROUTE.test(pathname) || isRoomObsPath(pathname);
+  return isBalanceToolPath(pathname) || UNTRACKED_ROUTE.test(pathname) || ROOM_ROUTE.test(pathname) || isRoomObsPath(pathname);
 }
 
 /**

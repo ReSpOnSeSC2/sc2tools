@@ -1,7 +1,7 @@
 export const BALANCE_LEAGUES = ["grandmaster", "master", "diamond", "platinum", "gold", "silver", "bronze"] as const;
 export const BALANCE_MATCHUPS = ["PvT", "PvZ", "TvZ"] as const;
 
-type League = typeof BALANCE_LEAGUES[number];
+export type BalanceLeague = typeof BALANCE_LEAGUES[number];
 export type BalanceMatchup = typeof BALANCE_MATCHUPS[number];
 export type BalanceCohort = {
   wins: number;
@@ -14,12 +14,12 @@ export type MatchupBalance = {
   sameTier: BalanceCohort;
   crossTier: BalanceCohort;
 };
-export type BalanceTier = { league: League; division: 1 | 2 | 3 | null; matchups: MatchupBalance[] };
+export type BalanceTier = { league: BalanceLeague; division: 1 | 2 | 3 | null; matchups: MatchupBalance[] };
 export type BalanceBundle = { season: number; asOf: string; tiers: BalanceTier[] };
 
 const DEFAULT_TIER = "diamond-1";
 const TIERS_TOTAL = (BALANCE_LEAGUES.length - 1) * 3 + 1;
-const LEAGUE_NAMES: Record<League, string> = {
+export const LEAGUE_NAMES: Record<BalanceLeague, string> = {
   grandmaster: "Grandmaster", master: "Master", diamond: "Diamond", platinum: "Platinum",
   gold: "Gold", silver: "Silver", bronze: "Bronze",
 };

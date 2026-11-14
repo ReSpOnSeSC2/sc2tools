@@ -5,9 +5,10 @@ import { isReportCardPath, isReportCardPreviewPath } from "./lib/instant/reportC
 import { isRoomObsPath, ROOM_OBS_PATH } from "./lib/matchRoomRoute";
 import { isPublicReplayReference, legacyReplayArchivePath } from "./lib/replayRouteAccess";
 import { isPublicStatusRequest, statusHostRedirect } from "./lib/publicStatusRoute";
+import { isBalanceToolPath } from "./lib/balance/routes";
 
 const PERMANENT_REDIRECT = 308;
-const SESSIONLESS_PAGES = new Set(["/wrapped", "/wrapped/opengraph-image", "/career", "/arcade/scout", "/balance"]);
+const SESSIONLESS_PAGES = new Set(["/wrapped", "/wrapped/opengraph-image", "/career", "/arcade/scout"]);
 
 /**
  * A mixed-case guide URL ("/guides/PvZ/Stargate-into-Glaives") → 308 to
@@ -83,7 +84,7 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const pathname = req.nextUrl.pathname;
   if (isRoomObsPath(pathname)) return matchRoomObsResponse(req);
   // Static replay views work without a Clerk handshake.
-  if (isPublicStatusRequest(pathname) || SESSIONLESS_PAGES.has(pathname)
+  if (isPublicStatusRequest(pathname) || isBalanceToolPath(pathname) || SESSIONLESS_PAGES.has(pathname)
     || isReportCardPath(pathname) || isReportCardPreviewPath(pathname)) {
     return NextResponse.next();
   }

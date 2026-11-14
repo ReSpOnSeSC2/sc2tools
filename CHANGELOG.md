@@ -4889,6 +4889,10 @@ release preparation, not a signed or published 0.24.9 installer.
   page. Each same-tier win rate includes a game count, an uncertainty interval
   and the snapshot date. The page credits SC2Pulse and lists cross-tier
   results separately.
+- Build a shareable balance claim with a receipt pinned to its source snapshot.
+  Browse matchup and league pages, or compare your own record with the ladder
+  in Whine Permit. Open Balance Court from a ranked loss in Instant Analysis
+  for a replay verdict. The typed record and replay are processed in your browser.
 
 ## [agent-v0.5.13] - 2026-05-09
 

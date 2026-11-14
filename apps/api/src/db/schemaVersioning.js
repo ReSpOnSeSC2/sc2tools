@@ -52,6 +52,7 @@ const REGISTRY = Object.freeze({
   [COLLECTIONS.JOB_RUNS]: { collection: COLLECTIONS.JOB_RUNS, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.PULSE_BALANCE_CURRENT]: { collection: COLLECTIONS.PULSE_BALANCE_CURRENT, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.PULSE_BALANCE_DAILY]: { collection: COLLECTIONS.PULSE_BALANCE_DAILY, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.PULSE_BALANCE_ARCHIVE]: { collection: COLLECTIONS.PULSE_BALANCE_ARCHIVE, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.CLASSIFIER_QUALITY]: { collection: COLLECTIONS.CLASSIFIER_QUALITY, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.ADMIN_AUDIT]: { collection: COLLECTIONS.ADMIN_AUDIT, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.SUPPORTERS]: { collection: COLLECTIONS.SUPPORTERS, currentVersion: 1, versionKey: VERSION_KEY },

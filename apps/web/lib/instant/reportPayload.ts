@@ -38,6 +38,7 @@ export interface InstantOpponent {
   /** Where `mmr` came from ("replay" = the replay's pre-game value). */
   mmrSource: string | null;
   strategy: string | null;
+  leagueId?: number | null;
 }
 
 /** `macroBreakdown` as stored on the payload (no API envelope fields). */
@@ -49,6 +50,7 @@ export type InstantMacroBreakdown = Omit<
 export interface InstantPayload {
   /** Read and validated only when the visitor opens local playback. */
   mapPlayback?: unknown;
+  opponentProxy?: boolean;
   gameId: string;
   date: string;
   result: string;
@@ -338,6 +340,9 @@ function toOpponent(value: unknown): InstantOpponent | null {
     mmr: num(value.mmr),
     mmrSource: str(value.mmrSource),
     strategy: str(value.strategy),
+    ...(typeof value.leagueId === "number" && Number.isInteger(value.leagueId) && value.leagueId >= 0 && value.leagueId <= 6
+      ? { leagueId: value.leagueId }
+      : {}),
   };
 }
 
@@ -385,5 +390,9 @@ export function parseInstantPayload(json: string): InstantPayload | null {
     oppBuildLog: strings(value.oppBuildLog),
     apmCurve: toApmCurve(value.apmCurve, durationSec),
     ...(isRecord(value.mapPlayback) ? { mapPlayback: value.mapPlayback } : {}),
+    ...(isRecord(value.spatial) && value.spatial.opp_proxy_classification_v === 2
+      && Array.isArray(value.spatial.opp_proxies) && value.spatial.opp_proxies.some(isRecord)
+      ? { opponentProxy: true }
+      : {}),
   };
 }

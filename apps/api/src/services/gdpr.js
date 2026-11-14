@@ -43,6 +43,7 @@ const GDPR_CLASSIFICATION = Object.freeze({
   BROWSER_INGEST_DAILY: "ttl_ephemeral", GUIDE_SAMPLES: "purge_only", GUIDE_STATS: "global", GUIDE_NOTES: "global",
   JOB_RUNS: "global", ADMIN_AUDIT: "purge_only", CLASSIFIER_QUALITY: "global",
   PULSE_BALANCE_CURRENT: "global", PULSE_BALANCE_DAILY: "global",
+  PULSE_BALANCE_ARCHIVE: "global",
   GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
   GHOST_EXAMPLES: "purge_only", PLAYER_GOALS: "purge_only", SUPPORTERS: "purge_only", DONATION_MONTHS: "global",
   // Reports and delivery channels are exported explicitly and purged with the owner.

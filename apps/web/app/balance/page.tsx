@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { LadderBalance } from "@/components/balance/LadderBalance";
+import { LinkButton } from "@/components/ui/Button";
+import { BALANCE_LEAGUES, BALANCE_MATCHUPS, BALANCE_RACES, LEAGUE_NAMES } from "@/lib/balance/bundle";
+import { getInstantImportMode } from "@/lib/instant/flag";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 export const dynamic = "force-static";
@@ -24,7 +27,21 @@ export default function BalancePage() {
         </p>
         <p className="text-caption text-text-muted">Data from the <a href={SOURCE} className={LINK_CLASS}>SC2Pulse API</a>.</p>
       </header>
+      <nav aria-label="Balance tools" className="flex flex-wrap gap-2">
+        <LinkButton href="/balance/claim" size="lg" prefetch={false}>Build a claim</LinkButton>
+        <LinkButton href="/permit" size="lg" variant="secondary" prefetch={false}>Whine Permit</LinkButton>
+        {getInstantImportMode() === "all" && <LinkButton href="/try#balance-court" size="lg" variant="secondary" prefetch={false}>Replay verdict</LinkButton>}
+      </nav>
       <LadderBalance />
+      <nav aria-label="Balance by matchup and league" className="space-y-2 rounded-xl border border-line bg-bg-surface p-4">
+        <h2 className="font-display text-h2 font-bold text-text">Matchups and leagues</h2>
+        <ul className="flex flex-wrap gap-x-4">
+          {BALANCE_MATCHUPS.map(matchup => <li key={matchup}><Link className={LINK_CLASS} href={`/balance/${matchup.toLowerCase()}`} prefetch={false}>{BALANCE_RACES[matchup].join(" vs ")}</Link></li>)}
+        </ul>
+        <ul className="flex flex-wrap gap-x-4">
+          {BALANCE_LEAGUES.map(league => <li key={league}><Link className={LINK_CLASS} href={`/balance/league/${league}`} prefetch={false}>{LEAGUE_NAMES[league]}</Link></li>)}
+        </ul>
+      </nav>
       <noscript><p className="text-body text-text-muted">Enable JavaScript to load the latest ladder balance snapshot.</p></noscript>
       <section className="space-y-2 rounded-xl border border-line bg-bg-surface p-4" aria-labelledby="balance-methods">
         <h2 id="balance-methods" className="font-display text-h2 font-bold text-text">How to read these numbers</h2>

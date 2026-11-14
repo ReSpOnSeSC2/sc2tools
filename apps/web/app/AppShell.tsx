@@ -25,10 +25,11 @@ import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { CommandSearchProvider } from "@/components/chrome/CommandSearchProvider";
 import { AppearanceAccountSync } from "@/components/chrome/AppearanceAccountSync";
 import { applyAppearanceAttributes, readStoredAppearance } from "@/lib/appearance";
+import { isBalanceToolPath } from "@/lib/balance/routes";
 
 const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
-const STANDALONE_SURFACES = new Set(["/wrapped", "/career", "/arcade/scout", "/balance"]);
+const STANDALONE_SURFACES = new Set(["/wrapped", "/career", "/arcade/scout"]);
 
 /**
  * Chooses the browser surface before mounting Clerk or normal site chrome.
@@ -83,7 +84,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Reachability checks must work even when authentication or app APIs fail.
   if (isPublicStatusRoute(pathname)) return <>{children}</>;
 
-  if (isTokenSurface || (pathname && STANDALONE_SURFACES.has(pathname)) || isReportCardPath(pathname)) {
+  if (isTokenSurface || isBalanceToolPath(pathname) || (pathname && STANDALONE_SURFACES.has(pathname)) || isReportCardPath(pathname)) {
     return (
       <ToastProvider>
         <main id="main-content" className={MAIN_CLASS}>
