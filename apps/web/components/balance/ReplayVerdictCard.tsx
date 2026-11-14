@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Scale } from "lucide-react";
 import { getBalanceCohort, cohortOptions, BALANCE_RACE_NAMES, SC2PULSE_URL, type BalanceEvidence } from "@/lib/balance/evidence";
-import { ladderShare, replayVerdictLabel, replayVerdictPath, type ReplayVerdict } from "@/lib/balance/verdictShare";
+import { ladderShare, matchesVerdictInterval, replayVerdictLabel, replayVerdictPath, type ReplayVerdict } from "@/lib/balance/verdictShare";
 import { BalanceCardActions } from "./BalanceCardActions";
 
 const percent = new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 1 });
@@ -22,6 +22,9 @@ export function ReplayVerdictCard({ summary, evidence, shared = false }: {
   const map = mapId === undefined ? null : evidence.maps.find(option => option.id === mapId)?.name;
   if (!counts || !league || (mapId !== undefined && !map)) {
     return <p role="status" className="text-body text-text-muted">This matchup has no same-tier games in the selected snapshot.</p>;
+  }
+  if (!matchesVerdictInterval(verdict, counts.interval)) {
+    return <p role="status" className="text-body text-text-muted">The verdict label does not match the evidence in this snapshot.</p>;
   }
   const match = `${BALANCE_RACE_NAMES[race]} vs ${BALANCE_RACE_NAMES[opponent]}`;
   const title = replayVerdictLabel(verdict);

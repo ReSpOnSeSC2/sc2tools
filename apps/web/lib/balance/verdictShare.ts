@@ -10,6 +10,15 @@ const VERDICT_LABELS = {
 
 export type Verdict = keyof typeof VERDICT_LABELS;
 
+export function matchesVerdictInterval(verdict: Verdict, { low, high }: { low: number; high: number }): boolean {
+  switch (verdict) {
+    case "imba": return high <= 0.47;
+    case "split": return high <= 0.49;
+    case "contempt": return low >= 0.51;
+    default: return high > 0.49 && low < 0.51;
+  }
+}
+
 export function ladderShare(winRate: number): number {
   return winRate >= 0.5 ? 0 : (0.5 - winRate) / (1 - winRate);
 }

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { parseInstantPayload } from "@/lib/instant/reportPayload";
 import type { BalanceEvidence } from "./evidence";
 import { decideReplayVerdict, EARLY_AGGRESSION, replayCases, replayCohort, replayExhibits, replayMap } from "./replayVerdict";
-import { ladderShare, readReplayVerdict, replayVerdictPath, type ReplayVerdict } from "./verdictShare";
+import { ladderShare, matchesVerdictInterval, readReplayVerdict, replayVerdictPath, type ReplayVerdict } from "./verdictShare";
 
 const evidence: BalanceEvidence = {
   season: 68, asOf: "2026-11-13", maps: [{ id: 3, name: "Blackrock LE" }],
@@ -47,6 +47,7 @@ describe("replay verdict", () => {
     expect(decideReplayVerdict({ low: 0.51, high: 0.56 }, { ...own, severity: 15 })).toBe("contempt");
     expect(ladderShare(0.4656)).toBeCloseTo(0.06437);
     expect(ladderShare(0.6)).toBe(0);
+    expect(matchesVerdictInterval("imba", { low: 0.48, high: 0.52 })).toBe(false);
   });
 
   it("cross-checks like-for-like autopsy evidence and does not infer a rush from duration", () => {

@@ -1,6 +1,6 @@
 import { balanceTierKey, BALANCE_LEAGUES } from "./bundle";
 import type { getBalanceCohort, BalanceEvidence, BalanceRace } from "./evidence";
-import type { Verdict } from "./verdictShare";
+import { matchesVerdictInterval, type Verdict } from "./verdictShare";
 import { toAutopsyGame } from "@/lib/instant/report";
 import type { InstantPayload } from "@/lib/instant/reportPayload";
 import { lossAutopsy } from "@/lib/lossAutopsy";
@@ -103,9 +103,9 @@ export function replayExhibits(payload: InstantPayload) {
 
 export function decideReplayVerdict(interval: Cohort["interval"], exhibits: Pick<ReturnType<typeof replayExhibits>, "severity" | "own" | "mirrors">): Verdict {
   const { severity, own, mirrors } = exhibits;
-  if (interval.high <= 0.47 && severity !== null && severity < 40) return "imba";
-  if (interval.high <= 0.49) return "split";
-  if (interval.low >= 0.51) return "contempt";
+  if (matchesVerdictInterval("imba", interval) && severity !== null && severity < 40) return "imba";
+  if (matchesVerdictInterval("split", interval)) return "split";
+  if (matchesVerdictInterval("contempt", interval)) return "contempt";
   const replayEdge = own.some(cause => {
     const mirror = mirrors.find(row => row.cause.id === cause.id);
     return !mirror || cause.severityScore > mirror.opponentSeverity;

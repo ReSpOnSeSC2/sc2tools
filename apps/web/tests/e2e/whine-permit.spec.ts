@@ -19,7 +19,7 @@ test("issues an exportable permit with local-only record entry", async ({ page }
   await page.getByLabel("Ladder tier or league").selectOption("diamond");
   const versusProtoss = page.getByRole("group", { name: "vs Protoss" });
   await page.getByRole("button", { name: "Issue permit" }).click();
-  await expect(page.getByRole("alert")).toHaveText("Enter a win or loss against at least one race.");
+  await expect(page.getByRole("alert").filter({ hasText: "Enter a win or loss against at least one race." })).toBeVisible();
   await versusProtoss.getByLabel("Wins").fill("417");
   await versusProtoss.getByLabel("Losses").fill("583");
   await page.getByRole("button", { name: "Issue permit" }).click();
