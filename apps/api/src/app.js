@@ -644,7 +644,10 @@ function makeServices(deps, clerk, adminClerkIds) {
     platformIntegrations,
     log: deps.logger,
   });
-  const pulseMatchVods = new PulseMatchVodsService({ logger: deps.logger });
+  const pulseMatchVods = new PulseMatchVodsService({
+    logger: deps.logger,
+    resolveTwitchArchive: (videoId) => directGameVods.resolveTwitchArchive(videoId),
+  });
   const gameVods = new GameVodLinksService({
     archives: directGameVods,
     pulseMatches: pulseMatchVods,

@@ -5,6 +5,8 @@ const {
   PulseMatchVodsService,
   parseTwitchVod,
 } = require("../src/services/pulseMatchVods");
+const { GameVodsService } = require("../src/services/gameVods");
+const { GameVodLinksService } = require("../src/services/gameVodLinks");
 
 const END = "2026-08-10T19:11:20.000Z";
 
@@ -68,7 +70,112 @@ function response(result) {
   return { ok: true, status: 200, json: async () => ({ result }) };
 }
 
+// SC2Pulse combined Rainfall with another game and used the combined duration
+// for its offset. The original replays and the Twitch video window agree.
+const HUP_VOD = "2926217119";
+const HUP_TOON = "1-S2-1-20845154";
+const RESPONSE_TOON = "1-S2-1-267727";
+const RAINFALL_END = "2026-11-12T02:06:06Z";
+const RAINFALL_START = "2026-11-12T01:55:38Z";
+const VOD_START = "2026-11-11T22:31:34Z";
+
+function hupsaiyaRows() {
+  const hup = (seconds) => participant({
+    id: 20845154, tag: "Hupsaiya", vod: `https://www.twitch.tv/videos/${HUP_VOD}?t=${seconds}s`,
+  });
+  const responsePlayer = () => participant({ id: 267727, tag: "ReSpOnSe" });
+  const rainfall = pulseRow({
+    date: "2026-11-12T02:06:04Z", duration: 1236, map: "Rainfall LE", id: 640116470,
+    participants: [participant({ id: 3168343, tag: "OrichalcosRo" }), { team: null }, hup(11649), responsePlayer()],
+  });
+  const lockdown = pulseRow({
+    date: "2026-11-12T02:16:12Z", duration: 565, map: "Lockdown LE", id: 640116406,
+    participants: [hup(12928), responsePlayer()],
+  });
+  for (const row of [rainfall, lockdown]) {
+    row.match.type = "_1V1";
+    for (const p of row.participants) {
+      const character = p.team?.members[0]?.character;
+      if (character) Object.assign(character, { region: "US", realm: 1 });
+    }
+  }
+  return [lockdown, rainfall];
+}
+
+const rainfallReplay = {
+  ...game({ gameId: "rainfall", date: RAINFALL_END, durationSec: 628, map: "Rainfall LE", myToonHandle: RESPONSE_TOON, opponentToonHandle: HUP_TOON }),
+  startedAt: RAINFALL_START,
+};
+const lockdownReplay = game({
+  gameId: "lockdown", date: "2026-11-12T02:16:11Z", durationSec: 544, map: "Lockdown LE", myToonHandle: RESPONSE_TOON, opponentToonHandle: HUP_TOON,
+});
+
 describe("PulseMatchVodsService", () => {
+  test("recovers the Rainfall VOD by ID when the channel archive is unavailable", async () => {
+    const fetchTwitch = jest.fn(async (_url, { body }) => {
+      const { variables } = JSON.parse(body);
+      if (variables.login) return { ok: true, json: async () => ({ data: { user: { videos: { edges: [] } } } }) };
+      expect(variables).toEqual({ id: HUP_VOD });
+      return { ok: true, json: async () => ({ data: { video: {
+        id: HUP_VOD, broadcastType: "ARCHIVE", createdAt: VOD_START,
+        publishedAt: "2026-11-11T22:32:00Z", lengthSeconds: 25380,
+      } } }) };
+    });
+    const archives = new GameVodsService({
+      users: { getPreferences: async () => ({}) },
+      playerChannels: { resolve: async (players) => ({ players: players.map((player) =>
+        player.toonHandle === HUP_TOON
+          ? { ...player, id: "hupsaiya", channels: { twitch: "https://www.twitch.tv/hupsaiya" } }
+          : player) }) },
+      fetchImpl: fetchTwitch,
+    });
+    const pulseMatches = new PulseMatchVodsService({
+      fetchImpl: async () => response(hupsaiyaRows()),
+      resolveTwitchArchive: (id) => archives.resolveTwitchArchive(id),
+    });
+    const service = new GameVodLinksService({ archives, pulseMatches });
+    const batch = await service.resolveForGames("u1", [rainfallReplay, lockdownReplay], { includeOpponent: true });
+    const single = await service.resolveForGames("u1", [rainfallReplay], { includeOpponent: true });
+
+    expect(batch.linksByGameId.rainfall).toMatchObject([{
+      perspective: "opponent", playerName: "Hupsaiya", videoId: HUP_VOD,
+      offsetSec: 12244, url: `https://www.twitch.tv/videos/${HUP_VOD}?t=3h24m4s`,
+    }]);
+    expect(batch.linksByGameId.lockdown).toMatchObject([{
+      perspective: "opponent", videoId: HUP_VOD, offsetSec: 12928,
+    }]);
+    expect(single.linksByGameId.rainfall).toEqual(batch.linksByGameId.rainfall);
+    expect(fetchTwitch).toHaveBeenCalledTimes(2);
+  });
+
+  test.each(["wrong realm", "ambiguous row"])("skips archive lookup for a merged match with %s", async (reason) => {
+    const rows = hupsaiyaRows();
+    if (reason === "wrong realm") rows[1].participants[2].team.members[0].character.realm = 2;
+    else rows.push({ ...rows[1], match: { ...rows[1].match, id: 640116471 } });
+    const resolveTwitchArchive = jest.fn();
+    const service = new PulseMatchVodsService({ fetchImpl: async () => response(rows), resolveTwitchArchive });
+
+    const { linksByGameId } = await service.resolveForGames([rainfallReplay, lockdownReplay]);
+
+    expect(resolveTwitchArchive).not.toHaveBeenCalled();
+    expect(linksByGameId.rainfall).toBeUndefined();
+    expect(linksByGameId.lockdown).toHaveLength(1);
+  });
+
+  test("drops a merged match link when the archive does not cover the replay start", async () => {
+    const resolveTwitchArchive = jest.fn(async () => ({
+      platform: "twitch", videoId: HUP_VOD,
+      startMs: Date.parse(RAINFALL_END), endMs: Date.parse("2026-11-12T05:34:34Z"),
+    }));
+    const service = new PulseMatchVodsService({ fetchImpl: async () => response(hupsaiyaRows()), resolveTwitchArchive });
+
+    const { linksByGameId } = await service.resolveForGames([rainfallReplay, lockdownReplay]);
+
+    expect(resolveTwitchArchive).toHaveBeenCalledWith(HUP_VOD);
+    expect(linksByGameId.rainfall).toBeUndefined();
+    expect(linksByGameId.lockdown).toHaveLength(1);
+  });
+
   test("keeps both participant VODs attached to their correct perspectives", async () => {
     const calls = [];
     const service = new PulseMatchVodsService({

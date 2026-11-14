@@ -20,6 +20,8 @@ const { normalizeIdentity } = require("./playerChannels");
 const TWITCH_GQL_URL = "https://gql.twitch.tv/gql";
 const TWITCH_ARCHIVES_QUERY =
   "query($login:String!){user(login:$login){videos(types:[ARCHIVE],sort:TIME,first:30){edges{node{id publishedAt lengthSeconds}}}}}";
+const TWITCH_ARCHIVE_BY_ID_QUERY =
+  "query($id:ID!){video(id:$id){id broadcastType createdAt publishedAt lengthSeconds}}";
 const YOUTUBE_WATCH_URL = "https://www.youtube.com/watch?v=";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -403,7 +405,37 @@ class GameVodsService {
 
   /** @param {ProviderChannel} channel @param {number} [deadlineMs] @returns {Promise<ProviderVod[]>} */
   _archivesForChannel(channel, deadlineMs) {
-    const key = providerKey(channel);
+    return this._cachedArchives(
+      providerKey(channel),
+      () => this._fetchArchives(channel, deadlineMs),
+      (err) => this._warn(err, channel.platform, { channel: channel.cacheKey }),
+    );
+  }
+
+  /** @param {string} videoId @returns {Promise<ProviderVod|null>} */
+  async resolveTwitchArchive(videoId) {
+    if (!isTwitchVideoId(videoId)) return null;
+    const vods = await this._cachedArchives(
+      `twitch-video:${videoId}`,
+      async () => {
+        const payload = await this._fetchTwitch(TWITCH_ARCHIVE_BY_ID_QUERY, { id: videoId });
+        const video = payload?.data?.video;
+        const vod = video?.id === videoId && video.broadcastType === "ARCHIVE"
+          ? parseTwitchArchive(video, parseDateMs(video.createdAt) ?? parseDateMs(video.publishedAt))
+          : null;
+        return vod ? [vod] : [];
+      },
+      (err) => this._warn(err, "twitch", { videoId }),
+    );
+    return vods[0] || null;
+  }
+
+  /**
+   * @param {string} key
+   * @param {() => Promise<ProviderVod[]>} load
+   * @param {(err: unknown) => void} warn
+   */
+  _cachedArchives(key, load, warn) {
     const cached = this._cache.get(key);
     const ttlMs = cached?.vods.some((vod) => vod.ongoing)
       ? Math.min(this.cacheTtlMs, YOUTUBE_ONGOING_CACHE_TTL_MS)
@@ -415,13 +447,13 @@ class GameVodsService {
     const pending = this._inflight.get(key);
     if (pending) return pending;
 
-    const job = this._fetchArchives(channel, deadlineMs)
+    const job = load()
       .then((vods) => {
         this._touchCache(key, { fetchedAt: this.now(), vods });
         return vods;
       })
       .catch((err) => {
-        this._warn(err, channel.platform, { channel: channel.cacheKey });
+        warn(err);
         const partial = /** @type {any} */ (err)?.partialVods;
         const vods = Array.isArray(partial)
           ? mergeVerifiedYoutubeVods(cached?.vods || [], partial)
@@ -451,16 +483,18 @@ class GameVodsService {
 
   /** @param {string} login @returns {Promise<ProviderVod[]>} */
   async _fetchTwitchArchives(login) {
+    return parseTwitchArchives(await this._fetchTwitch(TWITCH_ARCHIVES_QUERY, { login }));
+  }
+
+  /** @param {string} query @param {Record<string, string>} variables */
+  async _fetchTwitch(query, variables) {
     const response = await this.fetchImpl(TWITCH_GQL_URL, {
       method: "POST",
       headers: {
         "Client-ID": TWITCH_WEB_CLIENT_ID,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        query: TWITCH_ARCHIVES_QUERY,
-        variables: { login },
-      }),
+      body: JSON.stringify({ query, variables }),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!response.ok) throw new Error(`twitch gql ${response.status}`);
@@ -468,7 +502,7 @@ class GameVodsService {
     if (Array.isArray(payload?.errors) && payload.errors.length > 0) {
       throw new Error("twitch gql response errors");
     }
-    return parseTwitchArchives(payload);
+    return payload;
   }
 
   /**
@@ -1238,22 +1272,18 @@ function parseTwitchArchives(payload) {
   const vods = [];
   for (const edge of edges.slice(0, 30)) {
     const node = edge?.node;
-    const videoId = typeof node?.id === "string" ? node.id : String(node?.id ?? "");
-    if (!isTwitchVideoId(videoId)) continue;
-    const startMs = parseDateMs(node?.publishedAt);
-    const durationSec = finiteDuration(
-      node?.lengthSeconds,
-      MAX_VIDEO_DURATION_SEC,
-    );
-    if (startMs === null || durationSec === null) continue;
-    vods.push({
-      platform: "twitch",
-      videoId,
-      startMs,
-      endMs: startMs + durationSec * 1000,
-    });
+    const vod = parseTwitchArchive(node, parseDateMs(node?.publishedAt));
+    if (vod) vods.push(vod);
   }
   return vods;
+}
+
+/** @param {any} node @param {number|null} startMs @returns {ProviderVod|null} */
+function parseTwitchArchive(node, startMs) {
+  const videoId = String(node?.id ?? "");
+  const durationSec = finiteDuration(node?.lengthSeconds, MAX_VIDEO_DURATION_SEC);
+  if (!isTwitchVideoId(videoId) || startMs === null || durationSec === null) return null;
+  return { platform: "twitch", videoId, startMs, endMs: startMs + durationSec * 1000 };
 }
 
 /**

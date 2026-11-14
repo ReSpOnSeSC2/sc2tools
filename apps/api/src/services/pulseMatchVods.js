@@ -14,6 +14,9 @@
  * the games endpoint.
  */
 
+const { buildTimestampUrl, findContainingVod, gameStartMs } = require("./gameVods");
+const { REGION_HANDLE_PREFIX } = require("../util/regionFromToonHandle");
+
 const PULSE_MATCHES_URL =
   "https://sc2pulse.nephest.com/sc2/api/character-matches";
 const REQUEST_TIMEOUT_MS = 8000;
@@ -21,11 +24,15 @@ const CACHE_TTL_MS = 15 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 2000;
 const FETCH_CONCURRENCY = 4;
 const MAX_OPPONENT_TOONS = 50;
+const MAX_ARCHIVE_LOOKUPS = 8;
 
 // The Battle.net ladder result and a locally parsed replay normally agree to
 // the second, but allowing a small window accommodates API rounding/delayed
 // result timestamps without opening the door to nearby unrelated games.
 const END_TIME_TOLERANCE_MS = 2 * 60 * 1000;
+const MERGED_MATCH_END_TOLERANCE_MS = 15_000;
+
+/** @typedef {{gameId: string, startMs: number, link: NonNullable<ReturnType<typeof twitchLinkForParticipant>>}} ArchiveCandidate */
 
 class PulseMatchVodsService {
   /**
@@ -35,11 +42,13 @@ class PulseMatchVodsService {
    *   now?: () => number,
    *   cacheTtlMs?: number,
    *   userAgent?: string,
+   *   resolveTwitchArchive?: import('./gameVods').GameVodsService['resolveTwitchArchive'],
    * }} [opts]
    */
   constructor(opts = {}) {
     this.fetchImpl = opts.fetchImpl || globalThis.fetch;
     this.logger = opts.logger || null;
+    this.resolveTwitchArchive = opts.resolveTwitchArchive || null;
     this.now = opts.now || (() => Date.now());
     this.cacheTtlMs =
       typeof opts.cacheTtlMs === "number" && opts.cacheTtlMs >= 0
@@ -99,19 +108,57 @@ class PulseMatchVodsService {
 
     /** @type {Record<string, any[]>} */
     const linksByGameId = Object.create(null);
+    /** @type {Map<string, ArchiveCandidate[]>} */
+    const archiveCandidates = new Map();
     for (const [toon, toonGames] of gamesByToon.entries()) {
       const pulseMatches = pulseByToon.get(toon) || [];
       for (const game of toonGames) {
         const gameId = cleanGameId(game.gameId);
         if (!gameId) continue;
         const match = findPulseMatch(game, pulseMatches, toon);
-        if (!match) continue;
-        const links = linksForMatch(game, match, toon);
-        if (links.length > 0) linksByGameId[gameId] = links;
+        if (match) {
+          const links = linksForMatch(game, match, toon);
+          if (links.length > 0) linksByGameId[gameId] = links;
+        } else if (this.resolveTwitchArchive) {
+          const startMs = gameStartMs(game);
+          if (startMs === null) continue;
+          for (const link of linksForMergedMatch(game, pulseMatches, toon)) {
+            if (!archiveCandidates.has(link.videoId)) {
+              if (archiveCandidates.size >= MAX_ARCHIVE_LOOKUPS) continue;
+              archiveCandidates.set(link.videoId, []);
+            }
+            archiveCandidates.get(link.videoId)?.push({ gameId, startMs, link });
+          }
+        }
       }
     }
 
+    await this._addVerifiedArchiveLinks(archiveCandidates, linksByGameId);
+    for (const links of Object.values(linksByGameId)) links.sort(comparePerspectives);
     return { linksByGameId };
+  }
+
+  /**
+   * @param {Map<string, ArchiveCandidate[]>} archiveCandidates
+   * @param {Record<string, any[]>} linksByGameId
+   */
+  async _addVerifiedArchiveLinks(archiveCandidates, linksByGameId) {
+    const resolveArchive = this.resolveTwitchArchive;
+    if (!resolveArchive) return;
+    await mapWithConcurrency([...archiveCandidates], FETCH_CONCURRENCY, async ([videoId, candidates]) => {
+      const archive = await resolveArchive(videoId).catch((err) => {
+        this.logger?.warn?.({ err: String(err), videoId }, "pulse_match_vod_archive_failed");
+        return null;
+      });
+      if (archive?.platform !== "twitch" || archive.videoId !== videoId) return;
+      for (const { gameId, startMs, link } of candidates) {
+        if (!findContainingVod([archive], startMs)) continue;
+        const offsetSec = Math.floor((startMs - archive.startMs) / 1000);
+        const url = buildTimestampUrl("twitch", videoId, offsetSec);
+        if (!url) continue;
+        (linksByGameId[gameId] ||= []).push({ ...link, url, offsetSec });
+      }
+    });
   }
 
   /** @param {string} toon */
@@ -221,6 +268,7 @@ function findPulseMatch(game, rows, queriedToon) {
   /** @type {Array<{row: any, score: number}>} */
   const candidates = [];
   for (const row of Array.isArray(rows) ? rows : []) {
+    if (row?.match?.type === "_1V1" && row.participants?.length > 2) continue;
     const pulseEnd = parseDateMs(row && row.match && row.match.date);
     if (pulseEnd === null) continue;
     const endDelta = Math.abs(endMs - pulseEnd);
@@ -261,6 +309,53 @@ function findPulseMatch(game, rows, queriedToon) {
 }
 
 /**
+ * Pulse can merge simultaneous ladder results, combining participants and
+ * computing a wrong duration and VOD offset. Use only the archive ID from a
+ * unique row with the same map, a close end time and both exact replay toons.
+ * @param {any} game
+ * @param {any[]} rows
+ * @param {string} opponentToon
+ * @returns {Array<NonNullable<ReturnType<typeof twitchLinkForParticipant>>>}
+ */
+function linksForMergedMatch(game, rows, opponentToon) {
+  const myToon = normaliseToon(game.myToonHandle);
+  const endMs = parseDateMs(game.date);
+  const map = normaliseMapName(game.map || game.mapName || game.mapPlayback?.mapName);
+  if (!myToon || myToon === opponentToon || endMs === null || !map) return [];
+
+  let matchedParticipants = null;
+  for (const row of rows) {
+    const pulseEnd = parseDateMs(row?.match?.date);
+    if (row?.match?.type !== "_1V1" || pulseEnd === null
+      || Math.abs(pulseEnd - endMs) > MERGED_MATCH_END_TOLERANCE_MS
+      || normaliseMapName(row?.map?.name) !== map
+      || !Array.isArray(row?.participants) || row.participants.length <= 2) continue;
+
+    const mine = row.participants.filter((/** @type {any} */ p) => participantToon(p) === myToon);
+    const opponent = row.participants.filter((/** @type {any} */ p) => participantToon(p) === opponentToon);
+    if (mine.length !== 1 || opponent.length !== 1) continue;
+    if (matchedParticipants) return [];
+    matchedParticipants = [mine[0], opponent[0]];
+  }
+  if (!matchedParticipants) return [];
+  return [
+    twitchLinkForParticipant(matchedParticipants[0], "me"),
+    twitchLinkForParticipant(matchedParticipants[1], "opponent"),
+  ].filter((link) => link !== null);
+}
+
+/** @param {any} participant */
+function participantToon(participant) {
+  const members = participant?.team?.members;
+  if (!Array.isArray(members) || members.length !== 1) return null;
+  const character = members[0]?.character;
+  const region = character?.region === "US" ? "NA" : character?.region;
+  const prefix = typeof region === "string" && Object.hasOwn(REGION_HANDLE_PREFIX, region)
+    ? REGION_HANDLE_PREFIX[region] : null;
+  return prefix ? normaliseToon(`${prefix}-S2-${character.realm}-${character.battlenetId}`) : null;
+}
+
+/**
  * @param {any} game
  * @param {any} row
  * @param {string} queriedToon
@@ -277,14 +372,12 @@ function linksForMatch(game, row, queriedToon) {
   /** @type {Array<{
    *   participant: any,
    *   ids: Set<string>,
-   *   playerName: string|null,
    * }>} */
   const described = participants.map(
     /** @param {any} participant */
     (participant) => ({
       participant,
       ids: participantIds(participant),
-      playerName: participantName(participant),
     }),
   );
   const opponentIndex = opponentId
@@ -296,9 +389,6 @@ function linksForMatch(game, row, queriedToon) {
   const links = [];
   const seen = new Set();
   described.forEach((entry, index) => {
-    const vod = parseTwitchVod(entry.participant?.twitchVodUrl);
-    if (!vod || !entry.playerName) return;
-
     /** @type {'me'|'opponent'|null} */
     let perspective = null;
     if (myIndex === index) perspective = "me";
@@ -308,25 +398,29 @@ function linksForMatch(game, row, queriedToon) {
     else if (opponentIndex >= 0 && described.length === 2) perspective = "me";
     if (!perspective) return;
 
-    const key = `${perspective}:${vod.videoId}:${vod.offsetSec}`;
+    const link = twitchLinkForParticipant(entry.participant, perspective);
+    if (!link) return;
+    const key = `${perspective}:${link.videoId}:${link.offsetSec}`;
     if (seen.has(key)) return;
     seen.add(key);
-    links.push({
-      platform: "twitch",
-      perspective,
-      playerName: entry.playerName,
-      url: vod.url,
-      offsetSec: vod.offsetSec,
-      videoId: vod.videoId,
-      source: "sc2pulse",
-    });
+    links.push(link);
   });
 
-  links.sort((a, b) => {
-    if (a.perspective === b.perspective) return 0;
-    return a.perspective === "me" ? -1 : 1;
-  });
+  links.sort(comparePerspectives);
   return links;
+}
+
+/** @param {{perspective: string}} a @param {{perspective: string}} b */
+function comparePerspectives(a, b) {
+  return Number(a.perspective === "opponent") - Number(b.perspective === "opponent");
+}
+
+/** @param {any} participant @param {'me'|'opponent'} perspective */
+function twitchLinkForParticipant(participant, perspective) {
+  const vod = parseTwitchVod(participant?.twitchVodUrl);
+  const playerName = participantName(participant);
+  if (!vod || !playerName) return null;
+  return { ...vod, platform: /** @type {const} */ ("twitch"), perspective, playerName, source: /** @type {const} */ ("sc2pulse") };
 }
 
 /** @param {unknown} value */
@@ -413,7 +507,7 @@ function battlenetIdFromToon(value) {
 function normaliseToon(value) {
   if (typeof value !== "string") return null;
   const toon = value.trim();
-  return /^\d+-S2-\d+-\d+$/i.test(toon) ? toon : null;
+  return /^\d+-S2-\d+-\d+$/i.test(toon) ? toon.toUpperCase() : null;
 }
 
 /** @param {unknown} value */
