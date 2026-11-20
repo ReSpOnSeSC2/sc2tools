@@ -2,6 +2,12 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.25.3
+
+### Fixed
+- Keep Orbital Command landings from appearing as extra upgrades in replay
+  build orders.
+
 ## 0.25.2
 
 ### Added

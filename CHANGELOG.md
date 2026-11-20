@@ -390,6 +390,12 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.25.3
+
+- Keep Orbital Command landings from appearing as extra upgrades in replay
+  build orders. Macro Breakdown also corrects inflated town hall counts from
+  older uploads.
+
 ### Agent 0.25.2
 
 - Opt in to tray notifications for unread game milestones after playing.
