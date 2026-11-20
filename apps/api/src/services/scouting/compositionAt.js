@@ -130,6 +130,8 @@ const BUILDING_MORPH_PARENT = {
   WarpGate: "Gateway",
 };
 
+const TERRAN_TOWN_HALLS = ["CommandCenter", "OrbitalCommand", "PlanetaryFortress"];
+
 /**
  * sc2reader unit-name alias table. Mirrors UNIT_NAME_ALIASES in
  * compositionAt.ts. Keep additions synchronised with the TS file —
@@ -460,6 +462,9 @@ function countBuildingsAt(events, t) {
           startTime
         : startTime;
       if (visibleTime > t) continue;
+      // Historical build logs can record an Orbital landing as an upgrade.
+      // An upgrade can move an existing Command Center between buckets only.
+      if (prev === "CommandCenter" && !counts[prev]) continue;
       if (prev && (counts[prev] || 0) > 0) {
         counts[prev] -= 1;
         if (counts[prev] === 0) delete counts[prev];
@@ -511,9 +516,9 @@ function derivedBuildingDeaths(records) {
 
 /**
  * Decrement one structure death from the cumulative ``counts`` map.
- * Gateway ↔ WarpGate are fallback buckets for older/truncated payloads
- * whose build log omitted a type-change event. Mirrors
- * ``subtractBuildingDeath`` in compositionAt.ts.
+ * Prefers the exact canonical bucket. Alternate forms are fallbacks
+ * when an old build log missed or misreported a type change.
+ * Mirrors ``subtractBuildingDeath`` in compositionAt.ts.
  *
  * @param {Record<string, number>} counts
  * @param {string} name
@@ -532,6 +537,9 @@ function subtractBuildingDeath(counts, name, amount) {
   if (tryBucket(name)) return true;
   if (name === "Gateway") return tryBucket("WarpGate");
   if (name === "WarpGate") return tryBucket("Gateway");
+  if (TERRAN_TOWN_HALLS.includes(name)) {
+    return TERRAN_TOWN_HALLS.some(tryBucket);
+  }
   return false;
 }
 

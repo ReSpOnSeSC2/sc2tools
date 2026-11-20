@@ -512,6 +512,8 @@ const BUILDING_MORPH_PARENT: Record<string, string> = {
   WarpGate: "Gateway",
 };
 
+const TERRAN_TOWN_HALLS = ["CommandCenter", "OrbitalCommand", "PlanetaryFortress"];
+
 /**
  * Upgrade categories the build-order parser tags. The agent's catalog
  * marks every research event with ``category: "upgrade"``. Older
@@ -565,6 +567,9 @@ export function countBuildingsAt(
         ? Number(ev.complete_time ?? startTime) || startTime
         : startTime;
       if (visibleTime > t) continue;
+      // Historical build logs can record an Orbital landing as an upgrade.
+      // An upgrade can move an existing Command Center between buckets only.
+      if (prev === "CommandCenter" && !counts[prev]) continue;
       if (prev && (counts[prev] || 0) > 0) {
         counts[prev] = (counts[prev] || 0) - 1;
         if (counts[prev] === 0) delete counts[prev];
@@ -633,9 +638,9 @@ export function derivedBuildingDeaths(
 /**
  * Decrement one structure death from the cumulative ``counts`` map.
  *
- * Prefers the exact canonical bucket. Gateway ↔ WarpGate are fallback
- * buckets for older/truncated payloads whose build log omitted a
- * type-change event. Returns true when a unit was removed.
+ * Prefers the exact canonical bucket. Alternate forms are fallbacks
+ * when an old build log missed or misreported a type change.
+ * Returns true when a structure was removed.
  */
 function subtractBuildingDeath(
   counts: Record<string, number>,
@@ -653,6 +658,9 @@ function subtractBuildingDeath(
   if (tryBucket(name)) return true;
   if (name === "Gateway") return tryBucket("WarpGate");
   if (name === "WarpGate") return tryBucket("Gateway");
+  if (TERRAN_TOWN_HALLS.includes(name)) {
+    return TERRAN_TOWN_HALLS.some(tryBucket);
+  }
   return false;
 }
 

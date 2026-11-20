@@ -191,6 +191,24 @@ def test_build_log_carries_the_morphed_units(zerg_events):
     ]
 
 
+def test_landing_an_orbital_command_does_not_log_another_upgrade(monkeypatch):
+    _, opponent = _extract(monkeypatch, [
+        _Born(0, 1, "CommandCenter"),
+        _Change(112, 1, "OrbitalCommand"),
+        _Init(150, 2, "CommandCenter"),
+        _Change(240, 1, "OrbitalCommandFlying"),
+        _Change(252, 2, "OrbitalCommand"),
+        _Change(270, 1, "OrbitalCommand"),
+        _Change(488, 1, "OrbitalCommandFlying"),
+        _Change(510, 1, "OrbitalCommand"),
+    ], my_pid=1)
+
+    assert event_extractor.build_log_lines(opponent) == [
+        "[0:00] CommandCenter", "[1:52] OrbitalCommand",
+        "[2:30] CommandCenter", "[4:12] OrbitalCommand",
+    ]
+
+
 def test_opponent_morphs_land_on_the_opponent_side(monkeypatch):
     mine, theirs = _extract(monkeypatch, _current_stream(), my_pid=1)
     assert mine == []

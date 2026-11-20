@@ -284,6 +284,42 @@ describe("derivedBuildingDeaths — parity with compositionAt.ts", () => {
   });
 });
 
+describe("Terran town-hall roster parity", () => {
+  test("counts three Orbitals at 8:34 when a legacy log includes two landings", () => {
+    const buildEvents = [
+      { time: 0, name: "CommandCenter" },
+      { time: 112, name: "OrbitalCommand" },
+      { time: 138, name: "CommandCenter" },
+      { time: 252, name: "OrbitalCommand" },
+      { time: 349, name: "CommandCenter" },
+      { time: 447, name: "OrbitalCommand" },
+      { time: 488, name: "OrbitalCommand" },
+      { time: 510, name: "OrbitalCommand" },
+    ].map((event) => ({ ...event, is_building: true }));
+
+    expect(
+      deriveBuildingComposition({ buildEvents, productionBuildings: undefined, t: 514 }),
+    ).toEqual({ buildings: { OrbitalCommand: 3 }, source: "build_order" });
+  });
+
+  test("removes a destroyed town hall whose form was misreported in the build log", () => {
+    const buildEvents = [
+      { time: 0, name: "CommandCenter", is_building: true },
+      { time: 112, name: "OrbitalCommand", is_building: true },
+      { time: 330, name: "CommandCenter", is_building: true },
+      { time: 488, name: "OrbitalCommand", is_building: true },
+    ];
+    const productionBuildings = [
+      { name: "OrbitalCommand", born_time: 0, died_time: 901, destroyed: false },
+      { name: "CommandCenter", born_time: 400, died_time: 511, destroyed: true },
+    ];
+
+    expect(
+      deriveBuildingComposition({ buildEvents, productionBuildings, t: 514 }).buildings,
+    ).toEqual({ OrbitalCommand: 1 });
+  });
+});
+
 describe("deriveBuildingComposition — parity with compositionAt.ts", () => {
   test("removes destroyed structures from the cumulative count", () => {
     const buildEvents = [

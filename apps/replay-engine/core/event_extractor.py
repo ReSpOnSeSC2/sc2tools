@@ -423,6 +423,7 @@ def extract_events(
     # name as well so a unit that takes two listed types in turn (an
     # Overlord made a Transport and later an Overseer) is logged as each.
     morphed_unit_ids: Set[Tuple[Any, str]] = set()
+    flying_orbital_ids: Set[int] = set()
     event_source = getattr(replay, 'tracker_events', None) or replay.events
 
     def source_frame(event):
@@ -509,6 +510,16 @@ def extract_events(
                     stats['proxy_errors'] += 1
                     continue
                 clean = _event_name(raw)
+                # Landing emits OrbitalCommand again for the same unit ID.
+                # Only the upgrade from CommandCenter belongs in the build log.
+                if clean in ("OrbitalCommandFlying", "OrbitalCommand"):
+                    uid = _resolve_unit_id(event)
+                    if uid is not None:
+                        if clean == "OrbitalCommandFlying":
+                            flying_orbital_ids.add(uid)
+                        elif uid in flying_orbital_ids:
+                            flying_orbital_ids.remove(uid)
+                            continue
                 if pid is None:
                     if clean in PROXY_ELIGIBLE_BUILDINGS:
                         stats['proxy_errors'] += 1
