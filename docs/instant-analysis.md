@@ -334,7 +334,7 @@ Everything else in the payload must match byte for byte (`gameId`, `date`,
 2. **Wheels** (`browser-engine/wheels.mjs`). A private venv under
    `node_modules/.cache/sc2tools-browser-engine/venv` gets hash-pinned `pip`
    and `setuptools`, then `pip wheel --no-deps --require-hashes
-   --no-build-isolation` builds `sc2reader==1.8.0` and `mpyq==0.2.5` from
+   --no-build-isolation` builds `sc2reader==1.9.0` and `mpyq==0.2.5` from
    `requirements.txt` (every file pinned by SHA-256; mpyq's sdist builds with
    `SOURCE_DATE_EPOCH=315532800` into a reproducible wheel). Wheels are
    cached per requirements hash; any other wheel set is refused.

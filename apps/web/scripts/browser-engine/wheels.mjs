@@ -12,7 +12,7 @@
  * Example:
  *   const python = await findPython();
  *   const wheels = await ensureWheels(python);
- *   wheels.map((w) => w.file); // -> ["mpyq-0.2.5-py3-none-any.whl", "sc2reader-1.8.0-py3-none-any.whl"]
+ *   wheels.map((w) => w.file); // -> ["mpyq-0.2.5-py3-none-any.whl", "sc2reader-1.9.0-py3-none-any.whl"]
  */
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
@@ -33,7 +33,7 @@ const WHEELS_DIR = path.join(CACHE_DIR, "wheels");
 const WHEELS_COMPLETE = ".complete";
 const CACHE_KEY_HEX_CHARS = 16;
 const PURE_WHEEL_SUFFIX = "-py3-none-any.whl";
-const EXPECTED_WHEEL_PREFIXES = ["mpyq-0.2.5-", "sc2reader-1.8.0-"];
+const EXPECTED_WHEEL_PREFIXES = ["mpyq-0.2.5-", "sc2reader-1.9.0-"];
 const PROBE = "import sys, venv, ensurepip; print('%d.%d' % sys.version_info[:2])";
 
 function pipEnv() {

@@ -27,19 +27,52 @@ export function gameKeyFromTriggerKey(triggerKey: string | null): string | null 
   return triggerKey.slice("game:".length);
 }
 
-/** A partial envelope with no key cannot replace an already-known match. */
-export function useGameStartTriggerKey(
+// Keep the browser draw in the same early-game window as the desktop draw.
+const RANDOMIZER_LIVE_WINDOW_SEC = 30;
+
+export function isCompletedOverlayGame(live: LiveGamePayload | null): boolean {
+  return !!live && !live.isTest && (live.postGame === true || !!live.result || typeof live.durationSec === "number");
+}
+
+function randomizerMatchTriggerKey(
   live: LiveGamePayload | null,
   liveGame: LiveGameEnvelope | null,
 ): string | null {
-  const lastKnownGame = useRef<string | null>(null);
   const key = gameStartTriggerKey(live, liveGame);
+  if (live?.isTest) return key;
+  if (liveGame?.synthetic || liveGame?.isReplay || !gameKeyFromTriggerKey(key)) return null;
+  if (isCompletedOverlayGame(live) && (!liveGame || live?.gameKey === liveGame.gameKey)) return null;
+  return key;
+}
+
+function inRandomizerStartWindow(liveGame: LiveGameEnvelope | null): boolean {
+  const elapsed = Math.max(0, liveGame?.displayTime ?? 0);
+  const receivedAt = liveGame?.receivedAt;
+  const snapshotAge = typeof receivedAt === "number" ? Math.max(0, Date.now() - receivedAt) / 1000 : 0;
+  return elapsed + snapshotAge < RANDOMIZER_LIVE_WINDOW_SEC;
+}
+
+/** A late socket snapshot may identify a match without being a new start. */
+export function randomizerStartTriggerKey(
+  live: LiveGamePayload | null,
+  liveGame: LiveGameEnvelope | null,
+): string | null {
+  const key = randomizerMatchTriggerKey(live, liveGame);
+  return live?.isTest || inRandomizerStartWindow(liveGame) ? key : null;
+}
+
+/** A reveal admitted during loading can finish its normal visibility window. */
+export function useRandomizerTriggerKey(
+  live: LiveGamePayload | null,
+  liveGame: LiveGameEnvelope | null,
+): string | null {
+  const admitted = useRef<string | null>(null);
+  const key = randomizerMatchTriggerKey(live, liveGame);
+  const early = live?.isTest || inRandomizerStartWindow(liveGame);
   useEffect(() => {
-    if (key?.startsWith("game:") && key !== "game:unkeyed") {
-      lastKnownGame.current = key;
-    }
-  }, [key]);
-  return key === "game:unkeyed" ? lastKnownGame.current ?? key : key;
+    if (early && gameKeyFromTriggerKey(key)) admitted.current = key;
+  }, [key, early]);
+  return early || admitted.current === key ? key : null;
 }
 
 /** Scouting waits for gameplay and an identified opponent, including on resync. */

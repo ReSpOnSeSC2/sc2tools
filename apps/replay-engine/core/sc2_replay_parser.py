@@ -35,7 +35,7 @@ try:
     from sc2reader.exceptions import CorruptTrackerFileError
 except (ImportError, ModuleNotFoundError):
     # A few pure unit tests replace ``sc2reader`` with a minimal module stub
-    # before importing this parser. Production pins sc2reader 1.8.0, which
+    # before importing this parser. The pinned sc2reader release
     # always provides the real exception; the fallback keeps those metadata-
     # only tests importable without weakening the runtime path.
     class CorruptTrackerFileError(Exception):
@@ -49,6 +49,7 @@ from .build_definitions import (
 from .custom_builds import load_custom_builds
 from .event_extractor import build_log_lines, extract_events
 from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
+from .timebase import replay_timestamp_iso
 from .preset_policy import policy_snapshot, classification_evidence
 
 _OWNED_TOONS = ContextVar("owned_replay_toons", default=None)
@@ -468,7 +469,7 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     ctx = ReplayContext(file_path=os.path.abspath(file_path), depth=depth, raw=replay)
     ctx.is_resumed_from_replay = _is_resumed_replay(replay)
     ctx.map_name = getattr(replay, "map_name", "") or ""
-    ctx.date_iso = replay.date.isoformat() if getattr(replay, "date", None) else "unknown"
+    ctx.date_iso = replay_timestamp_iso(replay.date) if getattr(replay, "date", None) else "unknown"
     start_time = getattr(replay, "start_time", None)
     ctx.started_at_iso = start_time.isoformat() if start_time else None
     ctx.game_version = _normalise_game_version(

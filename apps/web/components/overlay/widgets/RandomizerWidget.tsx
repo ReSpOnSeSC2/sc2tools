@@ -4,8 +4,8 @@
  * Build-order randomizer overlay widget.
  *
  * Triggers once per new gameKey: derives the matchup from whatever
- * source has it (post-game ``live`` payload, the agent's pre/in-game
- * envelope, or a derived race pairing), spins a weighted-random build
+ * source has it (the agent's current envelope or a legacy pre-game
+ * payload), spins a weighted-random build
  * from the user's curated pool, renders a build-order reveal, then follows it
  * with the winning build's configured Gateway-unit draw when enabled.
  *
@@ -36,7 +36,12 @@ import type {
 import { isMatchupKey } from "@/lib/randomizer/types";
 import { mulberry32, seedFromString, spinResult } from "@/lib/randomizer/engine";
 import { RandomizerSequence } from "@/components/randomizer/RandomizerSequence";
-import { gameKeyFromTriggerKey, useGameStartTriggerKey } from "../gameStartTrigger";
+import {
+  gameKeyFromTriggerKey,
+  isCompletedOverlayGame,
+  randomizerStartTriggerKey,
+  useRandomizerTriggerKey,
+} from "../gameStartTrigger";
 import { randomizerSpinDelayMs } from "../buildIntentGate";
 import { useOverlayPlacement } from "../OverlayPlacement";
 import {
@@ -70,7 +75,7 @@ export function RandomizerWidget({
   const placement = useOverlayPlacement();
   const matchup = deriveMatchup(live, liveGame);
   const spinKey = deriveSpinKey(matchup, live, liveGame);
-  const triggerKey = useGameStartTriggerKey(live, liveGame);
+  const triggerKey = useRandomizerTriggerKey(live, liveGame);
   const [spin, setSpin] = useState<SpinState | null>(null);
   const [dismissedSpinId, setDismissedSpinId] = useState<number | null>(null);
   // Bumped by the gate's timers so the spin effect re-checks the gate.
@@ -89,8 +94,6 @@ export function RandomizerWidget({
   const suppressed = gate?.suppressRandomizer ?? false;
   const holdDeadlineMs = gate?.holdDeadlineMs ?? 0;
   const phase = liveGame?.phase ?? null;
-  // Only an agent-envelope or result-less pre-game start is a real roll.
-  const rollGameKey = !isTest && (liveGame !== null || !live?.result) ? gameKey : null;
 
   useEffect(() => {
     onSpinRef.current = onSpin;
@@ -147,10 +150,10 @@ export function RandomizerWidget({
     onSpinRef.current?.({
       triggerKey,
       startedAtMs: Date.now(),
-      roll: rollGameKey && !savedPick ? { gameKey: rollGameKey, buildId: outcome.winner.id } : null,
+      roll: gameKey && !savedPick ? { gameKey, buildId: outcome.winner.id } : null,
     });
   }, [
-    visible, matchup, spinKey, triggerKey, config, isTest, rollGameKey,
+    visible, matchup, spinKey, triggerKey, config, isTest, gameKey,
     intentSeen, suppressed, holdDeadlineMs, phase, gateClock, savedPick, displayedPick,
   ]);
 
@@ -161,14 +164,18 @@ export function RandomizerWidget({
     && intent?.gameKey === spinGameKey
     && intent.suppressRandomizer;
   const spinDisabled = !!spin && !!config && config.matchups[spin.outcome.matchup]?.enabled !== true;
+  const spinEnded = spinGameKey !== null && (
+    (liveGame?.phase === "match_ended" && (!liveGame.gameKey || liveGame.gameKey === spinGameKey))
+    || (live?.gameKey === spinGameKey && isCompletedOverlayGame(live))
+  );
   useEffect(() => {
-    if (spin && (spinSuppressed || spinDisabled)) setDismissedSpinId(spin.spinId);
-  }, [spin, spinSuppressed, spinDisabled]);
+    if (spin && (spinSuppressed || spinDisabled || spinEnded)) setDismissedSpinId(spin.spinId);
+  }, [spin, spinSuppressed, spinDisabled, spinEnded]);
 
   // Keep the reveal mounted through transient phase gaps; the clients hide
   // its frame. A genuinely different match must wait for its own outcome.
   if (!spin || (triggerKey !== null && spin.triggerKey !== triggerKey)) return null;
-  if (spinSuppressed || spinDisabled || dismissedSpinId === spin.spinId) return null;
+  if (spinSuppressed || spinDisabled || spinEnded || dismissedSpinId === spin.spinId) return null;
 
   return (
     <div
@@ -217,44 +224,7 @@ export function deriveSpinKey(
   liveGame: LiveGameEnvelope | null,
 ): string | null {
   if (!matchup) return null;
-  // Test fires don't carry a gameKey — synthesise one pinned to the test
-  // fire so a second Test re-triggers the widget. Checked first because a
-  // sample payload may carry a ``result`` and we still want it to spin.
-  if (live?.isTest) {
-    return `${matchup}:test:${live.testNonce ?? live.gameKey ?? live.matchup ?? "x"}`;
-  }
-  // The randomizer reveals "what to build THIS game", so it must fire at
-  // game START only. The agent's pre/in-game envelope is the start
-  // signal — key off its gameKey, but ONLY while the match is still LIVE
-  // (loading / started / in-progress). A ``match_ended`` envelope keeps
-  // arriving with the SAME gameKey (the socket only nulls ``liveGame`` on
-  // idle/menu), so treating it as a start signal is the game-END re-spin:
-  // the mid-match visibility timer unmounts the widget — resetting the
-  // spin-dedupe ref — and the lingering ended envelope (or the post-game
-  // payload that remounts the widget) would otherwise spin a SECOND time
-  // as the game finishes.
-  const phase = liveGame?.phase;
-  const envLive =
-    phase === "match_loading"
-    || phase === "match_started"
-    || phase === "match_in_progress";
-  const envKey = liveGame?.gameKey;
-  if (envLive && typeof envKey === "string" && envKey.length > 0) {
-    return `${matchup}:${envKey}`;
-  }
-  if (liveGame) return null;
-  // No agent envelope (agent offline / replay-only). Only a ``live``
-  // payload WITHOUT a result may start a spin: a post-game card always
-  // carries a ``result``, and firing off it is the same game-END
-  // double-spin. The agent gameKey and the cloud's replay-derived gameKey
-  // often differ, so dedupe-by-key can't catch this.
-  if (
-    live
-    && !live.result
-    && typeof live.gameKey === "string"
-    && live.gameKey.length > 0
-  ) {
-    return `${matchup}:${live.gameKey}`;
-  }
-  return null;
+  const trigger = randomizerStartTriggerKey(live, liveGame);
+  const seed = live?.isTest ? trigger : gameKeyFromTriggerKey(trigger);
+  return seed ? `${matchup}:${seed}` : null;
 }

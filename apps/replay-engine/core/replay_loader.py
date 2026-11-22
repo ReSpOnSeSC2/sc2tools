@@ -41,6 +41,7 @@ from .build_definitions import is_eight_worker_game, name_for_game_version
 from .custom_builds import load_custom_builds
 from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
 from .preset_policy import policy_snapshot
+from .timebase import replay_timestamp_iso
 
 
 def load_replay_with_fallback(file_path: str):
@@ -110,7 +111,7 @@ def process_replay_task(file_path: str, player_name: str) -> dict:
                     'file_path': file_path,
                     'error': "Replay has no opponent (vs AI / solo)."}
 
-        date_str = replay.date.isoformat() if replay.date else 'unknown'
+        date_str = replay_timestamp_iso(replay.date) if replay.date else 'unknown'
         length_sec = getattr(replay, 'game_length', None).seconds if getattr(replay, 'game_length', None) else 0
         game_id = f"{date_str}|{opponent.name}|{replay.map_name or 'unknown'}|{length_sec}"
 

@@ -2,6 +2,12 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.25.4
+
+### Fixed
+- Show which automatic title refresh options are saved and prompt to apply pending changes.
+- Use newer replay game data to resolve more abilities and units while keeping existing replay IDs stable.
+
 ## 0.25.3
 
 ### Fixed

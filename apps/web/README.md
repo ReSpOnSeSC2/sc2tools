@@ -201,7 +201,7 @@ INSTANT_GOLDEN_DIR=/tmp/instant-golden npm run test:engine
 built asset against its manifest, boots the bundle in Node with the worker's
 real Python glue and, with `INSTANT_GOLDEN_DIR` set, requires envelopes
 identical to the CPython goldens. `instant_golden.py` needs a Python with
-`sc2reader==1.8.0` installed. Without `INSTANT_GOLDEN_DIR`, only the asset
+the pinned `sc2reader` release installed. Without `INSTANT_GOLDEN_DIR`, only the asset
 and smoke checks run.
 
 ## Voice readout

@@ -96,6 +96,30 @@ def test_current_match_template_preserves_prefix_and_only_edits_locally(page, mo
     assert calls == []
 
 
+def test_automatic_title_status_tracks_saved_options_through_manual_title_save(page):
+    widget, state, app = page
+    state["account_mode"] = "sc2tools"
+    saved = state["title_automation"] = {"enabled": False, "on_game_start": False}
+    widget.render(state)
+    controls = widget.title_controls
+    assert controls.activation.text() == "Automatic title refresh is off."
+
+    controls.on_game_start.setChecked(True)
+    controls.enabled.setChecked(True)
+    pending = "Automatic title refresh is off. Click Save automatic title settings to apply your changes."
+    assert controls.activation.text() == pending
+
+    saved["message"] = "Preview uses your synced cloud session and recorded ladder history."
+    widget.refresh()
+    widget._completed({"action": "set_metadata", "state": state})
+    assert controls.on_game_start.isChecked() and controls.enabled.isChecked()
+    assert controls.activation.text() == pending
+
+    saved.update(enabled=True, on_game_start=True)
+    widget._completed({"action": "configure_title_automation", "state": state})
+    assert controls.activation.text() == "Automatic titles refresh at game start and after replay sync."
+
+
 def test_game_start_refresh_has_its_own_opt_in_and_survives_polling(page, monkeypatch):
     widget, state, app = page
     state["account_mode"] = "sc2tools"

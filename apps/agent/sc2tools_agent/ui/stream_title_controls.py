@@ -36,14 +36,17 @@ class StreamTitleControls:
         self.enabled.toggled.connect(self.edited)
         self.save = page._button("Save automatic title settings", self.configure, quiet=True)
         layout.addWidget(self.save)
+        self.activation = page._label("Automatic title refresh is off.", True)
+        layout.addWidget(self.activation)
         self.refresh = page._button("Refresh preview statistics", lambda: page.job({"action": "refresh_title_preview"}), quiet=True)
         layout.addWidget(self.refresh)
-        self.note = page._label("Automatic updates are off. Saving these settings never publishes a title.", True)
+        self.note = page._label("", True)
         layout.addWidget(self.note)
         page.title_input.textChanged.connect(self.update_preview)
 
     def edited(self, *_args):
         self.dirty = True
+        self._update_activation(self.page.state.get("title_automation", {}))
 
     def use_match_template(self):
         # Preserve a custom plain-text prefix without repeating match tokens.
@@ -51,7 +54,6 @@ class StreamTitleControls:
         prefix = current if current and "{" not in current and "}" not in current else "SC2"
         self.page.title_input.setText(prefix + " | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}")
         self.page._title_edited()
-        self.edited()
 
     def configure(self):
         self.page.job({"action": "configure_title_automation", "template": self.page.title_input.text(),
@@ -64,17 +66,39 @@ class StreamTitleControls:
         except ValueError as error:
             self.preview.setText("Preview: " + str(error))
 
+    def _saved_controls(self, settings):
+        platforms = settings.get("platforms", {})
+        return [
+            (self.enabled, settings.get("enabled") is True),
+            (self.on_game_start, settings.get("on_game_start") is True),
+            *((control, platforms.get(name, name != "youtube")) for name, control in self.platforms.items()),
+        ]
+
+    def _update_activation(self, settings):
+        modes = []
+        if settings.get("on_game_start") is True:
+            modes.append("at game start")
+        if settings.get("enabled") is True:
+            modes.append("after replay sync")
+        status = "Automatic title refresh is off."
+        if modes:
+            status = "Automatic titles refresh " + " and ".join(modes) + "."
+        options_changed = any(control.isChecked() != checked for control, checked in self._saved_controls(settings))
+        template_changed = self.page.title_dirty and (self.enabled.isChecked() or self.on_game_start.isChecked())
+        if options_changed or template_changed:
+            status += " Click Save automatic title settings to apply your changes."
+        self.activation.setText(status)
+
     def render(self, state):
         settings = state.get("title_automation", {})
         self.values = settings.get("values", {})
         if not self.dirty:
-            for control, checked in [(self.enabled, settings.get("enabled") is True),
-                (self.on_game_start, settings.get("on_game_start") is True),
-                *[(control, settings.get("platforms", {}).get(name, name != "youtube")) for name, control in self.platforms.items()]]:
+            for control, checked in self._saved_controls(settings):
                 blocked = control.blockSignals(True)
                 control.setChecked(checked)
                 control.blockSignals(blocked)
-        self.note.setText(settings.get("message", "Automatic updates are off. Saving these settings never publishes a title.")
+        self._update_activation(settings)
+        self.note.setText(settings.get("message", "Saving automatic title settings applies them to future games.")
             + " Game-start refresh runs once per live game when its opponent is ready. Post-sync refresh runs at most once every 10 minutes. Only changed titles are sent. Head-to-head uses your confirmed record against the current opponent. Map appears only when the live source supplies it. Matchup rates and peak use at most 512 recorded ladder games from 90 days.")
         self.update_preview()
         self.buttons()

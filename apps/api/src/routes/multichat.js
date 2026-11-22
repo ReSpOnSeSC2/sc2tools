@@ -771,7 +771,7 @@ function buildMultichatRouter(deps) {
           res.write(`: hb\n\n`);
         }, 20000);
 
-        req.on("close", () => {
+        res.once("close", () => {
           clearInterval(heartbeat);
           unsubscribe();
         });

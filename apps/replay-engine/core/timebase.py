@@ -1,4 +1,4 @@
-"""Real-game-time conversion helpers.
+"""Replay timestamp and real-game-time conversion helpers.
 
 sc2reader 1.8.0 hard-codes ``Event.second = frame // 16``. That's the
 HotS / WoL frame rate; LotV runs at 22.4 fps. ``replay.length`` itself
@@ -20,7 +20,16 @@ without a synthetic event wrapper.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 LOTV_FPS = 22.4
+
+
+def replay_timestamp_iso(value: datetime) -> str:
+    """Preserve the UTC timestamp format used in replay IDs by older agents."""
+    if isinstance(value, datetime) and value.utcoffset() is not None:
+        value = value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value.isoformat()
 
 
 def infer_fps(replay) -> float:

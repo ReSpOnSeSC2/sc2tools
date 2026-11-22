@@ -280,4 +280,51 @@ describe("RandomizerWidget build check-in gate", () => {
     expect(reveals).toEqual([]);
     expect(spins).toEqual([]);
   });
+
+  it.each<Partial<LiveGameEnvelope>>([
+    { synthetic: true },
+    { isReplay: true },
+    { phase: "match_in_progress", displayTime: 320 },
+    { phase: "match_started", displayTime: 320 },
+  ])("ignores a reconnect snapshot that cannot start a new reveal: %j", (snapshot) => {
+    harness({ liveGame: envelope(snapshot), intent: intent() });
+    advance(RANDOMIZER_INTENT_WAIT_MS);
+    expect(reveals).toEqual([]);
+    expect(spins).toEqual([]);
+  });
+
+  it("ignores a cached loading snapshot after the start window", () => {
+    harness({ liveGame: envelope({ receivedAt: Date.now() - 31_000 }), intent: intent() });
+    expect(reveals).toEqual([]);
+    expect(spins).toEqual([]);
+  });
+
+  it.each<Partial<LiveGamePayload>>([{ postGame: true }, { durationSec: 0 }])(
+    "ignores a finished upload with no decisive result: %j", (snapshot) => {
+      harness({ live: { gameKey: "cloud-key", matchup: "PvT", ...snapshot }, liveGame: null });
+      advance(RANDOMIZER_INTENT_WAIT_MS);
+      expect(reveals).toEqual([]);
+      expect(spins).toEqual([]);
+    },
+  );
+
+  it("can finish a reveal after the draw window but retires it when the game ends", () => {
+    const view = harness({ liveGame: envelope({ phase: "match_in_progress", displayTime: 29 }), intent: intent() });
+    expect(revealShown()).toBe(true);
+    view.update({ liveGame: envelope({ phase: "match_in_progress", displayTime: 30 }) });
+    expect(revealShown()).toBe(true);
+    view.update({ liveGame: envelope({ phase: "match_ended" }) });
+    expect(revealShown()).toBe(false);
+    view.update({ liveGame: null });
+    expect(revealShown()).toBe(false);
+    expect(spins).toHaveLength(1);
+  });
+
+  it("cancels a pending draw when the replay upload beats the ended envelope", () => {
+    const view = harness({ intent: held(6_000) });
+    view.update({ live: { gameKey: GAME, matchup: "PvT", postGame: true }, intent: intent() });
+    advance(6_000);
+    expect(reveals).toEqual([]);
+    expect(spins).toEqual([]);
+  });
 });

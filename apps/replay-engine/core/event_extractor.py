@@ -636,12 +636,8 @@ _MULE_TOKENS: Tuple[str, ...] = ("calldownmule", "mule",)
 # ---------------------------------------------------------------------------
 # Starcraft II ships a fresh ability table with every game-data patch, and
 # the link-id of an ability can shift when Blizzard inserts/removes entries.
-# Public sc2reader 1.8.0 only ships ability data up to LotV 80949 (and the
-# upstream branch only to 89720), so any replay produced by patch 5.0.14+
-# has chrono boost firing at a link that the bundled datapack labels as
-# something else entirely — which is why ``ability_name`` returns
-# "NexusMassRecall" / unknown / a Terran ability instead of
-# "ChronoBoostEnergyCost" for the user's recent replays.
+# A replay can use a newer ability table than sc2reader's bundled datapack,
+# so ``ability_name`` can be absent or resolve to a different command.
 #
 # We work around that by classifying the macro abilities directly on the
 # numeric ``ability_link`` (which is a stable integer that Blizzard does
@@ -754,7 +750,7 @@ def _run_ability_pass(
     my_pid: int,
     link_table: Dict[int, str],
     replay,
-) -> Tuple[List[Dict[str, Any]], Dict[str, int], Dict[str, int]]:
+) -> Tuple[List[Dict[str, Any]], Dict[str, int], int]:
     """One classification pass over the game events for ``my_pid``.
 
     Classifies macro casts by numeric ability_link via ``link_table``
@@ -763,10 +759,9 @@ def _run_ability_pass(
     re-executions of the preceding macro CommandEvent (chained casts —
     without them modern replays under-count by 70-80%).
 
-    Returns ``(ability_events, ability_counts, head_counts)`` —
-    ``head_counts`` is per-bucket fresh CommandEvents only (no chained
-    re-executions), which the chrono self-calibration trigger compares
-    against candidate-link head casts so it never mixes units.
+    The third result counts fresh casts matched by the table's chrono link.
+    Calibration compares this count with casts from the candidate link.
+    Name matches and chained executions cannot obscure that comparison.
 
     Pulled out of ``extract_macro_events`` so the chrono link
     self-calibration can re-run the identical pass with a corrected
@@ -776,9 +771,7 @@ def _run_ability_pass(
     ability_counts: Dict[str, int] = {
         "inject": 0, "chrono": 0, "mule": 0, "other": 0,
     }
-    head_counts: Dict[str, int] = {
-        "inject": 0, "chrono": 0, "mule": 0, "other": 0,
-    }
+    chrono_link_heads = 0
     # last_bucket_per_pid: pid -> bucket name of the most recent macro
     # CommandEvent that player issued. Reset to None whenever they issue a
     # non-macro command so a chained state event doesn't get misattributed.
@@ -826,7 +819,14 @@ def _run_ability_pass(
                 # stale datapack), then by name as a fallback.
                 link = _ability_link(event)
                 bucket = link_table.get(link) if link else None
-                if bucket is None:
+                if bucket == "chrono":
+                    chrono_link_heads += 1
+                # Target updates inherit the name of an earlier command even
+                # when the current input is a right-click or drag. They also
+                # precede their own execution records, so clear the chain.
+                if bucket is None and cls_name not in (
+                    "UpdateTargetUnitCommandEvent", "UpdateTargetPointCommandEvent",
+                ):
                     name = _normalize_ability_name(event)
                     bucket = _classify_macro_ability(name) if name else None
                 if bucket is None:
@@ -852,12 +852,11 @@ def _run_ability_pass(
                     last_chrono_target_per_pid.pop(pid, None)
                 ability_events.append(record)
                 ability_counts[bucket] += 1
-                head_counts[bucket] += 1
             except Exception:
                 continue
     except Exception:
         pass
-    return ability_events, ability_counts, head_counts
+    return ability_events, ability_counts, chrono_link_heads
 
 
 def _ability_link(event) -> Optional[int]:
@@ -1853,8 +1852,8 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     #      92→mule} for builds ≤ 92440, or {723→chrono, 113→inject,
     #      92→mule} for builds ≥ 93272 (the 5.0.14+ shift). This is the
     #      authoritative path because the link integer is stable in the
-    #      replay format even when sc2reader's bundled datapack (last
-    #      updated for build 89720) labels it with a stale name.
+    #      replay format even when sc2reader's bundled datapack labels it
+    #      with a stale name.
     #
     #   2. Fall back to ability-name classification for ancient builds and
     #      for replays where the numeric link is missing — covers older
@@ -1871,7 +1870,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     build = int(getattr(replay, "build", 0) or 0)
     link_table = _macro_link_table(build)
     game_events = getattr(replay, "events", None) or []
-    ability_events, ability_counts, head_counts = _run_ability_pass(
+    ability_events, ability_counts, chrono_link_heads = _run_ability_pass(
         game_events, my_pid, link_table, replay)
 
     # Self-calibrating chrono link. When the game's data patch is newer
@@ -1887,18 +1886,17 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     #     slot), where a handful of misclassified casts would
     #     otherwise mask the miss.
     if _player_race(replay, my_pid) == "Protoss":
-        chrono_heads = head_counts.get("chrono", 0)
         candidate = _detect_chrono_link(
             game_events, my_pid, link_table, building_name_by_uid)
         if candidate is not None and (
             ability_counts.get("chrono", 0) == 0
-            or candidate[1] >= 3 * max(1, chrono_heads)
+            or candidate[1] >= 3 * max(1, chrono_link_heads)
         ):
             recalibrated = {
                 k: v for k, v in link_table.items() if v != "chrono"
             }
             recalibrated[candidate[0]] = "chrono"
-            ability_events, ability_counts, head_counts = _run_ability_pass(
+            ability_events, ability_counts, _ = _run_ability_pass(
                 game_events, my_pid, recalibrated, replay)
 
     out["ability_events"].extend(ability_events)

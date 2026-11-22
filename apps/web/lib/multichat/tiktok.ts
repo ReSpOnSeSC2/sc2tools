@@ -12,6 +12,8 @@ import type { ChatBadge, ChatEngine, EngineCallbacks, PlatformState } from "./ty
 
 /** Keep replayed SSE frames from resurfacing after an EventSource reconnect. */
 const SEEN_CHAT_IDS_CAP = 512;
+const STATUS_TIMEOUT_MS = 40_000;
+const RELAY_RETRY_MS = 20_000;
 
 const RELAY_STATES: readonly PlatformState[] = [
   "connecting",
@@ -56,12 +58,44 @@ export function createTikTokChat(
   const { apiBase, token, username, callbacks } = opts;
   callbacks.onStatus("connecting");
   const url =
-    `${apiBase}/v1/multichat/${encodeURIComponent(token)}` +
+    `${apiBase.replace(/\/$/, "")}/v1/multichat/${encodeURIComponent(token)}` +
     `/tiktok/stream?username=${encodeURIComponent(username)}`;
-  const source = new EventSource(url);
   const seenChatIds = new Set<string>();
+  let lastState: PlatformState = "connecting";
+  let source: EventSource;
+  let closed = false;
+  let statusTimer: ReturnType<typeof setTimeout> | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-  source.onmessage = (event) => {
+  function stopWaiting() {
+    clearTimeout(statusTimer);
+    statusTimer = undefined;
+  }
+
+  function report(state: PlatformState, detail?: string) {
+    lastState = state;
+    if (state !== "connecting") stopWaiting();
+    callbacks.onStatus(state, detail);
+  }
+
+  function waitForStatus() {
+    if (statusTimer !== undefined) return;
+    statusTimer = setTimeout(() => {
+      if (lastState !== "error") report("error", "TikTok chat relay did not respond");
+      scheduleRetry();
+    }, STATUS_TIMEOUT_MS);
+  }
+
+  function scheduleRetry() {
+    stopWaiting();
+    retryTimer ??= setTimeout(() => {
+      retryTimer = undefined;
+      source.close();
+      open();
+    }, RELAY_RETRY_MS);
+  }
+
+  function onMessage(event: MessageEvent) {
     let data: RelayEvent;
     try {
       data = JSON.parse(String(event.data));
@@ -69,10 +103,13 @@ export function createTikTokChat(
       return;
     }
     if (data.type === "status") {
+      clearTimeout(retryTimer);
+      retryTimer = undefined;
       const state = RELAY_STATES.includes(data.state as PlatformState)
         ? (data.state as PlatformState)
         : "error";
-      callbacks.onStatus(state, data.detail);
+      report(state, data.detail);
+      if (state === "connecting") waitForStatus();
       return;
     }
     if (data.type === "chat" && data.message) {
@@ -125,16 +162,35 @@ export function createTikTokChat(
         ...(data.replay === true ? { replayed: true } : {}),
       });
     }
-  };
+  }
 
-  // EventSource retries on its own; report the gap so the status dot
-  // is honest while it does.
-  source.onerror = () => {
-    callbacks.onStatus("connecting", "relay reconnecting");
-  };
+  function open() {
+    const nextSource = source = new EventSource(url);
+    nextSource.onmessage = (event) => {
+      if (!closed && source === nextSource) onMessage(event);
+    };
+    nextSource.onerror = () => {
+      if (closed || source !== nextSource) return;
+      // EventSource retries ordinary network gaps, but stops after a failed
+      // HTTP handshake. Keep the latest relay error until a new status arrives.
+      if (nextSource.readyState === EventSource.CLOSED) {
+        if (lastState !== "error") report("error", "TikTok chat relay unavailable");
+        scheduleRetry();
+      } else if (lastState !== "error") {
+        report("connecting", "relay reconnecting");
+        waitForStatus();
+      }
+    };
+    waitForStatus();
+  }
+
+  open();
 
   return {
     close: () => {
+      closed = true;
+      stopWaiting();
+      clearTimeout(retryTimer);
       source.close();
     },
   };

@@ -4,8 +4,8 @@
 # sdist; mpyq only publishes an sdist and is built into a pure-Python wheel in
 # the pinned build venv (see build-requirements.txt).
 # Regenerate a hash: pip download --no-deps <pkg>==<ver> -d /tmp/x && pip hash /tmp/x/*
-sc2reader==1.8.0 \
-    --hash=sha256:b86b3e967dcbc33c35e7ef300b3ec4a70a80bcf56df964f92086fd87c4fd5205 \
-    --hash=sha256:8c0872f8e8daa5b7b8cd9d4542e12df0a7109a03c494bbe32b81f5384c27c396
+sc2reader==1.9.0 \
+    --hash=sha256:6c2f27023d12db89fce6a91c9f1a1cb5e6152f3245be3619e585066a6c664d1a \
+    --hash=sha256:91be5e465edf29475cf2e4f8d4a52ff4c28a03871a20c1c1ab88ae5bba7aa9a2
 mpyq==0.2.5 \
     --hash=sha256:30aaf5962be569f3f2b53978060cd047434ee4f5a215925dd6ff0fef04ec0007

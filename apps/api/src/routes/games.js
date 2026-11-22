@@ -1578,6 +1578,7 @@ async function publishOverlayLive(io, overlayLive, overlayTokens, userId, game, 
   /** @type {import('mongodb').Document|null} */
   const payload = await overlayLive.buildFromGame(userId, game);
   if (!payload) return null;
+  payload.postGame = true;
   payload.gameKey = pickGameKey(broker, userId, game, payload);
   // A reconnected Browser Source can resync this payload without re-deriving it.
   if (broker && typeof broker.setLatestOverlayLive === "function") {

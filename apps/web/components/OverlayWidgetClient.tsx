@@ -40,7 +40,7 @@ import {
   type VoicePrefs,
 } from "@/components/overlay/useVoiceReadout";
 import { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
-import { useGameStartTriggerKey, useScoutingStartTriggerKey } from "@/components/overlay/gameStartTrigger";
+import { useRandomizerTriggerKey, useScoutingStartTriggerKey } from "@/components/overlay/gameStartTrigger";
 import { hasLiveIntel, isLiveIntelWidget, liveIntelPayload } from "@/components/overlay/liveIntelPayload";
 import {
   mergeLiveGameStreamerHistory,
@@ -886,14 +886,14 @@ export function useWidgetVisibility(
   // the widget. Recovering the same match can resume that window, but
   // must never restart a reveal or show an already-expired scouting card.
   const startDeadlines = useRef(new Map<string, number>());
-  const gameStartKey = useGameStartTriggerKey(live, liveGame);
+  const randomizerStartKey = useRandomizerTriggerKey(live, liveGame);
   const scoutingStartKey = useScoutingStartTriggerKey(live, liveGame);
   const intel = liveIntelPayload(live, liveGame);
   const usesLiveIntel = isLiveIntelWidget(widget);
   const intelStart = usesLiveIntel && !!scoutingStartKey && !live?.isTest && !intel?.result;
   const startOnly = widget === "scouting" || widget === "randomizer" || intelStart;
   const startKey = intelStart ? (hasLiveIntel(widget, intel) ? scoutingStartKey : null)
-    : widget === "scouting" ? scoutingStartKey : gameStartKey;
+    : widget === "scouting" ? scoutingStartKey : randomizerStartKey;
 
   const consumesLiveGame = widget === "opponent";
   // Active match phases — used to count the live envelope as a

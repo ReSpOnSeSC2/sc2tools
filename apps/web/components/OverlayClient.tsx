@@ -44,7 +44,7 @@ import {
 import { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
 import { useScoutingVoiceClaim } from "@/components/overlay/useScoutingVoiceClaim";
 import {
-  useGameStartTriggerKey,
+  useRandomizerTriggerKey,
   useScoutingStartTriggerKey,
 } from "@/components/overlay/gameStartTrigger";
 import {
@@ -483,7 +483,7 @@ function useWidgetTimers({
   // widgets. The bridge can briefly return to menu and resync the same
   // game after a card has hidden; that is still the original start.
   const consumedStarts = useRef(new Map<WidgetId, Set<string>>());
-  const randomizerStartKey = useGameStartTriggerKey(live, liveGame);
+  const randomizerStartKey = useRandomizerTriggerKey(live, liveGame);
   const scoutingStartKey = useScoutingStartTriggerKey(live, liveGame);
   const intel = liveIntelPayload(live, liveGame);
   const consumeStart = useCallback((id: WidgetId, key: string): boolean => {

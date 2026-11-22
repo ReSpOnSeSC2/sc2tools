@@ -17,7 +17,7 @@ import {
   type BuildIntentLedger,
   type RandomizerWindowAnchor,
 } from "./buildIntentGate";
-import { gameKeyFromTriggerKey, useGameStartTriggerKey } from "./gameStartTrigger";
+import { gameKeyFromTriggerKey, useRandomizerTriggerKey } from "./gameStartTrigger";
 
 /** Games whose roll this page already reported; a reload starts afresh. */
 const REPORTED_ROLLS_KEPT = 16;
@@ -63,7 +63,7 @@ export function useRandomizerCheckin(
   liveGame: LiveGameEnvelope | null,
   ledger: BuildIntentLedger,
 ): RandomizerCheckin {
-  const triggerKey = useGameStartTriggerKey(live, liveGame);
+  const triggerKey = useRandomizerTriggerKey(live, liveGame);
   const intent = randomizerIntentGate(ledger, gameKeyFromTriggerKey(triggerKey));
   const [lastSpin, setLastSpin] = useState<{ triggerKey: string; startedAtMs: number } | null>(null);
   // Outlives widget remounts (an enabledWidgets toggle re-spins the same

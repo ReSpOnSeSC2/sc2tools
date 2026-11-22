@@ -390,6 +390,13 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Streaming reliability and Agent 0.25.4
+
+- Retry stalled TikTok LIVE chat connections and surface relay errors in chat.
+- Prevent the OBS build randomizer from drawing on stale snapshots or completed games.
+- Show saved automatic title settings and pending changes in Streams.
+- Update the replay parser's ability and unit data while preserving existing replay IDs.
+
 ### Agent 0.25.3
 
 - Keep Orbital Command landings from appearing as extra upgrades in replay

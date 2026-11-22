@@ -37,6 +37,8 @@
 const OFFLINE_RETRY_MS = 60 * 1000;
 /** Retry cadence after an unexpected disconnect mid-stream. */
 const DISCONNECT_RETRY_MS = 10 * 1000;
+/** Bound the whole upstream attempt, including signing and socket setup. */
+const CONNECT_TIMEOUT_MS = 30 * 1000;
 
 const DEFAULT_MAX_CHANNELS = 16;
 /** Bound replay de-duplication for one long-lived channel. */
@@ -116,7 +118,10 @@ class TikTokChatRelay {
     // Late joiners see the current state and the same recent chat/events that
     // earlier surfaces received. Event replays are wire-marked so timeline
     // surfaces catch up without firing a second toast or sound.
-    channel.deliver(listener, { type: "status", state: channel.state });
+    channel.deliver(listener, {
+      type: "status", state: channel.state,
+      ...(channel.statusDetail ? { detail: channel.statusDetail } : {}),
+    });
     if (channel.state === "connected") {
       channel.replayRecent(listener);
     }
@@ -175,6 +180,8 @@ class Channel {
     this.listeners = new Map();
     /** @type {"connecting"|"connected"|"offline"|"ended"|"error"} */
     this.state = "connecting";
+    /** @type {string | undefined} */
+    this.statusDetail = undefined;
     /**
      * Latest viewer count from the webcast's `roomUser` frames, or
      * null until TikTok sends the first one. Cleared on every
@@ -217,6 +224,7 @@ class Channel {
   emit(event) {
     if (event.type === "status") {
       this.state = event.state;
+      this.statusDetail = event.detail;
     } else if (event.type === "chat") {
       this.rememberRecentChat(event);
     } else if (event.type === "event") {
@@ -421,7 +429,7 @@ class Channel {
     });
     connection.on("disconnected", () => {
       if (!acceptEvents || this.connection !== connection) return;
-      if (startupPhase) acceptEvents = false;
+      acceptEvents = false;
       this.viewers = null;
       if (this.stopped || this.state === "ended") return;
       this.emit({ type: "status", state: "connecting" });
@@ -430,6 +438,20 @@ class Channel {
     connection.on("error", () => {
       /* handled by disconnected/retry — swallow to avoid unhandled 'error' crashes */
     });
+
+    // The connector can leave connect() pending when the socket closes
+    // before opening. Let a fresh attempt take over even if it never settles.
+    const connectTimeout = setTimeout(() => {
+      if (!acceptEvents || this.stopped || this.connection !== connection) return;
+      acceptEvents = false;
+      this.connection = null;
+      this.viewers = null;
+      safeDisconnect(connection);
+      this.emit({ type: "status", state: "error", detail: "TikTok chat connection timed out" });
+      this.log?.warn?.({ username: this.username }, "tiktok chat connection timed out");
+      this.scheduleRetry(DISCONNECT_RETRY_MS);
+    }, CONNECT_TIMEOUT_MS);
+    connectTimeout.unref?.();
 
     try {
       const connectedState = await connection.connect();
@@ -459,7 +481,11 @@ class Channel {
         this.replayRecent(listener);
       }
     } catch (err) {
+      if (!acceptEvents || this.stopped || this.connection !== connection) return;
       acceptEvents = false;
+      this.connection = null;
+      this.viewers = null;
+      safeDisconnect(connection);
       const offline = /isn'?t online|offline|not.*live/i.test(
         String(/** @type {any} */ (err)?.message || err),
       );
@@ -473,6 +499,8 @@ class Channel {
         detail: offline ? undefined : trimDetail(err),
       });
       this.scheduleRetry(OFFLINE_RETRY_MS);
+    } finally {
+      clearTimeout(connectTimeout);
     }
   }
 
@@ -550,7 +578,7 @@ function rememberBoundedId(ids, id) {
 /** @param {any} connection */
 function safeDisconnect(connection) {
   try {
-    connection?.disconnect?.();
+    void Promise.resolve(connection?.disconnect?.()).catch(() => {});
   } catch {
     /* already down */
   }
@@ -735,7 +763,8 @@ function mapTikTokEvent(name, data) {
  */
 async function defaultConnectionFactory(username) {
   const mod = await import("tiktok-live-connector");
-  const { TikTokLiveConnection } = /** @type {any} */ (mod);
+  const { TikTokLiveConnection, SignConfig } = /** @type {any} */ (mod);
+  SignConfig.baseOptions.timeout ??= 10_000;
   // A paid Euler Stream key is the only thing that unlocks the gift-list
   // signature endpoint. Without one we connect without extended gift info
   // rather than losing chat entirely; gifts still arrive, just without a

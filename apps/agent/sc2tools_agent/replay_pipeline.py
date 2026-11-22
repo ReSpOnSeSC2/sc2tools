@@ -4108,12 +4108,9 @@ def _to_iso(date: Any) -> str:
     """Return an RFC 3339 / JSON-Schema 'date-time' string in UTC.
 
     The server's request schema requires a full date-time including a
-    timezone designator. sc2reader's replay.date is a naive datetime
-    (no tzinfo), and earlier versions of this helper returned its
-    ``isoformat()`` directly — which produced strings like
-    '2025-11-25T18:27:19' that the server rejected with
-    "/date must match format \"date-time\"". Always normalise to UTC
-    with a 'Z' suffix.
+    timezone designator. The replay engine represents UTC internally
+    without a timezone suffix to keep game IDs stable across parser
+    versions. Normalize to UTC with a 'Z' suffix for the server.
     """
     dt: Optional[datetime] = None
     if isinstance(date, datetime):

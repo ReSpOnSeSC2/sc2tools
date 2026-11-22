@@ -55,6 +55,8 @@ export type LiveGamePayload = {
    * Test all and every real-game payload.
    */
   testWidget?: string;
+  /** The replay upload finished, including ties or games without a known result. */
+  postGame?: boolean;
   /**
    * Stable per-game identifier — same value the agent's pre-game
    * envelope carries on ``LiveGameEnvelope.gameKey``. The cloud
@@ -550,7 +552,7 @@ export interface LiveGameEnvelope {
    * loading screen, so the client's gameKey-change effect always has
    * a chance to clear stale ``live`` even when the original
    * loading event was lost to a disconnect or page reload.
-   * Telemetry-only — widgets render the same regardless.
+   * Start-only widgets must wait for a real agent snapshot.
    */
   synthetic?: boolean;
   /** Seconds elapsed in the SC2 client's in-game clock. */

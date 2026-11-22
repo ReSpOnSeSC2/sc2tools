@@ -4,10 +4,12 @@ import { createTikTokChat } from "./tiktok";
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
+  static CLOSED = 2;
 
   readonly url: string;
   onmessage: ((event: { data: string }) => void) | null = null;
   onerror: (() => void) | null = null;
+  readyState = 0;
   closed = false;
 
   constructor(url: string) {
@@ -21,11 +23,13 @@ class FakeEventSource {
 
   close() {
     this.closed = true;
+    this.readyState = FakeEventSource.CLOSED;
   }
 }
 
 afterEach(() => {
   FakeEventSource.instances = [];
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -36,7 +40,7 @@ describe("TikTok SSE chat", () => {
     const onEvent = vi.fn();
     const onStatus = vi.fn();
     const engine = createTikTokChat({
-      apiBase: "https://api.example.test",
+      apiBase: "https://api.example.test/",
       token: "overlay token",
       username: "@Some.User",
       callbacks: { onMessage, onEvent, onStatus },
@@ -159,5 +163,58 @@ describe("TikTok SSE chat", () => {
 
     engine.close();
     expect(source.closed).toBe(true);
+  });
+
+  it("reports a terminal relay failure and reopens a stopped EventSource", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const onStatus = vi.fn();
+    const engine = createTikTokChat({
+      apiBase: "https://api.example.test",
+      token: "token",
+      username: "streamer",
+      callbacks: { onMessage: vi.fn(), onStatus },
+    });
+    const first = FakeEventSource.instances[0];
+    first.readyState = FakeEventSource.CLOSED;
+    first.onerror?.();
+    expect(onStatus).toHaveBeenLastCalledWith("error", "TikTok chat relay unavailable");
+
+    vi.advanceTimersByTime(20_000);
+    expect(FakeEventSource.instances).toHaveLength(2);
+    const second = FakeEventSource.instances[1];
+    second.emit({ type: "status", state: "connected" });
+    expect(onStatus).toHaveBeenLastCalledWith("connected", undefined);
+    second.readyState = FakeEventSource.CLOSED;
+    second.onerror?.();
+    engine.close();
+    vi.advanceTimersByTime(20_000);
+    expect(FakeEventSource.instances).toHaveLength(2);
+  });
+
+  it("reports a stalled relay without masking its eventual diagnosis or recovery", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const onStatus = vi.fn();
+    const engine = createTikTokChat({
+      apiBase: "https://api.example.test",
+      token: "token",
+      username: "streamer",
+      callbacks: { onMessage: vi.fn(), onStatus },
+    });
+    const source = FakeEventSource.instances[0];
+    source.onerror?.();
+    expect(onStatus).toHaveBeenLastCalledWith("connecting", "relay reconnecting");
+    vi.advanceTimersByTime(40_000);
+    expect(onStatus).toHaveBeenLastCalledWith("error", "TikTok chat relay did not respond");
+    source.emit({ type: "status", state: "error", detail: "TikTok chat connection timed out" });
+    source.onerror?.();
+    expect(onStatus).toHaveBeenLastCalledWith("error", "TikTok chat connection timed out");
+
+    source.emit({ type: "status", state: "connected" });
+    expect(onStatus).toHaveBeenLastCalledWith("connected", undefined);
+    vi.advanceTimersByTime(20_000);
+    expect(FakeEventSource.instances).toHaveLength(1);
+    engine.close();
   });
 });

@@ -484,6 +484,47 @@ describe("services/tiktokChatRelay", () => {
     expect(conn.disconnect).toHaveBeenCalled();
   });
 
+  test("a stalled upstream socket times out and a new attempt can connect", async () => {
+    jest.useFakeTimers();
+    const stalled = fakeConnection();
+    const recovered = fakeConnection();
+    let resolveStalled;
+    stalled.connect.mockImplementation(() => new Promise((resolve) => {
+      resolveStalled = resolve;
+    }));
+    const connectionFactory = jest.fn()
+      .mockResolvedValueOnce(stalled)
+      .mockResolvedValueOnce(recovered);
+    const relay = new TikTokChatRelay({ connectionFactory });
+    const onEvent = jest.fn();
+    const unsubscribe = relay.subscribe("streamer", onEvent);
+
+    try {
+      await jest.advanceTimersByTimeAsync(30_000);
+      const timedOut = {
+        type: "status", state: "error", detail: "TikTok chat connection timed out",
+      };
+      expect(onEvent).toHaveBeenLastCalledWith(timedOut);
+      expect(stalled.disconnect).toHaveBeenCalledTimes(1);
+      const lateListener = jest.fn();
+      const unsubscribeLate = relay.subscribe("streamer", lateListener);
+      expect(lateListener).toHaveBeenCalledWith(timedOut);
+      unsubscribeLate();
+
+      await jest.advanceTimersByTimeAsync(10_000);
+      expect(connectionFactory).toHaveBeenCalledTimes(2);
+      expect(onEvent).toHaveBeenLastCalledWith({ type: "status", state: "connected" });
+
+      resolveStalled({ roomId: "stale-room" });
+      await jest.advanceTimersByTimeAsync(0);
+      expect(stalled.disconnect).toHaveBeenCalledTimes(2);
+      expect(onEvent).toHaveBeenLastCalledWith({ type: "status", state: "connected" });
+    } finally {
+      unsubscribe();
+      jest.useRealTimers();
+    }
+  });
+
   test("connect startup keeps recent chat once but suppresses stale alerts", async () => {
     const conn = fakeConnection();
     conn.connect.mockImplementation(async () => {

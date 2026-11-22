@@ -145,7 +145,7 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install --upgrade pip setuptools wheel
-          .venv/bin/pip install sc2reader==1.8.0 pytest==9.1.1
+          .venv/bin/pip install sc2reader==1.9.0 pytest==9.1.1
       - name: Desktop-agent parity tests
         run: cd apps/agent && ../../.venv/bin/python -m pytest tests/test_instant_analysis.py -ra
       - name: Generate CPython goldens (installed data view)

@@ -336,6 +336,19 @@ describe("useWidgetVisibility — randomizer is game-START only", () => {
     expect(out.value).toBe(true);
   });
 
+  it("waits for an actual early match when OBS reconnects", () => {
+    const out = { value: false };
+    const probe = (liveGame: LiveGameEnvelope) => (
+      <VisibilityProbe widget="randomizer" live={null} liveGame={liveGame} visibleOut={out} />
+    );
+    const { rerender } = render(probe(envelope({ phase: "match_loading", gameKey: "old", synthetic: true })));
+    expect(out.value).toBe(false);
+    rerender(probe(envelope({ phase: "match_in_progress", gameKey: "old", displayTime: 320 })));
+    expect(out.value).toBe(false);
+    rerender(probe(envelope({ phase: "match_loading", gameKey: "next" })));
+    expect(out.value).toBe(true);
+  });
+
   it("shows on a Test fire even when the sample carries a result", () => {
     const out = { value: false };
     render(
