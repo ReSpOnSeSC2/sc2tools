@@ -397,6 +397,27 @@ describe("/v1/me/profile", () => {
     expect(put.body.pulseIds).toEqual(["994428", "1-S2-1-1"]);
   });
 
+  test("PUT confirms the saved Pulse ID if the session policy lookup fails", async () => {
+    const lookup = jest.spyOn(db.overlayTokens, "findOne")
+      .mockRejectedValueOnce(new Error("overlay token lookup unavailable"));
+    let put;
+    try {
+      put = await withAuth(request(app).put("/v1/me/profile"))
+        .send({ pulseIds: ["994428"], sessionGapMinutes: null });
+      expect(lookup).toHaveBeenCalledTimes(1);
+    } finally {
+      lookup.mockRestore();
+    }
+
+    const got = await withAuth(request(app).get("/v1/me/profile"));
+    expect(got.status).toBe(200);
+    expect(got.body.pulseIds).toEqual(["994428"]);
+    expect(got.body.sessionPolicy).toEqual({ gapMinutes: 90, source: "auto-player", storedGapMinutes: null });
+    expect(put.status).toBe(200);
+    expect(put.body).toMatchObject({ pulseId: "994428", pulseIds: ["994428"] });
+    expect(put.body).not.toHaveProperty("sessionPolicy");
+  });
+
   test("PUT pulseIds: [] clears both the array and the legacy single field", async () => {
     // Seed something to clear.
     await withAuth(request(app).put("/v1/me/profile"))

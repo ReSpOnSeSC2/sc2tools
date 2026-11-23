@@ -11,6 +11,7 @@ import {
 import { useAuth } from "@clerk/nextjs";
 import { useSWRConfig } from "swr";
 import { apiCall, useApi, useOwnerRequestScope, type ClientApiError } from "@/lib/clientApi";
+import { sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import { readSessionPolicy, SESSION_POLICY_PATH, type SessionPolicy } from "@/lib/session-policy";
 import { validGap } from "@/lib/sessions";
 import { Badge } from "@/components/ui/Badge";
@@ -83,12 +84,29 @@ const PULSE_ID_CAP = 20;
 //   - A sc2reader toon handle, e.g. "1-S2-1-267727" (region-S<season>-realm-id)
 const NUMERIC_RE = /^[0-9]{1,12}$/;
 const TOON_RE = /^(98|[1-9])-S\d+-\d+-\d+$/i;
+const PULSE_INPUT_ERROR = "Enter a SC2 Pulse character profile link, a numeric Pulse ID, or a toon handle.";
 
 function classifyPulseId(raw: string): "pulse" | "toon" | "ptr" | "invalid" {
   if (NUMERIC_RE.test(raw)) return "pulse";
   const toon = TOON_RE.exec(raw);
   if (!toon) return "invalid";
   return toon[1] === "98" ? "ptr" : "toon";
+}
+
+function parsePulseIdInput(raw: string): string | null {
+  const value = raw.trim();
+  if (classifyPulseId(value) !== "invalid") return value;
+
+  try {
+    const url = new URL(value.includes("://") ? value : `https://${value}`);
+    if ((url.origin !== "https://sc2pulse.nephest.com" && url.origin !== "https://www.nephest.com")
+      || url.username || url.password || (url.pathname !== "/sc2/" && url.pathname !== "/sc2")) return null;
+    const types = url.searchParams.getAll("type");
+    const ids = url.searchParams.getAll("id");
+    return types.length === 1 && types[0] === "character" && ids.length === 1 && NUMERIC_RE.test(ids[0]) ? ids[0] : null;
+  } catch {
+    return null;
+  }
 }
 
 function toDraft(read: ProfileRead | undefined): Draft {
@@ -198,14 +216,16 @@ function SettingsProfileForm({ owner }: { owner: string | null }) {
         assertCurrent(); return answer;
       }, 15_000);
       if (!lifetime.active) return false;
-      // The PUT is confirmed. A local cache problem cannot turn that commit
-      // into a failed save or trigger a second policy HTTP request.
+      // Publish the confirmed save. The policy read is only needed when the
+      // server couldn't include the effective policy in the response.
       try { await mutate(saved, { revalidate: false }); } catch { /* Advisory cache publication. */ }
       if (!lifetime.active) return false;
+      const policy = readSessionPolicy(saved.sessionPolicy);
+      const ownsPolicy = (key: unknown) => Array.isArray(key) && key[0] === "authenticated-api"
+        && key[1] === owner && key[2] === SESSION_POLICY_PATH;
       try {
-        await mutateCache((key: unknown) => Array.isArray(key) && key[0] === "authenticated-api"
-          && key[1] === owner && key[2] === SESSION_POLICY_PATH,
-        readSessionPolicy(saved.sessionPolicy), { revalidate: false });
+        if (policy) await mutateCache(ownsPolicy, policy, { revalidate: false });
+        else void mutateCache(ownsPolicy).catch(() => {});
       } catch { /* The confirmed Profile save still stands. */ }
       if (!lifetime.active) return false;
       markSaved(); toast.success("Profile saved");
@@ -222,22 +242,16 @@ function SettingsProfileForm({ owner }: { owner: string | null }) {
   }
 
   function addPulseId(raw: string): { ok: boolean; reason?: string } {
-    const trimmed = raw.trim();
-    if (!trimmed) return { ok: false, reason: "Enter a Pulse ID first." };
-    if (classifyPulseId(trimmed) === "invalid") {
-      return {
-        ok: false,
-        reason:
-          "Use a numeric SC2Pulse character id (e.g. 994428) or a toon handle (e.g. 1-S2-1-267727).",
-      };
-    }
-    if (draft.pulseIds.includes(trimmed)) {
+    if (!raw.trim()) return { ok: false, reason: "Enter a Pulse ID first." };
+    const id = parsePulseIdInput(raw);
+    if (!id) return { ok: false, reason: PULSE_INPUT_ERROR };
+    if (draft.pulseIds.includes(id)) {
       return { ok: false, reason: "Already in your list." };
     }
     if (draft.pulseIds.length >= PULSE_ID_CAP) {
       return { ok: false, reason: `Up to ${PULSE_ID_CAP} Pulse IDs.` };
     }
-    setDraft((d) => ({ ...d, pulseIds: [...d.pulseIds, trimmed] }));
+    setDraft((d) => ({ ...d, pulseIds: [...d.pulseIds, id] }));
     return { ok: true };
   }
 
@@ -418,11 +432,10 @@ function PulseIdEditor({
     if (window.location.hash === "#pulse-id-help") setHelpOpen(true);
   }, []);
 
-  const trimmed = value.trim();
-  const liveClass =
-    trimmed.length === 0 ? "idle" : classifyPulseId(trimmed);
+  const entered = value.trim();
+  const id = entered ? parsePulseIdInput(entered) : null;
+  const invalid = !!entered && !id;
   const atCap = ids.length >= PULSE_ID_CAP;
-  const canAdd = !atCap && trimmed.length > 0 && liveClass !== "invalid";
 
   function handleAdd() {
     const result = onAdd(value);
@@ -469,14 +482,15 @@ function PulseIdEditor({
       ) : null}
 
       {/* Add row */}
-      <Field
-        label={ids.length === 0 ? "Add your first Pulse ID" : "Add another Pulse ID"}
-        hint={liveClass === "ptr"
-          ? "This PTR toon can identify you in replays. It has no SC2Pulse ladder rating."
-          : "Numeric SC2Pulse id (e.g. 994428) or toon handle (e.g. 1-S2-1-267727)"}
-        error={error || undefined}
-      >
-        <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+        <Field
+          className="min-w-0 flex-1"
+          label={ids.length === 0 ? "Add your first Pulse ID" : "Add another Pulse ID"}
+          hint={invalid ? PULSE_INPUT_ERROR : id && classifyPulseId(id) === "ptr"
+            ? "This PTR toon can identify you in replays. It has no SC2Pulse ladder rating."
+            : "Paste a SC2 Pulse character profile link, numeric Pulse ID, or toon handle."}
+          error={error || undefined}
+        >
           <Input
             ref={inputRef}
             value={value}
@@ -484,7 +498,8 @@ function PulseIdEditor({
             autoComplete="off"
             spellCheck={false}
             inputMode="text"
-            invalid={trimmed.length > 0 && liveClass === "invalid"}
+            invalid={invalid || !!error}
+            onBlur={() => { if (invalid) setError(PULSE_INPUT_ERROR); }}
             onChange={(e) => {
               setValue(e.target.value);
               if (error) setError(null);
@@ -497,17 +512,18 @@ function PulseIdEditor({
             }}
             disabled={atCap}
           />
-          <Button
-            type="button"
-            variant="secondary"
-            iconLeft={<Plus className="h-4 w-4" aria-hidden />}
-            onClick={handleAdd}
-            disabled={!canAdd}
-          >
-            Add
-          </Button>
-        </div>
-      </Field>
+        </Field>
+        <Button
+          type="button"
+          variant="secondary"
+          className="sm:mt-6"
+          iconLeft={<Plus className="h-4 w-4" aria-hidden />}
+          onClick={handleAdd}
+          disabled={atCap || !id}
+        >
+          Add
+        </Button>
+      </div>
 
       {/* Detected suggestions */}
       {detected.length > 0 ? (
@@ -524,9 +540,7 @@ function PulseIdEditor({
 
 function PulseIdChip({ id, onRemove }: { id: string; onRemove: () => void }) {
   const kind = classifyPulseId(id);
-  const sc2pulseHref = kind === "pulse"
-    ? `https://sc2pulse.nephest.com/sc2/?type=character&id=${encodeURIComponent(id)}&m=1#player-stats-mmr`
-    : null;
+  const sc2pulseHref = kind === "pulse" ? sc2pulseCharacterUrl(id) : null;
   return (
     <li className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-bg-elevated py-1 pl-3 pr-1.5 text-caption text-text">
       <span className="truncate font-mono">{id}</span>
@@ -642,13 +656,12 @@ function PulseIdHelp() {
               </a>{" "}
               and search your BattleTag.
             </li>
-            <li>Click your character. Your URL will look like:</li>
+            <li>Open your character and copy the profile link.</li>
             <li className="ml-2 break-all rounded bg-bg-elevated px-2 py-1 font-mono text-micro text-text">
               sc2pulse.nephest.com/sc2/?type=character&id=<span className="text-accent">994428</span>
             </li>
             <li>
-              The number after <span className="font-mono">id=</span> is your
-              Pulse ID. Paste it above.
+              Paste the full link or the number after <span className="font-mono">id=</span> above.
             </li>
           </ol>
         </li>

@@ -42,6 +42,44 @@ it("saves an integer preference and preserves the normal dirty/Save flow", async
   expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ sessionGapMinutes: 15, sessionPolicy: { gapMinutes: 15, source: "preference", storedGapMinutes: 15 } }), { revalidate: false });
   expect(mocks.error).not.toHaveBeenCalled();
 });
+
+it.each([
+  "https://sc2pulse.nephest.com/sc2/?type=character&id=994428&m=1#player-stats-mmr",
+  "sc2pulse.nephest.com/sc2/?id=994428&type=character",
+  "https://www.nephest.com/sc2/?type=character&id=994428",
+])("saves just the character ID from a pasted profile link (%s)", async (link) => {
+  render(<View />);
+  fireEvent.change(screen.getByRole("textbox", { name: "Add your first Pulse ID" }), { target: { value: link } });
+  fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+  expect(screen.getByRole("link", { name: "Open 994428 on sc2pulse.nephest.com" })).toBeTruthy();
+  fireEvent.change(screen.getByRole("textbox", { name: "Add another Pulse ID" }), { target: { value: "994428" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add" }));
+  expect(screen.getByRole("alert").textContent).toBe("Already in your list.");
+
+  fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+  await waitFor(() => expect(mocks.success).toHaveBeenCalledWith("Profile saved"));
+  expect(mocks.writes.map(({ body }) => body.pulseIds)).toEqual([["994428"]]);
+  expect(mocks.error).not.toHaveBeenCalled();
+});
+
+it.each([
+  "https://sc2pulse.nephest.com.example.com/sc2/?type=character&id=994428",
+  "https://sc2pulse.nephest.com/sc2/?type=team&id=994428",
+  "https://sc2pulse.nephest.com/sc2/?type=character&id=994428&id=123",
+])("explains why an unsupported link cannot be added (%s)", (link) => {
+  render(<View />);
+  const input = screen.getByRole("textbox", { name: "Add your first Pulse ID" });
+  fireEvent.change(input, { target: { value: link } });
+
+  expect(screen.getByText(/Enter a SC2 Pulse character profile link/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Add" }).hasAttribute("disabled")).toBe(true);
+  fireEvent.blur(input);
+  expect(input.getAttribute("aria-invalid")).toBe("true");
+  expect(screen.getByRole("alert").textContent).toMatch(/Enter a SC2 Pulse character profile link/);
+  expect(mocks.writes).toEqual([]);
+});
+
 it("rejects a fractional draft before any write or optimistic mutation", async () => {
   render(<View />); edit("15.5");
   await screen.findByRole("button", { name: "Retry" });
@@ -84,6 +122,25 @@ it("does not report a confirmed PUT as failed when local policy cache publicatio
   expect(mocks.writes).toHaveLength(1); expect(mocks.error).not.toHaveBeenCalled();
   expect(mocks.mutate.mock.calls).toHaveLength(1);
   expect(mocks.mutate.mock.calls[0][0]).toMatchObject({ sessionGapMinutes: 45 });
+});
+
+it("confirms a Pulse ID save and refreshes only the owner's policy when it is missing from the response", async () => {
+  const policyRefresh = deferred<void>();
+  mocks.cacheMutate.mockReturnValueOnce(policyRefresh.promise);
+  mocks.call.mockResolvedValueOnce({ battleTag: "Owner#1234", pulseId: "994428", pulseIds: ["994428"], sessionGapMinutes: null });
+  render(<View />);
+  fireEvent.change(screen.getByRole("textbox", { name: "Add your first Pulse ID" }), { target: { value: "994428" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+  await waitFor(() => expect(mocks.success).toHaveBeenCalledWith("Profile saved"));
+  expect(mocks.error).not.toHaveBeenCalled();
+  expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ pulseIds: ["994428"] }), { revalidate: false });
+  expect(mocks.cacheMutate).toHaveBeenCalledWith(expect.any(Function));
+  const [[matchesPolicy]] = mocks.cacheMutate.mock.calls;
+  expect(matchesPolicy(["authenticated-api", "a", "/v1/me/session-policy"])).toBe(true);
+  expect(matchesPolicy(["authenticated-api", "b", "/v1/me/session-policy"])).toBe(false);
+  policyRefresh.resolve();
 });
 
 it("clearing the input explicitly saves Auto rather than losing the field in a legacy patch", async () => {

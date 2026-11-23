@@ -392,12 +392,27 @@ function buildMeRouter(deps) {
         return;
       }
       const profile = await deps.users.updateProfile(auth.userId, result.value);
-      const lease = deps.sessionPolicy?.lease(auth.userId);
-      const policy = deps.sessionPolicy ? await deps.sessionPolicy.resolve(auth.userId, {
-        storedGapMinutes: profile.sessionGapMinutes,
-        ownerKnown: Object.prototype.hasOwnProperty.call(profile, "sessionGapMinutes"),
-      }) : null;
-      if (lease) deps.sessionPolicy?.assertCurrent(lease);
+      const sessionPolicy = deps.sessionPolicy;
+      if (!sessionPolicy) {
+        res.json(profile);
+        return;
+      }
+      const lease = sessionPolicy.lease(auth.userId);
+      const ownerKnown = Object.hasOwn(profile, "sessionGapMinutes");
+      let policy = null;
+      try {
+        policy = await sessionPolicy.resolve(auth.userId, {
+          storedGapMinutes: profile.sessionGapMinutes,
+          ownerKnown,
+        });
+      } catch (err) {
+        // The profile write is already committed. An unavailable policy
+        // lookup can only affect the response's optional policy details.
+        // A missing profile still needs the resolver's live owner check.
+        if (!ownerKnown) throw err;
+        deps.logger?.warn({ err, reqId: req.id }, "profile_session_policy_unavailable");
+      }
+      sessionPolicy.assertCurrent(lease);
       res.json({ ...profile, ...(policy ? { sessionPolicy: policy } : {}) });
     } catch (err) {
       next(err);
