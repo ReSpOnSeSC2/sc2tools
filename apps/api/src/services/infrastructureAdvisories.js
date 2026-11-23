@@ -198,9 +198,13 @@ function buildMongo(source) {
     ));
   }
   const cluster = monitoringAvailable
-    ? sanitiseMongoCluster(atlas.cluster)
+    ? sanitiseMongoCluster(atlas.cluster, appData)
     : null;
-  if (cluster && !stale) {
+  if (cluster && !stale && cluster.flexStorage) {
+    // Atlas reports no host CPU, cache or disk metrics for Flex clusters, so
+    // their absence is expected. The binding limit is the 5 GB data allowance.
+    pushFlexStorageAdvisory(advisories, cluster.flexStorage);
+  } else if (cluster && !stale) {
     const performance = cluster.performance;
     if (!performance?.cpu) {
       advisories.push(advisory(
@@ -415,12 +419,19 @@ function sanitiseAppData(source) {
   };
 }
 
-/** @param {Record<string, any>} source */
-function sanitiseMongoCluster(source) {
+/**
+ * @param {Record<string, any>} source
+ * @param {ReturnType<typeof sanitiseAppData>} [appData]
+ */
+function sanitiseMongoCluster(source, appData = null) {
   const used = integerOrNull(source.diskUsedBytes);
   const capacity = integerOrNull(source.diskCapacityBytes);
+  const tier = safeLabel(source.tier);
   return {
-    tier: safeLabel(source.tier),
+    tier,
+    flexStorage: tier === "flex"
+      ? flexStorageUsage(source.provisionedDiskGb, appData)
+      : null,
     provisionedDiskGb: finiteNumberOrNull(source.provisionedDiskGb),
     diskUsedBytes: used,
     diskCapacityBytes: capacity,
@@ -500,6 +511,60 @@ function sanitiseCredential(source) {
     daysRemaining: days,
     expiringSoon: days !== null && days <= 30,
   };
+}
+
+/**
+ * Flex counts uncompressed documents plus index bytes against a fixed data
+ * allowance (5 GB). The application's own dbStats measures exactly those two
+ * figures for its database; other databases on the cluster count as well, so
+ * the advisory copy says this is the SC2 Tools share. Decimal GB keeps the
+ * limit conservative.
+ *
+ * @param {unknown} rawLimitGb
+ * @param {ReturnType<typeof sanitiseAppData>} appData
+ */
+function flexStorageUsage(rawLimitGb, appData) {
+  const limitGb = finiteNumberOrNull(rawLimitGb);
+  const limitBytes = limitGb !== null && limitGb > 0
+    ? Math.round(limitGb * 1_000_000_000)
+    : null;
+  const logical = integerOrNull(appData?.logicalDataBytes);
+  const indexes = integerOrNull(appData?.allocatedIndexBytes);
+  const usedBytes = logical !== null && indexes !== null ? logical + indexes : null;
+  return {
+    usedBytes,
+    limitBytes,
+    utilizationPercent: usedBytes !== null && limitBytes !== null
+      ? roundPercent((usedBytes / limitBytes) * 100)
+      : null,
+    scope: "sc2tools_database_only",
+  };
+}
+
+/**
+ * Flex storage cannot auto-expand: at the limit Atlas refuses writes, so the
+ * action threshold escalates to "upgrade" rather than a storage tweak.
+ *
+ * @param {any[]} out
+ * @param {ReturnType<typeof flexStorageUsage>} usage
+ */
+function pushFlexStorageAdvisory(out, usage) {
+  const value = percentOrNull(usage.utilizationPercent);
+  if (value === null || value < THRESHOLDS.mongo.disk.watch) return;
+  const actionNow = value >= THRESHOLDS.mongo.disk.upgrade;
+  out.push(advisory(
+    "mongo",
+    actionNow ? "upgrade" : "watch",
+    actionNow ? "mongo_flex_storage_action" : "mongo_flex_storage_watch",
+    actionNow ? "Atlas Flex storage is nearly full" : "Watch Atlas Flex storage",
+    `The SC2 Tools database uses ${value}% of the Flex data allowance (documents plus indexes); other databases on the cluster also count.`,
+    actionNow
+      ? "Free space, for example by moving bulky fields to R2, or move to a dedicated tier before Atlas stops accepting writes."
+      : "Plan for the limit: Flex storage cannot expand, so trim bulky fields or budget for a dedicated tier.",
+    "flex_storage_utilization_percent",
+    value,
+    actionNow ? THRESHOLDS.mongo.disk.upgrade : THRESHOLDS.mongo.disk.watch,
+  ));
 }
 
 /**

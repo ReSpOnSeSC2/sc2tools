@@ -61,7 +61,7 @@ const COSTS: InfrastructureCosts = {
         projectedMonthlyRunRateUsd: 88.63,
       },
     },
-    planning: { monthlyUsd: 56.94 },
+    planning: { monthlyUsd: 8 },
   },
   site: {
     nonMongoFixedMonthlyUsd: 8.25,
@@ -78,4 +78,42 @@ test("labels a stale landing cost snapshot instead of calling it current", () =>
   );
   expect(screen.getByText(/Last successful provider snapshot/)).toBeTruthy();
   expect(screen.getByText(/live refresh is currently delayed/)).toBeTruthy();
+});
+
+test("describes Atlas Flex storage and its live run rate on the landing banner", () => {
+  render(
+    <DonateBanner
+      costs={{
+        ...COSTS,
+        stale: false,
+        mongo: {
+          ...COSTS.mongo,
+          atlas: {
+            available: true,
+            cluster: {
+              tier: "FLEX",
+              provisionedDiskGb: 5,
+              diskUsedBytes: null,
+              diskCapacityBytes: null,
+              diskMeasuredAt: null,
+              autoExpandStorage: false,
+            },
+            billing: {
+              ...COSTS.mongo.atlas.billing!,
+              postedCycleCents: 60,
+              categoryCents: { compute: 60, storage: 0, transfer: 0, other: 0 },
+              projectedMonthlyRunRateUsd: 9.3,
+            },
+          },
+        },
+        site: { ...COSTS.site, estimatedCurrentMonthlyTotalUsd: 17.55 },
+      }}
+    />,
+  );
+
+  expect(screen.getByRole("heading").textContent).toContain("about $17.55 a month");
+  expect(screen.getByText(/on Atlas Flex, which includes up to 5 GB of data and indexes/))
+    .toBeTruthy();
+  expect(screen.getByText(/\$9\.30 projected Atlas run rate/)).toBeTruthy();
+  expect(screen.queryByText(/disk telemetry is unavailable/)).toBeNull();
 });

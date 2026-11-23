@@ -385,6 +385,57 @@ describe("admin infrastructure health", () => {
     expect(within(renderCard!).getAllByText("Unavailable").length).toBeGreaterThan(0);
     expect(within(renderCard!).getByText("Live provider metrics unavailable")).toBeTruthy();
   });
+
+  it("shows Atlas Flex storage against its allowance instead of missing disk and CPU metrics", () => {
+    const flexMongo = {
+      ...INFRASTRUCTURE.providers.mongo,
+      status: "healthy",
+      cluster: {
+        tier: "flex",
+        flexStorage: {
+          usedBytes: 2_247_000_000,
+          limitBytes: 5_000_000_000,
+          utilizationPercent: 44.9,
+          scope: "sc2tools_database_only",
+        },
+        provisionedDiskGb: 5,
+        diskUsedBytes: null,
+        diskCapacityBytes: null,
+        diskUtilizationPercent: null,
+        diskMeasuredAt: null,
+        autoExpandStorage: false,
+        performance: null,
+      },
+      cost: {
+        ...INFRASTRUCTURE.providers.mongo.cost,
+        pricingMode: "planning_fallback",
+        planningMonthlyUsd: 8,
+        projectedMonthlyUsd: null,
+      },
+    };
+    useApiMock.mockImplementation((path: string) => ({
+      data: path === "/v1/admin/infrastructure"
+        ? { ...INFRASTRUCTURE, providers: { ...INFRASTRUCTURE.providers, mongo: flexMongo } }
+        : HEALTH,
+      error: null,
+      isLoading: false,
+    }));
+
+    render(<AdminHealthPage />);
+
+    const mongo = screen.getByRole("heading", { name: "MongoDB Atlas" }).closest("section");
+    expect(mongo).not.toBeNull();
+    expect(within(mongo!).getByText("FLEX")).toBeTruthy();
+    expect(within(mongo!).getByText("Flex base price")).toBeTruthy();
+    expect(within(mongo!).getByText("$8.00/mo")).toBeTruthy();
+    expect(within(mongo!).getByText(/backups and data transfer included/)).toBeTruthy();
+    expect(within(mongo!).getByText("Flex storage")).toBeTruthy();
+    expect(within(mongo!).getByText("44.9%")).toBeTruthy();
+    expect(within(mongo!).getByText(/2.09 GiB of 4.66 GiB/)).toBeTruthy();
+    expect(within(mongo!).getByText(/does not report host CPU or cache metrics for Flex/)).toBeTruthy();
+    expect(within(mongo!).queryByText("Provider disk metric unavailable")).toBeNull();
+    expect(within(mongo!).queryByText(/storage auto-expand/)).toBeNull();
+  });
 });
 
 const FIVE_MINUTES_MS = 5 * 60_000;

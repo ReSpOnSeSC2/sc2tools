@@ -186,7 +186,7 @@ describe("/v1/admin", () => {
     expect(res.body.database.appData.scope).toBe("sc2tools_database_only");
     expect(typeof res.body.database.appData.allocatedTotalBytes).toBe("number");
     expect(res.body.database.pricing).toMatchObject({
-      monthlyPlanningEstimateUsd: 56.94,
+      monthlyPlanningEstimateUsd: 8,
       estimate: true,
     });
     expect(res.body.database.atlas).toMatchObject({
@@ -662,7 +662,7 @@ describe("/v1/admin", () => {
       errorCode: "not_configured",
     });
     expect(res.body.mongo.storage.scope).toBe("sc2tools_database_only");
-    expect(res.body.mongo.pricing.monthlyPlanningEstimateUsd).toBe(56.94);
+    expect(res.body.mongo.pricing.monthlyPlanningEstimateUsd).toBe(8);
     expect(res.body.mongo.atlas).toMatchObject({
       configured: false,
       available: false,

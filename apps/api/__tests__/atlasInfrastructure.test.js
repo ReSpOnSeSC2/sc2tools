@@ -282,6 +282,9 @@ describe("AtlasInfrastructureClient", () => {
         return response({ access_token: "bearer-secret", expires_in: 3600 });
       }
       expect(init.headers.authorization).toBe("Bearer bearer-secret");
+      if (url.includes("/flexClusters/")) {
+        return response({ errorCode: "FLEX_CLUSTER_NOT_FOUND" }, 404);
+      }
       if (url.includes("/clusters/")) return response(clusterBody());
       if (url.includes("/invoices/pending")) return response(invoiceBody());
       if (url.endsWith("/processes?itemsPerPage=100")) {
@@ -334,7 +337,181 @@ describe("AtlasInfrastructureClient", () => {
       /sample-cluster|0123456789abcdef|89abcdef|bearer-secret|service-account/,
     );
   });
+
+  test("reads a Flex cluster from the Flex resource and projects from its first billed day", async () => {
+    const accepts = new Map();
+    const fetchImpl = jest.fn(async (url, init) => {
+      if (url.endsWith("/api/oauth/token")) {
+        return response({ access_token: "bearer-secret", expires_in: 3600 });
+      }
+      if (url.includes("/clusters/") || url.includes("/processes")) {
+        throw new Error(`classic API called for a Flex cluster: ${url}`);
+      }
+      accepts.set(url.includes("/flexClusters/") ? "flex" : "invoice", init.headers.accept);
+      if (url.endsWith(`/groups/${PROJECT_ID}/flexClusters/sample-cluster`)) {
+        return response(flexClusterBody());
+      }
+      if (url.includes("/invoices/pending")) return response(flexInvoiceBody(30));
+      throw new Error(`unexpected URL ${url}`);
+    });
+    const client = new AtlasInfrastructureClient({
+      config: atlasConfig(),
+      fetchImpl,
+      now: () => NOW,
+    });
+    const result = await client.snapshot();
+    expect(result.cluster).toEqual({
+      tier: "FLEX",
+      provider: "AWS",
+      region: "US_WEST_2",
+      provisionedDiskGb: 5,
+      autoExpandStorage: false,
+      diskUsedBytes: null,
+      diskCapacityBytes: null,
+      diskMeasuredAt: null,
+      performance: null,
+    });
+    // Two posted days at 30 cents: $0.60 over 2 of 31 days is ~$9.30/month,
+    // not the $1.69 a whole-cycle projection would claim.
+    expect(result.billing).toMatchObject({
+      available: true,
+      postedCycleCents: 60,
+      categoryCents: { compute: 60, storage: 0, transfer: 0, other: 0 },
+      projectedMonthlyRunRateCents: 930,
+      projectedMonthlyRunRateUsd: 9.3,
+    });
+    expect(accepts.get("flex")).toBe("application/vnd.atlas.2024-11-13+json");
+    expect(accepts.get("invoice")).toBe("application/vnd.atlas.2025-03-12+json");
+
+    // The kind is cached: a second refresh probes nothing new.
+    const probesBefore = fetchImpl.mock.calls.filter(([url]) => url.includes("/flexClusters/")).length;
+    await client.snapshot();
+    const probesAfter = fetchImpl.mock.calls.filter(([url]) => url.includes("/flexClusters/")).length;
+    expect(probesAfter - probesBefore).toBe(1);
+  });
+
+  test("caps a Flex run-rate projection at the $30 monthly price cap", async () => {
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.endsWith("/api/oauth/token")) {
+        return response({ access_token: "bearer-secret", expires_in: 3600 });
+      }
+      if (url.includes("/flexClusters/")) return response(flexClusterBody());
+      if (url.includes("/invoices/pending")) return response(flexInvoiceBody(150));
+      throw new Error(`unexpected URL ${url}`);
+    });
+    const result = await new AtlasInfrastructureClient({
+      config: atlasConfig(),
+      fetchImpl,
+      now: () => NOW,
+    }).snapshot();
+    expect(result.billing).toMatchObject({
+      postedCycleCents: 300,
+      projectedMonthlyRunRateCents: 3_000,
+      projectedMonthlyRunRateUsd: 30,
+    });
+  });
+
+  test("an Atlas outage during detection leaves the cluster unavailable instead of guessing a tier", async () => {
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.endsWith("/api/oauth/token")) {
+        return response({ access_token: "bearer-secret", expires_in: 3600 });
+      }
+      if (url.includes("/flexClusters/")) return response({}, 500);
+      if (url.includes("/invoices/pending")) return response(invoiceBody());
+      throw new Error(`unexpected URL ${url}`);
+    });
+    const result = await new AtlasInfrastructureClient({
+      config: atlasConfig(),
+      fetchImpl,
+      now: () => NOW,
+    }).snapshot();
+    expect(result.cluster).toBeNull();
+    expect(result.configErrorCode).toBe("atlas_cluster_unavailable");
+    expect(result.billing.available).toBe(true);
+    expect(fetchImpl.mock.calls.some(([url]) => url.includes("/clusters/"))).toBe(false);
+  });
 });
+
+describe("Atlas Flex billing helpers", () => {
+  test("measures a mid-cycle cluster from its first line item", () => {
+    expect(_internals.projectCycleCost({
+      postedCycleCents: 900,
+      cycleStart: "2026-08-01T00:00:00.000Z",
+      cycleEnd: "2026-08-31T00:00:00.000Z",
+      postedThrough: "2026-08-11T00:00:00.000Z",
+      billedSince: "2026-08-08T00:00:00.000Z",
+    })).toBe(9_000);
+    // A billedSince before the cycle (or missing) keeps the cycle start.
+    expect(_internals.projectCycleCost({
+      postedCycleCents: 900,
+      cycleStart: "2026-08-01T00:00:00.000Z",
+      cycleEnd: "2026-08-31T00:00:00.000Z",
+      postedThrough: "2026-08-11T00:00:00.000Z",
+      billedSince: "2026-07-20T00:00:00.000Z",
+    })).toBe(2_700);
+    // Less than one billed day is too little evidence for a run rate.
+    expect(_internals.projectCycleCost({
+      postedCycleCents: 30,
+      cycleStart: "2026-08-01T00:00:00.000Z",
+      cycleEnd: "2026-08-31T00:00:00.000Z",
+      postedThrough: "2026-08-11T00:00:00.000Z",
+      billedSince: "2026-08-10T12:00:00.000Z",
+    })).toBeNull();
+  });
+
+  test("files Flex charges as the cluster's compute", () => {
+    expect(_internals.atlasCostCategory("ATLAS_AWS_FLEX_INSTANCE_100")).toBe("compute");
+    expect(_internals.atlasCostCategory("FLEX_CLUSTER_OPS_BAND_2")).toBe("compute");
+  });
+
+  test("never raises a projection that is already under the Flex cap", () => {
+    const billing = { available: true, projectedMonthlyRunRateCents: 812, projectedMonthlyRunRateUsd: 8.12 };
+    expect(_internals.capFlexBilling(billing)).toEqual(billing);
+    const unavailable = { available: false, projectedMonthlyRunRateCents: null };
+    expect(_internals.capFlexBilling(unavailable)).toBe(unavailable);
+  });
+});
+
+function flexClusterBody() {
+  return {
+    name: "sample-cluster",
+    clusterType: "REPLICASET",
+    mongoDBVersion: "8.0.39",
+    stateName: "IDLE",
+    providerSettings: {
+      backingProviderName: "AWS",
+      providerName: "FLEX",
+      regionName: "US_WEST_2",
+      diskSizeGB: 5,
+    },
+    backupSettings: { enabled: true },
+    connectionStrings: { standardSrv: "mongodb+srv://sample-cluster.abcde.mongodb.net" },
+  };
+}
+
+/** Two posted Flex days (Aug 9 and Aug 10) at `dailyCents` each. */
+function flexInvoiceBody(dailyCents) {
+  return {
+    startDate: "2026-08-01T00:00:00.000Z",
+    endDate: "2026-09-01T00:00:00.000Z",
+    updated: "2026-08-11T00:00:00.000Z",
+    lineItems: [
+      line("ATLAS_AWS_FLEX_INSTANCE_100", dailyCents, {
+        startDate: "2026-08-09T00:00:00.000Z",
+        endDate: "2026-08-10T00:00:00.000Z",
+      }),
+      line("ATLAS_AWS_FLEX_INSTANCE_100", dailyCents, {
+        startDate: "2026-08-10T00:00:00.000Z",
+        endDate: "2026-08-11T00:00:00.000Z",
+      }),
+      line("GCP_INSTANCE_M10", 1_970, {
+        clusterName: "old-dedicated-cluster",
+        startDate: "2026-08-01T00:00:00.000Z",
+        endDate: "2026-08-09T00:00:00.000Z",
+      }),
+    ],
+  };
+}
 
 function metric(name, value) {
   return {

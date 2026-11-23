@@ -312,3 +312,73 @@ describe("authenticated infrastructure advisories", () => {
     ]);
   });
 });
+
+/** A Flex cluster as AtlasInfrastructureClient reports it: no disk or host metrics. */
+function flexInput(logicalDataBytes, allocatedIndexBytes) {
+  const input = healthyInput();
+  input.mongo.appData.logicalDataBytes = logicalDataBytes;
+  input.mongo.appData.allocatedIndexBytes = allocatedIndexBytes;
+  input.mongo.pricing.monthlyPlanningEstimateUsd = 8;
+  input.mongo.atlas.cluster = {
+    tier: "FLEX",
+    clusterName: "SECRET_CLUSTER",
+    provisionedDiskGb: 5,
+    diskUsedBytes: null,
+    diskCapacityBytes: null,
+    diskMeasuredAt: null,
+    autoExpandStorage: false,
+    performance: null,
+  };
+  input.mongo.atlas.billing.projectedMonthlyRunRateUsd = 9.3;
+  return input;
+}
+
+describe("Atlas Flex advisories", () => {
+  test("does not flag Flex's missing host metrics and reports its data allowance", () => {
+    const result = buildInfrastructureAdminSnapshot(flexInput(2_130_000_000, 117_000_000));
+    expect(result.advisories).toEqual([]);
+    expect(result.providers.mongo.status).toBe("healthy");
+    expect(result.providers.mongo.cluster).toMatchObject({
+      tier: "flex",
+      flexStorage: {
+        usedBytes: 2_247_000_000,
+        limitBytes: 5_000_000_000,
+        utilizationPercent: 44.9,
+        scope: "sc2tools_database_only",
+      },
+    });
+    expect(result.providers.mongo.cost).toMatchObject({
+      pricingMode: "atlas_projected",
+      projectedMonthlyUsd: 9.3,
+      planningMonthlyUsd: 8,
+    });
+    expect(JSON.stringify(result)).not.toMatch(/SECRET_CLUSTER|SECRET_SKU|SECRET_PROJECT/);
+  });
+
+  test("warns before the Flex data allowance and escalates near the limit", () => {
+    const watch = buildInfrastructureAdminSnapshot(flexInput(3_400_000_000, 200_000_000));
+    expect(watch.advisories.map((row) => [row.code, row.level, row.value])).toEqual([
+      ["mongo_flex_storage_watch", "watch", 72],
+    ]);
+    const action = buildInfrastructureAdminSnapshot(flexInput(3_900_000_000, 250_000_000));
+    expect(action.advisories.map((row) => [row.code, row.level, row.value])).toEqual([
+      ["mongo_flex_storage_action", "upgrade", 83],
+    ]);
+    expect(action.overallStatus).toBe("upgrade");
+  });
+
+  test("keeps Flex storage unknown when the app database size is unavailable", () => {
+    const input = flexInput(undefined, 117_000_000);
+    const result = buildInfrastructureAdminSnapshot(input);
+    expect(result.providers.mongo.cluster.flexStorage).toMatchObject({
+      usedBytes: null,
+      utilizationPercent: null,
+    });
+    expect(result.advisories).toEqual([]);
+  });
+
+  test("dedicated clusters carry no Flex storage block", () => {
+    const result = buildInfrastructureAdminSnapshot(healthyInput());
+    expect(result.providers.mongo.cluster.flexStorage).toBeNull();
+  });
+});

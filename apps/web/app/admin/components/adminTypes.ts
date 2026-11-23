@@ -335,6 +335,13 @@ export type AdminInfrastructureResp = {
       } | null;
       cluster: {
         tier: string | null;
+        /** Present for Atlas Flex: its fixed data allowance and the SC2 Tools share. */
+        flexStorage?: {
+          usedBytes: number | null;
+          limitBytes: number | null;
+          utilizationPercent: number | null;
+          scope: "sc2tools_database_only";
+        } | null;
         provisionedDiskGb: number | null;
         diskUsedBytes: number | null;
         diskCapacityBytes: number | null;

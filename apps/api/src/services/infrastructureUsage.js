@@ -28,8 +28,13 @@ const STORAGE_LOOKBACK_MS = 31 * 24 * 60 * 60 * 1000;
 
 // All monetary values are integer mills (1 mill = $0.001).  Integer math
 // prevents display drift around Cloudflare's rounded billing units.
-const FIXED_MONTHLY_MILLS = 65_190;
-const MONGO_MONTHLY_PLANNING_MILLS = 56_940;
+// The Mongo planning figure is the Atlas Flex base price ($8/month at 0-100
+// operations per second; Flex is billed hourly by ops band up to a $30
+// monthly cap). It is shown only while live Atlas billing is unavailable,
+// for example before the first day of a new cluster's charges has posted.
+// The non-Mongo part is Render Starter ($7) plus the domain ($1.25/month).
+const FIXED_MONTHLY_MILLS = 16_250;
+const MONGO_MONTHLY_PLANNING_MILLS = 8_000;
 const NON_MONGO_FIXED_MONTHLY_MILLS =
   FIXED_MONTHLY_MILLS - MONGO_MONTHLY_PLANNING_MILLS;
 const STANDARD_FREE_STORAGE_GB = 10;

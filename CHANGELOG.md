@@ -11,6 +11,16 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Hosting costs
+
+- The database now runs on MongoDB Atlas Flex instead of a dedicated M10, so
+  the landing page, donate page and admin infrastructure view show Flex
+  pricing: the live run rate measured from the cluster's first billed day and
+  capped at Flex's $30 monthly maximum, an $8 Flex base price while new charges
+  are still posting, and database storage against Flex's 5 GB allowance. The
+  admin backup card and the privacy page's backup-retention line read Flex's
+  daily snapshots (last 8 kept). See ADR 0095.
+
 ### Website navigation
 
 - Find Daily Scout, Match Rooms, the balance tools, Wrapped, and Replay Career

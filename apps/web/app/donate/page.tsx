@@ -28,6 +28,7 @@ import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { Badge, Card, GlowHalo, Section } from "@/components/ui";
 import { buttonClassName } from "@/components/ui/buttonStyles";
 import {
+  ATLAS_FLEX_STORAGE_LIMIT_GB,
   FIXED_MONTHLY_FALLBACK_USD,
   formatAtlasDiskBytes,
   formatBinaryStorageBytes,
@@ -36,6 +37,7 @@ import {
   formatStorageBytes,
   formatUsd,
   getInfrastructureCosts,
+  isAtlasFlex,
   monthlyCostSummary,
   type InfrastructureCosts,
 } from "@/lib/infrastructureCosts";
@@ -226,10 +228,10 @@ const COST_LINES: ReadonlyArray<CostLine> = [
   {
     id: "mongo",
     icon: Database,
-    label: "MongoDB Atlas — M10",
+    label: "MongoDB Atlas — Flex",
     detail:
-      "Dedicated M10 base tier for accounts, searchable replay metadata, opponent histories and aggregates. Backups, added storage and data transfer are usage-priced separately.",
-    approxMonthlyUsd: 56.94,
+      "Atlas Flex holds accounts, searchable replay metadata, opponent histories and aggregates. It is billed hourly by usage, from $8 up to a $30 monthly cap, and includes up to 5 GB of data, daily backups and data transfer.",
+    approxMonthlyUsd: 8,
     includedInBase: true,
     pricingHref: "https://www.mongodb.com/pricing",
   },
@@ -416,17 +418,19 @@ function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
       const allocated = formatBinaryStorageBytes(
         costs.mongo.appData.allocatedTotalBytes,
       );
-      const disk =
-        cluster?.diskUsedBytes !== null &&
-        cluster?.diskUsedBytes !== undefined &&
-        cluster.diskCapacityBytes !== null
+      const flex = isAtlasFlex(cluster);
+      const disk = flex
+        ? `Atlas Flex includes up to ${ATLAS_FLEX_STORAGE_LIMIT_GB} GB of data and indexes`
+        : cluster?.diskUsedBytes !== null &&
+            cluster?.diskUsedBytes !== undefined &&
+            cluster.diskCapacityBytes !== null
           ? `${formatAtlasDiskBytes(cluster.diskUsedBytes)} of ${formatAtlasDiskBytes(cluster.diskCapacityBytes)} Atlas disk used`
           : "Atlas disk telemetry unavailable";
       return {
         ...line,
         approxMonthlyUsd: projected ?? costs.mongo.planning.monthlyUsd,
         detail:
-          `${cluster?.tier ?? "Dedicated Atlas"} stores searchable replay metadata, opponent histories and aggregates. `
+          `${flex ? "Atlas Flex" : (cluster?.tier ?? "Atlas")} stores searchable replay metadata, opponent histories and aggregates. `
           + `SC2 Tools database allocation: ${allocated}; ${disk}.`,
         priceLabel:
           projected === null
@@ -504,6 +508,12 @@ function MongoUsageDetails({ costs }: { costs: InfrastructureCosts }) {
             "in its latest available sample"
           )}
           .
+        </p>
+      ) : isAtlasFlex(cluster) ? (
+        <p>
+          The database runs on Atlas Flex, which includes up to{" "}
+          {ATLAS_FLEX_STORAGE_LIMIT_GB} GB of data and indexes and does not
+          report disk usage, so no disk-used amount is shown.
         </p>
       ) : (
         <p>

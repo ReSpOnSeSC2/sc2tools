@@ -130,13 +130,13 @@ describe("InfrastructureUsageService", () => {
           cluster: null,
           billing: null,
         },
-        planning: { monthlyUsd: 56.94 },
+        planning: { monthlyUsd: 8 },
       },
       site: {
-        fixedMonthlyEquivalentUsd: 65.19,
+        fixedMonthlyEquivalentUsd: 16.25,
         nonMongoFixedMonthlyUsd: 8.25,
         pricingMode: "planning_fallback",
-        estimatedCurrentMonthlyTotalUsd: 70.095,
+        estimatedCurrentMonthlyTotalUsd: 21.155,
       },
     });
     expect(games.countDocuments).toHaveBeenCalledWith(
@@ -229,7 +229,7 @@ describe("InfrastructureUsageService", () => {
           projectedMonthlyRunRateUsd: 60,
         },
       },
-      planning: { monthlyUsd: 56.94 },
+      planning: { monthlyUsd: 8 },
     });
     expect(result.site).toMatchObject({
       nonMongoFixedMonthlyUsd: 8.25,
@@ -265,8 +265,8 @@ describe("InfrastructureUsageService", () => {
     const result = await service({ atlasClient }).snapshot();
     expect(result.site).toMatchObject({
       pricingMode: "planning_fallback",
-      fixedMonthlyEquivalentUsd: 65.19,
-      estimatedCurrentMonthlyTotalUsd: 70.095,
+      fixedMonthlyEquivalentUsd: 16.25,
+      estimatedCurrentMonthlyTotalUsd: 21.155,
     });
     expect(result.mongo.atlas.billing).toMatchObject({
       available: false,
@@ -292,7 +292,7 @@ describe("InfrastructureUsageService", () => {
         measuredAt: NOW.toISOString(),
       },
       pricing: {
-        monthlyPlanningEstimateUsd: 56.94,
+        monthlyPlanningEstimateUsd: 8,
         includedInSiteFixedMonthlyEquivalent: true,
         estimate: true,
         basis: "repo_budget_assumption",
@@ -525,7 +525,7 @@ describe("infrastructure usage cost model", () => {
       storageMonthlyMills: 0,
       classAMonthlyMills: 0,
       classBMonthlyMills: 0,
-      estimatedTotalMonthlyMills: 65_190,
+      estimatedTotalMonthlyMills: 16_250,
     });
     expect(_internals.calculateCosts({
       payloadBytes: 10_000_000_001,
