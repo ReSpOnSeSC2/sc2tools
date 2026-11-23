@@ -2246,13 +2246,10 @@ def test_stop_then_start_retires_long_archive_worker_before_restart(
 ) -> None:
     import sc2tools_agent.uploader.queue as queue_module
 
-    monkeypatch.setattr(queue_module, "_ARCHIVE_IDLE_GRACE_SEC", 0.01)
+    monkeypatch.setattr(queue_module, "_ARCHIVE_IDLE_GRACE_SEC", 0.0)
     entered = threading.Event()
     release = threading.Event()
     calls: list[str] = []
-    task = ReplayArchiveTask(tmp_path / "long-archive.SC2Replay", "long")
-    task.file_path.write_bytes(b"MPQ\x1blong")
-    ReplayArchiveJournal(tmp_path).enqueue_many([task])
 
     class _LongArchiveApi(_StubApi):
         def upload_replay_file_durable(
@@ -2262,7 +2259,7 @@ def test_stop_then_start_retires_long_archive_worker_before_restart(
         ) -> bool:
             calls.append(game_id)
             entered.set()
-            assert release.wait(3.0)
+            assert release.wait(10.0)
             return True
 
     q = UploadQueue(
@@ -2270,15 +2267,21 @@ def test_stop_then_start_retires_long_archive_worker_before_restart(
         state=AgentState(),
         api=_LongArchiveApi(),
     )
+    # Seed an owned task so the test exercises worker shutdown without first
+    # waiting for the separate legacy archive ownership migration.
+    owner = q._archive_owner(q._upload_context())
+    task = ReplayArchiveTask(tmp_path / "long-archive.SC2Replay", "long", owner)
+    task.file_path.write_bytes(b"MPQ\x1blong")
+    q._archive_journal.enqueue_many([task])
     q.start()
     stopper = threading.Thread(target=q.stop)
     try:
-        assert entered.wait(2.0)
+        assert entered.wait(5.0)
         stopper.start()
-        time.sleep(0.1)
+        assert q._archive_stop.wait(5.0)
         assert stopper.is_alive()
         release.set()
-        stopper.join(timeout=2.0)
+        stopper.join(timeout=5.0)
         assert not stopper.is_alive()
         assert q._archive_thread is None
         q.start()
@@ -2289,7 +2292,8 @@ def test_stop_then_start_retires_long_archive_worker_before_restart(
         assert q._network_gate.peak_active <= 2
     finally:
         release.set()
-        stopper.join(timeout=2.0)
+        if stopper.ident is not None:
+            stopper.join(timeout=5.0)
         q.stop()
 
 

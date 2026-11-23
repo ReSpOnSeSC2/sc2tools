@@ -8,8 +8,6 @@ import type { LiveGamePayload } from "./types";
 import type { WidgetId } from "./widgetLifecycle";
 import type { RandomizerConfig } from "@/lib/randomizer/types";
 import { OpponentWidget } from "./widgets/OpponentWidget";
-import { MatchResultWidget } from "./widgets/MatchResultWidget";
-import { PostGameWidget } from "./widgets/PostGameWidget";
 import { MmrDeltaWidget } from "./widgets/MmrDeltaWidget";
 import { StreakWidget } from "./widgets/StreakWidget";
 import { CheeseWidget } from "./widgets/CheeseWidget";
@@ -24,6 +22,8 @@ import { ScoutingWidget } from "./widgets/ScoutingWidget";
 import { SessionWidget, type SessionSummary } from "./widgets/SessionWidget";
 import { RandomizerWidget } from "./widgets/RandomizerWidget";
 
+const MatchResultWidget = dynamic(() => import("./widgets/MatchResultWidget").then(module => module.MatchResultWidget), { ssr: false });
+const PostGameWidget = dynamic(() => import("./widgets/PostGameWidget").then(module => module.PostGameWidget), { ssr: false });
 export const CompositeSeriesWidget = dynamic(() => import("./widgets/SeriesWidget").then(module => module.SeriesWidget), { ssr: false });
 
 // Live and test layers share these payload-only cards and their slot order.

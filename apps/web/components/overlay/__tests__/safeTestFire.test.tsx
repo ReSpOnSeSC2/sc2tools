@@ -60,12 +60,13 @@ describe.each(["all", "dedicated"])("safe samples on %s sources", (surface) => {
     fire("overlay:clear", { scope: "test", widget: "session" }); expect(layer(container)).toBe("");
     expect(container.textContent).toContain("RealOpponent"); expect(container.textContent).toContain("5432");
   });
-  it("keeps real post-game payload updates underneath a targeted result sample", () => {
+  it("keeps real post-game payload updates underneath a targeted result sample", async () => {
     const { container } = render(surface === "all" ? <OverlayClient token="token" /> : <OverlayWidgetClient token="token" widget="match-result" />);
     configure(["match-result"]);
     fire("overlay:live", { oppName: "RealOpponent", result: "win", map: "RealMapAlpha" });
     fire("overlay:live", { oppName: "SampleOpponent", result: "loss", map: "SampleMapBeta", isTest: true, testNonce: "result-sample", testWidget: "match-result" });
     fire("overlay:live", { oppName: "RealOpponent", result: "win", map: "RealMapOmega" });
+    await act(async () => { await vi.dynamicImportSettled(); });
     expect(layer(container)).toContain("SampleMapBeta");
     fire("overlay:clear", { scope: "test", widget: "match-result" });
     expect(container.textContent).toContain("RealMapOmega"); expect(container.textContent).not.toContain("SampleMapBeta");

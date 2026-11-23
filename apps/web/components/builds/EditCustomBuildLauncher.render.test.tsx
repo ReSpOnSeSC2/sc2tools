@@ -8,6 +8,7 @@ vi.mock("@/lib/useMyDisplayName", () => ({ useMyDisplayName: () => "" }));
 import { ToastProvider } from "@/components/ui/Toast";
 import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { duplicateBuildName } from "./EditCustomBuildLauncher";
+import type { BuildEditorPreviewResult } from "./editor/BuildEditor.types";
 
 beforeEach(() => { api.owner = "test-owner"; api.loaded = true; api.signedIn = true; api.getToken.mockReset().mockResolvedValue("token"); });
 afterEach(() => { cleanup(); api.call.mockReset(); vi.useRealTimers(); });
@@ -125,7 +126,10 @@ describe("saved build editor", () => {
   it("keeps a duplicate draft after 409 so renaming can create it safely", async () => {
     const doc = { slug: "original", name: "Original", race: "Protoss" as const, rules: [{ type: "before" as const, name: "BuildGateway", time_lt: 100 }], notes: "Keep this note" };
     let puts = 0;
-    api.call.mockImplementation(async (_token, _path, options) => {
+    api.call.mockImplementation(async (_token, path, options) => {
+      if (path === "/v1/custom-builds/preview-matches") {
+        return { matches: [], almost_matches: [], scanned_games: 3, truncated: false } satisfies BuildEditorPreviewResult;
+      }
       if (options?.method !== "PUT") return doc;
       if (++puts === 1) throw { status: 409, code: "slug_taken", message: "Taken" };
       return { saved: true, reclassify: null };
@@ -133,6 +137,7 @@ describe("saved build editor", () => {
     const saved = vi.fn();
     render(<ToastProvider><EditCustomBuildLauncher build={doc} intent="duplicate" onClose={vi.fn()} onSaved={saved} /></ToastProvider>);
     await screen.findByLabelText(/^Name/);
+    await screen.findByText(/3 games scanned/);
     fireEvent.click(screen.getByRole("button", { name: "Save build" }));
     expect(await screen.findByText("You already have a build called that — pick another name")).toBeTruthy();
     expect(saved).not.toHaveBeenCalled();
