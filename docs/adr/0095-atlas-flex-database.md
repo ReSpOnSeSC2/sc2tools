@@ -33,32 +33,56 @@ remains the backup provider, now with the Flex tier's fixed snapshot policy.
    project. `MONGODB_URI` points at it and `ATLAS_CLUSTER_NAME` names it.
 2. `AtlasInfrastructureClient` detects a Flex cluster through the Flex Admin
    API resource (version 2024-11-13) and caches the kind for six hours. A 400
-   or 404 from that resource means "dedicated"; any other failure propagates so
-   an outage is never read as a tier. For Flex it reports the provider settings
-   only (no disk or host metrics) and reads backups from the Flex snapshot list,
+   or 404 from that resource means "dedicated". Any other failure keeps the
+   last known kind and propagates only before a kind has been learned, so an
+   outage is never read as a tier. A fresh probe's response doubles as the
+   cluster read. For Flex the client reports the provider settings only (no
+   disk or host metrics) and reads backups from the Flex snapshot list,
    reporting the tier's fixed policy (daily, last 8 kept, no point-in-time
    restore).
 3. The billing run rate is measured from the configured cluster's first line
-   item, so a cluster that started mid-cycle is not diluted over days it did not
-   exist, and a Flex projection never exceeds the $30 cap. Flex SKUs count as
-   compute: the band price includes storage, backups and transfer.
+   item to the end of its newest one (the invoice's own "updated" time moves
+   whenever any line posts, so it only caps a line that claims to end later).
+   A cluster that started mid-cycle is not diluted over days it did not
+   exist. A Flex projection stays within $8–$30: never above the cap, and,
+   unless credits were posted, never below the base band that a partly billed
+   first day would otherwise suggest. The range applies when the probe says
+   Flex or the line items are Flex SKUs, so a failed cluster read cannot skip
+   it. Flex SKUs count as compute: the band price includes storage, backups
+   and transfer.
 4. The planning fallback, shown only while live billing is unavailable (for
    example before a new cluster's first day of charges posts), is the Flex base
    price of $8, so the public fixed baseline is $16.25 (Render $7, domain
    $1.25, Flex $8).
 5. Admin capacity advice for Flex replaces the disk and CPU advisories, which
-   Flex cannot supply, with a storage advisory against the 5 GB allowance using
-   the application database's own `dbStats` (watch at 70%, upgrade at 80%,
-   because Flex storage cannot expand).
+   Flex cannot supply, with a storage advisory against the 5 GB allowance
+   (watch at 70%, upgrade at 80%, because Flex storage cannot expand). The
+   allowance counts every database on the cluster, so the API sums `dbStats`
+   data and index sizes over all databases its user can read (names never
+   leave the server, and the total is admin-only). If that read fails, the
+   SC2 Tools database stands in as a labelled lower bound and a watch
+   advisory says the cluster total is unmeasured.
+6. The public retention notice (privacy page, account-deletion dialog,
+   goodbye page) keeps stating the previous cluster's backup schedule while
+   its snapshots exist, from `LEGACY_BACKUP_RETENTION`, next to Flex's
+   8-day policy. The operator removes the setting only after the old cluster
+   and its snapshots are deleted.
 
 ## Consequences
 
 - The public cost display drops from about $91 to about $16-23 a month.
 - Backups: daily snapshots, the last 8 kept, no point-in-time restore and no
-  on-demand snapshots. The privacy page's retention line follows the API and
-  now reads 8 days. The restore runbook's point-in-time steps do not apply.
-- Capacity: 5 GB including indexes (about 45% used at cutover), 500 operations
-  per second, and no disk spill for aggregations (in-memory sort limit 32 MB).
+  on-demand snapshots. The privacy page's retention line follows the API: 8
+  days, plus the previous cluster's schedule (7 days, 4 weeks, 12 months,
+  1 year) while `LEGACY_BACKUP_RETENTION` is set. The restore runbook's
+  point-in-time steps do not apply.
+- Until the M10 is deleted, it also holds a frozen copy of every account as of
+  cutover, including accounts deleted afterwards, so deleting it (with its
+  snapshots) promptly after the rollback window keeps the privacy notice true.
+- Capacity: 5 GB including indexes, counted over every database on the
+  cluster (the SC2 Tools database alone was about 45% at cutover), 500
+  operations per second, and no disk spill for aggregations (in-memory sort
+  limit 32 MB).
   The admin Global Trends history build sorts more than 32 MB and needs a
   follow-up before that admin page works on Flex; user-facing pages were
   checked against the limits.

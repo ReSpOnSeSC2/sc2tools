@@ -247,7 +247,7 @@ function MongoCard({
           label="Flex storage"
           value={flexStorage.utilizationPercent}
           detail={flexStorage.usedBytes !== null && flexStorage.limitBytes !== null
-            ? `${formatBinaryBytes(flexStorage.usedBytes)} of ${formatBinaryBytes(flexStorage.limitBytes)} · SC2 Tools database (documents + indexes); other databases also count`
+            ? `${formatBinaryBytes(flexStorage.usedBytes)} of ${formatBinaryBytes(flexStorage.limitBytes)} · ${flexStorageScope(flexStorage)}`
             : "Flex storage usage unavailable"}
         />
       ) : (
@@ -540,6 +540,20 @@ function nodeCoverage(
     return "Partial node coverage";
   }
   return `${performance.processCount}/${performance.expectedProcessCount} nodes measured`;
+}
+
+function flexStorageScope(
+  storage: NonNullable<
+    NonNullable<AdminInfrastructureResp["providers"]["mongo"]["cluster"]>["flexStorage"]
+  >,
+): string {
+  if (storage.scope !== "all_databases") {
+    return "SC2 Tools database only (documents + indexes); other databases also count, so the cluster total is higher";
+  }
+  const count = storage.databaseCount ?? null;
+  return count === null
+    ? "all databases on the cluster (documents + indexes)"
+    : `all ${count} ${count === 1 ? "database" : "databases"} on the cluster (documents + indexes)`;
 }
 
 function formatNullable(value: number | null, suffix: string): string {

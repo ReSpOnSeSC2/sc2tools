@@ -416,6 +416,28 @@ function sanitiseAppData(source) {
     allocatedTotalBytes: integerOrNull(source.allocatedTotalBytes),
     measuredAt: validIso(source.measuredAt),
     scope: "sc2tools_database_only",
+    allDatabases: sanitiseAllDatabases(source.allDatabases),
+  };
+}
+
+/**
+ * Cluster-wide totals (every database the application's user can read).
+ * Counts and byte sums only; database names never reach this payload.
+ *
+ * @param {Record<string, any>|null|undefined} source
+ */
+function sanitiseAllDatabases(source) {
+  if (!source) return null;
+  const logicalDataBytes = integerOrNull(source.logicalDataBytes);
+  const indexBytes = integerOrNull(source.indexBytes);
+  const databaseCount = integerOrNull(source.databaseCount);
+  if (logicalDataBytes === null || indexBytes === null
+    || databaseCount === null || databaseCount < 1) return null;
+  return {
+    logicalDataBytes,
+    indexBytes,
+    databaseCount,
+    measuredAt: validIso(source.measuredAt),
   };
 }
 
@@ -514,10 +536,10 @@ function sanitiseCredential(source) {
 }
 
 /**
- * Flex counts uncompressed documents plus index bytes against a fixed data
- * allowance (5 GB). The application's own dbStats measures exactly those two
- * figures for its database; other databases on the cluster count as well, so
- * the advisory copy says this is the SC2 Tools share. Decimal GB keeps the
+ * Flex counts uncompressed documents plus index bytes of every database on
+ * the cluster against one data allowance (5 GB). The cluster-wide dbStats
+ * total is used when it was measured; otherwise the SC2 Tools database alone
+ * stands in as a lower bound and the scope says so. Decimal GB keeps the
  * limit conservative.
  *
  * @param {unknown} rawLimitGb
@@ -528,16 +550,19 @@ function flexStorageUsage(rawLimitGb, appData) {
   const limitBytes = limitGb !== null && limitGb > 0
     ? Math.round(limitGb * 1_000_000_000)
     : null;
+  const all = appData?.allDatabases ?? null;
   const logical = integerOrNull(appData?.logicalDataBytes);
   const indexes = integerOrNull(appData?.allocatedIndexBytes);
-  const usedBytes = logical !== null && indexes !== null ? logical + indexes : null;
+  const appOnlyBytes = logical !== null && indexes !== null ? logical + indexes : null;
+  const usedBytes = all ? all.logicalDataBytes + all.indexBytes : appOnlyBytes;
   return {
     usedBytes,
     limitBytes,
     utilizationPercent: usedBytes !== null && limitBytes !== null
       ? roundPercent((usedBytes / limitBytes) * 100)
       : null,
-    scope: "sc2tools_database_only",
+    scope: all ? "all_databases" : "sc2tools_database_only",
+    databaseCount: all ? all.databaseCount : null,
   };
 }
 
@@ -550,14 +575,30 @@ function flexStorageUsage(rawLimitGb, appData) {
  */
 function pushFlexStorageAdvisory(out, usage) {
   const value = percentOrNull(usage.utilizationPercent);
+  const clusterWide = usage.scope === "all_databases";
+  if (value !== null && !clusterWide) {
+    // A breach on the lower bound is real, but staying under it proves
+    // nothing about the cluster, so say the total is unmeasured.
+    out.push(advisory(
+      "mongo",
+      "watch",
+      "mongo_flex_storage_partial",
+      "Flex storage covers only the SC2 Tools database",
+      `Atlas Flex counts every database on the cluster against its data allowance, but only the SC2 Tools database (${value}%) could be measured, so the cluster total is higher.`,
+      "Let the application's database user list databases and read their dbStats so the advisory can total the whole cluster.",
+    ));
+  }
   if (value === null || value < THRESHOLDS.mongo.disk.watch) return;
   const actionNow = value >= THRESHOLDS.mongo.disk.upgrade;
+  const count = usage.databaseCount ?? 0;
   out.push(advisory(
     "mongo",
     actionNow ? "upgrade" : "watch",
     actionNow ? "mongo_flex_storage_action" : "mongo_flex_storage_watch",
     actionNow ? "Atlas Flex storage is nearly full" : "Watch Atlas Flex storage",
-    `The SC2 Tools database uses ${value}% of the Flex data allowance (documents plus indexes); other databases on the cluster also count.`,
+    clusterWide
+      ? `The cluster's ${count} ${count === 1 ? "database uses" : "databases use"} ${value}% of the Flex data allowance (documents plus indexes).`
+      : `The SC2 Tools database alone uses ${value}% of the Flex data allowance (documents plus indexes); other databases on the cluster also count.`,
     actionNow
       ? "Free space, for example by moving bulky fields to R2, or move to a dedicated tier before Atlas stops accepting writes."
       : "Plan for the limit: Flex storage cannot expand, so trim bulky fields or budget for a dedicated tier.",

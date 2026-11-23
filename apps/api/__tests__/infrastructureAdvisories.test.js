@@ -313,11 +313,16 @@ describe("authenticated infrastructure advisories", () => {
   });
 });
 
-/** A Flex cluster as AtlasInfrastructureClient reports it: no disk or host metrics. */
-function flexInput(logicalDataBytes, allocatedIndexBytes) {
+/**
+ * A Flex cluster as AtlasInfrastructureClient reports it: no disk or host
+ * metrics. `allDatabases` is the cluster-wide dbStats total (null when it
+ * could not be read).
+ */
+function flexInput(logicalDataBytes, allocatedIndexBytes, allDatabases = null) {
   const input = healthyInput();
   input.mongo.appData.logicalDataBytes = logicalDataBytes;
   input.mongo.appData.allocatedIndexBytes = allocatedIndexBytes;
+  input.mongo.appData.allDatabases = allDatabases;
   input.mongo.pricing.monthlyPlanningEstimateUsd = 8;
   input.mongo.atlas.cluster = {
     tier: "FLEX",
@@ -334,19 +339,28 @@ function flexInput(logicalDataBytes, allocatedIndexBytes) {
 }
 
 describe("Atlas Flex advisories", () => {
-  test("does not flag Flex's missing host metrics and reports its data allowance", () => {
-    const result = buildInfrastructureAdminSnapshot(flexInput(2_130_000_000, 117_000_000));
+  /** @param {number} logical @param {number} indexes */
+  const cluster = (logical, indexes, databaseCount = 8) => ({
+    logicalDataBytes: logical, indexBytes: indexes, databaseCount, measuredAt: "2026-11-23T23:00:00.000Z",
+  });
+
+  test("does not flag Flex's missing host metrics and measures the whole cluster's allowance", () => {
+    const result = buildInfrastructureAdminSnapshot(
+      flexInput(2_130_000_000, 117_000_000, cluster(2_530_000_000, 147_000_000)),
+    );
     expect(result.advisories).toEqual([]);
     expect(result.providers.mongo.status).toBe("healthy");
     expect(result.providers.mongo.cluster).toMatchObject({
       tier: "flex",
       flexStorage: {
-        usedBytes: 2_247_000_000,
+        usedBytes: 2_677_000_000,
         limitBytes: 5_000_000_000,
-        utilizationPercent: 44.9,
-        scope: "sc2tools_database_only",
+        utilizationPercent: 53.5,
+        scope: "all_databases",
+        databaseCount: 8,
       },
     });
+    expect(result.providers.mongo.appData.allDatabases).toEqual(cluster(2_530_000_000, 147_000_000));
     expect(result.providers.mongo.cost).toMatchObject({
       pricingMode: "atlas_projected",
       projectedMonthlyUsd: 9.3,
@@ -356,15 +370,57 @@ describe("Atlas Flex advisories", () => {
   });
 
   test("warns before the Flex data allowance and escalates near the limit", () => {
-    const watch = buildInfrastructureAdminSnapshot(flexInput(3_400_000_000, 200_000_000));
+    const watch = buildInfrastructureAdminSnapshot(
+      flexInput(2_130_000_000, 117_000_000, cluster(3_400_000_000, 200_000_000)),
+    );
     expect(watch.advisories.map((row) => [row.code, row.level, row.value])).toEqual([
       ["mongo_flex_storage_watch", "watch", 72],
     ]);
-    const action = buildInfrastructureAdminSnapshot(flexInput(3_900_000_000, 250_000_000));
+    expect(watch.advisories[0].message).toMatch(/cluster's 8 databases use 72%/);
+    const action = buildInfrastructureAdminSnapshot(
+      flexInput(2_130_000_000, 117_000_000, cluster(3_900_000_000, 250_000_000)),
+    );
     expect(action.advisories.map((row) => [row.code, row.level, row.value])).toEqual([
       ["mongo_flex_storage_action", "upgrade", 83],
     ]);
     expect(action.overallStatus).toBe("upgrade");
+  });
+
+  test("other databases push the cluster over the watch line while SC2 Tools alone is under it", () => {
+    // SC2 Tools is 45% on its own; the cluster as a whole is 75%.
+    const result = buildInfrastructureAdminSnapshot(
+      flexInput(2_130_000_000, 117_000_000, cluster(3_600_000_000, 150_000_000)),
+    );
+    expect(result.advisories.map((row) => [row.code, row.value])).toEqual([
+      ["mongo_flex_storage_watch", 75],
+    ]);
+  });
+
+  test("labels an app-only figure as a lower bound when the cluster total is unreadable", () => {
+    const partial = buildInfrastructureAdminSnapshot(flexInput(2_130_000_000, 117_000_000));
+    expect(partial.providers.mongo.cluster.flexStorage).toMatchObject({
+      utilizationPercent: 44.9,
+      scope: "sc2tools_database_only",
+      databaseCount: null,
+    });
+    expect(partial.advisories.map((row) => [row.code, row.level])).toEqual([
+      ["mongo_flex_storage_partial", "watch"],
+    ]);
+    // A breach measured on the lower bound is still reported.
+    const breach = buildInfrastructureAdminSnapshot(flexInput(3_400_000_000, 200_000_000));
+    expect(breach.advisories.map((row) => row.code)).toEqual([
+      "mongo_flex_storage_partial",
+      "mongo_flex_storage_watch",
+    ]);
+    expect(breach.advisories[1].message).toMatch(/SC2 Tools database alone uses 72%/);
+  });
+
+  test("ignores a malformed cluster-wide total", () => {
+    const result = buildInfrastructureAdminSnapshot(
+      flexInput(2_130_000_000, 117_000_000, { logicalDataBytes: 5, indexBytes: null, databaseCount: 2 }),
+    );
+    expect(result.providers.mongo.appData.allDatabases).toBeNull();
+    expect(result.providers.mongo.cluster.flexStorage.scope).toBe("sc2tools_database_only");
   });
 
   test("keeps Flex storage unknown when the app database size is unavailable", () => {

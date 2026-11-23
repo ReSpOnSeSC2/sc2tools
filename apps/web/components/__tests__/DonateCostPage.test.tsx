@@ -176,6 +176,10 @@ test("describes Atlas Flex pricing and storage without inventing disk telemetry"
   expect(screen.getByText("MongoDB Atlas — Flex")).toBeTruthy();
   expect(screen.getAllByText(/Atlas Flex includes up to 5 GB of data and indexes/).length)
     .toBeGreaterThan(0);
+  // The allowance counts uncompressed data plus indexes, in decimal GB.
+  expect(screen.getAllByText(/SC2 Tools data and indexes: 1\.28 GB; Atlas Flex includes up to 5 GB/).length)
+    .toBeGreaterThan(0);
+  expect(screen.queryByText(/SC2 Tools database allocation/)).toBeNull();
   expect(screen.getByText(/runs on Atlas Flex, which includes up to\s+5 GB/)).toBeTruthy();
   expect(screen.getByText(/\$8\.25 non-Mongo fixed \+ \$9\.30 projected Atlas \+ \$0\.05 R2 estimate/))
     .toBeTruthy();

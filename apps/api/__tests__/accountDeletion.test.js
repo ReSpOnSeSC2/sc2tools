@@ -163,10 +163,26 @@ describe("complete account erasure (HTTP + Mongo)", () => {
 
   test("public retention returns only the configured safe schedule, not provider or account details", async () => {
     const response = await request(app).get("/v1/site/data-retention"); expect(response.status).toBe(200);
-    expect(response.body).toEqual({ available: false, retention: [], checkedAt: null });
+    expect(response.body).toEqual({ available: false, retention: [], legacyRetention: [], checkedAt: null });
     const safe = await publicDataRetention({ atlasStatus: async () => ({ available: true, stale: false, checkedAt: "2026-10-23", clusterId: "secret", snapshotId: "secret", retention: [{ unit: "days", keep: 7 }, { unit: "bad", keep: 9 }] }) });
-    expect(safe).toEqual({ available: true, retention: [{ unit: "days", value: 7 }], checkedAt: "2026-10-23" });
+    expect(safe).toEqual({ available: true, retention: [{ unit: "days", value: 7 }], legacyRetention: [], checkedAt: "2026-10-23" });
     expect((await publicDataRetention({ atlasStatus: async () => ({ available: true, stale: true, retention: [] }) })).available).toBe(false);
+  });
+
+  test("public retention keeps publishing a previous cluster's schedule while its backups exist", async () => {
+    // A Flex cluster's fixed 8-day policy must not hide the old dedicated
+    // cluster's year-long snapshots.
+    const flex = { atlasStatus: async () => ({ available: true, stale: false, checkedAt: "2026-11-23", retention: [{ unit: "days", keep: 8 }] }) };
+    const legacy = [{ unit: "days", value: 7 }, { unit: "weeks", value: 4 }, { unit: "months", value: 12 }, { unit: "years", value: 1 }];
+    expect(await publicDataRetention(flex, [...legacy, { unit: "decades", value: 1 }, { unit: "days", value: 0 }])).toEqual({
+      available: true,
+      retention: [{ unit: "days", value: 8 }],
+      legacyRetention: legacy,
+      checkedAt: "2026-11-23",
+    });
+    // An unavailable current policy still states the legacy schedule.
+    const down = await publicDataRetention({ atlasStatus: async () => ({ available: false, retention: [] }) }, legacy);
+    expect(down).toMatchObject({ available: false, legacyRetention: legacy });
   });
 
   test("deleted device tokens receive 401 and a late pairing poll cannot recreate a device", async () => {

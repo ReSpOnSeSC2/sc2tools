@@ -23,6 +23,10 @@ const MAX_RETENTION_ITEMS = 10;
 // one daily snapshot with the last 8 retained.
 const FLEX_TIER = "FLEX";
 const FLEX_API_VERSION = "2024-11-13";
+// A Flex cluster that runs all month costs at least the base band ($8) and
+// at most the cap ($30), so a run rate outside that range is a measurement
+// artifact (for example a first line item that starts before the cluster).
+const FLEX_MONTHLY_MIN_CENTS = 800;
 const FLEX_MONTHLY_CAP_CENTS = 3_000;
 const FLEX_STORAGE_LIMIT_GB = 5;
 const FLEX_SNAPSHOT_RETENTION_DAYS = 8;
@@ -37,6 +41,13 @@ const FLEX_SNAPSHOT_STATUSES = Object.freeze({
 // The cluster kind cannot change without a new cluster name in practice, so
 // one probe per window is enough and a Flex cluster never hits the classic API.
 const CLUSTER_KIND_TTL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * @typedef {{
+ *   kind: "flex"|"dedicated",
+ *   flexCluster: Record<string, any>|null,
+ * }} ClusterKindResult
+ */
 
 /**
  * Read-only MongoDB Atlas control-plane client. It deliberately returns an
@@ -73,14 +84,19 @@ class AtlasInfrastructureClient {
     /** @type {"flex"|"dedicated"|null} */
     this._clusterKindValue = null;
     this._clusterKindFreshUntil = 0;
-    /** @type {Promise<"flex"|"dedicated">|null} */
+    /** @type {Promise<ClusterKindResult>|null} */
     this._clusterKindInflight = null;
   }
 
   async snapshot() {
+    // One kind probe feeds both reads: the cluster read reuses a fresh Flex
+    // response, and billing applies the Flex price range even when the
+    // cluster read itself fails.
+    const kind = this._resolveClusterKind();
     const [clusterResult, invoiceResult] = await Promise.allSettled([
-      this._clusterSnapshot(),
-      this._billingSnapshot(),
+      kind.then((resolved) => this._clusterSnapshot(resolved)),
+      kind.then((resolved) => resolved.kind === "flex", () => false)
+        .then((flex) => this._billingSnapshot(flex)),
     ]);
     if (clusterResult.status === "rejected"
       && invoiceResult.status === "rejected") {
@@ -96,7 +112,7 @@ class AtlasInfrastructureClient {
       available: true,
       measuredAt: this._now().toISOString(),
       cluster,
-      billing: cluster?.tier === FLEX_TIER ? capFlexBilling(billing) : billing,
+      billing,
       configErrorCode: cluster ? null : "atlas_cluster_unavailable",
     };
   }
@@ -169,40 +185,67 @@ class AtlasInfrastructureClient {
     };
   }
 
+  /** @returns {Promise<"flex"|"dedicated">} */
+  async _clusterKind() {
+    return (await this._resolveClusterKind()).kind;
+  }
+
   /**
    * Whether the configured cluster is Flex or dedicated, cached for
-   * CLUSTER_KIND_TTL_MS. A 400/404 from the Flex resource means "dedicated";
-   * any other failure propagates so an outage is never misread as a tier.
+   * CLUSTER_KIND_TTL_MS, with concurrent callers sharing one probe.
    *
-   * @returns {Promise<"flex"|"dedicated">}
+   * @returns {Promise<ClusterKindResult>}
    */
-  async _clusterKind() {
+  _resolveClusterKind() {
     const nowMs = this._now().getTime();
     if (this._clusterKindValue && nowMs < this._clusterKindFreshUntil) {
-      return this._clusterKindValue;
+      return Promise.resolve({ kind: this._clusterKindValue, flexCluster: null });
     }
-    if (this._clusterKindInflight) return this._clusterKindInflight;
-    const pending = (async () => {
-      /** @type {"flex"|"dedicated"} */ let kind = "flex";
-      try {
-        await this._apiJson(this._flexClusterPath(), FLEX_API_VERSION);
-      } catch (err) {
-        const code = /** @type {any} */ (err)?.code;
-        if (code !== "atlas_admin_http_404" && code !== "atlas_admin_http_400") {
-          throw err;
-        }
-        kind = "dedicated";
-      }
-      this._clusterKindValue = kind;
-      this._clusterKindFreshUntil = this._now().getTime() + CLUSTER_KIND_TTL_MS;
-      return kind;
-    })();
-    this._clusterKindInflight = pending;
+    if (!this._clusterKindInflight) {
+      const pending = this._probeClusterKind();
+      this._clusterKindInflight = pending;
+      const clear = () => {
+        if (this._clusterKindInflight === pending) this._clusterKindInflight = null;
+      };
+      pending.then(clear, clear);
+    }
+    return this._clusterKindInflight;
+  }
+
+  /**
+   * A 400/404 from the Flex resource means "dedicated". Any other failure
+   * keeps the last known kind, so a transient outage neither changes the
+   * tier nor fails a read that only needs it; it propagates only before a
+   * kind has ever been learned. A successful probe returns the Flex resource
+   * so the cluster read does not fetch it twice.
+   *
+   * @returns {Promise<ClusterKindResult>}
+   */
+  async _probeClusterKind() {
     try {
-      return await pending;
-    } finally {
-      if (this._clusterKindInflight === pending) this._clusterKindInflight = null;
+      const flexCluster = await this._apiJson(
+        this._flexClusterPath(),
+        FLEX_API_VERSION,
+      );
+      this._rememberClusterKind("flex");
+      return { kind: "flex", flexCluster };
+    } catch (err) {
+      const code = /** @type {any} */ (err)?.code;
+      if (code === "atlas_admin_http_404" || code === "atlas_admin_http_400") {
+        this._rememberClusterKind("dedicated");
+        return { kind: "dedicated", flexCluster: null };
+      }
+      if (this._clusterKindValue) {
+        return { kind: this._clusterKindValue, flexCluster: null };
+      }
+      throw err;
     }
+  }
+
+  /** @param {"flex"|"dedicated"} kind */
+  _rememberClusterKind(kind) {
+    this._clusterKindValue = kind;
+    this._clusterKindFreshUntil = this._now().getTime() + CLUSTER_KIND_TTL_MS;
   }
 
   _flexClusterPath() {
@@ -211,10 +254,13 @@ class AtlasInfrastructureClient {
     return `/api/atlas/v2/groups/${project}/flexClusters/${name}`;
   }
 
-  async _clusterSnapshot() {
-    if (await this._clusterKind() === "flex") {
+  /** @param {ClusterKindResult} [resolved] */
+  async _clusterSnapshot(resolved) {
+    const { kind, flexCluster } = resolved ?? await this._resolveClusterKind();
+    if (kind === "flex") {
       return parseFlexCluster(
-        await this._apiJson(this._flexClusterPath(), FLEX_API_VERSION),
+        flexCluster
+          ?? await this._apiJson(this._flexClusterPath(), FLEX_API_VERSION),
       );
     }
     const project = encodeURIComponent(this.config.projectId);
@@ -233,7 +279,8 @@ class AtlasInfrastructureClient {
     return { ...parsed, ...operational };
   }
 
-  async _billingSnapshot() {
+  /** @param {boolean} [flex] the configured cluster is known to be Flex */
+  async _billingSnapshot(flex = false) {
     const org = encodeURIComponent(this.config.orgId);
     const raw = await this._apiJson(
       `/api/atlas/v2/orgs/${org}/invoices/pending`,
@@ -241,7 +288,7 @@ class AtlasInfrastructureClient {
     return parsePendingInvoices(raw, {
       projectId: this.config.projectId,
       clusterName: this.config.clusterName,
-    });
+    }, { flex });
   }
 
   /** @param {Record<string, any>} cluster */
@@ -536,20 +583,22 @@ function parseFlexBackupSnapshots(raw) {
 }
 
 /**
- * Flex charges stop at $30 a month, so a run-rate projection from a short
- * or busy window never claims more than the tier can cost.
+ * A Flex run rate stays inside the tier's price range: never above the $30
+ * cap, and (without credits) never below the $8 base band, which a short or
+ * partly unbilled first window would otherwise suggest. Credits can bring
+ * the real charge under $8, so the floor applies only when none were posted.
  *
- * @param {ReturnType<typeof parsePendingInvoices>} billing
+ * @param {number|null} projectedCents
+ * @param {{discounted: boolean}} options
  */
-function capFlexBilling(billing) {
-  const projected = billing?.projectedMonthlyRunRateCents;
-  if (!billing?.available || !Number.isSafeInteger(projected)) return billing;
-  const capped = Math.min(/** @type {number} */ (projected), FLEX_MONTHLY_CAP_CENTS);
-  return {
-    ...billing,
-    projectedMonthlyRunRateCents: capped,
-    projectedMonthlyRunRateUsd: centsToUsd(capped),
-  };
+function clampFlexProjection(projectedCents, { discounted }) {
+  if (projectedCents === null || !Number.isSafeInteger(projectedCents)) {
+    return projectedCents;
+  }
+  const floored = discounted
+    ? projectedCents
+    : Math.max(projectedCents, FLEX_MONTHLY_MIN_CENTS);
+  return Math.min(floored, FLEX_MONTHLY_CAP_CENTS);
 }
 
 /**
@@ -645,23 +694,27 @@ function parseClusterBackupSettings(raw) {
 /**
  * @param {Record<string, any>} raw
  * @param {{projectId: string, clusterName: string}} target
+ * @param {{flex?: boolean}} [options] the configured cluster is known to be
+ *   Flex; Flex line items imply it as well
  */
-function parsePendingInvoices(raw, target) {
+function parsePendingInvoices(raw, target, options = {}) {
   const invoices = Array.isArray(raw?.results)
     ? raw.results
     : (Array.isArray(raw?.lineItems) ? [raw] : []);
   let grossCents = 0;
   let discountCents = 0;
   let lineItemCount = 0;
+  let flexLineItemCount = 0;
   const categoryCents = { compute: 0, storage: 0, transfer: 0, other: 0 };
   /** @type {string[]} */ const cycleStarts = [];
   /** @type {string[]} */ const cycleEnds = [];
-  /** @type {string[]} */ const postedThrough = [];
+  /** @type {string[]} */ const invoiceUpdates = [];
+  /** @type {string[]} */ const lineEnds = [];
   /** @type {string[]} */ const clusterStarts = [];
   for (const invoice of invoices) {
     pushDate(cycleStarts, invoice?.startDate);
     pushDate(cycleEnds, invoice?.endDate);
-    pushDate(postedThrough, invoice?.updated);
+    pushDate(invoiceUpdates, invoice?.updated);
     for (const item of Array.isArray(invoice?.lineItems)
       ? invoice.lineItems
       : []) {
@@ -683,9 +736,10 @@ function parsePendingInvoices(raw, target) {
         itemGross - itemDiscount,
       );
       lineItemCount += 1;
+      if (isFlexSku(item?.sku)) flexLineItemCount += 1;
       pushDate(cycleStarts, item?.startDate);
       pushDate(clusterStarts, item?.startDate);
-      pushDate(postedThrough, item?.endDate ?? item?.created);
+      pushDate(lineEnds, item?.endDate ?? item?.created);
     }
   }
   // A valid pending-invoice response with no lines for the configured
@@ -697,15 +751,19 @@ function parsePendingInvoices(raw, target) {
   }
   const cycleStart = minIso(cycleStarts);
   const cycleEnd = maxIso(cycleEnds);
-  const through = maxIso(postedThrough);
+  const through = billedThrough(lineEnds, invoiceUpdates);
   const postedCycleCents = grossCents - discountCents;
-  const projectedMonthlyRunRateCents = projectCycleCost({
+  const projected = projectCycleCost({
     postedCycleCents,
     cycleStart,
     cycleEnd,
     postedThrough: through,
     billedSince: minIso(clusterStarts),
   });
+  const projectedMonthlyRunRateCents = options.flex === true
+    || flexLineItemCount > 0
+    ? clampFlexProjection(projected, { discounted: discountCents > 0 })
+    : projected;
   return {
     available: true,
     cycleStart,
@@ -749,12 +807,37 @@ function unavailableBilling(errorCode = "atlas_billing_unavailable") {
   };
 }
 
+/**
+ * The configured cluster's charges run through the end of its newest line
+ * item. The invoice's "updated" time moves whenever any line in the org
+ * posts (usually hours after the last billed hour), so measuring to it would
+ * spread the posted charges over unbilled time. It only caps a line that
+ * claims to end later, and stands in when no line carries a date.
+ *
+ * @param {string[]} lineEnds
+ * @param {string[]} invoiceUpdates
+ */
+function billedThrough(lineEnds, invoiceUpdates) {
+  const lineEnd = maxIso(lineEnds);
+  const updated = maxIso(invoiceUpdates);
+  if (!lineEnd) return updated;
+  if (!updated) return lineEnd;
+  return new Date(lineEnd).getTime() <= new Date(updated).getTime()
+    ? lineEnd
+    : updated;
+}
+
+/** @param {unknown} sku */
+function isFlexSku(sku) {
+  return String(sku || "").toUpperCase().includes("FLEX");
+}
+
 /** @param {unknown} sku */
 function atlasCostCategory(sku) {
   const value = String(sku || "").toUpperCase();
   // Flex is one all-inclusive hourly charge (storage, backups and data
   // transfer are part of the band price), so it is the cluster's compute.
-  if (value.includes("FLEX")) return "compute";
+  if (isFlexSku(value)) return "compute";
   if (value.includes("DATA_TRANSFER")) return "transfer";
   if (value.includes("STORAGE")) return "storage";
   if (value.includes("INSTANCE")) return "compute";
@@ -1179,7 +1262,8 @@ module.exports = {
   AtlasInfrastructureClient,
   _internals: {
     atlasCostCategory,
-    capFlexBilling,
+    billedThrough,
+    clampFlexProjection,
     connectionHosts,
     parseBackupSchedule,
     parseBackupSnapshots,

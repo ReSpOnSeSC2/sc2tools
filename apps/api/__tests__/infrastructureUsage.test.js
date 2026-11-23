@@ -71,6 +71,7 @@ function service(opts = {}) {
         indexSize: 200,
       })),
     },
+    mongoClient: opts.mongoClient,
     cloudflareAnalytics:
       opts.cloudflareAnalytics === undefined
         ? configured()
@@ -290,6 +291,7 @@ describe("InfrastructureUsageService", () => {
         allocatedTotalBytes: 2_500,
         scope: "sc2tools_database_only",
         measuredAt: NOW.toISOString(),
+        allDatabases: null,
       },
       pricing: {
         monthlyPlanningEstimateUsd: 8,
@@ -316,6 +318,64 @@ describe("InfrastructureUsageService", () => {
       scale: 1,
       maxTimeMS: 8_000,
     });
+  });
+
+  test("totals every readable database for the Flex allowance without publishing it", async () => {
+    const sizes = {
+      sc2tools_saas: { dataSize: 2_130_000_000, indexSize: 117_000_000 },
+      other_app: { dataSize: 400_000_000, indexSize: 30_000_000 },
+    };
+    const commands = [];
+    const mongoClient = {
+      db: (name) => ({
+        command: jest.fn(async (command) => {
+          commands.push([name, Object.keys(command)[0]]);
+          if (command.listDatabases) {
+            expect(command).toMatchObject({ nameOnly: true, authorizedDatabases: true, maxTimeMS: 8_000 });
+            return {
+              databases: [
+                { name: "admin" }, { name: "sc2tools_saas" }, { name: "local" },
+                { name: "other_app" }, { name: "config" },
+              ],
+            };
+          }
+          return sizes[name];
+        }),
+      }),
+    };
+    const usage = service({ mongoClient, atlasClient: null });
+    const admin = await usage.mongoStorageSnapshot();
+    expect(admin.appData.allDatabases).toEqual({
+      logicalDataBytes: 2_530_000_000,
+      indexBytes: 147_000_000,
+      databaseCount: 2,
+      measuredAt: NOW.toISOString(),
+    });
+    // Server-internal databases are neither listed into the total nor read.
+    expect(commands.filter(([, cmd]) => cmd === "dbStats").map(([name]) => name).sort())
+      .toEqual(["other_app", "sc2tools_saas"]);
+
+    const pub = await usage.snapshot();
+    expect(pub.mongo.appData).not.toHaveProperty("allDatabases");
+    expect(JSON.stringify(pub)).not.toMatch(/other_app|2530000000/);
+  });
+
+  test("reports no cluster-wide total when a database cannot be listed or read", async () => {
+    const failingList = { db: () => ({ command: jest.fn(async () => { throw new Error("not authorized"); }) }) };
+    expect((await service({ mongoClient: failingList, atlasClient: null }).mongoStorageSnapshot())
+      .appData).toMatchObject({ logicalDataBytes: 1_200, allDatabases: null });
+
+    const failingStats = {
+      db: (name) => ({
+        command: jest.fn(async (command) => {
+          if (command.listDatabases) return { databases: [{ name: "sc2tools_saas" }, { name: "locked" }] };
+          if (name === "locked") throw new Error("not authorized on locked");
+          return { dataSize: 10, indexSize: 5 };
+        }),
+      }),
+    };
+    expect((await service({ mongoClient: failingStats, atlasClient: null }).mongoStorageSnapshot())
+      .appData.allDatabases).toBeNull();
   });
 
   test("admin diagnostics expose config health but never provider identifiers", async () => {

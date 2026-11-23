@@ -426,12 +426,17 @@ function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
             cluster.diskCapacityBytes !== null
           ? `${formatAtlasDiskBytes(cluster.diskUsedBytes)} of ${formatAtlasDiskBytes(cluster.diskCapacityBytes)} Atlas disk used`
           : "Atlas disk telemetry unavailable";
+      // Flex's allowance counts uncompressed data plus indexes (decimal GB),
+      // so show that figure, not the smaller compressed allocation.
+      const usage = flex
+        ? `SC2 Tools data and indexes: ${formatStorageBytes(costs.mongo.appData.logicalDataBytes + costs.mongo.appData.allocatedIndexBytes)}`
+        : `SC2 Tools database allocation: ${allocated}`;
       return {
         ...line,
         approxMonthlyUsd: projected ?? costs.mongo.planning.monthlyUsd,
         detail:
           `${flex ? "Atlas Flex" : (cluster?.tier ?? "Atlas")} stores searchable replay metadata, opponent histories and aggregates. `
-          + `SC2 Tools database allocation: ${allocated}; ${disk}.`,
+          + `${usage}; ${disk}.`,
         priceLabel:
           projected === null
             ? `~${formatUsd(costs.mongo.planning.monthlyUsd)}/mo`

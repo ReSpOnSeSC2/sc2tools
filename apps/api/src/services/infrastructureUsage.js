@@ -22,6 +22,11 @@ const {
 
 const CLOUDFLARE_GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
 const CACHE_TTL_MS = 15 * 60 * 1000;
+// Server-internal databases do not count toward an Atlas data allowance.
+const SYSTEM_DATABASES = new Set(["admin", "local", "config"]);
+// A shared cluster holds a handful of app databases; a longer listing is not
+// a cluster this advisory was built for, so it reports a lower bound instead.
+const MAX_MEASURED_DATABASES = 50;
 const ERROR_RETRY_MS = 60 * 1000;
 const REQUEST_TIMEOUT_MS = 8 * 1000;
 const STORAGE_LOOKBACK_MS = 31 * 24 * 60 * 60 * 1000;
@@ -145,6 +150,7 @@ class InfrastructureUsageService {
    * @param {{
    *   games: import('mongodb').Collection,
    *   mongoDb: import('mongodb').Db,
+   *   mongoClient?: import('mongodb').MongoClient | null,
    *   cloudflareAnalytics?: {
    *     accountId: string,
    *     apiToken: string,
@@ -179,6 +185,7 @@ class InfrastructureUsageService {
     }
     this.games = deps.games;
     this.mongoDb = deps.mongoDb;
+    this.mongoClient = deps.mongoClient || null;
     this.config = deps.cloudflareAnalytics || null;
     this.fetchImpl = deps.fetchImpl || globalThis.fetch;
     this.now = deps.now || (() => new Date());
@@ -444,11 +451,14 @@ class InfrastructureUsageService {
 
   /** @param {Date} [measuredAt] */
   async _readMongoStorage(measuredAt = this._now()) {
-    const stats = await this.mongoDb.command({
-      dbStats: 1,
-      scale: 1,
-      maxTimeMS: this.timeoutMs,
-    });
+    const [stats, allDatabases] = await Promise.all([
+      this.mongoDb.command({
+        dbStats: 1,
+        scale: 1,
+        maxTimeMS: this.timeoutMs,
+      }),
+      this._readAllDatabasesStorage(measuredAt),
+    ]);
     const allocatedDocumentBytes = nonNegativeSafeInteger(
       stats?.storageSize,
       "Mongo storageSize",
@@ -471,7 +481,55 @@ class InfrastructureUsageService {
       allocatedTotalBytes,
       scope: "sc2tools_database_only",
       measuredAt: measuredAt.toISOString(),
+      allDatabases,
     };
+  }
+
+  /**
+   * Documents plus indexes summed over every database the application's
+   * user can read. Atlas Flex counts all of them against one data allowance,
+   * so the admin storage advisory needs this total rather than the SC2 Tools
+   * share. Names stay here; only sums and a count leave. Null when no client
+   * is wired or any read fails, which the advisory reports as a lower bound.
+   * Never part of the public cost payload.
+   *
+   * @param {Date} measuredAt
+   */
+  async _readAllDatabasesStorage(measuredAt) {
+    const client = this.mongoClient;
+    if (!client) return null;
+    try {
+      const listing = await client.db("admin").command({
+        listDatabases: 1,
+        nameOnly: true,
+        authorizedDatabases: true,
+        maxTimeMS: this.timeoutMs,
+      });
+      const names = (Array.isArray(listing?.databases) ? listing.databases : [])
+        .map((row) => String(row?.name || ""))
+        .filter((name) => name && !SYSTEM_DATABASES.has(name));
+      if (names.length === 0 || names.length > MAX_MEASURED_DATABASES) return null;
+      const stats = await Promise.all(names.map((name) => client.db(name).command({
+        dbStats: 1,
+        scale: 1,
+        maxTimeMS: this.timeoutMs,
+      })));
+      let logicalDataBytes = 0;
+      let indexBytes = 0;
+      for (const row of stats) {
+        logicalDataBytes += nonNegativeSafeInteger(row?.dataSize, "Mongo dataSize");
+        indexBytes += nonNegativeSafeInteger(row?.indexSize, "Mongo indexSize");
+      }
+      if (!Number.isSafeInteger(logicalDataBytes + indexBytes)) return null;
+      return {
+        logicalDataBytes,
+        indexBytes,
+        databaseCount: names.length,
+        measuredAt: measuredAt.toISOString(),
+      };
+    } catch {
+      return null;
+    }
   }
 
   async _readAtlas() {

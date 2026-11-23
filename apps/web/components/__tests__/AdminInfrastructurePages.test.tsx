@@ -396,7 +396,8 @@ describe("admin infrastructure health", () => {
           usedBytes: 2_247_000_000,
           limitBytes: 5_000_000_000,
           utilizationPercent: 44.9,
-          scope: "sc2tools_database_only",
+          scope: "all_databases",
+          databaseCount: 8,
         },
         provisionedDiskGb: 5,
         diskUsedBytes: null,
@@ -431,10 +432,47 @@ describe("admin infrastructure health", () => {
     expect(within(mongo!).getByText(/backups and data transfer included/)).toBeTruthy();
     expect(within(mongo!).getByText("Flex storage")).toBeTruthy();
     expect(within(mongo!).getByText("44.9%")).toBeTruthy();
-    expect(within(mongo!).getByText(/2.09 GiB of 4.66 GiB/)).toBeTruthy();
+    expect(within(mongo!).getByText(/2.09 GiB of 4.66 GiB · all 8 databases on the cluster \(documents \+ indexes\)/)).toBeTruthy();
     expect(within(mongo!).getByText(/does not report host CPU or cache metrics for Flex/)).toBeTruthy();
     expect(within(mongo!).queryByText("Provider disk metric unavailable")).toBeNull();
     expect(within(mongo!).queryByText(/storage auto-expand/)).toBeNull();
+  });
+
+  it("labels a Flex storage figure covering only the SC2 Tools database as a lower bound", () => {
+    const mongoProvider = INFRASTRUCTURE.providers.mongo;
+    const partialMongo = {
+      ...mongoProvider,
+      status: "watch",
+      cluster: {
+        tier: "flex",
+        flexStorage: {
+          usedBytes: 2_247_000_000,
+          limitBytes: 5_000_000_000,
+          utilizationPercent: 44.9,
+          scope: "sc2tools_database_only",
+          databaseCount: null,
+        },
+        provisionedDiskGb: 5,
+        diskUsedBytes: null,
+        diskCapacityBytes: null,
+        diskUtilizationPercent: null,
+        diskMeasuredAt: null,
+        autoExpandStorage: false,
+        performance: null,
+      },
+    };
+    useApiMock.mockImplementation((path: string) => ({
+      data: path === "/v1/admin/infrastructure"
+        ? { ...INFRASTRUCTURE, providers: { ...INFRASTRUCTURE.providers, mongo: partialMongo } }
+        : HEALTH,
+      error: null,
+      isLoading: false,
+    }));
+
+    render(<AdminHealthPage />);
+
+    const mongo = screen.getByRole("heading", { name: "MongoDB Atlas" }).closest("section");
+    expect(within(mongo!).getByText(/SC2 Tools database only \(documents \+ indexes\); other databases also count, so the cluster total is higher/)).toBeTruthy();
   });
 });
 

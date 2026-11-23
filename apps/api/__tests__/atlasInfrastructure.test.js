@@ -464,11 +464,120 @@ describe("Atlas Flex billing helpers", () => {
     expect(_internals.atlasCostCategory("FLEX_CLUSTER_OPS_BAND_2")).toBe("compute");
   });
 
-  test("never raises a projection that is already under the Flex cap", () => {
-    const billing = { available: true, projectedMonthlyRunRateCents: 812, projectedMonthlyRunRateUsd: 8.12 };
-    expect(_internals.capFlexBilling(billing)).toEqual(billing);
-    const unavailable = { available: false, projectedMonthlyRunRateCents: null };
-    expect(_internals.capFlexBilling(unavailable)).toBe(unavailable);
+  test("keeps a Flex run rate inside the tier's $8-$30 price range", () => {
+    const clamp = _internals.clampFlexProjection;
+    expect(clamp(812, { discounted: false })).toBe(812);
+    expect(clamp(558, { discounted: false })).toBe(800);
+    expect(clamp(4_650, { discounted: false })).toBe(3_000);
+    // Credits can bring the real charge under $8, so no floor then.
+    expect(clamp(558, { discounted: true })).toBe(558);
+    expect(clamp(4_650, { discounted: true })).toBe(3_000);
+    expect(clamp(null, { discounted: false })).toBeNull();
+  });
+
+  test("bills through the newest line item, not the invoice's last update", () => {
+    const through = _internals.billedThrough;
+    expect(through(["2026-08-10T00:00:00.000Z", "2026-08-11T00:00:00.000Z"], ["2026-08-11T03:00:00.000Z"]))
+      .toBe("2026-08-11T00:00:00.000Z");
+    // A line that claims to end after the invoice was last updated is capped.
+    expect(through(["2026-08-31T00:00:00.000Z"], ["2026-08-11T03:00:00.000Z"]))
+      .toBe("2026-08-11T03:00:00.000Z");
+    expect(through([], ["2026-08-11T03:00:00.000Z"])).toBe("2026-08-11T03:00:00.000Z");
+    expect(through(["2026-08-11T00:00:00.000Z"], [])).toBe("2026-08-11T00:00:00.000Z");
+    expect(through([], [])).toBeNull();
+  });
+
+  test("an invoice updated hours after the last billed hour does not dilute the run rate", () => {
+    const body = flexInvoiceBody(30);
+    body.updated = "2026-08-11T03:00:00.000Z";
+    expect(_internals.parsePendingInvoices(body, {
+      projectId: PROJECT_ID,
+      clusterName: "sample-cluster",
+    })).toMatchObject({
+      postedThrough: "2026-08-11T00:00:00.000Z",
+      projectedMonthlyRunRateCents: 930,
+    });
+  });
+
+  test("a partly billed first Flex day cannot pull the run rate under the $8 base band", () => {
+    const body = flexInvoiceBody(26);
+    // The cutover-day line starts at midnight but bills only the evening.
+    body.lineItems[0].totalPriceCents = 10;
+    const target = { projectId: PROJECT_ID, clusterName: "sample-cluster" };
+    expect(_internals.parsePendingInvoices(body, target)).toMatchObject({
+      postedCycleCents: 36,
+      projectedMonthlyRunRateCents: 800,
+      projectedMonthlyRunRateUsd: 8,
+    });
+    // With credits posted, the honest projection is kept.
+    body.lineItems[1].discountCents = 6;
+    expect(_internals.parsePendingInvoices(body, target)).toMatchObject({
+      postedCycleCents: 30,
+      projectedMonthlyRunRateCents: 465,
+    });
+    // A dedicated cluster's projection is never clamped.
+    const dedicated = flexInvoiceBody(10);
+    for (const item of dedicated.lineItems) item.sku = "GCP_INSTANCE_M10";
+    expect(_internals.parsePendingInvoices(dedicated, target).projectedMonthlyRunRateCents).toBe(310);
+    // Unless the tier is known to be Flex from the cluster probe.
+    expect(_internals.parsePendingInvoices(dedicated, target, { flex: true })
+      .projectedMonthlyRunRateCents).toBe(800);
+  });
+});
+
+describe("Atlas cluster kind detection", () => {
+  function token(url) {
+    return url.endsWith("/api/oauth/token")
+      ? response({ access_token: "bearer-secret", expires_in: 3600 })
+      : null;
+  }
+
+  test("reuses the probe's Flex response for the cluster read", async () => {
+    const fetchImpl = jest.fn(async (url) => token(url)
+      ?? (url.includes("/flexClusters/") ? response(flexClusterBody())
+        : url.includes("/invoices/pending") ? response(flexInvoiceBody(30))
+          : Promise.reject(new Error(`unexpected URL ${url}`))));
+    const result = await new AtlasInfrastructureClient({ config: atlasConfig(), fetchImpl, now: () => NOW }).snapshot();
+    expect(result.cluster.tier).toBe("FLEX");
+    expect(fetchImpl.mock.calls.filter(([url]) => url.includes("/flexClusters/"))).toHaveLength(1);
+  });
+
+  test("applies the Flex price range from Flex line items even when the cluster read fails", async () => {
+    const fetchImpl = jest.fn(async (url) => token(url)
+      ?? (url.includes("/flexClusters/") ? response({}, 503)
+        : url.includes("/invoices/pending") ? response(flexInvoiceBody(150))
+          : Promise.reject(new Error(`unexpected URL ${url}`))));
+    const result = await new AtlasInfrastructureClient({ config: atlasConfig(), fetchImpl, now: () => NOW }).snapshot();
+    expect(result.cluster).toBeNull();
+    expect(result.billing).toMatchObject({ postedCycleCents: 300, projectedMonthlyRunRateCents: 3_000 });
+  });
+
+  test("keeps the last known kind through a transient probe failure", async () => {
+    let now = NOW;
+    let probeStatus = 404;
+    const fetchImpl = jest.fn(async (url) => {
+      const auth = token(url);
+      if (auth) return auth;
+      if (url.includes("/flexClusters/")) return response({}, probeStatus);
+      if (url.includes("/backup/snapshots")) return response({ results: [] });
+      if (url.includes("/backup/schedule")) return response({});
+      if (url.includes("/clusters/sample-cluster")) return response(clusterBody());
+      throw new Error(`unexpected URL ${url}`);
+    });
+    const client = new AtlasInfrastructureClient({ config: atlasConfig(), fetchImpl, now: () => now });
+    await expect(client.backupStatus()).resolves.toMatchObject({ cloudBackupEnabled: null });
+    // Past the cache window the probe fails with a 503: the cluster is still
+    // read as dedicated instead of failing the backup check.
+    now = new Date(NOW.getTime() + 7 * 60 * 60 * 1000);
+    probeStatus = 503;
+    await expect(client.backupStatus()).resolves.toMatchObject({ pointInTime: { enabled: null } });
+    expect(fetchImpl.mock.calls.filter(([url]) => url.includes("/flexClusters/"))).toHaveLength(2);
+  });
+
+  test("with no kind learned yet, a probe outage still fails instead of guessing", async () => {
+    const fetchImpl = jest.fn(async (url) => token(url) ?? response({}, 503));
+    await expect(new AtlasInfrastructureClient({ config: atlasConfig(), fetchImpl, now: () => NOW })
+      .backupStatus()).rejects.toMatchObject({ code: "atlas_admin_http_503" });
   });
 });
 

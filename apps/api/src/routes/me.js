@@ -69,6 +69,7 @@ const MMR_LADDER_RACES = new Map([["P", "Protoss"], ["T", "Terran"], ["Z", "Zerg
  *   sessionPolicy?: import('../services/sessionPolicy').SessionPolicyService,
  *   gdpr: import('../services/gdpr').GdprService,
  *   backupStatus?: import('../services/backupStatus').BackupStatusService,
+ *   legacyBackupRetention?: {unit: string, value: number}[],
  *   dataRepairs?: import('../services/dataRepairs').DataRepairsService,
  *   pairings: import('../services/devicePairings').DevicePairingsService,
  *   agentVersion?: Pick<import('../services/agentVersion').AgentVersionService, 'latest'>,
@@ -106,7 +107,10 @@ function buildMeRouter(deps) {
   router.get("/site/data-retention", async (_req, res, next) => {
     try {
       res.set("Cache-Control", "public, max-age=60");
-      res.json(deps.backupStatus ? await publicDataRetention(deps.backupStatus) : { available: false, retention: [], checkedAt: null });
+      const legacy = deps.legacyBackupRetention || [];
+      res.json(deps.backupStatus
+        ? await publicDataRetention(deps.backupStatus, legacy)
+        : { available: false, retention: [], legacyRetention: legacy, checkedAt: null });
     } catch (error) { next(error); }
   });
   router.get("/me/data-inventory", deps.auth, async (req, res, next) => {

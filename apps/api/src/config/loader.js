@@ -72,6 +72,10 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *     clusterName: string,
  *     secretExpiresAt: string|null,
  *   }|null,
+ *   legacyBackupRetention: {
+ *     unit: "days"|"weeks"|"months"|"years",
+ *     value: number,
+ *   }[],
  *   renderAdmin: {
  *     apiKey: string,
  *     serviceId: string,
@@ -157,6 +161,7 @@ function loadConfig(env = process.env) {
     r2: parseR2Config(env),
     cloudflareAnalytics: parseCloudflareAnalyticsConfig(env),
     atlasAdmin: parseAtlasAdminConfig(env),
+    legacyBackupRetention: parseLegacyBackupRetention(env),
     renderAdmin: parseRenderAdminConfig(env),
     analytics: parseAnalyticsConfig(env),
     platformIntegrations: parsePlatformIntegrationsConfig(env),
@@ -689,6 +694,37 @@ function parseAtlasAdminConfig(env) {
 }
 
 /**
+ * Backup retention of a previous database cluster whose copies still exist,
+ * for example the dedicated cluster kept after a move to Atlas Flex. The
+ * public retention notice keeps stating that schedule next to the current
+ * one until the operator deletes the old cluster and its snapshots and then
+ * removes this setting. Comma-separated "<count> <unit>" entries, e.g.
+ * "7 days, 4 weeks, 12 months, 1 year". A malformed value fails startup so a
+ * privacy notice is never silently shortened.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {{unit: "days"|"weeks"|"months"|"years", value: number}[]}
+ */
+function parseLegacyBackupRetention(env) {
+  const raw = String(env.LEGACY_BACKUP_RETENTION || "").trim();
+  if (!raw) return [];
+  return raw.split(",").map((part) => {
+    const match = /^(\d{1,4})\s*(day|week|month|year)s?$/i.exec(part.trim());
+    const value = match ? Number(match[1]) : 0;
+    if (!match || value < 1) {
+      throw new Error(
+        "LEGACY_BACKUP_RETENTION must list \"<count> <days|weeks|months|years>\" "
+        + "entries, e.g. \"7 days, 4 weeks, 12 months, 1 year\"",
+      );
+    }
+    const unit = /** @type {"days"|"weeks"|"months"|"years"} */ (
+      `${match[2].toLowerCase()}s`
+    );
+    return { unit, value };
+  });
+}
+
+/**
  * Optional Render API capacity diagnostics. Render API keys are broadly
  * account-scoped rather than least-privilege credentials, so this integration
  * is opt-in and the adapter only performs service/metric GET requests. Render
@@ -846,6 +882,7 @@ module.exports = {
   parseR2Config,
   parseCloudflareAnalyticsConfig,
   parseAtlasAdminConfig,
+  parseLegacyBackupRetention,
   parseRenderAdminConfig,
   parseAnalyticsConfig,
   parsePlatformIntegrationsConfig,
