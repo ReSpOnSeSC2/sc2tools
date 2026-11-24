@@ -101,13 +101,17 @@ function handGames() {
     ["h4b", at(20, 10, 30), "Defeat"], ["h4a", at(20, 10, 30), "Victory"],
     // More than 90 minutes later: a new session.
     ["h5", at(20, 13, 40), "Defeat"], ["h6", at(20, 13, 45), "Defeat"],
-    // Other series of the same player: a custom game and an off-race game.
+    // Other series of the same player: a custom game, an off-race game and
+    // a ranked team game.
     ["h7", at(20, 13, 50), "Victory", { isLadderGame: false }],
     ["h8", at(20, 10, 5), "Defeat", { myRace: "Terran", myLadderRace: "Terran" }],
+    ["h9", at(20, 13, 55), "Victory", { playerCount: 4, matchFormat: "2v2" }],
   ].map(([gameId, date, result, extra]) => game({ userId: "u-hand", gameId, myToonHandle: HAND, date, result, ...extra }))
-    // Another player's games between them never join these sessions.
+    // Another player's games between them never join these sessions. Their
+    // game ids run against date order, and their opponent was renamed.
     .concat([at(20, 10, 1), at(20, 10, 11), at(20, 10, 31)].map((date, k) => game({
-      userId: "u-other", gameId: `o${k}`, myToonHandle: OTHER, date, result: "Victory",
+      userId: "u-other", gameId: `o${2 - k}`, myToonHandle: OTHER, date, result: "Victory",
+      opponent: { race: "Terran", toonHandle: "1-S2-1-555", displayName: k ? "New name" : "Old name" },
     })));
 }
 
@@ -204,14 +208,14 @@ describe("Global Trends momentum and net-MMR cards on Atlas Flex limits", () => 
   test("momentum sessions each series separately, in game order", async () => {
     const hand = await service.run("momentum", { player_selection: "include", included_players: HAND }, { sessionGapMinutes: 90 });
     // Ladder series: [h1 W, h2 L, h3 tie, h4a W, h4b L], then [h5 L, h6 L].
-    // h7 (custom) and h8 (Terran) each open their own series.
+    // h7 (custom), h8 (Terran) and h9 (team) each open their own series.
     expect(hand).toEqual({
       sessionGapMinutes: 90,
-      baseline: { wins: 3, losses: 5, total: 8, winRate: 3 / 8 },
+      baseline: { wins: 4, losses: 5, total: 9, winRate: 4 / 9 },
       postWin: { wins: 0, losses: 2, total: 2, winRate: 0 },
       postLoss: { wins: 1, losses: 1, total: 2, winRate: 0.5 },
       sessionPositions: [
-        { pos: 1, wins: 2, losses: 2, total: 4, winRate: 0.5 },
+        { pos: 1, wins: 3, losses: 2, total: 5, winRate: 0.6 },
         { pos: 2, wins: 0, losses: 2, total: 2, winRate: 0 },
         { pos: 3, wins: 1, losses: 0, total: 1, winRate: 1 },
         { pos: 4, wins: 0, losses: 1, total: 1, winRate: 0 },
@@ -220,7 +224,14 @@ describe("Global Trends momentum and net-MMR cards on Atlas Flex limits", () => 
     const both = await service.run("momentum", { player_selection: "include", included_players: `${HAND},${OTHER}` }, { sessionGapMinutes: 90 });
     // The other player's three wins form one session of their own.
     expect(both.postWin).toEqual({ wins: 2, losses: 2, total: 4, winRate: 0.5 });
-    expect(both.sessionPositions.slice(0, 3).map((row) => row.total)).toEqual([5, 3, 2]);
+    expect(both.sessionPositions.slice(0, 3).map((row) => row.total)).toEqual([6, 3, 2]);
+  });
+
+  test("the opponent drilldown names an opponent after the newest game, not the highest game id", async () => {
+    const other = await service.run("netMmrByOpponent", { player_selection: "include", included_players: OTHER }, {});
+    expect(other.items).toEqual([expect.objectContaining({
+      displayName: "New name", opponentRace: "T", pairs: 2, firstPlayed: at(20, 10, 1), lastPlayed: at(20, 10, 11),
+    })]);
   });
 
   test.each([
