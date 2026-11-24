@@ -341,7 +341,6 @@ class UploadQueue:
         self._archive_journal_error: Optional[ReplayArchiveJournalError] = None
         self._archive_lock = threading.Lock()
         self._archive_thread: Optional[threading.Thread] = None
-        self._archive_wake = threading.Event()
         self._archive_idle_since: Optional[float] = None
         self._archive_stop = threading.Event()
         self._ingest_stop = threading.Event()
@@ -455,7 +454,6 @@ class UploadQueue:
             self._ingest_generation += 1
             self._ingest_stop.set()
             self._archive_stop.set()
-            self._archive_wake.set()
             self._retry_wake.set()
             # Join in order; any thread already idle inside the
             # ``q.get(timeout=1.0)`` will exit on its next iteration.
@@ -628,7 +626,6 @@ class UploadQueue:
             self._pending_owners[path_key] = self._owner_identity(self._upload_context())
         with self._archive_lock:
             self._archive_idle_since = None
-        self._archive_wake.set()
         self._notify_pending()
         try:
             item = self._queue_item(job)
@@ -726,7 +723,6 @@ class UploadQueue:
                 # soon as the worker acknowledges another ready task.
                 return
             self._archive_scheduled.add(task.key)
-        self._archive_wake.set()
 
     def _requeue_archive_task(
         self,
@@ -750,7 +746,6 @@ class UploadQueue:
             # authoritative and hydration will recover this task later.
             with self._archive_lock:
                 self._archive_scheduled.discard(task.key)
-        self._archive_wake.set()
 
     def _run_archive(self) -> None:
         """Drain one crash-safe, low-priority original-replay lane."""
@@ -771,6 +766,9 @@ class UploadQueue:
                 log.exception("replay_archive_journal_suspended")
                 continue
             try:
+                # A task scheduled by an ingest worker wakes this get at
+                # once. Held tasks come back on their ready_at, so pause,
+                # gate and auth changes apply within about a second.
                 ready_at, _sequence, task, attempt = self._archive_q.get(
                     timeout=0.5,
                 )
@@ -1159,7 +1157,6 @@ class UploadQueue:
         with self._lock:
             self._auth_held = held
         self.retry_now()
-        self._archive_wake.set()
 
     def hold_auth_if_current(self, held: bool, *, api, epoch) -> bool:
         """Retire one admission without taking the queue lock under STATE."""
@@ -1168,7 +1165,6 @@ class UploadQueue:
                 return False
             self._auth_held = held
         self._retry_wake.set()
-        self._archive_wake.set()
         return True
 
     def replace_api(self, api: ApiClient) -> None:
