@@ -768,6 +768,8 @@ class GuiUI:
         """
         QtCore, QtGui, QtWidgets = _qt()
 
+        from ..crash_capture import install_qt_message_handler
+        install_qt_message_handler(QtCore)  # before the app, so startup warnings are kept
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(
             sys.argv if sys.argv else [""],
         )
@@ -2509,13 +2511,39 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             from .setup_wizard import build_setup_wizard
 
             self.showNormal()
+            previous = getattr(self, "_first_run_wizard", None)
+            if previous is not None:
+                previous.deleteLater()
+            # Kept so the status card's "Finish setup" can reopen it after "Finish later".
+            self._first_run_request = request
             self._first_run_wizard = build_setup_wizard(
                 self, request, QtCore=QtCore, QtWidgets=QtWidgets,
                 open_help=lambda: self._open_help("desktop-app-first-run"),
             )
-            self._first_run_wizard.rejected.connect(ui._on_quit)
+            # Esc, the title-bar X and "Finish later" only close the wizard. The boot
+            # worker keeps waiting for the choices and the status card offers Finish setup.
+            self._first_run_wizard.rejected.connect(self._first_run_postponed)
             self._first_run_wizard.completed.connect(self._first_run_completed)
             self._first_run_wizard.show()
+
+        def _first_run_postponed(self):
+            self._go_to_page("dashboard")
+            self._show_transient_notice("Setup is waiting. Choose Finish setup when you're ready.")
+
+        def _reopen_first_run(self):
+            request = getattr(self, "_first_run_request", None)
+            if request is None or request.finished:
+                return
+            wizard = getattr(self, "_first_run_wizard", None)
+            if wizard is not None and wizard.isVisible():
+                wizard.raise_()
+                wizard.activateWindow()
+                return
+            try:
+                request.refresh()  # folders and start-up changed in Settings meanwhile
+            except Exception:  # noqa: BLE001 - reopen with the last snapshot
+                log.warning("first_run_refresh_failed", exc_info=True)
+            self._show_first_run(request)
 
         def _first_run_completed(self, result):
             from ..sync_filter import PRESET_SINCE_SETUP
@@ -3951,6 +3979,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _health_actions(self):
             return {
                 "link_pc": self._link_pc,
+                "finish_setup": self._reopen_first_run,
                 "retry_now": ui._on_sync_retry,
                 "add_folder": self._click_choose_folder,
                 "set_player_name": self._focus_player_name,

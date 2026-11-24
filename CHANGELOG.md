@@ -453,6 +453,24 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.25.6
+
+- Delete update installers once the new version runs: updates download into
+  the agent's own `updates` folder, and the ~230 MB setups earlier versions
+  left in `%TEMP%` (55 on one PC, 11.6 GB) are removed, along with partial
+  downloads and interrupted-save temp files. Only agent-named files go.
+- Closing first-time setup (Esc, the title-bar X or Finish later) no longer
+  quits the agent; the status card offers Finish setup.
+- Notify once when a health problem first appears (unlinked, startup,
+  analyzer, update, OBS sign-in or folders), held while a match runs; the
+  tray tooltip names the first problem.
+- Retry replays skipped as unreadable once after each agent update, and give
+  OneDrive placeholders and files in use three more tries over about 20
+  minutes before skipping them.
+- Capture crashes locally (`logs\crash.log`, exception hooks and Qt
+  warnings), keep a failed save from leaving a timed pause on, and stop
+  sc2reader's per-event errors (with player names) from filling the log.
+
 ### Agent 0.25.5
 
 - Show your record and win rate against the current opponent on the agent's

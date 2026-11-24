@@ -31,8 +31,9 @@ HEARTBEAT_GRACE_SEC = 150  # about three missed 60 s heartbeats
 LIVE_CONTACT_SEC = 15  # the client poller backs off to 5 s while SC2 is idle
 STARTING_PHASES = ("starting", "connecting")
 LEVELS = ("ok", "info", "warn", "error", "off")
-ACTIONS = frozenset({"link_pc", "retry_now", "add_folder", "set_player_name", "resume",
+ACTIONS = frozenset({"link_pc", "finish_setup", "retry_now", "add_folder", "set_player_name", "resume",
                      "open_obs_settings", "install_update", "restart_agent", "copy_details", "open_log"})
+UNLINKED_SENTENCE = "This PC was unlinked from your account."
 STATUS_HELP = "desktop-app-status"
 SYNC_HELP = "desktop-app-sync-problems"
 GAMES_HELP = "my-game-didnt-show-up"  # identity and upload rows: why a game didn't arrive
@@ -73,9 +74,10 @@ class HealthFacts:
 
     phase: str = "starting"
     boot: BootFailure | None = None
-    # Pairing
+    # Pairing and first-run setup
     paired: bool | None = None
     unlinked: bool = False
+    setup_pending: bool = False
     # Cloud
     heartbeat_ok_at: float | None = None
     heartbeat_failed_at: float | None = None
@@ -179,11 +181,18 @@ def _boot(facts):
 
 def _pairing(facts, now):
     if facts.unlinked:
-        return HealthRow("pairing", "warn", "This PC was unlinked from your account.", "link_pc")
+        return HealthRow("pairing", "warn", UNLINKED_SENTENCE, "link_pc")
     if facts.paired is False:
         return HealthRow("pairing", "warn", "Link this PC to your account to start syncing.", "link_pc")
     if facts.paired:
         return HealthRow("pairing", "ok", "This PC is linked to your account.")
+    return None
+
+
+def _setup(facts, now):
+    # "Finish later" closed the first-run wizard; syncing waits for its choices.
+    if facts.setup_pending and not facts.unlinked:
+        return HealthRow("setup", "warn", "Finish setup to start syncing your replays.", "finish_setup")
     return None
 
 
@@ -342,7 +351,7 @@ def _auto_update(facts, now):
 
 # Table order breaks ties inside a level and decides the tray: the first warn
 # row wins, so a pairing problem stays amber while a pause greys the rest.
-RULES = (_pairing, _paused, _cloud, _failures, _folders, _identity, _analyzer,
+RULES = (_pairing, _setup, _paused, _cloud, _failures, _folders, _identity, _analyzer,
          _uploads, _archive, _filter, _updates, _live, _obs, _auto_update)
 
 
@@ -523,6 +532,9 @@ class HealthMonitor:
 
     def set_pairing(self, paired, *, unlinked=False):
         self._set(paired=bool(paired), unlinked=bool(unlinked))
+
+    def set_setup_pending(self, pending):
+        self._set(setup_pending=bool(pending))
 
     def heartbeat_ok(self, at=None):
         self._set(heartbeat_ok_at=self._stamp(at), heartbeat_failing_since=None)

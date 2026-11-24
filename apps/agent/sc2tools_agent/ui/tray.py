@@ -37,10 +37,15 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 from . import theme
+from ..health_notices import fit_utf16
 from .tray_images import _square_pad, render_tray_image, dot_color
 from .tray_notices import TrayNotices
 
 log = logging.getLogger(__name__)
+
+# NOTIFYICONDATAW.szTip holds 128 UTF-16 units including the terminator;
+# pystray raises on anything longer.
+TOOLTIP_MAX = 127
 
 
 def can_use_tray() -> bool:
@@ -505,9 +510,16 @@ class TrayUI:
     # ---------------- internal refresh ----------------
 
     def _tooltip(self) -> str:
+        """The headline, then the first problem's sentence, so a hidden window still says what's wrong."""
         with self._lock:
             snapshot = self._health
-        return "SC2 Tools - " + snapshot.headline if snapshot is not None else self._title(None)
+        if snapshot is None:
+            return fit_utf16(self._title(None), TOOLTIP_MAX)
+        lines = ["SC2 Tools - " + snapshot.headline]
+        problem = next((row for row in snapshot.rows if row.level in ("warn", "error")), None)
+        if problem is not None:
+            lines.append(problem.sentence)
+        return fit_utf16("\n".join(lines), TOOLTIP_MAX)
 
     def _show_dot(self) -> None:
         """Draw the snapshot's dot; the icon is only swapped when the colour changes."""

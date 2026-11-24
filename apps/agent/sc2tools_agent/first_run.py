@@ -75,13 +75,33 @@ def describe_setup_folder(folder, *, now=None):
 
 
 class FirstRunSetup:
-    def __init__(self, *, folders, start_with_windows, save):
+    def __init__(self, *, folders, start_with_windows, save, refresh=None):
         self.folders = tuple(str(folder) for folder in folders)
         self.start_with_windows = start_with_windows
         self._save = save
+        self._refresh = refresh
         self._lock = Lock()
         self._finished = Event()
         self._result = None
+
+    @property
+    def finished(self):
+        return self._finished.is_set()
+
+    def refresh(self):
+        """Re-read the folders and start-up setting before the wizard reopens.
+
+        Settings, Add folder and the folders row stay usable after Finish
+        later. A reopened wizard must show what they changed, or finishing
+        setup would undo it.
+        """
+        if self._refresh is None:
+            return
+        folders, start_with_windows = self._refresh()
+        with self._lock:
+            if not self._finished.is_set():
+                self.folders = tuple(str(folder) for folder in folders)
+                self.start_with_windows = start_with_windows
 
     def complete(self, choices):
         with self._lock:

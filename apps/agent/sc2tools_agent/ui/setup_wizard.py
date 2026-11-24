@@ -22,7 +22,8 @@ def build_setup_wizard(parent, request, *, QtCore, QtWidgets, describe=describe_
             self.setWindowTitle("Set up replay sync")
             self.setWindowModality(QtCore.Qt.ApplicationModal)
             self.setButtonText(QtWidgets.QWizard.FinishButton, "Start syncing")
-            self.setButtonText(QtWidgets.QWizard.CancelButton, "Quit setup")
+            # Closing, Esc and this button only postpone setup; SC2 Tools keeps running.
+            self.setButtonText(QtWidgets.QWizard.CancelButton, "Finish later")
             if open_help:
                 self.setOption(QtWidgets.QWizard.HaveHelpButton)
                 self.helpRequested.connect(open_help)

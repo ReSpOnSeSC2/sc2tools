@@ -43,6 +43,7 @@ from . import autostart
 from .api_client import ApiClient
 from .build_checkin import build_checkin_view_for, start_build_checkin
 from .build_checkin.wiring import web_queue_url
+from .crash_capture import install_crash_capture
 from .config import AgentConfig, load_config
 from .crash_reporter import (
     capture_exception,
@@ -69,6 +70,7 @@ from .pairing.flow import PairingControls
 from .pairing.recovery import RuntimeRecovery
 from .errors import classify
 from .health import HealthMonitor, classify_boot_error
+from .health_notices import HealthNotices, TITLE as HEALTH_NOTICE_TITLE
 from .recent_games import parse_time
 from .milestone_notices import MilestoneNotices
 from .relaunch import AgentRelaunch, take_restart_marker
@@ -96,6 +98,7 @@ from .replay_pipeline import probe_analyzer
 from .state import (AgentState, COMPANION_SKINS, _STATE_SAVE_LOCK, count_synced, load_state, save_state,
     migrate_legacy_state, commit_state_credentials, credential_revision, credential_status)
 from .agent_credentials import CredentialIntent, CredentialStorageError
+from .skip_retry import release_engine_skips
 from .sync_filter import SyncFilter
 from .ui import (
     ConsoleUI,
@@ -105,9 +108,10 @@ from .ui import (
     can_use_gui,
     can_use_tray,
 )
+from .update_cleanup import start_update_cleanup, system_temp_dir, updates_dir
 from .updater import ReleaseInfo, Updater, install_release, update_is_mandatory
 from .uploader.queue import UploadQueue
-from .watcher import ReplayWatcher
+from .watcher import ReplayWatcher, quiet_sc2reader
 
 LOG_FILENAME = "agent.log"
 LOG_MAX_BYTES = 5 * 1024 * 1024
@@ -188,6 +192,9 @@ def _run_locked_agent(
 ) -> int:
     """Start agent services after the caller owns the instance lock."""
     log_dir = _configure_logging(cfg)
+    # Native crashes, uncaught exceptions (threads and Qt slots too) and Qt
+    # warnings go to logs/ on this PC; the windowed exe has no console.
+    install_crash_capture(log_dir, version=__version__)
     init_crash_reporter(release=f"sc2tools-agent@{__version__}")
     log = logging.getLogger("sc2tools_agent")
     log.info(
@@ -197,6 +204,10 @@ def _run_locked_agent(
         argv if argv is not None else sys.argv[1:],
     )
     log.info("timebase: real-seconds (fps=22.4)")
+    # Installer downloads, partial downloads and interrupted-save temp files.
+    # Only the installed app sweeps %TEMP%: source runs never downloaded there.
+    start_update_cleanup(cfg.state_dir, __version__,
+                         temp_dir=system_temp_dir() if _running_frozen() else None)
     use_gui = (not args.no_gui) and can_use_gui()
     if args.no_gui:
         log.info("gui_disabled_via_flag")
@@ -463,6 +474,8 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
         paused=state.paused,folders=list(initial_replay_folders)),
         auth_epoch_guard=lambda epoch: _auth_epoch_current(state, epoch, stop_event))
     recovery_cell.api, recovery_cell.ui = api, ui
+    if tray:
+        _start_health_notices(ui, tray, lambda: recovery_cell.activity_gate)
     recovery_cell.support = _make_support_service(cfg, state, recovery_cell, stop_event, log_dir)
     support_lifetime.callback(recovery_cell.support.close)
     ui._support = recovery_cell.support
@@ -512,6 +525,7 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
     import_ctl: Optional[ImportController] = None
 
     activity_gate = GameActivityGate(enabled=not no_live)
+    recovery_cell.activity_gate = activity_gate  # health toasts wait for the match to end
     recovery_cell.api = api
     recovery = RuntimeRecovery(cell=recovery_cell, cfg=cfg, state=state, ui=ui,
                                stop_event=stop_event)
@@ -657,6 +671,7 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
     try:
         if stream_service:
             stream_service.start()
+        _release_engine_skips(cfg, state, log)
         upload.start()
         watcher.start()
         # Register the startup sweep as a visible import job when the
@@ -707,6 +722,8 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
         log.info("agent_stopping")
         if ui._milestone_notices:
             ui._milestone_notices.close()
+        if getattr(ui, "_health_notices", None):
+            ui._health_notices.close()
         if stream_service:
             stream_service.close()
         if obs_scene:
@@ -1012,6 +1029,8 @@ def _run_with_gui(
     multiplex = _Multiplexer(console, tray, gui,
         auth_epoch_guard=lambda epoch: _auth_epoch_current(state, epoch, stop_event))
     cell.ui = multiplex
+    if tray:
+        _start_health_notices(multiplex, tray, lambda: cell.activity_gate)
     cell.support = _make_support_service(cfg, state, cell, stop_event, log_dir)
     gui.set_support_service(cell.support)
     if tray:
@@ -1055,6 +1074,8 @@ def _run_with_gui(
     finally:
         if multiplex._milestone_notices:
             multiplex._milestone_notices.close()
+        if getattr(multiplex, "_health_notices", None):
+            multiplex._health_notices.close()
         cell.support.close()
 
     log.info("agent_stopping rc=%s", rc)
@@ -1175,15 +1196,24 @@ def _gui_boot_worker(
             ui.on_paired_current(state.user_id or "", getattr(state, "_owner_epoch", None))
 
         if setup_pending:
-            discovered = _discover_replay_folders(cfg, state)
+            def current_setup():
+                return (_discover_replay_folders(cfg, state),
+                        autostart.is_enabled() if autostart.is_supported() else None)
+
+            discovered, start_with_windows = current_setup()
             setup = FirstRunSetup(
                 folders=discovered,
-                start_with_windows=autostart.is_enabled() if autostart.is_supported() else None,
-                save=lambda choices: _save_first_run(cfg, state, choices, discovered, ui),
+                start_with_windows=start_with_windows,
+                # Compared with the folders the wizard showed, re-read when it reopens.
+                save=lambda choices: _save_first_run(cfg, state, choices, [Path(p) for p in setup.folders], ui),
+                refresh=current_setup,
             )
+            # Shown as "Finish setup" on the status card if the wizard is closed with Finish later.
+            ui.health.set_setup_pending(True)
             gui._dispatch("setupRequested", setup)
             if not setup.wait(stop_event):
                 return
+            ui.health.set_setup_pending(False)
 
         probe_ok, probe_diag = probe_analyzer()
         ui.on_analyzer_probe(probe_ok, probe_diag)
@@ -1407,6 +1437,7 @@ def _gui_boot_worker(
                     switch_on_replays=state.obs_switch_on_replays,
                 )
 
+        _release_engine_skips(cfg, state, log)
         upload.start()
         watcher.start()
         # Register the startup sweep as a visible import job when the
@@ -1455,15 +1486,38 @@ def _gui_boot_worker(
 # ---------------- callbacks ----------------
 
 
-def _start_pause_expiry(cfg, state, get_upload, get_ui, stop_event):
+_LOOP_ERROR_REPEAT_SEC = 600.0
+
+
+def _log_loop_error(seen, event, exc, *, clock=time.monotonic):
+    """Log a background loop's failure with its traceback, each error type at most every 10 minutes."""
+    kind = type(exc).__name__
+    now = clock()
+    last = seen.get((event, kind))
+    if last is not None and now - last < _LOOP_ERROR_REPEAT_SEC:
+        return
+    seen[(event, kind)] = now
+    logging.getLogger(__name__).warning("%s error=%s", event, kind, exc_info=(type(exc), exc, exc.__traceback__))
+
+
+def _start_pause_expiry(cfg, state, get_upload, get_ui, stop_event, *, tick=1.0, refresh_every=30.0):
     def run():
-        refresh_at=time.monotonic()+30
-        while not stop_event.wait(1):
+        refresh_at=time.monotonic()+refresh_every
+        failures = {}
+        while not stop_event.wait(tick):
+            # A failed refresh or save must not end this loop, or a timed
+            # pause would never expire. Each step has its own guard.
             if time.monotonic() >= refresh_at:
-                get_ui().refresh_status()
-                refresh_at=time.monotonic()+30
-            if state.paused and state.paused_until and state.paused_until <= time.time():
-                _handle_pause(cfg, state, get_upload(), False, ui=get_ui())
+                refresh_at=time.monotonic()+refresh_every
+                try:
+                    get_ui().refresh_status()
+                except Exception as exc:  # noqa: BLE001
+                    _log_loop_error(failures, "pause_expiry_refresh_failed", exc)
+            try:
+                if state.paused and state.paused_until and state.paused_until <= time.time():
+                    _handle_pause(cfg, state, get_upload(), False, ui=get_ui())
+            except Exception as exc:  # noqa: BLE001
+                _log_loop_error(failures, "pause_expiry_tick_failed", exc)
     thread = threading.Thread(target=run, name="sc2tools-pause-expiry", daemon=True)
     thread.start()
     return thread
@@ -1490,11 +1544,15 @@ def _handle_pause(
 ) -> None:
     state.paused = paused
     state.paused_until = until if paused else None
-    save_state(cfg.state_dir, state)
-    if upload:
-        upload.set_paused(paused)
-    if ui is not None:
-        ui.on_paused(paused, state.paused_until)
+    try:
+        save_state(cfg.state_dir, state)
+    finally:
+        # Applied even when agent.json can't be written, so the queue and the
+        # window always match the pause in memory; the next save persists it.
+        if upload:
+            upload.set_paused(paused)
+        if ui is not None:
+            ui.on_paused(paused, state.paused_until)
     logging.getLogger(__name__).info("agent_pause_toggled paused=%s", paused)
 
 
@@ -1529,6 +1587,31 @@ def _start_milestone_notices(cfg, state, ui, tray, stop_event):
                               notify=tray.show_notice, stop_event=stop_event)
     ui._milestone_notices = notices
     notices.start()
+    return notices
+
+
+def _release_engine_skips(cfg, state, log):
+    """Before the first sweep: replays an older engine skipped get one more parse."""
+    try:
+        released = release_engine_skips(state, cfg.state_dir)
+    except Exception:  # noqa: BLE001 - the skips stay; the next start tries again
+        log.warning("engine_skip_retry_failed", exc_info=True)
+        return 0
+    if released:
+        log.info("engine_skip_retry released=%d version=%s", released, __version__)
+    return released
+
+
+def _start_health_notices(ui, tray, gate_provider):
+    """Toast each new health problem once through the tray, never during a match."""
+    def busy():
+        gate = gate_provider()
+        return bool(gate is not None and gate.busy)
+
+    notices = HealthNotices(notify=lambda message: tray.show_notice(message, title=HEALTH_NOTICE_TITLE),
+                            busy=busy)
+    ui._health_notices = notices
+    ui.health.subscribe(notices.on_health)
     return notices
 
 
@@ -2347,7 +2430,8 @@ def _make_update_scheduler(cfg,state,cell,gate,stop_event,request_stop,log):
         if not _running_frozen():
             raise RuntimeError("Use Download installer to update this source install.")
         host=urllib.parse.urlparse(cfg.api_base).hostname
-        install_release(release,trusted_hosts=[host] if host else [])
+        # The next version deletes this setup once it runs (update_cleanup).
+        install_release(release,download_dir=updates_dir(cfg.state_dir),trusted_hosts=[host] if host else [])
         request_stop()
     def notify(release,phase,detail):
         if getattr(cell,"ui",None):
@@ -2703,6 +2787,7 @@ def _configure_logging(cfg: AgentConfig) -> Path:
     obs_sdk.handlers.clear()
     obs_sdk.addHandler(logging.NullHandler())
     obs_sdk.propagate = False
+    quiet_sc2reader()  # parses on the live lane run in this process
     for handler in list(root.handlers):
         root.removeHandler(handler)
     console = logging.StreamHandler()
@@ -3913,6 +3998,7 @@ class _Multiplexer:
         self._recovered_count = 0
         self._recent_history = None
         self._milestone_notices = None
+        self._health_notices = None
         self._import_ctl = None
         self._game_notifications = lambda: False
         self._notified_games = []

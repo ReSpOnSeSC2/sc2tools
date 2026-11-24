@@ -81,9 +81,11 @@ from .replay_finder import (
     path_key,
     watched_replay_folders,
 )
+from .replay_files import temporarily_unreadable
 from .replay_pipeline import (
     SKIP_ANALYSIS_FAILED,
     SKIP_FILE_UNSTABLE,
+    SKIP_PARSE_FAILED,
     AnalyzerImportError,
     parse_replay_for_cloud_ex,
     capture_unresolved_candidates,
@@ -111,6 +113,11 @@ SETTLE_POLL_SEC = 1.0
 # an interrupted save fails identically forever, so without a terminal
 # outcome it was re-queued every sweep and the import card never finished.
 _SETTLE_FAILURE_LIMIT = 3
+# A replay OneDrive hasn't downloaded yet, or that another program holds open,
+# stays unmarked and is tried again after each of these waits. One more failure
+# after the last wait records the skip the parse produced (parse_failed or
+# analysis_failed), which Retry, a full Re-sync and the next update retry.
+_UNAVAILABLE_RETRY_SEC = (60.0, 300.0, 900.0)
 
 # Boot-time probe budget. A healthy spawn on Windows takes ~1–3 s
 # (cold) or ~0.5 s (warm); 30 s is the upper bound we'll wait before
@@ -259,6 +266,16 @@ def _parse_pool_use_processes_env() -> bool:
     return raw.strip().lower() not in {"0", "false", "off", "no"}
 
 
+def quiet_sc2reader() -> None:
+    """Keep sc2reader's per-event errors out of the logs.
+
+    sc2reader logs an ERROR for every replay event it can't name (13,808 of
+    one PC's agent.log lines) and puts player names in them. The analyzer
+    reports real parse failures itself.
+    """
+    logging.getLogger("sc2reader").setLevel(logging.CRITICAL)
+
+
 def _install_worker_log_handler(state_dir_str: str) -> None:
     """Wire the child's root logger to a per-process worker log file.
     Idempotent and safe to call from any number of workers.
@@ -313,6 +330,7 @@ def _install_worker_log_handler(state_dir_str: str) -> None:
     handler.setFormatter(formatter)
     root.addHandler(handler)
     root.setLevel(logging.INFO)
+    quiet_sc2reader()
     setattr(root, "_sc2tools_worker_handler", True)
 
 
@@ -345,6 +363,10 @@ def _parse_in_worker(path_str: str, state_dir_str: str, owned_toons=None, owned_
       * ``("analysis_failed", path_str, str)`` → unexpected per-file
                                               error; recorded as a
                                               terminal skip
+      * ``("file_unavailable", path_str, reason)`` → a cloud placeholder
+                                              or a file in use; retried
+                                              later, then skipped as
+                                              ``reason``
 
     The function is intentionally process-mode-safe: it imports
     everything fresh, runs the file-settle loop in the worker (so
@@ -408,6 +430,8 @@ def _parse_in_worker(path_str: str, state_dir_str: str, owned_toons=None, owned_
     except _AnalyzerImportError as exc:
         return ("analyzer_error", path_str, str(exc))
     except Exception as exc:  # noqa: BLE001
+        if temporarily_unreadable(path):
+            return ("file_unavailable", path_str, SKIP_ANALYSIS_FAILED)
         # Returned rather than raised: a raised exception reached the parent
         # as an anonymous worker crash with no terminal outcome, so this one
         # replay was re-parsed on every sweep and never uploaded or skipped.
@@ -418,6 +442,8 @@ def _parse_in_worker(path_str: str, state_dir_str: str, owned_toons=None, owned_
             f"{type(exc).__name__}: {exc}"[:500],
         )
     if not game:
+        if reason == SKIP_PARSE_FAILED and temporarily_unreadable(path):
+            return ("file_unavailable", path_str, SKIP_PARSE_FAILED)
         # Carry the skip-reason code over the IPC boundary so the
         # parent can persist it (``skipped:<reason>``) and report it
         # to the import-progress UI.
@@ -529,6 +555,10 @@ class ReplayWatcher:
             str, tuple[tuple[int, int] | None, int]
         ] = {}
         self._settle_failures_lock = threading.Lock()
+        # path -> (attempts, monotonic time of the next try). See
+        # ``_record_unavailable``.
+        self._unavailable: dict[str, tuple[int, float]] = {}
+        self._unavailable_lock = threading.Lock()
         self._parse_inflight_limit = max(
             _PARSE_INFLIGHT_MIN,
             min(
@@ -931,6 +961,7 @@ class ReplayWatcher:
             resync = self._upload.is_resync_requested()
             if resync:
                 self._upload.acknowledge_resync()
+                self._clear_all_unavailable()
             # Otherwise discovery only adds. It runs every sweep because SC2
             # creates a toon folder when a new region or handle saves its
             # first replay (a PTR game's ``98-S2-1-<id>``), which a
@@ -978,6 +1009,8 @@ class ReplayWatcher:
                 if key in self._state.uploaded:
                     continue
                 if self._upload.is_pending(path):
+                    continue
+                if self._unavailable_waiting(key):
                     continue
                 if not sync_filter.mtime_in_range(mtime):
                     continue
@@ -1110,6 +1143,8 @@ class ReplayWatcher:
                 if key in self._state.uploaded:
                     continue
                 if self._upload.is_pending(path):
+                    continue
+                if self._unavailable_waiting(key):
                     continue
                 if not self._sync_filter().mtime_in_range(mtime):
                     self._mark_replay(key, "filtered", ticket)
@@ -1407,6 +1442,10 @@ class ReplayWatcher:
                 return
             if kind != "settle_failed":
                 self._clear_settle_failure(path)
+            if kind == "file_unavailable":
+                self._record_unavailable(path, payload or SKIP_PARSE_FAILED, ticket=ticket)
+                return
+            self._clear_unavailable(path)
             if kind == "game":
                 parsed = as_parsed_game(payload)
                 payload = parsed.game
@@ -1528,6 +1567,52 @@ class ReplayWatcher:
     def _clear_settle_failure(self, path: Path) -> None:
         with self._settle_failures_lock:
             self._settle_failures.pop(str(path), None)
+
+    def _record_unavailable(self, path: Path, reason: str = SKIP_PARSE_FAILED, *, ticket=None) -> None:
+        """Retry a replay that couldn't be read right now; skip it as ``reason`` at last.
+
+        OneDrive may not have downloaded it yet, or another program holds it.
+        Neither is the replay's fault, so it stays unmarked through
+        ``_UNAVAILABLE_RETRY_SEC``. A failure after the last wait records the
+        skip it would have had at once, so the import still finishes.
+        """
+        key = str(path)
+        with self._unavailable_lock:
+            attempts = self._unavailable.get(key, (0, 0.0))[0] + 1
+            if attempts > len(_UNAVAILABLE_RETRY_SEC):
+                self._unavailable.pop(key, None)
+                delay = None
+            else:
+                delay = _UNAVAILABLE_RETRY_SEC[attempts - 1]
+                self._unavailable[key] = (attempts, time.monotonic() + delay)
+        if delay is None:
+            log.warning(
+                "replay_file_unavailable_giving_up file=%s attempts=%d reason=%s "
+                "(recorded as skipped; Retry, Re-sync or the next update tries it again)",
+                path.name, attempts, reason,
+            )
+            ticket = ticket or replay_ticket(self._state)
+            if self._mark_replay(key, f"skipped:{reason}", ticket):
+                self._notify_skipped(path, reason, ticket=ticket)
+            return
+        (log.info if attempts == 1 else log.debug)(
+            "replay_file_unavailable file=%s attempt=%d retry_in_sec=%d "
+            "(cloud placeholder or in use; not marked skipped yet)",
+            path.name, attempts, int(delay),
+        )
+
+    def _unavailable_waiting(self, key: str) -> bool:
+        with self._unavailable_lock:
+            entry = self._unavailable.get(key)
+        return entry is not None and entry[1] > time.monotonic()
+
+    def _clear_unavailable(self, path: Path) -> None:
+        with self._unavailable_lock:
+            self._unavailable.pop(str(path), None)
+
+    def _clear_all_unavailable(self) -> None:
+        with self._unavailable_lock:
+            self._unavailable.clear()
 
     def _finish_replay(self, path: Path) -> None:
         with self._inflight_lock:
@@ -1728,6 +1813,9 @@ class ReplayWatcher:
                 self._analyzer_unavailable = True
                 return
             except Exception:  # noqa: BLE001
+                if temporarily_unreadable(path):
+                    self._record_unavailable(path, SKIP_ANALYSIS_FAILED, ticket=ticket)
+                    return
                 # Executors discard a raised exception silently, and the
                 # replay was then re-parsed on every sweep without ever
                 # being uploaded or skipped. Record a terminal outcome.
@@ -1747,6 +1835,10 @@ class ReplayWatcher:
                     self._analyzer_unavailable = False
             if not self._ticket_current(ticket):
                 return
+            if not game and skip_reason == SKIP_PARSE_FAILED and temporarily_unreadable(path):
+                self._record_unavailable(path, SKIP_PARSE_FAILED, ticket=ticket)
+                return
+            self._clear_unavailable(path)
             if not game:
                 # AI / unresolved / per-file parse error — record so we
                 # don't re-attempt every sweep.

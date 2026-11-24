@@ -34,6 +34,9 @@ def test_options_silent_upgrade_and_opt_in_data_removal_contract():
         assert f'RMDir /r "$LOCALAPPDATA\\sc2tools\\{folder}"' in data
     commands=[line.strip() for line in uninstall.splitlines() if line.strip() and not line.strip().startswith(';')]
     assert 'RMDir /r "$INSTDIR"' not in commands
+    # Downloaded update setups are a cache: always removed, never only on opt-in.
+    always=uninstall.split('${If} $DeleteUserData == ${BST_CHECKED}',1)[0]
+    assert 'RMDir /r "$LOCALAPPDATA\\sc2tools\\updates"' in always
     assert not any('replay_folders' in line or 'Documents' in line for line in commands)
 
 

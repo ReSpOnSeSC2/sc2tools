@@ -226,6 +226,7 @@ def test_both_watcher_modes_deliver_candidates_after_current_skip_marker(mode, w
     instance._stop = threading.Event()
     instance._analyzer_unavailable = False
     instance._process_crash_strikes = 0
+    instance._unavailable, instance._unavailable_lock = {}, threading.Lock()
     instance._clear_settle_failure = Mock()
     instance._finish_replay = Mock()
     instance._notify_skipped = Mock()

@@ -68,6 +68,7 @@ def monitor():
 @pytest.mark.parametrize("changes,rule_id,level,action", [
     ({"unlinked": True}, "pairing", "warn", "link_pc"),
     ({"paired": False}, "pairing", "warn", "link_pc"),
+    ({"setup_pending": True}, "setup", "warn", "finish_setup"),
     ({}, "pairing", "ok", None),
     ({"paused": True}, "paused", "warn", "resume"),
     ({"connection": "offline", "pending": 12}, "cloud", "warn", "retry_now"),
@@ -158,6 +159,8 @@ def test_unknown_or_quiet_facts_add_no_row():
     unpaired = evaluate(facts(paired=False, connection="offline", pending=3), NOW)
     assert row(unpaired, "cloud") is None and row(unpaired, "uploads") is None
     assert row(evaluate(facts(paused=True, pending=3), NOW), "uploads") is None
+    # An unlink outranks setup: Link PC comes first, and setup waits behind it.
+    assert row(evaluate(facts(setup_pending=True, unlinked=True), NOW), "setup") is None
 
 
 def test_rows_sort_by_level_then_table_order_and_off_rows_fill_the_footer():
@@ -206,6 +209,8 @@ def test_a_boot_failure_replaces_every_other_row(kind):
     ({"phase": "starting"}, None),
     ({"phase": "connecting", "pending": 2}, None),
     ({"phase": "connecting", "unlinked": True}, "amber"),
+    ({"phase": "connecting", "setup_pending": True}, "amber"),
+    ({"setup_pending": True, "paused": True}, "amber"),
     ({"phase": "starting", "analyzer_ok": False}, "red"),
     ({"phase": "boot_error"}, "red"),
 ])
@@ -573,3 +578,16 @@ def test_the_boot_error_path_reports_a_classified_failure(tmp_path, monkeypatch)
     assert snapshot.rows == (HealthRow("boot", "error", "Windows blocked a file or folder SC2 Tools needs "
                                        "(Permission denied).", "restart_agent"),)
     assert sink.on_status_view.call_args.args[0].status == AgentStatus.ERROR
+
+
+def test_finish_later_keeps_one_setup_row_until_the_boot_worker_clears_it():
+    watched, _clock, scheduler, seen = monitor()
+    watched.set_phase("connecting"); watched.set_pairing(True); watched.set_setup_pending(True)
+    scheduler.run()
+    setup = row(seen[-1], "setup")
+    assert setup == HealthRow("setup", "warn", "Finish setup to start syncing your replays.", "finish_setup")
+    assert seen[-1].rows[0] is setup and seen[-1].tray == "amber" and seen[-1].attention == 1
+    watched.set_setup_pending(False)
+    scheduler.run()
+    assert row(seen[-1], "setup") is None and seen[-1].attention == 0
+    assert health.UNLINKED_SENTENCE == row(evaluate(facts(unlinked=True), NOW), "pairing").sentence

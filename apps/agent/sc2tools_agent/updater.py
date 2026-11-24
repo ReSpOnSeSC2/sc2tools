@@ -2,7 +2,9 @@
 
 Polls ``GET /v1/agent/version`` on startup and on a periodic schedule.
 When the cloud reports a newer release than the running agent, downloads
-the installer to a temp dir, verifies the SHA-256, and launches it.
+the installer (the runner passes ``<state dir>/updates``, which
+``update_cleanup`` empties once the new version runs), verifies the
+SHA-256, and launches it.
 
 Compatible with both the PyInstaller-frozen .exe install AND the
 ``python -m sc2tools_agent`` source-run mode:
