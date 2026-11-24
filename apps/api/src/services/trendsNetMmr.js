@@ -72,6 +72,82 @@ function isTrustedMmr(valueField, sourceField) {
   };
 }
 
+/** Ladder races a measured pair can belong to. */
+const PAIR_LADDER_RACES = Object.freeze(["P", "T", "Z", "R"]);
+
+/**
+ * The games index that supplies the window's order: ``userId``, then the
+ * window's partition field, then its sort fields in the same directions.
+ */
+const NET_MMR_WINDOW_INDEX = Object.freeze({
+  name: "net_mmr_window",
+  key: Object.freeze({ userId: 1, myToonHandle: 1, date: -1, gameId: -1 }),
+});
+
+/** Whether a game is ranked 1v1. */
+function ranked1v1Expr() {
+  return {
+    $and: [
+      { $eq: ["$isLadderGame", true] },
+      { $eq: ["$playerCount", 2] },
+    ],
+  };
+}
+
+/** @param {string} race */
+function nextGameField(race) {
+  return `_next${race}`;
+}
+
+/**
+ * Write, for every ladder race, the next pair-eligible game of that race
+ * on the same account.
+ *
+ * A pair-eligible game is ranked 1v1 with a known account and ladder race,
+ * and the same account plus ladder race is exactly the window partition
+ * that pairs it. Every game in such a partition is itself pair-eligible,
+ * so "the next game of this partition" is "the next pair-eligible game of
+ * this account and ladder race". Other games never use their next game,
+ * because their drop reason is decided before that.
+ *
+ * The partition is the stored account field and the sort uses stored
+ * fields, newest first. Placed straight after the history $match, its
+ * order then comes from the ``net_mmr_window`` index instead of an
+ * in-memory sort, which Atlas Flex caps at 32 MB with no disk spill.
+ * (MongoDB rejects an array partition value; every write validates
+ * ``myToonHandle`` as a string, see validation/gameRecord.js.)
+ * Newest first, the games after this one come before it, so $min of
+ * [date, gameId, MMR, MMR source] over them is the next one. $min skips
+ * the nulls that other games yield, and needs no buffering for a window
+ * that starts at the partition's first game.
+ */
+function nextGameWindowStage() {
+  /** @param {string} race */
+  const candidate = (race) => ({
+    $cond: [
+      {
+        $and: [
+          ranked1v1Expr(),
+          hasNonEmptyString("$myToonHandle"),
+          { $eq: [myLadderRaceExpr(), race] },
+        ],
+      },
+      ["$date", "$gameId", "$myMmr", "$myMmrSource"],
+      null,
+    ],
+  });
+  return {
+    $setWindowFields: {
+      partitionBy: "$myToonHandle",
+      sortBy: { date: -1, gameId: -1 },
+      output: Object.fromEntries(PAIR_LADDER_RACES.map((race) => [
+        nextGameField(race),
+        { $min: candidate(race), window: { documents: ["unbounded", -1] } },
+      ])),
+    },
+  };
+}
+
 /**
  * Build the canonical accepted-pair input used by every net-MMR view.
  *
@@ -93,6 +169,13 @@ function netMmrPairStages(deps, userId, filters) {
     // build, or date filters here would make non-consecutive rows look
     // consecutive and attribute their combined drift to one game.
     { $match: { userId, isResumedFromReplay: { $ne: true } } },
+    // Nothing may sit between that $match and the window, or the window's
+    // order stops coming from the index.
+    nextGameWindowStage(),
+    // Filters select CURRENT games. The next observation may sit outside
+    // a date/opponent/map filter and still supplies the correct result of
+    // the selected anchor game.
+    { $match: displayMatch },
     {
       $addFields: {
         _bucket: deps.bucketSwitch(),
@@ -106,48 +189,38 @@ function netMmrPairStages(deps, userId, filters) {
         _hasMyAccount: hasNonEmptyString("$myToonHandle"),
         _hasMyMmr: { $isNumber: "$myMmr" },
         _trustedMyMmr: isTrustedMmr("$myMmr", "$myMmrSource"),
-        _ranked1v1: {
-          $and: [
-            { $eq: ["$isLadderGame", true] },
-            { $eq: ["$playerCount", 2] },
+        _ranked1v1: ranked1v1Expr(),
+      },
+    },
+    {
+      $addFields: {
+        // Queue fields stay part of the pairing even though only ranked
+        // 1v1 is displayed: a custom or team replay never becomes the next
+        // observation for a ladder game.
+        _next: {
+          $cond: [
+            { $and: ["$_ranked1v1", "$_hasMyAccount"] },
+            {
+              $switch: {
+                branches: PAIR_LADDER_RACES.map((race) => ({
+                  case: { $eq: ["$_myLadderRace", race] },
+                  then: `$${nextGameField(race)}`,
+                })),
+                default: null,
+              },
+            },
+            null,
           ],
         },
       },
     },
     {
       $addFields: {
-        // Queue fields remain in the partition even though only ranked
-        // 1v1 is displayed, preventing custom/team replays from becoming
-        // the next observation for a ladder game.
-        _partitionKey: {
-          account: { $ifNull: ["$myToonHandle", "__missing_account__"] },
-          ladderRace: "$_myLadderRace",
-          isLadder: { $ifNull: ["$isLadderGame", null] },
-          playerCount: { $ifNull: ["$playerCount", null] },
-        },
+        _nextGameId: { $ifNull: [{ $arrayElemAt: ["$_next", 1] }, null] },
+        _nextMyMmr: { $arrayElemAt: ["$_next", 2] },
+        _nextMyMmrSource: { $arrayElemAt: ["$_next", 3] },
       },
     },
-    {
-      $setWindowFields: {
-        partitionBy: "$_partitionKey",
-        sortBy: { date: 1, gameId: 1 },
-        output: {
-          _nextGameId: {
-            $shift: { output: "$gameId", by: 1, default: null },
-          },
-          _nextMyMmr: {
-            $shift: { output: "$myMmr", by: 1, default: null },
-          },
-          _nextMyMmrSource: {
-            $shift: { output: "$myMmrSource", by: 1, default: null },
-          },
-        },
-      },
-    },
-    // Filters select CURRENT games. The next observation may sit outside
-    // a date/opponent/map filter and still supplies the correct result of
-    // the selected anchor game.
-    { $match: displayMatch },
     {
       $addFields: {
         _hasNextMyMmr: { $isNumber: "$_nextMyMmr" },
@@ -609,4 +682,5 @@ module.exports = {
   netMmrByMatchup,
   netMmrPairStages,
   NET_MMR_MAX_DELTA,
+  NET_MMR_WINDOW_INDEX,
 };

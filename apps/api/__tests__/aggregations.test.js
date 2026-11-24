@@ -1127,7 +1127,7 @@ describe("services/aggregations", () => {
     expect(out.dropped.missingMyMmr).toBe(13);
   });
 
-  test("netMmrByMatchup partitions by account, ladder race, and queue", async () => {
+  test("netMmrByMatchup pairs within account, ladder race, and queue in index order", async () => {
     let captured = null;
     const games = {
       aggregate(pipeline) {
@@ -1142,12 +1142,20 @@ describe("services/aggregations", () => {
     };
     const svc = new AggregationsService({ games });
     await svc.netMmrByMatchup("u1", {});
+    const [history, window] = captured;
+    expect(history).toEqual({ $match: { userId: "u1", isResumedFromReplay: { $ne: true } } });
+    // Straight after the history $match, on stored fields: the
+    // net_mmr_window index supplies this order (no in-memory sort).
+    expect(window.$setWindowFields).toMatchObject({
+      partitionBy: "$myToonHandle",
+      sortBy: { date: -1, gameId: -1 },
+    });
+    // One next game per ladder race, and only ranked 1v1 games qualify.
+    expect(Object.keys(window.$setWindowFields.output)).toEqual(["_nextP", "_nextT", "_nextZ", "_nextR"]);
+    const windowJson = JSON.stringify(window);
+    expect(windowJson).toContain('{"$eq":["$isLadderGame",true]}');
+    expect(windowJson).toContain('{"$eq":["$playerCount",2]}');
     const json = JSON.stringify(captured);
-    expect(json).toContain('"partitionBy":"$_partitionKey"');
-    expect(json).toContain('"ladderRace":"$_myLadderRace"');
-    expect(json).toContain('"isLadder"');
-    expect(json).toContain('"playerCount"');
-    expect(json).toContain('"$myToonHandle"');
     // Unverified and missing values must remain visible to diagnostics.
     expect(json).toContain('"missingMyMmr"');
     expect(json).toContain('"untrustedMyMmr"');

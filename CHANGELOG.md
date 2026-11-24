@@ -11,6 +11,16 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Trends
+
+- Verified MMR (Net MMR by matchup and its opponent table) works again for
+  long histories. On Atlas Flex an in-memory sort is capped at 32 MB with no
+  disk spill, and pairing each game with the next one sorted the player's
+  whole history in memory, which failed at about 14,000 games. A new games
+  index (`net_mmr_window`) now supplies that order. The opponent table and
+  MMR progression no longer sort a whole history at all. Results are
+  unchanged. See ADR 0096.
+
 ### Hosting costs
 
 - The database now runs on MongoDB Atlas Flex instead of a dedicated M10, so
