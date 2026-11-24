@@ -17,6 +17,11 @@ def name(number=1, slot="device"):
     return f"{slot}-{number:032x}.dpapi"
 
 
+def counted(size):
+    """Synthetic bytes in which every 4-byte word differs."""
+    return b"".join(number.to_bytes(4, "little") for number in range(size // 4))
+
+
 def test_absent_reads_and_capacity_do_not_create_state_or_generation_roots(tmp_path):
     root = tmp_path / "absent" / "state"
     store = windows.WindowsCredentialStorage(root)
@@ -77,7 +82,7 @@ def test_generation_bounds_are_checked_before_reading_or_allocating_more(tmp_pat
     directory = root / "credentials-v1"
     directory.mkdir(parents=True)
     (directory / name()).write_bytes(b"x" * (MAX_GENERATION_BYTES + 1))
-    monkeypatch.setattr(windows.native.Handle, "read", lambda *args: pytest.fail("oversized generation was read"))
+    monkeypatch.setattr(store._files.kernel, "ReadFile", lambda *args: pytest.fail("oversized generation was read"))
     with pytest.raises(CredentialStorageError, match="^invalid_generation$"):
         store.read_generation(name())
 
@@ -103,8 +108,8 @@ def test_hardlinked_generation_is_rejected_before_any_read(tmp_path, monkeypatch
     outside = tmp_path / "synthetic-other-file"
     outside.write_bytes(b"owned synthetic bytes")
     os.link(outside, directory / name())
-    monkeypatch.setattr(windows.native.Handle, "read", lambda *args: pytest.fail("hardlinked generation was read"))
     store = windows.WindowsCredentialStorage(root)
+    monkeypatch.setattr(store._files.kernel, "ReadFile", lambda *args: pytest.fail("hardlinked generation was read"))
     with pytest.raises(CredentialStorageError, match="^unsafe_path$"):
         store.read_generation(name())
     assert outside.read_bytes() == b"owned synthetic bytes"
@@ -279,6 +284,124 @@ def test_native_failure_has_only_fixed_error_code(tmp_path, monkeypatch):
     assert failure.value.args == ("unavailable",)
     assert "synthetic token" not in repr(failure.value)
     assert failure.value.__context__ is None and failure.value.__cause__ is None
+
+
+def native_reads(monkeypatch, store, during=None):
+    """Record the byte count of each ReadFile through this store's handles.
+
+    during(call, size) runs before that call reaches the file, as a concurrent
+    writer would, and may return a smaller count to serve it with (a short read).
+    """
+    kernel, requested = store._files.kernel, []
+    original = kernel.ReadFile
+
+    def recording(handle, buffer, size, actual, overlapped):
+        requested.append(size)
+        served = during(len(requested), size) if during else None
+        return original(handle, buffer, size if served is None else served, actual, overlapped)
+
+    monkeypatch.setattr(kernel, "ReadFile", recording)
+    return requested
+
+
+def test_each_verified_read_is_one_native_call_and_an_end_probe(tmp_path, monkeypatch):
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    old = b'{"old":"' + b"o" * (3 << 20) + b'"}'  # Many 512 KiB support-read chunks.
+    new = b'{"new":"' + b"n" * (2 << 20) + b'"}'
+    store.replace_pointer(None, old)
+    requested = native_reads(monkeypatch, store)
+    assert store.read_pointer() == old
+    assert requested == [len(old), 1]
+    requested.clear()
+    store.replace_pointer(old, new)
+    # Raw fence, temporary read-back, second fence, read-back after the rename.
+    assert requested == [len(old), 1, len(new), 1, len(old), 1, len(new), 1]
+    assert (root / "agent.json").read_bytes() == new
+
+
+def test_each_native_read_stays_within_the_per_call_bound(tmp_path, monkeypatch):
+    assert 0 < windows._READ_CALL_MAX < 1 << 32  # ReadFile takes a DWORD count.
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    document = counted(10_000)
+    store.replace_pointer(None, document)
+    monkeypatch.setattr(windows, "_READ_CALL_MAX", 4096)
+    requested = native_reads(monkeypatch, store)
+    assert store.read_pointer() == document
+    assert requested == [4096, 4096, 10_000 - 8192, 1]
+
+
+def test_short_native_read_continues_where_it_stopped(tmp_path, monkeypatch):
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    document = counted(1_000_004)
+    store.replace_pointer(None, document)
+    first = len(document) // 3
+    requested = native_reads(monkeypatch, store, lambda call, size: first if call == 1 else None)
+    assert store.read_pointer() == document
+    assert requested == [len(document), len(document) - first, 1]
+
+
+@pytest.mark.parametrize("failure", ["native_error", "truncated"])
+def test_failed_or_truncated_native_read_reports_only_a_fixed_code(tmp_path, monkeypatch, failure):
+    import ctypes
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    store.replace_pointer(None, counted(1 << 20))
+    kernel, calls = store._files.kernel, []
+    original = kernel.ReadFile
+
+    def failing(handle, buffer, size, actual, overlapped):
+        calls.append(size)
+        if failure == "native_error":
+            ctypes.set_last_error(33)  # ERROR_LOCK_VIOLATION
+            return 0
+        # Another writer truncates agent.json after its size was verified: this
+        # call comes up short and the next one meets the end of the file.
+        with open(root / "agent.json", "r+b") as other:
+            other.truncate(1000)
+        return original(handle, buffer, size, actual, overlapped)
+
+    monkeypatch.setattr(kernel, "ReadFile", failing)
+    with pytest.raises(CredentialStorageError, match="^unavailable$") as error:
+        store.read_pointer()
+    assert error.value.args == ("unavailable",)
+    assert error.value.__context__ is None and error.value.__cause__ is None
+    if failure == "native_error":
+        assert calls == [1 << 20]
+    else:
+        assert calls == [1 << 20, (1 << 20) - 1000]
+        assert (root / "agent.json").stat().st_size == 1000
+
+
+@pytest.mark.parametrize("change, code", [("attributes", "unavailable"), ("hard_link", "unsafe_path")])
+def test_metadata_changed_during_the_read_reports_only_a_fixed_code(tmp_path, monkeypatch, change, code):
+    import ctypes
+    import stat
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    store.replace_pointer(None, b'{"synthetic":true}')
+    # The read pins every ancestor, tmp_path too, without write sharing, so the
+    # new link goes in an unpinned sibling directory.
+    pointer, linked = root / "agent.json", tmp_path / "elsewhere" / "linked"
+    linked.parent.mkdir()
+
+    def concurrent(call, size):
+        if call == 1:  # After the first verification, before the data arrives.
+            if change == "attributes":
+                ctypes.windll.kernel32.SetFileAttributesW(str(pointer), stat.FILE_ATTRIBUTE_HIDDEN)
+            else:
+                os.link(pointer, linked)
+
+    native_reads(monkeypatch, store, concurrent)
+    with pytest.raises(CredentialStorageError, match=f"^{code}$") as error:
+        store.read_pointer()
+    assert error.value.__context__ is None and error.value.__cause__ is None
+    if change == "attributes":
+        assert pointer.stat().st_file_attributes & stat.FILE_ATTRIBUTE_HIDDEN
+    else:
+        assert linked.read_bytes() == b'{"synthetic":true}'
 
 
 def chain(directory):
