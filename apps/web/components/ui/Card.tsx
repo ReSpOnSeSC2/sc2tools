@@ -213,7 +213,7 @@ export function Skeleton({ rows = 4 }: { rows?: number }) {
   return (
     <div className="rounded-xl border border-line bg-bg-surface shadow-card divide-y divide-border">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex gap-4 p-4">
+        <div key={i} data-skeleton-row="" className="flex gap-4 p-4">
           <div className="skeleton-shimmer h-4 w-32 rounded-md" />
           <div className="skeleton-shimmer h-4 w-12 rounded-md" />
           <div className="skeleton-shimmer h-4 w-12 rounded-md" />

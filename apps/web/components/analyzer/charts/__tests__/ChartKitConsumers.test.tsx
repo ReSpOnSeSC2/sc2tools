@@ -129,7 +129,7 @@ it("keeps streak callbacks and visible W/L labels when reduced motion disables p
   expect(screen.getByText(/n=3 decided/)).toBeTruthy();
   fireEvent.click(screen.getByText(/Notable streaks/));
   const run = screen.getByRole("button", { name: /W2/ }); fireEvent.click(run); expect(select).toHaveBeenLastCalledWith("g1");
-  expect(view.container.querySelector('[class*="animate-pulse"]')).toBeNull();
+  expect(view.container.querySelector('[class*="animate-pulse"], .skeleton-shimmer')).toBeNull();
   expect(view.container.querySelectorAll("button span[aria-hidden]").length).toBeGreaterThan(0);
   fireEvent.click(screen.getByRole("button", { name: /View as table/ })); expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(4);
 });

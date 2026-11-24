@@ -297,7 +297,7 @@ describe("MatchupGameLengthCard", () => {
     const { container } = render(<MatchupGameLengthCard />);
 
     expect(screen.getByText("Time played by matchup")).toBeTruthy();
-    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(3);
+    expect(container.querySelectorAll("[data-skeleton-row]")).toHaveLength(3);
     expect(screen.queryByText("No game-length data in this view")).toBeNull();
     expect(screen.queryByText("No matchup breakdown for this view")).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Time format" })).toBeNull();

@@ -495,7 +495,7 @@ describe("FingerprintCard", () => {
     it("shows a skeleton while loading", () => {
       useApiMock.mockReturnValue({ data: undefined, isLoading: true });
       const { container } = render(<FingerprintCard />);
-      expect(container.querySelector(".animate-pulse")).toBeTruthy();
+      expect(container.querySelector(".skeleton-shimmer, .animate-pulse")).toBeTruthy();
     });
 
     it("renders the response archetype, three spectra, and replay evidence", () => {

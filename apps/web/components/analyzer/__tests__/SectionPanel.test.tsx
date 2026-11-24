@@ -51,7 +51,7 @@ describe("SectionPanel", () => {
   it("loads only the section on screen", async () => {
     const { container } = render(<SectionPanel tab="macro" />);
     // The route skeleton shows while the chunk arrives.
-    expect(container.querySelector(".animate-pulse")).toBeTruthy();
+    expect(container.querySelector(".skeleton-shimmer, .animate-pulse")).toBeTruthy();
     expect(await screen.findByText("macro section")).toBeTruthy();
     expect([...loaded]).toEqual(["macro"]);
   });

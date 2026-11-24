@@ -194,7 +194,7 @@ describe("BuildDetailView signed out", () => {
       "/sign-up",
     );
     expect(screen.getByRole("link", { name: "Browse community builds" }).getAttribute("href")).toBe("/community");
-    expect(container.querySelector(".animate-pulse")).toBeNull();
+    expect(container.querySelector(".skeleton-shimmer, .animate-pulse")).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
@@ -203,6 +203,6 @@ describe("BuildDetailView signed out", () => {
     const { container } = render(<BuildDetailView slug="proxy-gate" />);
     expect(screen.getByRole("heading", { name: "Sign in to open this build" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Browse community builds" })).toBeTruthy();
-    expect(container.querySelector(".animate-pulse")).toBeNull();
+    expect(container.querySelector(".skeleton-shimmer, .animate-pulse")).toBeNull();
   });
 });
