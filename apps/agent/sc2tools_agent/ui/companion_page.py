@@ -10,6 +10,7 @@ import time
 
 from ..build_checkin.scouting import parse_recent_builds, recent_build_columns
 from ..companion_modes import build_companion_modes, effective_mode_features, normalize_modes, verified_one_on_one
+from ..opponent_identity import is_barcode_like_name
 from ..team_roster import TeamRoster, TEAM_FEATURES, roster_candidate
 from .opponent_card import opponent_record
 from .companion_build_chain import TIME_RANGES
@@ -180,17 +181,40 @@ def _live_context(snapshot):
         elif history.get("opponentIdentityMatched") is False:
             # The server matches recent builds by exact account, never by
             # display name, so they stay true when the name-matched record is dropped.
+            name_record = history.get("headToHead")
             history = {key: history[key] for key in ("opponentIdentityMatched", "recentBuilds") if key in history}
+            # The name-matched record stays out of ``headToHead`` (voice,
+            # notes and scouting read that as this exact account). The
+            # identity card shows it marked as approximate, as the OBS
+            # widget shows it, except for barcodes that many accounts share.
+            if isinstance(name_record, dict) and not is_barcode_like_name(current_name):
+                history["nameMatchedRecord"] = {"wins": name_record.get("wins"), "losses": name_record.get("losses")}
         profile = opponent.get("profile") or {}
         return active, {
             **history,
             "name": opponent.get("revealedName") or opponent.get("name") or "Opponent resolving…",
             "race": opponent.get("race"),
             "mmr": profile.get("mmr"),
-            "league": profile.get("league"), "region": profile.get("region"),
+            # SC2Pulse labels the Americas "US"; players (and the cloud) say "NA".
+            "league": profile.get("league"), "region": "NA" if profile.get("region") == "US" else profile.get("region"),
             "elapsed": envelope.get("displayTime"),
         }
     return False, post
+
+
+def _identity_record(context, fallback=None):
+    """``(wins, losses, approximate)`` for an identity card.
+
+    An exact head-to-head (or team totals) wins; otherwise a record the
+    cloud matched only by display name, flagged approximate.
+    """
+    record = context.get("headToHead") or context.get("totals") or fallback
+    if isinstance(record, dict) and (record.get("wins") is not None or record.get("losses") is not None):
+        return record.get("wins"), record.get("losses"), False
+    approximate = context.get("nameMatchedRecord")
+    if isinstance(approximate, dict):
+        return approximate.get("wins"), approximate.get("losses"), True
+    return None, None, False
 
 
 def _opponent_history_known(context):
@@ -417,7 +441,11 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             override = css_for_skin(skin)
             for widget in (self, *self.findChildren(QtWidgets.QWidget)):
                 base_style = widget.property("pinnedRaceBaseStyle")
-                if base_style is None and widget.styleSheet():
+                # Like the main window: a style of bare declarations (the
+                # identity card's responsive label sizes) styles only its own
+                # widget. Freezing it here re-applied a stale font size on
+                # every skin change.
+                if base_style is None and "{" in widget.styleSheet():
                     base_style = widget.styleSheet()
                     widget.setProperty("pinnedRaceBaseStyle", base_style)
                 if base_style is not None:
@@ -467,7 +495,6 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
 
         def update_context(self, context, *, scope=None):
             self.title.setText(_name(context) if context else "Preview · choose an opponent")
-            record = context.get("headToHead") or context.get("totals") or context
             parts = [str(value) for value in [context.get("race") or context.get("oppRace"), context.get("league"), context.get("region")] if value]
             if context.get("mmr") is not None:
                 parts.append(f"{context['mmr']} MMR")
@@ -475,10 +502,11 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             notes = context.get("opponentNotes") or {}
             text = notes.get("text") if isinstance(notes, dict) else ""
             if self.kind == "opponent":
+                wins, losses, approximate = _identity_record(context, fallback=context)
                 self.identity_card.set_identity(name=_name(context) if context else None,
                                                 race=context.get("race") or context.get("oppRace"),
                                                 mmr=context.get("mmr", context.get("oppMmr")),
-                                                wins=record.get("wins"), losses=record.get("losses"))
+                                                wins=wins, losses=losses, approximate=approximate)
                 return
             self._context = context
             scope = scope if scope is not None else (context.get("pulseId"), _name(context))
@@ -1685,9 +1713,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 profile = direct.get("profile") if isinstance(direct.get("profile"), dict) else {}
                 mmr = profile.get("mmr")
             race = {"p": "Protoss", "protoss": "Protoss", "t": "Terran", "terran": "Terran", "z": "Zerg", "zerg": "Zerg", "r": "Random", "random": "Random"}.get(str(race).strip().lower(), "—")
-            record = context.get("headToHead") or context.get("totals") or {}
-            record = record if isinstance(record, dict) else {}
-            self.compact_card.set_identity(name=name, race=race, mmr=mmr, wins=record.get("wins"), losses=record.get("losses"))
+            wins, losses, approximate = _identity_record(context)
+            self.compact_card.set_identity(name=name, race=race, mmr=mmr, wins=wins, losses=losses, approximate=approximate)
             if not active:
                 self.compact_card.set_waiting(in_game=in_game)
             self._set_team_mmr_source(self.compact_card, context)

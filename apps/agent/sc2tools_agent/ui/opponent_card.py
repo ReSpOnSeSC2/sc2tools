@@ -29,7 +29,12 @@ def opponent_identity(name=None, race=None, mmr=None):
     }
 
 
-def opponent_record(wins=None, losses=None):
+def opponent_record(wins=None, losses=None, *, approximate=False):
+    """Your record against one opponent, as card text.
+
+    ``approximate`` marks a record the cloud found by display name rather
+    than by the opponent's account, so it carries a leading ``≈``.
+    """
     def count(value):
         if type(value) is int and 0 <= value <= 2 ** 53 - 1:
             return value
@@ -41,8 +46,13 @@ def opponent_record(wins=None, losses=None):
     if wins is None or losses is None:
         return {"wins": None, "losses": None, "text": "—", "winRate": "—"}
     total = wins + losses
-    rate = f"{100 * wins / total:.1f}".rstrip("0").rstrip(".") + "%" if total else "—"
-    return {"wins": wins, "losses": losses, "text": f"{wins}W · {losses}L", "winRate": rate}
+    marker = "≈" if approximate is True else ""
+    rate = marker + f"{100 * wins / total:.1f}".rstrip("0").rstrip(".") + "%" if total else "—"
+    return {"wins": wins, "losses": losses, "text": f"{marker}{wins}W · {losses}L", "winRate": rate}
+
+
+NAME_MATCH_NOTE = ("Matched by display name, not by this opponent's account, "
+                   "so it can include games against another player who used this name.")
 
 
 def opponent_asset_root():
@@ -225,20 +235,24 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
         def sizeHint(self):
             return QtCore.QSize(260, 380) if profile else QtCore.QSize(420, 44)
 
-        def set_identity(self, name=None, race=None, mmr=None, *, wins=None, losses=None):
+        def set_identity(self, name=None, race=None, mmr=None, *, wins=None, losses=None, approximate=False):
             self.identity = opponent_identity(name, race, mmr)
-            self.record = opponent_record(wins, losses)
+            self.record = opponent_record(wins, losses, approximate=approximate)
+            self.record_approximate = approximate is True and self.record["wins"] is not None
+            note = (" " + NAME_MATCH_NOTE) if self.record_approximate else ""
             self.name_label.set_full_text(self.identity["name"])
             self.race_label.setText(self.identity["race"])
             self.mmr_label.setText(self.identity["mmr"])
             self.mmr_label.setToolTip("Matchmaking rating" if self.identity["mmr"] != "—" else "MMR unavailable")
             self.record_label.setText(self.record["text"])
-            self.record_label.setToolTip("Your wins and losses against this opponent: " + self.record["text"])
+            self.record_label.setToolTip("Your wins and losses against this opponent: " + self.record["text"] + "." + note)
             self.win_rate_label.setText(self.record["winRate"])
-            self.win_rate_label.setToolTip("Your win percentage against this opponent: " + self.record["winRate"])
+            self.win_rate_label.setToolTip("Your win percentage against this opponent: " + self.record["winRate"] + "." + note)
+            for caption in (self.record_caption, self.win_rate_caption):
+                caption.setToolTip(NAME_MATCH_NOTE if self.record_approximate else "")
             self.portrait.set_race(self.identity["race"])
             self.setAccessibleName("Opponent identity")
-            self.setAccessibleDescription(f"Name: {self.identity['name']}. Race: {self.identity['race']}. MMR: {self.identity['mmr']}. Your record: {self.record['text']}. Your win rate: {self.record['winRate']}.")
+            self.setAccessibleDescription(f"Name: {self.identity['name']}. Race: {self.identity['race']}. MMR: {self.identity['mmr']}. Your record: {self.record['text']}. Your win rate: {self.record['winRate']}.{note}")
             self._place_contents()
 
         def set_skin(self, skin):
@@ -302,10 +316,12 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
                 self.name_label.setGeometry(10, (self.height() - 20) // 2, name_width - 6, 20)
                 left = 10 + name_width
                 self._record_top = (self.height() - 29) // 2
-                for proportion, caption, value in ((0.15, self.race_caption, self.race_label),
-                                                    (0.14, self.mmr_caption, self.mmr_label),
-                                                    (0.23, self.record_caption, self.record_label),
-                                                    (0.23, self.win_rate_caption, self.win_rate_label)):
+                # Sized for "Random", "1v1 MMR", "≈123W · 45L" and "YOUR WIN
+                # RATE" at the 360 px minimum; the name column elides.
+                for proportion, caption, value in ((0.16, self.race_caption, self.race_label),
+                                                    (0.13, self.mmr_caption, self.mmr_label),
+                                                    (0.25, self.record_caption, self.record_label),
+                                                    (0.21, self.win_rate_caption, self.win_rate_label)):
                     column_width = round(available * proportion)
                     caption.setGeometry(left, self._record_top, column_width - 4, 11)
                     value.setGeometry(left, self._record_top + 11, column_width - 4, 18)

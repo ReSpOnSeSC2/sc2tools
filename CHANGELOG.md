@@ -449,6 +449,16 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.25.5
+
+- Show your record and win rate against the current opponent on the agent's
+  Compact bar and pinned opponent panel instead of dashes. Records matched only
+  by display name are marked ≈; barcode names stay hidden (ADR 0097).
+- Find the opponent's SC2Pulse account on your own server and send the exact
+  account to the cloud when there is exactly one match.
+- Keep the pinned opponent panel's text size after skin changes and fit long
+  records at the smallest Compact width.
+
 ### Streaming reliability and Agent 0.25.4
 
 - Retry stalled TikTok LIVE chat connections and surface relay errors in chat.

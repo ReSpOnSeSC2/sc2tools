@@ -301,6 +301,9 @@ class OpponentProfile:
     region: Optional[str] = None
     battle_tag: Optional[str] = None
     account_handle: Optional[str] = None
+    # Battle.net toon handle of the chosen Pulse character. The bridge
+    # sends it as ``opponent.toonHandle`` only for an unambiguous match.
+    toon_handle: Optional[str] = None
     mmr: Optional[int] = None
     league: Optional[str] = None
     league_tier: Optional[int] = None

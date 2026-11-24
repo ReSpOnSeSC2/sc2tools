@@ -173,6 +173,35 @@ def test_match_loading_emits_partial_payload_immediately() -> None:
         bridge.stop()
 
 
+@pytest.mark.parametrize(("opp_name", "confidence", "expected"), [
+    ("OppPlayer", 1.0, "2-S2-1-2594743"),
+    ("OppPlayer", 0.5, None),
+    ("IIIIIIIIIIII", 1.0, None),
+])
+def test_only_an_unambiguous_pulse_match_sends_the_exact_toon_handle(opp_name, confidence, expected) -> None:
+    """The cloud reads ``opponent.toonHandle`` as the exact account and
+    keys opponent rows by it, so a tied or barcode guess never sends one,
+    and the guessed handle never rides inside the profile."""
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    profile = OpponentProfile(name=opp_name, mmr=4000, pulse_character_id=234878,
+                              toon_handle="2-S2-1-2594743", confidence=confidence)
+    bridge = LiveBridge(lifecycle_bus=lifecycle, pulse=_StubPulseClient(profile=profile),
+                        user_name_hint="Streamer")
+    seen: List[Dict[str, Any]] = []
+    bridge.bus.subscribe(seen.append)
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event(opp_name=opp_name, game_key=f"{opp_name}|Streamer|1"))
+        assert _wait_for(lambda: any("profile" in e.get("opponent", {}) for e in seen))
+        enriched = next(e for e in seen if "profile" in e.get("opponent", {}))
+        assert enriched["opponent"].get("toonHandle") == expected
+        assert "toon_handle" not in enriched["opponent"]["profile"]
+        assert enriched["opponent"]["profile"]["pulse_character_id"] == 234878
+        assert "toonHandle" not in seen[0]["opponent"]
+    finally:
+        bridge.stop()
+
+
 def test_random_races_survive_later_concrete_values_for_same_game() -> None:
     """Selected Random must survive the API revealing spawned races."""
     lifecycle: EventBus[LiveLifecycleEvent] = EventBus()

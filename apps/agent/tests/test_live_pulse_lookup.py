@@ -765,3 +765,103 @@ def test_failed_season_fetch_does_not_disable_mmr_until_agent_restart() -> None:
 
     assert client._ensure_season(1) is None
     assert client._ensure_season(1) == 70
+
+
+def test_live_string_regions_score_the_region_and_report_the_exact_toon() -> None:
+    """Live SC2Pulse labels regions "US"/"EU" (not codes) and nests the
+    character under ``members``. The region hint must still score, the
+    profile reports the candidate's own server, and the chosen character
+    yields the toon handle Battle.net stamps into replays."""
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56, "region": "EU"}]))
+    session.queue(
+        "/character/search",
+        _ok([
+            {  # Same name and race on another server, listed first.
+                "members": {
+                    "character": {"id": 1, "name": "Clone#0001", "region": "US", "realm": 1, "battlenetId": 111},
+                    "terranGamesPlayed": 100,
+                },
+            },
+            {
+                "members": {
+                    "character": {"id": 2, "name": "Clone#0002", "region": "EU", "realm": 1, "battlenetId": 2594743},
+                    "terranGamesPlayed": 100,
+                },
+            },
+        ]),
+    )
+    session.queue("/group/team", _ok([{"rating": 5200, "league": 5, "region": "EU"}]))
+    client = _make_client(session)
+    profile = client.resolve(name="Clone", region="EU", race="Terran")
+    assert profile is not None
+    assert profile.pulse_character_id == 2
+    assert profile.region == "EU"
+    assert profile.confidence == 1.0
+    assert profile.toon_handle == "2-S2-1-2594743"
+    assert profile.alternatives == ["Clone (US)"]
+    assert profile.mmr == 5200
+
+
+@pytest.mark.parametrize("character", [
+    {"id": 3, "name": "Gap#3", "region": "EU", "battlenetId": 9},
+    {"id": 3, "name": "Gap#3", "region": "EU", "realm": 0, "battlenetId": 9},
+    {"id": 3, "name": "Gap#3", "region": "SEA", "realm": 1, "battlenetId": 9},
+    {"id": 3, "name": "Gap#3", "region": "EU", "realm": "1", "battlenetId": "x9"},
+    {"id": 3, "name": "Gap#3", "region": "EU", "realm": "²", "battlenetId": 9},
+])
+def test_toon_handle_needs_a_known_region_realm_and_battlenet_id(character) -> None:
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56}]))
+    session.queue("/character/search", _ok([{"members": {"character": character}}]))
+    session.queue("/group/team", _ok([]))
+    profile = _make_client(session).resolve(name="Gap", region="EU", race="Zerg")
+    assert profile is not None and profile.pulse_character_id == 3
+    assert profile.toon_handle is None
+
+
+def _hit(cid: int, name: str, region: str, bnid: int, **games: int) -> dict:
+    return {"members": {"character": {"id": cid, "name": name, "region": region, "realm": 1, "battlenetId": bnid}, **games}}
+
+
+def test_a_same_server_namesake_on_another_race_keeps_the_pick_uncertain() -> None:
+    """The live opponent may be off-racing. An exact namesake on the same
+    server must stop the race bonus from making the pick certain, or its
+    toon handle would be sent as the exact account."""
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56}]))
+    session.queue("/character/search", _ok([
+        _hit(1, "Bob#1", "US", 222, terranGamesPlayed=300),
+        _hit(2, "Bob#2", "US", 333, zergGamesPlayed=300),
+        _hit(3, "Bob#3", "EU", 444, terranGamesPlayed=300),
+    ]))
+    session.queue("/group/team", _ok([{"rating": 4100, "league": 4}]))
+    profile = _make_client(session).resolve(name="Bob", region="NA", race="Terran")
+    assert profile is not None and profile.pulse_character_id == 1
+    assert profile.confidence < 1.0
+
+
+def test_a_namesake_past_the_first_ten_hits_keeps_the_pick_uncertain() -> None:
+    hits = [_hit(1, "Bob#1", "US", 222, terranGamesPlayed=300)]
+    hits += [_hit(100 + i, f"Bobby{i}#1", "US", 500 + i, terranGamesPlayed=10) for i in range(10)]
+    hits.append(_hit(2, "Bob#2", "US", 333, protossGamesPlayed=300))
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56}]))
+    session.queue("/character/search", _ok(hits))
+    session.queue("/group/team", _ok([{"rating": 4100, "league": 4}]))
+    profile = _make_client(session).resolve(name="Bob", region="NA", race="Terran")
+    assert profile is not None and profile.pulse_character_id == 1
+    assert profile.confidence < 1.0
+
+
+def test_the_only_exact_name_on_the_server_stays_certain_among_partial_and_foreign_hits() -> None:
+    hits = [_hit(100 + i, f"Bobby{i}#1", "US", 500 + i, terranGamesPlayed=10) for i in range(12)]
+    hits += [_hit(3, "Bob#3", "EU", 444, terranGamesPlayed=300), _hit(1, "Bob#1", "US", 222, terranGamesPlayed=300)]
+    session = _StubSession()
+    session.queue("/season/list/all", _ok([{"battlenetId": 56}]))
+    session.queue("/character/search", _ok(hits))
+    session.queue("/group/team", _ok([{"rating": 4100, "league": 4}]))
+    profile = _make_client(session).resolve(name="Bob", region="NA", race="Terran")
+    assert profile is not None and profile.pulse_character_id == 1
+    assert profile.confidence == 1.0
+    assert profile.toon_handle == "1-S2-1-222"

@@ -480,20 +480,59 @@ def test_live_history_name_mismatch_cannot_attach_previous_player_records(oppone
             "opponentNotes": {"text": "Not this player", "readAloud": True}}}})
     assert active
     assert not context.get("headToHead") and not context.get("opponentNotes")
+    # A previous player's record is never shown, not even as approximate.
+    assert "nameMatchedRecord" not in context
 
 
-def test_unmatched_live_identity_does_not_present_candidate_records_or_notes(companion):
+def test_name_matched_record_is_shown_as_approximate_without_notes_or_scouting(companion):
+    """The cloud found this opponent's row only by display name. The OBS
+    widget shows that record; the identity cards show it marked ≈ instead
+    of dashes, while notes, scouting and voice stay exact-account only."""
     page, state, app = companion
     history = page._snapshot["liveGame"]["streamerHistory"]
-    history["opponentIdentityMatched"] = False
-    history["opponentNotes"] = {"text": "Not this player", "readAloud": True}
+    history.update({"oppName": "Live opponent", "opponentIdentityMatched": False,
+                    "opponentNotes": {"text": "Not this player", "readAloud": True}})
     page.set_density("compact")
-    assert page.compact_card.record["wins"] is None
-    assert page.compact_card.win_rate_label.text() == "—"
+    page._update_overlays()
+    for card in (page.compact_card, page.overlays["opponent"].identity_card):
+        assert card.record_approximate is True
+        assert card.record_label.text() == "≈2W · 1L"
+        assert card.win_rate_label.text() == "≈66.7%"
+        assert "display name" in card.record_label.toolTip()
+        assert "display name" in card.accessibleDescription()
     active, context = _live_context(page._snapshot)
     assert active and context["name"] == "Live opponent"
     assert not context.get("headToHead") and not context.get("opponentNotes")
     assert not context.get("last5GamesScouting")
+    assert context["nameMatchedRecord"] == {"wins": 2, "losses": 1}
+
+
+def test_barcode_name_match_keeps_the_record_hidden(companion):
+    page, state, app = companion
+    envelope = page._snapshot["liveGame"]
+    envelope["opponent"]["name"] = "IIIIIIIIIIII"
+    envelope["streamerHistory"].update({"oppName": "IIIIIIIIIIII", "opponentIdentityMatched": False})
+    page.set_density("compact")
+    page._update_overlays()
+    for card in (page.compact_card, page.overlays["opponent"].identity_card):
+        assert card.record["wins"] is None and card.win_rate_label.text() == "—"
+        assert card.record_approximate is False
+    active, context = _live_context(page._snapshot)
+    assert active and "nameMatchedRecord" not in context and not context.get("headToHead")
+
+
+def test_exact_identity_with_production_history_fields_shows_the_record(companion):
+    """Production enrichment carries ``oppName`` and the identity flag; an
+    exact account match must reach both identity cards unmarked."""
+    page, state, app = companion
+    page._snapshot["liveGame"]["streamerHistory"].update({
+        "oppName": "Live opponent", "opponentIdentityMatched": True, "opponentPulseId": "2-S2-1-2594743"})
+    page.set_density("compact")
+    page._update_overlays()
+    for card in (page.compact_card, page.overlays["opponent"].identity_card):
+        assert card.record_label.text() == "2W · 1L" and card.win_rate_label.text() == "66.7%"
+        assert card.record_approximate is False
+        assert "display name" not in card.record_label.toolTip()
 
 
 def test_compact_record_and_percentage_follow_the_live_opponent_not_browsed_dossier(companion):
@@ -677,3 +716,29 @@ def test_assistance_off_reason_follows_the_switch_pairing_snapshot_and_shutdown(
     assert page.assistance_off_reason() == "connecting"
     page.shutdown()
     assert page.assistance_off_reason() == "closed"
+
+
+def test_pinned_identity_card_keeps_its_responsive_label_sizes_across_skins(companion):
+    """Skin changes used to freeze the card's label styles from the first
+    call and re-apply that stale font size after the card was resized."""
+    page, state, app = companion
+    panel = page.overlays["opponent"]
+    card = panel.identity_card
+    card.resize(360, 40)
+    card._place_contents()
+    panel.set_appearance("protoss", False)
+    card.resize(420, 44)
+    card._place_contents()
+    panel.set_appearance("zerg", False)
+    for label in (card.name_label, card.record_label, card.win_rate_label):
+        assert "13px" in label.styleSheet(), label.styleSheet()
+        assert label.property("pinnedRaceBaseStyle") is None
+
+
+def test_live_context_shows_the_americas_as_na_like_the_rest_of_sc2tools():
+    active, context = _live_context({"liveGame": {"phase": "match_in_progress", "capturedAt": time.time(),
+        "opponent": {"name": "Current", "profile": {"region": "US", "mmr": 4000}}}})
+    assert active and context["region"] == "NA"
+    active, context = _live_context({"liveGame": {"phase": "match_in_progress", "capturedAt": time.time(),
+        "opponent": {"name": "Current", "profile": {"region": "EU"}}}})
+    assert context["region"] == "EU"

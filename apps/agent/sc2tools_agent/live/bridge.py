@@ -32,6 +32,7 @@ from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional
 
+from ..opponent_identity import unambiguous_toon_handle
 from .event_bus import EventBus
 from .metrics import METRICS
 from .pulse_lookup import PulseClient
@@ -531,7 +532,16 @@ class LiveBridge:
             "race": ctx.opponent_race,
         }
         if ctx.profile is not None:
-            env["opponent"]["profile"] = to_jsonable(ctx.profile)
+            profile = to_jsonable(ctx.profile)
+            # The cloud reads ``opponent.toonHandle`` as the exact account,
+            # so a guessed handle never rides along in the profile.
+            profile.pop("toon_handle", None)
+            env["opponent"]["profile"] = profile
+            toon = unambiguous_toon_handle(ctx.profile, ctx.opponent_name)
+            if toon:
+                # Lets the cloud match the opponent row by its toon key
+                # when that row has no SC2Pulse character id yet.
+                env["opponent"]["toonHandle"] = toon
         if ctx.user_name or ctx.user_race:
             env["user"] = {
                 "name": ctx.user_name,

@@ -250,3 +250,31 @@ def test_your_record_and_percentage_use_only_complete_nonnegative_counts(wins, l
     assert result["winRate"] == rate
     if record == "—":
         assert result["wins"] is result["losses"] is None
+
+
+def test_name_matched_record_is_marked_approximate():
+    assert opponent_record(2, 1, approximate=True) == {"wins": 2, "losses": 1, "text": "≈2W · 1L", "winRate": "≈66.7%"}
+    assert opponent_record(0, 0, approximate=True)["winRate"] == "—"
+    assert opponent_record(None, 1, approximate=True)["text"] == "—"
+    assert opponent_record(2, 1, approximate="yes")["text"] == "2W · 1L"
+
+
+def test_approximate_record_fits_the_smallest_compact_card(tmp_path):
+    run_card_check(tmp_path, '''
+        from sc2tools_agent.ui.opponent_card import build_opponent_card
+        card = build_opponent_card(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+        card.set_identity("GoldChain", "Random", 5189, wins=123, losses=45, approximate=True)
+        card.show()
+        for size in ((360, 40), (420, 44)):
+            card.resize(*size)
+            app.processEvents()
+            assert card.record_label.text() == "≈123W · 45L" and card.win_rate_label.text() == "≈73.2%"
+            for label in (card.race_label, card.record_label, card.win_rate_label, card.win_rate_caption):
+                assert label.fontMetrics().horizontalAdvance(label.text()) <= label.width(), (size, label.text())
+            assert "display name" in card.record_caption.toolTip()
+            assert "display name" in card.win_rate_label.toolTip()
+        card.set_identity("GoldChain", "Protoss", 5189, wins=1, losses=0)
+        assert card.record_caption.toolTip() == "" and card.record_approximate is False
+        assert card.record_label.text() == "1W · 0L"
+        card.close()
+    ''')

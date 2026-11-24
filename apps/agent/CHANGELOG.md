@@ -2,6 +2,15 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.25.5
+
+### Fixed
+- Show your record and win rate against the current opponent on the Compact bar and the pinned opponent panel instead of dashes. A record the cloud matched only by the opponent's display name is marked ≈ and says so in its tooltip; barcode names stay hidden.
+- Pick the opponent's SC2Pulse account on your own server. Live SC2Pulse reports regions as text and the lookup compared them with region numbers, so the server never counted and no match was ever certain.
+- Send the opponent's exact account to the cloud when SC2Pulse finds exactly one match, so your record, notes and opponent links attach to that account.
+- Keep the pinned opponent panel's text size after changing skins, and fit "Random" and long records at the smallest Compact width.
+- Still save the replay archive's progress on shutdown if Windows refuses to start the archive worker.
+
 ## 0.25.4
 
 ### Fixed

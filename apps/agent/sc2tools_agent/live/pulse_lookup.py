@@ -99,11 +99,49 @@ def _canon_race(raw: Optional[str]) -> Optional[str]:
 
 
 def _region_code(raw: Any) -> Optional[int]:
-    if isinstance(raw, int) and raw in PULSE_REGION_CODE_TO_LABEL:
+    if type(raw) is int and raw in PULSE_REGION_CODE_TO_LABEL:
         return raw
     if isinstance(raw, str):
-        return PULSE_REGION_LABEL_TO_CODE.get(raw.upper())
+        return PULSE_REGION_LABEL_TO_CODE.get(raw.strip().upper())
     return None
+
+
+def _positive_int(raw: Any) -> Optional[int]:
+    if type(raw) is int:
+        return raw if raw > 0 else None
+    if isinstance(raw, str) and raw.strip().isascii() and raw.strip().isdecimal():
+        value = int(raw.strip())
+        return value if value > 0 else None
+    return None
+
+
+def _has_server_namesake(best: Dict[str, Any], candidates: List[Dict[str, Any]], *, name: str) -> bool:
+    """Whether another hit has ``name`` exactly on ``best``'s server."""
+    region = _region_code(_pick_hit_character(best).get("region"))
+    target = name.casefold()
+    for candidate in candidates:
+        if candidate is best or not isinstance(candidate, dict):
+            continue
+        character = _pick_hit_character(candidate)
+        cand_name = _split_battletag(character.get("name"))
+        if cand_name and cand_name.casefold() == target and _region_code(character.get("region")) == region:
+            return True
+    return False
+
+
+def _toon_handle(character: Dict[str, Any]) -> Optional[str]:
+    """The Battle.net toon handle (``2-S2-1-2594743``) of a Pulse character.
+
+    SC2Pulse's region code, realm and battlenetId are exactly the parts
+    Battle.net stamps into a replay's toon handle, and the cloud keys
+    every opponent row by that handle.
+    """
+    region = _region_code(character.get("region"))
+    realm = _positive_int(character.get("realm"))
+    battlenet_id = _positive_int(character.get("battlenetId"))
+    if region is None or realm is None or battlenet_id is None:
+        return None
+    return f"{region}-S2-{realm}-{battlenet_id}"
 
 
 def _last_played_timestamp(raw: Any) -> float:
@@ -440,6 +478,11 @@ class PulseClient:
             )
         best_score, best = scored[0]
         confidence = self._confidence_for(best_score, scored)
+        if confidence >= 1.0 and _has_server_namesake(best, candidates, name=name):
+            # Another account with this exact name on the same server can
+            # be the real opponent playing off-race, so the race bonus
+            # alone never makes the pick certain.
+            confidence = 0.5
         team_info = self._fetch_team_for(best, race=race)
         return self._build_profile(
             name=name,
@@ -462,9 +505,11 @@ class PulseClient:
         data = self._get_with_retry(url, params=params)
         if not isinstance(data, list):
             return []
-        # Pulse returns up to ~50 by default; trim to a reasonable
-        # shortlist so we don't fan out the team-fetch step too wide.
-        return data[:10]
+        # SC2Pulse returns every match (450 for "Bob", 11,000+ for a
+        # barcode). Scoring is local and only the winner's team is fetched,
+        # so keep the whole list: a namesake past an early cut-off would
+        # otherwise let the wrong account look certain.
+        return data
 
     def _fetch_team_for(
         self, candidate: Dict[str, Any], *, race: Optional[str] = None,
@@ -610,9 +655,10 @@ class PulseClient:
         * Region match: matches caller hint (+.3) > no hint (.0).
         * Race match: top-played race agrees with hint (+.2).
         """
-        target_region_code = (
-            PULSE_REGION_LABEL_TO_CODE.get(region) if region else None
-        )
+        # Live SC2Pulse labels regions ("US", "EU"); older fixtures and
+        # responses use the numeric code. Compare normalised codes, or a
+        # same-region account never outranks a namesake on another server.
+        target_region_code = _region_code(region) if region else None
         target_race = _canon_race(race)
         scored: List[Tuple[float, Dict[str, Any]]] = []
         for c in candidates:
@@ -630,7 +676,7 @@ class PulseClient:
                 score += 0.3
             # Region
             if target_region_code is not None:
-                if ch.get("region") == target_region_code:
+                if _region_code(ch.get("region")) == target_region_code:
                     score += 0.3
             # Race — race counts live on the team-member object, which
             # Pulse nests under ``members[0]`` (newer responses) or
@@ -669,7 +715,7 @@ class PulseClient:
     def _candidate_label(self, candidate: Dict[str, Any]) -> str:
         ch = _pick_hit_character(candidate)
         name = _split_battletag(ch.get("name")) or "?"
-        region = PULSE_REGION_CODE_TO_LABEL.get(ch.get("region"), "?")
+        region = PULSE_REGION_CODE_TO_LABEL.get(_region_code(ch.get("region")), "?")
         return f"{name} ({region})"
 
     def _build_profile(
@@ -684,7 +730,9 @@ class PulseClient:
         alternatives: List[str],
     ) -> OpponentProfile:
         ch = _pick_hit_character(candidate)
-        cand_region = PULSE_REGION_CODE_TO_LABEL.get(ch.get("region"))
+        # Live SC2Pulse sends "US"/"EU"; normalise before the label lookup
+        # so the profile reports the candidate's own server, not the hint.
+        cand_region = PULSE_REGION_CODE_TO_LABEL.get(_region_code(ch.get("region")))
         # Display name from the candidate (preferred — has the right
         # discriminator), fall back to the in-game name from the
         # caller if Pulse withheld it.
@@ -737,6 +785,7 @@ class PulseClient:
             region=cand_region or region,
             battle_tag=battle_tag,
             account_handle=battle_tag,
+            toon_handle=_toon_handle(ch),
             mmr=mmr,
             league=league,
             league_tier=league_tier,
