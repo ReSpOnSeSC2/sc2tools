@@ -32,8 +32,7 @@ export const BUTTON_SIZE_CLASSES: Record<ButtonSize, string> = {
 };
 
 export const BUTTON_BASE_CLASSES = [
-  "inline-flex items-center justify-center font-display font-semibold tracking-[-0.01em] select-none",
-  "transition-[color,background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.97] disabled:active:scale-100",
+  "btn-base inline-flex items-center justify-center font-display font-semibold",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
   "disabled:cursor-not-allowed",
 ].join(" ");
