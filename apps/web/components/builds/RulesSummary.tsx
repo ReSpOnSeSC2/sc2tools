@@ -137,7 +137,7 @@ function RuleRow({ rule }: { rule: BuildRule }) {
   return (
     <li
       className={[
-        "flex min-h-[44px] items-center gap-3 border-b border-l border-b-border px-3 py-2 last:border-b-0",
+        "flex min-h-[44px] items-center gap-3 border-b border-l-2 border-b-border px-3 py-2 last:border-b-0",
         RULE_TONE_STRIPE[ruleTone(rule)],
       ].join(" ")}
     >

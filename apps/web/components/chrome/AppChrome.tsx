@@ -398,7 +398,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               className={[TAB_BASE, !inTabBar ? "text-accent-cyan" : "text-text-muted hover:text-text"].join(" ")}
             >
               {!inTabBar ? <TabBeam /> : null}
-              <span className={[TAB_PILL, !inTabBar ? "bg-accent-cyan/12" : ""].join(" ")}><MoreHorizontal className="h-5 w-5" aria-hidden /></span>
+              <span className={[TAB_PILL, !inTabBar ? "bg-accent-cyan/15" : ""].join(" ")}><MoreHorizontal className="h-5 w-5" aria-hidden /></span>
               More
             </button>
           </SignedIn>
@@ -496,7 +496,7 @@ function TabBarLink({ entry, active }: { entry: NavEntry; active: boolean }) {
       className={[TAB_BASE, active ? "text-accent-cyan" : "text-text-muted hover:text-text"].join(" ")}
     >
       {active ? <TabBeam /> : null}
-      <span className={[TAB_PILL, active ? "bg-accent-cyan/12" : ""].join(" ")}><Icon className="h-5 w-5" aria-hidden /></span>
+      <span className={[TAB_PILL, active ? "bg-accent-cyan/15" : ""].join(" ")}><Icon className="h-5 w-5" aria-hidden /></span>
       {entry.shortLabel ?? entry.label}
     </Link>
   );

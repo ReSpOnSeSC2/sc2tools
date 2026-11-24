@@ -73,7 +73,7 @@ export function WinRateSortToggle({
               title={o.title}
               className={`min-h-11 sm:min-h-8 whitespace-nowrap rounded-full px-3 text-xs tabular-nums transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 selected
-                  ? "bg-bg-elevated text-text shadow-card ring-1 ring-line"
+                  ? "bg-accent-cyan/15 text-text shadow-card ring-1 ring-accent-cyan/50"
                   : "text-text-muted hover:text-text"
               }`}
             >

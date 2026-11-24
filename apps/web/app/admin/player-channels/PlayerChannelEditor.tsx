@@ -80,7 +80,7 @@ export function PlayerChannelEditor({ entry, onClose, onSaved }: {
     if (dirty) setDiscarding(true);
     else onClose();
   }, [saving, dirty, onClose]);
-  const textareaClass = "block w-full resize-y rounded-lg border border-line bg-bg-surface px-3 py-2 font-mono text-caption text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50";
+  const textareaClass = "block w-full resize-y rounded-lg border border-border-strong bg-bg-surface px-3 py-2 font-mono text-caption text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50";
 
   async function save() {
     if (saving) return;

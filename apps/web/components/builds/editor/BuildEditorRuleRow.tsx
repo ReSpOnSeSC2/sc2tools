@@ -103,7 +103,7 @@ export function RuleRow({
     // Row separators sit on the <li> (not the list's divide-*), because a
     // divide colour would override the stripe's left-border colour.
     <li
-      className={`border-l ${RULE_TONE_STRIPE[ruleTone(rule)]} border-t border-t-border px-3 py-2 text-caption first:border-t-0`}
+      className={`border-l-2 ${RULE_TONE_STRIPE[ruleTone(rule)]} border-t border-t-border px-3 py-2 text-caption first:border-t-0`}
     >
       <div
         role="group"

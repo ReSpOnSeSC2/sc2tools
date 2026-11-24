@@ -159,7 +159,7 @@ function ReplayLibraryTip() {
 function ReplayError({ error, onRetry }: { error: ClientApiError; onRetry: () => void }) {
   return (
     <div className="p-5" role="alert">
-      <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-danger/40 bg-danger/8 p-4 sm:flex-row sm:items-center">
+      <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-danger/40 bg-danger/10 p-4 sm:flex-row sm:items-center">
         <div>
           <p className="font-semibold text-text">Couldn't load replay history</p>
           <p className="mt-1 text-caption text-text-muted">{error.message}</p>

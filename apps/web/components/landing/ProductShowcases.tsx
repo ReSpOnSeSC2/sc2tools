@@ -115,7 +115,7 @@ export function ReplayTheaterPreview({ priority = false }: { priority?: boolean 
             </div>
             <ol className="divide-y divide-border">
               {REPLAY_FEED.map((event) => (
-                <li key={`${event.time}-${event.name}`} className={`grid grid-cols-[2.6rem_2.3rem_1fr] items-center gap-2 px-4 py-3 ${event.active ? "bg-accent/12" : ""}`}>
+                <li key={`${event.time}-${event.name}`} className={`grid grid-cols-[2.6rem_2.3rem_1fr] items-center gap-2 px-4 py-3 ${event.active ? "bg-accent/15" : ""}`}>
                   <span className="font-mono text-micro tabular-nums text-text-dim">{event.time}</span>
                   <span className={`text-[9px] font-bold ${event.side === "YOU" ? "text-accent-cyan" : "text-danger"}`}>{event.side}</span>
                   <span className={`text-caption ${event.active ? "font-semibold text-text" : "text-text-muted"}`}>{event.name}</span>

@@ -37,7 +37,7 @@ type IdentityContext = {
 
 export const IDENTITY_REASON_MIN = 10;
 export const IDENTITY_REASON_MAX = 2000;
-export const IDENTITY_TEXTAREA_CLASS = "block w-full resize-y rounded-lg border border-line bg-bg-surface px-3 py-2 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50";
+export const IDENTITY_TEXTAREA_CLASS = "block w-full resize-y rounded-lg border border-border-strong bg-bg-surface px-3 py-2 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50";
 export function identityError(error: unknown): string {
   return (error as { message?: string } | null)?.message || "Please try again.";
 }

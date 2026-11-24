@@ -41,7 +41,7 @@ export function FilterSheet({
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-border-strong bg-bg-elevated px-4 py-2 text-sm text-text shadow-card transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-border-strong bg-bg-elevated px-4 py-2 text-sm text-text shadow-card transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
         <SlidersHorizontal className="h-4 w-4 text-text-muted" aria-hidden />
         <span className="font-medium">Filters</span>

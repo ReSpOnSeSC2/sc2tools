@@ -49,7 +49,7 @@ export function CopyButton({
     {clipboard.fallbackText !== null ? <div className="space-y-2 rounded-lg border border-border bg-bg-surface p-3">
       <label htmlFor={inputId} className="block text-caption font-semibold">{fallbackLabel}</label>
       {/[\r\n]/.test(clipboard.fallbackText) ? <textarea ref={setInputRef} id={inputId} value={clipboard.fallbackText} readOnly rows={3}
-        aria-describedby={helpId} className="block min-h-11 w-full rounded-lg border border-line bg-bg-surface px-3 py-2 text-body text-text focus:outline-none focus:ring-2 focus:ring-accent"
+        aria-describedby={helpId} className="block min-h-11 w-full rounded-lg border border-border-strong bg-bg-surface px-3 py-2 text-body text-text focus:outline-none focus:ring-2 focus:ring-accent"
         onFocus={event => event.currentTarget.select()} onKeyDown={onFallbackKey} />
         : <Input ref={setInputRef} id={inputId} value={clipboard.fallbackText} readOnly aria-describedby={helpId}
           className="min-h-11" onFocus={event => event.currentTarget.select()} onKeyDown={onFallbackKey} />}

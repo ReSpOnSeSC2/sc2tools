@@ -340,7 +340,7 @@ export function BuildPublishModal({
               </p>
             </div>
           </div>
-          <label className="flex items-start gap-3 rounded-lg border border-accent-cyan/30 bg-accent-cyan/8 p-3">
+          <label className="flex items-start gap-3 rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 p-3">
             <input
               type="checkbox"
               checked={confirmAck}

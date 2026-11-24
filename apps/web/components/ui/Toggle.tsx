@@ -28,12 +28,12 @@ export const Toggle = forwardRef<HTMLButtonElement, ToggleProps>(function Toggle
       onClick={() => onChange(!checked)}
       className={[
         "relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full",
-        "border border-border-strong transition-[background-color,border-color,box-shadow]",
+        "border transition-[background-color,border-color,box-shadow]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         "disabled:cursor-not-allowed disabled:opacity-50",
         checked
           ? "border-accent bg-accent shadow-[0_0_14px_rgb(var(--accent-cyan)/0.35)]"
-          : "bg-bg-subtle",
+          : "border-border-strong bg-bg-subtle",
         className,
       ]
         .filter(Boolean)

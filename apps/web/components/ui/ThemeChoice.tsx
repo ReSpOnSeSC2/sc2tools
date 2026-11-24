@@ -22,7 +22,7 @@ export function ThemeChoice({ className = "" }: { className?: string }) {
       if (next === null) return;
       event.preventDefault(); setTheme(modes[next]); event.currentTarget.querySelector<HTMLButtonElement>(`[data-theme-option="${modes[next]}"]`)?.focus();
     }}>
-      {modes.map(value => { const { label, Icon } = choices[value]; return <button key={value} type="button" role="radio" aria-checked={mode === value} data-theme-option={value} tabIndex={mode === value ? 0 : -1} onClick={() => setTheme(value)} className={`inline-flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg px-2 text-caption font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${mode === value ? "bg-bg-elevated text-text shadow-card ring-1 ring-line" : "text-text-muted hover:text-text"}`}><Icon className="h-4 w-4 shrink-0" aria-hidden />{label}</button>; })}
+      {modes.map(value => { const { label, Icon } = choices[value]; return <button key={value} type="button" role="radio" aria-checked={mode === value} data-theme-option={value} tabIndex={mode === value ? 0 : -1} onClick={() => setTheme(value)} className={`inline-flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg px-2 text-caption font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${mode === value ? "bg-accent-cyan/15 text-text shadow-card ring-1 ring-accent-cyan/50" : "text-text-muted hover:text-text"}`}><Icon className="h-4 w-4 shrink-0" aria-hidden />{label}</button>; })}
     </div>
     {mode === "system" ? <p className="text-caption text-text-muted">Follows your device appearance.</p> : null}
   </div>;

@@ -99,7 +99,7 @@ export function MinGamesPicker({
               title={`Show only rows with at least ${n} game${n === 1 ? "" : "s"}`}
               className={`min-h-11 min-w-11 rounded-full px-2.5 sm:min-h-8 sm:min-w-8 text-xs tabular-nums transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 active
-                  ? "bg-bg-elevated text-text shadow-card ring-1 ring-line"
+                  ? "bg-accent-cyan/15 text-text shadow-card ring-1 ring-accent-cyan/50"
                   : "text-text-muted hover:text-text"
               }`}
             >

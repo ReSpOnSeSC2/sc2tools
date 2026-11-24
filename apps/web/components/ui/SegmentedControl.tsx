@@ -115,7 +115,7 @@ export function SegmentedControl<T extends string>({
               "text-caption font-semibold tabular-nums transition-[color,background-color,box-shadow]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
               checked
-                ? "bg-bg-elevated text-text shadow-card ring-1 ring-line"
+                ? "bg-accent-cyan/15 text-text shadow-card ring-1 ring-accent-cyan/50"
                 : "text-text-muted hover:text-text",
             ].join(" ")}
           >

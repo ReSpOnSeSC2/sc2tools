@@ -18,7 +18,7 @@ export function ChartFrame<Row>({ title, showTitle = false, summary, rows, colum
   const ready = !query || hasQueryData(query);
   const content = () => !rows.length ? empty || <EmptyState title="No chart data in this view" /> : table
     ? <ChartDataTable title={title} summary={summary} rows={rows} columns={columns} /> : children;
-  return <section aria-label={title} className={`min-w-0 space-y-3 rounded-2xl border border-line bg-bg-surface surface-sheen p-3 shadow-card sm:p-4 ${className}`} data-testid={testId}>
+  return <section aria-label={title} className={`min-w-0 space-y-3 ${className}`} data-testid={testId}>
     {ready ? <p className="sr-only">{summary}</p> : null}
     <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
       {showTitle ? <h3 className="text-body font-semibold tracking-tight text-text">{title}</h3> : null}

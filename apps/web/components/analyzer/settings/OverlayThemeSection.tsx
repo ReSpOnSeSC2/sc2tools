@@ -231,7 +231,7 @@ export function OverlayThemeSection({
                   value={expandHex(theme.accent ?? DEFAULT_OVERLAY_ACCENT)}
                   onChange={(e) => commitHex(e.target.value)}
                   aria-label="Accent colour picker"
-                  className="h-11 w-12 flex-shrink-0 cursor-pointer rounded-md border border-line bg-bg-surface p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  className="h-11 w-12 flex-shrink-0 cursor-pointer rounded-md border border-border-strong bg-bg-surface p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 />
                 <Input
                   value={hexDraft}

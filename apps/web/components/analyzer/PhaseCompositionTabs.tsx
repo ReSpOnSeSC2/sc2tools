@@ -245,7 +245,7 @@ export function PhaseCompositionTabs({
                   : undefined
               }
               className={[
-                "inline-flex min-h-[44px] shrink-0 snap-start items-center gap-2 -mb-px border-b border-transparent px-3 py-2 text-caption transition-colors",
+                "inline-flex min-h-[44px] shrink-0 snap-start items-center gap-2 -mb-px border-b-2 border-transparent px-3 py-2 text-caption transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                 selected
                   ? "text-text font-semibold"
