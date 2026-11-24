@@ -174,12 +174,13 @@ from sc2tools_agent.support_diagnostics import DiagnosticRow, DiagnosticSnapshot
 from sc2tools_agent.support_runtime import SupportResult
 from sc2tools_agent.ui.health_card import ACTION_LABELS
 calls = []
-installed = threading.Event()
 QtWidgets.QFileDialog.getExistingDirectory = lambda *args, **kwargs: calls.append("add_folder") or ""
 QtWidgets.QMessageBox.question = lambda *args, **kwargs: QtWidgets.QMessageBox.Yes
 ui, win = make_window(on_link_again=lambda: calls.append("link_pc"), on_sync_retry=lambda: calls.append("retry_now"),
-                      on_pause=lambda paused: calls.append(("pause", paused)), on_install_update=installed.set,
+                      on_pause=lambda paused: calls.append(("pause", paused)),
                       on_restart_agent=lambda: calls.append("restart_agent"))
+# Install now lives on the update card only; the checks never offer a second install button.
+assert "install_update" not in ACTIONS
 win.show(); app.processEvents()
 assert set(ACTION_LABELS) == ACTIONS == set(win._health_actions())
 actions = sorted(ACTIONS)
@@ -196,7 +197,6 @@ def click(action):
 for action in ("link_pc", "retry_now", "add_folder", "restart_agent", "resume"):
     click(action)
 assert calls == ["link_pc", "retry_now", "add_folder", "restart_agent", ("pause", False)]
-click("install_update"); assert installed.wait(1)
 click("open_log"); assert win._stack.currentIndex() == 2
 click("open_obs_settings")  # the first visit to Settings, so its layout is fresh
 scroll = win._settings_scroll

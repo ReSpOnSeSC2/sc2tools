@@ -68,14 +68,80 @@ def scheduler(tmp_path,clock,**changes):
     return value,installed,notices
 
 
-@pytest.mark.parametrize("obstacle",["match","settling","stream","capture"])
-def test_scheduler_never_installs_during_activity_even_explicit(tmp_path,obstacle):
-    clock=Clock()
-    gate=SimpleNamespace(busy=obstacle=="match",free_for=0 if obstacle=="settling" else 120)
-    value,install,notices=scheduler(tmp_path,clock,gate=gate,streaming=lambda:obstacle=="stream",capturing=lambda:obstacle=="capture")
-    value.offer(release()); assert not install.called
+HOLDS = {
+    "match": ("Will install after this match", "Installs as soon as this match ends"),
+    "stream": ("Will install when OBS stops streaming and recording", "Installs as soon as OBS stops streaming and recording"),
+    "capture": ("Will install when the replay capture finishes", "Installs as soon as the replay capture finishes"),
+}
+
+
+@pytest.mark.parametrize("obstacle",sorted(HOLDS))
+def test_install_now_waits_for_a_match_stream_or_capture_then_installs_at_once(tmp_path,obstacle):
+    clock=Clock(); active=[True]
+    gate=SimpleNamespace(busy=obstacle=="match",free_for=0)
+    value,install,notices=scheduler(tmp_path,clock,gate=gate,state=AgentState(auto_update_enabled=False),
+        streaming=lambda:obstacle=="stream" and active[0],capturing=lambda:obstacle=="capture" and active[0])
+    value.offer(release())
+    assert not install.called and notices[-1][1:]==("deferred",HOLDS[obstacle][0])
     assert not value.tick(explicit=True) and not install.called
-    assert notices[-1][2]=="Will install after this match"
+    assert notices[-1][1:]==("queued",HOLDS[obstacle][1])
+    value.poll(); assert not install.called and notices[-1][1:]==("queued",HOLDS[obstacle][1])
+    # It ends. The quiet period has not run and automatic updates are off, but the
+    # remembered click installs on the next background pass.
+    gate.busy=False; active[0]=False
+    value.poll()
+    install.assert_called_once()
+    assert notices[-1][1]=="installing"
+
+
+def test_install_now_skips_the_quiet_period_that_automatic_installs_wait_out(tmp_path):
+    clock=Clock(); gate=SimpleNamespace(busy=False,free_for=0)
+    value,install,notices=scheduler(tmp_path,clock,gate=gate)
+    value.offer(release())
+    assert not install.called and notices[-1][1:]==("deferred","Will install in about 2 minutes if no game starts")
+    gate.free_for=70
+    assert not value.tick() and notices[-1][2]=="Will install in about a minute if no game starts"
+    assert value.tick(explicit=True)
+    install.assert_called_once()
+
+
+def test_later_cancels_a_queued_install_now(tmp_path):
+    clock=Clock(); gate=SimpleNamespace(busy=True,free_for=0)
+    value,install,notices=scheduler(tmp_path,clock,gate=gate)
+    value.offer(release()); value.tick(explicit=True)
+    assert notices[-1][1]=="queued"
+    value.later()
+    assert notices[-1][1:]==("deferred","Remind me tomorrow")
+    gate.busy=False; gate.free_for=120
+    value.poll()
+    assert not install.called and notices[-1][1:]==("deferred","Remind me tomorrow")
+
+
+def test_a_queued_retry_runs_after_a_failed_install(tmp_path):
+    clock=Clock(); gate=SimpleNamespace(busy=False,free_for=120)
+    value,install,notices=scheduler(tmp_path,clock,gate=gate)
+    install.side_effect=RuntimeError("checksum mismatch")
+    value.offer(release())
+    assert install.call_count==1 and notices[-1][1:]==("failed","checksum mismatch")
+    value.poll(); assert install.call_count==1  # a failure waits for Retry
+    gate.busy=True; install.side_effect=None
+    assert not value.tick(explicit=True) and notices[-1][1:]==("queued","Installs as soon as this match ends")
+    gate.busy=False; value.poll()
+    assert install.call_count==2 and notices[-1][1]=="installing"
+
+
+def test_a_running_install_keeps_its_card_when_another_pass_or_offer_arrives(tmp_path):
+    clock=Clock(); value,install,notices=scheduler(tmp_path,clock)
+    seen=[]
+    def downloading(_release):
+        before=len(notices)
+        value.poll(); value.offer(release())  # the loop and the release feed fire mid-download
+        seen.append(notices[before:])
+    install.side_effect=downloading
+    value.offer(release())
+    assert seen==[[]] and notices[-1][1]=="installing"
+    value.poll(); value.offer(release())  # handed to the installer: nothing repaints the card
+    assert notices[-1][1]=="installing" and install.call_count==1
 
 
 def test_auto_update_opt_out_still_allows_explicit_install_once(tmp_path):

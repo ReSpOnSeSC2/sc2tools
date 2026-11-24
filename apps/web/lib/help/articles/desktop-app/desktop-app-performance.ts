@@ -7,7 +7,7 @@ const article: HelpArticle = {
   "category": "desktop-app",
   "audience": "all",
   "order": 4,
-  "updated": "2026-10-23",
+  "updated": "2026-11-24",
   "keywords": [
     "game mode",
     "performance",
@@ -66,7 +66,7 @@ const article: HelpArticle = {
     },
     {
       "type": "paragraph",
-      "text": "Automatic accurate replay capture does not begin during a live match. Updates wait until the game has been idle for at least two minutes, OBS has no active output, and no replay capture is running. **Install now** also respects these guards. See [How updates work](/help/desktop-app-updates)."
+      "text": "Automatic accurate replay capture does not begin during a live match. Automatic updates wait until the game has been idle for at least two minutes, OBS has no active output, and no replay capture is running. **Install now** skips the two-minute wait but still waits for a running match, a live OBS output, or a replay capture. See [How updates work](/help/desktop-app-updates)."
     },
     {
       "type": "paragraph",

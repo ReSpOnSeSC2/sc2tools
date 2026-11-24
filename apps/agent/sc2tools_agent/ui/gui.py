@@ -4061,7 +4061,6 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "set_player_name": self._focus_player_name,
                 "resume": self._resume_sync,
                 "open_obs_settings": lambda: self._open_settings_at(self._obs_card),
-                "install_update": lambda: self._run_update_action(ui._on_install_update),
                 "restart_agent": self._confirm_restart,
                 "copy_details": self._copy_status_details,
                 "open_log": lambda: self.show_log("errors"),

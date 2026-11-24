@@ -121,6 +121,13 @@ win._update_card.notes_button.setChecked(True)
 assert "Better syncing" in win._update_card.notes.toPlainText()
 win._update_card.install_button.click();assert installed.wait(1)
 win._update_card.later_button.click();assert later.wait(1)
+# A click during a match is queued: the button says so and stays pressed, and Later can cancel it.
+ui.show_update_state(release,"queued","Installs as soon as this match ends");app.processEvents()
+card=win._update_card
+assert card.message.text()=="Installs as soon as this match ends" and card.message.isVisible()
+assert card.install_button.text()=="Queued" and not card.install_button.isEnabled() and card.later_button.isEnabled()
+ui.show_update_state(release,"deferred","Remind me tomorrow");app.processEvents()
+assert card.install_button.text()=="Install now" and card.install_button.isEnabled()
 ui.show_update_state(release,"failed","Checksum mismatch");app.processEvents()
 assert win._update_card.message.text()=="Update failed: Checksum mismatch"
 assert win._update_card.install_button.text()=="Retry" and win._update_card.download_button.isVisible()
