@@ -107,9 +107,12 @@ describe("Global Trends canonical-history lifecycle", () => {
     expect(collection.deleteMany).toHaveBeenCalledWith({ _globalSnapshotId: stamp._globalSnapshotId });
     expect(collection.aggregate).not.toHaveBeenCalled();
     expect(history.current).toBeNull();
+    const indexCalls = collection.createIndex.mock.calls.length;
     const id = await history.withSnapshot(async (snapshot) => snapshot.id);
     expect(id).not.toBe(stamp._globalSnapshotId);
     expect(db.games.aggregate).toHaveBeenCalledTimes(2);
+    // A failure re-ensures the hinted indexes, in case one was dropped.
+    expect(collection.createIndex.mock.calls.slice(indexCalls)).toEqual(collection.createIndex.mock.calls.slice(0, indexCalls));
   });
 
   test("a failed duplicate pass is unpublished and cleaned up too", async () => {
@@ -185,10 +188,12 @@ describe("Global Trends history duplicate removal and deadline", () => {
     expect(collection.deleteMany.mock.invocationCallOrder[1]).toBeLessThan(collection.aggregate.mock.invocationCallOrder[1]);
   });
 
-  test("all build commands share one deadline", async () => {
+  test("all build commands share one deadline, which starts once the build is admitted", async () => {
     let now = 5000;
     jest.spyOn(Date, "now").mockImplementation(() => now);
-    const { db, collection, history } = fixture(() => { now += 20000; return Promise.resolve([]); });
+    const { db, collection } = fixture(() => { now += 20000; return Promise.resolve([]); });
+    // Waiting for a query slot does not spend the build's budget.
+    const history = new GlobalTrendsHistory(db, async (work) => { now += 15000; return work(); });
     await history.withSnapshot(async () => {});
     const left = (ms) => ({ maxTimeMS: ms, timeoutMS: ms });
     expect([db.games.aggregate.mock.calls[0][1], collection.aggregate.mock.calls[0][1]])

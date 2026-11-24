@@ -122,18 +122,18 @@ class GlobalTrendsHistory {
     await this._ensureIndexes();
     const id = randomUUID();
     const revision = this.revision;
-    // Building all rows is a once-per-snapshot write, not a chart read. Its
-    // commands share one deadline. Driver CSOT replaces the client's 30s
-    // socket timer and bounds both server work and the response to it. No
-    // allowDiskUse: Atlas Flex does not support it, and no stage here sorts
-    // or groups the corpus in memory.
-    const deadline = Date.now() + HISTORY_BUILD_TIMEOUT_MS;
-    const remaining = () => {
-      const ms = Math.max(1, deadline - Date.now());
-      return { maxTimeMS: ms, timeoutMS: ms };
-    };
     try {
       await this.execute(async () => {
+        // Building all rows is a once-per-snapshot write, not a chart read.
+        // Its commands share one deadline, which starts once admitted. Driver
+        // CSOT replaces the client's 30s socket timer and bounds both server
+        // work and the response to it. No allowDiskUse: Atlas Flex does not
+        // support it, and no stage here sorts or groups the corpus in memory.
+        const deadline = Date.now() + HISTORY_BUILD_TIMEOUT_MS;
+        const remaining = () => {
+          const ms = Math.max(1, deadline - Date.now());
+          return { maxTimeMS: ms, timeoutMS: ms };
+        };
         await this.db.games.aggregate([
           ...globalRowStages(),
           { $set: {
@@ -160,6 +160,9 @@ class GlobalTrendsHistory {
     } catch (err) {
       // A failed build can leave a partial generation. It is never published.
       await this.collection.deleteMany({ _globalSnapshotId: id }).catch(() => {});
+      // The passes hint their indexes: re-ensure them (createIndex is
+      // idempotent) in case an index or the collection was dropped.
+      this.indexes = null;
       throw err;
     }
     const previous = this.current;

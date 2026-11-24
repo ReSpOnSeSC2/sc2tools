@@ -18,6 +18,7 @@ const {
 
 const CAP_BYTES = 256 * 1024;
 const P = "1-S2-1-900";
+const Q = "1-S2-1-777";
 const MEMORY_LIMIT_NO_DISK_USE = "QueryExceededMemoryLimitNoDiskUseAllowed";
 
 let nextId = 0;
@@ -81,6 +82,18 @@ function edgeCases() {
     // Opposing perspectives of one replay are two observations.
     ["opponent-view", true, { userId: "u9", myToonHandle: "1-S2-1-999", gameId: "dup-trust" }],
     ["numeric-toon", true, { userId: "u5", myToonHandle: 12345, gameId: "numeric" }],
+    // Ingest requires string gameIds. A legacy numeric one must not fail the
+    // build when it loses the replay-id pass without a hash, and stays apart
+    // from the same digits as a string.
+    ["numeric-id-winner", true, { userId: "u6", myToonHandle: P, gameId: 42, replayFile: { sha256: sha("e") }, updatedAt: at(5) }],
+    ["numeric-id-loser", false, { userId: "u7", myToonHandle: P, gameId: 42, replayFile: {}, updatedAt: at(1) }],
+    ["numeric-id-no-hash", true, { userId: "u6", myToonHandle: P, gameId: 43, replayFile: {} }],
+    ["string-id-43", true, { userId: "u8", myToonHandle: P, gameId: "43", replayFile: {} }],
+    // Exact ties in one series (no gameId, same time): MMR progression opens
+    // at the first game and closes at the last, by source _id.
+    ["tie-series-1", true, { userId: "ua", myToonHandle: Q, gameId: undefined, date: at(30), myMmr: 4000 }],
+    ["tie-series-2", true, { userId: "ub", myToonHandle: Q, gameId: undefined, date: at(30), myMmr: 4100 }],
+    ["tie-series-3", true, { userId: "uc", myToonHandle: Q, gameId: undefined, date: at(30), myMmr: 4200 }],
     // Never eligible.
     ["deleted", false, { _deleted: true }], ["pending", false, { _deletionPending: true }],
     ["excluded", false, { excluded: true }], ["resumed", false, { isResumedFromReplay: true }],
@@ -169,5 +182,7 @@ describe("Global Trends on Atlas Flex limits", () => {
     const points = chart.at(-1).$facet.points;
     expect(points.findIndex((stage) => stage.$sort)).toBeGreaterThan(points.findIndex((stage) => stage.$group));
     for (const [, options] of read.mock.calls) expect(options).not.toHaveProperty("allowDiskUse");
+    const ties = await service.run("mmrProgression", { player_selection: "include", included_players: Q }, { interval: "day", tz: "UTC" });
+    expect(ties.points).toEqual([expect.objectContaining({ openMmr: 4000, closeMmr: 4200, total: 3, activeSeries: 1 })]);
   });
 });

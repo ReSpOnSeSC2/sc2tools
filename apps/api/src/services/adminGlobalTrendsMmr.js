@@ -5,8 +5,10 @@ const { myLadderRaceExpr } = require("./trendsRegionExpr");
 const { bucketSwitch, pickInterval, pickTimezone } = require("./aggregations");
 const { LIMITS } = require("../config/constants");
 
-/** Game order within one account/race series. */
-const SERIES_ORDER = Object.freeze({ date: 1, gameId: 1 });
+/** Game order within one account/race series. The source game _id (the
+ * snapshot reader maps _id to it) breaks exact ties, so open and close are
+ * the first and last game even when date and gameId repeat. */
+const SERIES_ORDER = Object.freeze({ date: 1, gameId: 1, _id: 1 });
 
 /** Aggregate bucket closes with one vote per active account/ladder race.
  * Upload volume cannot overweight one player and no difference is taken
