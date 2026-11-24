@@ -56,7 +56,7 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
    replay kept for two accounts, ADR 0096), and kept rows never tie on all
    four, so the result is the same. `$group` keeps one value per opponent
    instead of a sort entry per accumulator: across the platform about
-   32 MiB instead of 58 MiB, against `$group`'s 100 MB limit.
+   33 MiB instead of 58 MiB, against `$group`'s 100 MB limit.
 
 ## Consequences
 
@@ -89,8 +89,8 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
   assumed to behave the same there, as the personal cards also assume.
 - Limits that remain:
   - The opponent drilldown's `$group` grows with the number of distinct
-    opponents across the cohort, about 1.3 KB each, and a page sorts its
-    first `offset + limit` opponents (about 1.4 KB each). An unfiltered
+    opponents across the cohort, about 1.4 KB each, and a page sorts its
+    first `offset + limit` opponents (about as much per row). An unfiltered
     whole-platform page past roughly 20,000 opponents would pass 32 MB. A
     drilldown narrowed to one race, as the chart opens it, needs a fraction.
   - The build now reads every row's ladder race. A non-string

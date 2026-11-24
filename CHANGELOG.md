@@ -55,7 +55,8 @@ corresponding GitHub Release.
   whole player history in memory, momentum about 530 MB per sort. The
   history now stores momentum's session keys and has two indexes that supply
   every window's order, so no card sorts the history. The opponent table
-  also holds half as much per opponent. Results are unchanged. See ADR 0097.
+  also holds about 40% less in memory per opponent. Results are unchanged.
+  See ADR 0097.
 
 ### Device sign-in during database outages
 
