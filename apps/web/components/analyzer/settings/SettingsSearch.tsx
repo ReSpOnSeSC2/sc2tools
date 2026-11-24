@@ -33,7 +33,7 @@ export function SettingsSearch({ ownerKey, onNavigate }: {
     return () => { mounted.current = false; input.current = null; };
   }, []);
   usePageSearchShortcut(input);
-  return <div ref={root} className="mb-5 min-w-0">
+  return <div ref={root} className="mb-5 min-w-0 rounded-2xl border border-line glass p-2 sm:p-3">
     <Combobox label="Find a setting" placeholder="Search settings…" value={query} options={OPTIONS}
       onInputChange={setQuery} emptyMessage="No settings match. Try another word."
       onChange={id => {

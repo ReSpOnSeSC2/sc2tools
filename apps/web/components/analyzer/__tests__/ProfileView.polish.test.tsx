@@ -42,7 +42,7 @@ it("debounces database revisions, retains data after refresh errors, and retries
   expect(screen.getByRole("heading", { name: "Rival" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Retry" })); expect(harness.retry).toHaveBeenCalledOnce();
 });
-it("shows clearable map/strategy/build filters and keeps replay history immediately above notes", () => {
+it("shows clearable map/strategy/build filters and keeps notes after replay history in reading order", () => {
   render(<ProfileView pulseId="target" onBack={() => undefined} />);
   fireEvent.click(screen.getByRole("button", { name: /Alcyone/ }));
   expect(screen.getByText("Games (filtered)")).toBeTruthy();
@@ -56,7 +56,7 @@ it("shows clearable map/strategy/build filters and keeps replay history immediat
   expect(within(bar).getByRole("button", { name: /Remove build/ })).toBeTruthy();
   fireEvent.click(within(bar).getByRole("button", { name: "Clear all" }));
   expect(screen.queryByRole("region", { name: "Active dossier filters" })).toBeNull();
-  expect(screen.getByLabelText("Replay history").nextElementSibling).toBe(screen.getByLabelText("Notes"));
+  expect(screen.getByLabelText("Replay history").compareDocumentPosition(screen.getByLabelText("Notes")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 it("keeps the brief's evidence inside the selected local cohort", async () => {
   render(<ProfileView pulseId="target" onBack={() => undefined} />);

@@ -148,9 +148,9 @@ function ByOppStrategyView({
   return (
     <div className="space-y-4">
       <KpiStrip items={kpis} />
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="glass flex flex-wrap items-center gap-3 rounded-2xl border border-line p-2">
         <input
-          className="w-full rounded-lg border border-border-strong bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
+          className="min-h-11 w-full flex-1 rounded-lg border border-border-strong bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
           placeholder="Search strategies"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -294,7 +294,7 @@ export function StrategyFiltersBar() {
   };
 
   return (
-    <div className="rounded-xl border border-line bg-bg-surface p-3 shadow-hard">
+    <div role="group" aria-label="Strategy filters" className="glass rounded-2xl border border-line p-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <FilterSelect
           label="My race"
@@ -417,10 +417,10 @@ export function StrategiesTab({ drill: controlledDrill, onDrillChange, view: con
   const setDrill = (next: StrategyDrillFilter | null) => { if (controlledDrill === undefined) setLocalDrill(next); onDrillChange?.(next); };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <StrategyFiltersBar />
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-base font-semibold text-text">
+      <div className="flex flex-col gap-2 border-b border-line pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="font-display text-h3 font-bold tracking-tight text-text">
           {view === "opp"
             ? "Win rate vs opponent strategies"
             : "My build × Their strategy"}
@@ -445,8 +445,14 @@ export function StrategiesTab({ drill: controlledDrill, onDrillChange, view: con
           )}
         />
       )}
-      <StrategyMmrPanel />
-      <BuildMatchupHeatmap />
+      <section aria-labelledby="strategies-deeper-heading" className="space-y-4">
+        <div className="space-y-0.5">
+          <p className="hud-label">Go deeper</p>
+          <h2 id="strategies-deeper-heading" className="font-display text-h3 font-bold tracking-tight text-text">Rating and matchup detail</h2>
+        </div>
+        <StrategyMmrPanel />
+        <BuildMatchupHeatmap />
+      </section>
       {drill && <StrategyGamesSheet drill={drill} onBack={() => setDrill(null)} />}
     </div>
   );

@@ -42,8 +42,8 @@ export interface SectionHeaderProps {
   title?: ReactNode;
   /** Replaces the tabs.ts description. */
   description?: ReactNode;
-  /** Small cyan HUD eyebrow above the title. */
-  eyebrow?: ReactNode;
+  /** Small cyan HUD eyebrow above the title. Defaults to "Analysis"; pass null to omit. */
+  eyebrow?: ReactNode | null;
   /** Section-level controls, shown before "How to read this". */
   actions?: ReactNode;
   className?: string;
@@ -52,7 +52,7 @@ export interface SectionHeaderProps {
 const CONTROL_CLASS =
   "inline-flex min-h-11 items-center gap-1.5 text-caption text-text-muted transition-colors hover:text-text";
 
-export function SectionHeader({ tab, title, description, eyebrow, actions, className = "" }: SectionHeaderProps) {
+export function SectionHeader({ tab, title, description, eyebrow = "Analysis", actions, className = "" }: SectionHeaderProps) {
   const def = TABS.find((item) => item.id === tab);
   const intro = description ?? def?.description;
   const [hidden, setHidden] = useLocalStorageState<boolean>(introHiddenKey(tab), false, isBoolean);

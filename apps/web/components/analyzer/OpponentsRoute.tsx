@@ -33,8 +33,8 @@ export function OpponentsRoute() {
   const [count, setCount] = useState<number | null>(null);
   const [exportAction, setExportAction] = useState<OpponentExportAction | null>(null);
   return (
-    <div className="space-y-5">
-      <SectionHeader tab="opponents" description="Everyone you've faced, keyed to their SC2Pulse ID" actions={<>{count === null ? null : <span className="rounded-full border border-line px-2 py-1 text-caption tabular-nums">{formatNumber(count)} results</span>}{exportAction ? <Button variant="secondary" disabled={exportAction.disabled} onClick={exportAction.download} title={`Export all ${formatNumber(exportAction.count)} matching opponents, including rows outside the render window`}>Export CSV</Button> : null}</>} />
+    <div className="space-y-5 lg:space-y-6">
+      <SectionHeader tab="opponents" eyebrow="Opponents" description="Everyone you've faced, keyed to their SC2Pulse ID" actions={<>{count === null ? null : <span className="rounded-full border border-line px-3 py-1 text-caption tabular-nums text-text-muted">{formatNumber(count)} results</span>}{exportAction ? <Button variant="secondary" disabled={exportAction.disabled} onClick={exportAction.download} title={`Export all ${formatNumber(exportAction.count)} matching opponents, including rows outside the render window`}>Export CSV</Button> : null}</>} />
       <OpponentsTab
         location={location}
         controls={controls}

@@ -26,7 +26,7 @@ export function SessionsPage() {
   const restartSameRequest = sessionListApi(sessionListQuery(filters, restart, tz)) === sessionListApi(query);
   const navigate = (next: URLSearchParams) => { if (q.current()) writer.update(() => next, "push", guard); };
   return <div className="space-y-5">
-    <PageHeader as="h2" size="section" title="Session history" description="Review complete sessions inside your selected filters. The output day or window selects sessions; it does not split their membership at midnight." />
+    <PageHeader as="h2" size="section" eyebrow="Analysis" title="Session history" description="Review complete sessions inside your selected filters. The output day or window selects sessions; it does not split their membership at midnight." />
     <SessionViewControls query={query} navigate={navigate} refresh={() => restartSameRequest ? q.mutate() : navigate(restart)} />
     {problem ? <Card><p role="alert">{problem}</p></Card> : <SessionRequestState q={q} restartHref={sessionHref(restart)} restartSameRequest={restartSameRequest}
       contextHref={days => sessionHref(changeSessionQuery(query, { contextDays: String(days) }))}

@@ -267,10 +267,11 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
   };
 
   return (
-    <div className="min-w-0 max-w-full space-y-5">
+    <div className="min-w-0 max-w-full space-y-5 lg:space-y-6">
       {!chromeBreadcrumb ? <nav aria-label="Breadcrumb" className="min-w-0 max-w-full text-caption text-text-muted"><Link href={backHref} className="underline">Opponents</Link><span aria-hidden> / </span><span aria-current="page" className="[overflow-wrap:anywhere]">{opponentName}</span></nav> : null}
-      <header aria-label="Opponent profile" className="flex flex-wrap items-end justify-between gap-4">
+      <header aria-label="Opponent profile" className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-line bg-bg-surface surface-sheen p-4 shadow-card sm:p-5 lg:gap-6">
         <div className="w-full min-w-0 lg:w-auto lg:flex-1">
+          <p className="hud-label mb-1">Opponent dossier</p>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="min-w-0 max-w-full [overflow-wrap:anywhere] text-h2 font-semibold">{data.name || "unnamed"}</h1>
             <DossierRivalStar pulseId={data.pulseId || pulseId} name={data.name || "unnamed opponent"} />
@@ -311,7 +312,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
             <PublicProfileLink href={publicHref} />
           ) : null}
         </div>
-        <div className={`grid w-full grid-cols-2 gap-3 sm:grid-cols-4 lg:w-auto ${filterActive ? "[&>div]:border-accent" : ""}`}>
+        <div className={`grid w-full grid-cols-2 gap-3 sm:grid-cols-4 lg:w-auto lg:min-w-[22rem] ${filterActive ? "[&>div]:border-accent" : ""}`}>
           <Stat label={filterActive ? "Games (filtered)" : "Games"} value={t.total || 0} />
           <Stat label={filterActive ? "W (filtered)" : "W"} value={t.wins || 0} color="rgb(var(--success))" />
           <Stat label={filterActive ? "L (filtered)" : "L"} value={t.losses || 0} color="rgb(var(--danger))" />
@@ -323,8 +324,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2 text-caption text-text-muted"><span>Showing {summarizeFilters(filters, seasons)}</span><Button variant="ghost" onClick={() => setAllTime(value => !value)}>{allTime ? "Use analyzer dates" : "Show all time"}</Button><LazyHelpLink slug="opponent-dossier">How to read this page</LazyHelpLink></div>
-      <GroupingPreference preference={grouping} />
+      <div className="glass flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-line px-3 py-1 text-caption text-text-muted sm:px-4"><span>Showing {summarizeFilters(filters, seasons)}</span><Button variant="ghost" onClick={() => setAllTime(value => !value)}>{allTime ? "Use analyzer dates" : "Show all time"}</Button><LazyHelpLink slug="opponent-dossier">How to read this page</LazyHelpLink><div className="ml-auto min-w-0"><GroupingPreference preference={grouping} /></div></div>
       {data.games?.length === 0 && !!data.series?.games.length ? <p className="text-caption text-text-muted">No games in this range.{data.series.lastSeen ? ` You last met on ${formatDate(new Date(data.series.lastSeen))}.` : ""} <button type="button" className="min-h-11 px-2 text-accent underline" onClick={() => setAllTime(true)}>Show all time</button></p> : null}
       {profile.error ? <div role="status" className="flex items-center gap-3 text-caption text-warning">
         <span>Couldn't refresh after your last game</span><Button variant="ghost" size="sm" onClick={() => mutate()}>Retry</Button>
@@ -336,7 +336,9 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         ...(selectedBuildMatchup ? [{ key: "build", label: "Build", value: `${selectedBuildMatchup.myBuild} vs ${selectedBuildMatchup.oppStrategy}`, clear: () => setSelectedBuildMatchup(null) }] : []),
       ]} onClear={() => { setSelectedMap(null); setSelectedStrategy(null); setSelectedBuildMatchup(null); setSelectedTiming(null); }} />
       {filterActive && data.gamesTruncated ? <p className="text-caption text-text-muted">Filtered summaries use the loaded meeting sample.{selectedTiming ? " Replay history shows the selected analyzed games." : " Replay history searches all matching games."}</p> : null}
-      <SectionNav variant="bar" aria-label="Dossier sections" items={[{ id: "dossier-brief", label: "Brief" }, { id: "dossier-tendencies", label: "Tendencies" }, { id: "dossier-timings", label: "Timings" }, { id: "dossier-history", label: "History" }, { id: "dossier-ladder", label: "Ladder" }, { id: "dossier-identity", label: "Identity" }]} />
+      <SectionNav variant="bar" aria-label="Dossier sections" items={[{ id: "dossier-brief", label: "Brief" }, { id: "dossier-tendencies", label: "Tendencies" }, { id: "dossier-timings", label: "Timings" }, { id: "dossier-history", label: "History" }, { id: "dossier-notes", label: "Notes" }, { id: "dossier-ladder", label: "Ladder" }, { id: "dossier-identity", label: "Identity" }]} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start lg:gap-8">
+      <div className="min-w-0 space-y-6 lg:col-span-8 lg:space-y-8">
       <section id="dossier-brief" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Brief</h2><ScoutingBriefCard profile={briefProfile} /></section>
       <section id="dossier-tendencies" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-5"><h2 className="text-h3 font-semibold">Tendencies</h2>
       <H2HTrendsSection
@@ -420,8 +422,12 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         }}
       />
 
+      </section>
+      </div>
+      <aside aria-label="Notes, ladder and identity" className="min-w-0 space-y-6 lg:col-span-4 lg:space-y-8">
+      <section id="dossier-notes" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32">
       <OpponentNotesCard
-        headingLevel={3}
+        headingLevel={2}
         pulseId={pulseId}
         initialNotes={data.notes}
         initialNotesReadAloud={data.notesReadAloud}
@@ -435,10 +441,11 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
           );
         }}
       />
-
       </section>
       <section id="dossier-ladder" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Ladder</h2><DossierOnView label="Ladder context"><LadderContextCard pulseId={pulseId} confirmedIdentity={data.globalIdentity}><RaceMmrPanel embedded breakdown={races} isLoading={racesLoading} confirmedIdentity={data.globalIdentity} /></LadderContextCard></DossierOnView></section>
       <DossierIdentitySection pulseId={pulseId} open={identityOpen} onOpenChange={setIdentityOpen} diagnosticsOpen={diagnosticsOpen} submission={identitySubmissionEnabled} candidates={identityCandidatesEnabled} race={data.oppRaceModal} onChanged={() => { void refreshCache(isOpponentKey(pulseId)); }} onRetried={async response => { await refreshCache(isOpponentKey(pulseId)); if (response.resolvedPulseCharacterId) toast?.success("Pulse data refreshed"); else toast?.info("Still couldn't find their SC2Pulse profile"); }} />
+      </aside>
+      </div>
 
 
 

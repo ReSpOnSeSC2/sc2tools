@@ -41,9 +41,14 @@ export function TodayView() {
   const me = useDashboardMe();
   const { enabled: browserImportEnabled } = useInstantImport();
 
+  const showChecklist = me.games.total > 0 && !onboardingView(me, browserImportEnabled).checklist;
+
   return (
-    <GuidedTours id="today" ready={me.games.total > 0 && !onboardingView(me, browserImportEnabled).checklist} className="space-y-5">
-      {me.games.total > 0 && !onboardingView(me, browserImportEnabled).checklist ? <SectionBoundary label="your suggested next steps"><LevelUpChecklist /></SectionBoundary> : null}
+    <GuidedTours id="today" ready={showChecklist} className="space-y-6 lg:space-y-8">
+      {/* Notices band: onboarding and agent upgrade sit above the fold
+          only while they have something to say (each renders nothing
+          otherwise), so a settled account opens straight on its numbers. */}
+      {showChecklist ? <SectionBoundary label="your suggested next steps"><LevelUpChecklist /></SectionBoundary> : null}
       <AgentUpgradeNotice
         initialAgent={{
           paired: me.agentPaired,
@@ -61,25 +66,47 @@ export function TodayView() {
         <LiveScoutingBrief />
       </SectionBoundary>
 
-      <div data-tour="today-summary"><DashboardKpiStrip /></div>
+      <section aria-label="Headline numbers" data-tour="today-summary"><DashboardKpiStrip /></section>
 
-      <SectionBoundary label="your goals"><GoalsTodayCard /></SectionBoundary>
-      <SectionBoundary label="your league targets"><TargetsStrip /></SectionBoundary>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start lg:gap-8">
+        {/* Primary column: how you are performing. */}
+        <div className="min-w-0 space-y-6 lg:col-span-8">
+          <ZoneHeading id="today-performance-heading" eyebrow="Performance" title="How you are doing" />
 
-      {me.weeklyReportWeek ? <Card className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-body font-bold tracking-tight text-text">Last week</h2>
-        <LinkButton href={`/app/reports/weekly/${encodeURIComponent(me.weeklyReportWeek)}`} variant="secondary" size="sm" className="min-h-11">Open weekly report</LinkButton>
-      </Card> : null}
+          {me.weeklyReportWeek ? <Card className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-display text-body font-bold tracking-tight text-text">Last week</h3>
+            <LinkButton href={`/app/reports/weekly/${encodeURIComponent(me.weeklyReportWeek)}`} variant="secondary" size="sm" className="min-h-11">Open weekly report</LinkButton>
+          </Card> : null}
 
-      <div data-tour="today-daily-pulse"><SectionBoundary label="the Daily Pulse strip">
-        <DailyPulse
-          hrefForCard={(card) => dailyPulseHref(card, viewFiltersQuery(filters).toString())}
-        />
-      </SectionBoundary></div>
+          <div data-tour="today-daily-pulse"><SectionBoundary label="the Daily Pulse strip">
+            <DailyPulse
+              hrefForCard={(card) => dailyPulseHref(card, viewFiltersQuery(filters).toString())}
+            />
+          </SectionBoundary></div>
 
-      <div data-tour="today-ladder-pulse"><SectionBoundary label="Ladder Pulse">
-        <LadderPulse />
-      </SectionBoundary></div>
+          <div data-tour="today-ladder-pulse"><SectionBoundary label="Ladder Pulse">
+            <LadderPulse />
+          </SectionBoundary></div>
+        </div>
+
+        {/* Side rail: what to work on next. Sticky on desktop; on phones it
+            follows the performance column in reading order. */}
+        <aside aria-labelledby="today-focus-heading" className="min-w-0 space-y-6 lg:sticky lg:top-20 lg:col-span-4 lg:self-start">
+          <ZoneHeading id="today-focus-heading" eyebrow="Focus" title="What to work on" />
+          <SectionBoundary label="your goals"><GoalsTodayCard /></SectionBoundary>
+          <SectionBoundary label="your league targets"><TargetsStrip /></SectionBoundary>
+        </aside>
+      </div>
     </GuidedTours>
+  );
+}
+
+/** Small eyebrow + title that names a Today zone (an h2 under the page h1). */
+function ZoneHeading({ id, eyebrow, title }: { id: string; eyebrow: string; title: string }) {
+  return (
+    <div className="space-y-0.5">
+      <p className="hud-label">{eyebrow}</p>
+      <h2 id={id} className="font-display text-h3 font-bold tracking-tight text-text">{title}</h2>
+    </div>
   );
 }

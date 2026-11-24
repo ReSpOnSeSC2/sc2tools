@@ -341,6 +341,7 @@ function SettingsShellInner({
         </nav>
 
         <div ref={panelRegion} className="min-w-0">
+        <TabIntro tab={tabs.find((t) => t.id === active)} />
         {(() => {
           if (active === "overlay" || active === "chat") {
             const sections = settingsSectionsForTab(active);
@@ -406,6 +407,20 @@ function SettingsShellInner({
       />
     </>
   );
+}
+
+/** Opens every tab the same way: area eyebrow, tab name, one-line purpose. */
+function TabIntro({ tab }: { tab: TabDef | undefined }) {
+  if (!tab) return null;
+  const group = SETTINGS_GROUPS.find((g) => g.id === tab.group);
+  return <div data-settings-tab-intro={tab.id} className="mb-5 flex items-start gap-3 border-b border-line pb-4">
+    <span className="mt-0.5 hidden h-10 w-10 flex-none items-center justify-center rounded-xl border border-line bg-bg-subtle text-accent-cyan sm:flex"><tab.Icon className="h-5 w-5" aria-hidden /></span>
+    <div className="min-w-0">
+      <p className="hud-label">{group?.label ?? "Settings"}</p>
+      <p className="text-h3 font-bold tracking-tight text-text">{tab.label}</p>
+      <p className="mt-0.5 text-body text-text-muted">{tab.description}</p>
+    </div>
+  </div>;
 }
 
 function MobileSettingsTabs({ tabs, active, isDirty, requestSwitch }: { tabs: readonly TabDef[]; active: SettingsTabId; isDirty: (id: SettingsTabId) => boolean; requestSwitch: (id: string) => void }) {

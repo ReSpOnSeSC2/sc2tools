@@ -347,7 +347,7 @@ export function BattlefieldTab({ focus: controlledFocus }: { focus?: string | nu
               <div className="mb-4 space-y-2"><label className="flex min-h-11 items-center gap-3 text-caption font-medium text-text"><Toggle checked={poolOnly} onChange={setPoolPreference} label="Current ladder pool only" /><span>Current ladder pool only</span></label>{!pool.fresh ? <p className="text-micro text-warning">Pool data may be out of date; showing all maps by default.</p> : null}</div>
 
               <ul
-                className="space-y-4"
+                className="grid grid-cols-1 gap-x-8 gap-y-6 xl:grid-cols-2"
                 aria-label="Map performance by matchup"
               >
                 {sortedMapMatchupGroups.map((g) => (

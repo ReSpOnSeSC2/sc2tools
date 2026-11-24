@@ -55,6 +55,7 @@ export function GoalsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
+        eyebrow="Progress"
         title="Goals"
         description="Targets that track themselves from your replays: games, win rate, MMR, macro and build practice."
         actions={

@@ -109,14 +109,15 @@ describe("TodayView", () => {
     ).toBeTruthy();
   });
 
-  it("shows the goals card and the targets strip between the summary and Daily Pulse", async () => {
+  it("puts the summary first, then performance, with goals and targets in the side rail", async () => {
     render(<TodayView />);
     const goals = await screen.findByTestId("today-goals");
     const targets = await screen.findByTestId("today-targets");
     const kpi = screen.getByTestId("kpi-strip"), daily = screen.getByTestId("daily-pulse");
-    expect(kpi.compareDocumentPosition(goals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(kpi.compareDocumentPosition(daily) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(daily.compareDocumentPosition(goals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(goals.compareDocumentPosition(targets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(targets.compareDocumentPosition(daily) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(goals.closest("aside")).toBe(targets.closest("aside"));
   });
 });
 

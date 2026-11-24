@@ -102,7 +102,7 @@ export function BuildsTab({ search: controlledSearch, onSearchChange }: { search
   if (isLoading && !error) return <Skeleton rows={6} />;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {error && data ? (
         <Card role="alert">
           <p className="text-caption text-text-muted">
@@ -114,7 +114,7 @@ export function BuildsTab({ search: controlledSearch, onSearchChange }: { search
         <RequestError error={error} onRetry={() => mutate()} filtered />
       ) : null}
       <ReclassifyBanner rows={data || []} />
-      <div className="flex flex-wrap items-center gap-3">
+      <div role="search" aria-label="Build filters" className="glass flex flex-wrap items-center gap-3 rounded-2xl border border-line p-2">
         <Input
           type="search"
           aria-label="Search builds"

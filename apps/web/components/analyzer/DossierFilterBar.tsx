@@ -6,7 +6,7 @@ export function DossierFilterBar({ filters, onClear }: {
 }) {
   if (!filters.length) return null;
   return <section role="region" aria-label="Active dossier filters"
-    className="sticky top-[var(--chrome-top,3rem)] z-20 flex flex-wrap items-center gap-2 rounded-xl border border-accent/40 bg-bg-surface p-3 text-caption">
+    className="sticky top-[var(--chrome-top,3rem)] z-20 flex flex-wrap items-center gap-2 glass rounded-2xl border border-accent/40 px-3 py-2 text-caption">
     <span>Filtered:</span>{filters.map((filter) => <button key={filter.key}
       aria-label={`Remove ${filter.key} filter ${filter.value}`} onClick={filter.clear}
       className="min-h-11 rounded-full border border-accent/40 px-3 text-accent">{filter.label}: {filter.value} ×</button>)}

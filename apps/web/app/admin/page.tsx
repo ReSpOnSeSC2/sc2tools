@@ -22,6 +22,7 @@ import {
   upsertLiveAdminEvent,
 } from "./components/adminEventFeed";
 import { useAdminEventsSocket } from "./components/useAdminEventsSocket";
+import { AdminDirectory } from "./components/AdminDirectory";
 import { AdminNeedsAttention } from "./components/AdminNeedsAttention";
 import { AdminDailyActivity } from "./components/AdminDailyActivity";
 import { weekOverWeek } from "./components/adminDailyEvents";
@@ -100,6 +101,7 @@ export default function AdminDashboardPage() {
         : storage.data ? <Link href="/admin/health" className="inline-flex min-h-11 items-center rounded text-body text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           Database {formatBytes(storage.data.dataBytes + storage.data.indexBytes)} → Infrastructure
         </Link> : null}
+      <AdminDirectory />
     </div>
   );
 }

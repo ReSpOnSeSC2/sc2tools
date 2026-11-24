@@ -344,79 +344,90 @@ export function OpponentsTab({
   const showSkeleton = isLoading && rawItems.length === 0;
 
   return (
-    <div className="space-y-4">
-      {isLoadingMore ? <p className="text-caption text-text-muted">MMR leaders (still loading)</p> : null}
-      <MmrImpactLeaders
-        mostWon={mmrLeaders.mostWon}
-        mostLost={mmrLeaders.mostLost}
-        loading={isMmrImpactLoading || (groupByPlayer && (isLoading || !!isPulseLinksLoading))}
-        unavailable={!!mmrImpactError || (groupByPlayer && !!error)}
-        incomplete={groupByPlayer && (hitMaxPages || hitMmrImpactMaxPages)}
-        onOpen={open}
-      />
-
-      <RivalriesStrip rows={items} onOpen={open} incomplete={isLoading || isLoadingMore || hitMaxPages || !!error} recentAvailable={summary.data?.recentComplete === true} />
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick opponent views">
-        <OpponentQuickViews quick={quick} onChange={setQuick} sort={sort} rivalCount={rivals.keys.length} />
-        {!onExportAction ? <Button variant="secondary" disabled={exportDisabled} title={`Export all ${formatNumber(items.length)} matching ${groupByPlayer ? "players" : "accounts"}, including rows outside the render window`} onClick={exportRows}>Export CSV</Button> : null}
-        <div className="ml-auto"><OpponentColumnPicker columns={columns} onChange={(key, checked) => setColumnOverrides({ ...columnOverrides, [key]: checked })} onReset={() => setColumnOverrides({})} /></div>
+    <div className="space-y-4 lg:space-y-5">
+      {/* Context zone: one toolbar. Search leads, quick views and filters
+          follow, and the column picker closes the row. */}
+      <div role="search" aria-label="Opponent list controls" className="glass space-y-3 rounded-2xl border border-line p-2 sm:p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-0 flex-1 basis-full sm:basis-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-dim" aria-hidden />
+            <Input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or Pulse ID"
+              aria-label="Search opponents"
+              onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setSearch(""); } }}
+              className="min-h-11 pl-9 pr-11"
+            />
+            {search ? <button type="button" aria-label="Clear search" onClick={() => { setSearch(""); searchRef.current?.focus(); }} className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:ring-accent"><X className="h-4 w-4" aria-hidden /></button> : null}
+          </div>
+          {!onExportAction ? <Button variant="secondary" disabled={exportDisabled} title={`Export all ${formatNumber(items.length)} matching ${groupByPlayer ? "players" : "accounts"}, including rows outside the render window`} onClick={exportRows}>Export CSV</Button> : null}
+          <OpponentColumnPicker columns={columns} onChange={(key, checked) => setColumnOverrides({ ...columnOverrides, [key]: checked })} onReset={() => setColumnOverrides({})} />
+        </div>
+        <div className="scroll-fade-x -mx-1 overflow-x-auto px-1 sm:mx-0 sm:overflow-visible sm:px-0">
+          <div className="flex min-w-max items-center gap-2 sm:min-w-0 sm:flex-wrap" role="group" aria-label="Quick opponent views">
+            <OpponentQuickViews quick={quick} onChange={setQuick} sort={sort} rivalCount={rivals.keys.length} />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2">
+          <MinGamesPicker value={minGames} onChange={setMinGames} />
+          <label className="flex min-h-11 items-center gap-2">
+            <span className="whitespace-nowrap text-micro uppercase tracking-wider text-text-dim">
+              MMR impact
+            </span>
+            <Select
+              value={mmrImpactFilter}
+              onChange={(event) =>
+                setMmrImpactFilter(event.target.value as MmrImpactFilter)
+              }
+              aria-label="Filter opponents by MMR impact"
+              className="min-h-11 text-caption"
+            >
+              <option value="all">All opponents</option>
+              <option value="tracked">Verified pairs only</option>
+              <option value="net-gain">You gained overall</option>
+              <option value="net-loss">They gained overall</option>
+            </Select>
+          </label>
+          <label className="flex min-h-11 items-center gap-2 text-caption text-text-muted"><Toggle checked={hasNotes} onChange={setHasNotes} label="Has notes" /><span>Has notes</span></label>
+          <GroupingPreference preference={grouping} />
+          {changed ? <Button variant="ghost" size="sm" onClick={reset}>Reset</Button> : null}
+          <div className="ml-auto flex w-full flex-col gap-1 sm:w-auto sm:items-end">
+            <span aria-live="polite" className="text-caption tabular-nums text-text-dim">
+              {isRefreshing ? "Updating… · " : isLoadingMore ? `Loading more opponents… (${formatNumber(rawItems.length)} so far) · ` : ""}
+              {formatNumber(items.length)} {showPlayerGroups ? "players" : "accounts"}
+              {groupByPlayer && mergedNameCount > 0
+                ? ` · ${formatNumber(mergedNameCount)} accounts merged`
+                : null}
+              {hitMaxPages ? " · Showing your most recent 8,000 opponents" : null}
+            </span>
+            {isMmrImpactLoading || hitMmrImpactMaxPages ? (
+              <span className="text-caption text-text-dim">
+                {isMmrImpactLoading
+                  ? "Loading verified MMR impact..."
+                  : "Some MMR impact rows were omitted; narrow the global filters."}
+              </span>
+            ) : null}
+          </div>
+        </div>
       </div>
       {rivals.error || rivals.unavailable ? <div role="alert" className="flex flex-wrap items-center gap-2 text-caption text-warning"><p>{rivals.error || "Rival preferences are temporarily unavailable."}</p>{rivals.unavailable ? <Button variant="ghost" size="sm" onClick={rivals.retry}>Retry rival preferences</Button> : null}</div> : null}
       {summary.error ? <p role="status" className="flex flex-wrap items-center gap-2 text-caption text-text-muted">Recent rival details are unavailable.<Button variant="ghost" size="sm" onClick={summary.retry}>Retry rival details</Button></p> : null}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative w-full sm:max-w-sm">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-dim" aria-hidden />
-        <Input
-          ref={searchRef}
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name or Pulse ID"
-          aria-label="Search opponents"
-          onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setSearch(""); } }}
-          className="min-h-[44px] pl-9 pr-11"
+
+      {/* Hero zone: the headline rivalries and MMR swings, above the table. */}
+      <div className="space-y-4">
+        {isLoadingMore ? <p className="text-caption text-text-muted">MMR leaders (still loading)</p> : null}
+        <RivalriesStrip rows={items} onOpen={open} incomplete={isLoading || isLoadingMore || hitMaxPages || !!error} recentAvailable={summary.data?.recentComplete === true} />
+        <MmrImpactLeaders
+          mostWon={mmrLeaders.mostWon}
+          mostLost={mmrLeaders.mostLost}
+          loading={isMmrImpactLoading || (groupByPlayer && (isLoading || !!isPulseLinksLoading))}
+          unavailable={!!mmrImpactError || (groupByPlayer && !!error)}
+          incomplete={groupByPlayer && (hitMaxPages || hitMmrImpactMaxPages)}
+          onOpen={open}
         />
-        {search ? <button type="button" aria-label="Clear search" onClick={() => { setSearch(""); searchRef.current?.focus(); }} className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:ring-accent"><X className="h-4 w-4" aria-hidden /></button> : null}
-        </div>
-        <MinGamesPicker value={minGames} onChange={setMinGames} />
-        <label className="flex min-h-[44px] items-center gap-2">
-          <span className="whitespace-nowrap text-micro uppercase tracking-wider text-text-dim">
-            MMR impact
-          </span>
-          <Select
-            value={mmrImpactFilter}
-            onChange={(event) =>
-              setMmrImpactFilter(event.target.value as MmrImpactFilter)
-            }
-            aria-label="Filter opponents by MMR impact"
-            className="min-h-[44px] text-caption"
-          >
-            <option value="all">All opponents</option>
-            <option value="tracked">Verified pairs only</option>
-            <option value="net-gain">You gained overall</option>
-            <option value="net-loss">They gained overall</option>
-          </Select>
-        </label>
-        <label className="flex min-h-[44px] items-center gap-2 text-caption text-text-muted"><Toggle checked={hasNotes} onChange={setHasNotes} label="Has notes" /><span>Has notes</span></label>
-        {changed ? <Button variant="ghost" size="sm" onClick={reset}>Reset</Button> : null}
-        <GroupingPreference preference={grouping} />
-        <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
-          <span aria-live="polite" className="text-xs text-text-dim">
-            {isRefreshing ? "Updating… · " : isLoadingMore ? `Loading more opponents… (${formatNumber(rawItems.length)} so far) · ` : ""}
-            {formatNumber(items.length)} {showPlayerGroups ? "players" : "accounts"}
-            {groupByPlayer && mergedNameCount > 0
-              ? ` · ${formatNumber(mergedNameCount)} accounts merged`
-              : null}
-            {hitMaxPages ? " · Showing your most recent 8,000 opponents" : null}
-          </span>
-          {isMmrImpactLoading || hitMmrImpactMaxPages ? (
-            <span className="text-xs text-text-dim">
-              {isMmrImpactLoading
-                ? "Loading verified MMR impact..."
-                : "Some MMR impact rows were omitted; narrow the global filters."}
-            </span>
-          ) : null}
-        </div>
       </div>
 
       {rawItems.length > 0 && error ? <div role="alert" className="flex items-center gap-3 text-caption text-warning">

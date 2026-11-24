@@ -49,9 +49,13 @@ const ArcadeTab = dynamic(
  */
 export function SectionPanel({ tab }: { tab: Exclude<TabId, "opponents"> }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 lg:space-y-8">
       <SectionHeader tab={tab} />
-      <SectionBody tab={tab} />
+      {/* Each section owns its context zone (filters, search, quick
+          views) as the first thing in its body, then its content. */}
+      <div className="space-y-6">
+        <SectionBody tab={tab} />
+      </div>
     </div>
   );
 }
