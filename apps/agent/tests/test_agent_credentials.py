@@ -1,4 +1,5 @@
 """Direct dormant transaction contracts, using finite synthetic IO and crypto."""
+from contextlib import contextmanager
 from dataclasses import FrozenInstanceError, replace
 import hashlib
 import itertools
@@ -64,6 +65,49 @@ class MemoryStorage:
 
     def capacity(self):
         return len(self.generations), sum(len(value) for value in self.generations.values())
+
+
+class PinnedStorage(MemoryStorage):
+    """Synthetic adapter transaction: records its span, can fail its final check."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.depth, self.depths, self.final_check = 0, [], None
+
+    @contextmanager
+    def transaction(self):
+        self.events.append(("begin",))
+        self.depth += 1
+        try:
+            yield
+        finally:
+            self.depth -= 1
+        self.events.append(("end",))
+        if self.final_check is not None:
+            raise CredentialStorageError(self.final_check)
+
+    def identity(self):
+        self.depths.append(self.depth)
+        return super().identity()
+
+    def read_pointer(self):
+        self.depths.append(self.depth)
+        return super().read_pointer()
+
+    def read_generation(self, name):
+        self.depths.append(self.depth)
+        return super().read_generation(name)
+
+    def create_generation(self, name, data):
+        self.depths.append(self.depth)
+        return super().create_generation(name, data)
+
+    def replace_pointer(self, expected, data):
+        self.depths.append(self.depth)
+        return super().replace_pointer(expected, data)
+
+    def capacity(self):
+        self.depths.append(self.depth)
+        return super().capacity()
 
 
 def projection(**changes):
@@ -360,6 +404,47 @@ def test_unreadable_post_replace_is_indeterminate_then_exact_retry_can_resolve()
     storage.read_pointer = read_pointer
     assert commit_transaction(storage, crypto, prepared).document == storage.pointer
     assert load_credentials(storage, crypto).obs.value == "committed-private"
+
+
+def test_load_and_commit_each_run_every_storage_call_inside_one_adapter_transaction():
+    storage, crypto = PinnedStorage(), SyntheticCrypto()
+    prepared = prepare(storage, crypto, device=CredentialIntent("set", "synthetic-device-secret"))
+    assert storage.events == [("begin",), ("end",)]
+    name = prepared.generations[0].name
+    for run, inside in ((lambda: commit_transaction(storage, crypto, prepared), [("create", name), ("replace",)]),
+                        (lambda: load_credentials(storage, crypto), [("read", name)])):
+        storage.events.clear()
+        storage.depths.clear()
+        run()
+        assert storage.events[0] == ("begin",) and storage.events[-1] == ("end",)
+        assert storage.events.count(("begin",)) == 1 and all(event in storage.events for event in inside)
+        assert storage.depths and set(storage.depths) == {1}
+    assert load_credentials(storage, crypto).device.value == "synthetic-device-secret"
+
+
+def test_failed_final_pin_check_fails_closed_after_publication_or_load():
+    storage, crypto = PinnedStorage(), SyntheticCrypto()
+    prepared = prepare(storage, crypto, device=CredentialIntent("set", "synthetic-device-secret"))
+    storage.final_check = "unsafe_path"
+    error = assert_code("indeterminate", lambda: commit_transaction(storage, crypto, prepared))
+    assert error.__context__ is None and error.__cause__ is None
+    assert storage.pointer == prepared.document  # Published, but not vouched for.
+    loaded = load_credentials(storage, crypto)
+    assert (loaded.status, loaded.code, loaded.device.value, loaded.raw) == ("unreadable", "unsafe_path", None, None)
+    assert loaded.store_id == storage.store_id
+    storage.final_check = None
+    assert commit_transaction(storage, crypto, prepared).document == storage.pointer
+    assert load_credentials(storage, crypto).device.value == "synthetic-device-secret"
+
+
+def test_failed_transaction_body_keeps_its_own_code_without_a_final_pin_check():
+    storage, crypto = PinnedStorage(), SyntheticCrypto()
+    prepared = prepare(storage, crypto, obs=CredentialIntent("set", "synthetic-obs-secret"))
+    storage.pointer = projection(window_page="settings")
+    storage.events.clear()
+    storage.final_check = "unsafe_path"
+    assert_code("conflict", lambda: commit_transaction(storage, crypto, prepared))
+    assert storage.events == [("begin",)] and storage.generations == {}
 
 
 def test_failed_clear_keeps_old_durable_value_and_successful_clear_increments_revision():
