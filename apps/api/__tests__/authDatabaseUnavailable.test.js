@@ -20,7 +20,9 @@ const { buildErrorHandler } = require("../src/middleware/errorHandler");
 const { safePrivateSearchError } = require("../src/middleware/privateSearchBoundary");
 const { safeReplayDownloadBatchError } = require("../src/middleware/replayDownloadBatchBoundary");
 const { DevicePairingsService } = require("../src/services/devicePairings");
+const { attachSocketAuth } = require("../src/socket/auth");
 const { sha256 } = require("../src/util/hash");
+const sentry = require("../src/util/sentry");
 
 // Device-token shaped bearers: 43 base64url characters, no dots.
 const liveToken = "Q".repeat(43);
@@ -167,6 +169,61 @@ describe("Clerk sign-ins", () => {
     const response = await probe(harness({}).app, clerkJwt);
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ userId: "clerk-owner", clerkUserId: "user_synthetic", source: "clerk" });
+  });
+});
+
+describe("socket handshakes", () => {
+  const dbHost = "db-7.internal:27017";
+  const networkTimeout = () => new MongoNetworkTimeoutError(`connection 4 to ${dbHost} timed out`);
+
+  /** Run the real handshake middleware. Resolves with exactly what socket.io
+   * serialises into the client's connect_error ({ message, data }), or null. */
+  function handshake(opts, auth) {
+    let middleware;
+    attachSocketAuth({ use: (fn) => { middleware = fn; }, on: () => {} }, { secretKey: "synthetic", ...opts });
+    const socket = { handshake: { auth }, data: {} };
+    return new Promise((resolve) => {
+      middleware(socket, (err) => resolve(err ? { message: err.message, data: err.data } : null));
+    });
+  }
+
+  let captured;
+  beforeEach(() => { captured = jest.spyOn(sentry, "captureException").mockImplementation(() => {}); });
+  afterEach(() => captured.mockRestore());
+
+  test.each([
+    ["device token lookup", { resolveDeviceToken: async () => { throw networkTimeout(); } }, { deviceToken: liveToken }],
+    ["overlay token lookup", { resolveOverlayToken: async () => { throw new MongoServerSelectionError(
+      `Server selection timed out after 30000 ms connecting to ${dbHost}`, { type: "Unknown", servers: new Map() }); } },
+    { overlayToken: "overlay-token" }],
+    ["overlay replaced check", { resolveOverlayToken: async () => null, isOverlayTokenReplaced: async () => { throw networkTimeout(); } },
+      { overlayToken: "overlay-token" }],
+  ])("a database failure in the %s sends auth_unavailable, not the driver's message", async (_label, opts, auth) => {
+    expect(await handshake(opts, auth)).toEqual({ message: "auth_unavailable", data: undefined });
+    expect(captured).not.toHaveBeenCalled(); // An outage is not a bug report.
+  });
+
+  test("a rejected Clerk JWT sends auth_failed, not Clerk's message", async () => {
+    verifyToken.mockRejectedValue(new Error("Error loading Clerk JWKS from https://api.clerk.com/v1/jwks with code=503"));
+    expect(await handshake({}, { token: clerkJwt })).toEqual({ message: "auth_failed", data: undefined });
+  });
+
+  test("a server bug sends internal_error and is reported instead", async () => {
+    const bug = new TypeError(`bug near ${dbHost}`);
+    const hit = { userId: "owner", get deviceId() { throw bug; } };
+    const result = await handshake({ resolveDeviceToken: async () => hit }, { deviceToken: liveToken });
+    expect(result).toEqual({ message: "internal_error", data: undefined });
+    expect(captured).toHaveBeenCalledWith(bug);
+  });
+
+  test("verdicts keep their codes", async () => {
+    expect(await handshake({ resolveDeviceToken: async () => null }, { deviceToken: liveToken }))
+      .toEqual({ message: "invalid_device_token", data: undefined });
+    expect(await handshake({ resolveOverlayToken: async () => null, isOverlayTokenReplaced: async () => true },
+      { overlayToken: "overlay-token" })).toEqual({ message: "overlay_token_replaced", data: undefined });
+    expect(await handshake({ resolveOverlayToken: async () => null, isOverlayTokenReplaced: async () => false },
+      { overlayToken: "overlay-token" })).toEqual({ message: "invalid_overlay_token", data: undefined });
+    expect(await handshake({ resolveDeviceToken: async () => ({ userId: "owner" }) }, { deviceToken: liveToken })).toBeNull();
   });
 });
 
