@@ -17,9 +17,11 @@ the offline packaged Qt diagnostic. They do not publish, tag, or execute setup.
    Installer signing and publication remain owner release steps; source tests do
    not prove a published installer is signed.
 3. In the final coordinated release PR, set the chosen version in
-   `apps/agent/sc2tools_agent/__init__.py` and the matching web fallback in
-   `apps/web/lib/agentNotice.ts`. Move the agent Unreleased notes under that
-   version and update the release notes. Version-check CI must pass.
+   `apps/agent/sc2tools_agent/__init__.py` and set the web fallback in
+   `apps/web/lib/agentNotice.ts` to the release before it (ADR 0100). Move the
+   agent Unreleased notes under that version and update the release notes.
+   Version-check CI must pass. Nothing on the website needs changing after
+   the release is published.
 4. Before creating a tag, the owner obtains the approved SignPath Foundation
    project/certificate and configures `SIGNPATH_API_TOKEN` plus the repository
    variables listed in `apps/agent/packaging/README.md`. A real signed workflow

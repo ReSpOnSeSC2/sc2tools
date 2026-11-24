@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { FALLBACK_LATEST_AGENT_VERSION } from "./agentNotice";
+import { compareAgentVersions, latestPublishedAgentVersion } from "./agentReleaseSource.server";
 
 export type AgentRelease = {
   version: string;
@@ -30,12 +31,6 @@ function parseRelease(section: string): AgentRelease {
   return { version, date, notes };
 }
 
-function compareVersions(left: string, right: string): number {
-  const [leftMajor, leftMinor, leftPatch] = left.split(".").map(Number);
-  const [rightMajor, rightMinor, rightPatch] = right.split(".").map(Number);
-  return leftMajor - rightMajor || leftMinor - rightMinor || leftPatch - rightPatch;
-}
-
 export function parseAgentChangelog(markdown: string): AgentRelease[] {
   const sections = markdown.replace(/\r\n?/g, "\n").split(/^##(?!#)/m).slice(1);
   // Only a leading draft section is allowed. Every subsequent heading must be a release.
@@ -45,20 +40,39 @@ export function parseAgentChangelog(markdown: string): AgentRelease[] {
   const releases = sections.map(parseRelease);
   for (let index = 1; index < releases.length; index += 1) {
     const { version } = releases[index];
-    if (compareVersions(releases[index - 1].version, version) <= 0) {
+    if (compareAgentVersions(releases[index - 1].version, version) <= 0) {
       throw new Error(`Agent changelog versions must be unique and newest first: ${version}`);
     }
   }
   return releases;
 }
 
-export function getAgentReleaseNotes(): AgentRelease[] {
-  const source = resolve(process.cwd(), "../agent/CHANGELOG.md");
-  const releases = parseAgentChangelog(readFileSync(source, "utf8"));
-  // The fallback advances after publication and marks where public history starts.
-  const latest = releases.findIndex(({ version }) => version === FALLBACK_LATEST_AGENT_VERSION);
-  if (latest < 0) throw new Error(`Missing Agent changelog entry for ${FALLBACK_LATEST_AGENT_VERSION}`);
-  return releases.slice(latest);
+/**
+ * Every release in the agent changelog, newest first, including a version
+ * still being prepared on main. The file is read when a page renders, so
+ * next.config.mjs traces it into the routes that call this.
+ */
+export function readAgentChangelog(): AgentRelease[] {
+  return parseAgentChangelog(readFileSync(resolve(process.cwd(), "../agent/CHANGELOG.md"), "utf8"));
+}
+
+/**
+ * The public part of the history: from the newest release at or below
+ * `published`, the newest published agent version, down. A version still
+ * being prepared never shows. Without an answer from GitHub (`null`), the
+ * build's FALLBACK_LATEST_AGENT_VERSION marks the start; release commits keep
+ * it on a published release (see agentNotice.ts).
+ */
+export function publishedAgentReleases(releases: AgentRelease[], published: string | null): AgentRelease[] {
+  const newest = published ?? FALLBACK_LATEST_AGENT_VERSION;
+  const start = releases.findIndex(({ version }) => compareAgentVersions(version, newest) <= 0);
+  if (start < 0) throw new Error(`No Agent changelog entry at or below ${newest}`);
+  return releases.slice(start);
+}
+
+/** The release notes the changelog page and Agent RSS feed show. */
+export async function getAgentReleaseNotes(): Promise<AgentRelease[]> {
+  return publishedAgentReleases(readAgentChangelog(), await latestPublishedAgentVersion());
 }
 
 export function agentReleaseAnchor(version: string): string {

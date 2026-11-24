@@ -1,11 +1,59 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
-import { GET, dynamic } from "@/app/changelog/agent.xml/route";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GET, dynamic, revalidate } from "@/app/changelog/agent.xml/route";
 import { GET as productFeed } from "@/app/changelog/rss.xml/route";
 import { FALLBACK_LATEST_AGENT_VERSION } from "../agentNotice";
-import { agentReleaseAnchor, agentReleaseMarkdown, getAgentReleaseNotes, parseAgentChangelog } from "../agentReleases";
+import { AGENT_RELEASES_REVALIDATE_SECONDS } from "../agentReleaseSource.server";
+import {
+  agentReleaseAnchor,
+  agentReleaseMarkdown,
+  getAgentReleaseNotes,
+  parseAgentChangelog,
+  publishedAgentReleases,
+  readAgentChangelog,
+  type AgentRelease,
+} from "../agentReleases";
 import { rssResponse } from "../rss";
+import nextConfig from "../../next.config.mjs";
+
+/** The matcher Next applies to outputFileTracingIncludes keys (build/collect-build-traces.js). */
+const picomatch = createRequire(import.meta.url)("next/dist/compiled/picomatch") as (
+  glob: string,
+  options: { dot: boolean; contains: boolean },
+) => (route: string) => boolean;
+
+const fetchMock = vi.fn();
+const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+afterAll(() => warn.mockRestore());
+
+/** GitHub's release list with `versions` published, each with its installer. */
+function githubPublishes(...versions: string[]) {
+  const body = JSON.stringify(versions.map(version => ({
+    tag_name: `agent-v${version}`,
+    draft: false,
+    prerelease: false,
+    assets: [{ name: `SC2ToolsAgent-Setup-${version}.exe`, browser_download_url: "https://example.test/setup.exe", size: 1 }],
+  })));
+  fetchMock.mockImplementation(async () => new Response(body));
+}
+
+function releases(...versions: string[]): AgentRelease[] {
+  return versions.map(version => ({ version, notes: `- Notes for ${version}` }));
+}
+
+const versionsOf = (list: AgentRelease[]) => list.map(({ version }) => version);
+
+beforeEach(() => {
+  fetchMock.mockReset();
+  warn.mockClear();
+  vi.stubGlobal("fetch", fetchMock);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("Agent release history", () => {
   it("preserves version order, optional dates and Markdown from Windows checkouts", () => {
@@ -38,12 +86,6 @@ describe("Agent release history", () => {
     expect(() => parseAgentChangelog(markdown)).toThrow(reason);
   });
 
-  it("reads the real changelog with the tracked published version first", () => {
-    const releases = getAgentReleaseNotes();
-    expect(releases.length).toBeGreaterThan(1);
-    expect(releases[0].version).toBe(FALLBACK_LATEST_AGENT_VERSION);
-  });
-
   it("links the release's committed gallery and leaves unrelated relative links alone", () => {
     const source = readFileSync(resolve(process.cwd(), "../agent/CHANGELOG.md"), "utf8");
     const notes = parseAgentChangelog(source).find(({ version }) => version === "0.25.0")?.notes ?? "";
@@ -54,21 +96,83 @@ describe("Agent release history", () => {
     const unrelated = "[internal](../../private/notes.md)";
     expect(agentReleaseMarkdown("0.25.0", unrelated)).toBe(unrelated);
   });
+});
 
-  it("publishes valid static RSS with a stable page link for every included version", async () => {
-    const releases = getAgentReleaseNotes();
-    const response = GET();
+describe("published Agent releases", () => {
+  it("starts at the newest published release and hides a version still being prepared", () => {
+    expect(versionsOf(publishedAgentReleases(releases("0.25.9", "0.25.8", "0.25.7"), "0.25.8"))).toEqual(["0.25.8", "0.25.7"]);
+  });
+
+  it("starts at the newest entry when GitHub names a release this build has no notes for yet", () => {
+    expect(versionsOf(publishedAgentReleases(releases("0.25.8", "0.25.7"), "0.25.9"))).toEqual(["0.25.8", "0.25.7"]);
+    expect(versionsOf(publishedAgentReleases(releases("0.25.10", "0.25.8", "0.25.7"), "0.25.9"))).toEqual(["0.25.8", "0.25.7"]);
+  });
+
+  it("starts at the build's fallback version without an answer from GitHub", () => {
+    const changelog = releases("99.0.0", FALLBACK_LATEST_AGENT_VERSION, "0.0.1");
+    expect(versionsOf(publishedAgentReleases(changelog, null))).toEqual([FALLBACK_LATEST_AGENT_VERSION, "0.0.1"]);
+  });
+
+  it("fails when no entry is old enough to have been published", () => {
+    expect(() => publishedAgentReleases(releases("0.25.8", "0.25.7"), "0.25.6")).toThrow(/No Agent changelog entry at or below 0.25.6/);
+  });
+
+  it("names the build's fallback version in the agent changelog", () => {
+    expect(versionsOf(readAgentChangelog())).toContain(FALLBACK_LATEST_AGENT_VERSION);
+  });
+
+  // Without the file in their server bundle, every regeneration would fail and
+  // the page would silently stay on its build-time list.
+  it("traces the agent changelog into both routes that read it when they render", () => {
+    const includes: Record<string, string[]> = nextConfig.outputFileTracingIncludes ?? {};
+    const changelog = resolve(process.cwd(), "../agent/CHANGELOG.md");
+    expect(existsSync(changelog)).toBe(true);
+    for (const route of ["/changelog", "/changelog/agent.xml"]) {
+      const traced = Object.entries(includes)
+        .filter(([glob]) => picomatch(glob, { dot: true, contains: true })(route))
+        .flatMap(([, files]) => files.map(file => resolve(process.cwd(), file)));
+      expect(traced, route).toContain(changelog);
+    }
+  });
+
+  it("follows GitHub's newest published release through the real changelog", async () => {
+    const [newest, previous] = versionsOf(readAgentChangelog());
+    githubPublishes(previous);
+    expect((await getAgentReleaseNotes())[0].version).toBe(previous);
+    githubPublishes(previous, newest);
+    expect((await getAgentReleaseNotes())[0].version).toBe(newest);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the build's version when GitHub can't be read", async () => {
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+    expect((await getAgentReleaseNotes())[0].version).toBe(FALLBACK_LATEST_AGENT_VERSION);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Agent RSS feed", () => {
+  it("publishes valid RSS with a stable page link for every published version", async () => {
+    const [newest, previous] = versionsOf(readAgentChangelog());
+    githubPublishes(previous);
+    const included = publishedAgentReleases(readAgentChangelog(), previous);
+    const response = await GET();
     const xml = new DOMParser().parseFromString(await response.text(), "application/xml");
     const items = [...xml.querySelectorAll("item")];
 
-    expect(dynamic).toBe("force-static");
     expect(response.headers.get("Content-Type")).toContain("application/rss+xml");
     expect(xml.querySelector("parsererror")).toBeNull();
     expect(xml.documentElement.getAttribute("version")).toBe("2.0");
-    expect(items).toHaveLength(releases.length);
-    expect(items.map(item => item.querySelector("title")?.textContent)).toEqual(releases.map(({ version }) => `SC2 Tools Agent ${version}`));
-    expect(items.map(item => item.querySelector("guid")?.textContent?.split("#")[1])).toEqual(releases.map(({ version }) => agentReleaseAnchor(version)));
-    expect(items.map(item => Boolean(item.querySelector("pubDate")))).toEqual(releases.map(({ date }) => Boolean(date)));
+    expect(items).toHaveLength(included.length);
+    expect(items.map(item => item.querySelector("title")?.textContent)).toEqual(included.map(({ version }) => `SC2 Tools Agent ${version}`));
+    expect(items.map(item => item.querySelector("guid")?.textContent?.split("#")[1])).toEqual(included.map(({ version }) => agentReleaseAnchor(version)));
+    expect(items.map(item => Boolean(item.querySelector("pubDate")))).toEqual(included.map(({ date }) => Boolean(date)));
+    expect(items.some(item => item.querySelector("guid")?.textContent?.endsWith(`#${agentReleaseAnchor(newest)}`))).toBe(false);
+  });
+
+  it("renders statically and again every 10 minutes, like the release lookup", () => {
+    expect(dynamic).toBe("force-static");
+    expect(revalidate).toBe(AGENT_RELEASES_REVALIDATE_SECONDS);
   });
 
   it("only emits announcement entries in the product feed", async () => {

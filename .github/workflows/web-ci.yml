@@ -96,6 +96,11 @@ jobs:
       NEXT_PUBLIC_INSTANT_IMPORT: all
       INSTANT_ENGINE_REQUIRED: '1'
       NEXT_PUBLIC_GUIDES_ENABLED: "on"
+      # The agent release lookup behind /api/agent/version and the changelog
+      # reads the fixture API instead of GitHub. It has no releases route and
+      # drops the request, so the build and the smoke never depend on GitHub
+      # and the changelog shows FALLBACK_LATEST_AGENT_VERSION.
+      AGENT_RELEASES_URL: "http://127.0.0.1:8080/repos/ReSpOnSeSC2/sc2tools/releases"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

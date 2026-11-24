@@ -7,9 +7,10 @@
 # A drift here means the engine reports a version that disagrees with the
 # canonical file, or the lookup fell back to the unknown sentinel, so we
 # hard-fail PRs the moment the two values diverge.
-# Also keeps the website's loading-state agent label on a version players can
-# download: the agent package version, or the release before it while the
-# package version is still being prepared on main (see the check below).
+# Also keeps the website's fallback agent version (shown while release
+# metadata loads, or when GitHub's release list can't be read) on a version
+# players can download: the release before the agent package version, or the
+# package version once it is published (see the check below).
 # And pins the in-browser engine (Instant Analysis): INSTANT_ENGINE_VERSION in
 # apps/web/lib/instant/engineVersion.ts must equal apps/replay-engine/VERSION,
 # and PYODIDE_VERSION must equal the exact pyodide pin in apps/web/package.json
@@ -92,12 +93,18 @@ jobs:
           web_match = re.search(r'^export const FALLBACK_LATEST_AGENT_VERSION\s*=\s*"(\d+\.\d+\.\d+)"', web_notice, re.MULTILINE)
           if not agent_match or not web_match:
               sys.exit('ERROR: missing agent package version or web fallback version')
-          # The website names the fallback before release metadata loads, and
-          # main deploys on every merge while an agent release is cut later
-          # from a tag. So the fallback may stay on the release before the
-          # package version (the next "## X.Y.Z" section of the agent
-          # changelog) until that version is published. It may never run
-          # ahead of the package, nor fall further behind than that.
+          # The website names the fallback only when GitHub's release list
+          # can't be used: before release metadata loads, when that request
+          # fails, and as the start of the changelog when a build can't reach
+          # GitHub. Main deploys on every merge while an agent release is cut
+          # later from a tag, so a release commit sets the fallback to the
+          # release before the package version (the next "## X.Y.Z" section of
+          # the agent changelog), never to the package version it prepares.
+          # Once that version is published the fallback may name it, but
+          # nothing has to raise it: the changelog page, its feed and the
+          # download metadata follow GitHub. This check can't tell whether the
+          # package version is published, so it accepts both; it fails a
+          # fallback ahead of the package or further behind.
           package_version, web_version = agent_match[1], web_match[1]
           agent_changelog = Path('apps/agent/CHANGELOG.md').read_text(encoding='utf-8')
           releases = re.findall(r'^## (\d+\.\d+\.\d+)\s*$', agent_changelog, re.MULTILINE)
@@ -105,7 +112,7 @@ jobs:
           if web_version == package_version:
               print('OK -- agent package and web fallback agree on', package_version)
           elif web_version in previous:
-              print(f'OK -- web fallback {web_version} is the release before agent {package_version}, which is in preparation')
+              print(f'OK -- web fallback {web_version} is the release before agent {package_version}')
           else:
               sys.exit(f'ERROR: agent version drift -- package {package_version}, web fallback {web_version}, '
                        f'release before the package version {previous[0] if previous else "unknown"}')

@@ -9,6 +9,10 @@ import { AgentReleaseHistory } from "./AgentReleaseHistory";
 
 const TITLE = "What's new";
 export const dynamic = "force-static";
+// The Agent release notes start at the newest published agent release on
+// GitHub (lib/agentReleaseSource.server.ts), so the page renders again at
+// most every 10 minutes to pick up a release once the owner publishes it.
+export const revalidate = 600;
 export const metadata: Metadata = {
   ...pageMetadata({ title: TITLE, description: "Recent improvements to SC2 Tools, the desktop app, Stream Studio and guides.", canonical: "/changelog" }),
   title: TITLE,

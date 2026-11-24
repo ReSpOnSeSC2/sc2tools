@@ -3,8 +3,8 @@ import { MiniMarkdown } from "@/components/ui/MiniMarkdown";
 import { buttonClassName } from "@/components/ui/buttonStyles";
 import { agentReleaseAnchor, agentReleaseMarkdown, getAgentReleaseNotes } from "@/lib/agentReleases";
 
-export function AgentReleaseHistory() {
-  const releases = getAgentReleaseNotes();
+export async function AgentReleaseHistory() {
+  const releases = await getAgentReleaseNotes();
   return (
     <section id="agent-release-notes" className="scroll-mt-24 space-y-4" aria-labelledby="agent-release-title">
       <div className="flex flex-wrap items-center justify-between gap-2">

@@ -129,6 +129,13 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
+/**
+ * The smoke points AGENT_RELEASES_URL at the fixture API, which can't list
+ * releases, so the page and the feed both start at the build's
+ * FALLBACK_LATEST_AGENT_VERSION: the path a build takes when GitHub can't be
+ * reached. Following GitHub's newest published release is unit-tested
+ * (lib/__tests__/agentReleases.test.ts).
+ */
 async function verifyAgentReleaseHistory(
   page: Page,
   request: APIRequestContext,
