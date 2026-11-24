@@ -2,6 +2,18 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.25.6
+
+### Fixed
+- Delete downloaded update installers once the new version runs. Updates now download into SC2 Tools' own `updates` folder. The setups earlier versions left in your temporary folder (about 230 MB each) are removed too, along with abandoned partial downloads and temp files left by interrupted saves. Only files SC2 Tools created are touched, and uninstalling removes the `updates` folder.
+- Closing first-time setup with Esc, the title-bar X or the new Finish later button no longer quits SC2 Tools. The status card shows Finish setup until you complete it, and syncing starts then.
+- Show one notification when a problem first appears: this PC was unlinked, startup failed, the replay analyzer didn't load, an update couldn't install, OBS rejected the saved password, or a replay folder is missing. You see it even when the window is hidden in the tray. Notifications wait until your match ends, and the tray tooltip now names the first problem.
+- Try replays skipped because they couldn't be read (`parse_failed`, `analysis_failed`, `unsupported_replay`) once more after each update, since a new version can often read them after a StarCraft II patch.
+- Keep replays that OneDrive hasn't downloaded yet, or that another program has open, waiting instead of skipping them at once. SC2 Tools tries them three more times over about 20 minutes before recording the skip, which the next update retries.
+- Keep a local record of crashes: native crashes go to `logs\crash.log` (kept under about 1 MB, with a backup), and errors that escape a background task or the window, plus Qt warnings, go to the activity log. Nothing is sent anywhere.
+- A failed save can no longer leave a timed pause on for good.
+- Stop sc2reader's per-event messages from filling the activity log. They also carried player names.
+
 ## 0.25.5
 
 ### Fixed

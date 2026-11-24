@@ -70,6 +70,7 @@ def bare(tmp_path, state):
     instance._sync_filter = lambda: SimpleNamespace(replay_in_range=lambda _: True)
     instance._analyzer_unavailable = False; instance._uses_processes = False
     instance._process_crash_strikes = 0
+    instance._unavailable, instance._unavailable_lock = {}, threading.Lock()
     return instance
 
 

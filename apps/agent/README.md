@@ -104,7 +104,9 @@ runner.py
   +-- watcher.py         watchdog FS events + periodic sweep + override
   +-- uploader/queue.py  bounded queue, dedupe, pause, resync
   +-- updater.py         poll /v1/agent/version, verify SHA-256, install
+  +-- update_cleanup.py  delete the installers and temp files it created
   +-- crash_reporter.py  Sentry SDK with PII redaction
+  +-- crash_capture.py   local crash.log, exception hooks, Qt messages
   +-- ui/
         +-- gui.py       PySide6 main window  (production UX)
         +-- tray.py      pystray indicator    (always alongside the GUI)
@@ -257,7 +259,7 @@ instead of silently claiming playback.
 | Companion | Searchable opponent directory, meetings, build comparisons, recorded tech timings, notes, and independent game panel switches. |
 | Dashboard | Shared status and recovery; Last game and locally tracked Today W–L/MMR; Synced with today's uploads, Waiting, persistent relative Last upload, Failed (24 h), and history-import progress. Pause and Open dashboard remain here; Re-sync is in Settings → Maintenance and Updates is beside the sidebar version. |
 | Recent games | Latest 200 local outcomes, kept across restarts. When, result, matchup, opponent, map, length, own MMR and status; status/date filters and collapsed history imports. Double-click opens game analysis. Right-click selects the exact replay in Explorer, copies its path/error, retries or re-analyzes; select failed rows for Retry failed. |
-| Activity log | Incremental tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log`, with complete tracebacks, readable level filters, Ctrl+F search, follow/pause, copy selection or last 200 lines, and Open log folder. |
+| Activity log | Incremental tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log`, with complete tracebacks, readable level filters, Ctrl+F search, follow/pause, copy selection or last 200 lines, and Open log folder. Native crashes are written to `logs\crash.log`. |
 | Settings | Replay folders and sync date range (including Last 30 days), start-up, updates, capture, build check-in and OBS. Use the section index or Jump menu to find a setting. Timing labels identify what applies instantly, what needs Save, and what takes effect after restart. The API field supports Reset to default and Test. |
 | Streams | Shared stream title and YouTube description, connected channels, and verified or accepted per-platform save results. |
 
@@ -464,6 +466,9 @@ Later (24 hours). Optional automatic updates respect the saved setting; Install
 now still works when auto-update is off. Required updates defer at most 24 hours
 from first discovery. Every install waits for two idle minutes, stopped OBS
 outputs, and no capture. Failure leaves Retry and Download installer actions.
+Installers download to `%LOCALAPPDATA%\sc2tools\updates`. Once the new version
+runs it deletes its own setup and older ones there and in `%TEMP%` (where
+versions before 0.25.6 left them), plus abandoned partial downloads.
 Capture notices cannot erase an update. After a version change, an Updated toast
 and What's new link offer bundled notes even offline. Source checkouts use the
 manual installer path. No release is published by these source changes.

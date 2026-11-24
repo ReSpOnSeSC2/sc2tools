@@ -13,7 +13,8 @@ def boot_seams(monkeypatch, tmp_path, *, paired=False):
     from sc2tools_agent import runner
     state = AgentState(user_id="synthetic-owner" if paired else None, device_token="synthetic-token" if paired else None)
     cfg = SimpleNamespace(state_dir=tmp_path, api_base="https://api.example.test", parse_concurrency=2, replay_folder=None)
-    ui = SimpleNamespace(health=SimpleNamespace(facts=lambda: HealthFacts()), _support=None,
+    ui = SimpleNamespace(health=SimpleNamespace(facts=lambda: HealthFacts(), subscribe=lambda _callback: None),
+        _support=None,
         on_paused=lambda *_args: None, on_status=lambda *_args: None, on_phase=lambda *_args: None,
         show_pairing_code=lambda *_args: None, on_pairing_state=lambda *_args: None, on_paired=lambda *_args: None)
     trays = []

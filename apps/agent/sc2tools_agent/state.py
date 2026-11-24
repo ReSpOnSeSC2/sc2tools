@@ -80,6 +80,8 @@ class AgentState:
     update_first_seen_at: Optional[float] = None
     update_snoozed_until: Optional[float] = None
     last_run_version: Optional[str] = None
+    skip_retry_version: Optional[str] = None
+    """Agent version that last released engine-related skips for one more parse (skip_retry)."""
 
     paused: bool = False
     """When True the watcher keeps observing but the upload queue is
@@ -523,6 +525,7 @@ def _state_from_raw(raw):
         update_first_seen_at=_coerce_timestamp(raw.get("update_first_seen_at")),
         update_snoozed_until=_coerce_timestamp(raw.get("update_snoozed_until")),
         last_run_version=_coerce_str(raw.get("last_run_version")),
+        skip_retry_version=_coerce_str(raw.get("skip_retry_version")),
         paused=bool(raw.get("paused") or False),
         replay_folder_override=legacy_single,
         replay_folders_override=folders,

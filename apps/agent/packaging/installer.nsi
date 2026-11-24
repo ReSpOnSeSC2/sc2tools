@@ -215,6 +215,8 @@ Section "Uninstall"
     ; tokens and the dedupe cursor. Restrict deletion to the install-
     ; managed _internal\ subtree only.
     RMDir /r "$INSTDIR\_internal"
+    ; Downloaded update installers are a cache, never user data.
+    RMDir /r "$LOCALAPPDATA\sc2tools\updates"
 
     ; Only explicit opt-in removes these app-owned paths. Never use replay
     ; folder overrides or a recursive removal of the install/data root.
