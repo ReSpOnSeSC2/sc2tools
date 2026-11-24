@@ -88,6 +88,67 @@ def install_wheel_guard(widget, QtCore):
     return guard
 
 
+def install_wheel_router(app, QtCore, QtWidgets):
+    """Make the mouse wheel scroll whatever surface is under the pointer.
+
+    One application-wide filter covers every window the agent opens (main
+    window, Companion panels, check-in cards, scouting report, dialogs),
+    including controls created after it is installed:
+
+    - Value controls (combo boxes, spin and date boxes, sliders) never take
+      keyboard focus from the wheel, and while unfocused they pass wheel
+      input on to the nearest scroll area, so scrolling a page never edits
+      a setting by accident. A control the player clicked or tabbed into
+      keeps its own wheel behaviour, and an open combo list keeps the wheel
+      for its items.
+    - Tab bars pass the wheel on while unfocused instead of switching tabs.
+    - Scroll bars, lists, tables and text views keep their native
+      behaviour: they scroll themselves and hand the wheel to the page once
+      they reach an end.
+    Returns the installed filter; calling it again returns the same one.
+    """
+    existing = getattr(app, "_sc2_wheel_router", None)
+    if existing is not None:
+        return existing
+    value_types = (QtWidgets.QComboBox, QtWidgets.QAbstractSpinBox, QtWidgets.QAbstractSlider)
+    wheel_focus = QtCore.Qt.WheelFocus
+
+    def _tame_focus(widget):
+        if isinstance(widget, value_types) and not isinstance(widget, QtWidgets.QScrollBar):
+            if (widget.focusPolicy() & wheel_focus) == wheel_focus:
+                widget.setFocusPolicy(QtCore.Qt.StrongFocus)
+
+    class WheelRouter(QtCore.QObject):
+        def eventFilter(self, watched, event):
+            kind = event.type()
+            if kind == QtCore.QEvent.Polish:
+                _tame_focus(watched)
+                return False
+            if kind != QtCore.QEvent.Wheel:
+                return False
+            if isinstance(watched, QtWidgets.QScrollBar):
+                return False
+            if isinstance(watched, QtWidgets.QComboBox):
+                view = watched.view()
+                if view is not None and view.isVisible():
+                    return False
+            elif not isinstance(watched, (QtWidgets.QAbstractSpinBox, QtWidgets.QAbstractSlider, QtWidgets.QTabBar)):
+                return False
+            if watched.hasFocus():
+                return False
+            # Ignored + filtered: Qt keeps offering the wheel to the parents,
+            # so the enclosing scroll area scrolls.
+            event.ignore()
+            return True
+
+    router = WheelRouter(app)
+    app.installEventFilter(router)
+    app._sc2_wheel_router = router
+    for widget in app.allWidgets():
+        _tame_focus(widget)
+    return router
+
+
 def guard_value_widgets(root, QtCore=None, QtWidgets=None):
     if QtCore is None or QtWidgets is None:
         from PySide6 import QtCore, QtWidgets
@@ -175,6 +236,14 @@ def build_flow_layout(parent=None, *, QtCore, QtWidgets, spacing=8):
             return top - rectangle.y() + row_height + margins.bottom()
 
     return FlowLayout()
+
+
+def page_description(text, QtWidgets):
+    """The muted one-line purpose under the title of a page."""
+    label = QtWidgets.QLabel(text)
+    label.setObjectName("pageDescription")
+    label.setWordWrap(True)
+    return label
 
 
 def scrolling_page(scroll, *, QtWidgets):

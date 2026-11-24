@@ -7,7 +7,7 @@ from collections import deque
 from . import theme
 from .help_links import help_button
 from .log_records import LogRecord, matches, parse_chunk, read_tail
-from .qt_helpers import scrolling_page
+from .qt_helpers import page_description, scrolling_page
 
 
 def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
@@ -40,6 +40,7 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
             self.filter_combo.currentIndexChanged.connect(self.rebuild)
             self.open_folder_button = QtWidgets.QPushButton("Open log folder")
             self.open_folder_button.clicked.connect(open_folder)
+            self.header_description = page_description("What the agent did, newest last", QtWidgets)
             layout.addWidget(self.header_panel)
 
             self.toolbar_panel = QtWidgets.QWidget()
@@ -121,12 +122,14 @@ def build_activity_log(parent, *, log_file, QtCore, QtGui, QtWidgets,
             if signature[0]:
                 self._header_layout.addWidget(self.header_title, 0, 0, 1, 2)
                 self._header_layout.addWidget(self.header_help, 0, 2)
-                self._header_layout.addWidget(self.filter_combo, 1, 0, 1, 2)
-                self._header_layout.addWidget(self.open_folder_button, 1, 2)
+                self._header_layout.addWidget(self.header_description, 1, 0, 1, 3)
+                self._header_layout.addWidget(self.filter_combo, 2, 0, 1, 2)
+                self._header_layout.addWidget(self.open_folder_button, 2, 2)
                 self._header_layout.setColumnStretch(0, 1)
             else:
                 for widget, column in zip(header, (0, 1, 3, 4)):
                     self._header_layout.addWidget(widget, 0, column)
+                self._header_layout.addWidget(self.header_description, 1, 0, 1, 5)
                 self._header_layout.setColumnStretch(2, 1)
             if signature[1]:
                 self._toolbar_layout.addWidget(self.search, 0, 0, 1, 2)

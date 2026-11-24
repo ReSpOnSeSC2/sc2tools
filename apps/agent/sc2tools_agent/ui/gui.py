@@ -44,7 +44,7 @@ log = logging.getLogger(__name__)
 # private name used inside this module. Authoritative definition
 # lives in ``config.py`` so the runner and GUI share a single
 # ceiling — see the comment block there for why 12.
-from .qt_helpers import guard_value_widgets, validate_api_base, probe_api_health
+from .qt_helpers import page_description, guard_value_widgets, install_wheel_router, validate_api_base, probe_api_health
 from .help_links import help_url, help_button, site_url
 from .settings_page import (
     APPLIES_INSTANTLY, SAVED_WITH_SAVE, SYNC_DATE_FORMAT, build_settings_page, settings_timing,
@@ -112,6 +112,7 @@ _ACCENT = theme.ACCENT
 _ACCENT_HOVER = theme.ACCENT_HOVER
 _ACCENT_CYAN = theme.ACCENT_CYAN
 _SUCCESS = palette.GREEN
+_STATUS_TONES = {"ok": palette.GREEN, "info": palette.CYAN, "warn": palette.AMBER, "error": palette.RED}
 _WARNING = palette.AMBER
 _DANGER = palette.RED
 _BORDER = theme.BORDER
@@ -1111,6 +1112,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def __init__(self) -> None:
             super().__init__()
+            # Every page, panel and floating window scrolls with the mouse wheel.
+            install_wheel_router(QtWidgets.QApplication.instance(), QtCore, QtWidgets)
             self.setWindowFlag(QtCore.Qt.FramelessWindowHint, True)
             self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
             self.setWindowTitle(f"SC2 Tools Agent  ·  v{ui._version}")
@@ -1415,74 +1418,107 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _build_sidebar(self) -> QtWidgets.QWidget:
             frame = QtWidgets.QFrame()
             frame.setObjectName("agentSidebar")
-            frame.setFixedWidth(240)
+            frame.setFixedWidth(theme.SIDEBAR_WIDTH)
 
             layout = QtWidgets.QVBoxLayout(frame)
-            layout.setContentsMargins(10, 10, 10, 10)
-            layout.setSpacing(8)
+            layout.setContentsMargins(theme.SPACE_S + 2, theme.SPACE_S + 2, theme.SPACE_S + 2, theme.SPACE_S + 2)
+            layout.setSpacing(theme.SPACE_XS)
 
-            brand = QtWidgets.QLabel("Your agent")
-            brand.setObjectName("h2")
-            layout.addWidget(brand)
-
-            tagline = QtWidgets.QLabel("Sync, history and streaming")
-            tagline.setObjectName("muted")
-            layout.addWidget(tagline)
-
-            layout.addSpacing(8)
+            # Live status first: what a player wants to know before choosing a page.
+            status = QtWidgets.QPushButton()
+            status.setObjectName("sidebarStatus")
+            status.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            status.setMinimumHeight(theme.SIDEBAR_STATUS_HEIGHT)
+            status.setCursor(QtCore.Qt.PointingHandCursor)
+            status.setAccessibleName("Agent status. Open dashboard")
+            status.setToolTip("Open the dashboard")
+            status.clicked.connect(lambda: self._go_to_page("dashboard"))
+            status_row = QtWidgets.QHBoxLayout(status)
+            status_row.setContentsMargins(theme.SPACE_M, theme.SPACE_S, theme.SPACE_M, theme.SPACE_S)
+            status_row.setSpacing(theme.SPACE_S)
+            self._sidebar_status_dot = QtWidgets.QLabel("●")
+            self._sidebar_status_dot.setStyleSheet("color: " + palette.GREY)
+            status_row.addWidget(self._sidebar_status_dot, 0, QtCore.Qt.AlignVCenter)
+            status_text = QtWidgets.QVBoxLayout()
+            status_text.setSpacing(0)
+            self._sidebar_status = QtWidgets.QLabel()
+            self._sidebar_status.setObjectName("sidebarStatusTitle")
+            self._sidebar_status_detail = QtWidgets.QLabel()
+            self._sidebar_status_detail.setObjectName("sidebarStatusDetail")
+            for label in (self._sidebar_status, self._sidebar_status_detail):
+                label.setWordWrap(False)
+                label.setMinimumWidth(0)
+                label.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+                label.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+                status_text.addWidget(label)
+            self._sidebar_status_dot.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+            status_row.addLayout(status_text, 1)
+            layout.addWidget(status)
+            self._sidebar_status_button = status
 
             self._nav_group = QtWidgets.QButtonGroup(self)
             self._nav_group.setExclusive(True)
             self._nav_focus_order = []
 
-            for index, label in [
-                (5, "Companion"), (0, "Dashboard"), (1, "Recent games"),
-                (4, "Streams"), (2, "Activity log"), (3, "Settings"), (6, "Help"),
-            ]:
-                btn = QtWidgets.QPushButton(label)
-                btn.setObjectName("navItem")
-                btn.setCheckable(True)
-                btn.setCursor(QtCore.Qt.PointingHandCursor)
-                if index == 0:
-                    btn.setChecked(True)
-                btn.clicked.connect(
-                    lambda _checked=False, key=self._PAGE_KEYS[index]: self._go_to_page(key),
-                )
-                self._nav_group.addButton(btn, index)
-                self._nav_focus_order.append(btn)
-                layout.addWidget(btn)
+            for caption, items in (
+                ("Play", [(5, "Companion")]),
+                ("Sync and stream", [(0, "Dashboard"), (1, "Recent games"), (4, "Streams"), (2, "Activity log")]),
+                ("Setup", [(3, "Settings"), (6, "Help")]),
+            ):
+                heading = QtWidgets.QLabel(caption.upper())
+                heading.setObjectName("navCaption")
+                heading.setAccessibleName(caption)
+                layout.addWidget(heading)
+                for index, label in items:
+                    btn = QtWidgets.QPushButton(label)
+                    btn.setObjectName("navItem")
+                    btn.setCheckable(True)
+                    btn.setCursor(QtCore.Qt.PointingHandCursor)
+                    if index == 0:
+                        btn.setChecked(True)
+                    btn.clicked.connect(
+                        lambda _checked=False, key=self._PAGE_KEYS[index]: self._go_to_page(key),
+                    )
+                    self._nav_group.addButton(btn, index)
+                    self._nav_focus_order.append(btn)
+                    layout.addWidget(btn)
 
             layout.addStretch(1)
 
-            self._sidebar_status = QtWidgets.QLabel()
-            self._sidebar_status.setObjectName("muted")
-            self._sidebar_status.setWordWrap(False)
-            self._sidebar_status.setMinimumWidth(0)
-            self._sidebar_status.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
-            layout.addWidget(self._sidebar_status)
+            rule = QtWidgets.QFrame()
+            rule.setObjectName("sidebarRule")
+            rule.setFixedHeight(1)
+            layout.addWidget(rule)
 
             help_btn = QtWidgets.QPushButton("Help and support")
-            help_btn.setFlat(True)
+            help_btn.setObjectName("sidebarLink")
+            help_btn.setCursor(QtCore.Qt.PointingHandCursor)
             help_btn.clicked.connect(lambda: self._go_to_page("help"))
             layout.addWidget(help_btn)
+
             quit_btn = QtWidgets.QPushButton("Quit SC2 Tools")
-            quit_btn.setFlat(True)
+            quit_btn.setObjectName("sidebarLink")
+            quit_btn.setCursor(QtCore.Qt.PointingHandCursor)
             quit_btn.clicked.connect(ui._on_quit)
-            quit_row=QtWidgets.QWidget()
-            quit_layout=QtWidgets.QHBoxLayout(quit_row)
-            quit_layout.setContentsMargins(0,0,0,0)
-            quit_layout.addWidget(quit_btn)
-            quit_layout.addWidget(help_button(QtWidgets,"Window and tray",lambda:self._open_help("desktop-app-tray")))
-            layout.addWidget(quit_row)
+            quit_row = QtWidgets.QHBoxLayout()
+            quit_row.setSpacing(theme.SPACE_S)
+            quit_row.addWidget(quit_btn)
+            quit_row.addStretch(1)
+            quit_row.addWidget(help_button(QtWidgets, "Window and tray", lambda: self._open_help("desktop-app-tray")))
+            layout.addLayout(quit_row)
 
             version_lbl = QtWidgets.QLabel(f"v{ui._version}")
             version_lbl.setObjectName("dim")
             footer = QtWidgets.QHBoxLayout()
+            footer.setContentsMargins(theme.SPACE_S, 0, 0, 0)
             footer.addWidget(version_lbl)
+            footer.addStretch(1)
             self._updates_btn = QtWidgets.QPushButton("Updates")
+            self._updates_btn.setObjectName("sidebarLink")
             self._updates_btn.setAccessibleName("Check for updates")
             self._updates_btn.setToolTip("Check for updates")
             self._updates_btn.setFlat(True)
+            self._updates_btn.setCursor(QtCore.Qt.PointingHandCursor)
             self._updates_btn.clicked.connect(self._click_check_updates)
             footer.addWidget(self._updates_btn)
             layout.addLayout(footer)
@@ -1495,17 +1531,21 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             page = QtWidgets.QWidget()
             v = QtWidgets.QVBoxLayout(page)
             v.setContentsMargins(theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y, theme.PAGE_MARGIN_X, theme.PAGE_MARGIN_Y)
-            v.setSpacing(18)
+            v.setSpacing(theme.SPACE_L)
 
+            header = QtWidgets.QVBoxLayout()
+            header.setSpacing(theme.SPACE_2XS)
             title = QtWidgets.QLabel("Dashboard")
             title.setObjectName("h1")
-            v.addWidget(title)
+            header.addWidget(title)
+            header.addWidget(page_description("Sync status, recent uploads and quick actions", QtWidgets))
+            v.addLayout(header)
 
+            # Notices come first and only take room while they apply.
             from .service_notice import build_service_notice
             self._site_notice_card = build_service_notice(self, QtCore=QtCore, QtWidgets=QtWidgets,
                 dashboard_url=ui._dashboard_url, open_browser=lambda url: webbrowser.open(url,new=2))
             v.addWidget(self._site_notice_card)
-            v.addWidget(self._build_status_card())
             from .update_card import build_update_card
             self._update_card = build_update_card(self, QtCore=QtCore, QtWidgets=QtWidgets,
                 install=lambda: self._run_update_action(ui._on_install_update),
@@ -1517,21 +1557,80 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._connection_kind = "online"
             v.addWidget(self._build_replay_archive_card())
             v.addWidget(self._build_pairing_card())
+            # The hero: status, the main actions of the page, then the checklist behind them.
+            v.addWidget(self._build_status_card())
             self._stats_row = self._build_stats_row()
             v.addWidget(self._stats_row)
-            v.addWidget(self._build_action_row())
             from .game_dashboard import build_game_dashboard
             self._game_dashboard = build_game_dashboard(self, QtCore=QtCore, QtWidgets=QtWidgets,
                 open_game=self._open_recent_game, pause=self._click_pause,
                 current_season=self._import_current_season,
                 open_website=self._open_checkin_queue, open_help=self._open_help)
+            self._game_dashboard.right_column.insertWidget(0, self._build_folders_card())
             v.addWidget(self._game_dashboard)
             v.addStretch(1)
             scroll = QtWidgets.QScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
             scroll.setWidget(page)
+            self._dashboard_reflow = self._install_dashboard_reflow(scroll)
             return scroll
+
+        def _install_dashboard_reflow(self, scroll):
+            """Two columns on a wide page, one on a narrow one; the hero actions drop below the headline."""
+            window = self
+
+            class Reflow(QtCore.QObject):
+                def __init__(self):
+                    super().__init__(scroll)
+                    self.viewport = scroll.viewport()
+                    self.viewport.installEventFilter(self)
+
+                def apply(self):
+                    width = self.viewport.width()
+                    window._game_dashboard.set_wide(width >= theme.DASHBOARD_TWO_COLUMN_WIDTH)
+                    window._health_view.set_stacked(width < theme.DASHBOARD_STACKED_HERO_WIDTH)
+
+                def eventFilter(self, watched, event):
+                    if watched is self.viewport and event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.Show):
+                        self.apply()
+                    return False
+
+            reflow = Reflow()
+            reflow.apply()
+            return reflow
+
+        def _build_folders_card(self) -> QtWidgets.QFrame:
+            card = QtWidgets.QFrame()
+            card.setObjectName("card")
+            column = QtWidgets.QVBoxLayout(card)
+            column.setContentsMargins(theme.CARD_PADDING_X, theme.CARD_PADDING_Y, theme.CARD_PADDING_X, theme.CARD_PADDING_Y)
+            column.setSpacing(theme.SPACE_S)
+            heading = QtWidgets.QLabel("Replay folders")
+            heading.setObjectName("h2")
+            column.addWidget(heading)
+            about = QtWidgets.QLabel("The agent watches these folders for new replays. Add one per region or account you play on.")
+            about.setObjectName("muted")
+            about.setWordWrap(True)
+            column.addWidget(about)
+            from .qt_helpers import build_flow_layout
+            actions = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
+            choose_btn = QtWidgets.QPushButton("Add replay folder…")
+            self._choose_btn = choose_btn
+            choose_btn.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
+            choose_btn.setToolTip(
+                "Add another StarCraft II Replays folder to the watch "
+                "list. Each region/account has its own folder, so add "
+                "one entry per region you play on.",
+            )
+            choose_btn.clicked.connect(self._click_choose_folder)
+            actions.addWidget(choose_btn)
+            manage = QtWidgets.QPushButton("Manage in Settings")
+            manage.setToolTip("See, rename or remove the watched folders in Settings.")
+            manage.clicked.connect(lambda: self._go_to_page("settings"))
+            actions.addWidget(manage)
+            column.addLayout(actions)
+            return card
 
         def _build_replay_archive_card(self) -> QtWidgets.QFrame:
             card = QtWidgets.QFrame()
@@ -1572,11 +1671,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _build_status_card(self) -> QtWidgets.QFrame:
             card = QtWidgets.QFrame()
-            card.setObjectName("card")
+            card.setObjectName("cardElevated")
 
             column = QtWidgets.QVBoxLayout(card)
-            column.setContentsMargins(20, 18, 20, 18)
-            column.setSpacing(8)
+            column.setContentsMargins(theme.CARD_PADDING_X, theme.CARD_PADDING_Y, theme.CARD_PADDING_X, theme.CARD_PADDING_Y)
+            column.setSpacing(theme.SPACE_S)
 
             # The newest health snapshot is the card's only source of status.
             from .health_card import build_health_view
@@ -1585,6 +1684,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 status_help=help_button(QtWidgets, "Status lights", lambda: self._open_help("desktop-app-status")),
                 run_action=self._run_health_action, open_row_help=self._open_row_help,
                 row_tooltip=self._health_row_tooltip,
+                header_actions=self._build_action_row(),
             )
             column.addWidget(self._health_view)
 
@@ -1722,22 +1822,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             return {"frame": card, "value": value_lbl, "label": label_lbl}
 
         def _build_action_row(self) -> QtWidgets.QWidget:
-            # Two-row layout: cramming five buttons into one row makes
-            # Qt shrink labels below their natural width on smaller
-            # window sizes (which is what users were seeing — "Re-sync
-            # from scratch" rendering with the trailing "scratch"
-            # clipped past the button border). Splitting into local
-            # actions on top and external actions on the bottom keeps
-            # every label fully readable down to the window's minimum
-            # size of 820 px.
-            outer = QtWidgets.QFrame()
-            v = QtWidgets.QVBoxLayout(outer)
-            v.setContentsMargins(0, 0, 0, 0)
-            v.setSpacing(8)
-
-            local_row = QtWidgets.QHBoxLayout()
-            local_row.setSpacing(8)
-            local_row.setContentsMargins(0, 0, 0, 0)
+            # Pause beside the one primary action, in the status hero. Add replay folder lives in
+            # the Replay folders card; Re-sync is placed in Settings Maintenance.
+            outer = QtWidgets.QWidget()
+            row = QtWidgets.QHBoxLayout(outer)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(theme.SPACE_S)
 
             self._pause_btn = QtWidgets.QPushButton(
                 "Resume syncing" if self._paused else "Pause syncing",
@@ -1750,7 +1840,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "resume drains the queue.",
             )
             self._pause_btn.clicked.connect(self._click_pause)
-            local_row.addWidget(self._pause_btn)
+            row.addWidget(self._pause_btn)
 
             resync_btn = QtWidgets.QPushButton("Re-sync")
             self._resync_btn = resync_btn
@@ -1763,27 +1853,6 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "de-duplicates by game ID).",
             )
             resync_btn.clicked.connect(self._click_resync)
-            # Placed in Settings Maintenance below; keep it away from Pause.
-
-            choose_btn = QtWidgets.QPushButton("Add replay folder…")
-            self._choose_btn = choose_btn
-            choose_btn.setSizePolicy(
-                QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed,
-            )
-            choose_btn.setToolTip(
-                "Add another StarCraft II Replays folder to the watch "
-                "list. Each region/account has its own folder, so add "
-                "one entry per region you play on.",
-            )
-            choose_btn.clicked.connect(self._click_choose_folder)
-            local_row.addWidget(choose_btn)
-            local_row.addStretch(1)
-            v.addLayout(local_row)
-
-            ext_row = QtWidgets.QHBoxLayout()
-            ext_row.setSpacing(8)
-            ext_row.setContentsMargins(0, 0, 0, 0)
-            ext_row.addStretch(1)
 
             dash_btn = QtWidgets.QPushButton("Open dashboard")
             dash_btn.setObjectName("primary")
@@ -1791,8 +1860,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed,
             )
             dash_btn.clicked.connect(self._open_dashboard)
-            ext_row.addWidget(dash_btn)
-            v.addLayout(ext_row)
+            row.addWidget(dash_btn)
 
             return outer
 
@@ -3321,7 +3389,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _update_responsive_chrome(self):
             narrow = self.width() < 900
             companion = self._stack.currentWidget() is self._companion_page
-            self._sidebar.setVisible(not companion and not narrow)
+            sidebar = not companion and not narrow
+            self._sidebar.setVisible(sidebar)
+            # The sidebar is the navigation on agent pages; the back / Home / breadcrumb bar is for
+            # the windows where it is hidden.
+            self._agent_toolbar.setVisible(not companion and not sidebar)
             self._agent_edition.setVisible(not narrow)
             self._agent_version.setVisible(not narrow)
             columns = 2 if narrow else 4
@@ -3344,7 +3416,6 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                     surface.update()
             self._update_responsive_chrome()
             self._agent_brandbar.setVisible(not companion)
-            self._agent_toolbar.setVisible(not companion)
             self._outer_layout.setContentsMargins(*((0, 0, 0, 0) if companion else (10, 10, 10, 10)))
             self._frame_layout.setContentsMargins(*((0, 0, 0, 0) if companion else (14, 12, 14, 14)))
             self._frame_layout.setSpacing(0 if companion else 10)
@@ -3955,7 +4026,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             """While unpaired, hide the totals and lock Pause, Re-sync and Add folder; a pending save locks them too."""
             unpaired = not self._paired
             self._stats_row.setVisible(not unpaired)
-            self._game_dashboard.setVisible(not unpaired)
+            self._game_dashboard.set_details_visible(not unpaired)
             for button in (self._pause_btn, self._resync_btn, self._choose_btn):
                 button.setEnabled(not unpaired and not self._settings_save_pending)
 
@@ -3973,8 +4044,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             full = f"● {snapshot.headline}"
             problems = [row.sentence for row in snapshot.rows if row.level in ("warn", "error")]
             self._sidebar_status.setToolTip("\n".join([full, *problems]))
-            width = max(80, self._sidebar_status.width())
-            self._sidebar_status.setText(self._sidebar_status.fontMetrics().elidedText(full, QtCore.Qt.ElideRight, width))
+            self._sidebar_status_button.setAccessibleName(f"Agent status: {snapshot.headline}. Open dashboard")
+            self._sidebar_status_dot.setStyleSheet("color: " + _STATUS_TONES.get(snapshot.level, palette.GREY))
+            uploads = next((row.sentence for row in snapshot.rows if row.id == "uploads"), "")
+            self._sidebar_status_detail.setVisible(bool(uploads))
+            for label, text in ((self._sidebar_status, snapshot.headline), (self._sidebar_status_detail, uploads)):
+                width = max(label.width(), theme.SIDEBAR_WIDTH - 110)
+                label.setText(label.fontMetrics().elidedText(text, QtCore.Qt.ElideRight, width))
 
         def _health_actions(self):
             return {

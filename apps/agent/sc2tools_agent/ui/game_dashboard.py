@@ -1,6 +1,7 @@
 """Small dashboard game/import cards; rendering only, no IO or threads."""
 from __future__ import annotations
 
+from . import theme
 from .recent_games import relative_time
 from ..recent_games import parse_time
 
@@ -11,9 +12,20 @@ def build_game_dashboard(parent, *, QtCore, QtWidgets, open_game, pause, current
     class GameDashboard(QtWidgets.QWidget):
         def __init__(self):
             super().__init__(parent)
-            layout = QtWidgets.QVBoxLayout(self)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(12)
+            # Two columns when the page is wide, one stacked column when it is not.
+            self.columns = QtWidgets.QBoxLayout(QtWidgets.QBoxLayout.TopToBottom, self)
+            self.columns.setContentsMargins(0, 0, 0, 0)
+            self.columns.setSpacing(theme.SPACE_L)
+            self.left = QtWidgets.QWidget()
+            self.right = QtWidgets.QWidget()
+            layout = QtWidgets.QVBoxLayout(self.left)
+            side = QtWidgets.QVBoxLayout(self.right)
+            for column in (layout, side):
+                column.setContentsMargins(0, 0, 0, 0)
+                column.setSpacing(theme.SPACE_M)
+            self.columns.addWidget(self.left, 1)
+            self.columns.addWidget(self.right, 1)
+            self.right_column = side
             self.last_id = None
             self.last_card, last = self._card("Last game")
             self.last = QtWidgets.QLabel("Your next synced game will appear here.")
@@ -33,7 +45,8 @@ def build_game_dashboard(parent, *, QtCore, QtWidgets, open_game, pause, current
             self.history_note.setObjectName("muted")
             self.history_note.setWordWrap(True)
             today.addWidget(self.history_note)
-            layout.addWidget(self.today_card)
+            side.addWidget(self.today_card)
+            side.addStretch(1)
             self.import_card, progress = self._card("Importing your replay history")
             self.import_phase = QtWidgets.QLabel("Scanning…")
             progress.addWidget(self.import_phase)
@@ -63,12 +76,21 @@ def build_game_dashboard(parent, *, QtCore, QtWidgets, open_game, pause, current
             self.local_error.setWordWrap(True)
             self.local_error.setObjectName("error")
             layout.addWidget(self.local_error)
+            layout.addStretch(1)
+
+        def set_wide(self, wide):
+            self.columns.setDirection(QtWidgets.QBoxLayout.LeftToRight if wide else QtWidgets.QBoxLayout.TopToBottom)
+
+        def set_details_visible(self, visible):
+            """The game cards need a linked PC; a card that must stay in the right column is placed around them."""
+            self.left.setVisible(visible)
+            self.today_card.setVisible(visible)
 
         def _card(self, title):
             frame = QtWidgets.QFrame()
             frame.setObjectName("card")
             layout = QtWidgets.QVBoxLayout(frame)
-            layout.setContentsMargins(18, 14, 18, 14)
+            layout.setContentsMargins(theme.SPACE_L + 2, theme.SPACE_M + 2, theme.SPACE_L + 2, theme.SPACE_M + 2)
             heading = QtWidgets.QLabel(title)
             heading.setObjectName("h2")
             layout.addWidget(heading)

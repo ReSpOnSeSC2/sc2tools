@@ -48,6 +48,14 @@ PAGE_MARGIN_X = 28
 PAGE_MARGIN_Y = 24
 # The least height of a page's list or log; the page scrolls below it.
 PAGE_LIST_MIN_HEIGHT = 160
+# The navigation rail beside agent pages, and the page widths where the Dashboard reflows.
+SIDEBAR_WIDTH = 240
+SIDEBAR_STATUS_HEIGHT = 56
+# The inset of a card's content.
+CARD_PADDING_X = 20
+CARD_PADDING_Y = 18
+DASHBOARD_TWO_COLUMN_WIDTH = 760
+DASHBOARD_STACKED_HERO_WIDTH = 560
 # The round "?" beside a setting or a status line.
 HELP_LINK_SIZE = 20
 CHECKIN_ROW_HEIGHT = 30
@@ -267,6 +275,26 @@ QWidget#agentPageToolbar QPushButton:hover, QToolButton#agentMenuButton:hover {{
 QWidget#agentPageToolbar QPushButton:focus, QToolButton#agentMenuButton:focus {{ border-color: {skin.focus}; }}
 QToolButton#agentMenuButton {{ padding-right: {SPACE_XL}px; }}
 QFrame#agentSidebar QPushButton:flat {{ text-align: left; }}
+QLabel#navCaption {{
+    color: {TEXT_DIM}; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_SEMIBOLD}; letter-spacing: 1px;
+    padding: {SPACE_M}px {SPACE_M}px {SPACE_2XS}px {SPACE_M}px;
+}}
+QPushButton#sidebarStatus {{
+    background: {CARD_FILL}; border: 1px solid {BORDER}; border-top-color: {HAIRLINE_TOP};
+    border-radius: {RADIUS_M}px; padding: 0; min-height: {SIDEBAR_STATUS_HEIGHT}px; text-align: left; font-weight: {WEIGHT_REGULAR};
+}}
+QPushButton#sidebarStatus:hover {{ background: {ROW_HOVER}; }}
+QPushButton#sidebarStatus:focus {{ border-color: {skin.focus}; }}
+QLabel#sidebarStatusTitle {{ color: {TEXT}; font-weight: {WEIGHT_SEMIBOLD}; }}
+QLabel#sidebarStatusDetail {{ color: {TEXT_MUTED}; font-size: {TYPE_SMALL}px; }}
+QPushButton#sidebarLink {{
+    background: transparent; color: {TEXT_MUTED}; border: 1px solid transparent; border-radius: {RADIUS_S}px;
+    padding: {SPACE_XS}px {SPACE_S}px; font-size: {TYPE_SMALL}px; font-weight: {WEIGHT_REGULAR}; text-align: left;
+}}
+QPushButton#sidebarLink:hover {{ background: {BUTTON_HOVER}; color: {TEXT}; }}
+QPushButton#sidebarLink:focus {{ border-color: {skin.focus}; }}
+QPushButton#sidebarLink:disabled {{ background: transparent; color: {TEXT_DISABLED}; border-color: transparent; }}
+QFrame#sidebarRule {{ background: {BORDER}; border: none; }}
 QToolButton#agentMenuButton::menu-indicator {{
     image: url("{CONTROL_ICONS['chevron-down']}"); subcontrol-origin: padding;
     subcontrol-position: center right; right: {SPACE_S}px; width: {SPACE_M}px; height: {SPACE_M}px;
@@ -288,6 +316,8 @@ QFrame#cardArchive {{
 }}
 QLabel#h1 {{ font-family: {FONT_FAMILY_DISPLAY}; font-size: {TYPE_HEADLINE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
 QLabel#h2 {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
+QLabel#pageDescription {{ color: {TEXT_MUTED}; font-size: {TYPE_BODY}px; }}
+QLabel#statusOrb {{ font-size: {TYPE_HEADLINE}px; }}
 QLabel#muted {{ color: {TEXT_MUTED}; }}
 QLabel#dim {{ color: {TEXT_DIM}; }}
 QLabel#hint {{ color: {TEXT_DIM}; font-size: {TYPE_SMALL}px; }}

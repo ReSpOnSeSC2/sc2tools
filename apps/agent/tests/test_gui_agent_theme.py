@@ -24,8 +24,8 @@ def test_all_agent_pages_share_console_bezel_and_keep_existing_page_ownership(tm
             assert win._agent_frame.property("companion") is False
             assert win._agent_display.property("companion") is False
             assert win._agent_brandbar.isVisible()
-            assert win._agent_toolbar.isVisible()
             assert win._sidebar.isVisible()
+            assert not win._agent_toolbar.isVisible()  # the sidebar is the navigation here
             assert label.casefold() in win._agent_section_label.text().casefold()
             assert win._agent_display.isAncestorOf(win._stack.currentWidget())
             assert win._agent_frame.isAncestorOf(win._agent_display)

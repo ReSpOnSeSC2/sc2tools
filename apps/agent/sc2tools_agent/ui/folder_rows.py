@@ -23,6 +23,7 @@ def build_folder_rows(list_widget, *, QtCore, QtGui, QtWidgets, open_folder):
                 item = list_widget.item(index)
                 raw = item.text()
                 item.setToolTip(raw)
+                item.setForeground(QtGui.QBrush(QtCore.Qt.transparent))
                 row = QtWidgets.QWidget()
                 layout = QtWidgets.QHBoxLayout(row)
                 layout.setContentsMargins(6, 5, 6, 5)

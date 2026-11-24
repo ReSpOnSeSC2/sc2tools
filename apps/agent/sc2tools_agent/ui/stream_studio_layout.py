@@ -1,7 +1,7 @@
 """Widget layout for the Streams page. The page owns all streaming state and callbacks."""
 
 from . import theme
-from .qt_helpers import install_wheel_guard
+from .qt_helpers import install_wheel_guard, page_description
 
 AUTO_REARM_LABEL = ("Prepare the next pair automatically", "after both streams end")
 
@@ -17,6 +17,7 @@ def build_stream_studio(page, QtCore, QtWidgets):
     heading.addStretch()
     heading.addWidget(page._label("SC2TOOLS  /  STREAM STUDIO", name="studioEyebrow"))
     layout.addLayout(heading)
+    layout.addWidget(page_description("Titles, destinations and OBS setup for your streams", QtWidgets))
 
     layout.addWidget(_command(page, QtCore, QtWidgets))
     layout.addLayout(_youtube(page, QtCore, QtWidgets))

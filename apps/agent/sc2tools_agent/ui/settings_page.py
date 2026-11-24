@@ -6,6 +6,7 @@ import os
 from ..config import _DEFAULT_API_BASE, PARSE_CONCURRENCY_USEFUL_MAX
 from . import theme
 from .help_links import help_button
+from .qt_helpers import page_description
 
 # Format the sync-range controls and the corresponding saved dates consistently.
 SYNC_DATE_FORMAT = "yyyy-MM-dd"
@@ -100,6 +101,7 @@ def build_settings_page(
     title = QtWidgets.QLabel("Settings")
     title.setObjectName("h1")
     v.addWidget(title)
+    v.addWidget(page_description("Folders, account, overlay and performance", QtWidgets))
     navigation = QtWidgets.QHBoxLayout()
     section_label = QtWidgets.QLabel("Settings section")
     section_select = QtWidgets.QComboBox()

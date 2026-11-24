@@ -5,7 +5,7 @@ snapshot repaints the view, at most twice a second. A row keeps its line while
 its id stays, so a live count never replaces a button mid-click.
 """
 from ..health import GAMES_HELP, SYNC_HELP, HealthFacts, evaluate
-from . import palette
+from . import palette, theme
 from .help_links import help_button
 
 # What the monitor says before any subsystem has reported.
@@ -22,7 +22,8 @@ _DOTS = {"error": (palette.RED, "Error"), "warn": (palette.AMBER, "Needs attenti
 _ROW_HELP = {SYNC_HELP: "Sync problems", GAMES_HELP: "Why didn't my game show up?"}
 
 
-def build_health_view(parent, *, QtCore, QtWidgets, status_help, run_action, open_row_help, row_tooltip):
+def build_health_view(parent, *, QtCore, QtWidgets, status_help, run_action, open_row_help, row_tooltip,
+                      header_actions=None):
     class Line(QtWidgets.QWidget):
         """A dot, the sentence, at most one action button and the row's own "?"."""
 
@@ -73,33 +74,94 @@ def build_health_view(parent, *, QtCore, QtWidgets, status_help, run_action, ope
                 self._layout.addWidget(self.help_button)
 
     class HealthView(QtWidgets.QWidget):
+        """The status hero: an orb, the headline and summary, the page's main actions, then the checklist."""
+
         def __init__(self):
             super().__init__(parent)
             self.lines = []
+            self.snapshot = None
+            self._expanded = False
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(8)
-            top = QtWidgets.QHBoxLayout()
+            layout.setSpacing(theme.SPACE_M)
+            # Side by side while the card is wide; the window flips it to a column when it is not.
+            self.header = QtWidgets.QBoxLayout(QtWidgets.QBoxLayout.LeftToRight)
+            self.header.setSpacing(theme.SPACE_L)
+            identity = QtWidgets.QHBoxLayout()
+            identity.setSpacing(theme.SPACE_M)
+            self.orb = QtWidgets.QLabel("●")
+            self.orb.setObjectName("statusOrb")
+            identity.addWidget(self.orb, 0, QtCore.Qt.AlignTop)
+            text = QtWidgets.QVBoxLayout()
+            text.setSpacing(theme.SPACE_2XS)
             self.headline = QtWidgets.QLabel()
             self.headline.setObjectName("h2")
             self.headline.setWordWrap(True)
             self.headline.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
-            top.addWidget(self.headline, 1)
-            top.addWidget(status_help, 0, QtCore.Qt.AlignTop)
-            layout.addLayout(top)
+            text.addWidget(self.headline)
+            self.summary = QtWidgets.QLabel()
+            self.summary.setObjectName("muted")
+            self.summary.setTextFormat(QtCore.Qt.PlainText)
+            self.summary.setWordWrap(True)
+            self.summary.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            text.addWidget(self.summary)
+            identity.addLayout(text, 1)
+            identity.addWidget(status_help, 0, QtCore.Qt.AlignTop)
+            self.header.addLayout(identity, 1)
+            self.actions = header_actions
+            if header_actions is not None:
+                self.header.addWidget(header_actions, 0, QtCore.Qt.AlignTop | QtCore.Qt.AlignRight)
+            layout.addLayout(self.header)
+            # Everything that is fine tucks behind this; anything that needs you stays in view.
+            self.details_toggle = QtWidgets.QPushButton()
+            self.details_toggle.setObjectName("quietButton")
+            self.details_toggle.setCheckable(True)
+            self.details_toggle.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
+            self.details_toggle.toggled.connect(self._toggle_details)
+            layout.addWidget(self.details_toggle, 0, QtCore.Qt.AlignLeft)
+            self.details = QtWidgets.QWidget()
+            details = QtWidgets.QVBoxLayout(self.details)
+            details.setContentsMargins(0, 0, 0, 0)
+            details.setSpacing(theme.SPACE_S)
             self.rows = QtWidgets.QVBoxLayout()
             self.rows.setSpacing(6)
-            layout.addLayout(self.rows)
+            details.addLayout(self.rows)
             self.footer = QtWidgets.QLabel()
             self.footer.setObjectName("dim")
             self.footer.setTextFormat(QtCore.Qt.PlainText)
             self.footer.setWordWrap(True)
-            layout.addWidget(self.footer)
+            layout.addWidget(self.details)
+            layout.addWidget(self.footer)  # a note about what is off stays in view
             self.apply(STARTING)
+
+        def set_stacked(self, stacked):
+            """Put the main actions under the headline (a narrow card) or beside it."""
+            self.header.setDirection(QtWidgets.QBoxLayout.TopToBottom if stacked else QtWidgets.QBoxLayout.LeftToRight)
+            if self.actions is not None:
+                self.header.setAlignment(self.actions, QtCore.Qt.AlignLeft if stacked else QtCore.Qt.AlignRight | QtCore.Qt.AlignTop)
+
+        def _toggle_details(self, expanded):
+            self._expanded = expanded
+            self._sync_details()
+
+        def _sync_details(self):
+            fine = self.snapshot is not None and self.snapshot.level == "ok" and bool(self.snapshot.rows)
+            self.details_toggle.setVisible(fine)
+            self.details_toggle.setText("Hide details" if self._expanded else "Show details")
+            self.details_toggle.setAccessibleName("Hide status details" if self._expanded else "Show status details")
+            self.details.setVisible(not fine or self._expanded)
 
         def apply(self, snapshot):
             self.snapshot = snapshot
             self.headline.setText(snapshot.headline)
+            color, level = _DOTS.get(snapshot.level, _DOTS["ok"])
+            self.orb.setStyleSheet("color: " + color)
+            self.orb.setAccessibleName(level)
+            total = len(snapshot.rows)
+            passing = sum(row.level == "ok" for row in snapshot.rows)
+            self.summary.setText("" if not total else f"All {total} checks are passing." if passing == total
+                                 else f"{passing} of {total} checks are passing.")
+            self.summary.setVisible(bool(total))
             # Lines are keyed by row id, so a changing count keeps the line, its buttons and their focus.
             old = {line.row.id: line for line in self.lines}
             for line in self.lines:
@@ -113,5 +175,6 @@ def build_health_view(parent, *, QtCore, QtWidgets, status_help, run_action, ope
                 self.rows.addWidget(line)
             self.footer.setText(" ".join(row.sentence for row in snapshot.footer))
             self.footer.setVisible(bool(snapshot.footer))
+            self._sync_details()
 
     return HealthView()

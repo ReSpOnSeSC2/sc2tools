@@ -7,7 +7,7 @@ import html
 
 from ..recent_games import MAX_RECENT_GAMES, parse_time
 from . import theme
-from .qt_helpers import scrolling_page
+from .qt_helpers import page_description, scrolling_page
 
 COLUMNS = ("When", "Result", "Matchup", "Opponent", "Map", "Length", "MMR", "Status")
 
@@ -161,9 +161,8 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             title = QtWidgets.QLabel("Recent games")
             title.setObjectName("h1")
             layout.addWidget(title)
-            explanation = QtWidgets.QLabel("Double-click a game to open its analysis. Right-click for the replay file, error details or Retry.")
-            explanation.setWordWrap(True)
-            explanation.setObjectName("muted")
+            explanation = page_description("Every replay this PC uploaded. Double-click a game to open its analysis. "
+                                           "Right-click for the replay file, error details or Retry.", QtWidgets)
             layout.addWidget(explanation)
             self.controls_panel = QtWidgets.QWidget()
             self.controls_panel.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
