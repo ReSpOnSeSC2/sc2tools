@@ -7,6 +7,7 @@ const { PRIVATE_SEARCH_COMMENT } = require("../services/privateSearchReader");
 const { COMMUNITY_SEARCH_COMMENT, REPLAY_SEARCH_COMMENT } = require("../middleware/searchQueryPrivacy");
 const { REPLAY_DOWNLOAD_COMMENT } = require("../middleware/replayDownloadBatchBoundary");
 const { STORAGE_TOTALS_COMMENT } = require("../services/infrastructureStorageComment");
+const { NET_MMR_WINDOW_INDEX } = require("../services/trendsNetMmr");
 const { startPrivateSearchIndex } = require("./privateSearchIndexes");
 const { ensureNotesIndexes } = require("../services/notes");
 const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("../services/gameStatsMaintenance");
@@ -523,6 +524,10 @@ async function ensureIndexes(ctx, opts = {}) {
   // tie-breaker prevents replay rows with identical timestamps from being
   // skipped between pages while this compound order avoids a blocking sort.
   await ctx.games.createIndex({ userId: 1, date: -1, _id: -1 });
+  // Supplies the net-MMR window's order (account, then newest first), so the
+  // Trends verified-MMR charts never sort a whole history in memory: Atlas
+  // Flex caps that at 32 MB with no disk spill (services/trendsNetMmr.js).
+  await ctx.games.createIndex({ ...NET_MMR_WINDOW_INDEX.key }, { name: NET_MMR_WINDOW_INDEX.name });
   // Public infrastructure usage counts only completed original-replay
   // markers. A partial index keeps that global count index-only without
   // allocating entries for the much larger set of pre-archive game rows.

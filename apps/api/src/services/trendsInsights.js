@@ -96,9 +96,11 @@ async function mmrProgression(deps, userId, opts, filters) {
     $dateTrunc: { date: "$date", unit: interval, timezone },
   };
   const groupAccumulators = {
-    // $last after $sort:asc gives the most recent MMR in the bucket.
-    closeMmr: { $last: "$myMmr" },
-    openMmr: { $first: "$myMmr" },
+    // The bucket's chronologically last and first readings. $bottom and
+    // $top order the games themselves, so no $sort stage holds the whole
+    // history in memory (Atlas Flex caps that at 32 MB).
+    closeMmr: { $bottom: { sortBy: { date: 1, gameId: 1 }, output: "$myMmr" } },
+    openMmr: { $top: { sortBy: { date: 1, gameId: 1 }, output: "$myMmr" } },
     minMmr: { $min: "$myMmr" },
     maxMmr: { $max: "$myMmr" },
     wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
@@ -164,10 +166,6 @@ async function mmrProgression(deps, userId, opts, filters) {
           },
         },
       },
-      // Sort once before $facet so every sub-pipeline sees the same
-      // chronological order and $first / $last resolve to the
-      // bucket's opening / closing MMR.
-      { $sort: { date: 1, gameId: 1 } },
       {
         $facet: {
           coverage: [
