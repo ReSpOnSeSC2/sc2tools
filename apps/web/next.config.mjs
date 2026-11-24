@@ -119,6 +119,11 @@ const nextConfig = {
   // local icons. Trace the assets so serverless builds retain those files.
   outputFileTracingIncludes: {
     "/community/builds/*/opengraph-image": ["./public/icons/sc2/{buildings,units,upgrades}/*.png"],
+    // The changelog page and its Agent RSS feed render again on the server
+    // (every 10 minutes, to follow published agent releases) and read the
+    // agent changelog from disk each time (lib/agentReleases.ts). Keys match
+    // anywhere in a route, so this covers /changelog and /changelog/agent.xml.
+    "/changelog": ["../agent/CHANGELOG.md"],
   },
   reactStrictMode: true,
   poweredByHeader: false,

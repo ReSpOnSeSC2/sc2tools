@@ -7,10 +7,20 @@
  * lib/sentry.ts — the app must keep working without a DSN.
  */
 
+import { AGENT_RELEASES_UNAVAILABLE } from "@/lib/agentReleaseSource.server";
 import { streamViewerTelemetryPath } from "@/lib/streamViewerRoute";
 import { isRoomObsPath } from "@/lib/matchRoomRoute";
 
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
+
+/**
+ * A failure the app expects and already handles. A changelog regeneration
+ * that can't read GitHub throws on purpose so Next keeps the last page; Next
+ * retries it on later requests, so reporting each one would only add noise.
+ */
+function isHandledError(error: unknown): boolean {
+  return error instanceof Error && error.name === AGENT_RELEASES_UNAVAILABLE;
+}
 
 function isPrivateRequest(value: unknown): boolean {
   if (typeof value !== "string") return false;
@@ -41,7 +51,7 @@ export async function onRequestError(
   ...args: unknown[]
 ): Promise<void> {
   const request = args[1] as { path?: unknown } | undefined;
-  if (!DSN || isPrivateRequest(request?.path)) return;
+  if (!DSN || isPrivateRequest(request?.path) || isHandledError(args[0])) return;
   try {
     const Sentry = await import("@sentry/nextjs");
     (

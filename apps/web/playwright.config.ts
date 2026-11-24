@@ -24,8 +24,8 @@ const BROWSER = process.env.PW_BROWSER === "firefox" ? "firefox" : "chromium";
  * this suite asserts.
  *
  * Run locally:
- *   npm run build   (with the dummy env below, incl. NEXT_PUBLIC_REVIEWS_ENABLED=on
- *                    and NEXT_PUBLIC_GUIDES_ENABLED=on)
+ *   npm run build   (with the dummy env below, incl. NEXT_PUBLIC_REVIEWS_ENABLED=on,
+ *                    NEXT_PUBLIC_GUIDES_ENABLED=on and AGENT_RELEASES_URL)
  *   npx playwright test
  */
 export default defineConfig({
@@ -110,6 +110,11 @@ export default defineConfig({
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_live_Y2xlcmsuZXhhbXBsZS5jb20k",
       CLERK_SECRET_KEY: "sk_live_dummy",
       NEXT_PUBLIC_API_BASE: "http://localhost:8080",
+      // The agent release lookup (lib/agentReleaseSource.server.ts) reads
+      // the fixture API, which has no releases route and drops the request,
+      // so the changelog shows the build's FALLBACK_LATEST_AGENT_VERSION and
+      // never depends on GitHub. Also read while building: use the same value.
+      AGENT_RELEASES_URL: "http://127.0.0.1:8080/repos/ReSpOnSeSC2/sc2tools/releases",
       // Build-time inlined: the build step must use the same values.
       NEXT_PUBLIC_REVIEWS_ENABLED: "on",
       NEXT_PUBLIC_GUIDES_ENABLED: "on",

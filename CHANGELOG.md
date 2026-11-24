@@ -11,6 +11,13 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent release notes
+
+- The changelog page and the Agent RSS feed now show a new desktop agent
+  release within about 20 minutes of it being published on GitHub, without a
+  website update. Notes for a version still being prepared stay hidden,
+  including while GitHub can't be reached. See ADR 0100.
+
 ### Design
 
 - The website and the desktop agent have a new look, Command Glass: deep tonal
