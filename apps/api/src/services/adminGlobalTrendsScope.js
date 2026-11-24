@@ -79,6 +79,16 @@ function trustedReplayMmrExpr() {
   ] };
 }
 
+/** The series a session belongs to: one player's games in one ladder race
+ * and queue. Session momentum never chains games across two series. */
+function sessionSeriesExpr() {
+  return {
+    player: "$_globalPlayerId", race: myLadderRaceExpr(),
+    ladder: { $ifNull: ["$isLadderGame", null] },
+    size: { $ifNull: ["$playerCount", null] },
+  };
+}
+
 /** Which duplicate upload survives: trustworthy/newly computed metadata
  * first, with a deterministic tie on the source game id. */
 const GLOBAL_DEDUPE_ORDER = Object.freeze({ _globalTrustedMmr: -1, updatedAt: -1, _id: 1 });
@@ -172,6 +182,6 @@ function playerIncluded(player, cohort) {
 
 module.exports = {
   parseGlobalTrendsFilters, globalRowStages, globalHistoryStages, playerIncluded,
-  stringExpr, trustedReplayMmrExpr, replayKeyExpr, replayFileKeyExpr,
+  stringExpr, trustedReplayMmrExpr, replayKeyExpr, replayFileKeyExpr, sessionSeriesExpr,
   GLOBAL_DEDUPE_ORDER, GLOBAL_HISTORY_PROJECTION, GLOBAL_ROSTER_PROJECTION,
 };

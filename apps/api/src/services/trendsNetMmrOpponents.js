@@ -147,7 +147,13 @@ async function netMmrByOpponent(deps, userId, filters, opts = {}) {
         _displayName: trimmedString("$opponent.displayName"),
       },
     },
-    { $addFields: { _opponentIdentity: opponentIdentityExpr() } },
+    {
+      $addFields: {
+        _opponentIdentity: opponentIdentityExpr(),
+        // Compared in order by $max below: the newest game wins.
+        _newest: ["$date", "$gameId", "$_displayName", "$_oppRace"],
+      },
+    },
     {
       $group: {
         _id: "$_opponentIdentity",
@@ -156,15 +162,12 @@ async function netMmrByOpponent(deps, userId, filters, opts = {}) {
         pulseId: { $max: "$_pulseId" },
         toonHandle: { $max: "$_toonHandle" },
         pulseCharacterId: { $max: "$_pulseCharacterId" },
-        // The newest game's name and race. $bottom picks that game without
-        // a $sort stage, which would hold every kept game in memory (Atlas
-        // Flex caps an in-memory sort at 32 MB).
-        displayName: {
-          $bottom: { sortBy: { date: 1, gameId: 1 }, output: "$_displayName" },
-        },
-        opponentRace: {
-          $bottom: { sortBy: { date: 1, gameId: 1 }, output: "$_oppRace" },
-        },
+        // The newest game's date, name and race. $max of [date, game id,
+        // ...] picks that game without a $sort stage, which would hold every
+        // kept game in memory (Atlas Flex caps an in-memory sort at 32 MB).
+        // It keeps one value per opponent where $bottom keeps a sort entry,
+        // which matters when admin Global Trends groups every opponent.
+        newest: { $max: "$_newest" },
         netMmr: { $sum: "$_delta" },
         mmrWon: {
           $sum: { $cond: [{ $gt: ["$_delta", 0] }, "$_delta", 0] },
@@ -187,7 +190,13 @@ async function netMmrByOpponent(deps, userId, filters, opts = {}) {
         },
         avgDelta: { $avg: "$_delta" },
         firstPlayed: { $min: "$date" },
-        lastPlayed: { $max: "$date" },
+      },
+    },
+    {
+      $addFields: {
+        displayName: { $arrayElemAt: ["$newest", 2] },
+        opponentRace: { $arrayElemAt: ["$newest", 3] },
+        lastPlayed: { $arrayElemAt: ["$newest", 0] },
       },
     },
     {

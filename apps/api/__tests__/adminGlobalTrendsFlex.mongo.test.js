@@ -105,7 +105,10 @@ function edgeCases() {
 /** A stored snapshot row, compared field for field with a reference row. */
 function asReference(row) {
   const copy = { ...row, _id: row._globalSourceId };
-  for (const field of ["_globalSnapshotId", "_globalExpiresAt", "_globalSourceId", "_globalReplayKey", "_globalFileKey"]) delete copy[field];
+  for (const field of [
+    "_globalSnapshotId", "_globalExpiresAt", "_globalSourceId", "_globalReplayKey", "_globalFileKey",
+    "_globalSessionSeries", "_globalSessionOrder",
+  ]) delete copy[field];
   return BSON.EJSON.stringify(copy, { relaxed: false });
 }
 
