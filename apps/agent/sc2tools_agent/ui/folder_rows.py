@@ -6,6 +6,28 @@ from ..replay_finder import detected_replay_folders, path_key
 
 
 def build_folder_rows(list_widget, *, QtCore, QtGui, QtWidgets, open_folder):
+    class FolderPath(QtWidgets.QLabel):
+        """The folder's full path on one line, shortened in the middle to fit.
+
+        The middle goes first so the drive and the account/region folder at
+        the end stay readable; the whole path is in the tooltip.
+        """
+
+        def __init__(self, path):
+            super().__init__()
+            self._path = path
+            self.setObjectName("folderPath")
+            self.setToolTip(path)
+            self.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+            self.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            self.setText(path)
+
+        def resizeEvent(self, event):  # noqa: N802
+            super().resizeEvent(event)
+            shown = self.fontMetrics().elidedText(self._path, QtCore.Qt.ElideMiddle, max(0, self.width()))
+            if shown != self.text():
+                self.setText(shown)
+
     class Rows(QtCore.QObject):
         ready = QtCore.Signal(str, object)
 
@@ -34,6 +56,7 @@ def build_folder_rows(list_widget, *, QtCore, QtGui, QtWidgets, open_folder):
                 label.setText(folder_label(self.cache[raw][1]) if raw in self.cache else Path(raw).name + " · Scanning…")
                 label.setToolTip(raw)
                 text.addWidget(label)
+                text.addWidget(FolderPath(raw))
                 origin = QtWidgets.QLabel("Auto-detected" if path_key(Path(raw)) in detected else "Added by you")
                 origin.setObjectName("dim")
                 text.addWidget(origin)
@@ -42,6 +65,8 @@ def build_folder_rows(list_widget, *, QtCore, QtGui, QtWidgets, open_folder):
                 button.setToolTip(raw)
                 button.clicked.connect(lambda _checked=False, raw=raw: open_folder(Path(raw)))
                 layout.addWidget(button)
+                # Polish first so the row is measured with its stylesheet fonts.
+                row.ensurePolished()
                 item.setSizeHint(row.sizeHint())
                 list_widget.setItemWidget(item, row)
                 self.schedule(raw)
@@ -69,6 +94,7 @@ def build_folder_rows(list_widget, *, QtCore, QtGui, QtWidgets, open_folder):
                         label.setProperty("missing", not info.exists)
                         label.style().unpolish(label)
                         label.style().polish(label)
+                        row.ensurePolished()
                         item.setSizeHint(row.sizeHint())
     return Rows()
 

@@ -21,5 +21,9 @@ def test_folder_rows_never_paint_the_path_under_the_row_widget(tmp_path):
         row = win._folder_list.itemWidget(item)
         assert row is not None
         assert row.findChild(QtWidgets.QLabel, "folderSummary") is not None
+        # The row itself names the folder: a path line with the full path on hover.
+        path_label = row.findChild(QtWidgets.QLabel, "folderPath")
+        assert path_label is not None and path_label.toolTip() == missing
+        assert path_label.text()
         assert item.sizeHint().height() >= row.sizeHint().height()
     ''')

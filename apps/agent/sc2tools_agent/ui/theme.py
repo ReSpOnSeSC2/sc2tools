@@ -322,6 +322,7 @@ QLabel#muted {{ color: {TEXT_MUTED}; }}
 QLabel#dim {{ color: {TEXT_DIM}; }}
 QLabel#hint {{ color: {TEXT_DIM}; font-size: {TYPE_SMALL}px; }}
 QLabel#folderSummary[missing="true"] {{ color: {WARNING}; }}
+QLabel#folderPath {{ color: {TEXT_MUTED}; }}
 QLabel#stat {{ font-family: {FONT_FAMILY_DISPLAY}; font-size: {TYPE_HEADLINE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
 QPushButton#statAction {{ text-align: left; }}
 QLabel#settingsToastOk {{ color: {SUCCESS}; }}
