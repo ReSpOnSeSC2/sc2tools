@@ -28,7 +28,7 @@ const DEDUPE_PASSES = Object.freeze([
 ]);
 
 /** Indexes that supply the order of a card's windows over whole histories,
- * which Atlas Flex could not sort in memory (ADR 0097). Each window must
+ * which Atlas Flex could not sort in memory (ADR 0098). Each window must
  * follow the snapshot $match directly, and its read hints the index. */
 const WINDOW_INDEXES = Object.freeze({
   /** Net MMR's pairing window: the games index (NET_MMR_WINDOW_INDEX) with

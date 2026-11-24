@@ -42,7 +42,7 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
    followed by `$first` or `$last`. This covers progression's open and close
    MMR, and the opponent table's newest name and race: one `$max` of
    `[date, gameId, myToonHandle, ladder race, name, race]`, which keeps less
-   in memory than `$bottom` (ADR 0097).
+   in memory than `$bottom` (ADR 0098).
    - Only admin Global Trends can tie on `(date, gameId)`, because its history
      may keep one replay for two accounts. For example, both players uploaded
      it, or one account was uploaded under the `S2` and `s2` spellings.
@@ -85,7 +85,7 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
   games by date and game id on index keys before fetching them.
 - Admin Global Trends reuses these pipelines on its history collection. Its
   snapshot stores the windows' sort fields and indexes them, so its windows
-  do not sort either (ADR 0097).
+  do not sort either (ADR 0098).
 - An adversarial pass compared the old and new code on generated histories:
   about 85,000 comparisons in five areas (personal and global momentum, net
   MMR, progression, plans and sort memory), each difference re-checked by a

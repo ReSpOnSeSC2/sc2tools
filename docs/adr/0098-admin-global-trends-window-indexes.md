@@ -1,4 +1,4 @@
-# ADR 0097: Admin Global Trends windows read their order from snapshot indexes
+# ADR 0098: Admin Global Trends windows read their order from snapshot indexes
 
 Status: Accepted, November 23, 2026. Follows ADR 0095
 (`docs/adr/0095-atlas-flex-database.md`) and ADR 0096

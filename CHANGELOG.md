@@ -56,7 +56,7 @@ corresponding GitHub Release.
   history now stores momentum's session keys and has two indexes that supply
   every window's order, so no card sorts the history. The opponent table
   also holds about 40% less in memory per opponent. Results are unchanged.
-  See ADR 0097.
+  See ADR 0098.
 
 ### Device sign-in during database outages
 

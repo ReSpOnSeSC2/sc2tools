@@ -4,7 +4,7 @@
 // Atlas Flex caps an in-memory sort at 32 MB and does not support
 // allowDiskUse. Across the platform, admin Global Trends' momentum windows
 // needed ~530 MB of sort memory each and net MMR's pairing window ~141 MB
-// (ADR 0097). This suite scales the caps down so a small fixture overflows
+// (ADR 0098). This suite scales the caps down so a small fixture overflows
 // them the same way, then checks that the momentum, net-MMR and opponent
 // cards answer within them, exactly as the same cards with window keys
 // computed at query time (allowed to spill) answer.
@@ -117,7 +117,7 @@ function handGames() {
 }
 
 /** The same card with its window keys computed at query time, as before the
- * snapshot stored them (ADR 0097). MongoDB then sorts each window's input in
+ * snapshot stored them (ADR 0098). MongoDB then sorts each window's input in
  * memory, which `allowDiskUse` lets spill. */
 function computedKeys(pipeline) {
   const sourceId = pipeline.find((stage) => stage.$set?._id === "$_globalSourceId");

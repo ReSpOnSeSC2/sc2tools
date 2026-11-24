@@ -22,7 +22,7 @@ const ALLOWED_METHODS = new Set([
 ]);
 const NET_METHODS = new Set(["netMmrByMatchup", "netMmrByOpponent"]);
 /** Cards whose leading windows read a whole history, and the index that
- * supplies their order (ADR 0097). */
+ * supplies their order (ADR 0098). */
 const WINDOW_INDEX = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
   netMmrByMatchup: WINDOW_INDEXES.netMmr.name,
   netMmrByOpponent: WINDOW_INDEXES.netMmr.name,
