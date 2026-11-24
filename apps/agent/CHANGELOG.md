@@ -2,6 +2,18 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.25.7
+
+### Changed
+- A new look, Command Glass, matching the website: cooler blue-black surfaces, cards lit from the top, a lit primary button, softer corners and pill badges. Each race skin keeps its canvas, accent, focus colour, brand mark and border art.
+- Cleaner layout. The sidebar is now the one place to navigate: your live status sits at the top (select it to open the Dashboard), the pages are grouped under Play, Sync and stream, and Setup, and the duplicate back, Home and breadcrumb row only appears in narrow windows, Companion and Compact. Every page opens with its title and a one-line summary of what it is for.
+- The Dashboard leads with a status card holding the headline, Pause syncing and Open dashboard, with the checks below it (shown whenever something needs attention, behind Show details otherwise), then your numbers, then Last game and Replay folders side by side in wide windows.
+
+### Fixed
+- The mouse wheel scrolls every page, panel, floating window and dialog. Scrolling over a dropdown, number box, date, slider or tab no longer changes it unless you clicked into it first; lists and tables scroll themselves and hand off to the page at their end.
+- Settings, Replay folders: a folder's path, its status (for example "Not found (external drive?)") and "Added by you" no longer draw on top of each other. Each folder shows its status, its path (shortened in the middle, full path on hover) and where it came from on separate lines.
+- Activity log: the page summary sits under the title at every window size.
+
 ## 0.25.6
 
 ### Fixed

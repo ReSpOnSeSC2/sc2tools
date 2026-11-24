@@ -467,6 +467,17 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.25.7
+
+- A new look matching the website (Command Glass) with each race skin's
+  identity kept, and a cleaner layout: the sidebar is the one navigation with
+  live status on top, pages grouped by purpose, a title and one-line summary on
+  every page, and a Dashboard that leads with a status card and its actions.
+- The mouse wheel scrolls every page, panel and window, and never changes an
+  unfocused dropdown, number box, date, slider or tab on the way.
+- Replay folders in Settings show status, path and origin on separate lines
+  instead of drawing them on top of each other.
+
 ### Agent 0.25.6
 
 - Delete update installers once the new version runs: updates download into
