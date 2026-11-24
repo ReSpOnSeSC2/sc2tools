@@ -368,7 +368,7 @@ function SourceRow({
     inRules && countRepeats ? raiseRuleForRepeatRow(rules, rows, row) : null;
   const rowAccent = row.isTech
     ? "bg-accent-cyan/10 border-l-2 border-accent-cyan"
-    : "border-l-2 border-transparent opacity-80 hover:opacity-100";
+    : "border-l border-transparent opacity-80 hover:opacity-100";
   return (
     <li className={`flex items-center gap-2 px-3 py-1.5 text-caption ${rowAccent}`}>
       <span className="w-10 font-mono tabular-nums text-text-dim">

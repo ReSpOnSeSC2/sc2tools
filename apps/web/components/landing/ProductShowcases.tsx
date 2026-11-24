@@ -39,7 +39,7 @@ const UNIT_MARKERS = [
 export function ReplayTheaterPreview({ priority = false }: { priority?: boolean }) {
   return (
     <figure className="min-w-0">
-      <div className="replay-scope overflow-hidden rounded-md border-2 border-line bg-[#070a0f] shadow-hard">
+      <div className="replay-scope overflow-hidden rounded-md border border-line bg-[#070a0f] shadow-hard">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-strong bg-bg-surface px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <CirclePlay className="h-4 w-4 shrink-0 text-accent-cyan" aria-hidden />
@@ -88,7 +88,7 @@ export function ReplayTheaterPreview({ priority = false }: { priority?: boolean 
               </span>
             ))}
 
-            <div className="absolute left-[57%] top-[51%] h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent-cyan/70 bg-accent-cyan/10 shadow-[0_0_24px_rgba(60,224,214,.32)] sm:h-28 sm:w-28">
+            <div className="absolute left-[57%] top-[51%] h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-accent-cyan/70 bg-accent-cyan/10 shadow-[0_0_24px_rgba(60,224,214,.32)] sm:h-28 sm:w-28 ring-1 ring-accent-cyan/70">
               <div className="absolute inset-3 rounded-full border border-accent-cyan/40" />
               <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-sm bg-black/70 px-2 py-1 text-[9px] font-bold tracking-[.12em] text-accent-cyan">
                 PSI STORM · 6:31
@@ -157,7 +157,7 @@ const TREND_BARS = [42, 58, 39, 67, 54, 76, 63, 84, 70, 92, 79, 88] as const;
 
 export function ImprovementPreview() {
   return (
-    <figure className="min-w-0 overflow-hidden rounded-md border-2 border-line bg-bg-surface shadow-hard">
+    <figure className="min-w-0 overflow-hidden rounded-md border border-line bg-bg-surface shadow-hard">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
         <div className="flex items-center gap-2">
           <ChartNoAxesCombined className="h-4 w-4 text-accent-cyan" aria-hidden />
@@ -261,7 +261,7 @@ const GHOST_STEPS = [
 
 export function PracticePreview() {
   return (
-    <figure className="overflow-hidden rounded-md border-2 border-line bg-bg-surface shadow-hard">
+    <figure className="overflow-hidden rounded-md border border-line bg-bg-surface shadow-hard">
       <div className="grid lg:grid-cols-[1.05fr_.95fr]">
         <div className="border-b border-border p-5 sm:p-6 lg:border-b-0 lg:border-r">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -353,7 +353,7 @@ const CHAT_LINES = [
 
 export function StreamStudioPreview() {
   return (
-    <figure className="replay-scope overflow-hidden rounded-md border-2 border-line bg-bg shadow-hard">
+    <figure className="replay-scope overflow-hidden rounded-md border border-line bg-bg shadow-hard">
       <div className="grid xl:grid-cols-[minmax(0,1.25fr)_22rem]">
         <div className="relative min-h-[430px] overflow-hidden border-b border-white/10 xl:border-b-0 xl:border-r">
           <Image

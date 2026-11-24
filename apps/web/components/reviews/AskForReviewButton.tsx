@@ -212,7 +212,7 @@ function AskForReviewForm({ gameId, durationSec, matchup, onClose, ownerId }: Pr
             rows={3}
             maxLength={REVIEW_LIMITS.QUESTION_MAX + 50}
             placeholder="Why did my blink all-in fail? I think I hit at 6:00 but the roaches were already out."
-            className="mt-1 w-full rounded-lg border-2 border-line bg-bg px-3 py-2 text-body text-text placeholder:text-text-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="mt-1 w-full rounded-lg border border-border-strong bg-bg px-3 py-2 text-body text-text placeholder:text-text-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             aria-invalid={touched && Boolean(questionProblem)}
             aria-describedby={`${formId}-q-help`}
           />

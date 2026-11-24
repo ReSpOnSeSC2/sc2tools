@@ -118,7 +118,7 @@ export function SettingsSectionNav({ tab, sections, scope, hash, onNavigate, tar
     <div className="lg:sticky lg:top-24">
       <label id={labelId} htmlFor={`${labelId}-select`} className="mb-2 block text-caption font-semibold text-text">On this page</label>
       <select id={`${labelId}-select`} aria-labelledby={labelId} value={current} onChange={event => onNavigate(hrefFor(event.target.value))}
-        className="min-h-11 w-full rounded-md border border-border bg-bg-surface px-3 py-2 text-body text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden">
+        className="min-h-11 w-full rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-body text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden">
         {options.map(section => <option key={section.id} value={section.id}>{section.label}</option>)}
       </select>
       <ul className="hidden space-y-1 lg:block">{options.map(section => <li key={section.id}>

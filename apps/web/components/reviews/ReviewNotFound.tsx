@@ -27,7 +27,7 @@ export function ReviewNotFound({ id }: { id: string | null }) {
   );
   if (req.data?.request) return <ReviewPage initial={req.data} />;
   if (eligible && !req.data && !req.error) {
-    return <div aria-busy="true" aria-label="Loading review" className="h-64 animate-pulse rounded-xl border-2 border-line bg-bg-elevated" />;
+    return <div aria-busy="true" aria-label="Loading review" className="h-64 animate-pulse rounded-xl border border-line bg-bg-elevated" />;
   }
   return (
     <EmptyStatePanel

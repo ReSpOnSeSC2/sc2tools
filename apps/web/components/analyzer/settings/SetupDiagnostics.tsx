@@ -27,7 +27,7 @@ export function CopySetupDiagnostics({ me, warnings }: { me?: SetupMe; warnings?
     try { await navigator.clipboard.writeText(text); setFallback(""); toast?.success("Diagnostics copied"); }
     catch { setFallback(text); toast?.info("Select and copy the diagnostics below"); }
   }
-  return <div className="space-y-2"><Button variant="secondary" size="sm" disabled={!me} onClick={() => { void copy(); }} iconLeft={<Copy className="h-4 w-4" aria-hidden />}>Copy diagnostics</Button>{fallback ? <textarea ref={field} readOnly aria-label="Diagnostics to copy" value={fallback} rows={6} className="w-full rounded border border-border bg-bg-elevated p-2 font-mono text-caption" /> : null}</div>;
+  return <div className="space-y-2"><Button variant="secondary" size="sm" disabled={!me} onClick={() => { void copy(); }} iconLeft={<Copy className="h-4 w-4" aria-hidden />}>Copy diagnostics</Button>{fallback ? <textarea ref={field} readOnly aria-label="Diagnostics to copy" value={fallback} rows={6} className="w-full rounded border border-border-strong bg-bg-elevated p-2 font-mono text-caption" /> : null}</div>;
 }
 
 export function CopyUserId({ value }: { value: string }) {

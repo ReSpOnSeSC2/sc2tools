@@ -68,7 +68,7 @@ export function RecentlyDeletedDrawer({
       ) : (
         <ul className="space-y-2" aria-label="Deleted builds">
           {items.map((item) => (
-            <li key={item.slug} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-line bg-bg-surface p-3">
+            <li key={item.slug} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-bg-surface p-3">
               <div className="min-w-0">
                 <p className="break-words font-semibold text-text">{item.name}</p>
                 <p className="text-micro text-text-dim">

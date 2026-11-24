@@ -150,7 +150,7 @@ function ByOppStrategyView({
       <KpiStrip items={kpis} />
       <div className="flex flex-wrap items-center gap-3">
         <input
-          className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
+          className="w-full rounded-lg border border-border-strong bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
           placeholder="Search strategies"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -294,7 +294,7 @@ export function StrategyFiltersBar() {
   };
 
   return (
-    <div className="rounded-xl border-2 border-line bg-bg-surface p-3 shadow-hard">
+    <div className="rounded-xl border border-line bg-bg-surface p-3 shadow-hard">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <FilterSelect
           label="My race"
@@ -369,7 +369,7 @@ function FilterSelect({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="min-h-[44px] w-full rounded-lg border-2 border-line bg-bg-surface px-2.5 text-sm text-text transition-colors hover:border-border-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
+        className="min-h-[44px] w-full rounded-lg border border-border-strong bg-bg-surface px-2.5 text-sm text-text transition-colors hover:border-border-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {options.map((o) => (
           <option key={o.value || "_any"} value={o.value}>

@@ -18,7 +18,7 @@ const ReplayStage = dynamic(
   { ssr: false },
 );
 
-const placeholder = <div aria-busy="true" aria-label="Loading map replay" className="h-[36vh] min-h-48 animate-pulse rounded-xl border-2 border-line bg-bg-elevated motion-reduce:animate-none" />;
+const placeholder = <div aria-busy="true" aria-label="Loading map replay" className="h-[36vh] min-h-48 animate-pulse rounded-xl border border-line bg-bg-elevated motion-reduce:animate-none" />;
 
 /**
  * The shared game's map replay, fed only by the share's scoped grant

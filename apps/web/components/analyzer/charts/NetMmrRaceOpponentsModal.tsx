@@ -165,7 +165,7 @@ export function NetMmrRaceOpponentsModal({
             }}
             placeholder="Search opponent or ID…"
             aria-label={`Search ${raceName} opponents`}
-            className="h-10 w-full rounded-lg border border-border bg-bg-surface pl-9 pr-3 text-sm text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            className="h-10 w-full rounded-lg border border-border-strong bg-bg-surface pl-9 pr-3 text-sm text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
           />
         </label>
 
@@ -178,7 +178,7 @@ export function NetMmrRaceOpponentsModal({
               setOffset(0);
             }}
             aria-label="Minimum MMR pairs"
-            className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-bg-surface px-3 text-sm text-text focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent sm:w-36"
+            className="h-10 min-w-0 flex-1 rounded-lg border border-border-strong bg-bg-surface px-3 text-sm text-text focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent sm:w-36"
           >
             {MIN_PAIR_OPTIONS.map((count) => (
               <option key={count} value={count}>
@@ -197,7 +197,7 @@ export function NetMmrRaceOpponentsModal({
               setOffset(0);
             }}
             aria-label="Sort opponents"
-            className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-bg-surface px-3 text-sm text-text focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent sm:w-44"
+            className="h-10 min-w-0 flex-1 rounded-lg border border-border-strong bg-bg-surface px-3 text-sm text-text focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent sm:w-44"
           >
             {RANKING_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>

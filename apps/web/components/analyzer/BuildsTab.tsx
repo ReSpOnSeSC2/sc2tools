@@ -165,7 +165,7 @@ export function BuildsTab({ search: controlledSearch, onSearchChange }: { search
               {rows.map((b) => (
                 <li key={b.name}>
                   <div
-                    className="flex w-full flex-col gap-1.5 rounded-xl border-2 border-line bg-bg-surface px-3 py-2 text-left shadow-hard transition hover:border-accent hover:bg-accent/10"
+                    className="flex w-full flex-col gap-1.5 rounded-xl border border-line bg-bg-surface px-3 py-2 text-left shadow-hard transition hover:border-accent hover:bg-accent/10"
                   >
                     <button type="button" onClick={() => setEditing(b.name)} className="min-h-11 rounded text-left text-sm font-semibold text-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
                       {b.name}
@@ -261,7 +261,7 @@ export function BuildsTab({ search: controlledSearch, onSearchChange }: { search
       </Card> : null}
 
       <BuildMmrPanel />
-      <div className="space-y-2"><label className="flex items-center gap-2 text-caption text-text-muted">Group build mix by<select aria-label="Build mix period" value={bucket} onChange={event => setBucket(event.target.value as MechanicsBucket)} className="min-h-11 rounded-md border border-border bg-bg-surface px-2 text-text"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select></label><MixOverTimeChart endpoint="timeseries/my-builds" title="Build mix over time" caption="Recorded game counts per build and calendar period." bucket={bucket} /></div>
+      <div className="space-y-2"><label className="flex items-center gap-2 text-caption text-text-muted">Group build mix by<select aria-label="Build mix period" value={bucket} onChange={event => setBucket(event.target.value as MechanicsBucket)} className="min-h-11 rounded-md border border-border-strong bg-bg-surface px-2 text-text"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select></label><MixOverTimeChart endpoint="timeseries/my-builds" title="Build mix over time" caption="Recorded game counts per build and calendar period." bucket={bucket} /></div>
 
       {/* ``[&>*]:min-w-0`` style applied per-child below — see each
           chart wrapper. Without it the long build labels in the chart
@@ -374,7 +374,7 @@ function ReclassifyBanner({ rows }: { rows: BuildRow[] }) {
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-warning/40 bg-warning/5 px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/5 px-4 py-3 ring-1 ring-warning/40">
       <p className="text-caption text-text">
         <span className="font-semibold">
           {formatNumber(staleCount)} game{staleCount === 1 ? "" : "s"} have

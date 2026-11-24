@@ -89,8 +89,8 @@ export function RealGameShowcase() {
       </div>
 
       {/* The parsed-game panel, styled like the product UI. */}
-      <div className="mt-8 overflow-hidden rounded-md border-2 border-line bg-bg-surface shadow-hard">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b-2 border-line bg-bg-elevated/50 px-5 py-3">
+      <div className="mt-8 overflow-hidden rounded-md border border-line bg-bg-surface shadow-hard">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line bg-bg-elevated/50 px-5 py-3">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <span className="font-serif text-h4 font-semibold text-text">
               Protoss vs Zerg
@@ -235,7 +235,7 @@ function ShowcasePlayerColumn({
 
 function ShowcaseFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border-t-2 border-line pt-3">
+    <div className="border-t border-line pt-3">
       <dt className="kicker">{label}</dt>
       <dd className="mt-1.5 text-body text-text-muted">{value}</dd>
     </div>

@@ -46,7 +46,7 @@ export function MyReviewRequests({ summary, error, retry }: {
           <p className="mb-3 text-caption text-text-muted">{selected.detail}</p>
           {error && !summary ? <RequestError error={error} onRetry={retry} /> : !summary || !feed.data ? feed.error
             ? <RequestError error={feed.error} onRetry={() => feed.mutate()} />
-            : <div aria-busy="true" aria-label="Loading your review requests" className="h-28 animate-pulse rounded-xl border-2 border-line bg-bg-elevated" />
+            : <div aria-busy="true" aria-label="Loading your review requests" className="h-28 animate-pulse rounded-xl border border-line bg-bg-elevated" />
             : items.length ? <ul className="space-y-3" aria-label="Your review requests">{items.map((card) => <ReviewCard key={card.id} card={card} now={Date.now()} />)}</ul>
               : <EmptyStatePanel title={selected.empty} description={selected.detail} action={tab === "all"
                 ? <div className="flex flex-wrap justify-center gap-3"><AskAboutGameButton /><Link href="/app/replays" className="inline-flex min-h-11 items-center font-semibold text-link underline">Browse your replays</Link></div> : undefined} />}

@@ -29,7 +29,7 @@ function OwnerAccounts() {
   return <details ref={details} className="min-w-0 w-full max-w-full" onKeyDown={event => {
     if (event.key === "Escape" && details.current?.open) { details.current.open = false; details.current.querySelector("summary")?.focus(); }
   }}>
-    <summary className="min-h-11 cursor-pointer rounded-lg border-2 border-line bg-bg-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+    <summary className="min-h-11 cursor-pointer rounded-lg border border-line bg-bg-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
       Account · {active.length ? `${active.length} selected` : "All accounts"}
     </summary>
     <div className="mt-2 min-w-0 max-w-full rounded-lg border border-border bg-bg-surface p-3">

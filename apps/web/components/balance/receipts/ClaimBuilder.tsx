@@ -43,7 +43,7 @@ function ClaimReceipt({ selection, bundle }: { selection: ClaimSelection; bundle
   const description = `Claimed advantage for ${race} over ${BALANCE_RACE_NAMES[opponent]}`;
 
   return (
-    <article className="space-y-4 rounded-xl border-2 border-line bg-bg-surface p-4 sm:p-6" aria-labelledby="balance-receipt-heading">
+    <article className="space-y-4 rounded-xl border border-line bg-bg-surface p-4 sm:p-6" aria-labelledby="balance-receipt-heading">
       <header className="space-y-1">
         <h2 id="balance-receipt-heading" className="font-display text-h2 font-bold text-text">{result}</h2>
         <p className="text-body text-text">{description}.</p>

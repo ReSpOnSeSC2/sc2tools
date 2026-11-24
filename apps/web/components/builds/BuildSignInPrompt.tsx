@@ -13,7 +13,7 @@ import { signInHref, signUpHref } from "@/lib/authLinks";
 export function BuildSignInPrompt({ slug }: { slug: string }) {
   const returnTo = `/builds/${encodeURIComponent(slug)}`;
   return (
-    <section className="rounded-2xl border-2 border-line bg-bg-surface px-4 shadow-hard sm:px-6">
+    <section className="rounded-2xl border border-line bg-bg-surface px-4 shadow-hard sm:px-6">
       <EmptyStatePanel
         size="lg"
         icon={<Lock className="h-6 w-6" aria-hidden />}

@@ -15,15 +15,15 @@ import { EmptyStatePanel } from "./EmptyState";
 
 export type CardVariant = "default" | "elevated" | "feature" | "interactive";
 
-// Courtside cards: a bold 2px ink outline + a hard offset shadow (no blur) so
-// every surface reads like a physical "playbook sticker" rather than a soft
-// generic panel. The feature variant swaps the ink line for an accent outline.
+// Command Glass cards: a tonal surface with a faint top sheen, a 1px
+// hairline edge and soft layered elevation. Elevated sits one step up and
+// floats; feature carries the aurora edge; interactive lifts and glows.
 const VARIANT_CLASSES: Record<CardVariant, string> = {
-  default: "bg-bg-surface border-2 border-line shadow-hard",
-  elevated: "bg-bg-surface border-2 border-line shadow-hard",
-  feature: "bg-bg-surface border-2 border-accent shadow-hard",
+  default: "bg-bg-surface surface-sheen border border-line shadow-card",
+  elevated: "bg-bg-elevated surface-sheen border border-line shadow-pop",
+  feature: "aurora-ring bg-bg-surface surface-sheen border border-transparent shadow-card",
   interactive:
-    "bg-bg-surface border-2 border-line shadow-hard hover:border-accent hover:bg-bg-elevated transition-colors cursor-pointer",
+    "bg-bg-surface surface-sheen border border-line shadow-card cursor-pointer transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-accent-cyan/40 hover:shadow-glow",
 };
 
 /** Heading level for the legacy inline `title`. */
@@ -159,7 +159,7 @@ export function Stat({
   color?: string;
 }) {
   return (
-    <div className="rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard">
+    <div className="rounded-xl border border-line bg-bg-surface p-4 shadow-hard">
       <div className="text-micro uppercase tracking-wider text-text-dim">
         {label}
       </div>
@@ -211,7 +211,7 @@ export function EmptyState({
 
 export function Skeleton({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard divide-y divide-border">
+    <div className="rounded-xl border border-line bg-bg-surface shadow-hard divide-y divide-border">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex animate-pulse gap-4 p-4">
           <div className="h-4 w-32 rounded bg-bg-elevated" />

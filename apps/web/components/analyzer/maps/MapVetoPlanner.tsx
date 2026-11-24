@@ -31,7 +31,7 @@ function CopyVetoes({ names, matchup }: { names: readonly string[]; matchup: str
   const text = `Suggested SC2 vetoes${matchup ? ` vs ${matchup}` : ""}: ${names.join(", ")}`;
   return <div className="space-y-2"><Button variant="secondary" disabled={!names.length} onClick={async () => {
     try { await navigator.clipboard.writeText(text); setCopied(true); setFallback(false); } catch { setFallback(true); }
-  }}>Copy veto list</Button>{copied ? <p role="status" className="text-micro text-success">Veto list copied.</p> : null}{fallback ? <label className="block text-caption text-text-muted">Copy this veto list<textarea readOnly value={text} onFocus={(event) => event.target.select()} className="mt-1 w-full rounded border border-border bg-bg-surface p-2 text-text" /></label> : null}</div>;
+  }}>Copy veto list</Button>{copied ? <p role="status" className="text-micro text-success">Veto list copied.</p> : null}{fallback ? <label className="block text-caption text-text-muted">Copy this veto list<textarea readOnly value={text} onFocus={(event) => event.target.select()} className="mt-1 w-full rounded border border-border-strong bg-bg-surface p-2 text-text" /></label> : null}</div>;
 }
 
 /** Why fewer vetoes than the chosen count are suggested: too few decided games, or no other map below the pool average. */

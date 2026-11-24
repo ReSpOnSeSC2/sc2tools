@@ -44,7 +44,7 @@ export function useAutomaticLessons(setup: CourseSetup | undefined) {
 
 export function CourseCompletion({ lessons, widgets }: { lessons: readonly string[]; widgets?: StarterWidgetStatus }) {
   const starter = OVERLAY_STARTER_PACKS[0];
-  return <section aria-labelledby="stream-course-complete" className="space-y-4 rounded-md border-2 border-line bg-bg-surface p-4 sm:p-6">
+  return <section aria-labelledby="stream-course-complete" className="space-y-4 rounded-md border border-line bg-bg-surface p-4 sm:p-6">
     <h3 id="stream-course-complete" className="text-body-lg font-semibold">Your first scene checklist</h3>
     <ul aria-label="Completed lessons" className="flex flex-wrap gap-2">{lessons.map(lesson => <li key={lesson}><Badge variant="success">{lesson}</Badge></li>)}</ul>
     <div className="grid gap-4 sm:grid-cols-2">

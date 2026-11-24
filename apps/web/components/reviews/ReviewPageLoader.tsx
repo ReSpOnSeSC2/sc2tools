@@ -28,5 +28,5 @@ export function ReviewPageLoader({ id }: { id: string }) {
       />
     );
   }
-  return <div aria-busy="true" aria-label="Loading review" className="h-64 animate-pulse rounded-xl border-2 border-line bg-bg-elevated" />;
+  return <div aria-busy="true" aria-label="Loading review" className="h-64 animate-pulse rounded-xl border border-line bg-bg-elevated" />;
 }

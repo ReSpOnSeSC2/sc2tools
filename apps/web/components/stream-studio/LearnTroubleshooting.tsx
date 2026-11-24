@@ -48,7 +48,7 @@ export function LearnTroubleshooting() {
       <p className="mt-4 max-w-2xl text-body-lg text-text-muted">A quiet widget is sometimes waiting for its event. These checks help you tell the difference.</p>
       <div className="mt-7 space-y-3">
         {PROBLEMS.map((problem) => (
-          <details key={problem.title} className="group rounded-md border-2 border-line bg-bg-surface p-4 sm:p-5">
+          <details key={problem.title} className="group rounded-md border border-line bg-bg-surface p-4 sm:p-5">
             <summary className="min-h-11 cursor-pointer py-2 text-body font-semibold text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{problem.title}</summary>
             <p className="mt-4 max-w-4xl text-body text-text-muted">{problem.body}</p>
             <Link href={problem.href} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded text-caption font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{problem.action}<ArrowUpRight className="h-4 w-4" aria-hidden /></Link>

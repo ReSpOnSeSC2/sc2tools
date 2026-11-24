@@ -86,7 +86,7 @@ export function Combobox({ label, value, options, onChange, onInputChange, place
         onChange={event => { setQuery({ value: onInputChange ? event.target.value : value, text: event.target.value }); setActive(-1); setOpen(true); onInputChange?.(event.target.value); }} />
       <ChevronDown aria-hidden className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
     </div>
-    {shown && position && portalHost ? createPortal(<div ref={popup} style={position} className="fixed z-sheet flex flex-col overflow-hidden rounded-lg border-2 border-line bg-bg-surface shadow-xl">
+    {shown && position && portalHost ? createPortal(<div ref={popup} style={position} className="fixed z-sheet flex flex-col overflow-hidden rounded-lg border border-line bg-bg-surface shadow-xl">
       <ul id={listId} role="listbox" aria-label={`${label} options`} className="min-h-0 max-h-64 overflow-y-auto overscroll-contain p-1">
         {visible.map((option, index) => <li key={option.value} id={`${id}-option-${index}`} role="option" aria-selected={option.value === value} aria-disabled={option.disabled || undefined}
           className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-body text-text ${index === active ? "bg-bg-elevated outline outline-2 -outline-offset-2 outline-accent" : "hover:bg-bg-elevated"} ${option.disabled ? "cursor-not-allowed opacity-50" : ""}`}

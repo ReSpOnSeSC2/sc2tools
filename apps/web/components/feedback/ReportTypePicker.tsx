@@ -28,7 +28,7 @@ export function ReportTypePicker({
   return (
     <fieldset disabled={disabled} className="min-w-0">
       <legend className="mb-1.5 text-caption font-medium text-text">What is it?</legend>
-      <div className="grid grid-cols-3 overflow-hidden rounded-lg border-2 border-line">
+      <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-line">
         {OPTIONS.map(({ id, label, Icon }, index) => {
           const selected = value === id;
           return (
@@ -37,7 +37,7 @@ export function ReportTypePicker({
               className={[
                 "relative flex min-h-11 cursor-pointer items-center justify-center gap-1.5 px-2 text-caption font-semibold transition-colors",
                 "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-accent",
-                index > 0 ? "border-l-2 border-line" : "",
+                index > 0 ? "border-l border-line" : "",
                 selected ? "bg-accent/15 text-accent" : "text-text-muted hover:bg-bg-elevated hover:text-text",
               ].join(" ")}
             >

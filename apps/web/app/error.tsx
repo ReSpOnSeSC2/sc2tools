@@ -41,7 +41,7 @@ export default function RouteError({
   }, [error]);
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border-2 border-line bg-bg-surface px-4 py-12 shadow-hard sm:px-6 sm:py-16">
+    <section className="relative overflow-hidden rounded-2xl border border-line bg-bg-surface px-4 py-12 shadow-hard sm:px-6 sm:py-16">
       <meta name="robots" content="noindex, nofollow" />
       <EmptyStatePanel
         size="lg"

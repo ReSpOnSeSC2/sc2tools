@@ -14,7 +14,7 @@ export function MatchupSwitcher({ current, era, counters = false }: { current: s
         const matchup = `${letter}v${opponent}`;
         const path = counters ? guidePaths.counters(matchup.toLowerCase()) : guidePaths.matchup(matchup.toLowerCase());
         return <Link key={matchup} href={`${path}${guideBandQueryString(null, era)}`} aria-current={current.toLowerCase() === matchup.toLowerCase() ? "page" : undefined}
-          className="inline-flex min-h-9 shrink-0 items-center rounded-full border-2 border-border bg-bg-surface px-3 text-caption font-semibold aria-[current=page]:border-accent">
+          className="inline-flex min-h-9 shrink-0 items-center rounded-full border border-border bg-bg-surface px-3 text-caption font-semibold aria-[current=page]:border-accent">
           <MatchupLabel matchup={matchup} />
         </Link>;
       })}

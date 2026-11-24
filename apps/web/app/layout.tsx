@@ -10,13 +10,13 @@ import { ThemeSync } from "@/components/ui/ThemeSync";
 import "./globals.css";
 
 /**
- * "Courtside" type system (adapted from RallyReady):
- *   - Hanken Grotesk — clean humanist body/UI face (--font-sans)
- *   - Bricolage Grotesque — confident grotesque DISPLAY face for headings,
- *     wordmark, big numbers (--font-display)
- * Both are committed Latin WOFF2 files loaded through next/font/local, so a
- * production build never depends on Google Fonts being reachable. Numeric
- * monospace uses the system mono stack in tailwind.config.ts.
+ * Command Glass type system: one variable family, Hanken Grotesk
+ * (100-900), for body, UI, headings, the wordmark and big numbers
+ * (--font-sans; `font-display` is the same family at heavier weights with
+ * tighter tracking). It is a committed Latin WOFF2 loaded through
+ * next/font/local, so a production build never depends on Google Fonts and
+ * every route preloads exactly one font file. Numeric monospace uses the
+ * platform mono stack in tailwind.config.ts. See ADR 0099.
  */
 const sans = localFont({
   src: "./fonts/hanken-grotesk-latin.woff2",
@@ -25,43 +25,6 @@ const sans = localFont({
   style: "normal",
   adjustFontFallback: "Arial",
   variable: "--font-sans",
-});
-
-const display = localFont({
-  src: "./fonts/bricolage-grotesque-latin.woff2",
-  display: "swap",
-  weight: "600 800",
-  style: "normal",
-  adjustFontFallback: "Arial",
-  variable: "--font-display",
-});
-
-/**
- * Editorial serif — Fraunces. Deliberately NOT a third grotesque: the
- * landing page pairs ONE sans (Hanken, body/UI) with ONE serif (Fraunces,
- * headlines) instead of the two-sans default that gives AI-built sites
- * their tell. Exposed as `--font-serif` and read by `fontFamily.serif`
- * in tailwind.config.ts; only the marketing landing page opts into it, so
- * the rest of the app keeps the established grotesque display voice.
- */
-const serif = localFont({
-  src: [
-    {
-      path: "./fonts/fraunces-latin-normal.woff2",
-      weight: "400 700",
-      style: "normal",
-    },
-    {
-      path: "./fonts/fraunces-latin-italic.woff2",
-      weight: "400 700",
-      style: "italic",
-    },
-  ],
-  display: "swap",
-  // Only the landing page uses it, so it is not preloaded on every route.
-  preload: false,
-  adjustFontFallback: "Times New Roman",
-  variable: "--font-serif",
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
@@ -137,7 +100,7 @@ export default function RootLayout({
     <html
       lang="en"
       data-theme="dark"
-      className={`${sans.variable} ${display.variable} ${serif.variable}`}
+      className={sans.variable}
       suppressHydrationWarning
     >
       <head>

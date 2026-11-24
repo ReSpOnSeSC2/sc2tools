@@ -779,7 +779,7 @@ function finite(value: unknown): value is number {
 function primaryActionClass(): string {
   return [
     "hard-press inline-flex min-h-[40px] items-center justify-center gap-2 rounded-full",
-    "border-2 border-line bg-accent px-4 py-2 font-display text-caption font-bold text-white",
+    "border border-line bg-accent px-4 py-2 font-display text-caption font-bold text-white",
     "hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
     "focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
   ].join(" ");
@@ -788,7 +788,7 @@ function primaryActionClass(): string {
 function secondaryActionClass(): string {
   return [
     "hard-press inline-flex min-h-[40px] items-center justify-center gap-2 rounded-full",
-    "border-2 border-line bg-bg-surface px-4 py-2 font-display text-caption font-bold text-text",
+    "border border-line bg-bg-surface px-4 py-2 font-display text-caption font-bold text-text",
     "hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
     "focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
   ].join(" ");

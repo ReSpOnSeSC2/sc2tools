@@ -74,7 +74,7 @@ export function ReviewMenu({ label, children, items, disabled, className, onActi
         else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void activate(); }
       }}>{children}</button>
     {open ? <div ref={popup} id={id} role="menu" aria-label={label} aria-busy={pending || undefined}
-      className={`absolute right-0 z-50 flex max-h-[70vh] w-64 max-w-[calc(100vw-2rem)] flex-col overflow-y-auto rounded-lg border-2 border-line bg-bg-surface p-1 shadow-hard ${up ? "bottom-full mb-1" : "top-full mt-1"}`} style={{ transform: shift ? `translateX(${shift}px)` : undefined }}
+      className={`absolute right-0 z-50 flex max-h-[70vh] w-64 max-w-[calc(100vw-2rem)] flex-col overflow-y-auto rounded-lg border border-line bg-bg-surface p-1 shadow-hard ${up ? "bottom-full mb-1" : "top-full mt-1"}`} style={{ transform: shift ? `translateX(${shift}px)` : undefined }}
       onKeyDown={(event) => {
         if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); return; }
         if (event.key === "Tab") { close(); return; }
@@ -84,7 +84,7 @@ export function ReviewMenu({ label, children, items, disabled, className, onActi
         controls[next]?.focus();
       }}>
       {(step ?? items).map((item) => item.href ? <a key={item.id} role="menuitem" tabIndex={active === item.id ? 0 : -1} onFocus={() => setActive(item.id)} href={item.href} target={item.target} rel={item.rel} onClick={() => void choose(item)} className="flex min-h-10 items-center rounded px-3 py-2 text-left text-caption font-semibold text-text hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none">{item.label}</a> : <button key={item.id} type="button" role="menuitem" tabIndex={active === item.id ? 0 : -1} onFocus={() => setActive(item.id)} disabled={pending || item.disabled} onClick={() => void choose(item)} className="min-h-10 rounded px-3 py-2 text-left text-caption font-semibold text-text hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none disabled:opacity-50">{item.label}</button>)}
-      {fallbackText ? <div role="none" className="space-y-1 p-2"><label htmlFor={`${id}-copy`} className="text-micro text-text-muted">Copy this text</label><input ref={fallback} id={`${id}-copy`} readOnly value={fallbackText} className="min-h-10 w-full rounded border border-line bg-bg px-2 text-caption text-text" onFocus={(event) => event.currentTarget.select()} /></div> : null}
+      {fallbackText ? <div role="none" className="space-y-1 p-2"><label htmlFor={`${id}-copy`} className="text-micro text-text-muted">Copy this text</label><input ref={fallback} id={`${id}-copy`} readOnly value={fallbackText} className="min-h-10 w-full rounded border border-border-strong bg-bg px-2 text-caption text-text" onFocus={(event) => event.currentTarget.select()} /></div> : null}
     </div> : null}
   </span>;
 }

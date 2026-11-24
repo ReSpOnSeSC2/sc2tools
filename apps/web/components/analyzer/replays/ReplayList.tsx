@@ -87,7 +87,7 @@ export function ReplayList({
         <div className="hidden overflow-x-auto xl:block">
           <table className="w-full min-w-[1040px] text-left text-caption">
             <caption className="sr-only">Replay history for {playerName}</caption>
-            <thead className="border-b-2 border-line bg-bg-elevated/70 text-micro uppercase tracking-wider text-text-muted">
+            <thead className="border-b border-line bg-bg-elevated/70 text-micro uppercase tracking-wider text-text-muted">
               <tr>
                 {owner && selection ? <th scope="col" className="px-3 py-3"><span className="sr-only">Select replay</span></th> : null}
                 <th scope="col" className="w-24 px-4 py-3 font-semibold">Result</th>
@@ -235,7 +235,7 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, p
         {owner ? <Link
           href={analysisHref}
           aria-label={`${owner ? "Open" : "Sign in to open"} replay analysis for ${replayContext(game)}`}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-2 border-line bg-bg-elevated text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line bg-bg-elevated text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <ArrowUpRight className="h-4 w-4" aria-hidden />
         </Link> : null}
@@ -434,7 +434,7 @@ function PublicReplayActions({ game, href, handle, locked, mobile = false }: { g
 }
 
 const actionClass = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-border bg-bg-elevated/60 px-2.5 text-micro font-semibold text-text-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
-const mobileActionClass = "inline-flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-3 text-caption font-semibold text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+const mobileActionClass = "inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-line bg-bg-surface px-3 text-caption font-semibold text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
 /** Owner rows: review queue state, review tags and the private note count. */
 function ReviewBadges({ game, className = "" }: { game: ReplayLibraryItem; className?: string }) {

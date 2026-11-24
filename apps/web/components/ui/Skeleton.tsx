@@ -61,7 +61,7 @@ export function SkeletonCard({ className = "", children }: { className?: string;
   return (
     <div
       aria-hidden
-      className={["rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
+      className={["rounded-xl border border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
     >
       {children}
     </div>

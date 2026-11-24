@@ -32,7 +32,7 @@ export function ReviewExchangeIntro() {
   return (
     <section
       aria-labelledby="review-exchange-how"
-      className="rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard sm:p-5"
+      className="rounded-xl border border-line bg-bg-surface p-4 shadow-hard sm:p-5"
     >
       <h2 id="review-exchange-how" className="text-h4 font-bold text-text">
         How the Review Exchange works
@@ -42,7 +42,7 @@ export function ReviewExchangeIntro() {
           <li key={title} className="flex gap-3">
             <span
               aria-hidden
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-line bg-accent/15 text-accent"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-accent/15 text-accent"
             >
               <StepIcon className="h-4 w-4" />
             </span>

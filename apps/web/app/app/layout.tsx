@@ -69,7 +69,7 @@ async function AnalyzerWithMe({ children }: { children: ReactNode }) {
 function AnalyzerSkeleton() {
   return (
     <div className="space-y-5" aria-busy="true" aria-label="Loading dashboard">
-      <div className="h-14 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
+      <div className="h-14 animate-pulse rounded-xl border border-line bg-bg-surface" />
       {/* Same grid as DashboardKpiStrip: the lead card spans both
           columns on phones, so nothing shifts when the cards arrive. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -77,7 +77,7 @@ function AnalyzerSkeleton() {
           <div
             key={i}
             className={[
-              "rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard",
+              "rounded-xl border border-line bg-bg-surface p-4 shadow-hard",
               i === 0 ? "col-span-2 lg:col-span-1" : "",
             ].join(" ")}
           >
@@ -86,8 +86,8 @@ function AnalyzerSkeleton() {
           </div>
         ))}
       </div>
-      <div className="h-32 animate-pulse rounded-xl border-2 border-line bg-bg-surface shadow-hard" />
-      <div className="h-40 animate-pulse rounded-xl border-2 border-line bg-bg-surface shadow-hard" />
+      <div className="h-32 animate-pulse rounded-xl border border-line bg-bg-surface shadow-hard" />
+      <div className="h-40 animate-pulse rounded-xl border border-line bg-bg-surface shadow-hard" />
     </div>
   );
 }

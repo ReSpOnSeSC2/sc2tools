@@ -222,7 +222,7 @@ function GuidedWorksheet({ onClose, onPlan, retryNotice }: { onClose: () => void
       {retryNotice}
       <Field label="Matchup"><Select value={draft.matchup} onChange={event => setDraft(old => ({ ...old, matchup: event.target.value }))}><option value="">Any matchup</option>{MATCHUPS.map(value => <option key={value}>{value}</option>)}</Select></Field>
       {PLANNING_QUESTIONS.map(([key, label, hint]) => <Field key={key} label={label} hint={hint}>
-        <textarea rows={2} className="w-full rounded-lg border border-border bg-bg-surface p-2" value={draft[key]} onChange={event => setDraft(old => ({ ...old, [key]: event.target.value }))} />
+        <textarea rows={2} className="w-full rounded-lg border border-border-strong bg-bg-surface p-2" value={draft[key]} onChange={event => setDraft(old => ({ ...old, [key]: event.target.value }))} />
       </Field>)}
       <Button disabled={disabled} onClick={() => onPlan(draft)}>Keep plan beside a draft</Button>
     </div>

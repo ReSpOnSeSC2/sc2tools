@@ -209,7 +209,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
           aria-label="App navigation"
           className={[
             "app-rail group/rail fixed inset-y-0 left-0 z-nav flex w-16 flex-col gap-1 overflow-y-auto overflow-x-hidden",
-            "border-r-2 border-border bg-bg-surface px-2 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]",
+            "border-r border-border bg-bg-surface px-2 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]",
             "motion-safe:transition-[width] motion-safe:duration-150",
             "hover:w-56 focus-within:w-56 hover:shadow-hard",
           ].join(" ")}
@@ -236,7 +236,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               />
             ))}</RailGroup>
             <span className="min-h-3 flex-1" />
-            <span aria-hidden className="mx-1.5 border-t-2 border-border" />
+            <span aria-hidden className="mx-1.5 border-t border-border" />
             <RailGroup label="Your setup">{utilities.map((entry) => (
               <RailLink
                 key={entry.key}
@@ -269,7 +269,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* pt: in the installed iOS app the status bar overlays the page
             (black-translucent), so the bar starts below the notch. */}
-        <header className="sticky top-0 z-30 border-b-2 border-border bg-bg/90 pt-[env(safe-area-inset-top)] supports-[backdrop-filter]:backdrop-blur-md">
+        <header className="sticky top-0 z-30 border-b border-border bg-bg/90 pt-[env(safe-area-inset-top)] supports-[backdrop-filter]:backdrop-blur-md">
           <div className="mx-auto flex h-12 w-full max-w-[1680px] items-center gap-3 px-4 sm:px-6 lg:px-8">
             <Link
               href="/"
@@ -285,7 +285,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
                 onClick={(event) => backToGameSource(event, safeGameSource(backHref))}
                 onNavigate={() => beginNavigation(backHref)}
                 aria-label={backLabel}
-                className="grid h-11 w-11 shrink-0 place-items-center md:h-8 md:w-8 rounded-full border-2 border-border text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="grid h-11 w-11 shrink-0 place-items-center md:h-8 md:w-8 rounded-full border border-border text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <ChevronLeft className="h-4 w-4" aria-hidden />
               </Link>
@@ -377,7 +377,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
       <nav
         ref={tabBarRef}
         aria-label="Quick sections"
-        className="fixed inset-x-0 bottom-0 z-nav border-t-2 border-border bg-bg/95 pb-[env(safe-area-inset-bottom,0px)] supports-[backdrop-filter]:backdrop-blur-md md:hidden"
+        className="fixed inset-x-0 bottom-0 z-nav border-t border-border bg-bg/95 pb-[env(safe-area-inset-bottom,0px)] supports-[backdrop-filter]:backdrop-blur-md md:hidden"
       >
         <div className="mx-auto flex max-w-md items-stretch px-2 py-1.5">
           <ClerkLoading>{Array.from({ length: 5 }, (_, index) => <div key={index} aria-hidden className="flex flex-1 flex-col items-center gap-1 py-1.5"><span className="h-5 w-5 rounded bg-bg-elevated motion-safe:animate-pulse" /><span className="h-2 w-7 rounded bg-bg-elevated" /></div>)}</ClerkLoading>

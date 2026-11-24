@@ -20,7 +20,7 @@ export function ThemeToggle({ className = "", size = "md" }: { className?: strin
     onKeyDown={event => { if (event.key === "ArrowDown") { event.preventDefault(); clear(); setOpen(true); } }}
     aria-label={label} aria-describedby={hintId}
     aria-expanded={open} aria-pressed={theme === "light"} title={`${label} · hold for System options`}
-    className={`hard-press inline-flex ${size === "sm" ? "h-8 w-8" : "h-9 w-9"} items-center justify-center rounded-full border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${className}`}>
+    className={`hard-press inline-flex ${size === "sm" ? "h-8 w-8" : "h-9 w-9"} items-center justify-center rounded-full border border-line bg-bg-surface text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${className}`}>
     {theme === "dark" ? <Sun className="h-4 w-4" aria-hidden /> : <Moon className="h-4 w-4" aria-hidden />}
   </button><span id={hintId} className="sr-only">Press and hold, right-click, or press Arrow Down for Light, Dark and System options.</span><ThemeDialog open={open} onClose={() => setOpen(false)} /></>;
 }

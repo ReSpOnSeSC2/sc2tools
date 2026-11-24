@@ -651,7 +651,7 @@ function StatusSummary({
   if (state.status === "pending" && suggestion) {
     return (
       <div className="space-y-3">
-        <div className="rounded-lg border-2 border-line bg-bg-elevated/50 px-3 py-2.5">
+        <div className="rounded-lg border border-line bg-bg-elevated/50 px-3 py-2.5">
           <p className="text-micro font-bold uppercase tracking-[0.12em] text-text-dim">
             Suggested
           </p>
@@ -702,7 +702,7 @@ function StatusSummary({
   if (state.status === "confirmed" && state.build) {
     return (
       <div className="space-y-3">
-        <div className="rounded-lg border-2 border-line bg-bg-elevated/50 px-3 py-2.5">
+        <div className="rounded-lg border border-line bg-bg-elevated/50 px-3 py-2.5">
           <p className="text-micro font-bold uppercase tracking-[0.12em] text-text-dim">
             Planned build
           </p>

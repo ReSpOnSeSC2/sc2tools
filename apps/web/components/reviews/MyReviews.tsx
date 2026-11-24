@@ -33,7 +33,7 @@ export function MyReviews() {
   }, []);
   if (isLoaded && isSignedIn) return <MyReviewsSignedIn key={userId} />;
   if (!isLoaded && !graceOver) {
-    return <div aria-busy="true" aria-label="Loading your reviews" className="h-64 animate-pulse rounded-xl border-2 border-line bg-bg-elevated" />;
+    return <div aria-busy="true" aria-label="Loading your reviews" className="h-64 animate-pulse rounded-xl border border-line bg-bg-elevated" />;
   }
   return (
     <EmptyStatePanel
@@ -101,7 +101,7 @@ function BlockedReviewers() {
                 type="button"
                 disabled={busyId !== null}
                 onClick={() => void unblock(b.id, b.name)}
-                className="min-h-[36px] shrink-0 rounded-full border-2 border-line px-3 text-caption font-semibold text-text hover:bg-bg-elevated disabled:opacity-60"
+                className="min-h-[36px] shrink-0 rounded-full border border-line px-3 text-caption font-semibold text-text hover:bg-bg-elevated disabled:opacity-60"
               >
                 {busyId === b.id ? "Unblocking…" : "Unblock"}
               </button>

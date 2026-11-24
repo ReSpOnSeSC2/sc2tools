@@ -394,7 +394,7 @@ export function SettingsMultiChatAlerts({
                         kind,
                         e.target.value as AlertVisualSelection,
                       )}
-                      className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption text-text focus:border-accent focus:outline-none"
+                      className="w-full min-w-0 rounded-md border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-caption text-text focus:border-accent focus:outline-none"
                     >
                       <option value="shuffle">🎲 Smart Shuffle</option>
                       {ALERT_VISUAL_CATEGORIES.map((category) => (

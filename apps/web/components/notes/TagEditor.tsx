@@ -98,7 +98,7 @@ export function TagEditor({
           placeholder={full ? `Up to ${max} tags` : "Add your own tag"}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add(draft); } }}
-          className="min-h-11 min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 sm:max-w-xs"
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-border-strong bg-bg px-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 sm:max-w-xs"
         />
         <button type="button" disabled={disabled || full || !canonicalTag(draft)} onClick={() => add(draft)} className={`${CHIP} border-border bg-bg-elevated text-text disabled:opacity-50`}>
           <Plus className="h-3.5 w-3.5" aria-hidden />Add tag

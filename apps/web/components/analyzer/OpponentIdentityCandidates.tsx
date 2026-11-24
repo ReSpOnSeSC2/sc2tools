@@ -486,7 +486,7 @@ function CandidateCard({
             aria-expanded={expanded}
             aria-controls={detailId}
             onClick={() => setExpanded((current) => !current)}
-            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-4 font-display text-caption font-bold text-text shadow-hard transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full border border-line bg-bg-surface px-4 font-display text-caption font-bold text-text shadow-hard transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {expanded ? "Hide evidence" : "Compare evidence"}
             <ChevronDown
@@ -497,7 +497,7 @@ function CandidateCard({
           <Link
             href={href}
             aria-label={`Open ${candidate.name || "candidate"} opponent dossier`}
-            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full border-2 border-transparent px-4 font-display text-caption font-bold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full border border-transparent px-4 font-display text-caption font-bold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Open dossier
             <ArrowUpRight className="h-4 w-4" aria-hidden />

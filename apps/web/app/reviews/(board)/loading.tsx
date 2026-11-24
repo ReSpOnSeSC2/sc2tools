@@ -8,9 +8,9 @@ export default function ReviewsBoardLoading() {
       <div className="flex flex-wrap gap-2">{[0, 1, 2, 3].map((item) => <div key={item} className="h-11 w-28 animate-pulse rounded-full bg-bg-elevated" />)}</div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"><div className="space-y-3">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-24 animate-pulse rounded-xl border-2 border-line bg-bg-surface shadow-hard" />
+          <div key={i} className="h-24 animate-pulse rounded-xl border border-line bg-bg-surface shadow-hard" />
         ))}
-      </div><div className="h-fit space-y-3 rounded-xl border-2 border-line bg-bg-surface p-4"><div className="h-5 w-40 animate-pulse rounded bg-bg-elevated" />{[0, 1, 2, 3, 4].map((item) => <div key={item} className="h-12 animate-pulse rounded bg-bg-elevated" />)}</div></div>
+      </div><div className="h-fit space-y-3 rounded-xl border border-line bg-bg-surface p-4"><div className="h-5 w-40 animate-pulse rounded bg-bg-elevated" />{[0, 1, 2, 3, 4].map((item) => <div key={item} className="h-12 animate-pulse rounded bg-bg-elevated" />)}</div></div>
     </div>
   );
 }

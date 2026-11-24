@@ -117,7 +117,7 @@ export default async function HelpArticlePage({ params }: Params) {
                   <li key={item.slug}>
                     <Link
                       href={helpArticlePath(item.slug)}
-                      className="group flex h-full flex-col gap-1 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard transition-colors hover:border-accent hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      className="group flex h-full flex-col gap-1 rounded-xl border border-line bg-bg-surface p-4 shadow-hard transition-colors hover:border-accent hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     >
                       <span className="flex items-center justify-between gap-2 font-semibold text-text group-hover:text-accent">
                         {item.title}

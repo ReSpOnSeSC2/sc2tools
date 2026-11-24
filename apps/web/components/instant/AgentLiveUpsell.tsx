@@ -89,7 +89,7 @@ function UpsellCard({ onDismiss, className }: { onDismiss?: () => void; classNam
   return (
     <section
       aria-labelledby={titleId}
-      className={["space-y-4 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
+      className={["space-y-4 rounded-xl border border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
@@ -123,7 +123,7 @@ function UpsellInline({ onDismiss, className }: { onDismiss?: () => void; classN
     <section
       aria-label="Install the agent for live features"
       className={[
-        "flex flex-col gap-3 rounded-xl border-2 border-line bg-bg-surface px-4 py-3 shadow-hard sm:flex-row sm:items-center",
+        "flex flex-col gap-3 rounded-xl border border-line bg-bg-surface px-4 py-3 shadow-hard sm:flex-row sm:items-center",
         className,
       ].filter(Boolean).join(" ")}
     >

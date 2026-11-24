@@ -249,7 +249,7 @@ export function ReplayIntake({
         <input ref={inputs.attachFolderInput} type="file" multiple onChange={inputs.onPicked("folder")} disabled={disabled} tabIndex={-1} aria-label="Replay folder" className="sr-only" />
       ) : null}
       <IntakeStatus fileCount={fileCount} estimate={estimate} maxFiles={maxFiles} maxParsedFiles={maxParsedFiles} />
-      <details className="rounded-lg border-2 border-line bg-bg-surface px-3">
+      <details className="rounded-lg border border-line bg-bg-surface px-3">
         <summary className="flex min-h-[44px] cursor-pointer items-center text-caption font-semibold text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           Where are my replays?
         </summary>

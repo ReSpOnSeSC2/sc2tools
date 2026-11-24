@@ -333,7 +333,7 @@ function OwnerReplayShareControl({ ownerId, getToken }: { ownerId: string | null
           <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-caption text-danger">Sharing settings could not be loaded. Try the request again or close this dialog.</p>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-xl border-2 border-line bg-bg-elevated/45 p-4">
+            <div className="rounded-xl border border-line bg-bg-elevated/45 p-4">
               <div className="flex items-start gap-3">
                 {sharing?.enabled && handle ? <Tv2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden /> : <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" aria-hidden />}
                 <div className="min-w-0">

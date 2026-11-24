@@ -521,7 +521,7 @@ export function BuildEditorSheet({
             onChange={(e) => update("description", e.target.value)}
             rows={3}
             maxLength={4000}
-            className="block w-full rounded-lg border border-border bg-bg-elevated p-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+            className="block w-full rounded-lg border border-border-strong bg-bg-elevated p-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
             placeholder="What makes this opener distinct? What does it punish?"
           />
         </Field>
@@ -536,7 +536,7 @@ export function BuildEditorSheet({
             onChange={(e) => update("notes", e.target.value)}
             rows={4}
             maxLength={8000}
-            className="block w-full rounded-lg border border-border bg-bg-elevated p-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+            className="block w-full rounded-lg border border-border-strong bg-bg-elevated p-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
             placeholder="If they take their natural before 4:00, switch to the punishing variant."
           />
         </Field>

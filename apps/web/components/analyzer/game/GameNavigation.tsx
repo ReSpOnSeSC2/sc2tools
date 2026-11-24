@@ -57,7 +57,7 @@ export function GameNavigation({ game, source, opponentContext, buildLabel }: {
     <select id={selectId} value={scope} onChange={(event) => {
       if (!isGameNeighborScope(event.target.value)) return;
       setScope(event.target.value); try { localStorage.setItem(SCOPE_KEY, event.target.value); } catch { /* Navigation still works. */ }
-    }} title="Same build follows the game's stored effective check-in or classified build label. Custom definition rules are not evaluated here." className="min-h-11 max-w-full rounded-md border border-border bg-bg-surface px-3 text-text">
+    }} title="Same build follows the game's stored effective check-in or classified build label. Custom definition rules are not evaluated here." className="min-h-11 max-w-full rounded-md border border-border-strong bg-bg-surface px-3 text-text">
       <option value="all">All games</option><option value="opponent">Same opponent</option><option value="matchup">Same matchup</option><option value="build">Same build</option>
     </select>
     {record && Number.isInteger(record.wins) && Number.isInteger(record.losses) && record.wins >= 0 && record.losses >= 0 ? <span className="rounded-full border border-border bg-bg-surface px-3 py-1 tabular-nums" title="Your recorded wins and losses against this opponent, across all time">H2H {record.wins}–{record.losses} all-time</span> : null}

@@ -95,7 +95,7 @@ export function BuildFilterBar({
   return (
     <section
       aria-label="Filter custom builds"
-      className="space-y-3 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard"
+      className="space-y-3 rounded-xl border border-line bg-bg-surface p-4 shadow-hard"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <Field
@@ -141,7 +141,7 @@ export function BuildFilterBar({
         </Field>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <div role="radiogroup" aria-label="Whose builds" className="inline-flex flex-wrap rounded-full border-2 border-line p-0.5">
+        <div role="radiogroup" aria-label="Whose builds" className="inline-flex flex-wrap rounded-full border border-line p-0.5">
           {SOURCES.map((option) => (
             <button
               key={option.value}

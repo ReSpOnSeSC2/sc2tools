@@ -545,7 +545,7 @@ function Render({
                 }}
                 onFocus={(e) => e.currentTarget.select()}
                 disabled={!tradeable}
-                className="h-9 w-20 rounded border border-border bg-bg-elevated px-2 text-right font-mono tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-9 w-20 rounded border border-border-strong bg-bg-elevated px-2 text-right font-mono tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
               />
               <span className="text-caption text-text-dim">%</span>
             </li>
@@ -620,7 +620,7 @@ function Render({
                 value={name}
                 onChange={(e) => setName(e.target.value.slice(0, 60))}
                 placeholder="Display name"
-                className="h-9 w-full rounded border border-border bg-bg px-2 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="h-9 w-full rounded border border-border-strong bg-bg px-2 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               />
             )}
           </div>

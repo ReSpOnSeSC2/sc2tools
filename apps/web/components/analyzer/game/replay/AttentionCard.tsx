@@ -63,7 +63,7 @@ export function AttentionCard({ playback, start, end, readAll }: { playback: Map
         {data ? <canvas ref={ref} width={64} height={64} className="absolute inset-0 h-full w-full" role="img" aria-label="Camera position density, brighter where the selected player spent more time" /> : null}
       </div>
       <div className="space-y-2 text-caption">
-        <label className="flex items-center gap-2">Camera<select value={side} onChange={event => setSide(event.target.value === "opp" ? "opp" : "me")} className="min-h-11 rounded-md border border-border bg-bg-surface px-2">
+        <label className="flex items-center gap-2">Camera<select value={side} onChange={event => setSide(event.target.value === "opp" ? "opp" : "me")} className="min-h-11 rounded-md border border-border-strong bg-bg-surface px-2">
           <option value="me">You</option><option value="opp">Opponent</option>
         </select></label>
         {full ? <p className="text-text-muted">Full replay</p> : start !== undefined && end !== undefined

@@ -14,7 +14,7 @@ import { formatReportDate, gamesLabel, winratePercent } from "./ReportBits";
 
 function Tile({ label, value, detail }: { label: string; value: string; detail?: string | null }) {
   return (
-    <li className="min-w-0 rounded-xl border-2 border-line bg-bg-surface p-3 shadow-hard">
+    <li className="min-w-0 rounded-xl border border-line bg-bg-surface p-3 shadow-hard">
       <p className="text-micro font-semibold uppercase tracking-wider text-text-dim">{label}</p>
       <p className="mt-1 break-words font-display text-h4 text-text">{value}</p>
       {detail ? <p className="mt-0.5 break-words text-caption text-text-muted">{detail}</p> : null}

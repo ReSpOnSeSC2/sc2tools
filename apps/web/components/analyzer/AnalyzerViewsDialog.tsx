@@ -52,7 +52,7 @@ function ViewsEditor({ owner, onClose }: { owner: { current: string | null | und
   return <div className="space-y-5">
     <form className="space-y-2" onSubmit={event => { event.preventDefault(); void save(); }}>
       <label className="block text-caption font-medium" htmlFor="analyzer-view-name">{editing ? "Rename view" : "View name"}</label>
-      <div className="flex flex-wrap gap-2"><input ref={field} id="analyzer-view-name" autoComplete="off" maxLength={60} value={name} onChange={event => setName(event.target.value)} disabled={pending} className="min-h-11 min-w-0 flex-1 rounded-lg border border-border bg-bg-surface px-3 text-body" /><Button type="submit" disabled={pending}>{editing ? "Rename" : "Save current view"}</Button>{editing ? <Button type="button" variant="ghost" disabled={pending} onClick={() => { setName(""); setEditing(null); }}>Cancel rename</Button> : null}</div>
+      <div className="flex flex-wrap gap-2"><input ref={field} id="analyzer-view-name" autoComplete="off" maxLength={60} value={name} onChange={event => setName(event.target.value)} disabled={pending} className="min-h-11 min-w-0 flex-1 rounded-lg border border-border-strong bg-bg-surface px-3 text-body" /><Button type="submit" disabled={pending}>{editing ? "Rename" : "Save current view"}</Button>{editing ? <Button type="button" variant="ghost" disabled={pending} onClick={() => { setName(""); setEditing(null); }}>Cancel rename</Button> : null}</div>
       <p className="text-micro text-text-muted">{prefs.views.length}/{ANALYZER_VIEW_LIMIT} views saved. A default view opens on the first plain Today visit of a browser session.</p>
     </form>
     {error ? <p role="alert" className="text-caption text-danger">{error}</p> : null}

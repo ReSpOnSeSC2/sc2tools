@@ -28,7 +28,7 @@ export function LearnSectionNav() {
     for (const { id } of SECTIONS) { const section = document.getElementById(id); if (section) observer.observe(section); }
     return () => observer.disconnect();
   }, []);
-  return <nav aria-label="Learning sections" className="sticky top-16 z-20 flex gap-1 overflow-x-auto rounded-md border-2 border-line bg-bg px-2 py-1 shadow-sm sm:gap-3">
+  return <nav aria-label="Learning sections" className="sticky top-16 z-20 flex gap-1 overflow-x-auto rounded-md border border-line bg-bg px-2 py-1 shadow-sm sm:gap-3">
     {SECTIONS.map(({ id, label, icon: Icon }) => <a key={id} href={`#${id}`} aria-current={active === id ? "true" : undefined} onClick={() => setActive(id)}
       className={`inline-flex min-h-9 shrink-0 items-center gap-2 rounded-full px-2 text-caption font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${active === id ? "bg-accent/10 text-accent" : "text-text-muted hover:bg-bg-elevated hover:text-accent"}`}><Icon className="h-4 w-4" aria-hidden />{label}</a>)}
   </nav>;

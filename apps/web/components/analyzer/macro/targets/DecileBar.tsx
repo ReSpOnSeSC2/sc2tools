@@ -29,7 +29,7 @@ export function DecileBar({ deciles, mine, currentP50, nextP50, label }: {
       ) : null}
       {currentP50 !== null ? <span className="absolute top-0 h-4 w-0.5 -translate-x-1/2 bg-text-dim" style={{ left: at(currentP50) }} /> : null}
       {nextP50 !== null ? <span className="absolute top-0 h-4 w-0.5 -translate-x-1/2 bg-accent" style={{ left: at(nextP50) }} /> : null}
-      {mine !== null ? <span className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-bg-surface bg-accent-cyan" style={{ left: at(mine) }} /> : null}
+      {mine !== null ? <span className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-bg-surface bg-accent-cyan" style={{ left: at(mine) }} /> : null}
     </div>
   );
 }

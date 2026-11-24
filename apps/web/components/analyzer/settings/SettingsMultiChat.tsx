@@ -457,7 +457,7 @@ function OwnerSettingsMultiChat({ token, getToken, isCurrent }: { token: string 
                   onChange={(e) =>
                     set({ rankRace: sanitizeRankRace(e.target.value) })
                   }
-                  className="w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
+                  className="w-full min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
                 >
                   {RANK_RACES.map((r) => (
                     <option key={r} value={r}>
@@ -711,7 +711,7 @@ function OwnerSettingsMultiChat({ token, getToken, isCurrent }: { token: string 
                         }
                         placeholder="https://libretranslate.example.com/translate"
                         disabled={!draft.translate.enabled}
-                        className="w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50"
+                        className="w-full min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50"
                       />
                     </label>
                     <label className="block min-w-0">
@@ -732,7 +732,7 @@ function OwnerSettingsMultiChat({ token, getToken, isCurrent }: { token: string 
                         placeholder="optional"
                         autoComplete="off"
                         disabled={!draft.translate.enabled}
-                        className="w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50"
+                        className="w-full min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50"
                       />
                     </label>
                     <label className="block min-w-0">
@@ -753,7 +753,7 @@ function OwnerSettingsMultiChat({ token, getToken, isCurrent }: { token: string 
                         placeholder="en"
                         maxLength={8}
                         disabled={!draft.translate.enabled}
-                        className="w-24 min-w-0 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50"
+                        className="w-24 min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50"
                       />
                     </label>
                   </div>
@@ -831,7 +831,7 @@ function TextInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
-      className="w-full min-w-0 max-w-md rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50"
+      className="w-full min-w-0 max-w-md rounded-lg border border-border-strong bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50"
     />
   );
 }

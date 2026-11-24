@@ -93,7 +93,7 @@ export function Header() {
       <header
         data-scrolled={scrolled || undefined}
         className={[
-          "sticky top-0 z-40 w-full border-b-2 border-line bg-bg/85",
+          "sticky top-0 z-40 w-full border-b border-line bg-bg/85",
           "relative",
           "motion-safe:transition-[background-color,backdrop-filter] motion-safe:duration-150",
           "data-[scrolled]:bg-bg/95 data-[scrolled]:supports-[backdrop-filter]:backdrop-blur-md",
@@ -163,7 +163,7 @@ export function Header() {
               onClick={() => setDrawerOpen(true)}
               className={[
                 "hard-press inline-flex h-11 w-11 items-center justify-center rounded-full",
-                "border-2 border-line bg-bg-surface text-text",
+                "border border-line bg-bg-surface text-text",
                 "hover:bg-bg-elevated",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                 "lg:hidden",

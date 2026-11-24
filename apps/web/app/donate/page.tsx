@@ -156,7 +156,7 @@ function HeroBlock({ costs, coverage }: { costs: InfrastructureCosts | null; cov
         Donations pay for the servers, database and storage.
       </p>
       {coverage ? (
-        <div className="mx-auto mt-6 max-w-xl rounded-xl border-2 border-line bg-bg-surface p-4 text-left shadow-hard">
+        <div className="mx-auto mt-6 max-w-xl rounded-xl border border-line bg-bg-surface p-4 text-left shadow-hard">
           <CoverageMeter coverage={coverage} />
         </div>
       ) : null}

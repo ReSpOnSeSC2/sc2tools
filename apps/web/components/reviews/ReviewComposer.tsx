@@ -149,7 +149,7 @@ function OwnedReviewComposer({
 
   return (
     <><form
-      className="space-y-3 rounded-xl border-2 border-line bg-bg-surface p-3 shadow-hard"
+      className="space-y-3 rounded-xl border border-line bg-bg-surface p-3 shadow-hard"
       aria-label={parentId ? "Reply" : "Write a review comment"}
       onSubmit={(e) => {
         e.preventDefault();
@@ -222,7 +222,7 @@ function OwnedReviewComposer({
           rows={parentId ? 3 : 4}
           maxLength={REVIEW_LIMITS.COMMENT_MAX + 200}
           placeholder={parentId ? "Reply…" : "What happened here, and what should they do instead? **bold**, *italic*, lists and links work; times like 5:40 become jump links."}
-          className="w-full resize-y rounded-lg border-2 border-line bg-bg px-3 py-2 text-body text-text placeholder:text-text-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="w-full resize-y rounded-lg border border-border-strong bg-bg px-3 py-2 text-body text-text placeholder:text-text-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           aria-invalid={touched && Boolean(problem)}
           aria-describedby={`${bodyId}-help`}
         />
@@ -285,7 +285,7 @@ function MomentLinkButton({ requestUrl, seconds }: { requestUrl: string; seconds
               if (event.key === "Enter") event.preventDefault();
               if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); clipboard.clear(); }
             }}
-            className="min-h-10 w-full rounded border border-line bg-bg px-2 text-caption text-text"
+            className="min-h-10 w-full rounded border border-border-strong bg-bg px-2 text-caption text-text"
           />
         </span>
       ) : null}

@@ -255,7 +255,7 @@ export function CrashCourse({ setup }: { setup?: CourseSetup } = {}) {
         </button>
       </div>
 
-      {resetUndo ? <div role="status" className="fixed bottom-5 right-5 z-50 max-w-[calc(100vw-2.5rem)] rounded-md border-2 border-line bg-bg-surface p-4 text-body text-text shadow-hard">Progress reset · <button type="button" className="font-semibold text-accent underline" onClick={() => { setProgress(resetUndo.progress); automatic.restore(resetUndo.automatic); setResetUndo(null); setAnswerVisible(false); }}>Undo</button></div> : null}
+      {resetUndo ? <div role="status" className="fixed bottom-5 right-5 z-50 max-w-[calc(100vw-2.5rem)] rounded-md border border-line bg-bg-surface p-4 text-body text-text shadow-hard">Progress reset · <button type="button" className="font-semibold text-accent underline" onClick={() => { setProgress(resetUndo.progress); automatic.restore(resetUndo.automatic); setResetUndo(null); setAnswerVisible(false); }}>Undo</button></div> : null}
       <div className="space-y-2">
         <p role="status" aria-live="polite" className="text-body font-semibold text-text">
           {completeIds.size} of {LESSONS.length} lessons complete.
@@ -298,7 +298,7 @@ export function CrashCourse({ setup }: { setup?: CourseSetup } = {}) {
           })}
         </nav>
 
-        <article id={lessonPanelId} aria-labelledby={lessonHeadingId} className="min-w-0 rounded-md border-2 border-line bg-bg-surface p-5 shadow-hard sm:p-7">
+        <article id={lessonPanelId} aria-labelledby={lessonHeadingId} className="min-w-0 rounded-md border border-line bg-bg-surface p-5 shadow-hard sm:p-7">
           <p className="text-caption font-semibold uppercase tracking-wider text-accent">Lesson {activeIndex + 1} / {LESSONS.length} · {lesson.time}</p>
           <h3 id={lessonHeadingId} className="mt-2 font-display text-h2 text-text">{lesson.title}</h3>
           <p className="mt-2 text-body-lg text-text-muted">{lesson.promise}</p>
@@ -315,7 +315,7 @@ export function CrashCourse({ setup }: { setup?: CourseSetup } = {}) {
             ))}
           </ol>
 
-          <div className="mt-6 rounded-md border-2 border-line bg-bg-subtle p-4 sm:p-5">
+          <div className="mt-6 rounded-md border border-line bg-bg-subtle p-4 sm:p-5">
             <h4 className="font-display text-h4 text-text">Try it now</h4>
             <p className="mt-2 text-body text-text-muted">{lesson.tryIt}</p>
             <button

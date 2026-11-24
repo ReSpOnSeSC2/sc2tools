@@ -38,14 +38,14 @@ export type ChartPalette = { series: readonly string[]; lowSample: string; red: 
 // SSR / first paint fallback. Values match the dark-theme defaults in
 // app/globals.css so an SSR snapshot lines up with the hydrated chart.
 export const DARK_FALLBACK: ChartThemeTokens = {
-  bg: "rgb(6 9 14)",
-  bgSurface: "rgb(12 16 23)",
-  bgElevated: "rgb(17 23 32)",
-  text: "rgb(231 237 240)",
-  textMuted: "rgb(159 173 185)",
-  textDim: "rgb(134 146 159)",
-  border: "rgb(92 105 124)",
-  borderStrong: "rgb(117 132 155)",
+  bg: "rgb(5 7 11)",
+  bgSurface: "rgb(11 15 22)",
+  bgElevated: "rgb(18 23 34)",
+  text: "rgb(237 242 247)",
+  textMuted: "rgb(163 175 191)",
+  textDim: "rgb(136 149 166)",
+  border: "rgb(34 42 56)",
+  borderStrong: "rgb(92 105 124)",
   accent: "rgb(21 125 140)",
   accentCyan: "rgb(60 224 214)",
   success: "rgb(62 200 132)",

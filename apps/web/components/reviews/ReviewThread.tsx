@@ -118,7 +118,7 @@ export function ReviewThread(ctx: ThreadContext) {
         <h2 id="review-thread-title" className="font-display text-h3 font-bold text-text">
           {data.request.stats.reviewCount === 1 ? "1 review" : `${data.request.stats.reviewCount} reviews`}
         </h2>
-        <div role="group" aria-label="Order reviews" className="inline-flex rounded-full border-2 border-line p-0.5 text-caption font-semibold">
+        <div role="group" aria-label="Order reviews" className="inline-flex rounded-full border border-line p-0.5 text-caption font-semibold">
           {(["top", "timeline"] as const).map((key) => (
             <button
               key={key}
@@ -153,7 +153,7 @@ export function ReviewThread(ctx: ThreadContext) {
             <li key={c.id}>
               <CommentCard comment={c} ctx={ctx} />
               {(replies.get(c.id) ?? []).length ? (
-                <ol className="ml-4 mt-2 space-y-2 border-l-2 border-border pl-3 sm:ml-6">
+                <ol className="ml-4 mt-2 space-y-2 border-l border-border pl-3 sm:ml-6">
                   {(replies.get(c.id) ?? []).map((r) => (
                     <li key={r.id}><CommentCard comment={r} ctx={ctx} isReply /></li>
                   ))}

@@ -275,7 +275,7 @@ function StudentSchedule({
                             key={`${slot.startAt}-${slot.durationMinutes}`}
                             type="button"
                             onClick={() => setSelected(slot)}
-                            className="hard-press min-h-11 rounded-full border-2 border-line bg-bg-surface px-3 font-mono text-caption font-bold tabular-nums text-text hover:border-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            className="hard-press min-h-11 rounded-full border border-line bg-bg-surface px-3 font-mono text-caption font-bold tabular-nums text-text hover:border-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                           >
                             {formatTime(slot.startAt, localTimeZone)}
                           </button>

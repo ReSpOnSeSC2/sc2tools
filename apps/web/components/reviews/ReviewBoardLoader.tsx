@@ -21,7 +21,7 @@ export function ReviewBoardLoader({ query, cursor }: { query: string; cursor?: s
       description="The review service didn't respond. Nothing was lost."
       action={<Button variant="secondary" loading={req.isValidating} onClick={() => void req.mutate()}>Try again</Button>} />;
   }
-  if (!req.data) return <div aria-busy="true" aria-label="Loading review requests" className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl border-2 border-line bg-bg-elevated" />)}</div>;
+  if (!req.data) return <div aria-busy="true" aria-label="Loading review requests" className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl border border-line bg-bg-elevated" />)}</div>;
   const now = Date.now();
   return <div className="space-y-4">{req.data.items.length ? <ul className="space-y-3" aria-label="Review requests">{req.data.items.map((card) => <ReviewCard key={card.id} card={card} now={now} />)}</ul> : <ReviewBoardEmpty filters={filters} />}<ReviewBoardPagination filters={filters} cursor={cursor} nextCursor={req.data.nextCursor} /></div>;
 }

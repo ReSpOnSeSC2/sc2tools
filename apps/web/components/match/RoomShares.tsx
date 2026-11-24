@@ -103,7 +103,7 @@ export function MatchResultExport({ room }: { room: Room }) {
         <Button variant="secondary" disabled={copy.pending} loading={image.busy} onClick={() => { void shareImage(); }}>Share result image</Button>
       </div>
       {copy.copied && <p role="status" className="text-caption text-text-muted">Result copied.</p>}
-      {copy.fallbackText && <textarea aria-label="Result text" className="block w-full rounded-lg border border-line bg-bg-surface p-3 text-body"
+      {copy.fallbackText && <textarea aria-label="Result text" className="block w-full rounded-lg border border-border-strong bg-bg-surface p-3 text-body"
         readOnly rows={5} value={copy.fallbackText} ref={copy.inputRef as Ref<HTMLTextAreaElement>} />}
       {image.message && <p role={image.error ? "alert" : "status"} className={image.error ? "text-caption text-danger" : "text-caption text-text-muted"}>
         {image.message}

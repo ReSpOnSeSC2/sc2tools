@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
  *                             4 stat tiles, 6 build cards
  */
 
-const PANEL = "rounded-xl border-2 border-line bg-bg-surface shadow-hard";
+const PANEL = "rounded-xl border border-line bg-bg-surface shadow-hard";
 
 function Bone({ className }: { className: string }) {
   return <div className={`rounded bg-bg-elevated motion-safe:animate-pulse ${className}`} />;

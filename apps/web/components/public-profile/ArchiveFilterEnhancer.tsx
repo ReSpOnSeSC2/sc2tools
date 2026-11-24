@@ -21,7 +21,7 @@ export function ArchiveFilterEnhancer({ action, search = "", build, children }: 
     setValue(next); clearTimeout(timer.current);
     if (!next.trim() || next.trim().length >= 2) timer.current = setTimeout(submit, 400);
   }
-  return <form ref={formRef} action={action} method="get" className="border-b-2 border-line p-4" role="search" onSubmit={() => clearTimeout(timer.current)} onChange={(event) => { if (event.target instanceof HTMLSelectElement) submit(); }}>
+  return <form ref={formRef} action={action} method="get" className="border-b border-line p-4" role="search" onSubmit={() => clearTimeout(timer.current)} onChange={(event) => { if (event.target instanceof HTMLSelectElement) submit(); }}>
     {build ? <input type="hidden" name="build" value={build} /> : null}
     <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-6">
       <label className="relative min-w-0 sm:col-span-2 xl:col-span-2">

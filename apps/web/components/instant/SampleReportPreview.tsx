@@ -37,7 +37,7 @@ export function SampleReportPreview() {
     return () => { current = false; clearTimeout(timer); controller.abort(); };
   }, [attempt]);
   const report = useMemo(() => sample ? buildInstantReport(sample.payloads, new Date(Math.max(...sample.payloads.map((game) => Date.parse(game.date))))) : null, [sample]);
-  return <section aria-label="Sample replay report" className="space-y-4 rounded-xl border-2 border-line bg-bg-surface p-3 sm:p-5" data-testid="sample-report-frame">
+  return <section aria-label="Sample replay report" className="space-y-4 rounded-xl border border-line bg-bg-surface p-3 sm:p-5" data-testid="sample-report-frame">
     <header><h2 className="font-display text-h3">Sample replay report</h2><p className="text-caption text-text-muted">Real fixture replays, with player identities removed. These examples are separate games; nothing is saved to your browser history or account.</p></header>
     {error ? <div role="alert"><p>{error}</p><Button variant="secondary" onClick={() => setAttempt((value) => value + 1)}>Retry sample</Button></div> : !report ? <p role="status">Loading the example report…</p> : <><p className="text-caption text-text-muted">Engine {sample?.metadata.engineVersion} · fixed sample data, not your results</p><InstantReport report={report} title="Example results" /></>}
   </section>;

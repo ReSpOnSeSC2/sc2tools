@@ -34,7 +34,7 @@ export function ReplayVerdictCard({ summary, evidence, shared = false }: {
   const snapshot = `Season ${season} · Snapshot ${asOf} UTC`;
   const data = `${games.format(counts.games)} same-tier games · ${counts.confidence}% interval ${interval}`;
   return (
-    <article className="space-y-3 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard sm:p-6">
+    <article className="space-y-3 rounded-xl border border-line bg-bg-surface p-4 shadow-hard sm:p-6">
       <p className="flex items-center gap-2 font-semibold text-text-muted"><Scale size={18} aria-hidden />Balance Court</p>
       <h2 className="font-display text-h2 font-bold text-text">{title}</h2>
       <p className="break-words text-body text-text-muted">{scope}</p>

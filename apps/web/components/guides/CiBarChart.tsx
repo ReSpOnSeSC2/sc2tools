@@ -91,7 +91,7 @@ function RowTooltip({ id, datum }: { id: string; datum: CiBarDatum }) {
     <div
       id={id}
       role="tooltip"
-      className="pointer-events-none absolute left-0 top-full z-20 mt-1 w-max max-w-full rounded-lg sm:left-1/3 sm:max-w-[16rem] border-2 border-line bg-bg-surface px-3 py-2 text-caption text-text shadow-hard"
+      className="pointer-events-none absolute left-0 top-full z-20 mt-1 w-max max-w-full rounded-lg sm:left-1/3 sm:max-w-[16rem] border border-line bg-bg-surface px-3 py-2 text-caption text-text shadow-hard"
     >
       <div className="font-semibold">{datum.label}</div>
       <div className="tabular-nums">{fmtPct(datum.winRate)} win rate</div>

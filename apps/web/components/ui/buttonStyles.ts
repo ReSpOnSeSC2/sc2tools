@@ -10,18 +10,19 @@
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 
-// Courtside buttons are pills in the display face. Primary/secondary/danger
-// wear the 2px ink outline + hard offset shadow and physically COLLAPSE into
-// that shadow on press (`hard-press`). Ghost stays flat and quiet.
+// Command Glass buttons are pills. Primary and danger are lit fills with a
+// top highlight and a soft glow on hover (`btn-primary` / `btn-danger` in
+// globals.css); secondary is a raised glass surface on a hairline edge;
+// ghost stays flat and quiet. Every variant presses in with a gentle scale.
 export const BUTTON_VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    "hard-press bg-accent text-white border-2 border-line hover:bg-accent-hover disabled:opacity-50",
+    "btn-primary bg-accent text-white border border-white/10 hover:bg-accent-hover disabled:opacity-50",
   secondary:
-    "hard-press bg-bg-surface text-text border-2 border-line hover:bg-bg-elevated disabled:opacity-50",
+    "btn-secondary bg-bg-elevated text-text border border-line hover:border-border-strong hover:bg-bg-subtle disabled:opacity-50",
   ghost:
-    "bg-transparent text-text border-2 border-transparent hover:bg-bg-elevated transition-colors disabled:opacity-50",
+    "bg-transparent text-text border border-transparent hover:bg-bg-subtle disabled:opacity-50",
   danger:
-    "hard-press bg-danger text-white border-2 border-line hover:bg-danger disabled:opacity-50",
+    "btn-danger bg-danger text-white border border-white/10 hover:bg-danger disabled:opacity-50",
 };
 
 export const BUTTON_SIZE_CLASSES: Record<ButtonSize, string> = {
@@ -31,7 +32,8 @@ export const BUTTON_SIZE_CLASSES: Record<ButtonSize, string> = {
 };
 
 export const BUTTON_BASE_CLASSES = [
-  "inline-flex items-center justify-center font-display font-bold tracking-tight",
+  "inline-flex items-center justify-center font-display font-semibold tracking-[-0.01em] select-none",
+  "transition-[color,background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.97] disabled:active:scale-100",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
   "disabled:cursor-not-allowed",
 ].join(" ");

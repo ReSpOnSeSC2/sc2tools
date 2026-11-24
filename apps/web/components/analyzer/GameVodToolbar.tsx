@@ -47,7 +47,7 @@ export function GameVodToolbar({ links, className }: { links: SafeLink[]; classN
     <Button ref={trigger} variant="secondary" size="sm" className={className} aria-haspopup="menu" aria-expanded={open} aria-controls={id}
       onClick={(event) => { event.stopPropagation(); wanted.current = 0; if (open) close(); else setOpen(true); }}
       onKeyDown={(event) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); wanted.current = event.key === "ArrowUp" ? -1 : 0; setOpen(true); } }} iconRight={<ChevronDown className="h-4 w-4" aria-hidden />}>VODs</Button>
-    {open ? createPortal(<div ref={menu} id={id} role="menu" aria-label="Game VODs" style={position} className="fixed z-[80] flex max-h-[70vh] w-72 max-w-[calc(100vw-1rem)] flex-col overflow-y-auto rounded-lg border-2 border-line bg-bg-surface p-1 shadow-hard"
+    {open ? createPortal(<div ref={menu} id={id} role="menu" aria-label="Game VODs" style={position} className="fixed z-[80] flex max-h-[70vh] w-72 max-w-[calc(100vw-1rem)] flex-col overflow-y-auto rounded-lg border border-line bg-bg-surface p-1 shadow-hard"
       onKeyDown={(event) => {
         if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); return; }
         if (event.key === "Tab") { close(); return; }

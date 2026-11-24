@@ -283,7 +283,7 @@ export function BuildCheckInQueue({
               {[0, 1, 2].map((row) => (
                 <div
                   key={row}
-                  className="h-28 rounded-xl border-2 border-line bg-bg-elevated motion-safe:animate-pulse"
+                  className="h-28 rounded-xl border border-line bg-bg-elevated motion-safe:animate-pulse"
                 />
               ))}
             </div>

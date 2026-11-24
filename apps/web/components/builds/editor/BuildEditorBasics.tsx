@@ -133,7 +133,7 @@ export function BuildEditorBasics({
         label={`Description (${draft.description.length}/${DESC_MAX_CHARS})`}
       >
         <textarea
-          className="block w-full resize-none rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-dim focus:border-accent-cyan focus:outline-none focus:ring-1 focus:ring-accent-cyan"
+          className="block w-full resize-none rounded-lg border border-border-strong bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-dim focus:border-accent-cyan focus:outline-none focus:ring-1 focus:ring-accent-cyan"
           rows={2}
           maxLength={DESC_MAX_CHARS}
           value={draft.description}
@@ -147,7 +147,7 @@ export function BuildEditorBasics({
       <Field label="Personal notes (private)" htmlFor={notesId} hint="Only you see these: scouting tells, timings to remember, reminders.">
         <textarea id={notesId} ref={notesRef} rows={3} maxLength={BUILD_NOTES_MAX_CHARS}
           value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-          className="block w-full resize-y rounded-lg border border-border bg-bg-elevated px-3 py-2 text-body text-text focus:border-accent-cyan focus:outline-none focus:ring-1 focus:ring-accent-cyan" />
+          className="block w-full resize-y rounded-lg border border-border-strong bg-bg-elevated px-3 py-2 text-body text-text focus:border-accent-cyan focus:outline-none focus:ring-1 focus:ring-accent-cyan" />
         {draft.notes.length >= 7000 ? <p role="status" aria-label="Personal notes character count" className="mt-1 text-micro tabular-nums text-text-muted">{draft.notes.length}/{BUILD_NOTES_MAX_CHARS}</p> : null}
       </Field>
 

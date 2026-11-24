@@ -81,7 +81,7 @@ export function BuildHistorySheet({
             const panelId = `history-${slug}-${item.rev}`;
             const isOpen = expanded === item.rev;
             return (
-              <li key={item.rev} className="rounded-xl border-2 border-line bg-bg-surface p-3">
+              <li key={item.rev} className="rounded-xl border border-line bg-bg-surface p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-semibold text-text">{String(item.build.name || "Untitled build")}</p>

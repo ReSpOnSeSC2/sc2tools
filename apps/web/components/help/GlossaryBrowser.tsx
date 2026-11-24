@@ -77,7 +77,7 @@ export function GlossaryBrowser({ variant = "page" }: { variant?: "page" | "comp
       <label htmlFor={inputId} className="block text-caption font-semibold text-text">Search glossary</label>
       <input id={inputId} value={query} onChange={event => { retireNavigation(); setQuery(event.target.value); }} aria-describedby={statusId}
         onKeyDown={event => { if (event.key === "Escape" && query) { event.preventDefault(); retireNavigation(); setQuery(""); } }}
-        className="min-h-11 w-full rounded-md border border-border bg-bg px-3 text-body text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+        className="min-h-11 w-full rounded-md border border-border-strong bg-bg px-3 text-body text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
       <p id={statusId} role="status" aria-live="polite" className="text-caption text-text-muted">{filtered.length} term{filtered.length === 1 ? "" : "s"}</p>
     </div>
     <nav aria-label="Glossary A to Z" className="flex flex-wrap gap-1">

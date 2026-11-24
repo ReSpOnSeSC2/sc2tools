@@ -143,7 +143,7 @@ export function HelpMenu({
         onKeyDown={onButtonKeyDown}
         className={[
           "hard-press inline-flex h-9 w-9 items-center justify-center rounded-full",
-          "border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated",
+          "border border-line bg-bg-surface text-text hover:bg-bg-elevated",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         ].join(" ")}
       >
@@ -157,7 +157,7 @@ export function HelpMenu({
           aria-labelledby={buttonId}
           onKeyDown={onMenuKeyDown}
           className={[
-            "fixed inset-x-4 top-[calc(env(safe-area-inset-top,0px)+3.5rem)] z-50 rounded-xl border-2 border-line bg-bg-surface p-1.5 shadow-hard",
+            "fixed inset-x-4 top-[calc(env(safe-area-inset-top,0px)+3.5rem)] z-50 rounded-xl border border-line bg-bg-surface p-1.5 shadow-hard",
             "sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72",
           ].join(" ")}
         >

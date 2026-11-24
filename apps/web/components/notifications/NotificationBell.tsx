@@ -219,20 +219,20 @@ function Bell_({ compact }: { compact: boolean }) {
         aria-label={count ? `Notifications, ${count} unread` : "Notifications"}
         onClick={togglePanel}
         className={[
-          "hard-press relative inline-flex items-center justify-center rounded-full border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated",
+          "hard-press relative inline-flex items-center justify-center rounded-full border border-line bg-bg-surface text-text hover:bg-bg-elevated",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           compact ? "h-8 min-w-8 px-2" : "h-9 min-w-9 px-2.5",
         ].join(" ")}
       >
         <Bell className={`h-4 w-4 ${unread.error ? "text-text-dim" : ""}`} aria-hidden />
         {count > 0 ? (
-          <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white">
+          <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white">
             {count > 99 ? "99+" : String(count)}
           </span>
         ) : null}
       </button>
       {/* eslint-disable-next-line jsx-a11y/no-autofocus -- The lazy panel focuses its first row only after the fresh page is ready and merged. */}
-      <Popover open={open} onClose={closePanel} anchorRef={bellRef} label="Notifications" id={panelId} autoFocus={false} className="border-2 border-line !p-2">
+      <Popover open={open} onClose={closePanel} anchorRef={bellRef} label="Notifications" id={panelId} autoFocus={false} className="border border-line !p-2">
       {open ? <NotificationPanel items={items} ready={scopeReady && scopeMerged} loading={!!(list.isLoading || list.isValidating)}
         listError={!!list.error} unreadError={!!unread.error} readError={readError} view={view} selectView={selectView} onClose={closePanel}
         retryList={() => { if (!scopeReady) setScopeVersion((value) => value + 1); else void list.mutate(); }}

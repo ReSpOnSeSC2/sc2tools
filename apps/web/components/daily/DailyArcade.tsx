@@ -154,7 +154,7 @@ function DailyResults({ day, practice, results, focus }: ResultsProps) {
       <Button className="min-h-11" loading={copy.pending} onClick={() => void copy.copy(text)}>Copy spoiler-free result</Button>
       {copy.copied && <p role="status" className="text-caption text-text-muted">Result copied.</p>}
       {copy.fallbackText && <textarea ref={setCopyInput} aria-label="Result to copy" readOnly value={copy.fallbackText}
-        className="block w-full rounded-md border border-line bg-bg-elevated p-2 text-body text-text focus-visible:ring-2 focus-visible:ring-accent" />}
+        className="block w-full rounded-md border border-border-strong bg-bg-elevated p-2 text-body text-text focus-visible:ring-2 focus-visible:ring-accent" />}
     </section>
   );
 }

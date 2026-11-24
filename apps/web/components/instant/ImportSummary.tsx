@@ -110,7 +110,7 @@ export function summaryRows(counts: UploadCounts): Array<{ label: string; value:
 function StopNotice({ reason, resetAt }: { reason: UploadStopReason; resetAt?: number }) {
   const copy = stopCopy(reason, resetAt);
   return (
-    <div role="alert" className="flex gap-2 rounded-lg border-2 border-warning/50 bg-warning/10 px-3 py-2 text-caption">
+    <div role="alert" className="flex gap-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-caption ring-1 ring-warning/50">
       <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-warning" aria-hidden />
       <p className="min-w-0">
         <span className="block font-semibold text-text">{copy.title}</span>
@@ -259,7 +259,7 @@ export function ImportSummary(props: ImportSummaryProps) {
   return (
     <section
       aria-label="Import summary"
-      className={["space-y-4 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
+      className={["space-y-4 rounded-xl border border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
     >
       <Headline counts={counts} autoFocus={autoFocus} />
       <CountRows counts={counts} />

@@ -154,7 +154,7 @@ function useBrowserUpload(
 function BackupToggle({ checked, onChange, disabled }: { checked: boolean; onChange: (next: boolean) => void; disabled: boolean }) {
   const hintId = useId();
   return (
-    <label className="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border-2 border-line bg-bg-surface px-3 py-2 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
+    <label className="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border border-line bg-bg-surface px-3 py-2 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
       <input
         type="checkbox"
         checked={checked}
@@ -180,7 +180,7 @@ function UploadProgressCard({ progress, onCancel }: { progress: BrowserUploadPro
     label.current?.focus();
   }, []);
   return (
-    <section aria-label="Upload progress" className="space-y-3 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard">
+    <section aria-label="Upload progress" className="space-y-3 rounded-xl border border-line bg-bg-surface p-4 shadow-hard">
       <p ref={label} tabIndex={-1} className="text-body font-semibold text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         {uploadStageLabel(progress)}
       </p>
@@ -195,7 +195,7 @@ function EngineErrorCard({ session, onStartOver }: { session: InstantSession; on
   if (!session.error) return null;
   const copy = errorCopy(session.error);
   return (
-    <div role="alert" className="space-y-2 rounded-xl border-2 border-danger/50 bg-danger/10 p-4">
+    <div role="alert" className="space-y-2 rounded-xl border border-danger/50 bg-danger/10 p-4 ring-1 ring-danger/50">
       <p className="text-body font-semibold text-text">{copy.title}</p>
       <p className="text-caption text-text-muted">{copy.hint}</p>
       <div className="flex flex-wrap gap-2">
@@ -318,7 +318,7 @@ function UploadResult({
   if (upload.status === "uploading") return <UploadProgressCard progress={upload.progress} onCancel={upload.cancel} />;
   if (upload.status === "error") {
     return (
-      <div role="alert" className="space-y-2 rounded-xl border-2 border-danger/50 bg-danger/10 p-4">
+      <div role="alert" className="space-y-2 rounded-xl border border-danger/50 bg-danger/10 p-4 ring-1 ring-danger/50">
         <p className="text-body font-semibold text-text">The upload stopped unexpectedly</p>
         <p className="text-caption text-text-muted">Try again — games already uploaded are skipped automatically.</p>
         <Button variant="secondary" onClick={() => void upload.retry()}>Try again</Button>

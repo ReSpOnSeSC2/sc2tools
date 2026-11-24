@@ -31,7 +31,7 @@ export function ReviewBoardFilters({ filters }: { filters: BoardFilters }) {
       className="flex flex-wrap items-end gap-2"
       onSubmit={(e) => e.preventDefault()}
     >
-      <div role="group" aria-label="Sort" className="inline-flex rounded-full border-2 border-line p-0.5 text-caption font-semibold">
+      <div role="group" aria-label="Sort" className="inline-flex rounded-full border border-line p-0.5 text-caption font-semibold">
         {(["hot", "new", "top"] as const).map((sort) => (
           <button
             key={sort}

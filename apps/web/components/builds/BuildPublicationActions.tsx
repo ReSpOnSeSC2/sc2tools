@@ -65,7 +65,7 @@ export function useBuildPublicationActions({ slug, name, enabled, onChanged, pub
     publication, publicSlug, copy, requestUnpublish: () => setConfirm(true),
     dialogs: <>
       <ConfirmDialog open={confirm} title={`Unpublish “${name}”?`} description="It disappears from Community builds. Your private copy, stats and notes stay." confirmLabel="Unpublish" intent="danger" focusCancel loading={pending} onClose={() => { if (!pending) setConfirm(false); }} onConfirm={unpublish} />
-      <Modal open={copyValue != null} onClose={() => setCopyValue(null)} title="Copy public link" initialFocusRef={copyRef}><input ref={copyRef} readOnly aria-label="Public build link" value={copyValue ?? ""} onFocus={(event) => event.currentTarget.select()} className="min-h-11 w-full rounded border border-border bg-bg-elevated px-3 text-caption text-text" /><p className="mt-2 text-caption text-text-muted">Copy the selected link to share this listing.</p></Modal>
+      <Modal open={copyValue != null} onClose={() => setCopyValue(null)} title="Copy public link" initialFocusRef={copyRef}><input ref={copyRef} readOnly aria-label="Public build link" value={copyValue ?? ""} onFocus={(event) => event.currentTarget.select()} className="min-h-11 w-full rounded border border-border-strong bg-bg-elevated px-3 text-caption text-text" /><p className="mt-2 text-caption text-text-muted">Copy the selected link to share this listing.</p></Modal>
       {message ? <p role="status" className="mt-2 break-words text-caption text-text-muted">{message}</p> : null}
     </>,
   };

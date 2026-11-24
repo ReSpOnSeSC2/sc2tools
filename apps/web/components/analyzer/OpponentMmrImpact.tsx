@@ -59,18 +59,18 @@ export function MmrImpactLeaders({
       <div className="grid gap-2 sm:grid-cols-2">
         {loading ? (
           <>
-            <div className="h-24 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
-            <div className="h-24 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
+            <div className="h-24 animate-pulse rounded-xl border border-line bg-bg-surface" />
+            <div className="h-24 animate-pulse rounded-xl border border-line bg-bg-surface" />
           </>
         ) : unavailable ? (
           <div
             role="alert"
-            className="rounded-xl border-2 border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning sm:col-span-2"
+            className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning sm:col-span-2 ring-1 ring-warning/40"
           >
             The verified MMR impact is temporarily unavailable.
           </div>
         ) : incomplete ? (
-          <div className="rounded-xl border-2 border-line bg-bg-surface px-4 py-3 text-sm text-text-muted sm:col-span-2">
+          <div className="rounded-xl border border-line bg-bg-surface px-4 py-3 text-sm text-text-muted sm:col-span-2">
             Grouped MMR leaders need the complete opponent history. Narrow the global filters to see them.
           </div>
         ) : mostWon || mostLost ? (
@@ -87,7 +87,7 @@ export function MmrImpactLeaders({
             />
           </>
         ) : (
-          <div className="rounded-xl border-2 border-line bg-bg-surface px-4 py-3 text-sm text-text-muted sm:col-span-2">
+          <div className="rounded-xl border border-line bg-bg-surface px-4 py-3 text-sm text-text-muted sm:col-span-2">
             No verified opponent MMR pairs match the current filters yet.
           </div>
         )}
@@ -110,7 +110,7 @@ function MmrLeaderCard({
   const Icon = won ? TrendingUp : TrendingDown;
   if (!opponent) {
     return (
-      <div className="rounded-xl border-2 border-line bg-bg-surface px-4 py-3 text-sm text-text-dim">
+      <div className="rounded-xl border border-line bg-bg-surface px-4 py-3 text-sm text-text-dim">
         No net MMR {won ? "gains" : "losses"} in this range.
       </div>
     );
@@ -146,7 +146,7 @@ function MmrLeaderCard({
     </>
   );
   const cardClass =
-    "group flex min-h-[92px] items-center gap-3 rounded-xl border-2 border-line bg-bg-surface px-4 py-3 text-left shadow-hard";
+    "group flex min-h-[92px] items-center gap-3 rounded-xl border border-line bg-bg-surface px-4 py-3 text-left shadow-hard";
   if (!openId) return <div className={cardClass}>{content}</div>;
   return (
     <button

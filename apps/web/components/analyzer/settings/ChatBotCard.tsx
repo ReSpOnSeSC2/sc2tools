@@ -210,7 +210,7 @@ function OwnerChatBotCard({ twitchChannel, getToken, isCurrent }: { twitchChanne
             value={draft.username}
             onChange={(e) => set({ username: e.target.value })}
             placeholder="sc2toolsbot"
-            className="w-full rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
+            className="w-full rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
           />
         </label>
         <label className="block w-56 min-w-0">
@@ -223,7 +223,7 @@ function OwnerChatBotCard({ twitchChannel, getToken, isCurrent }: { twitchChanne
             onChange={(e) => set({ token: e.target.value })}
             placeholder={hasToken ? "•••••••• (leave blank to keep)" : "oauth:…"}
             autoComplete="off"
-            className="w-full rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
+            className="w-full rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
           />
         </label>
         <label className="block w-44 min-w-0">
@@ -233,7 +233,7 @@ function OwnerChatBotCard({ twitchChannel, getToken, isCurrent }: { twitchChanne
             value={draft.channel}
             onChange={(e) => set({ channel: e.target.value })}
             placeholder={twitchChannel || "your channel"}
-            className="w-full rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
+            className="w-full rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
           />
         </label>
       </div>

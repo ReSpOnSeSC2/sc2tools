@@ -103,7 +103,7 @@ export function RuleRow({
     // Row separators sit on the <li> (not the list's divide-*), because a
     // divide colour would override the stripe's left-border colour.
     <li
-      className={`border-l-2 ${RULE_TONE_STRIPE[ruleTone(rule)]} border-t border-t-border px-3 py-2 text-caption first:border-t-0`}
+      className={`border-l ${RULE_TONE_STRIPE[ruleTone(rule)]} border-t border-t-border px-3 py-2 text-caption first:border-t-0`}
     >
       <div
         role="group"
@@ -279,7 +279,7 @@ function CountField({
         onCommit(n);
       }}
       onBlur={() => setText(String(value))}
-      className="h-8 w-12 rounded-md border-2 border-line bg-bg-surface px-1 text-center font-mono text-caption tabular-nums text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+      className="h-8 w-12 rounded-md border border-border-strong bg-bg-surface px-1 text-center font-mono text-caption tabular-nums text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
     />
   );
 }

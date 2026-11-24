@@ -731,7 +731,7 @@ function extractErr(err: unknown): string {
 
 function FirstRunEmptyState({ onCreate }: { onCreate: (choice: BuildStartChoice) => void }) {
   return (
-    <section className="space-y-4 rounded-2xl border-2 border-line bg-bg-surface p-4 shadow-hard sm:p-6">
+    <section className="space-y-4 rounded-2xl border border-line bg-bg-surface p-4 shadow-hard sm:p-6">
       <h3 className="text-h3 font-semibold">No custom builds yet</h3>
       <p className="text-body text-text-muted">Choose a starting point. From a game’s build order, you can also use “Save as new build” to capture that replay’s opener.</p>
       <BuildStartCards onChoose={onCreate} community />

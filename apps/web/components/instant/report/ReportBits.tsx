@@ -69,7 +69,7 @@ export function ReportCard({ title, subtitle, testId, children, className = "" }
     <section
       data-testid={testId}
       aria-label={title}
-      className={["min-w-0 overflow-hidden rounded-xl border-2 border-line bg-bg-surface shadow-hard", className]
+      className={["min-w-0 overflow-hidden rounded-xl border border-line bg-bg-surface shadow-hard", className]
         .filter(Boolean)
         .join(" ")}
     >

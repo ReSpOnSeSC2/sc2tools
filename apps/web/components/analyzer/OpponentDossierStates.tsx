@@ -37,7 +37,7 @@ export function DossierSkeleton() {
 /** The API has no opponent with this id in the signed-in player's games. */
 export function OpponentNotFound() {
   return (
-    <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard">
+    <div className="rounded-xl border border-line bg-bg-surface shadow-hard">
       <EmptyStatePanel
         icon={<UserX className="h-5 w-5" aria-hidden />}
         title="Not in your history"

@@ -4,7 +4,7 @@ export type ThemeMode = Theme | "system";
 export const THEME_STORAGE_KEY = "sc2tools.theme";
 export const THEME_ATTRIBUTE = "data-theme";
 export const THEME_MODE_ATTRIBUTE = "data-theme-mode";
-export const THEME_COLORS = { light: "#f4f6fa", dark: "#06090e" } as const;
+export const THEME_COLORS = { light: "#f5f7fa", dark: "#05070b" } as const;
 const MEDIA = "(prefers-color-scheme: light)";
 const isBrowser = () => typeof window !== "undefined";
 const valid = (value: unknown): value is ThemeMode => value === "light" || value === "dark" || value === "system";

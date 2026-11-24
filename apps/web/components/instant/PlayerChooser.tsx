@@ -53,7 +53,7 @@ export function PlayerChooser({ candidates, onChoose, onCancel, className = "", 
   return (
     <section
       aria-labelledby={headingId}
-      className={["space-y-4 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
+      className={["space-y-4 rounded-xl border border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
     >
       <div aria-live="polite" className="space-y-1">
         <h2 id={headingId} ref={heading} tabIndex={-1} className="font-display text-h3 text-text focus:outline-none">
@@ -70,7 +70,7 @@ export function PlayerChooser({ candidates, onChoose, onCancel, className = "", 
               type="button"
               onClick={() => onChoose(candidate.toon)}
               className={[
-                "flex min-h-[44px] w-full items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-3 py-2 text-left",
+                "flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-line bg-bg-surface px-3 py-2 text-left",
                 "text-body font-semibold text-text transition-colors motion-reduce:transition-none",
                 "hover:border-accent hover:bg-bg-elevated",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",

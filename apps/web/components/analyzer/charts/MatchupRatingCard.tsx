@@ -43,7 +43,7 @@ function RatingPanel({ row }: { row: MatchupRatingSeries }) {
     <RatingPlot row={row} plot={plot} index={index} onChoose={setChosen} describedBy={`${id}-help ${id}-selection`} />
     {selected && <div className="mt-3 space-y-1">
       <label className="text-micro text-text-muted" htmlFor={`${id}-window`}>Inspect window</label>
-      <select id={`${id}-window`} aria-label={label} aria-describedby={`${id}-help ${id}-selection`} className="min-h-11 w-full rounded border border-border bg-bg-surface px-2 text-caption text-text" value={index} onChange={event => setChosen(Number(event.target.value))}>{row.points.map((point, i) => <option key={i} value={i}>Game {i + 1} · {formatDate(new Date(point.date))}</option>)}</select>
+      <select id={`${id}-window`} aria-label={label} aria-describedby={`${id}-help ${id}-selection`} className="min-h-11 w-full rounded border border-border-strong bg-bg-surface px-2 text-caption text-text" value={index} onChange={event => setChosen(Number(event.target.value))}>{row.points.map((point, i) => <option key={i} value={i}>Game {i + 1} · {formatDate(new Date(point.date))}</option>)}</select>
       <div id={`${id}-selection`} role="status" aria-live="polite" aria-atomic="true" className="space-y-1 tabular-nums">
         <p className="text-caption font-semibold text-text">Games {Math.max(1, index - selected.games + 2)}–{index + 1} · ending {formatDate(new Date(selected.date))}</p>
         <p className="text-caption text-text">{selected.perfRating == null ? "No finite rating" : `${formatNumber(Math.round(selected.perfRating))} performance rating`} · {selected.ratedGames}/{selected.games} rated · {selected.excludedNoMmr} missing</p>

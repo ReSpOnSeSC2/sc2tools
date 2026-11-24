@@ -100,11 +100,11 @@ export function BrowserVsAgentTable({ className = "" }: BrowserVsAgentTableProps
         role="region"
         aria-label="Browser vs desktop agent comparison"
         tabIndex={0}
-        className="max-w-full overflow-x-auto rounded-xl border-2 border-line bg-bg-surface shadow-hard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="max-w-full overflow-x-auto rounded-xl border border-line bg-bg-surface shadow-hard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <table aria-label={TITLE} className="w-full table-fixed border-collapse text-left text-caption">
           <thead>
-            <tr className="border-b-2 border-line">
+            <tr className="border-b border-line">
               <th scope="col" className={`${CELL} font-semibold text-text`}>Feature</th>
               <th scope="col" className={`${CELL} font-semibold text-text`}>Browser</th>
               <th scope="col" className={`${CELL} font-semibold text-text`}>Desktop agent</th>

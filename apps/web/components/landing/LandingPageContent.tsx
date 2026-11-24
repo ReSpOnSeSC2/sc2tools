@@ -255,7 +255,7 @@ function HeroPeekSlide({
         </h2>
         <p className="text-body-lg text-text-muted">{body}</p>
       </div>
-      <div className="overflow-hidden rounded-md border-2 border-line bg-bg-elevated/40">
+      <div className="overflow-hidden rounded-md border border-line bg-bg-elevated/40">
         <Image
           src={imageSrc}
           alt={imageAlt}
@@ -366,7 +366,7 @@ function ImprovementChapter() {
 
 function ChapterNote({ title, body }: { title: string; body: string }) {
   return (
-    <div className="border-t-2 border-line pt-4">
+    <div className="border-t border-line pt-4">
       <p className="font-serif text-h4 font-semibold text-text">{title}</p>
       <p className="mt-2 text-caption text-text-muted">{body}</p>
     </div>
@@ -509,7 +509,7 @@ function IncludedChapter() {
       />
       <div className="mt-10 grid gap-6 lg:grid-cols-3">
         {INCLUDED_GROUPS.map(({ title, stat, icon: Icon, items }) => (
-          <article key={title} className="rounded-md border-2 border-line bg-bg-surface p-5 shadow-hard sm:p-6">
+          <article key={title} className="rounded-md border border-line bg-bg-surface p-5 shadow-hard sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="kicker">{title}</p>
@@ -546,7 +546,7 @@ function LandingHowItWorks() {
           { num: "02", title: "Play normally", body: "Every finished replay is read, classified and synced automatically in the background." },
           { num: "03", title: "Review, practice, stream", body: "Your dashboard, coaching views and OBS sources update between games." },
         ].map((step) => (
-          <div key={step.num} className="border-t-2 border-line pt-5">
+          <div key={step.num} className="border-t border-line pt-5">
             <span className="block font-serif text-display-lg font-normal leading-none text-editorial">{step.num}</span>
             <h3 className="mt-4 font-serif text-h3 font-semibold text-text">{step.title}</h3>
             <p className="mt-2 text-body text-text-muted">{step.body}</p>
@@ -576,7 +576,7 @@ function SupportTeaser() {
 function LandingFinalCta() {
   return (
     <section className="mt-20 md:mt-24">
-      <div className="rounded-md border-2 border-accent bg-bg-surface px-6 py-12 shadow-hard md:px-12 md:py-16">
+      <div className="rounded-md border border-accent bg-bg-surface px-6 py-12 shadow-hard md:px-12 md:py-16 ring-1 ring-accent">
         <p className="kicker">Ready for the next game?</p>
         <h2 className="mt-4 max-w-3xl font-serif text-[40px] font-semibold leading-[1.04] tracking-[-0.01em] text-text md:text-display-lg">
           Your replay already has the answers.{" "}

@@ -43,7 +43,7 @@ export function BuildsPublicIntro({ returnTo = "/builds" }: { returnTo?: string 
 
       <section
         aria-labelledby="builds-intro-how"
-        className="relative overflow-hidden rounded-2xl border-2 border-line bg-bg-surface p-5 shadow-hard sm:p-8"
+        className="relative overflow-hidden rounded-2xl border border-line bg-bg-surface p-5 shadow-hard sm:p-8"
       >
         <GlowHalo color="cyan" position="top" opacity={0.6} size={70} />
         <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-center">
@@ -57,7 +57,7 @@ export function BuildsPublicIntro({ returnTo = "/builds" }: { returnTo?: string 
                   <li key={step.title} className="flex gap-3">
                     <span
                       aria-hidden
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-line bg-accent/15 font-display text-caption font-bold text-accent"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-accent/15 font-display text-caption font-bold text-accent"
                     >
                       {index + 1}
                     </span>
@@ -70,7 +70,7 @@ export function BuildsPublicIntro({ returnTo = "/builds" }: { returnTo?: string 
               </ol>
             </div>
 
-            <div className="space-y-3 rounded-xl border-2 border-line bg-bg-elevated/60 p-4">
+            <div className="space-y-3 rounded-xl border border-line bg-bg-elevated/60 p-4">
               <h3 className="text-body font-bold text-text">Sign up to start your library</h3>
               <p className="flex items-start gap-2 text-caption text-text-muted">
                 <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -110,7 +110,7 @@ export function BuildsPublicIntro({ returnTo = "/builds" }: { returnTo?: string 
           </div>
 
           <figure className="space-y-2">
-            <div className="overflow-hidden rounded-xl border-2 border-line bg-bg-elevated/40">
+            <div className="overflow-hidden rounded-xl border border-line bg-bg-elevated/40">
               <Image
                 src="/landing/build-editor.png"
                 alt="The SC2 Tools build editor: a replay's build order on one side, the rules you pick from it on the other"

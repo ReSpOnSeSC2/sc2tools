@@ -32,7 +32,7 @@ export function YouTubeFacade({ video }: { video: YouTubeFacadeVideo }) {
   const urls = safeVideoUrls(video);
   return (
     <div className="space-y-2">
-      <div className="relative aspect-video w-full overflow-hidden rounded-xl border-2 border-line bg-bg-elevated shadow-hard">
+      <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-line bg-bg-elevated shadow-hard">
         {isPlaying && urls.embed ? (
           <iframe
             src={`${urls.embed}?${EMBED_PARAMS}`}
@@ -63,7 +63,7 @@ export function YouTubeFacade({ video }: { video: YouTubeFacadeVideo }) {
                 className="absolute inset-0 h-full w-full object-cover"
               />
             ) : null}
-            <span className="relative flex h-14 w-14 items-center justify-center rounded-full border-2 border-line bg-danger text-white shadow-hard motion-safe:transition-transform motion-safe:group-hover:scale-105">
+            <span className="relative flex h-14 w-14 items-center justify-center rounded-full border border-line bg-danger text-white shadow-hard motion-safe:transition-transform motion-safe:group-hover:scale-105">
               <Play className="ml-0.5 h-6 w-6 fill-current" aria-hidden />
             </span>
           </button>

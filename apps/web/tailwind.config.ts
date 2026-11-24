@@ -38,6 +38,13 @@ const config: Config = {
           hover: channel("--accent-hover"),
           cyan: channel("--accent-cyan"),
         },
+        // Command Glass aurora stops: cyan -> azure -> violet. Decorative
+        // gradients only (hero type, beams, rings); see globals.css.
+        aurora: {
+          1: channel("--aurora-1"),
+          2: channel("--aurora-2"),
+          3: channel("--aurora-3"),
+        },
         // Warm "signal" colour — reserved for rare emphasis (NEW flags,
         // hero numbers). The single warm note against the cool palette.
         signal: {
@@ -69,7 +76,8 @@ const config: Config = {
           DEFAULT: channel("--border"),
           strong: channel("--border-strong"),
         },
-        // Courtside structural outline — the bold 2px line on cards/buttons.
+        // Card and panel edge hairline (decorative; controls use
+        // border-border-strong). See ADR 0099.
         line: channel("--line"),
       },
       // Text and filled controls need different contrast on each surface.
@@ -104,8 +112,50 @@ const config: Config = {
       boxShadow: {
         "halo-cyan": "0 0 60px var(--halo-cyan)",
         "halo-accent": "0 0 60px var(--halo-accent)",
-        // The Courtside signature: a hard offset shadow with no blur.
+        // Resting elevation for cards and controls: a soft layered shadow
+        // with a faint top highlight. `hard` is the legacy name of the same
+        // token, kept so existing call-sites follow the system.
         hard: "var(--shadow-hard)",
+        card: "var(--shadow-card)",
+        // Floating surfaces: dialogs, popovers, menus, toasts, sheets.
+        pop: "var(--shadow-pop)",
+        // Interactive emphasis: a cyan edge and glow (hover, featured).
+        glow: "var(--shadow-glow)",
+      },
+      backgroundImage: {
+        sheen: "var(--sheen)",
+        aurora:
+          "linear-gradient(100deg, rgb(var(--aurora-1)) 0%, rgb(var(--aurora-2)) 55%, rgb(var(--aurora-3)) 100%)",
+      },
+      // Softer, more modern corners across the existing scale: every
+      // rounded-md/lg/xl/2xl call-site picks this up without an edit.
+      borderRadius: {
+        md: "0.4375rem",
+        lg: "0.625rem",
+        xl: "0.875rem",
+        "2xl": "1.125rem",
+        "3xl": "1.5rem",
+      },
+      keyframes: {
+        "rise-in": {
+          from: { opacity: "0", transform: "translateY(6px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "scale-in": {
+          from: { opacity: "0", transform: "translateY(4px) scale(0.98)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        "sheet-up": {
+          from: { transform: "translateY(100%)" },
+          to: { transform: "translateY(0)" },
+        },
+      },
+      animation: {
+        "rise-in": "rise-in var(--dur-slow) var(--ease-out) both",
+        "scale-in": "scale-in var(--dur-base) var(--ease-out) both",
+        "sheet-up": "sheet-up var(--dur-slow) var(--ease-out) both",
+        shimmer: "shimmer 1.6s var(--ease-in-out) infinite",
+        "beam-pulse": "beamPulse 2.8s var(--ease-in-out) infinite",
       },
       fontFamily: {
         // Body/UI face — Hanken Grotesk via next/font (`--font-sans`), set on
@@ -117,31 +167,36 @@ const config: Config = {
           "system-ui",
           "sans-serif",
         ],
-        // Display face — Bricolage Grotesque (`--font-display`). The athletic
-        // grotesque voice for headings, the wordmark, and big numbers.
+        // Display — the same variable Hanken Grotesk at heavier weights with
+        // tight tracking. Command Glass is one family: headings, the
+        // wordmark and big numbers stay in voice with the UI around them.
         display: [
-          "var(--font-display)",
-          "Bricolage Grotesque",
+          "var(--font-sans)",
           "Hanken Grotesk",
           "ui-sans-serif",
           "system-ui",
           "sans-serif",
         ],
-        // Editorial serif — Fraunces (`--font-serif`). The single serif that
-        // pairs with the Hanken sans on the magazine landing page (1 sans +
-        // 1 serif, not two grotesques). Loaded in app/layout.tsx.
+        // `font-serif` stays as a utility name for older long-form markup
+        // but resolves to the same family: the serif magazine treatment was
+        // retired with the Command Glass system (ADR 0099).
         serif: [
-          "var(--font-serif)",
-          "Fraunces",
-          "ui-serif",
-          "Georgia",
-          "Cambria",
-          "Times New Roman",
-          "serif",
+          "var(--font-sans)",
+          "Hanken Grotesk",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
         ],
-        // Numeric/tabular monospace — system stack (Courtside uses no custom
-        // mono face).
-        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        // Numeric/technical monospace — the platform's modern mono first.
+        mono: [
+          "ui-monospace",
+          "SFMono-Regular",
+          "Cascadia Mono",
+          "Segoe UI Mono",
+          "Menlo",
+          "Consolas",
+          "monospace",
+        ],
       },
       // Custom motion curves so transitions read intentional rather than
       // using the browser-default ease. `--ease-*`/`--dur-*` live in
@@ -162,12 +217,12 @@ const config: Config = {
         // utilities in globals.css.
         // Courtside: heavier display weights + tighter tracking for the
         // athletic-editorial voice.
-        "display-xl": ["4rem", { lineHeight: "4.25rem", letterSpacing: "-0.03em", fontWeight: "800" }],
-        "display-lg": ["3rem", { lineHeight: "3.25rem", letterSpacing: "-0.03em", fontWeight: "800" }],
-        h1: ["2.25rem", { lineHeight: "2.625rem", letterSpacing: "-0.02em", fontWeight: "700" }],
-        h2: ["1.75rem", { lineHeight: "2.125rem", letterSpacing: "-0.02em", fontWeight: "700" }],
-        h3: ["1.375rem", { lineHeight: "1.75rem", letterSpacing: "-0.015em", fontWeight: "700" }],
-        h4: ["1.125rem", { lineHeight: "1.5rem", letterSpacing: "-0.01em", fontWeight: "700" }],
+        "display-xl": ["4rem", { lineHeight: "4.25rem", letterSpacing: "-0.04em", fontWeight: "800" }],
+        "display-lg": ["3rem", { lineHeight: "3.25rem", letterSpacing: "-0.035em", fontWeight: "800" }],
+        h1: ["2.25rem", { lineHeight: "2.625rem", letterSpacing: "-0.03em", fontWeight: "750" }],
+        h2: ["1.75rem", { lineHeight: "2.125rem", letterSpacing: "-0.025em", fontWeight: "700" }],
+        h3: ["1.375rem", { lineHeight: "1.75rem", letterSpacing: "-0.02em", fontWeight: "700" }],
+        h4: ["1.125rem", { lineHeight: "1.5rem", letterSpacing: "-0.015em", fontWeight: "650" }],
         "body-lg": ["1.0625rem", { lineHeight: "1.625rem" }],
         body: ["0.9375rem", { lineHeight: "1.5rem" }],
         caption: ["0.8125rem", { lineHeight: "1.25rem" }],

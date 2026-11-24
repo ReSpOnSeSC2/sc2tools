@@ -321,7 +321,7 @@ function DailyPulseFrame({
   return (
     <section
       aria-label="Daily Pulse"
-      className="overflow-hidden rounded-xl border-2 border-line bg-bg-surface shadow-hard"
+      className="overflow-hidden rounded-xl border border-line bg-bg-surface shadow-hard"
     >
       {pending ? (
         <div className="flex min-h-[48px] w-full items-center justify-between gap-3 px-4 py-3">
@@ -356,7 +356,7 @@ function DailyPulseGate({ onLoad }: { onLoad: () => void }) {
   return (
     <section
       aria-label="Daily Pulse"
-      className="overflow-hidden rounded-xl border-2 border-line bg-bg-surface shadow-hard"
+      className="overflow-hidden rounded-xl border border-line bg-bg-surface shadow-hard"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="min-w-0 flex-1 basis-56">

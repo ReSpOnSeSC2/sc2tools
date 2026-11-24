@@ -241,7 +241,7 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
 
       <RequestHeader data={data} onChanged={refresh} onClosed={() => setLocallyClosed(true)} currentTime={currentTime} />
       {refreshError || pageReq.error ? (
-        <div role="alert" className="rounded-xl border-2 border-warning/50 bg-warning/10 p-3 text-caption text-text">
+        <div role="alert" className="rounded-xl border border-warning/50 bg-warning/10 p-3 text-caption text-text ring-1 ring-warning/50">
           <p>The latest review thread couldn&apos;t be loaded. Saved changes won&apos;t be submitted again.</p>
           <Button variant="ghost" size="sm" loading={refreshing} onClick={() => void refresh()}>Retry</Button>
         </div>
@@ -288,7 +288,7 @@ function ReviewPageContent({ initial }: { initial: ReviewPageData }) {
               onStart={() => setComposing(currentTime)}
             />
           ) : (
-            <p className="flex items-center gap-2 rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted">
+            <p className="flex items-center gap-2 rounded-xl border border-line bg-bg-surface p-3 text-body text-text-muted">
               <Lock className="h-4 w-4" aria-hidden /> This request is closed to new comments.
             </p>
           )}
@@ -395,7 +395,7 @@ export function RequestHeader({ data, onChanged, onClosed, currentTime = 0 }: { 
     finally { setReporting(false); }
   }
   return (
-    <><header className="relative rounded-xl border-2 border-line bg-bg-surface shadow-hard">
+    <><header className="relative rounded-xl border border-line bg-bg-surface shadow-hard">
       <MapArtwork mapName={r.game.map} size="hero" eager className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl border-0 opacity-25" />
       <span aria-hidden className="absolute inset-0 rounded-xl bg-gradient-to-r from-bg-surface via-bg-surface/95 to-bg-surface/70" />
       <div className="relative space-y-3 p-4 sm:p-5">
@@ -465,7 +465,7 @@ export function RequestHeader({ data, onChanged, onClosed, currentTime = 0 }: { 
   );
 }
 
-const GATE_CLASS = "rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted";
+const GATE_CLASS = "rounded-xl border border-line bg-bg-surface p-3 text-body text-text-muted";
 const GATE_LINK_CLASS = "inline-flex min-h-9 items-center text-caption font-semibold";
 
 /** "Why?" next to a gate: the article section on who can review. */
@@ -498,7 +498,7 @@ export function ComposerGate({
   const v = data.viewer;
   if (!signedIn || !v.signedIn) {
     return (
-      <div className="rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted">
+      <div className="rounded-xl border border-line bg-bg-surface p-3 text-body text-text-muted">
         <Link href={signInHref(data.request.url)} className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">Sign in</Link>
         {" "}to comment, vote or mark reviews helpful.
       </div>

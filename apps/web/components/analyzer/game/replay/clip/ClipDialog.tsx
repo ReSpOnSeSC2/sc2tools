@@ -302,11 +302,11 @@ export default function ClipDialog({
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1 text-text-muted">Start (m:ss)
               <input value={startText} onChange={(event) => setStartText(event.target.value)} inputMode="text" autoComplete="off"
-                aria-describedby={`${id}-range`} className="min-h-11 w-24 rounded-md border border-border bg-bg-surface px-3 tabular-nums text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+                aria-describedby={`${id}-range`} className="min-h-11 w-24 rounded-md border border-border-strong bg-bg-surface px-3 tabular-nums text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
             </label>
             <label className="flex flex-col gap-1 text-text-muted">End (m:ss)
               <input value={endText} onChange={(event) => setEndText(event.target.value)} inputMode="text" autoComplete="off"
-                aria-describedby={`${id}-range`} className="min-h-11 w-24 rounded-md border border-border bg-bg-surface px-3 tabular-nums text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+                aria-describedby={`${id}-range`} className="min-h-11 w-24 rounded-md border border-border-strong bg-bg-surface px-3 tabular-nums text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
             </label>
             <Button variant="secondary" size="sm" className="min-h-11" onClick={() => setRange(defaultClipRange(playback.stats, time, playback.gameLength, rangeWindow))}>Nearest fight</Button>
             <Button variant="secondary" size="sm" className="min-h-11" onClick={() => setRange(clampClipRange({ start: time - 10, end: time + 10 }, playback.gameLength, rangeWindow))}>Around {formatClock(time)}</Button>

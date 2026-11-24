@@ -8,7 +8,7 @@ import { reviewMomentUrl } from "@/lib/reviewNavigation";
 import { useToastOptional } from "@/components/ui/Toast";
 import { ReviewMenu, type ReviewMenuItem } from "./ReviewMenu";
 
-const BUTTON = "inline-flex min-h-10 items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-3.5 text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+const BUTTON = "inline-flex min-h-10 items-center gap-2 rounded-full border border-line bg-bg-surface px-3.5 text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
 export function ReviewShareMenu({ path, question, matchup, currentTime = 0 }: {
   path: string; question: string; matchup: string | null;

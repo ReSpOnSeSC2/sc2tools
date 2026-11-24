@@ -24,7 +24,7 @@ export function MacroSummaryCard({ backfill }: { backfill: MacroBackfill }) {
   if (!data || data.gamesTotal === 0) return null;
   const coverage = Math.round(data.gamesWithMacro / data.gamesTotal * 100);
   return <Card><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-    <div className="flex items-start gap-4"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2 border-line bg-bg-elevated"><Gauge className="h-6 w-6 text-accent-cyan" aria-hidden /></div>
+    <div className="flex items-start gap-4"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-line bg-bg-elevated"><Gauge className="h-6 w-6 text-accent-cyan" aria-hidden /></div>
       <div><div className="text-micro uppercase tracking-wider text-text-dim">Average macro score</div><div className={`text-3xl font-bold tabular-nums ${scoreToneTextClass(data.avgScore)}`}>{data.avgScore ?? "—"}</div><div className="mt-0.5 text-caption text-text-dim">{formatNumber(data.gamesWithMacro)} of {formatNumber(data.gamesTotal)} games scored ({coverage}%)</div></div>
     </div>
     {data.gamesMissingMacro > 0 || backfill.running ? <div className="space-y-1.5 lg:text-right">

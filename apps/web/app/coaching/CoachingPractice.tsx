@@ -484,7 +484,7 @@ function PracticeWorkspace({ role }: { role: CoachingRole }) {
       <Card variant="feature" className="relative">
         <div className="grid gap-5 p-1 sm:grid-cols-[1fr_auto] sm:items-center">
           <div className="flex min-w-0 items-start gap-4">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 border-line bg-accent/15 text-accent-cyan shadow-hard">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-line bg-accent/15 text-accent-cyan shadow-hard">
               <Target className="h-5 w-5" aria-hidden />
             </span>
             <div>
@@ -698,10 +698,10 @@ function PracticeWorkspace({ role }: { role: CoachingRole }) {
 function PracticeSkeleton() {
   return (
     <div className="space-y-5" aria-label="Loading practice plans">
-      <div className="h-40 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
+      <div className="h-40 animate-pulse rounded-xl border border-line bg-bg-surface" />
       <div className="grid gap-4 xl:grid-cols-2">
-        <div className="h-80 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
-        <div className="h-80 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
+        <div className="h-80 animate-pulse rounded-xl border border-line bg-bg-surface" />
+        <div className="h-80 animate-pulse rounded-xl border border-line bg-bg-surface" />
       </div>
     </div>
   );

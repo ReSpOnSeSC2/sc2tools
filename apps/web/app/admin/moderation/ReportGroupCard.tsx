@@ -82,6 +82,6 @@ export function ReportGroupCard({ group, onResolved }: { group: ReportGroup; onR
 
 function ResolutionNote({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return <Field label="Resolution note (optional)" hint={`${value.length}/500 characters`}>
-    <textarea value={value} maxLength={500} onChange={(e) => onChange(e.target.value)} className="min-h-24 rounded-lg border-2 border-line bg-bg-surface p-2 text-text" />
+    <textarea value={value} maxLength={500} onChange={(e) => onChange(e.target.value)} className="min-h-24 rounded-lg border border-border-strong bg-bg-surface p-2 text-text" />
   </Field>;
 }

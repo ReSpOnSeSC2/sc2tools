@@ -94,11 +94,11 @@ export function OpponentReplayHistory({
       {sampled ? <p className="mb-3 text-caption text-text-muted">Selected analyzed sample{data?.membership ? ` · ${data.membership.requestedGameCount} linked games` : ""}.</p> : null}
       <div className="mb-3 flex flex-wrap gap-3 text-caption">
         <ReplayCsvExportButton query={pagePath.split("?")[1] || ""} opponentId={opponentContext.pulseId} />
-        <label>Show: <select aria-label="Filter replay results" className="min-h-11 rounded border border-border bg-bg-surface px-2" value={result}
+        <label>Show: <select aria-label="Filter replay results" className="min-h-11 rounded border border-border-strong bg-bg-surface px-2" value={result}
           onChange={(event) => { setResult(event.target.value); setCursor(null); setNewerCursors([]); }}>
           <option value="">All results</option><option value="win">Wins</option><option value="loss">Losses</option>
         </select></label>
-        {onSelectMap ? <label>Map: <select aria-label="Filter dossier map" className="min-h-11 rounded border border-border bg-bg-surface px-2" value={selectedMap || ""}
+        {onSelectMap ? <label>Map: <select aria-label="Filter dossier map" className="min-h-11 rounded border border-border-strong bg-bg-surface px-2" value={selectedMap || ""}
           onChange={(event) => onSelectMap(event.target.value || null)}><option value="">All maps</option>{maps.map((map) => <option key={map}>{map}</option>)}</select></label> : null}
       </div>
       {waitingWithoutRows ? (

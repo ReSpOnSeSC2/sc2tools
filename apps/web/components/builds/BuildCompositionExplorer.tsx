@@ -97,7 +97,7 @@ export function BuildCompositionExplorer({ payload, apiPath, onOpenGames }: {
       </div>
       <label htmlFor={`${id}-compare`} className="min-w-0 space-y-2 text-caption font-medium text-text">
         <span className="block">Compare a game <span className="font-normal text-text-muted">(optional)</span></span>
-        <select id={`${id}-compare`} value={selectedId} disabled={!selectionGames.length} onChange={(event) => setSelection(event.target.value)} className={`min-h-11 w-full min-w-0 max-w-full rounded-md border border-border bg-bg-surface px-3 text-caption font-normal text-text ${focus}`}>
+        <select id={`${id}-compare`} value={selectedId} disabled={!selectionGames.length} onChange={(event) => setSelection(event.target.value)} className={`min-h-11 w-full min-w-0 max-w-full rounded-md border border-border-strong bg-bg-surface px-3 text-caption font-normal text-text ${focus}`}>
           <option value="">Build overview</option>
           {selectionGames.map((game, index) => <option key={game.gameId} value={game.gameId}>{gameLabel(game, index)}</option>)}
         </select>

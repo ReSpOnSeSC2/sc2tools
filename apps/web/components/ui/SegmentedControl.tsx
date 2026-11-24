@@ -86,7 +86,7 @@ export function SegmentedControl<T extends string>({
       aria-label={labelledBy ? undefined : label}
       aria-labelledby={labelledBy}
       className={[
-        "inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-full border-2 border-line bg-bg-surface p-0.5",
+        "inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-full border border-line bg-bg-surface p-0.5",
         className,
       ]
         .filter(Boolean)

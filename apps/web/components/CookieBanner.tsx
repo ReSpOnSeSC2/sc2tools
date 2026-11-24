@@ -30,7 +30,7 @@ export function CookieBanner() {
   return <div ref={panel} data-cookie-banner role="dialog" aria-labelledby="cookie-title" aria-describedby="cookie-body" tabIndex={-1}
     onKeyDown={(event) => { if (event.key === "Escape" && reopened) { event.preventDefault(); close(); } }}
     className="fixed inset-x-0 bottom-above-chrome z-banner px-3 focus:outline-none sm:left-auto sm:right-4 sm:max-w-md sm:px-0">
-    <div className="rounded-xl border-2 border-border bg-bg-surface p-4 shadow-hard">
+    <div className="rounded-xl border border-border bg-bg-surface p-4 shadow-hard">
       <div className="flex items-center justify-between gap-3"><h2 id="cookie-title" className="text-body font-semibold text-text">{reopened ? "Cookie settings" : "Cookies & analytics"}</h2>
         {reopened ? <button type="button" aria-label="Close cookie settings" onClick={close} className="grid h-11 w-11 place-items-center rounded focus-visible:ring-2 focus-visible:ring-accent"><X aria-hidden className="h-4 w-4" /></button> : null}</div>
       {reopened ? <p role="status" className="text-caption text-text-muted">Analytics is currently {consent === "granted" ? "on" : "off"}</p> : null}

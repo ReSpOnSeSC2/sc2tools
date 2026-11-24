@@ -405,7 +405,7 @@ function MatchupSelect({
         onChange={(event) =>
           onChange(event.target.value as MixOpponentRace)
         }
-        className="h-8 max-w-[9rem] rounded-md border border-border bg-bg-elevated px-2 text-caption text-text transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+        className="h-8 max-w-[9rem] rounded-md border border-border-strong bg-bg-elevated px-2 text-caption text-text transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
       >
         <option value="">All matchups</option>
         {MIX_RACES.map((race) => (

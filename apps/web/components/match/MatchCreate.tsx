@@ -135,7 +135,7 @@ export function MatchCreate() {
         <span className="font-semibold">Map names</span>
         <textarea value={rawMaps} onChange={event => setRawMaps(event.target.value)} rows={5} maxLength={1000}
           aria-describedby="match-map-limit"
-          className="block w-full rounded-lg border border-line bg-bg-surface p-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+          className="block w-full rounded-lg border border-border-strong bg-bg-surface p-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
         <span id="match-map-limit" className="block text-caption text-text-muted">Enter one map per line.</span>
       </label> : <LadderPool maps={maps} fresh={pool.fresh} loading={seasons.isLoading} retry={() => { void seasons.mutate(); }} />}
       {error && <p role="alert" className="text-caption text-danger">{error}</p>}

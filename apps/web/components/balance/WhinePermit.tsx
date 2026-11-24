@@ -10,7 +10,7 @@ import { PermitCard } from "./PermitCard";
 const RACES: BalanceRace[] = ["P", "T", "Z"];
 type Fields = Record<BalanceRace, { wins: string; losses: string }>;
 const EMPTY: Fields = { P: { wins: "", losses: "" }, T: { wins: "", losses: "" }, Z: { wins: "", losses: "" } };
-const INPUT = "w-full min-h-12 rounded-lg border-2 border-line bg-bg-surface px-3 text-body text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40";
+const INPUT = "w-full min-h-12 rounded-lg border border-line bg-bg-surface px-3 text-body text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40";
 const LABEL = "block text-caption font-semibold text-text";
 
 function PermitForm({ evidence }: { evidence: BalanceEvidence }) {

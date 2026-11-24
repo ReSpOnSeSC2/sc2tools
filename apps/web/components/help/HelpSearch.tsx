@@ -169,7 +169,7 @@ export function HelpSearch({ articleHref = helpArticlePath, onOpenArticle, label
           ref={listRef}
           aria-label="Search results"
           onKeyDown={onListKeyDown}
-          className="mt-2 divide-y divide-border overflow-hidden rounded-lg border-2 border-line bg-bg-surface"
+          className="mt-2 divide-y divide-border overflow-hidden rounded-lg border border-line bg-bg-surface"
         >
           {results.map(({ article }) => (
             <li key={article.slug}>

@@ -72,7 +72,7 @@ export default async function ReviewsBoardPage({ searchParams }: { searchParams:
             How it works
           </LazyHelpLink>
           <SignedIn>
-            <Link href="/reviews/mine" className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated">
+            <Link href="/reviews/mine" className="inline-flex min-h-[44px] items-center rounded-full border border-line px-5 font-semibold text-text hover:bg-bg-elevated">
               My reviews
             </Link>
             <AskAboutGameButton />

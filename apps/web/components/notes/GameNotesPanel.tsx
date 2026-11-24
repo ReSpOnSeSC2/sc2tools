@@ -117,7 +117,7 @@ function GameNoteComposer({ workspace, onSaved }: { workspace: GameNoteWorkspace
         <textarea ref={field} value={text} maxLength={NOTE_TEXT_MAX} rows={3} onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void save(); } if (event.key === "Escape") cancelNote(); }}
           placeholder="What happened here, and what to do next time?"
-          className="block min-h-[88px] w-full resize-y rounded-lg border border-border bg-bg px-3 py-2 text-body font-normal text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" />
+          className="block min-h-[88px] w-full resize-y rounded-lg border border-border-strong bg-bg px-3 py-2 text-body font-normal text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" />
       </label>
       <TagEditor tags={tags} onChange={setTags} presets={GAME_NOTE_TAGS} disabled={busy} />
       {error ? <p role="alert" className="text-caption text-danger">Couldn&apos;t save the note. {error}</p> : null}
@@ -163,7 +163,7 @@ function GameNoteRow({ note, number, active, workspace, onSeek, onDelete }: {
         <form className="mt-2 space-y-2" aria-label="Edit game note" onSubmit={(event) => { event.preventDefault(); if (text.trim()) void patch({ text, tags }, () => setEditing(false)); }}>
           <label className="block text-caption font-semibold">Note text
             <textarea value={text} maxLength={NOTE_TEXT_MAX} rows={3} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setEditing(false); }}
-              className="mt-1 block w-full resize-y rounded-lg border border-border bg-bg px-3 py-2 text-body font-normal text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" />
+              className="mt-1 block w-full resize-y rounded-lg border border-border-strong bg-bg px-3 py-2 text-body font-normal text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" />
           </label>
           <TagEditor tags={tags} onChange={setTags} presets={GAME_NOTE_TAGS} disabled={busy} />
           <div className="flex flex-wrap gap-2">

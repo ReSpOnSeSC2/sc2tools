@@ -277,7 +277,7 @@ export function BuildPublishModal({
               }}
               rows={4}
               maxLength={4000}
-              className="block w-full rounded-lg border border-border bg-bg-elevated p-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+              className="block w-full rounded-lg border border-border-strong bg-bg-elevated p-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
             />
           </Field>
           <Field

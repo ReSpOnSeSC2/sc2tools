@@ -93,17 +93,17 @@ export function WidgetExplorer() {
         <span className="rounded-full border border-border bg-bg-surface px-3 py-1 text-caption font-semibold text-text-muted">{WIDGET_GUIDES.length} widgets explained</span>
       </div>
 
-      <div className="mt-7 rounded-md border-2 border-line bg-bg-surface p-4 sm:p-5">
+      <div className="mt-7 rounded-md border border-line bg-bg-surface p-4 sm:p-5">
         <label htmlFor="widget-search" className="text-caption font-semibold text-text">Search the widget guide</label>
         <div className="relative mt-2">
           <Search className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-text-dim" aria-hidden />
           <input id="widget-search" type="search" value={query} onChange={(event) => { setQuery(event.target.value); setCopied(false); }}
             placeholder="Try scouting, MMR, chat, or countdown…"
-            className={`min-h-12 w-full rounded-md border border-border bg-bg py-3 pl-10 pr-3 text-body text-text placeholder:text-text-dim ${FOCUS}`} />
+            className={`min-h-12 w-full rounded-md border border-border-strong bg-bg py-3 pl-10 pr-3 text-body text-text placeholder:text-text-dim ${FOCUS}`} />
         </div>
         <div className="mt-4 sm:hidden">
           <label htmlFor="widget-category" className="text-caption font-semibold text-text">Category</label>
-          <select id="widget-category" value={group} onChange={(event) => { setGroup(event.target.value as WidgetGuide["group"] | "all"); setCopied(false); setManualLink(null); }} className={`mt-2 min-h-11 w-full rounded-md border border-border bg-bg px-3 py-2 text-body text-text ${FOCUS}`}>
+          <select id="widget-category" value={group} onChange={(event) => { setGroup(event.target.value as WidgetGuide["group"] | "all"); setCopied(false); setManualLink(null); }} className={`mt-2 min-h-11 w-full rounded-md border border-border-strong bg-bg px-3 py-2 text-body text-text ${FOCUS}`}>
             <option value="all">All widgets</option>
             {WIDGET_GROUPS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
@@ -121,7 +121,7 @@ export function WidgetExplorer() {
       </div>
 
       {filtered.length > 0 ? (
-        <details open={galleryOpen} onToggle={(event) => setGalleryOpen(event.currentTarget.open)} className="mt-4 rounded-md border-2 border-line bg-bg-surface">
+        <details open={galleryOpen} onToggle={(event) => setGalleryOpen(event.currentTarget.open)} className="mt-4 rounded-md border border-line bg-bg-surface">
           <summary className={`min-h-12 cursor-pointer rounded-md px-4 py-3 text-body font-semibold text-text ${FOCUS}`}>
             Browse widget previews <span className="text-caption font-normal text-text-dim">({filtered.length})</span>
           </summary>
@@ -150,7 +150,7 @@ export function WidgetExplorer() {
 
       {selected ? (
         <div className="mt-5 grid items-start gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
-          <nav aria-label="Choose a widget" className="hidden max-h-[calc(100vh-11rem)] space-y-1 overflow-y-auto rounded-md border-2 border-line bg-bg-surface p-2 lg:sticky lg:top-36 lg:block">
+          <nav aria-label="Choose a widget" className="hidden max-h-[calc(100vh-11rem)] space-y-1 overflow-y-auto rounded-md border border-line bg-bg-surface p-2 lg:sticky lg:top-36 lg:block">
             {filtered.map((guide) => (
               <button key={guide.id} type="button" aria-pressed={selected.id === guide.id} onClick={() => choose(guide.id)}
                 className={`flex min-h-12 w-full items-center justify-between gap-2 rounded px-3 py-3 text-left text-body ${FOCUS} ${selected.id === guide.id ? "bg-accent/10 font-semibold text-accent" : "text-text-muted hover:bg-bg-elevated"}`}>
@@ -162,7 +162,7 @@ export function WidgetExplorer() {
             <div className="lg:hidden">
               <label htmlFor="widget-picker" className="text-caption font-semibold text-text">Choose a widget</label>
               <select id="widget-picker" value={selected.id} onChange={(event) => choose(event.target.value)}
-                className={`mt-2 min-h-12 w-full rounded-md border-2 border-line bg-bg-surface px-3 py-2 text-body text-text ${FOCUS}`}>
+                className={`mt-2 min-h-12 w-full rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-body text-text ${FOCUS}`}>
                 {filtered.map((guide) => <option key={guide.id} value={guide.id}>{guide.name}</option>)}
               </select>
             </div>
@@ -170,17 +170,17 @@ export function WidgetExplorer() {
             <button type="button" onClick={copyGuide} className={`inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-caption font-semibold text-text-muted hover:text-accent ${FOCUS}`}>
               <Copy className="h-4 w-4" aria-hidden />{copied ? "Guide link copied" : "Copy a link to this guide"}
             </button>
-            {manualLink ? <label className="block text-caption text-text-muted">Copy this public guide link manually<input readOnly value={manualLink} onFocus={(event) => event.target.select()} className={`mt-2 min-h-11 w-full min-w-0 rounded border border-border bg-bg-surface px-3 text-body text-text ${FOCUS}`} /></label> : null}
+            {manualLink ? <label className="block text-caption text-text-muted">Copy this public guide link manually<input readOnly value={manualLink} onFocus={(event) => event.target.select()} className={`mt-2 min-h-11 w-full min-w-0 rounded border border-border-strong bg-bg-surface px-3 text-body text-text ${FOCUS}`} /></label> : null}
           </div>
         </div>
       ) : (
-        <div className="mt-5 rounded-md border-2 border-line bg-bg-surface px-6 py-10 text-center">
+        <div className="mt-5 rounded-md border border-line bg-bg-surface px-6 py-10 text-center">
           <p className="font-display text-h3 font-bold text-text">No widgets match that search.</p>
           <p className="mt-2 text-body text-text-muted">Try a shorter name or look across all categories.</p>
-          <button type="button" onClick={() => { setQuery(""); setGroup("all"); }} className={`mt-4 min-h-11 rounded-full border-2 border-line px-5 font-semibold text-text ${FOCUS}`}>Clear search and filters</button>
+          <button type="button" onClick={() => { setQuery(""); setGroup("all"); }} className={`mt-4 min-h-11 rounded-full border border-line px-5 font-semibold text-text ${FOCUS}`}>Clear search and filters</button>
         </div>
       )}
-      {STUDIO_AUTOMATION_GUIDES.filter(guide => (group === "all" || group === "community") && (!query.trim() || [guide.name, guide.summary, guide.capability, ...guide.needs].join(" ").toLowerCase().includes(query.trim().toLowerCase()))).map(guide => <article key={guide.id} id={guide.id} aria-label={`${guide.name} guide`} className="mt-8 min-w-0 scroll-mt-28 space-y-4 rounded-md border-2 border-line bg-bg-surface p-5 sm:p-7">
+      {STUDIO_AUTOMATION_GUIDES.filter(guide => (group === "all" || group === "community") && (!query.trim() || [guide.name, guide.summary, guide.capability, ...guide.needs].join(" ").toLowerCase().includes(query.trim().toLowerCase()))).map(guide => <article key={guide.id} id={guide.id} aria-label={`${guide.name} guide`} className="mt-8 min-w-0 scroll-mt-28 space-y-4 rounded-md border border-line bg-bg-surface p-5 sm:p-7">
         <h3 className="text-h3 font-semibold">{guide.name}</h3><p className="text-body text-text-muted">{guide.summary}</p>
         <p className="rounded border border-border bg-bg-elevated p-3 text-body">{guide.capability}</p>
         <h4 className="text-body font-semibold">Before you start</h4><ul className="list-disc space-y-2 pl-5 text-body text-text-muted">{guide.needs.map(item => <li key={item}>{item}</li>)}</ul>
@@ -193,7 +193,7 @@ export function WidgetExplorer() {
 
 function WidgetDetail({ guide, onRelated, detailRef }: { guide: WidgetGuide; onRelated: (id: string) => void; detailRef: RefObject<HTMLElement | null> }) {
   return (
-    <article ref={detailRef} tabIndex={-1} aria-label={`${guide.name} guide`} className="min-w-0 scroll-mt-28 overflow-hidden rounded-md border-2 border-line bg-bg-surface shadow-hard focus:outline-none">
+    <article ref={detailRef} tabIndex={-1} aria-label={`${guide.name} guide`} className="min-w-0 scroll-mt-28 overflow-hidden rounded-md border border-line bg-bg-surface shadow-hard focus:outline-none">
       <header className="border-b border-border p-5 sm:p-7">
         <p className="text-caption font-semibold text-accent">{WIDGET_GROUPS.find((group) => group.id === guide.group)?.name}</p>
         <h3 className="mt-2 font-display text-3xl font-bold text-text">{guide.name}</h3>

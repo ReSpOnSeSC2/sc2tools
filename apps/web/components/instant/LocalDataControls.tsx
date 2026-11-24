@@ -60,7 +60,7 @@ export function LocalDataControls({ persisted, onCleared, className = "" }: Loca
   return (
     <section
       aria-label="Data stored on this device"
-      className={["flex flex-col gap-3 rounded-xl border-2 border-line bg-bg-elevated/60 p-4 sm:flex-row sm:items-center sm:justify-between", className]
+      className={["flex flex-col gap-3 rounded-xl border border-line bg-bg-elevated/60 p-4 sm:flex-row sm:items-center sm:justify-between", className]
         .filter(Boolean)
         .join(" ")}
     >

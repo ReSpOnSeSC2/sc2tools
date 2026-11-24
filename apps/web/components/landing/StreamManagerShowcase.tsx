@@ -45,7 +45,7 @@ export function StreamManagerShowcase({
     <section
       id={id}
       aria-labelledby={`${id}-title`}
-      className={`scroll-mt-28 overflow-hidden rounded-md border-2 border-line bg-bg-surface shadow-hard ${className}`}
+      className={`scroll-mt-28 overflow-hidden rounded-md border border-line bg-bg-surface shadow-hard ${className}`}
     >
       <div className="grid items-center gap-8 p-5 sm:p-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-10 lg:p-10">
         <div className="min-w-0">

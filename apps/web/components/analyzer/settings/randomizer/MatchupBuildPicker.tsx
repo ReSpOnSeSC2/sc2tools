@@ -147,7 +147,7 @@ export function MatchupBuildPicker({
                 placeholder="Search your custom builds…"
                 value={search}
                 onChange={(event) => onSearchChange(event.target.value)}
-                className="mb-3 w-full rounded-lg border border-border bg-bg-surface px-3 py-2 text-caption"
+                className="mb-3 w-full rounded-lg border border-border-strong bg-bg-surface px-3 py-2 text-caption"
               />
             ) : null}
             {customBuildPage?.error ? (

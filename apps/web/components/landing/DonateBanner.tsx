@@ -27,10 +27,10 @@ export function DonateBanner({ costs, coverage }: { costs: InfrastructureCosts |
 
   return (
     <section className="mt-24 md:mt-32">
-      <div className="grid items-center gap-6 rounded-md border-2 border-line bg-bg-surface p-6 shadow-hard md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-8 md:p-8">
+      <div className="grid items-center gap-6 rounded-md border border-line bg-bg-surface p-6 shadow-hard md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-8 md:p-8">
         <span
           aria-hidden
-          className="inline-flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-md border-2 border-editorial/40 bg-editorial/10 text-editorial"
+          className="inline-flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-md border border-editorial/40 bg-editorial/10 text-editorial ring-1 ring-editorial/40"
         >
           <Heart className="h-7 w-7" />
         </span>

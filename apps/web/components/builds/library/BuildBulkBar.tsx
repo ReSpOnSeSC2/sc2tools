@@ -48,7 +48,7 @@ export function BuildBulkBar({
   return (
     <section
       aria-label="Bulk actions"
-      className="sticky bottom-3 z-30 mt-4 space-y-2 rounded-xl border-2 border-line bg-bg-surface p-3 shadow-hard"
+      className="sticky bottom-3 z-30 mt-4 space-y-2 rounded-xl border border-line bg-bg-surface p-3 shadow-hard"
     >
       <div className="flex flex-wrap items-center gap-2">
         <p role="status" aria-live="polite" className="mr-auto text-caption font-semibold text-text">

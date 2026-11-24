@@ -201,8 +201,8 @@ export function EmptySchedule({ icon, title, body }: { icon: React.ReactNode; ti
 export function ScheduleSkeleton() {
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.75fr)]" aria-label="Loading sessions">
-      <div className="h-[640px] animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
-      <div className="h-72 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
+      <div className="h-[640px] animate-pulse rounded-xl border border-line bg-bg-surface" />
+      <div className="h-72 animate-pulse rounded-xl border border-line bg-bg-surface" />
     </div>
   );
 }

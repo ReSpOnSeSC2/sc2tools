@@ -27,7 +27,7 @@ export function ForecastExplanation() {
     <Button ref={trigger} size="sm" variant="ghost" className="min-h-11" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>How is this calculated?</Button>
     {open && typeof document !== "undefined" ? createPortal(<>
       <button type="button" tabIndex={-1} aria-label="Close forecast explanation" className="fixed inset-0 z-40" onMouseDown={event => event.preventDefault()} onClick={() => setOpen(false)} />
-      <div ref={panel} id={id} role="dialog" aria-modal="true" aria-label="How the opening forecast works" tabIndex={-1} style={position} className="fixed z-50 space-y-3 overflow-y-auto rounded-xl border-2 border-line bg-bg-surface p-4 text-text shadow-card">
+      <div ref={panel} id={id} role="dialog" aria-modal="true" aria-label="How the opening forecast works" tabIndex={-1} style={position} className="fixed z-50 space-y-3 overflow-y-auto rounded-xl border border-line bg-bg-surface p-4 text-text shadow-card">
         <h3 className="text-body font-semibold">A forecast from recorded history</h3>
         <p className="text-caption text-text-muted">The source is your latest 50 matching metadata rows, ordered newest first. Hidden, deleted, resumed and other-matchup games do not use a slot. Short or invalid-duration observations then lower the sample; older games do not refill it.</p>
         <p className="text-caption text-text-muted">Newer observations count more. After eight eligible games, an observation has half its original weight. A game on the selected map counts 1.5 times as much. Unlabelled games keep their share.</p>

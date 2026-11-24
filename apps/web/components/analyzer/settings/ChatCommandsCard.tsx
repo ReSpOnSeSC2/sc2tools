@@ -107,7 +107,7 @@ function CommandGuide({ rankRace, editable = false, token }: Props) {
           </div>
         ))}
       </div>
-      {fallback ? <label className="block text-caption text-text-muted">Copy this bio text<textarea ref={copyField} readOnly value={fallback} onFocus={event => event.currentTarget.select()} className="mt-1 min-h-24 w-full rounded-lg border border-border bg-bg-surface p-2 text-caption" /></label> : null}
+      {fallback ? <label className="block text-caption text-text-muted">Copy this bio text<textarea ref={copyField} readOnly value={fallback} onFocus={event => event.currentTarget.select()} className="mt-1 min-h-24 w-full rounded-lg border border-border-strong bg-bg-surface p-2 text-caption" /></label> : null}
       {editable ? token ? <LazyEditor token={token} onSaved={setSaved} /> : <p className="text-caption text-text-muted">Choose an overlay token to edit and preview saved commands.</p> : null}
     </div>
   );

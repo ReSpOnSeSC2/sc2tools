@@ -279,7 +279,7 @@ const ANNOUNCEMENTS: Record<Status, string> = {
 /** Visual only: the always-mounted live region announces the sync once. */
 function StatusChip({ progress }: { progress: FolderSyncProgress | null }) {
   return (
-    <p aria-hidden className="inline-flex min-h-[32px] items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-3 text-caption text-text-muted shadow-hard">
+    <p aria-hidden className="inline-flex min-h-[32px] items-center gap-2 rounded-full border border-line bg-bg-surface px-3 text-caption text-text-muted shadow-hard">
       <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
       <span>
         {ANNOUNCEMENTS.running}
@@ -293,7 +293,7 @@ function ResumeBanner({ onResume, onDismiss }: { onResume: () => void; onDismiss
   return (
     <section
       aria-label="Folder Sync paused"
-      className="flex flex-col gap-3 rounded-xl border-2 border-line bg-bg-surface px-4 py-3 shadow-hard sm:flex-row sm:items-center"
+      className="flex flex-col gap-3 rounded-xl border border-line bg-bg-surface px-4 py-3 shadow-hard sm:flex-row sm:items-center"
     >
       <FolderSync className="hidden h-5 w-5 flex-shrink-0 text-accent-cyan sm:block" aria-hidden />
       <p className="min-w-0 flex-1 text-caption text-text-muted">

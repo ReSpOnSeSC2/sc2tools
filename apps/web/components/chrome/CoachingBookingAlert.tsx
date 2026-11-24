@@ -80,7 +80,7 @@ export function CoachingBookingAlert({ compact = false }: { compact?: boolean })
       title={`${label} — open Coaching`}
       className={[
         "hard-press relative inline-flex items-center justify-center gap-2 rounded-full",
-        "border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated",
+        "border border-line bg-bg-surface text-text hover:bg-bg-elevated",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         "h-8 min-w-8 px-2",
       ].join(" ")}
@@ -89,7 +89,7 @@ export function CoachingBookingAlert({ compact = false }: { compact?: boolean })
       <span className="hidden max-w-40 truncate font-display text-caption font-bold text-text 2xl:inline">
         {label}
       </span>
-      <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white">
+      <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white">
         {count}
       </span>
     </Link>

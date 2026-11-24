@@ -166,7 +166,7 @@ function Hero() {
           height={1124}
           sizes="(min-width: 1024px) 58vw, 100vw"
           priority
-          className="h-auto w-full rounded-md border-2 border-line shadow-hard"
+          className="h-auto w-full rounded-md border border-line shadow-hard"
         />
       </figure>
     </header>
@@ -181,7 +181,7 @@ function Features() {
       </div>
       <div className="mt-10 grid gap-6 md:grid-cols-2">
         {FEATURE_GROUPS.map(({ title, icon: Icon, items }) => (
-          <article key={title} className="min-w-0 rounded-md border-2 border-line bg-bg-surface p-5 shadow-hard sm:p-6">
+          <article key={title} className="min-w-0 rounded-md border border-line bg-bg-surface p-5 shadow-hard sm:p-6">
             <h3 className="flex items-center gap-2 text-h3 font-semibold text-text">
               <Icon className="h-5 w-5 flex-shrink-0 text-accent" aria-hidden />
               {title}
@@ -203,7 +203,7 @@ function Features() {
           width={2000}
           height={1114}
           sizes="(min-width: 1152px) 1152px, 100vw"
-          className="h-auto w-full rounded-md border-2 border-line shadow-hard"
+          className="h-auto w-full rounded-md border border-line shadow-hard"
         />
         <figcaption className="mt-3 text-caption text-text-dim">
           Facing someone again? The rematch card shows how your last games against them went.
@@ -221,7 +221,7 @@ function Setup() {
       </div>
       <ol className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {SETUP_STEPS.map((step, index) => (
-          <li key={step.title} className="min-w-0 rounded-md border-2 border-line bg-bg-surface p-5 shadow-hard">
+          <li key={step.title} className="min-w-0 rounded-md border border-line bg-bg-surface p-5 shadow-hard">
             <span className="font-serif text-[32px] font-semibold leading-none text-editorial" aria-hidden>
               {index + 1}
             </span>
@@ -264,7 +264,7 @@ function Questions() {
 
 function FinalCta({ tryEnabled }: { tryEnabled: boolean }) {
   return (
-    <section className="mt-20 rounded-md border-2 border-line bg-bg-surface p-6 shadow-hard md:mt-28 md:p-10">
+    <section className="mt-20 rounded-md border border-line bg-bg-surface p-6 shadow-hard md:mt-28 md:p-10">
       <h2 className="font-serif text-[28px] font-semibold leading-tight text-text md:text-[36px]">
         Put your opponent on screen before the game starts.
       </h2>

@@ -95,20 +95,20 @@ export function ReviewReplayPanel({
   );
 
   if (closed) {
-    return <div role="status" className="rounded-xl border-2 border-line bg-bg-surface p-4 text-body text-text-muted">
+    return <div role="status" className="rounded-xl border border-line bg-bg-surface p-4 text-body text-text-muted">
       This request is closed, so its replay is no longer shared. The review thread is still available.
     </div>;
   }
   if (hidden) {
     return (
-      <div role="status" className="rounded-xl border-2 border-line bg-bg-surface p-4 text-body text-text-muted">
+      <div role="status" className="rounded-xl border border-line bg-bg-surface p-4 text-body text-text-muted">
         The replay isn&apos;t shared while this request is hidden pending moderator review.
       </div>
     );
   }
   if (analysisError) {
     return (
-      <div role="status" className="rounded-xl border-2 border-line bg-bg-surface p-4 text-body text-text-muted">
+      <div role="status" className="rounded-xl border border-line bg-bg-surface p-4 text-body text-text-muted">
         {analysisError.status === 410
           ? analysisError.message || "This request is closed, so its replay is no longer shared."
           : "The replay analysis couldn't be loaded right now. The review thread is still available."}
@@ -116,7 +116,7 @@ export function ReviewReplayPanel({
     );
   }
   if (!analysis) {
-    return <div aria-busy="true" aria-label="Loading replay" className="h-[36vh] min-h-48 animate-pulse rounded-xl border-2 border-line bg-bg-elevated xl:h-[min(80vh,900px)]" />;
+    return <div aria-busy="true" aria-label="Loading replay" className="h-[36vh] min-h-48 animate-pulse rounded-xl border border-line bg-bg-elevated xl:h-[min(80vh,900px)]" />;
   }
 
   const stageProps = {
@@ -154,7 +154,7 @@ export function ReviewReplayPanel({
   }
   const loadingPlayback = (mode === "inline" && inlineReq.isLoading) || (mode === "segmented" && manifestReq.isLoading);
   if (loadingPlayback) {
-    return <div aria-busy="true" aria-label="Loading map replay" className="h-[36vh] min-h-48 animate-pulse rounded-xl border-2 border-line bg-bg-elevated xl:h-[min(80vh,900px)]" />;
+    return <div aria-busy="true" aria-label="Loading map replay" className="h-[36vh] min-h-48 animate-pulse rounded-xl border border-line bg-bg-elevated xl:h-[min(80vh,900px)]" />;
   }
   return <TimelineFallback analysis={analysis} seekRequest={seekRequest} onTimeChange={onTimeChange} />;
 }

@@ -11,6 +11,6 @@ export function BenchmarkStrip({ label, percentile, league, matchup, n }: {
   return <div className="relative mt-2 h-2 rounded-full bg-bg-elevated" role="img"
     aria-label={`${label}: band = opponent's league, ${league} ${matchup}; dot = this game's ${percentile.label} percentile; n=${n}.`}>
     <span className="absolute inset-y-0 left-[25%] w-1/2 rounded-full bg-border-strong" />
-    <span className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-bg-surface bg-accent" style={{ left: `${percentile.value}%` }} />
+    <span className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-bg-surface bg-accent" style={{ left: `${percentile.value}%` }} />
   </div>;
 }

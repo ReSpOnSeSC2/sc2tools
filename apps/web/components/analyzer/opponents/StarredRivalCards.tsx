@@ -20,7 +20,7 @@ export function StarredRivalCards({ rows, summary, keyFor, onOpen, star, channel
     {totalStars > rows.length ? <p className="mb-2 text-caption text-text-muted">Some saved rivals have no matching row in this view. Widen your filters or search to find them.</p> : null}
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{rows.map(row => {
       const meta = byKey.get(keyFor(row) || "");
-      return <article key={row.pulseId} className="min-w-0 rounded-xl border-2 border-line bg-bg-surface p-4"><div className="flex items-center gap-2"><OpponentLink opponent={row} onOpen={onOpen} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 font-semibold text-text hover:underline"><span className="truncate">{row.name || "unnamed"}</span><OpponentRace row={row} /></OpponentLink>{star(row)}</div>
+      return <article key={row.pulseId} className="min-w-0 rounded-xl border border-line bg-bg-surface p-4"><div className="flex items-center gap-2"><OpponentLink opponent={row} onOpen={onOpen} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 font-semibold text-text hover:underline"><span className="truncate">{row.name || "unnamed"}</span><OpponentRace row={row} /></OpponentLink>{star(row)}</div>
         <p className="text-sm tabular-nums">{row.wins}–{row.losses} · {pct1(row.winRate)} · {row.games} games</p>
         <p className="mt-2 text-caption text-text-muted">{meta?.streak ? `${meta.streak.count}${meta.streak.atLeast ? "+" : ""} ${meta.streak.kind === "win" ? "wins" : "losses"} in a row` : "Streak unmeasured"}</p>
         <p className="text-caption text-text-muted">Last meeting {row.lastPlayed ? <time dateTime={row.lastPlayed} title={formatDateTime(new Date(row.lastPlayed))}>{fmtAgo(row.lastPlayed)}</time> : "unknown"}</p>

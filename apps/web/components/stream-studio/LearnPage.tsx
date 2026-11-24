@@ -20,7 +20,7 @@ export function LearnPage() {
           <a href="#crash-course" className={buttonClassName({ size: "lg", className: "mt-6" })}>Start the crash course<ArrowDown className="h-4 w-4" aria-hidden /></a>
           <p className="mt-4 text-caption text-text-dim">Six short lessons · follow at your own pace · no account needed to learn</p>
         </div>
-        <div className="rounded-md border-2 border-line bg-bg-surface p-5 shadow-hard sm:p-7">
+        <div className="rounded-md border border-line bg-bg-surface p-5 shadow-hard sm:p-7">
           <span className="inline-flex rounded-full bg-editorial/10 px-3 py-1 text-micro font-semibold uppercase tracking-wider text-editorial">The first-stream recipe</span>
           <h2 className="mt-4 font-display text-h3 font-bold text-text">Three widgets. One clear story.</h2>
           <ol className="mt-5 space-y-4">
@@ -45,7 +45,7 @@ export function LearnPage() {
         <p className="mt-4 max-w-2xl text-body-lg text-text-muted">Choose a starter pack, review exactly what it enables in Settings, then add and test its Browser Sources.</p>
         <div className="mt-7 grid gap-5 lg:grid-cols-3">
           {STARTERS.map((starter) => (
-            <article key={starter.id} id={`starter-${starter.id}`} className="scroll-mt-28 flex min-w-0 flex-col rounded-md border-2 border-line bg-bg-surface p-5 shadow-hard sm:p-6">
+            <article key={starter.id} id={`starter-${starter.id}`} className="scroll-mt-28 flex min-w-0 flex-col rounded-md border border-line bg-bg-surface p-5 shadow-hard sm:p-6">
               <CheckCircle2 className="h-6 w-6 text-accent" aria-hidden />
               <h3 className="mt-4 font-display text-h3 font-bold text-text">{starter.name}</h3>
               <p className="mt-2 text-body text-text-muted">{starter.goal}</p>
@@ -60,7 +60,7 @@ export function LearnPage() {
 
       <WidgetExplorer />
       <LearnTroubleshooting />
-      <section className="mt-16 flex flex-col gap-5 rounded-md border-2 border-line bg-accent/5 p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
+      <section className="mt-16 flex flex-col gap-5 rounded-md border border-line bg-accent/5 p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
         <div><h2 className="font-display text-h2 font-bold text-text">Make your first source work.</h2><p className="mt-2 text-body text-text-muted">Then come back here for the next piece. Your course progress stays in this browser.</p></div>
         <Link href="/settings?tab=overlay" className={buttonClassName({ size: "lg", className: "flex-none" })}>Go to Overlay settings<ArrowRight className="h-4 w-4" aria-hidden /></Link>
       </section>

@@ -49,7 +49,7 @@ export function StatCard({
     <div
       className={[
         // Courtside KPI card: 2px ink outline + hard offset shadow.
-        "flex flex-col rounded-xl border-2 border-line bg-bg-surface shadow-hard",
+        "flex flex-col rounded-xl border border-line bg-bg-surface shadow-hard",
         SIZE_CLASSES[size],
         align === "center" ? "items-center text-center" : "items-start",
         className,

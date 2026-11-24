@@ -202,7 +202,7 @@ export function BuildPicker({
             setActiveKey(null);
           }}
           onKeyDown={onKeyDown}
-          className="block h-10 w-full rounded-lg border-2 border-line bg-bg-surface pl-9 pr-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
+          className="block h-10 w-full rounded-lg border border-border-strong bg-bg-surface pl-9 pr-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
 
@@ -211,7 +211,7 @@ export function BuildPicker({
         role="listbox"
         aria-label={label}
         aria-busy={waiting || undefined}
-        className="max-h-72 overflow-y-auto overscroll-contain rounded-lg border-2 border-line bg-bg"
+        className="max-h-72 overflow-y-auto overscroll-contain rounded-lg border border-line bg-bg"
       >
         {waiting ? (
           <PickerSkeleton />

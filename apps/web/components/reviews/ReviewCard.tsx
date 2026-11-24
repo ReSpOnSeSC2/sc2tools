@@ -20,7 +20,7 @@ export function ReviewCard({ card, now, variant = "full" }: { card: ReviewCardDa
       <Link
         href={card.url}
         data-testid="review-card"
-        className={`group flex min-w-0 gap-3 rounded-xl border-2 border-line bg-bg-surface p-3 shadow-hard transition-colors hover:border-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:p-4 ${card.replayShared ? "pr-14 sm:pr-16" : ""}`}
+        className={`group flex min-w-0 gap-3 rounded-xl border border-line bg-bg-surface p-3 shadow-hard transition-colors hover:border-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:p-4 ${card.replayShared ? "pr-14 sm:pr-16" : ""}`}
       >
         <div className="relative hidden h-20 w-32 shrink-0 overflow-hidden rounded-lg border border-border sm:block">
           <MapArtwork mapName={card.map} size="card" alt={card.map ? `${card.map} minimap` : ""} className="border-0" />

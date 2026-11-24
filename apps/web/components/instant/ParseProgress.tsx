@@ -111,7 +111,7 @@ export function ParseProgress(props: ParseProgressProps) {
   return (
     <section
       aria-label="Analysis progress"
-      className={["space-y-4 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
+      className={["space-y-4 rounded-xl border border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
     >
       <p
         ref={labelRef}
@@ -130,7 +130,7 @@ export function ParseProgress(props: ParseProgressProps) {
           aria-valuemax={max}
           aria-valuenow={done}
           aria-valuetext={`${done} of ${max}`}
-          className="h-3 overflow-hidden rounded-full border-2 border-line bg-bg-elevated"
+          className="h-3 overflow-hidden rounded-full border border-line bg-bg-elevated"
         >
           <div className="h-full bg-accent transition-[width] duration-150 motion-reduce:transition-none" style={{ width: `${percent}%` }} />
         </div>

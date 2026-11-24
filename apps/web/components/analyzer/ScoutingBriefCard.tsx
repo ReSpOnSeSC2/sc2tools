@@ -22,6 +22,6 @@ export function ScoutingBriefCard({ profile }: { profile: ScoutingBriefProfile }
     <ul className="space-y-2 text-body-sm text-text-muted">{lines.map((line, index) => <li key={index} className="break-words">{line}</li>)}</ul>
     <p className="mt-3 text-micro text-text-dim">Your recorded games in this dossier&apos;s scope. Counts show the sample behind each line.</p>
     {copied ? <p role="status" className="mt-2 text-caption text-success">Brief copied.</p> : null}
-    {fallback ? <label className="mt-3 block text-caption text-text-muted">Copy this scouting brief<textarea ref={field} value={fallback} readOnly onFocus={event => event.currentTarget.select()} className="mt-2 min-h-32 w-full rounded-lg border border-border bg-bg-surface p-3 text-caption text-text" /></label> : null}
+    {fallback ? <label className="mt-3 block text-caption text-text-muted">Copy this scouting brief<textarea ref={field} value={fallback} readOnly onFocus={event => event.currentTarget.select()} className="mt-2 min-h-32 w-full rounded-lg border border-border-strong bg-bg-surface p-3 text-caption text-text" /></label> : null}
   </Card>;
 }

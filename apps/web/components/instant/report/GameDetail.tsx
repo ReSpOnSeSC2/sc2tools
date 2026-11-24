@@ -158,7 +158,7 @@ export function GameDetail({ game }: { game: ReportGame }) {
         <section
           aria-label="Macro timeline"
           data-testid="report-macro-chart"
-          className="min-w-0 overflow-hidden rounded-xl border-2 border-line bg-bg-surface py-4 shadow-hard sm:px-4"
+          className="min-w-0 overflow-hidden rounded-xl border border-line bg-bg-surface py-4 shadow-hard sm:px-4"
         >
           <LazyMacroChart {...chart} />
         </section>

@@ -30,7 +30,7 @@ export default function MyReviewsPage() {
         description="The replays you've asked about, the reviews you've written, and the reviewers you've blocked."
         actions={
           <>
-            <Link href="/reviews" className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated">
+            <Link href="/reviews" className="inline-flex min-h-[44px] items-center rounded-full border border-line px-5 font-semibold text-text hover:bg-bg-elevated">
               Review board
             </Link>
             <AskAboutGameButton />

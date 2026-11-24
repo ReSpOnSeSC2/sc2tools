@@ -108,7 +108,7 @@ export function UrlRow({
           </Button>
         ) : null}
       </div>
-      {fallback ? <div className="min-w-0 sm:col-span-2"><label className="text-caption text-text-muted">Copy this private URL<input ref={field} aria-label="Copy this private URL" readOnly value={url} onFocus={event => event.currentTarget.select()} className="mt-1 w-full min-w-0 rounded border border-border bg-bg-surface p-2 font-mono text-caption text-text" /></label><p role="status" className="text-caption text-text-muted">Clipboard unavailable. The full URL is selected for copying.</p></div> : null}
+      {fallback ? <div className="min-w-0 sm:col-span-2"><label className="text-caption text-text-muted">Copy this private URL<input ref={field} aria-label="Copy this private URL" readOnly value={url} onFocus={event => event.currentTarget.select()} className="mt-1 w-full min-w-0 rounded border border-border-strong bg-bg-surface p-2 font-mono text-caption text-text" /></label><p role="status" className="text-caption text-text-muted">Clipboard unavailable. The full URL is selected for copying.</p></div> : null}
     </div>
   );
 }

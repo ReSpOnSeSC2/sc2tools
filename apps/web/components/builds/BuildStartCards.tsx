@@ -15,7 +15,7 @@ export function BuildStartCards({ onChoose, community = false }: {
     { choice: "detected" as const, title: "From a detected build", text: "Choose an analyzer label, then a matching replay as your starting point.", Icon: ScanText },
     { choice: "blank" as const, title: "Blank build", text: "Start with no rules and choose actions from the token picker.", Icon: FilePlus2 },
   ];
-  const cardClass = "flex min-h-11 min-w-0 flex-col items-start gap-2 rounded-xl border-2 border-line bg-bg-surface p-4 text-left text-text hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+  const cardClass = "flex min-h-11 min-w-0 flex-col items-start gap-2 rounded-xl border border-line bg-bg-surface p-4 text-left text-text hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
   return <div className="space-y-4">
     <div className="grid gap-3 sm:grid-cols-2">
       {cards.slice(0, 2).map(({ choice, title, text, Icon }) => <button key={choice} type="button" className={cardClass} onClick={() => onChoose(choice)}><Icon className="h-5 w-5 text-accent" aria-hidden /><span className="font-semibold">{title}</span><span className="text-caption text-text-muted">{text}</span></button>)}

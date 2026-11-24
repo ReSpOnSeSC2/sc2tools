@@ -57,7 +57,7 @@ export function PublicReplayLibrary({ data, query }: { data: ReplayLibraryRespon
           emptyTitle={hasLocalFilters ? "No replays match these filters" : "No shared replays yet"}
           emptyDescription={hasLocalFilters ? "Clear or broaden the replay filters to see more games." : `When ${profile.displayName} syncs a replay, it will appear here automatically.`} />
       </section>
-      {query.cursor || page.hasMore ? <nav aria-label="Replay pages" className="flex flex-wrap items-center justify-between gap-3 border-t-2 border-line px-4 py-3">
+      {query.cursor || page.hasMore ? <nav aria-label="Replay pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
         {query.cursor ? <LinkButton href={archiveHref(root, query, resetPage) + "#replay-results"} variant="secondary" size="sm" iconLeft={<ArrowLeft className="h-4 w-4" aria-hidden />}>Back to {query.sort === "date_asc" ? "oldest" : "newest"}</LinkButton> : <span />}
         {page.hasMore && page.nextCursor ? <LinkButton href={archiveHref(root, query, { cursor: page.nextCursor, page: nextPage }) + "#replay-results"} variant="secondary" size="sm" iconRight={<ChevronRight className="h-4 w-4" aria-hidden />}>{query.sort === "date_asc" ? "Newer" : "Older"} replays</LinkButton> : null}
       </nav> : null}

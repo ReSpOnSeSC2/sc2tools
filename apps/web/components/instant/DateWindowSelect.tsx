@@ -40,7 +40,7 @@ export function DateWindowSelect({
   return (
     <fieldset disabled={disabled} aria-disabled={disabled} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} onKeyUp={(event) => event.stopPropagation()} className={["min-w-0", className].filter(Boolean).join(" ")}>
       <legend className="mb-1 text-caption font-semibold text-text">{legend}</legend>
-      <div className="inline-flex flex-wrap gap-1 rounded-full border-2 border-line bg-bg-surface p-1">
+      <div className="inline-flex flex-wrap gap-1 rounded-full border border-line bg-bg-surface p-1">
         {OPTIONS.map((option) => (
           <label key={option.kind} className="relative inline-flex cursor-pointer has-[:disabled]:cursor-not-allowed">
             <input

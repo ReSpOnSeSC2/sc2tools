@@ -105,7 +105,7 @@ export function GuideVideosList({ payload, initialMatchup = "all", initialVideos
         <label className="block max-w-lg space-y-2 text-caption font-semibold text-text">
           <span>Search video titles</span>
           <input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setLimit(PAGE_SIZE); focusIndex.current = null; }}
-            className="min-h-11 w-full rounded-lg border border-border bg-bg-panel px-3 text-body text-text placeholder:text-text-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" placeholder="Search titles…" />
+            className="min-h-11 w-full rounded-lg border border-border-strong bg-bg-panel px-3 text-body text-text placeholder:text-text-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" placeholder="Search titles…" />
         </label>
         <p role="status" aria-live="polite" className="text-caption text-text-muted">
           {fmtCountNoun(filtered.length, "video")} found{filtered.length > limit ? ` · Showing ${limit}` : ""}.

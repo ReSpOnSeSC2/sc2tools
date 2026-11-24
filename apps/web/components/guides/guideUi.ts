@@ -13,7 +13,7 @@ import type { GuideCell, GuideEra, GuideMatchup } from "@/lib/guides/types";
 
 /** The site's signature card surface. */
 export const GUIDE_PANEL_CLASS =
-  "rounded-xl border-2 border-line bg-bg-surface shadow-hard";
+  "rounded-xl border border-line bg-bg-surface shadow-hard";
 export const GUIDE_SECTION_ANCHOR_CLASS = "scroll-mt-28 lg:scroll-mt-24";
 
 /** Inline text link (accent, underline on hover, visible focus ring). */
@@ -22,11 +22,11 @@ export const GUIDE_LINK_CLASS =
 
 /** Primary pill link (sign-up style). */
 export const GUIDE_PRIMARY_ACTION_CLASS =
-  "hard-press inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-2 border-line bg-accent px-5 py-2 font-display text-caption font-bold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
+  "hard-press inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-line bg-accent px-5 py-2 font-display text-caption font-bold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
 
 /** Secondary pill link / button. */
 export const GUIDE_SECONDARY_ACTION_CLASS =
-  "hard-press inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py-2 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-60";
+  "hard-press inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-line bg-bg-surface px-5 py-2 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
  * Scroll container that keeps wide tables from overflowing the page.
@@ -38,7 +38,7 @@ export const GUIDE_TABLE_WRAP_CLASS = `${GUIDE_PANEL_CLASS} relative overflow-x-
 
 export const GUIDE_TABLE_CLASS = "w-full min-w-[520px] text-caption";
 export const GUIDE_THEAD_CLASS =
-  "border-b-2 border-line bg-bg-elevated text-micro uppercase tracking-wider text-text-dim";
+  "border-b border-line bg-bg-elevated text-micro uppercase tracking-wider text-text-dim";
 export const GUIDE_TH_CLASS = "px-3 py-2 text-left font-semibold";
 export const GUIDE_TH_NUM_CLASS = "px-3 py-2 text-right font-semibold";
 export const GUIDE_TD_CLASS = "px-3 py-2 align-middle text-text";

@@ -103,7 +103,7 @@ export function UnitCompositionTable({ summary, onOpenGames }: {
         {rows.length > 1 ? (
           <label className="flex items-center gap-2 text-micro text-text-muted">
             Sort by
-            <select value={sort} onChange={(event) => setSort(event.target.value)} className={`min-h-11 rounded-md border border-border bg-bg-surface px-2 text-caption text-text ${focus}`}>
+            <select value={sort} onChange={(event) => setSort(event.target.value)} className={`min-h-11 rounded-md border border-border-strong bg-bg-surface px-2 text-caption text-text ${focus}`}>
               <option value="count">Average count</option>
               <option value="frequency">Frequency</option>
               <option value="name">Unit name</option>

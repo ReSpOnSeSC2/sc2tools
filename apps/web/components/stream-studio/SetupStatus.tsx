@@ -16,7 +16,7 @@ export function StreamStudioCourse() {
 }
 
 function SetupStatus(props: CheckListProps) {
-  return <section aria-labelledby="stream-setup-heading" className="mt-10 space-y-3 rounded-md border-2 border-line bg-bg-surface p-4 sm:p-6">
+  return <section aria-labelledby="stream-setup-heading" className="mt-10 space-y-3 rounded-md border border-line bg-bg-surface p-4 sm:p-6">
     <h2 id="stream-setup-heading" className="text-body-lg font-semibold">Your setup</h2>
     <StreamReadinessChecks {...props} />
   </section>;

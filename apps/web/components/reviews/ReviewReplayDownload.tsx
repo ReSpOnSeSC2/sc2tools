@@ -42,8 +42,8 @@ export function ReviewReplayDownload({
   useEffect(() => { setState("idle"); setMessage(""); }, [scopeId]);
 
   const cls = variant === "card"
-    ? "grid h-9 w-9 place-items-center rounded-full border-2 border-line bg-bg-surface text-text-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
-    : "inline-flex min-h-9 min-w-0 max-w-full items-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-3.5 text-caption font-semibold text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60";
+    ? "grid h-9 w-9 place-items-center rounded-full border border-line bg-bg-surface text-text-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+    : "inline-flex min-h-9 min-w-0 max-w-full items-center gap-1.5 rounded-full border border-line bg-bg-surface px-3.5 text-caption font-semibold text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60";
   const suffix = variant === "card" && contextLabel ? `: ${contextLabel}` : "";
   const label = `Download replay${suffix}`;
 

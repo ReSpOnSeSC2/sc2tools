@@ -152,7 +152,7 @@ function DateFilter({ stageCustom = false }: { stageCustom?: boolean } = {}) {
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={open ? panelId : undefined}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-3 py-2 text-sm text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-line bg-bg-surface px-3 py-2 text-sm text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         >
           <span className="font-medium">{triggerLabel}</span>
           <ChevronDown className="h-3.5 w-3.5 text-text-muted" aria-hidden />
@@ -212,7 +212,7 @@ function DateFilter({ stageCustom = false }: { stageCustom?: boolean } = {}) {
                   value={customStart}
                   max={customEnd || undefined}
                   onChange={(e) => { setCustomStart(e.target.value); if (stageCustom) customRange(e.target.value, customEnd); }}
-                  className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent mt-0.5 min-h-[44px]"
+                  className="w-full rounded-lg border border-border-strong bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent mt-0.5 min-h-[44px]"
                 />
               </label>
               <label className="block">
@@ -224,7 +224,7 @@ function DateFilter({ stageCustom = false }: { stageCustom?: boolean } = {}) {
                   value={customEnd}
                   min={customStart || undefined}
                   onChange={(e) => { setCustomEnd(e.target.value); if (stageCustom) customRange(customStart, e.target.value); }}
-                  className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent mt-0.5 min-h-[44px]"
+                  className="w-full rounded-lg border border-border-strong bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent mt-0.5 min-h-[44px]"
                 />
               </label>
               {stageCustom ? null : <button

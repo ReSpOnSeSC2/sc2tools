@@ -40,7 +40,7 @@ export function NoGamesYet({
   if (browserImportEnabled) return <NoGamesYetChoices />;
   return (
     <section
-      className="relative overflow-hidden rounded-2xl border-2 border-line bg-bg-surface shadow-hard px-4 py-12 sm:px-6 sm:py-20"
+      className="relative overflow-hidden rounded-2xl border border-line bg-bg-surface shadow-hard px-4 py-12 sm:px-6 sm:py-20"
       data-testid="dashboard-no-games"
     >
       <GlowHalo color="cyan" position="top" opacity={0.85} size={70} />
@@ -82,7 +82,7 @@ export function NoGamesYet({
 function NoGamesYetChoices() {
   return (
     <section
-      className="relative overflow-hidden rounded-2xl border-2 border-line bg-bg-surface shadow-hard px-4 py-10 sm:px-6 sm:py-16"
+      className="relative overflow-hidden rounded-2xl border border-line bg-bg-surface shadow-hard px-4 py-10 sm:px-6 sm:py-16"
       data-testid="dashboard-no-games"
     >
       <GlowHalo color="cyan" position="top" opacity={0.85} size={70} />
@@ -135,7 +135,7 @@ function ChoiceCard({
   variant: "primary" | "secondary";
 }) {
   return (
-    <li className="flex flex-col gap-3 rounded-xl border-2 border-line bg-bg-elevated/40 p-4">
+    <li className="flex flex-col gap-3 rounded-xl border border-line bg-bg-elevated/40 p-4">
       <div className="flex items-center gap-2 text-text">
         <span className="text-accent-cyan">{icon}</span>
         <h3 className="text-body font-semibold">{title}</h3>

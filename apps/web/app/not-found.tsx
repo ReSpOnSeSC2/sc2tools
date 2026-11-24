@@ -14,7 +14,7 @@ import { GlowHalo } from "@/components/ui/GlowHalo";
  */
 export default function NotFound() {
   return (
-    <section className="relative overflow-hidden rounded-2xl border-2 border-line bg-bg-surface px-4 py-12 shadow-hard sm:px-6 sm:py-20">
+    <section className="relative overflow-hidden rounded-2xl border border-line bg-bg-surface px-4 py-12 shadow-hard sm:px-6 sm:py-20">
       <GlowHalo color="cyan" position="top" opacity={0.85} size={70} />
       <div className="relative z-10">
         <EmptyStatePanel

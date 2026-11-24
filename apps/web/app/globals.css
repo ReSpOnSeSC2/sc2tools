@@ -53,45 +53,56 @@
  * ============================================================ */
 
 /* ------------------------------------------------------------------
- * "Command Console" identity — a tactical, broadcast-grade system.
+ * "Command Glass" identity — a precision, broadcast-grade HUD.
  *
- * The palette is deliberately monochromatic-cool (deep blue-black ground,
- * teal/cyan primary) so the product reads like a StarCraft II command
- * terminal rather than the generic indigo-glow look. A single warm AMBER
- * "signal" colour is reserved for rare emphasis (new flags, key numbers),
- * giving the warm/cool tension you see in esports broadcasts.
+ * Depth comes from light, not outlines: a deep blue-black ground, tonal
+ * surfaces with a faint top sheen, 1px hairlines, soft layered shadows
+ * and frosted glass on the chrome. Teal/cyan stays the interaction
+ * colour; a cyan -> azure -> violet "aurora" is reserved for brand moments
+ * (hero type, the active-nav beam, featured surfaces) and amber `signal`
+ * stays for rare emphasis.
  *
- * `--accent` stays deep enough that white text on a filled accent keeps the
- * same (or better) contrast it had before, so the ~90 existing
- * `bg-accent text-white` call-sites need no edits.
+ * Boundaries have two roles (docs/adr/0099-command-glass-visual-system.md):
+ *   --border, --line  decorative hairlines (dividers, card and panel
+ *                     edges). Never the only cue that something is a
+ *                     control.
+ *   --border-strong   control boundaries (fields, switches, outlined
+ *                     controls); >= 3:1 on every surface.
+ *
+ * `--accent` stays deep enough that white text on a filled accent keeps
+ * >= 4.5:1, so the `bg-accent text-white` call-sites need no edits.
  * ------------------------------------------------------------------ */
 :root[data-theme="dark"],
 :root:not([data-theme]) {
   color-scheme: dark;
 
-  --bg: 6 9 14;               /* #06090e — OLED-leaning ground */
-  --bg-surface: 12 16 23;     /* #0c1017 */
-  --bg-elevated: 17 23 32;    /* #111720 */
-  --bg-subtle: 26 33 46;      /* #1a212e */
+  --bg: 5 7 11;               /* #05070b — deep space ground */
+  --bg-surface: 11 15 22;     /* #0b0f16 */
+  --bg-elevated: 18 23 34;    /* #121722 */
+  --bg-subtle: 26 32 46;      /* #1a202e */
 
-  --text: 231 237 240;        /* #e7edf0 */
-  --text-muted: 159 173 185;  /* #9fadb9 — ~9.7:1 on ground */
-  --text-dim: 134 146 159;    /* #86929f — lifted to ~7.2:1 for comfortable reads */
+  --text: 237 242 247;        /* #edf2f7 */
+  --text-muted: 163 175 191;  /* #a3afbf — ~8:1 */
+  --text-dim: 136 149 166;    /* #8895a6 — ~5.9:1 worst case */
 
   --accent: 21 125 140;       /* #157d8c — filled controls with white text */
   --accent-hover: 9 104 117;  /* #096875 — white text remains readable on hover */
-  --accent-ink: 31 158 175;   /* #1f9eaf — link and label text on dark surfaces */
+  --accent-ink: 52 186 201;   /* #34bac9 — link and label text on dark surfaces */
   --accent-ink-hover: 60 224 214; /* #3ce0d6 */
   --accent-cyan: 60 224 214;  /* #3ce0d6 — electric cyan, glows + eyebrows */
+
+  /* Aurora stops — decorative gradients only (hero type, beams, rings).
+     Each stop still clears 4.5:1 on every surface, so gradient text stays
+     readable without a large-text exception. */
+  --aurora-1: 60 224 214;     /* #3ce0d6 cyan */
+  --aurora-2: 96 140 255;     /* #608cff azure */
+  --aurora-3: 167 139 250;    /* #a78bfa violet */
 
   --signal: 245 184 74;       /* #f5b84a — amber, rare emphasis only */
   --signal-hover: 250 200 110;/* #fac86e */
 
-  /* Editorial accent — a clay / dusty-rose note that is deliberately the
-     "1 unusual accent" of the landing palette. It is NOT a default-tailwind
-     hue; sitting warm-and-earthy against the cool teal/cyan, it is what the
-     magazine layout uses for kickers, rules, and the drop-initial so the
-     page stops reading as the stock 3-colour AI gradient. */
+  /* Editorial accent — a clay note kept for the few long-form public
+     layouts (battle reports, Stream Studio lessons) that still use it. */
   --editorial: 214 132 110;       /* #d6846e — clay rose on dark */
   --editorial-soft: 232 178 162;  /* #e8b2a2 — lifted tint for fine rules */
 
@@ -106,26 +117,27 @@
   --player-you: 96 146 255;   /* #6092ff */
   --player-opp: 255 99 99;    /* #ff6363 */
 
-  --border: 92 105 124;       /* #5c697c — control boundaries on all surfaces */
-  --border-strong: 117 132 155; /* #75849b */
+  --border: 34 42 56;         /* #222a38 — decorative hairline */
+  --border-strong: 92 105 124; /* #5c697c — control boundary, >= 3:1 */
 
   --halo-cyan: rgba(60, 224, 214, 0.16);
   --halo-accent: rgba(31, 158, 175, 0.18);
 
-  /* "Courtside" structural line — the bold outline weight worn by cards,
-     buttons, and inputs. In dark it must be a visible MID tone (a near-black
-     line would vanish on the near-black ground), echoing RallyReady's dark
-     outline treatment. */
-  --line: 92 105 124;              /* #5c697c — visible 2px outline on dark */
+  /* Card and panel edge — a hairline a step brighter than --border so a
+     surface separates from the ground without a heavy outline. */
+  --line: 40 49 65;                /* #283141 */
 
-  /* Hard offset shadow (no blur) — the signature "playbook sticker" depth.
-     A pure-black offset would vanish on the near-black ground, so on dark we
-     tint the hard offset with the brand cyan: the sticker lift stays visible
-     and on-palette while keeping RallyReady's crisp no-blur edge. */
-  --shadow-hard: 3px 3px 0 rgba(60, 224, 214, 0.22);
+  /* Elevation — soft layered shadows with a faint top highlight. The old
+     name --shadow-hard is kept so every `shadow-hard` call-site (and
+     `.hard-press`) moves with the system instead of being codemodded. */
+  --shadow-hard: inset 0 1px 0 0 rgb(255 255 255 / 0.04), 0 1px 2px 0 rgb(0 0 0 / 0.45), 0 12px 32px -18px rgb(0 0 0 / 0.9);
+  --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.05), 0 2px 8px -2px rgb(0 0 0 / 0.5), 0 28px 72px -20px rgb(0 0 0 / 0.9);
+  --shadow-glow: 0 0 0 1px rgb(60 224 214 / 0.3), 0 10px 32px -12px rgb(60 224 214 / 0.5);
+  --sheen: linear-gradient(180deg, rgb(255 255 255 / 0.03), rgb(255 255 255 / 0) 7rem);
 
-  /* Dot-grid backdrop ink (alpha baked in, not a channel triple). */
-  --dot: rgba(150, 200, 205, 0.05);
+  /* Ambient backdrop: grid ink and aurora strength (alpha baked in). */
+  --dot: rgba(150, 200, 220, 0.045);
+  --aurora-wash: 0.12;
 
   --race-protoss: 124 140 255;   /* #7c8cff — azure, kept distinct in data viz */
   --race-terran:  255 107 107;   /* #ff6b6b */
@@ -153,26 +165,30 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg: 244 246 250;          /* #f4f6fa */
+  --bg: 245 247 250;          /* #f5f7fa — cool porcelain */
   --bg-surface: 255 255 255;  /* #ffffff */
-  --bg-elevated: 249 251 254; /* #f9fbfe */
-  --bg-subtle: 235 239 245;   /* #ebeff5 */
+  --bg-elevated: 250 251 253; /* #fafbfd */
+  --bg-subtle: 237 241 246;   /* #edf1f6 */
 
-  --text: 13 18 26;           /* #0d121a — ~17:1 */
-  --text-muted: 63 72 86;     /* #3f4856 — darkened to ~8.6:1 for crisp secondary text */
-  --text-dim: 81 91 107;      /* #515b6b — darkened to ~6.6:1, no more washed-out labels */
+  --text: 11 18 32;           /* #0b1220 — ~17:1 */
+  --text-muted: 63 72 86;     /* #3f4856 — ~8.6:1 */
+  --text-dim: 81 91 107;      /* #515b6b — ~6.4:1 */
 
-  --accent: 14 125 140;       /* #0e7d8c — deep teal, white text ~4.3:1 */
+  --accent: 14 125 140;       /* #0e7d8c — deep teal, white text ~4.8:1 */
   --accent-hover: 9 104 117;  /* #096875 */
   --accent-ink: 8 102 109;    /* #08666d — also passes common 15% selected fills */
   --accent-ink-hover: 9 104 117; /* #096875 */
   --accent-cyan: 8 102 109;   /* #08666d */
 
+  --aurora-1: 8 115 124;      /* #08737c */
+  --aurora-2: 47 87 214;      /* #2f57d6 */
+  --aurora-3: 101 69 214;     /* #6545d6 */
+
   --signal: 143 92 12;        /* #8f5c0c */
   --signal-hover: 122 78 10;  /* #7a4e0a */
 
-  /* Editorial clay-rose, darkened for AA on the light paper ground. */
-  --editorial: 165 72 52;         /* #a54834 — clay rose on light */
+  /* Editorial clay-rose, darkened for AA on the light ground. */
+  --editorial: 165 72 52;         /* #a54834 */
   --editorial-soft: 157 79 59;    /* #9d4f3b */
 
   --success: 21 122 67;       /* #157a43 */
@@ -183,17 +199,19 @@
   --player-you: 37 99 235;    /* #2563eb */
   --player-opp: 214 40 57;    /* #d62839 */
 
-  --border: 124 135 155;      /* #7c879b */
-  --border-strong: 101 115 138; /* #65738a */
+  --border: 221 227 235;      /* #dde3eb — decorative hairline */
+  --border-strong: 124 135 155; /* #7c879b — control boundary, >= 3:1 */
 
   --halo-cyan: rgba(17, 150, 158, 0.12);
   --halo-accent: rgba(14, 125, 140, 0.12);
 
-  /* Courtside: in light mode the structural outline is near-black ink and the
-     hard shadow is that same ink — the crisp "sticker" edge on white. */
-  --line: 13 18 26;                /* #0d121a — ink outline */
-  --shadow-hard: 3px 3px 0 rgba(13, 18, 26, 0.9);
-  --dot: rgba(15, 30, 45, 0.06);
+  --line: 214 221 231;             /* #d6dde7 — card and panel edge */
+  --shadow-hard: inset 0 1px 0 0 rgb(255 255 255 / 0.9), 0 1px 2px 0 rgb(15 23 42 / 0.05), 0 10px 30px -18px rgb(15 23 42 / 0.25);
+  --shadow-pop: 0 0 0 1px rgb(15 23 42 / 0.06), 0 2px 8px -2px rgb(15 23 42 / 0.08), 0 28px 72px -20px rgb(15 23 42 / 0.3);
+  --shadow-glow: 0 0 0 1px rgb(14 125 140 / 0.3), 0 10px 30px -12px rgb(14 125 140 / 0.35);
+  --sheen: linear-gradient(180deg, rgb(255 255 255 / 0.6), rgb(255 255 255 / 0) 7rem);
+  --dot: rgba(15, 30, 45, 0.05);
+  --aurora-wash: 0.1;
 
   --race-protoss: 74 90 230;    /* #4a5ae6 */
   --race-terran:  184 51 58;    /* #b8333a */
@@ -222,9 +240,12 @@
  * Tailwind's DEFAULT timing-function + duration in tailwind.config.ts.
  * ============================================================ */
 :root {
-  --ease-out: cubic-bezier(0.2, 0, 0, 1);
-  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --dur-base: 150ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --dur-fast: 120ms;
+  --dur-base: 160ms;
+  --dur-slow: 280ms;
 }
 
 /* ============================================================
@@ -238,6 +259,13 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  font-feature-settings: "kern", "calt";
+}
+
+/* Thin, on-palette scrollbars everywhere (the replay stage keeps its own). */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--border-strong) / 0.55) transparent;
 }
 
 /* ============================================================
@@ -273,9 +301,9 @@ html[data-density="compact"] [data-density-pad="card-header"] {
 }
 
 /* ============================================================
- * Ambient "Courtside" backdrop — a faint ink dot-grid fixed behind
- * all content, framing the app like a playbook sitting on paper
- * (lifted from RallyReady's desktop dot-grid). Decorative + inert.
+ * Ambient backdrop — a soft aurora at the top of the viewport over a
+ * faint HUD grid that fades out below the fold. Decorative + inert;
+ * fixed so it costs one composited layer, not a repaint per scroll.
  * ============================================================ */
 body::before {
   content: "";
@@ -283,33 +311,39 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-image: radial-gradient(var(--dot) 1.5px, transparent 1.6px);
-  background-size: 22px 22px;
-  background-position: center;
-  -webkit-mask-image: radial-gradient(
-    ellipse 120% 80% at 50% -5%,
-    #000 0%,
-    transparent 78%
-  );
-  mask-image: radial-gradient(
-    ellipse 120% 80% at 50% -5%,
-    #000 0%,
-    transparent 78%
-  );
+  background:
+    radial-gradient(48rem 24rem at 12% -6%, rgb(var(--aurora-1) / var(--aurora-wash)), transparent 70%),
+    radial-gradient(44rem 22rem at 88% -10%, rgb(var(--aurora-2) / var(--aurora-wash)), transparent 70%),
+    radial-gradient(36rem 20rem at 52% -14%, rgb(var(--aurora-3) / calc(var(--aurora-wash) * 0.7)), transparent 70%);
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--dot) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--dot) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: center top;
+  -webkit-mask-image: radial-gradient(ellipse 110% 70% at 50% 0%, #000 0%, transparent 72%);
+  mask-image: radial-gradient(ellipse 110% 70% at 50% 0%, #000 0%, transparent 72%);
 }
 
 /* ============================================================
- * Headings wear the display face (Bricolage Grotesque) — the
- * confident athletic-editorial voice of the Courtside system.
- * Per-element size/line-height utilities still win; this only
- * sets the family + tight tracking app-wide.
+ * Headings use the display stack (Hanken Grotesk at heavier weights)
+ * with tight tracking — one family, precise and quiet. Per-element
+ * size/line-height utilities still win; this only sets the family and
+ * tracking app-wide.
  * ============================================================ */
 h1,
 h2,
 h3,
 h4 {
   font-family: theme("fontFamily.display");
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
 }
 
 /* ============================================================
@@ -355,8 +389,8 @@ h4 {
 }
 
 ::selection {
-  background: rgb(var(--accent));
-  color: rgb(var(--bg));
+  background: rgb(var(--accent-cyan) / 0.28);
+  color: inherit;
 }
 
 @layer base {
@@ -403,6 +437,60 @@ h4 {
     opacity: 0;
   }
   to {
+    opacity: 1;
+  }
+}
+
+/* Command Glass motion: content rises in, dialogs scale in, sheets slide
+ * up, skeletons shimmer. All are neutralised by the reduced-motion block
+ * above. Tailwind exposes them as animate-rise-in / animate-scale-in /
+ * animate-sheet-up / animate-shimmer. */
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+@keyframes beamPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
     opacity: 1;
   }
 }
@@ -466,9 +554,7 @@ h4 {
 }
 .glow-text-cyan {
   color: rgb(var(--accent-cyan));
-  text-shadow:
-    0 0 18px var(--halo-cyan),
-    0 0 2px rgba(255, 255, 255, 0.5);
+  text-shadow: 0 0 22px var(--halo-cyan);
 }
 
 .gradient-backdrop {
@@ -476,6 +562,156 @@ h4 {
     radial-gradient(ellipse 80% 50% at 50% 0%, var(--halo-cyan) 0%, transparent 60%),
     radial-gradient(ellipse 60% 40% at 80% 100%, var(--halo-accent) 0%, transparent 60%),
     rgb(var(--bg));
+}
+
+/* ============================================================
+ * Command Glass kit — the shared surface vocabulary.
+ *
+ *   .glass / .glass-strong  frosted chrome (top bar, rail, tab bar,
+ *                           dialogs, popovers, toasts)
+ *   .surface-sheen          faint top light on a card surface
+ *   .aurora-text            cyan -> azure -> violet gradient type
+ *   .aurora-ring            1px gradient edge for featured surfaces
+ *   .aurora-beam            the luminous active-nav / tab indicator
+ *   .hud-label              uppercase eyebrow in the interaction colour
+ *   .hud-corners            HUD corner brackets on a framed visual
+ *   .skeleton-shimmer       loading sweep (static under reduced motion)
+ *   .lift                   hover lift for interactive surfaces
+ *   .scroll-fade-x          fades the edges of a horizontal scroller
+ *   .btn-primary/-secondary/-danger  depth for the Button recipe
+ * Text on glass is composited over content: keep glass at >= 72%
+ * opacity so the solid-surface contrast matrix still describes it.
+ * ============================================================ */
+.glass {
+  background-color: rgb(var(--bg-surface) / 0.74);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+}
+.glass-strong {
+  background-color: rgb(var(--bg-elevated) / 0.88);
+  -webkit-backdrop-filter: blur(24px) saturate(1.7);
+  backdrop-filter: blur(24px) saturate(1.7);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background-color: rgb(var(--bg-surface) / 0.97);
+  }
+  .glass-strong {
+    background-color: rgb(var(--bg-elevated));
+  }
+}
+
+.surface-sheen {
+  background-image: var(--sheen);
+}
+
+.aurora-text {
+  color: rgb(var(--aurora-1));
+  background-image: linear-gradient(100deg, rgb(var(--aurora-1)) 0%, rgb(var(--aurora-2)) 55%, rgb(var(--aurora-3)) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+@media (forced-colors: active) {
+  .aurora-text {
+    -webkit-text-fill-color: currentColor;
+    background-image: none;
+  }
+}
+
+.aurora-ring {
+  position: relative;
+  isolation: isolate;
+}
+.aurora-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgb(var(--aurora-1) / 0.7), rgb(var(--aurora-2) / 0.45) 45%, rgb(var(--aurora-3) / 0.6));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.aurora-beam {
+  background-image: linear-gradient(180deg, rgb(var(--aurora-1)), rgb(var(--aurora-2)) 60%, rgb(var(--aurora-3)));
+  box-shadow: 0 0 12px rgb(var(--aurora-1) / 0.55);
+}
+
+.hud-label {
+  font-family: theme("fontFamily.sans");
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(var(--accent-cyan));
+}
+
+.hud-corners {
+  position: relative;
+}
+.hud-corners::before,
+.hud-corners::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  border-color: rgb(var(--accent-cyan) / 0.75);
+  border-style: solid;
+}
+.hud-corners::before {
+  top: -1px;
+  left: -1px;
+  border-width: 2px 0 0 2px;
+  border-top-left-radius: 6px;
+}
+.hud-corners::after {
+  right: -1px;
+  bottom: -1px;
+  border-width: 0 2px 2px 0;
+  border-bottom-right-radius: 6px;
+}
+
+.skeleton-shimmer {
+  background-color: rgb(var(--bg-subtle));
+  background-image: linear-gradient(100deg, transparent 20%, rgb(var(--text) / 0.06) 45%, transparent 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s var(--ease-in-out) infinite;
+}
+
+.lift {
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-pop);
+}
+
+.scroll-fade-x {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+}
+
+.btn-primary,
+.btn-danger {
+  background-image: linear-gradient(180deg, rgb(0 0 0 / 0), rgb(0 0 0 / 0.14));
+  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.18), 0 1px 2px 0 rgb(0 0 0 / 0.3);
+}
+.btn-primary:hover:not(:disabled) {
+  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.2), var(--shadow-glow);
+}
+.btn-danger:hover:not(:disabled) {
+  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.2), 0 0 0 1px rgb(var(--danger) / 0.35), 0 10px 30px -12px rgb(var(--danger) / 0.5);
+}
+.btn-secondary {
+  background-image: var(--sheen);
+  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.04), 0 1px 2px 0 rgb(0 0 0 / 0.18);
 }
 
 /* ============================================================
@@ -565,22 +801,21 @@ h4 {
 }
 
 /* ============================================================
- * "Courtside" UI language (adapted from RallyReady)
+ * Labels, title beam and press feedback
  *
- * The athletic-editorial kit that gives the product its point of view:
- *   .overline     — bold uppercase label (eyebrows, KPI labels)
- *   .title-spine  — accent "spine" bar beside a screen/section title
- *   .hard-press   — button that physically collapses into its shadow
- *   .rule-tick    — legacy alias kept as the accent spine (back-compat)
+ *   .overline     — uppercase eyebrow / KPI label in the body face
+ *   .title-spine  — a slim luminous aurora beam beside a title
+ *   .hard-press   — legacy name: soft elevation + a gentle press scale
+ *   .rule-tick    — legacy alias kept as the beam (back-compat)
  * ============================================================ */
 
-/* Bold uppercase label in the body face — the editorial eyebrow. */
+/* Uppercase label in the body face — the HUD eyebrow. */
 .overline {
   font-family: theme("fontFamily.sans");
   font-size: 0.75rem;
   line-height: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-weight: 650;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -594,44 +829,45 @@ h4 {
   content: "";
   position: absolute;
   left: 0;
-  top: 0.14em;
-  bottom: 0.14em;
-  width: 6px;
+  top: 0.18em;
+  bottom: 0.18em;
+  width: 3px;
   border-radius: 9999px;
-  background: rgb(var(--accent));
+  background-image: linear-gradient(180deg, rgb(var(--aurora-1)), rgb(var(--aurora-2)) 60%, rgb(var(--aurora-3)));
+  box-shadow: 0 0 10px rgb(var(--aurora-1) / 0.45);
 }
-/* Back-compat: anything still asking for .rule-tick gets the spine bar. */
+/* Back-compat: anything still asking for .rule-tick gets the beam. */
 .rule-tick {
   display: inline-block;
-  width: 6px;
+  width: 3px;
   align-self: stretch;
   min-height: 1.1em;
   border-radius: 9999px;
-  background: rgb(var(--accent));
+  background-image: linear-gradient(180deg, rgb(var(--aurora-1)), rgb(var(--aurora-2)) 60%, rgb(var(--aurora-3)));
+  box-shadow: 0 0 10px rgb(var(--aurora-1) / 0.45);
 }
 
 /* ============================================================
- * Editorial / magazine kit — used only by the marketing landing page.
- * These give the page its asymmetric, print-laid-out voice: an
- * uppercase kicker, a hairline section rule, a serif drop-initial, and
- * a clay-rose "folio" number. Deliberately squared (no soft 2xl radii)
- * and free of the cyan glow that the rest of the product chrome uses.
+ * Section kit for long-form public pages: an uppercase kicker in the
+ * interaction colour, a hairline rule with a short aurora tick, and a
+ * quiet lead-in. (The serif magazine treatment was retired with the
+ * Command Glass system; the class names stay so markup keeps working.)
  * ============================================================ */
 .kicker {
   font-family: theme("fontFamily.sans");
   font-size: 0.75rem;
   line-height: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
+  font-weight: 650;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgb(var(--editorial));
+  color: rgb(var(--accent-cyan));
 }
 
-/* Thin full-bleed editorial rule with a short clay tick at the start. */
+/* Hairline section rule with a short aurora tick at the start. */
 .ed-rule {
   border: 0;
   height: 1px;
-  background: rgb(var(--border-strong));
+  background: rgb(var(--border));
   position: relative;
 }
 .ed-rule::before {
@@ -640,33 +876,27 @@ h4 {
   left: 0;
   top: -1px;
   height: 3px;
-  width: 56px;
-  background: rgb(var(--editorial));
+  width: 48px;
+  border-radius: 9999px;
+  background-image: linear-gradient(90deg, rgb(var(--aurora-1)), rgb(var(--aurora-2)), rgb(var(--aurora-3)));
 }
 
-/* Serif drop-initial for the lead standfirst — the print "lead-in". */
+/* Lead-in: the first letter simply carries the text colour at full weight. */
 .drop-initial::first-letter {
-  font-family: theme("fontFamily.serif");
-  float: left;
-  font-weight: 600;
-  font-size: 3.6em;
-  line-height: 0.82;
-  padding-right: 0.08em;
-  margin-top: 0.04em;
-  color: rgb(var(--editorial));
+  font-weight: 700;
+  color: rgb(var(--text));
 }
 
-/* Tactile press: the hard offset shadow COLLAPSES as the control pushes
- * 3px into the page — RallyReady's "playbook sticker" interaction.
+/* Press feedback: soft elevation and a gentle scale on press. The legacy
+ * name stays so the existing call-sites keep their tactile response.
  * Neutralised under prefers-reduced-motion by the global block above. */
 .hard-press {
   box-shadow: var(--shadow-hard);
-  transition: transform 0.08s var(--ease-out), box-shadow 0.08s var(--ease-out),
-    background-color 0.12s var(--ease-out);
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
 }
 .hard-press:active {
-  transform: translate(3px, 3px);
-  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  transform: scale(0.97);
 }
 
 /* Clerk primary buttons: belt-and-braces against white-on-white. The
@@ -729,9 +959,9 @@ h4 {
   --accent-ink-hover: 60 224 214;
   --accent-cyan: 62 224 214;  /* #3ee0d6 */
 
-  --border: 92 105 124;
-  --border-strong: 117 132 155;
-  --line: 92 105 124;
+  --border: 38 48 64;         /* #263040 — hairline on the stage */
+  --border-strong: 117 132 155; /* #75849b — control boundary */
+  --line: 44 55 73;           /* #2c3749 */
 
   --success: 62 200 132;
   --warning: 232 156 56;

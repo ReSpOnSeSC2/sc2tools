@@ -175,7 +175,7 @@ export function GameLengthFilter() {
                 value={draftMin}
                 placeholder="any"
                 onChange={(e) => setDraftMin(e.target.value)}
-                className="mt-0.5 min-h-[44px] w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="mt-0.5 min-h-[44px] w-full rounded-lg border border-border-strong bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               />
             </label>
             <label className="block">
@@ -190,7 +190,7 @@ export function GameLengthFilter() {
                 value={draftMax}
                 placeholder="any"
                 onChange={(e) => setDraftMax(e.target.value)}
-                className="mt-0.5 min-h-[44px] w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="mt-0.5 min-h-[44px] w-full rounded-lg border border-border-strong bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               />
             </label>
           </div>

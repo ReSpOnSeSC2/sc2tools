@@ -55,7 +55,7 @@ function UploadBar({ progress }: { progress: UploadProgress | null }) {
         aria-valuemin={0}
         aria-valuemax={total}
         aria-valuenow={done}
-        className="h-3 overflow-hidden rounded-full border-2 border-line bg-bg-elevated"
+        className="h-3 overflow-hidden rounded-full border border-line bg-bg-elevated"
       >
         <div
           className="h-full bg-accent transition-[width] duration-150 motion-reduce:transition-none"

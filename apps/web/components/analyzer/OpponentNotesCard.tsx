@@ -205,7 +205,7 @@ function OpponentNotesEditor({
           }}
           placeholder="Example: Hides tech after early pressure. Check dead air behind the natural at 3:30."
           onChange={(event) => edit({ notes: event.target.value })}
-          className="min-h-[112px] w-full resize-y rounded-lg border-2 border-line bg-bg px-3 py-2 text-sm leading-relaxed text-text shadow-inner transition-colors placeholder:text-text-dim focus:border-accent focus:ring-2 focus:ring-accent/20"
+          className="min-h-[112px] w-full resize-y rounded-lg border border-border-strong bg-bg px-3 py-2 text-sm leading-relaxed text-text shadow-inner transition-colors placeholder:text-text-dim focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
       </div>
 

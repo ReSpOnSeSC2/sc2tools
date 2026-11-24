@@ -286,7 +286,7 @@ export function SettingsMultiChatSounds({
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Sound name (shown in pickers)"
             maxLength={40}
-            className="w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+            className="w-full min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
           />
 
           {mode === "url" ? (
@@ -297,7 +297,7 @@ export function SettingsMultiChatSounds({
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://…/sound.mp3"
                 maxLength={400}
-                className="min-w-0 flex-1 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+                className="min-w-0 flex-1 rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
               />
               <Button size="sm" variant="secondary" onClick={addLink}>
                 Add link
@@ -332,14 +332,14 @@ export function SettingsMultiChatSounds({
                 onChange={(e) => setText(e.target.value)}
                 placeholder='Phrase to speak, e.g. "New sub! Welcome aboard!"'
                 maxLength={200}
-                className="w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+                className="w-full min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
               />
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={voiceName}
                   onChange={(e) => setVoiceName(e.target.value)}
                   aria-label="Voice for this line"
-                  className="min-w-0 flex-1 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
+                  className="min-w-0 flex-1 rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
                 >
                   <option value="">Machine default voice</option>
                   {voices.map((v) => (

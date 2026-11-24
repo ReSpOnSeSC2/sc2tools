@@ -105,7 +105,7 @@ export function OverlayTokenManager({ items, selected, onSelect, onRefresh, comp
   return <Card className="space-y-4">
     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
       <label className="min-w-0 text-body font-medium text-text">URLs shown for
-        <select className="mt-1 block w-full rounded-md border border-border bg-bg px-3 py-2 text-body" value={selected.token} disabled={busy || statusPending || !owner || dirty} onChange={event => { if (operation.current || dirtyRef.current || pendingRef.current || currentScope.current !== scope || !scope.active) return; setMessage(""); setError(""); onSelect(event.target.value); }}>
+        <select className="mt-1 block w-full rounded-md border border-border-strong bg-bg px-3 py-2 text-body" value={selected.token} disabled={busy || statusPending || !owner || dirty} onChange={event => { if (operation.current || dirtyRef.current || pendingRef.current || currentScope.current !== scope || !scope.active) return; setMessage(""); setError(""); onSelect(event.target.value); }}>
           {items.map(item => <option key={item.token} value={item.token}>{item.label} · {item.token.slice(-4)}{item.rotationPending ? " · rotation pending" : ""}</option>)}
         </select>
       </label>
@@ -115,7 +115,7 @@ export function OverlayTokenManager({ items, selected, onSelect, onRefresh, comp
     {!compact ? <>
       <div className="flex flex-wrap items-end gap-2">
         <label className="min-w-0 flex-1 text-caption text-text-muted">Token label
-          <input className="mt-1 block w-full rounded-md border border-border bg-bg px-3 py-2 text-body text-text" maxLength={60} value={label} disabled={busy || statusPending || !!selected.rotationPending} onChange={event => setDraft({ token: selected.token, label: event.target.value })} />
+          <input className="mt-1 block w-full rounded-md border border-border-strong bg-bg px-3 py-2 text-body text-text" maxLength={60} value={label} disabled={busy || statusPending || !!selected.rotationPending} onChange={event => setDraft({ token: selected.token, label: event.target.value })} />
         </label>
         <Button variant="secondary" disabled={busy || statusPending || !label.trim() || label === selected.label || !!selected.rotationPending} onClick={() => void save("rename")}>Save label</Button>
       </div>

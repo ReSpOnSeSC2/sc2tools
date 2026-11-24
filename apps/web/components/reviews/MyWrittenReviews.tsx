@@ -23,9 +23,9 @@ export function MyWrittenReviews({ summary, error, retry }: {
     </div>
     {error && !summary ? <RequestError error={error} onRetry={retry} /> : !summary || !feed.data ? feed.error
       ? <RequestError error={feed.error} onRetry={() => feed.mutate()} />
-      : <div aria-busy="true" aria-label="Loading reviews you've written" className="space-y-2">{[0, 1].map((index) => <div key={index} className="h-20 animate-pulse rounded-xl border-2 border-line bg-bg-elevated" />)}</div>
+      : <div aria-busy="true" aria-label="Loading reviews you've written" className="space-y-2">{[0, 1].map((index) => <div key={index} className="h-20 animate-pulse rounded-xl border border-line bg-bg-elevated" />)}</div>
       : items.length ? <ul className="space-y-2" aria-label="Reviews you've written">{items.map((item) => <li key={item.commentId}>
-        <Link href={`${item.request.url}#comment-${item.commentId}`} className="block space-y-1 rounded-xl border-2 border-line bg-bg-surface p-3 hover:border-accent-cyan">
+        <Link href={`${item.request.url}#comment-${item.commentId}`} className="block space-y-1 rounded-xl border border-line bg-bg-surface p-3 hover:border-accent-cyan">
           <p className="line-clamp-1 text-caption text-text-muted">{item.request.matchup ? `[${item.request.matchup}] ` : ""}{item.request.question}</p>
           <p className="line-clamp-2 break-words text-body text-text">{item.snippet}</p>
           <p className="flex flex-wrap items-center gap-3 text-caption">

@@ -297,7 +297,7 @@ function SettingsShellInner({
 
         {/* Desktop sidebar */}
         <nav aria-label="Settings navigation" className="hidden space-y-2 lg:block">
-          <div className="sticky top-4 grid gap-0.5 rounded-xl border-2 border-line bg-bg-surface p-1 shadow-hard">
+          <div className="sticky top-4 grid gap-0.5 rounded-xl border border-line bg-bg-surface p-1 shadow-hard">
             {desktopRows.map((row, index) => row.kind === "heading" ? (
               <h2 key={row.group.id} id={`${panelScopeId}-group-${row.group.id}`} data-settings-group={row.group.id} style={{ gridRow: index + 1 }} className="px-3 pb-1 pt-3 text-caption font-semibold text-text-muted">{row.group.label}</h2>
             ) : row.kind === "devices" ? (

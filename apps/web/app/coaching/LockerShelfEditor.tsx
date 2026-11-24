@@ -52,7 +52,7 @@ export function LockerShelfEditor({ library, onClose, onAdd, busy, retryNotice }
         setKind(event.target.value as ShelfKind); setFile(undefined); setLink(""); setError("");
       }}>{Object.entries(SHELF_KINDS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select></Field>
       <Field label="Title" required><Input required maxLength={180} value={title} disabled={working} onChange={event => setTitle(event.target.value)} /></Field>
-      <Field label="Notes"><textarea className="w-full rounded-lg border border-border bg-bg-surface p-3 text-body text-text" rows={4} maxLength={5000}
+      <Field label="Notes"><textarea className="w-full rounded-lg border border-border-strong bg-bg-surface p-3 text-body text-text" rows={4} maxLength={5000}
         value={notes} disabled={working} onChange={event => setNotes(event.target.value)} /></Field>
       {kind !== "notes" ? <Field label="Attachment file"><input key={kind} type="file" accept={FILE_TYPES[kind]} disabled={working} onChange={event => setFile(event.target.files?.[0])} /></Field> : null}
       {acceptsLink ? <Field label="Attachment link"><Input value={link} inputMode="url" maxLength={2048} disabled={working} onChange={event => setLink(event.target.value)} /></Field> : null}

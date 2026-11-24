@@ -179,7 +179,7 @@ export function ServiceWorkerRegister() {
           returnFocusRef.current = previous;
         }
       }}
-      className="fixed bottom-above-chrome left-1/2 z-banner flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border-2 border-line bg-bg-surface px-4 py-3 shadow-hard"
+      className="fixed bottom-above-chrome left-1/2 z-banner flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-line bg-bg-surface px-4 py-3 shadow-hard"
     >
       <p className="min-w-0 flex-1 basis-48 text-caption text-text">
         <span className="font-semibold">Update available.</span>{" "}

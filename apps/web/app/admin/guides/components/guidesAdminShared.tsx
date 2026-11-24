@@ -237,4 +237,4 @@ export function AdminSectionHeader({
 }
 
 export const ADMIN_TEXTAREA_CLASS =
-  "block w-full resize-y rounded-lg border-2 border-line bg-bg-surface px-3 py-2 font-mono text-caption text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50";
+  "block w-full resize-y rounded-lg border border-line bg-bg-surface px-3 py-2 font-mono text-caption text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50";

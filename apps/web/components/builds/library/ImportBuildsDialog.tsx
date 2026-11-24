@@ -178,7 +178,7 @@ export function ImportBuildsDialog({
               onChange={(event) => setSource(event.target.value)}
               rows={6}
               spellCheck={false}
-              className="w-full rounded-lg border-2 border-line bg-bg-elevated p-3 font-mono text-caption text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="w-full rounded-lg border border-border-strong bg-bg-elevated p-3 font-mono text-caption text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">

@@ -18,6 +18,6 @@ export function GameClockLink({ time, getHref }: { time: number; getHref: () => 
       catch { setFallback(href); }
     }}>Copy link at {formatGameClock(time)}</Button>
     {copied ? <span role="status" className="sr-only">Link copied</span> : null}
-    {fallback ? <span className="max-w-full"><label htmlFor={id} className="text-micro">Copy this replay link</label><input ref={input} id={id} readOnly value={fallback} className="block min-h-11 w-64 max-w-full rounded border border-border bg-bg-surface px-2 text-caption text-text" onFocus={(event) => event.currentTarget.select()} /></span> : null}
+    {fallback ? <span className="max-w-full"><label htmlFor={id} className="text-micro">Copy this replay link</label><input ref={input} id={id} readOnly value={fallback} className="block min-h-11 w-64 max-w-full rounded border border-border-strong bg-bg-surface px-2 text-caption text-text" onFocus={(event) => event.currentTarget.select()} /></span> : null}
   </span>;
 }

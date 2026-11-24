@@ -281,7 +281,7 @@ function FolderSyncCardView({ folder, className }: { folder: FolderSyncControlle
     <section
       id="folder-sync"
       aria-labelledby={headingId}
-      className={["space-y-4 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
+      className={["space-y-4 rounded-xl border border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
     >
       <div className="flex flex-wrap items-center gap-2">
         <h2 id={headingId} className="font-display text-h4 text-text">Folder Sync</h2>
@@ -289,7 +289,7 @@ function FolderSyncCardView({ folder, className }: { folder: FolderSyncControlle
       </div>
       {folder.mode ? <p className="text-caption text-text-muted">{folderSyncIntro(folder.mode)}</p> : null}
       <FolderSyncBody folder={folder} onStop={() => setConfirmStop(true)} />
-      <details className="rounded-lg border-2 border-line bg-bg-surface px-3">
+      <details className="rounded-lg border border-line bg-bg-surface px-3">
         <summary className="flex min-h-[44px] cursor-pointer items-center text-caption font-semibold text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           Where is my StarCraft II folder?
         </summary>

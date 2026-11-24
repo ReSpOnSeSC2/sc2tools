@@ -11,7 +11,7 @@ export function MoreFiltersPopover({ count, children }: { count: number; childre
   return <div className="relative">
     <button ref={triggerRef} type="button" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? panelId : undefined}
       onClick={() => setOpen(!open)}
-      className="inline-flex min-h-11 items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-3 py-2 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-line bg-bg-surface px-3 py-2 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
       <SlidersHorizontal aria-hidden className="h-4 w-4" />Filters
       {count ? <span className="rounded-full bg-accent/10 px-2 text-accent">{count} active</span> : null}
     </button>

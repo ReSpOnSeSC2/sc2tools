@@ -89,7 +89,7 @@ function TryHero() {
         Drop StarCraft II replays or a folder. Get a report on up to {MAX_TRY_FILES} of your newest 1v1 games,
         including your record by matchup, openers, macro and why you lost your last game.
       </p>
-      <p className="flex max-w-prose items-start gap-2 rounded-xl border-2 border-line bg-bg-elevated/60 p-3 text-body font-semibold text-text">
+      <p className="flex max-w-prose items-start gap-2 rounded-xl border border-line bg-bg-elevated/60 p-3 text-body font-semibold text-text">
         <ShieldCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-success" aria-hidden />
         <span>{PRIVACY_LINE}</span>
       </p>
@@ -119,7 +119,7 @@ function ComingSoon() {
 function EngineErrorPanel({ kind, onRetry, onReset }: { kind: ErrorKind | null; onRetry: () => void; onReset: () => void }) {
   const copy = errorCopy(kind ?? "engine_unavailable");
   return (
-    <div role="alert" className="space-y-3 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard">
+    <div role="alert" className="space-y-3 rounded-xl border border-line bg-bg-surface p-4 shadow-hard">
       <p className="flex items-start gap-2 text-body font-semibold text-text">
         <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning" aria-hidden />
         {copy.title}

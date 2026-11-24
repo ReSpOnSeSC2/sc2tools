@@ -143,7 +143,7 @@ export function QueueItem({
       aria-labelledby={titleId}
       aria-busy={actions.busy !== null || undefined}
       className={[
-        "rounded-xl border-2 border-line bg-bg-surface p-3 shadow-hard",
+        "rounded-xl border border-line bg-bg-surface p-3 shadow-hard",
         done ? "opacity-80" : "",
       ].join(" ")}
       data-testid="build-checkin-queue-item"

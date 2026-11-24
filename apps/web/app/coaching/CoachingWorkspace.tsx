@@ -100,7 +100,7 @@ export default function CoachingWorkspace() {
           <button
             type="button"
             onClick={() => void mutate()}
-            className="mt-5 min-h-10 rounded-full border-2 border-line bg-bg-surface px-5 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="mt-5 min-h-10 rounded-full border border-line bg-bg-surface px-5 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Try again
           </button>
@@ -185,5 +185,5 @@ export default function CoachingWorkspace() {
 }
 
 export function CoachingShellSkeleton() {
-  return <div role="region" aria-busy="true" aria-label="Loading coaching workspace" className="space-y-4"><div className="h-20 animate-pulse rounded-xl border-2 border-line bg-bg-surface" /><div className="flex gap-2">{[0, 1, 2].map((item) => <div key={item} className="h-11 w-28 animate-pulse rounded-full bg-bg-elevated" />)}</div><div className="h-72 animate-pulse rounded-xl border-2 border-line bg-bg-surface" /></div>;
+  return <div role="region" aria-busy="true" aria-label="Loading coaching workspace" className="space-y-4"><div className="h-20 animate-pulse rounded-xl border border-line bg-bg-surface" /><div className="flex gap-2">{[0, 1, 2].map((item) => <div key={item} className="h-11 w-28 animate-pulse rounded-full bg-bg-elevated" />)}</div><div className="h-72 animate-pulse rounded-xl border border-line bg-bg-surface" /></div>;
 }

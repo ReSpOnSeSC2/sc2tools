@@ -20,7 +20,7 @@ export function HotkeyHabits({ data }: { data?: ReplayMechanics }) {
   return <div className="space-y-3">
     <p className="text-caption text-text-muted">Logical actions recorded in the replay. Camera returns are inferred from moves to a uniquely saved location. Screen changes count jumps of at least 20 map units.</p>
     <label className="flex flex-wrap items-center gap-2 text-caption">Game phase
-      <select value={phase} onChange={event => setPhase(Number(event.target.value))} className="min-h-11 rounded-md border border-border bg-bg-surface px-2">
+      <select value={phase} onChange={event => setPhase(Number(event.target.value))} className="min-h-11 rounded-md border border-border-strong bg-bg-surface px-2">
         <option value={-1}>Whole game</option>
         {data.phases.map((row, index) => <option key={row.startSec} value={index}>{formatGameClock(row.startSec)}–{formatGameClock(row.endSec)}</option>)}
       </select>
