@@ -10,6 +10,15 @@ from sc2tools_agent.state import AgentState, _STATE_SAVE_LOCK
 from sc2tools_agent.uploader.queue import UploadQueue, _PRIORITY_OVERFLOW_LIMIT
 from tests.test_upload_queue import _cfg, _game, _StubApi, _wait_for
 
+# Each accepted upload commits durably before the next starts: an fsync'd
+# archive-journal record, then agent.json through the credential store, which
+# opens and verifies every ancestor directory (~1,000 GIL-releasing Win32 calls
+# per commit). Idle that is ~25 ms; on a busy runner every call can stall (one
+# CPU-bound thread in the process makes each GIL handoff wait out a switch
+# interval), and the 3 s default once expired mid-drain. Polls return as soon
+# as the work lands, so a healthy run never waits for this ceiling.
+_DURABLE_UPLOAD_WAIT_SEC = 30.0
+
 
 def test_match_hold_preserves_history_and_accepts_live_game_then_resumes(tmp_path, monkeypatch):
     clock = [1000.0]
@@ -176,15 +185,18 @@ def test_priority_overflow_budget_survives_pause_stop_retry_and_inflight_dequeue
         assert not q.submit(deferred)
         assert not q.is_pending(deferred.file_path)
         finish_request.set()
-        assert _wait_for(lambda: all(str(job.file_path) in state.uploaded for job in admitted))
+        # Eight live games upload one at a time, each with its own commit.
+        assert _wait_for(lambda: all(str(job.file_path) in state.uploaded for job in admitted),
+                         timeout=_DURABLE_UPLOAD_WAIT_SEC)
         assert q.pending_count() == 1
 
         # Successful terminal cleanup reclaims the allowance automatically.
         assert q.submit(deferred)
-        assert _wait_for(lambda: str(deferred.file_path) in state.uploaded)
+        assert _wait_for(lambda: str(deferred.file_path) in state.uploaded,
+                         timeout=_DURABLE_UPLOAD_WAIT_SEC)
         assert q.pending_count() == 1
         gate.enabled = False
-        assert _wait_for(lambda: q.pending_count() == 0)
+        assert _wait_for(lambda: q.pending_count() == 0, timeout=_DURABLE_UPLOAD_WAIT_SEC)
         assert len(api.calls) == _PRIORITY_OVERFLOW_LIMIT + 2
         assert _wait_for(lambda: q._q.unfinished_tasks == q._retry_q.unfinished_tasks == 0)
     finally:
