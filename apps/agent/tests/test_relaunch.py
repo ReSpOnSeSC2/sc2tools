@@ -43,6 +43,16 @@ def test_the_spawn_is_detached_and_uses_the_launch_environment(monkeypatch):
     assert "PYINSTALLER_RESET_ENVIRONMENT" not in source.environ
 
 
+def test_the_launch_record_drops_the_restart_marker_and_hands_out_copies(monkeypatch):
+    monkeypatch.setenv("SC2TOOLS_API_BASE", "https://now.example.test")
+    assert relaunch.launch_environ()["SC2TOOLS_API_BASE"] == "https://now.example.test"  # nothing recorded yet
+    recorded = relaunch.remember_launch_environ({"PATH": "C:/Windows", relaunch.RESTARTED_ENV: "1"})
+    assert recorded == {"PATH": "C:/Windows"}
+    recorded["SC2TOOLS_UPDATE_PARENT_PID"] = "4321"
+    relaunch.launch_environ()["SC2TOOLS_UPDATE_EXIT_TIMEOUT_SEC"] = "37"
+    assert relaunch.launch_environ() == {"PATH": "C:/Windows"}
+
+
 def test_a_failed_spawn_is_logged_not_raised(monkeypatch, caplog):
     monkeypatch.setattr(relaunch.subprocess, "Popen", Mock(side_effect=OSError("blocked")))
     restart = AgentRelaunch([], frozen=False)

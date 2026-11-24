@@ -3,6 +3,11 @@
 A copy started any earlier finds the lock held, hands off to this window and
 exits. So the window only arms an ``AgentRelaunch``; ``run_agent`` starts it
 after the normal shutdown has released the lock. Standard library only.
+
+Every new copy, from Restart agent or from the installer an update runs, starts
+with this run's launch environment, recorded before ``_bootstrap`` promoted saved
+settings into ``os.environ``. A promoted value would pass as explicit environment
+and hide a setting saved since this copy started.
 """
 from __future__ import annotations
 
@@ -17,6 +22,24 @@ log = logging.getLogger(__name__)
 # and this marker in the new copy's environment skips the saved start_minimized setting.
 _DROPPED_FLAGS = frozenset({"--start-minimized"})
 RESTARTED_ENV = "SC2TOOLS_RESTARTED"
+
+_launch_environ = None  # set by run_agent, before _bootstrap edits os.environ
+
+
+def remember_launch_environ(environ=None):
+    """Record this run's launch environment and return a copy. Call before ``_bootstrap``.
+
+    The restart marker is left out: it was for this copy only."""
+    global _launch_environ
+    recorded = dict(os.environ if environ is None else environ)
+    recorded.pop(RESTARTED_ENV, None)
+    _launch_environ = recorded
+    return dict(recorded)
+
+
+def launch_environ():
+    """A copy of the recorded launch environment, or of ``os.environ`` when none was recorded."""
+    return dict(os.environ if _launch_environ is None else _launch_environ)
 
 
 def _frozen():

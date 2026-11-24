@@ -48,6 +48,7 @@ from typing import Any, Callable, Dict, Iterable, Optional
 
 from . import __version__
 from .config import AgentConfig
+from .relaunch import launch_environ
 from .state import AgentState, save_state
 
 log = logging.getLogger(__name__)
@@ -556,6 +557,11 @@ def _spawn_windows_installer_detached(
     a console, and ``CREATE_NEW_PROCESS_GROUP`` isolates the helper from the
     agent's control events. Untrusted values are passed only through the child
     environment, never interpolated into the program text.
+
+    That environment starts from this run's launch environment, not
+    ``os.environ``: NSIS relaunches the agent with it, and a setting
+    ``_bootstrap`` promoted from agent.json would pass there as explicit
+    environment and hide the value saved since this copy started.
     """
     system_root = Path(os.environ.get("SystemRoot") or r"C:\Windows")
     powershell = (
@@ -565,7 +571,7 @@ def _spawn_windows_installer_detached(
         / "v1.0"
         / "powershell.exe"
     )
-    helper_env = os.environ.copy()
+    helper_env = launch_environ()
     helper_env["SC2TOOLS_UPDATE_INSTALLER_PATH"] = str(installer_path)
     helper_env["SC2TOOLS_UPDATE_PARENT_PID"] = str(int(parent_pid))
     helper_env["SC2TOOLS_UPDATE_EXIT_TIMEOUT_SEC"] = str(

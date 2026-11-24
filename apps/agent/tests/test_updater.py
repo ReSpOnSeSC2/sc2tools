@@ -5,18 +5,20 @@ from __future__ import annotations
 import hashlib
 import http.server
 import json
+import os
 import socket
 import threading
 import time
 from pathlib import Path, PurePath
 from typing import Optional
+from unittest.mock import Mock
 
 import pytest
 
 import sc2tools_agent.updater as updater_module
-from sc2tools_agent import __version__
+from sc2tools_agent import __version__, relaunch, runner
 from sc2tools_agent.config import AgentConfig
-from sc2tools_agent.state import AgentState
+from sc2tools_agent.state import AgentState, save_state
 from sc2tools_agent.updater import (
     INSTALLER_PARENT_EXIT_TIMEOUT_SEC,
     ReleaseArtifact,
@@ -29,6 +31,7 @@ from sc2tools_agent.updater import (
     install_release,
     update_is_mandatory,
 )
+from tests.test_agent_state_credentials import synthetic_state_io
 
 
 def test_installer_wait_exceeds_longest_inflight_upload_timeout() -> None:
@@ -342,6 +345,57 @@ def test_windows_launcher_waits_for_agent_exit_without_cmd_shell(
     assert "Start-Process -FilePath $installer" in program
     # The path is data in the child environment, not executable script.
     assert str(installer) not in program
+
+
+# What _bootstrap copies from agent.json into os.environ when the variable is unset.
+_PROMOTED = {
+    "SC2TOOLS_API_BASE": "https://saved.example.test",
+    "SC2TOOLS_LOG_LEVEL": "DEBUG",
+    "SC2TOOLS_PARSE_CONCURRENCY": "2",
+    "SC2TOOLS_UPLOAD_CONCURRENCY": "3",
+}
+
+
+def test_the_installer_relaunch_reads_saved_settings_not_this_copys_promoted_ones(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    synthetic_state_io,
+) -> None:
+    """NSIS relaunches the updated agent with the helper's environment. A value
+    _bootstrap promoted would pass there as explicit environment and hide any
+    setting saved after this copy started, until a cold start."""
+    monkeypatch.setenv("SC2TOOLS_STATE_DIR", str(tmp_path))  # never the real state folder
+    for name in _PROMOTED:
+        monkeypatch.setenv(name, "")  # registers the name, so teardown also undoes _bootstrap's write
+        monkeypatch.delenv(name)
+    monkeypatch.setenv("SC2TOOLS_UPLOAD_BATCH_SIZE", "7")  # set before launch, so the user's choice
+    monkeypatch.setenv(relaunch.RESTARTED_ENV, "1")  # this copy came from Restart agent
+    save_state(tmp_path, AgentState(
+        api_base_override="https://saved.example.test", log_level_override="DEBUG",
+        parse_concurrency_override=2, upload_concurrency_override=3, upload_batch_size_override=30,
+    ))
+    helper_envs = []
+    monkeypatch.setattr(updater_module.subprocess, "Popen",
+                        lambda _args, **kwargs: helper_envs.append(kwargs["env"]))
+    monkeypatch.setattr(runner, "AgentInstanceLock", lambda _path: Mock(**{"acquire.return_value": True}))
+    monkeypatch.setattr(runner, "migrate_legacy_state", lambda _path, _guard: None)
+
+    def run_until_an_update_installs(_cfg, _args, _argv, **_kwargs):
+        # The saved settings are live in this copy, and the explicit variable won.
+        assert {name: os.environ.get(name) for name in _PROMOTED} == _PROMOTED
+        assert os.environ["SC2TOOLS_UPLOAD_BATCH_SIZE"] == "7"
+        updater_module._spawn_windows_installer_detached(
+            Path(r"C:\Temp\setup.exe"), parent_pid=4321, timeout_sec=37)
+        return 0
+
+    monkeypatch.setattr(runner, "_run_locked_agent", run_until_an_update_installs)
+    assert runner.run_agent([]) == 0
+    [helper_env] = helper_envs
+    assert {name: helper_env[name] for name in _PROMOTED if name in helper_env} == {}
+    assert helper_env["SC2TOOLS_UPLOAD_BATCH_SIZE"] == "7"
+    assert helper_env["SC2TOOLS_STATE_DIR"] == str(tmp_path)
+    assert relaunch.RESTARTED_ENV not in helper_env  # the marker was for this copy only
+    assert helper_env["SC2TOOLS_UPDATE_PARENT_PID"] == "4321"
 
 
 def test_install_release_rejects_bad_sha256(tmp_path: Path) -> None:
