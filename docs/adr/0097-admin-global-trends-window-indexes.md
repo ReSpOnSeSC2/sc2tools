@@ -12,11 +12,11 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
   personal Trends cards. Its Momentum, Net MMR by matchup and opponent
   drilldown cards failed for the whole platform with
   `QueryExceededMemoryLimitNoDiskUseAllowed`.
-- **Their windows sorted the whole snapshot.** Measured on production-shaped
-  data (63,466 rows, 88 players, the largest with 12,279 rows), each of
-  momentum's sorts needed about 533 MB (its order key, `sessions.mongoOrder()`,
-  takes about 8.4 KB per row in sort memory), and net MMR's pairing window
-  about 141 MB.
+- **Their windows sorted the whole snapshot.** Measured on a local copy of
+  the production games (63,466 snapshot rows, 88 players, the largest with
+  12,279 rows), each of momentum's sorts needed about 533 MB (its order key,
+  `sessions.mongoOrder()`, takes about 8.4 KB per row in sort memory), and
+  net MMR's pairing window about 141 MB.
 - **The personal cards' fix (ADR 0096) did not reach the snapshot.** A window
   takes its order from an index only if it follows the `$match` directly and
   partitions and sorts by stored fields. The snapshot had no such index, the
@@ -57,14 +57,20 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
 
 ## Consequences
 
-- On the production-shaped fixture under Flex's limits, momentum needs about
-  0.06 MiB of sort memory, net MMR by matchup about 0.06 MiB, and the
-  opponent drilldown 0.2 MiB (3.4 MiB for a 500-row page at offset 2,000).
+- Checked on a synthetic fixture of the same shape (no production data is
+  copied), under Flex's limits. Sort memory for the whole platform:
+
+  | Card | Before | After |
+  |---|---|---|
+  | Momentum | 540 MiB | 0.06 MiB |
+  | Net MMR by matchup | 41 MiB | 0.06 MiB |
+  | Opponent drilldown | 46 MiB | 0.2 MiB (3.4 MiB for a 500-row page at offset 2,000) |
+
   Every card answers in under 2 seconds locally.
 - 185 calls (8 cohorts by 7 filter sets for each card, plus session gaps,
   time zones, matchup grouping, opponent sorts and pages) return
   byte-identical results to the previous pipelines run with disk use
-  allowed. The fixture is synthetic: no production data is copied.
+  allowed.
 - Storage grows by about 370 bytes per snapshot row (about 23 MB per
   generation of 63,466 rows before compression) plus the two indexes (about
   12 MB per generation). A refresh briefly keeps two generations. Building
