@@ -159,12 +159,12 @@ export function Stat({
   color?: string;
 }) {
   return (
-    <div className="rounded-xl border border-line bg-bg-surface p-4 shadow-hard">
-      <div className="text-micro uppercase tracking-wider text-text-dim">
+    <div className="rounded-xl border border-line bg-bg-surface surface-sheen p-4 shadow-card">
+      <div className="overline text-text-dim">
         {label}
       </div>
       <div
-        className="mt-1 text-xl font-display font-bold tabular-nums"
+        className="mt-1 text-xl font-display font-bold tabular-nums tracking-tight"
         style={color ? { color } : undefined}
       >
         {value}
@@ -211,13 +211,13 @@ export function EmptyState({
 
 export function Skeleton({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="rounded-xl border border-line bg-bg-surface shadow-hard divide-y divide-border">
+    <div className="rounded-xl border border-line bg-bg-surface shadow-card divide-y divide-border">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex animate-pulse gap-4 p-4">
-          <div className="h-4 w-32 rounded bg-bg-elevated" />
-          <div className="h-4 w-12 rounded bg-bg-elevated" />
-          <div className="h-4 w-12 rounded bg-bg-elevated" />
-          <div className="h-4 w-24 rounded bg-bg-elevated" />
+        <div key={i} className="flex gap-4 p-4">
+          <div className="skeleton-shimmer h-4 w-32 rounded-md" />
+          <div className="skeleton-shimmer h-4 w-12 rounded-md" />
+          <div className="skeleton-shimmer h-4 w-12 rounded-md" />
+          <div className="skeleton-shimmer h-4 w-24 rounded-md" />
         </div>
       ))}
     </div>

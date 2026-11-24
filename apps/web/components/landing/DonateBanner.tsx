@@ -27,16 +27,16 @@ export function DonateBanner({ costs, coverage }: { costs: InfrastructureCosts |
 
   return (
     <section className="mt-24 md:mt-32">
-      <div className="grid items-center gap-6 rounded-md border border-line bg-bg-surface p-6 shadow-hard md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-8 md:p-8">
+      <div className="grid items-center gap-6 aurora-ring rounded-2xl bg-bg-surface/80 surface-sheen p-6 shadow-pop md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-8 md:p-8">
         <span
           aria-hidden
-          className="inline-flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-md border border-editorial/40 bg-editorial/10 text-editorial ring-1 ring-editorial/40"
+          className="inline-flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/30"
         >
           <Heart className="h-7 w-7" />
         </span>
         <div className="space-y-1.5">
-          <p className="kicker">What it costs</p>
-          <h2 className="font-serif text-h3 font-semibold tracking-[-0.01em] text-text md:text-h2">
+          <p className="hud-label">What it costs</p>
+          <h2 className="font-display text-h3 font-bold tracking-tight text-text md:text-h2">
             {summary
               ? costs?.stale
                 ? `Free for players — about ${formatUsd(summary.totalUsd)} a month from the latest available provider snapshot.`

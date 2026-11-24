@@ -77,9 +77,9 @@ export function Tour({ title, step, target, index, total, pending, error, onBack
   const placement = phone ? { left: 0, right: 0, bottom: 0 } : { width, left: bounds ? Math.max(12, Math.min(bounds.viewportWidth - width - 12, bounds.left)) : 12, top };
   return createPortal(<div className="fixed inset-0" style={{ zIndex: layer }} data-tour-overlay="true">
     <div aria-hidden="true" className="absolute inset-0" />
-    {bounds ? <div aria-hidden="true" className="pointer-events-none fixed rounded-xl border-2 border-accent" style={{ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height, boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.66)" }} /> : null}
+    {bounds ? <div aria-hidden="true" className="pointer-events-none fixed rounded-xl border border-accent ring-2 ring-accent-cyan/40" style={{ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height, boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.66)" }} /> : null}
     <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} tabIndex={-1}
-      data-tour-dialog="true" className="fixed flex max-h-[80dvh] flex-col overflow-y-auto rounded-t-2xl border border-border bg-bg-surface p-5 text-text shadow-[var(--shadow-card)] sm:rounded-xl" style={placement}>
+      data-tour-dialog="true" className="fixed flex max-h-[80dvh] flex-col overflow-y-auto rounded-t-2xl border border-line glass-strong p-5 text-text shadow-pop motion-safe:animate-sheet-up sm:rounded-xl sm:motion-safe:animate-scale-in" style={placement}>
       <p className="text-caption text-text-muted">{title} · Step {index + 1} of {total}</p>
       <h2 id={titleId} className="mt-1 text-h4 font-semibold">{step.title}</h2>
       <p id={descriptionId} className="mt-3 text-body-sm text-text-muted">{step.text}</p>

@@ -52,7 +52,7 @@ export function Field({
     >
       <label
         htmlFor={controlId}
-        className="text-caption font-medium text-text"
+        className="text-caption font-medium text-text-muted"
       >
         {label}
         {required ? (

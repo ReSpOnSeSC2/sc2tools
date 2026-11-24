@@ -19,8 +19,8 @@ export function GetYourOwnCTA() {
       <GlowHalo color="mixed" position="bottom-right" />
       <div className="relative flex flex-col items-start gap-4 px-5 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="space-y-1">
-          <p className="overline text-accent-cyan">Free · no card required</p>
-          <h2 className="text-h3 font-bold text-text">
+          <p className="hud-label">Free · no card required</p>
+          <h2 className="font-display text-h3 font-bold tracking-tight text-text">
             {instant ? "Analyze your replays free" : "Track your own StarCraft II stats"}
           </h2>
           <p className="max-w-md text-body text-text-muted">

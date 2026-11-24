@@ -93,10 +93,9 @@ export function Header() {
       <header
         data-scrolled={scrolled || undefined}
         className={[
-          "sticky top-0 z-40 w-full border-b border-line bg-bg/85",
-          "relative",
-          "motion-safe:transition-[background-color,backdrop-filter] motion-safe:duration-150",
-          "data-[scrolled]:bg-bg/95 data-[scrolled]:supports-[backdrop-filter]:backdrop-blur-md",
+          "glass sticky top-0 z-40 w-full border-b border-border",
+          "motion-safe:transition-shadow motion-safe:duration-150",
+          "data-[scrolled]:shadow-card",
           "pt-[env(safe-area-inset-top,0px)]",
         ].join(" ")}
       >
@@ -162,10 +161,9 @@ export function Header() {
               aria-controls="mobile-nav-drawer"
               onClick={() => setDrawerOpen(true)}
               className={[
-                "hard-press inline-flex h-11 w-11 items-center justify-center rounded-full",
-                "border border-line bg-bg-surface text-text",
-                "hover:bg-bg-elevated",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+                "inline-flex h-11 w-11 items-center justify-center rounded-full text-text",
+                "motion-safe:transition-colors hover:bg-bg-subtle",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                 "lg:hidden",
               ].join(" ")}
             >
@@ -216,13 +214,13 @@ function NavLink({ href, label, active, wideOnly = false }: NavLinkProps) {
       href={href}
       aria-current={active ? "page" : undefined}
       className={[
-        "relative h-9 items-center whitespace-nowrap rounded-full px-2.5 font-display text-caption font-bold xl:px-3.5",
+        "relative h-9 items-center whitespace-nowrap rounded-full px-3 text-caption font-medium",
         wideOnly ? "hidden xl:inline-flex" : "inline-flex",
         "motion-safe:transition-colors motion-safe:duration-150",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         active
-          ? "bg-accent/10 text-accent-cyan"
-          : "text-text-muted hover:bg-bg-elevated hover:text-text",
+          ? "bg-bg-subtle text-text"
+          : "text-text-muted hover:bg-bg-subtle/70 hover:text-text",
       ].join(" ")}
     >
       {label}

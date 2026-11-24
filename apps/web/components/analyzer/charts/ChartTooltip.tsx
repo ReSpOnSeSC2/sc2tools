@@ -15,8 +15,6 @@ export type ChartTooltipRow = {
   dot?: string;
 };
 
-const BG = "rgb(var(--bg-elevated))";
-const BORDER = "rgb(var(--border))";
 const HEADER = "rgb(var(--accent-ink))";
 const ROW_LABEL = "rgb(var(--text-muted))";
 const ROW_VALUE = "rgb(var(--text))";
@@ -54,15 +52,13 @@ export function ChartTooltip({
   const showHeader = header != null && header !== "";
   return (
     <div
+      className="glass-strong rounded-xl border border-line shadow-pop"
       style={{
-        background: BG,
-        border: `1px solid ${BORDER}`,
-        borderRadius: 8,
-        padding: "6px 10px",
+        padding: "8px 12px",
         fontSize: 12,
         lineHeight: 1.5,
-        boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
         maxWidth: 260,
+        fontVariantNumeric: "tabular-nums",
       }}
     >
       {showHeader ? (

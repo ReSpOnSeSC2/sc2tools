@@ -72,7 +72,8 @@ it("puts the public browser analyzer first while Clerk loads", () => {
   const download = hero.getByRole("link", { name: "Download the free agent" });
   expect(hero.getAllByRole("link").slice(0, 2)).toEqual([browser, download]);
   expect(browser.classList.contains("bg-accent")).toBe(true);
-  expect(download.classList.contains("bg-bg-surface")).toBe(true);
+  expect(download.classList.contains("bg-bg-elevated")).toBe(true);
+  expect(download.classList.contains("bg-accent")).toBe(false);
 
   mocks.signedIn = true;
   rerender(<LandingPageContent />);

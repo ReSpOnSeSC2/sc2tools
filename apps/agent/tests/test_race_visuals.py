@@ -45,10 +45,10 @@ def test_default_is_an_exact_stylesheet_noop_and_race_overrides_leave_semantics_
         assert "QFrame#agentFrame" in style and "QFrame#companionConsole" in style
         assert "QPushButton#navItem:checked" in style and "QCheckBox::indicator:checked" in style
         assert "QTableView::item:selected" in style and colors.accent in style
-        assert "gradient" not in style and palette_for_skin(skin)["border"] not in style
+        assert not [name for name, body in __import__("sc2tools_agent.ui.theme", fromlist=["_rules"])._rules(style) if "gradient" in "".join(body) and name != "QPushButton#primary" and not name.startswith("QPushButton#primary:")] and palette_for_skin(skin)["border"] not in style
         assert not any(selector in style for selector in ("#badgeErr", "#badgeOk", 'tone="good"', 'tone="live"'))
         assert theme.DANGER not in style and theme.DANGER_SOLID not in style
-        properties = set(re.findall(r"([a-z-]+):", re.sub(r"[^{}]*\{", "{", style)))
+        properties = set(re.findall(r"([a-z-]+):", re.sub(r"[^{}]*\{", "{", re.sub(r"qlineargradient\([^)]*\)", "", style))))
         assert properties <= {"background", "color", "border-color", "border-left-color", "border-bottom-color",
                               "selection-background-color", "selection-color"}, properties
 
@@ -236,7 +236,7 @@ from types import SimpleNamespace
 from sc2tools_agent.ui import race_visuals
 from sc2tools_agent.ui.race_visuals import create_race_effects, css_for_skin
 race_visuals.create_race_artwork = lambda **kwargs: SimpleNamespace(paint=lambda *args: False)
-assert "gradient" not in css_for_skin("protoss")
+assert not [name for name, body in __import__("sc2tools_agent.ui.theme", fromlist=["_rules"])._rules(css_for_skin("protoss")) if "gradient" in "".join(body) and not name.startswith("QPushButton#primary")]
 window = QtWidgets.QWidget()
 window.resize(520, 480)
 window.show()

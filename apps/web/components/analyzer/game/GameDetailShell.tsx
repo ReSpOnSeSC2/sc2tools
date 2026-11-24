@@ -123,7 +123,7 @@ export function GameDetailShell({
         </Link>
 
         <Card variant="feature" padded={false} className="group/map relative overflow-visible">
-          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
           <MapArtwork
             mapName={game.map}
             size="hero"
@@ -132,18 +132,18 @@ export function GameDetailShell({
           />
           <span
             aria-hidden
-            className="absolute inset-0 bg-gradient-to-r from-bg-surface via-bg-surface/90 to-bg-surface/55"
+            className="absolute inset-0 bg-gradient-to-r from-bg-surface via-bg-surface/85 to-bg-surface/40"
           />
           <span
             aria-hidden
-            className="absolute inset-0 bg-gradient-to-t from-bg-surface/80 via-transparent to-bg-surface/20"
+            className="absolute inset-0 bg-gradient-to-t from-bg-surface via-bg-surface/70 to-transparent"
           />
           </div>
 
           <div className="relative space-y-3 p-4 sm:p-5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <ResultBadge result={game.result} />
-              <h1 className="min-w-0 break-words font-display text-h2 font-bold text-text">{title}</h1>
+              <h1 className="min-w-0 break-words font-display text-h2 font-bold tracking-tight text-text">{title}</h1>
             </div>
 
             <dl className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-caption text-text-muted">
@@ -224,7 +224,7 @@ function MetaItem({
 }) {
   return (
     <div className="flex items-center gap-1.5">
-      <dt className="text-micro uppercase tracking-wider text-text-dim">
+      <dt className="overline text-text-dim">
         {label}
       </dt>
       <dd className="text-text">{children}</dd>

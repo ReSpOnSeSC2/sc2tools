@@ -86,7 +86,7 @@ export function SegmentedControl<T extends string>({
       aria-label={labelledBy ? undefined : label}
       aria-labelledby={labelledBy}
       className={[
-        "inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-full border border-line bg-bg-surface p-0.5",
+        "inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-full border border-line bg-bg/60 p-1",
         className,
       ]
         .filter(Boolean)
@@ -112,11 +112,11 @@ export function SegmentedControl<T extends string>({
             onKeyDown={(event) => onKeyDown(event, index)}
             className={[
               "inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-3 sm:min-h-8",
-              "text-caption font-semibold tabular-nums transition-colors",
+              "text-caption font-semibold tabular-nums transition-[color,background-color,box-shadow]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
               checked
-                ? "bg-accent text-white"
-                : "text-text-muted hover:bg-bg-elevated hover:text-text",
+                ? "bg-bg-elevated text-text shadow-card ring-1 ring-line"
+                : "text-text-muted hover:text-text",
             ].join(" ")}
           >
             {option.label}

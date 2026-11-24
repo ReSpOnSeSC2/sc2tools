@@ -74,10 +74,10 @@ export function RealGameShowcase() {
   return (
     <section className="mt-24 md:mt-32">
       <div className="grid gap-x-10 gap-y-4 lg:grid-cols-12">
-        <p className="kicker lg:col-span-4">See exactly what you get</p>
+        <p className="hud-label lg:col-span-4">See exactly what you get</p>
         <div className="lg:col-span-8">
           <hr className="ed-rule mb-5" />
-          <h2 className="font-serif text-[32px] font-semibold leading-tight tracking-[-0.01em] text-text md:text-[40px]">
+          <h2 className="font-display text-h2 font-bold leading-tight tracking-tight text-text md:text-[2.5rem]">
             One replay in. Your whole game, read back.
           </h2>
           <p className="mt-3 max-w-2xl text-body-lg text-text-muted">
@@ -89,10 +89,10 @@ export function RealGameShowcase() {
       </div>
 
       {/* The parsed-game panel, styled like the product UI. */}
-      <div className="mt-8 overflow-hidden rounded-md border border-line bg-bg-surface shadow-hard">
+      <div className="mt-8 overflow-hidden rounded-2xl border border-line bg-bg-surface/70 surface-sheen shadow-pop">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line bg-bg-elevated/50 px-5 py-3">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <span className="font-serif text-h4 font-semibold text-text">
+            <span className="font-display text-h4 font-semibold text-text">
               Protoss vs Zerg
             </span>
             <span className="text-text-dim" aria-hidden>
@@ -104,13 +104,13 @@ export function RealGameShowcase() {
             </span>
             <span className="text-caption text-text-muted">1v1 Ladder</span>
           </div>
-          <span className="inline-flex items-center gap-1.5 text-caption font-semibold text-editorial">
+          <span className="inline-flex items-center gap-1.5 text-caption font-semibold text-accent-cyan">
             <Wand2 className="h-3.5 w-3.5" aria-hidden />
             Auto-read from one .SC2Replay
           </span>
         </div>
 
-        <div className="grid md:grid-cols-2 md:divide-x-2 md:divide-line">
+        <div className="grid md:grid-cols-2 md:divide-x md:divide-line">
           <ShowcasePlayerColumn player={SHOWCASE_YOU} side="You" />
           <ShowcasePlayerColumn player={SHOWCASE_OPP} side="Opponent" />
         </div>
@@ -145,10 +145,10 @@ export function RealGameShowcase() {
       </div>
 
       <div className="mt-20 grid gap-x-10 gap-y-5 lg:grid-cols-12 md:mt-24">
-        <p className="kicker lg:col-span-4">And it stacks up over time</p>
+        <p className="hud-label lg:col-span-4">And it stacks up over time</p>
         <div className="lg:col-span-8">
           <hr className="ed-rule mb-5" />
-          <h3 className="font-serif text-[30px] font-semibold leading-tight tracking-[-0.01em] text-text md:text-[38px]">
+          <h3 className="font-display text-h2 font-bold leading-tight tracking-tight text-text md:text-[2.5rem]">
             A few games in, the graphs do the talking.
           </h3>
           <p className="mt-3 max-w-2xl text-body-lg text-text-muted">
@@ -186,13 +186,13 @@ function ShowcasePlayerColumn({
             ].join(" ")}
           />
           <div className="min-w-0">
-            <p className="font-serif text-h4 font-semibold text-text">{side}</p>
+            <p className="font-display text-h4 font-semibold text-text">{side}</p>
             <p className="text-caption text-text-dim">{player.race}</p>
           </div>
         </div>
         <span
           className={[
-            "inline-flex h-7 items-center rounded-md border-2 px-2 text-caption font-bold",
+            "inline-flex h-7 items-center rounded-full border px-3 text-caption font-bold",
             win
               ? "border-success/50 text-success"
               : "border-text-dim/40 text-text-dim",
@@ -202,7 +202,7 @@ function ShowcasePlayerColumn({
         </span>
       </div>
 
-      <div className="mt-4 border-l-2 border-editorial pl-3">
+      <div className="mt-4 border-l-2 border-accent-cyan pl-3">
         <p className="kicker">Detected opening</p>
         <p className="mt-1 text-body font-medium text-text">{player.read}</p>
       </div>
@@ -213,7 +213,7 @@ function ShowcasePlayerColumn({
             <span
               className={[
                 "w-12 flex-shrink-0 font-mono text-caption tabular-nums",
-                s.key ? "text-editorial" : "text-text-dim",
+                s.key ? "text-accent-cyan" : "text-text-dim",
               ].join(" ")}
             >
               {s.t}

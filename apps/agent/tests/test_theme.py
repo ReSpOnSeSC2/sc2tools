@@ -68,7 +68,7 @@ def test_shared_styles_cover_existing_and_companion_shell_surfaces(selector):
 
 
 def test_stylesheet_contains_resolved_tokens_and_balanced_rules():
-    assert "gradient" not in theme.STYLE
+    assert set(re.findall(r"\w*gradient", theme.STYLE)) <= {"qlineargradient"}
     assert theme.FOCUS in theme.STYLE
     assert theme.STYLE.count("{") == theme.STYLE.count("}")
     assert "{BG}" not in theme.STYLE

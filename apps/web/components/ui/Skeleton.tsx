@@ -21,7 +21,7 @@ export function SkeletonBar({ className = "" }: { className?: string }) {
   return (
     <div
       aria-hidden
-      className={["rounded bg-bg-elevated motion-safe:animate-pulse", className].filter(Boolean).join(" ")}
+      className={["rounded-md skeleton-shimmer", className].filter(Boolean).join(" ")}
     />
   );
 }
@@ -61,7 +61,7 @@ export function SkeletonCard({ className = "", children }: { className?: string;
   return (
     <div
       aria-hidden
-      className={["rounded-xl border border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
+      className={["rounded-xl border border-line bg-bg-surface p-4 shadow-card", className].filter(Boolean).join(" ")}
     >
       {children}
     </div>
@@ -71,7 +71,7 @@ export function SkeletonCard({ className = "", children }: { className?: string;
 /** A chart-shaped loading state with one announcement and decorative bars. */
 export function SkeletonChart({ label = "Loading chart", className = "" }: { label?: string; className?: string }) {
   return <SkeletonRegion label={label} className={className}>
-    <div aria-hidden className="flex h-48 items-end gap-3 rounded-xl border border-border p-4">
+    <div aria-hidden className="flex h-48 items-end gap-3 rounded-xl border border-line bg-bg-surface p-4 shadow-card">
       {["h-1/3", "h-2/3", "h-1/2", "h-4/5", "h-3/5", "h-full"].map((height, index) =>
         <SkeletonBar key={index} className={`min-w-0 flex-1 ${height}`} />)}
     </div>

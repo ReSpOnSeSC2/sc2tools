@@ -98,7 +98,7 @@ function EffectSelect({
       value={value}
       aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
+      className="w-full min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
     >
       {allowNone ? <option value="none">None (silent)</option> : null}
       {customSounds.length > 0 ? (
@@ -444,7 +444,7 @@ export function SettingsMultiChatTts({
               <select
                 value={value.voiceName}
                 onChange={(e) => set({ voiceName: e.target.value })}
-                className="w-full min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
+                className="w-full min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
               >
                 <option value="">Machine default</option>
                 {offeredVoices.map((v) => (

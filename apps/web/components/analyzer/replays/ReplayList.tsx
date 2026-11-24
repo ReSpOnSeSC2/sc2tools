@@ -87,7 +87,7 @@ export function ReplayList({
         <div className="hidden overflow-x-auto xl:block">
           <table className="w-full min-w-[1040px] text-left text-caption">
             <caption className="sr-only">Replay history for {playerName}</caption>
-            <thead className="border-b border-line bg-bg-elevated/70 text-micro uppercase tracking-wider text-text-muted">
+            <thead className="border-b border-line bg-bg-elevated/50 text-micro uppercase tracking-[0.12em] text-text-dim">
               <tr>
                 {owner && selection ? <th scope="col" className="px-3 py-3"><span className="sr-only">Select replay</span></th> : null}
                 <th scope="col" className="w-24 px-4 py-3 font-semibold">Result</th>
@@ -99,7 +99,7 @@ export function ReplayList({
                 <th scope="col" className={`${owner ? "w-48" : "w-40"} px-4 py-3 text-right font-semibold`}>Open</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-line">
               {items.map((game) => (
                 <DesktopReplayRow
                   key={game.gameId}
@@ -118,7 +118,7 @@ export function ReplayList({
           </table>
         </div>
 
-        <ul className="divide-y divide-border lg:grid lg:grid-cols-2 xl:hidden" role="list">
+        <ul className="divide-y divide-line lg:grid lg:grid-cols-2 xl:hidden" role="list">
           {items.map((game) => (
             <MobileReplayCard
               key={game.gameId}
@@ -158,7 +158,7 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
     ? gameAnalysisHref(game.gameId, null, source)
     : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);
   return (
-    <tr data-replay-game-id={game.gameId} onClickCapture={event => rememberOpen(event, game.gameId, onOpenReplay)} className="group bg-bg-surface transition-colors hover:bg-bg-elevated/55">
+    <tr data-replay-game-id={game.gameId} onClickCapture={event => rememberOpen(event, game.gameId, onOpenReplay)} className="group bg-bg-surface transition-colors hover:bg-bg-subtle/60">
       {owner && selection ? <td className="px-2 py-3"><ReplaySelection gameId={game.gameId} selection={selection} /></td> : null}
       <td className={["border-l-4 px-4 py-3", resultRail(game.result)].join(" ")}>
         <ResultBadge result={game.result} />
@@ -323,7 +323,7 @@ function PlayerLine({ name, race, pulseId, muted = false }: { name: string; race
           <Icon name={raceIconName(normalized)} kind="race" size={14} decorative />
         </span>
       ) : (
-        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-border text-[10px] text-text-dim">?</span>
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-border text-micro text-text-dim">?</span>
       )}
       {pulseId ? <OpponentLink pulseId={pulseId} name={name} className="font-semibold" /> : <span className={["truncate", muted ? "text-text-muted" : "font-semibold text-text"].join(" ")} title={name}>{name}</span>}
     </div>

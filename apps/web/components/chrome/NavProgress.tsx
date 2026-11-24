@@ -43,5 +43,5 @@ export function NavProgress({ onPendingChange }: { onPendingChange?: (pending: b
     timers.current.push(setTimeout(() => { setShown(false); setComplete(false); }, 200));
   }, [pathname, search, onPendingChange]);
   if (!shown) return null;
-  return <span aria-hidden data-nav-progress className="pointer-events-none absolute bottom-0 left-0 h-0.5 bg-accent" style={{ width: `${reduced ? 100 : width}%`, opacity: complete ? 0 : reduced ? 0.6 : 1, transition: reduced ? "none" : complete ? "width 100ms, opacity 200ms" : "width 12s cubic-bezier(.1,.5,.1,1)" }} />;
+  return <span aria-hidden data-nav-progress className="pointer-events-none absolute bottom-0 left-0 h-0.5 bg-aurora shadow-[0_0_10px_rgb(var(--accent-cyan)/0.55)]" style={{ width: `${reduced ? 100 : width}%`, opacity: complete ? 0 : reduced ? 0.6 : 1, transition: reduced ? "none" : complete ? "width 100ms, opacity 200ms" : "width 12s cubic-bezier(.1,.5,.1,1)" }} />;
 }

@@ -158,7 +158,7 @@ export function TrendsTabView({ overview }: { overview: TrendsOverview }) {
             value={bucket}
             onChange={(e) => setBucket(e.target.value as TrendsOverview["bucket"])}
             aria-describedby="trends-grouping-hint"
-            className="rounded-lg border border-border-strong bg-bg-surface px-3 py-[0.55rem] text-text transition-colors focus:border-accent focus:outline-none text-sm"
+            className="rounded-lg border border-border-strong bg-bg-surface px-3 py-[0.55rem] text-text transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 text-sm"
           >
             <option value="day">Day</option>
             <option value="week">Week</option>

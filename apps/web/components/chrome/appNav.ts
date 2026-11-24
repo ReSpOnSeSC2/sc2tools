@@ -2,7 +2,8 @@ import type { ComponentType, SVGProps } from "react";
 import {
   Bell,
   BookOpen,
-  CalendarClock,
+  GraduationCap,
+  History,
   Compass,
   Cpu,
   Crosshair,
@@ -114,7 +115,7 @@ const UTILITY_ENTRIES: NavEntry[] = [
     key: "coaching",
     href: "/coaching",
     label: "Coaching", description: "Your sessions",
-    icon: CalendarClock,
+    icon: GraduationCap,
     group: "utility",
     coachingOnly: true,
   },
@@ -137,7 +138,7 @@ const UTILITY_ENTRIES: NavEntry[] = [
 export const NAV_ENTRIES: readonly NavEntry[] = [
   TODAY_ENTRY,
   ...SECTION_ENTRIES,
-  { key: "sessions", href: "/app/sessions", label: "Sessions", description: "Review complete sessions and recorded ratings", icon: CalendarClock, group: "section" },
+  { key: "sessions", href: "/app/sessions", label: "Sessions", description: "Review complete sessions and recorded ratings", icon: History, group: "section" },
   { key: "goals", href: "/app/goals", label: "Goals", description: "Targets that track themselves from your replays", icon: Target, group: "section" },
   EXPLORE_ENTRY,
   ...UTILITY_ENTRIES,

@@ -176,10 +176,10 @@ export function AnalyzerFrame({
 
 function FrameFilters({ today }: { today: boolean }) {
   const [show, setShow] = useLocalStorageState<boolean>("analyzer.today.showFilters", false, (value): value is boolean => typeof value === "boolean");
-  return <div className="rounded-xl border border-line bg-bg-surface px-3 py-3 shadow-hard sm:py-2">
+  return <div className="rounded-2xl border border-line bg-bg-surface surface-sheen px-3 py-3 shadow-card sm:py-2">
     {today ? <div className="flex flex-wrap items-center gap-2"><p className="min-w-0 flex-1 text-caption text-text-muted">Filters shape the analysis sections. Today shows your live session.</p><button type="button" aria-expanded={show} onClick={() => setShow(!show)} className="min-h-11 rounded-full px-3 text-caption text-accent underline">{show ? "Hide filters" : "Show filters"}</button></div> : null}
     {!today || show ? <FilterBar /> : null}
-    <ActiveFilterChips className="mt-3 border-t border-border pt-3 sm:mt-2 sm:pt-2" />
+    <ActiveFilterChips className="mt-3 border-t border-line pt-3 sm:mt-2 sm:pt-2" />
   </div>;
 }
 

@@ -193,7 +193,7 @@ export function WidgetExplorer() {
 
 function WidgetDetail({ guide, onRelated, detailRef }: { guide: WidgetGuide; onRelated: (id: string) => void; detailRef: RefObject<HTMLElement | null> }) {
   return (
-    <article ref={detailRef} tabIndex={-1} aria-label={`${guide.name} guide`} className="min-w-0 scroll-mt-28 overflow-hidden rounded-md border border-line bg-bg-surface shadow-hard focus:outline-none">
+    <article ref={detailRef} tabIndex={-1} aria-label={`${guide.name} guide`} className="min-w-0 scroll-mt-28 overflow-hidden rounded-md border border-line bg-bg-surface shadow-hard focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
       <header className="border-b border-border p-5 sm:p-7">
         <p className="text-caption font-semibold text-accent">{WIDGET_GROUPS.find((group) => group.id === guide.group)?.name}</p>
         <h3 className="mt-2 font-display text-3xl font-bold text-text">{guide.name}</h3>

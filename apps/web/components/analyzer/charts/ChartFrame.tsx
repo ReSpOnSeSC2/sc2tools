@@ -18,12 +18,12 @@ export function ChartFrame<Row>({ title, showTitle = false, summary, rows, colum
   const ready = !query || hasQueryData(query);
   const content = () => !rows.length ? empty || <EmptyState title="No chart data in this view" /> : table
     ? <ChartDataTable title={title} summary={summary} rows={rows} columns={columns} /> : children;
-  return <section aria-label={title} className={`min-w-0 space-y-3 ${className}`} data-testid={testId}>
+  return <section aria-label={title} className={`min-w-0 space-y-3 rounded-2xl border border-line bg-bg-surface surface-sheen p-3 shadow-card sm:p-4 ${className}`} data-testid={testId}>
     {ready ? <p className="sr-only">{summary}</p> : null}
     <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-      {showTitle ? <h3 className="text-caption font-semibold text-text">{title}</h3> : null}
+      {showTitle ? <h3 className="text-body font-semibold tracking-tight text-text">{title}</h3> : null}
       {ready ? legend : null}{toolbar}
-      {ready && rows.length > 0 ? <Button variant="ghost" size="sm" className="min-h-11" aria-pressed={table} aria-controls={id} onClick={() => setTable(value => !value)}>{table ? "Show chart" : "View as table"}<span className="sr-only"> · {title}</span></Button> : null}
+      {ready && rows.length > 0 ? <Button variant="ghost" size="sm" className="min-h-11 rounded-full text-text-muted hover:text-text" aria-pressed={table} aria-controls={id} onClick={() => setTable(value => !value)}>{table ? "Show chart" : "View as table"}<span className="sr-only"> · {title}</span></Button> : null}
     </div>
     <div id={id}>{query ? <QueryState q={query}>{content}</QueryState> : content()}</div>
   </section>;
@@ -31,11 +31,11 @@ export function ChartFrame<Row>({ title, showTitle = false, summary, rows, colum
 
 function ChartDataTable<Row>({ title, summary, rows, columns }: Pick<ChartFrameProps<Row>, "title" | "summary" | "rows" | "columns">) {
   // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The named overflow region must accept keyboard scrolling.
-  return <div role="region" aria-label={`${title} data table`} tabIndex={0} className="max-w-full overflow-x-auto rounded-lg border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+  return <div role="region" aria-label={`${title} data table`} tabIndex={0} className="max-w-full overflow-x-auto rounded-xl border border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
     <table className="w-full border-collapse text-caption">
       <caption className="sr-only">{title}. {summary}</caption>
-      <thead className="bg-bg-elevated"><tr>{columns.map(column => <th key={column.key} scope="col" className={`px-3 py-2 font-semibold text-text ${column.align === "right" ? "text-right" : "text-left"}`}>{column.label}</th>)}</tr></thead>
-      <tbody className="divide-y divide-border">{rows.map((row, index) => <tr key={index}>{columns.map(column => <td key={column.key} className={`break-words px-3 py-2 text-text-muted ${column.align === "right" ? "text-right tabular-nums" : "text-left"}`}>{column.render(row)}</td>)}</tr>)}</tbody>
+      <thead className="bg-bg-elevated"><tr>{columns.map(column => <th key={column.key} scope="col" className={`px-3 py-2 text-micro font-semibold uppercase tracking-[0.12em] text-text-dim ${column.align === "right" ? "text-right" : "text-left"}`}>{column.label}</th>)}</tr></thead>
+      <tbody className="divide-y divide-line">{rows.map((row, index) => <tr key={index} className="hover:bg-bg-subtle/60">{columns.map(column => <td key={column.key} className={`break-words px-3 py-2 text-text-muted ${column.align === "right" ? "text-right tabular-nums" : "text-left"}`}>{column.render(row)}</td>)}</tr>)}</tbody>
     </table>
   </div>;
 }

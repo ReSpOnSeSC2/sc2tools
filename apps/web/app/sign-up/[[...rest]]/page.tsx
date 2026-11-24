@@ -67,7 +67,7 @@ function SignUpWidget({ theme }: { theme: Theme }) {
 function WidgetPlaceholder() {
   return (
     <div
-      className="min-h-[480px] rounded-xl border border-border bg-bg-surface/40"
+      className="min-h-[480px] rounded-2xl border border-line bg-bg-surface/40"
       aria-hidden
     />
   );
@@ -95,10 +95,11 @@ const BULLETS: ReadonlyArray<MarketingBullet> = [
 
 function SignUpMarketing() {
   return (
-    <div className="space-y-6 md:space-y-7">
+    <div className="relative isolate space-y-6 md:space-y-7">
+      <div aria-hidden className="pointer-events-none absolute -left-10 -top-16 -z-10 h-64 w-64 rounded-full bg-aurora opacity-10 blur-3xl" />
       <FreeBadge />
-      <h1 className="text-h1 font-semibold leading-tight text-text md:text-display-lg">
-        Free in <span className="text-accent-cyan">30 seconds.</span>
+      <h1 className="font-display text-h1 font-extrabold leading-[1.05] tracking-[-0.04em] text-text md:text-display-lg">
+        Free in <span className="aurora-text">30 seconds.</span>
         <br />
         No card.
       </h1>
@@ -121,7 +122,7 @@ function SignUpMarketing() {
           <li key={text} className="flex items-start gap-3">
             <span
               aria-hidden
-              className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
+              className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/30"
             >
               <Icon className="h-4 w-4" />
             </span>
@@ -136,7 +137,7 @@ function SignUpMarketing() {
 
 function FreeBadge() {
   return (
-    <p className="inline-flex items-center gap-1.5 text-caption font-medium text-accent-cyan">
+    <p className="hud-label inline-flex items-center gap-1.5 rounded-full border border-accent-cyan/30 bg-accent-cyan/10 px-3 py-1">
       <Zap className="h-3.5 w-3.5" aria-hidden />
       Free forever — no card required
     </p>
@@ -145,7 +146,7 @@ function FreeBadge() {
 
 function PlayerQuote() {
   return (
-    <blockquote className="rounded-lg border border-border bg-bg-elevated/60 p-4">
+    <blockquote className="rounded-xl border border-line bg-bg-elevated/60 surface-sheen p-4">
       <div className="flex items-start gap-3">
         <CreditCard
           className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-cyan"

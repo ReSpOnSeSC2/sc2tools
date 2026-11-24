@@ -56,7 +56,7 @@ function SignInWidget({ theme }: { theme: Theme }) {
 function WidgetPlaceholder() {
   return (
     <div
-      className="min-h-[480px] rounded-xl border border-border bg-bg-surface/40"
+      className="min-h-[480px] rounded-2xl border border-line bg-bg-surface/40"
       aria-hidden
     />
   );
@@ -84,13 +84,14 @@ const BULLETS: ReadonlyArray<MarketingBullet> = [
 
 function SignInMarketing() {
   return (
-    <div className="space-y-6 md:space-y-7">
-      <p className="inline-flex items-center gap-1.5 text-caption font-medium text-accent-cyan">
+    <div className="relative isolate space-y-6 md:space-y-7">
+      <div aria-hidden className="pointer-events-none absolute -left-10 -top-16 -z-10 h-64 w-64 rounded-full bg-aurora opacity-10 blur-3xl" />
+      <p className="hud-label inline-flex items-center gap-1.5 rounded-full border border-accent-cyan/30 bg-accent-cyan/10 px-3 py-1">
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-cyan shadow-halo-cyan" />
         Welcome back
       </p>
-      <h1 className="text-h1 font-semibold leading-tight text-text md:text-display-lg">
-        Sign in to <span className="text-accent-cyan">SC2 Tools</span>
+      <h1 className="font-display text-h1 font-extrabold leading-[1.05] tracking-[-0.04em] text-text md:text-display-lg">
+        Sign in to <span className="aurora-text">SC2 Tools</span>
       </h1>
       <p className="max-w-prose text-body-lg text-text-muted">
         Your replay history, opponent dossiers, and overlay layouts are
@@ -101,7 +102,7 @@ function SignInMarketing() {
           <li key={text} className="flex items-start gap-3">
             <span
               aria-hidden
-              className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
+              className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/30"
             >
               <Icon className="h-4 w-4" />
             </span>

@@ -40,9 +40,13 @@ export function HeroCarousel({ slides, intervalMs = 5500, ariaLabel = "Product h
   }
   if (!total) return null;
   // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Carousel arrow keys operate the focused strip and its controls.
-  return <section aria-roledescription="carousel" aria-label={ariaLabel} aria-live={playing ? "off" : "polite"} className="relative min-w-0"
+  return <section aria-roledescription="carousel" aria-label={ariaLabel} aria-live={playing ? "off" : "polite"} className="relative isolate min-w-0"
     onKeyDown={(event) => { const next = event.key === "ArrowRight" ? current + 1 : event.key === "ArrowLeft" ? current - 1 : event.key === "Home" ? 0 : event.key === "End" ? total - 1 : null; if (next !== null) { event.preventDefault(); go(next); } }}>
-    <div className="group relative overflow-hidden rounded-md border border-line bg-bg-elevated/40 shadow-hard">
+    <div aria-hidden className="pointer-events-none absolute -inset-x-6 -top-8 bottom-4 -z-10 rounded-full bg-aurora opacity-20 blur-3xl" />
+    <div className="group hud-corners glass relative overflow-hidden rounded-2xl border border-line shadow-pop">
+      <div aria-hidden className="flex h-8 items-center gap-1.5 border-b border-border px-4">
+        <span className="h-2 w-2 rounded-full bg-text-dim/40" /><span className="h-2 w-2 rounded-full bg-text-dim/40" /><span className="h-2 w-2 rounded-full bg-text-dim/40" />
+      </div>
       <ul ref={strip} role="group" aria-label="Product highlight slides" tabIndex={0} className="grid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent max-md:flex max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto"
         style={{ touchAction: desktop ? "pan-y" : "auto" }}
         onScroll={() => { if (!desktop) setPaused(true); }}
@@ -57,9 +61,9 @@ export function HeroCarousel({ slides, intervalMs = 5500, ariaLabel = "Product h
     </div>
     {total > 1 ? <div role="group" aria-label="Slide selector" className="mt-3 hidden items-center justify-center gap-2 md:flex">
       {slides.map((slide, index) => <button key={slide.id} type="button" aria-label={"Show slide " + (index + 1) + " of " + total + ": " + slide.label} aria-current={index === current ? "true" : undefined}
-        onClick={() => go(index)} className="inline-flex h-6 min-w-6 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><span aria-hidden className={index === current ? "h-1.5 w-8 bg-editorial" : "h-1.5 w-3 bg-border"} /></button>)}
-      <button type="button" aria-label={paused ? "Play slideshow" : "Pause slideshow"} onClick={() => setPaused((value) => !value)} className="inline-flex h-11 w-11 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{paused ? <Play aria-hidden className="h-5 w-5" /> : <Pause aria-hidden className="h-5 w-5" />}</button>
+        onClick={() => go(index)} className="inline-flex h-6 min-w-6 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><span aria-hidden className={index === current ? "h-1.5 w-8 rounded-full bg-aurora transition-all" : "h-1.5 w-3 rounded-full bg-border-strong/60 transition-all"} /></button>)}
+      <button type="button" aria-label={paused ? "Play slideshow" : "Pause slideshow"} onClick={() => setPaused((value) => !value)} className="inline-flex h-11 w-11 items-center justify-center rounded-full text-text-muted hover:bg-bg-subtle/60 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{paused ? <Play aria-hidden className="h-5 w-5" /> : <Pause aria-hidden className="h-5 w-5" />}</button>
     </div> : null}
   </section>;
 }
-const NAV = "absolute top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md border border-border bg-bg-surface/80 text-text opacity-0 md:inline-flex group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 motion-reduce:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+const NAV = "absolute top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-border glass-strong text-text opacity-0 md:inline-flex group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 motion-reduce:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";

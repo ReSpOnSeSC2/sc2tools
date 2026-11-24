@@ -37,7 +37,7 @@ export function Section({
         <header className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div className="space-y-1">
             {title ? (
-              <h2 className="title-spine text-h3 font-bold text-text">{title}</h2>
+              <h2 className="title-spine text-h4 font-bold tracking-tight text-text">{title}</h2>
             ) : null}
             {description ? (
               <p className="text-body text-text-muted">{description}</p>

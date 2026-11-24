@@ -59,7 +59,7 @@ export function WinRateSortToggle({
       <div
         role="radiogroup"
         aria-label="Sort by win rate"
-        className="inline-flex overflow-hidden rounded-lg border border-line"
+        className="inline-flex gap-0.5 rounded-full border border-line bg-bg/60 p-1"
       >
         {OPTIONS.map((o) => {
           const selected = active && dir === o.dir;
@@ -71,10 +71,10 @@ export function WinRateSortToggle({
               aria-checked={selected}
               onClick={() => onChange(o.dir)}
               title={o.title}
-              className={`min-h-[32px] whitespace-nowrap px-2.5 text-xs tabular-nums transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+              className={`min-h-11 sm:min-h-8 whitespace-nowrap rounded-full px-3 text-xs tabular-nums transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 selected
-                  ? "bg-accent/20 text-accent"
-                  : "text-text-muted hover:bg-bg-elevated"
+                  ? "bg-bg-elevated text-text shadow-card ring-1 ring-line"
+                  : "text-text-muted hover:text-text"
               }`}
             >
               {o.label}

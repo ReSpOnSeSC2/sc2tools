@@ -27,12 +27,12 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         ref={ref}
         aria-invalid={invalid || undefined}
         className={[
-          "block w-full appearance-none bg-bg-surface text-text border-2",
-          "transition-colors",
+          "block w-full appearance-none bg-bg-subtle/40 text-text border",
+          "transition-[border-color,box-shadow,background-color] hover:bg-bg-subtle/60",
           invalid
-            ? "border-danger focus:border-danger focus:ring-danger"
-            : "border-line focus:border-accent",
-          "focus:outline-none focus:ring-2 focus:ring-accent/40",
+            ? "border-danger focus:border-danger focus:ring-danger/20"
+            : "border-border-strong focus:border-accent focus:ring-accent/20",
+          "focus:outline-none focus:ring-4",
           "disabled:opacity-50 disabled:cursor-not-allowed",
           SIZE_CLASSES[selectSize],
           className,

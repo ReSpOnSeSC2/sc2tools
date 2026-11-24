@@ -83,9 +83,9 @@ export function SiteStats({ wide = false, syncStatus, variant = "marketing", sig
         ? "Some counts unavailable"
         : "Updates every 30 seconds";
 
-  if (variant === "app") return <section aria-label="App activity" className={`border-b border-border bg-bg-surface/40 ${signedIn ? analyzer ? "block" : "hidden md:block" : "hidden xl:block"}`}>
+  if (variant === "app") return <section aria-label="App activity" className={`border-b border-border bg-bg-surface/30 ${signedIn ? analyzer ? "block" : "hidden md:block" : "hidden xl:block"}`}>
     <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8"><div className="flex min-h-9 items-center justify-between gap-2">{signedIn ? <div className="min-w-0">{syncStatus}</div> : <span />}
-      <button type="button" aria-expanded={expanded} aria-controls={detailsId} onClick={toggle} className="ml-auto hidden min-h-9 shrink-0 items-center gap-2 rounded-lg px-2 text-caption text-text-muted hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent xl:inline-flex">Community · {unavailable || data?.activeUsers == null ? "unavailable" : `${COMPACT_NUMBER_FORMAT.format(data.activeUsers)} online`}<ChevronDown className={`h-3 w-3 ${expanded ? "rotate-180" : ""}`} aria-hidden /></button>
+      <button type="button" aria-expanded={expanded} aria-controls={detailsId} onClick={toggle} className="ml-auto hidden min-h-9 shrink-0 items-center gap-2 rounded-lg px-2 text-caption text-text-muted hover:bg-bg-subtle/70 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent xl:inline-flex">Community · {unavailable || data?.activeUsers == null ? "unavailable" : `${COMPACT_NUMBER_FORMAT.format(data.activeUsers)} online`}<ChevronDown className={`h-3 w-3 ${expanded ? "rotate-180" : ""}`} aria-hidden /></button>
     </div><div id={detailsId} hidden={!expanded} className="border-t border-border py-3"><div className="hidden xl:block"><p className="mb-2 text-caption text-text-muted">{status}</p><dl className="flex flex-wrap gap-6">{values.map(({ label, value }) => <div key={label}><dt className="text-caption text-text-muted">{label}</dt><dd className="font-mono text-caption text-text">{value == null || unavailable ? "—" : NUMBER_FORMAT.format(value)}</dd></div>)}</dl></div></div></div>
   </section>;
 

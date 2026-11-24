@@ -48,8 +48,7 @@ export function StatCard({
   return (
     <div
       className={[
-        // Courtside KPI card: 2px ink outline + hard offset shadow.
-        "flex flex-col rounded-xl border border-line bg-bg-surface shadow-hard",
+        "flex flex-col rounded-xl border border-line bg-bg-surface surface-sheen shadow-card",
         SIZE_CLASSES[size],
         align === "center" ? "items-center text-center" : "items-start",
         className,
@@ -57,12 +56,12 @@ export function StatCard({
         .filter(Boolean)
         .join(" ")}
     >
-      <div className="text-micro font-medium uppercase tracking-wider text-text-dim">
+      <div className="overline text-text-dim">
         {label}
       </div>
       <div
         className={[
-          "font-display font-bold tabular-nums leading-none",
+          "font-display font-bold tabular-nums tracking-tight leading-none",
           VALUE_CLASSES[size],
         ].join(" ")}
       >

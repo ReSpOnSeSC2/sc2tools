@@ -185,7 +185,7 @@ export function ConnectionBanner() {
   return (
     <div role="status" aria-live="polite" data-testid="connection-banner">
       {reconnecting ? (
-        <div className="border-t border-warning/40 bg-warning/10">
+        <div className="border-t border-warning/30 bg-warning/10 backdrop-blur-sm">
           <div className="mx-auto flex w-full max-w-[1680px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-caption text-text sm:px-6 lg:px-8">
             {offline ? (
               <WifiOff className="h-4 w-4 shrink-0 text-warning" aria-hidden />

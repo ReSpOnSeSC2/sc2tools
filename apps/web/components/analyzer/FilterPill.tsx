@@ -36,8 +36,8 @@ export function PillButton({
         "text-micro font-medium uppercase tracking-wider tabular-nums",
         "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         active
-          ? "border-accent/40 bg-accent/10 text-accent"
-          : "border-border text-text-dim hover:bg-bg-elevated hover:text-text",
+          ? "border-accent-cyan/30 bg-accent-cyan/10 text-accent"
+          : "border-border text-text-dim hover:bg-bg-subtle/60 hover:text-text",
       ].join(" ")}
     >
       {children}

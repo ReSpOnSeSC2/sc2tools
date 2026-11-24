@@ -77,10 +77,17 @@ export function useToastOptional(): ToastContextValue | null {
 }
 
 const VARIANT_CLASSES: Record<ToastVariant, string> = {
-  info: "border-accent/40 bg-bg-surface",
-  success: "border-success/40 bg-bg-surface",
-  warning: "border-warning/40 bg-bg-surface",
-  error: "border-danger/40 bg-bg-surface",
+  info: "border-line",
+  success: "border-line",
+  warning: "border-line",
+  error: "border-line",
+};
+
+const VARIANT_BEAM_CLASSES: Record<ToastVariant, string> = {
+  info: "bg-accent",
+  success: "bg-success",
+  warning: "bg-warning",
+  error: "bg-danger",
 };
 
 const VARIANT_ICON_CLASSES: Record<ToastVariant, string> = {
@@ -202,10 +209,14 @@ function ToastCard({
       role={item.variant === "error" ? "alert" : "status"}
       aria-live={item.variant === "error" ? "assertive" : "polite"}
       className={[
-        "pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 shadow-[var(--shadow-card)]",
+        "pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-xl border glass-strong py-3 pl-5 pr-4 shadow-pop motion-safe:animate-rise-in",
         VARIANT_CLASSES[item.variant],
       ].join(" ")}
     >
+      <span
+        aria-hidden
+        className={["absolute inset-y-0 left-0 w-[3px]", VARIANT_BEAM_CLASSES[item.variant]].join(" ")}
+      />
       <VariantIcon variant={item.variant} />
       <div className="min-w-0 flex-1">
         <div className="text-body font-semibold text-text">{item.title}</div>
@@ -219,7 +230,7 @@ function ToastCard({
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss notification"
-        className="-mr-1 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="-mr-1 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-bg-subtle hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <X className="h-4 w-4" aria-hidden />
       </button>

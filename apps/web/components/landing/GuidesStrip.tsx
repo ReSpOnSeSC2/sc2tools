@@ -16,11 +16,11 @@ export function GuidesStrip() {
   return (
     <div
       data-testid="landing-guides-strip"
-      className="mt-8 grid gap-6 border-y border-border py-6 lg:grid-cols-[1fr_auto] lg:items-center"
+      className="mt-6 grid gap-6 rounded-2xl border border-line bg-bg-surface/70 surface-sheen p-5 shadow-card sm:p-6 lg:grid-cols-[1fr_auto] lg:items-center"
     >
       <div>
-        <p className="kicker">Build guides</p>
-        <h3 className="mt-2 font-serif text-h3 font-semibold text-text">What wins on ladder, build by build.</h3>
+        <p className="hud-label">Build guides</p>
+        <h3 className="mt-2 font-display text-h3 font-semibold text-text">What wins on ladder, build by build.</h3>
         <p className="mt-2 max-w-2xl text-caption text-text-muted">
           Every opener ranked by its real ladder win rate, with key timings, army snapshots and build-order videos.
         </p>
@@ -33,7 +33,7 @@ export function GuidesStrip() {
           <li key={matchup}>
             <Link
               href={guideMatchupPath(matchup)}
-              className="flex h-11 min-w-[64px] items-center justify-center rounded-md border border-border bg-bg-elevated px-3 font-mono text-caption font-bold text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex h-11 min-w-[64px] items-center justify-center rounded-full border border-line bg-bg-elevated px-3 font-mono text-caption font-bold text-text-muted transition-colors hover:bg-bg-subtle hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <span className="sr-only">{`${matchup} build guides`}</span>
               <span aria-hidden>{matchup}</span>

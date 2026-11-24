@@ -76,7 +76,7 @@ export function ActiveFilterChips({ className = "", defaults, showViewLink = tru
       {showViewLink ? <CopyViewLink /> : null}
       {active.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span id={labelId} className="text-micro uppercase tracking-wider text-text-dim">
+          <span id={labelId} className="overline text-text-dim">
             Active filters
           </span>
           <ul aria-labelledby={labelId} className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
@@ -92,8 +92,8 @@ export function ActiveFilterChips({ className = "", defaults, showViewLink = tru
                   aria-label={`Remove filter ${chip.label}: ${chip.value}${chip.setIn ? `, set in ${chip.setIn}` : ""}`}
                   title={chip.setIn ? `${chip.value} (set in ${chip.setIn})` : chip.value}
                   className={[
-                    "inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 pl-3 pr-2 text-left text-caption text-text sm:min-h-8",
-                    "transition-colors hover:border-accent hover:bg-accent/20",
+                    "inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-full border border-accent-cyan/30 bg-accent-cyan/10 pl-3 pr-2 text-left text-caption text-accent sm:min-h-8",
+                    "transition-colors hover:border-accent-cyan/60 hover:bg-accent-cyan/20",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                   ].join(" ")}
                 >
@@ -112,7 +112,7 @@ export function ActiveFilterChips({ className = "", defaults, showViewLink = tru
           {showReset ? <button
             type="button"
             onClick={reset}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-2 text-caption font-semibold text-text-muted transition-colors hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:ml-auto sm:min-h-8"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-2 text-caption font-semibold text-text-muted transition-colors hover:bg-bg-subtle/60 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:ml-auto sm:min-h-8"
           >
             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
             Reset to defaults

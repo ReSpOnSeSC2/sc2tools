@@ -74,8 +74,8 @@ export function RequestError({
       role="alert"
       data-testid="request-error"
       className={[
-        "rounded-lg border px-3 py-3 sm:px-4",
-        waiting ? "border-warning/40 bg-warning/5" : "border-danger/30 bg-danger/5",
+        "rounded-xl border px-3 py-3 sm:px-4",
+        waiting ? "border-warning/30 bg-warning/[0.08]" : "border-danger/30 bg-danger/[0.08]",
         className,
       ]
         .filter(Boolean)

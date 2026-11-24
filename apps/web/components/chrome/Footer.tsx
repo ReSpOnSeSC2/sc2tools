@@ -86,7 +86,7 @@ export function productLinks(tryPage: boolean): readonly FooterLink[] {
 
 export function Footer() {
   return (
-    <footer className="mt-16 border-t border-border bg-bg-surface/40">
+    <footer className="mt-16 surface-sheen border-t border-border bg-bg-surface/40">
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
         <div className="grid gap-10 md:grid-cols-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <BrandStrip />
@@ -151,7 +151,7 @@ interface FooterColumnProps {
 function FooterColumn({ title, links, extra, trailing }: FooterColumnProps) {
   return (
     <div>
-      <h3 className="text-micro font-semibold uppercase tracking-[0.12em] text-text-dim">
+      <h3 className="overline text-text-dim">
         {title}
       </h3>
       <ul className="mt-3 space-y-2">
@@ -185,7 +185,7 @@ function FooterColumn({ title, links, extra, trailing }: FooterColumnProps) {
 }
 
 const FOOTER_LINK_CLS =
-  "inline-flex min-h-[28px] items-center text-caption text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-sm";
+  "inline-flex min-h-[28px] items-center text-caption text-text-muted motion-safe:transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-sm";
 
 function FooterLinkGate({ auth, children }: { auth?: FooterLink["auth"]; children: ReactNode }) {
   if (auth === "in") return <SignedIn>{children}</SignedIn>;
@@ -198,7 +198,7 @@ function StatusBadge() {
     <Link
       href={STATUS_PAGE_URL}
       prefetch={false}
-      className="inline-flex min-h-[28px] items-center gap-1.5 rounded-full border border-border bg-bg-elevated px-2.5 py-1 text-micro font-medium text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="inline-flex min-h-[28px] items-center gap-1.5 rounded-full border border-line bg-bg-elevated/60 px-2.5 py-1 text-micro font-medium text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       System status
     </Link>

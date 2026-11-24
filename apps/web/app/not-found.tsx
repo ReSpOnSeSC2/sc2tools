@@ -14,13 +14,14 @@ import { GlowHalo } from "@/components/ui/GlowHalo";
  */
 export default function NotFound() {
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-line bg-bg-surface px-4 py-12 shadow-hard sm:px-6 sm:py-20">
+    <section className="relative overflow-hidden glass surface-sheen rounded-2xl border border-line px-4 py-12 shadow-pop sm:px-6 sm:py-20">
       <GlowHalo color="cyan" position="top" opacity={0.85} size={70} />
+      <div aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-48 w-[32rem] max-w-full -translate-x-1/2 rounded-full bg-aurora opacity-15 blur-3xl" />
       <div className="relative z-10">
         <EmptyStatePanel
           size="lg"
           icon={<Compass className="h-6 w-6" aria-hidden />}
-          title={<h1 className="text-h3 font-bold text-text">We couldn&apos;t find that page</h1>}
+          title={<h1 className="font-display text-h3 font-bold tracking-tight text-text">We couldn&apos;t find that page</h1>}
           description="The link may be old, or the build or replay it pointed to was removed."
           action={<NotFoundActions />}
         />

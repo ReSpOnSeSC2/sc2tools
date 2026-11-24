@@ -11,6 +11,20 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Design
+
+- The website and the desktop agent have a new look, Command Glass: deep tonal
+  surfaces with a faint top light, thin hairline edges instead of heavy
+  outlines, soft layered shadows, frosted-glass navigation, dialogs and
+  menus, and a cyan-to-violet accent reserved for highlights. One typeface
+  is used throughout, corners are softer, and motion is quicker and calmer
+  (it still follows the reduced-motion setting). Every page, control and
+  shortcut works as before.
+- Text fields, selects and switches keep a clearly visible edge (3:1), while
+  dividers and card edges are now subtle. The phone tab bar now spans tablets
+  properly, and the More sheet shows the analysis sections as a grid.
+- Pages load one font file instead of two.
+
 ### Trends
 
 - Verified MMR (Net MMR by matchup and its opponent table) works again for

@@ -208,7 +208,7 @@ function NotesAndPublish({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={4}
-              className="w-full rounded-lg border border-border-strong bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[120px]"
+              className="w-full rounded-lg border border-border-strong bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 min-h-[120px]"
               placeholder="Personal notes, synonyms, scouting tells…"
             />
             <div className="mt-2 flex items-center justify-between gap-2">

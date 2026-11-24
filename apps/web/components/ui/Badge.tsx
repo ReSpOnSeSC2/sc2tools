@@ -48,8 +48,8 @@ export function Badge({
   return (
     <span
       className={[
-        // Courtside "sticker" tag: a bold pill with a crisp outline.
-        "inline-flex items-center rounded-full border-[1.5px] font-bold",
+        // A semibold pill with a 1px hairline edge.
+        "inline-flex items-center rounded-full border font-semibold",
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],
         className,

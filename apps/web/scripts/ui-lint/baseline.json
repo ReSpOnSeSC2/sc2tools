@@ -151,13 +151,6 @@
       "example": "\"focus:outline-none\""
     },
     {
-      "file": "components/analyzer/BuildEditorModal.tsx",
-      "rule": "focus-without-ring",
-      "signature": "edfb2a08d6952b77ee9e08fced3570d4e0ac4c76c93d54b4ffdc35adb83b178e",
-      "count": 1,
-      "example": "\"w-full rounded-lg border border-border bg-bg-elevated px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[120px]\""
-    },
-    {
       "file": "components/analyzer/GameStreamLinks.tsx",
       "rule": "hex-outside-visualization",
       "signature": "85b03a89fb53989fbe10da5c438c19960c72a884f07c59948f01b4dd06f1d331",
@@ -256,25 +249,11 @@
       "example": "\"text-[#9146ff]\""
     },
     {
-      "file": "components/analyzer/StrategiesTab.tsx",
-      "rule": "focus-without-ring",
-      "signature": "2ff7eeb4721eea6607d4dad1c74ca2e4fd471115e609862f3921743e9871256b",
-      "count": 1,
-      "example": "\"w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none\""
-    },
-    {
       "file": "components/analyzer/StrengthAdjusted.tsx",
       "rule": "analyzer-header-title",
       "signature": "e7162296a70d29005be8973b0b6330efaaa870c6059ff0418d4f0d5922bce832",
       "count": 1,
       "example": "<Link href=\"/help/vs-expected\" aria-label=\"About vs expected\" title=\"How strength-adjusted wins and performance ratings work\" className=\"inline-flex min-h-11 min-w-11 items-center "
-    },
-    {
-      "file": "components/analyzer/TrendsTab.tsx",
-      "rule": "focus-without-ring",
-      "signature": "dcc3180058c5973b3e50cd3c6e0d5cc9d05c08b15311c081198e85ed43c611ec",
-      "count": 1,
-      "example": "\"rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors focus:border-accent focus:outline-none text-sm\""
     },
     {
       "file": "components/analyzer/arcade/SeasonRecap.tsx",
@@ -853,13 +832,6 @@
     {
       "file": "components/analyzer/replays/ReplayList.tsx",
       "rule": "small-arbitrary-text",
-      "signature": "00608f84268afef903bde692af64382266a6f8ba5d317b9991141e9cec0680cc",
-      "count": 1,
-      "example": "\"grid h-6 w-6 shrink-0 place-items-center rounded-md border border-border text-[10px] text-text-dim\""
-    },
-    {
-      "file": "components/analyzer/replays/ReplayList.tsx",
-      "rule": "small-arbitrary-text",
       "signature": "10970f9964af6ab51e0580185ec5b05704c3efd26d4ada1c0ed5ae7bd948b69e",
       "count": 1,
       "example": "\"text-[10px] uppercase tracking-wide text-text-dim\""
@@ -886,13 +858,6 @@
       "example": "\"var(--color-success, #3ec07a)\""
     },
     {
-      "file": "components/analyzer/settings/ChatBotCard.tsx",
-      "rule": "focus-without-ring",
-      "signature": "a986cdc816ba8644cd14bfada96bde963d95483075e873641ee45f84b0794c3e",
-      "count": 3,
-      "example": "\"w-full rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none\""
-    },
-    {
       "file": "components/analyzer/settings/OverlayThemeSection.tsx",
       "rule": "hex-outside-visualization",
       "signature": "85af107e292c5e2d0bcdaac820d8f92d9a1206e248f61b7cca7d914480111965",
@@ -914,41 +879,6 @@
       "example": "<div ref={panel} id={panelId} role=\"dialog\" aria-label={`Display for ${name}`} tabIndex={-1} className=\"fixed z-sheet space-y-2 overflow-y-auto rounded-lg border border-border bg-b"
     },
     {
-      "file": "components/analyzer/settings/SettingsMultiChat.tsx",
-      "rule": "focus-without-ring",
-      "signature": "30f406b96c98cc37553fb9d1bfc3841efe3d594d549d1c6a4edbc92a7684dd0b",
-      "count": 1,
-      "example": "\"w-full min-w-0 max-w-md rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:"
-    },
-    {
-      "file": "components/analyzer/settings/SettingsMultiChat.tsx",
-      "rule": "focus-without-ring",
-      "signature": "5ff4034756c81e9be728cfae2e72a9c3b4f805832a6214709c3ed0cae7ad373e",
-      "count": 1,
-      "example": "\"w-24 min-w-0 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50\""
-    },
-    {
-      "file": "components/analyzer/settings/SettingsMultiChat.tsx",
-      "rule": "focus-without-ring",
-      "signature": "7152cb30791410c538a61b6e9d142dd179eb4fcc1f2c9fada05a6bdb0c7430f9",
-      "count": 2,
-      "example": "\"w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-5"
-    },
-    {
-      "file": "components/analyzer/settings/SettingsMultiChat.tsx",
-      "rule": "focus-without-ring",
-      "signature": "d18f96d11e5ff297793fe85a6f62d2fffa3476ce3c666fbbea997462f5a2ad68",
-      "count": 1,
-      "example": "\"w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none\""
-    },
-    {
-      "file": "components/analyzer/settings/SettingsMultiChatAlerts.tsx",
-      "rule": "focus-without-ring",
-      "signature": "e0d5ed7eb0d52985e60df7a4e50d44ab384a6717cdd4a90bd7ab80af3b1d5461",
-      "count": 1,
-      "example": "\"w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption text-text focus:border-accent focus:outline-none\""
-    },
-    {
       "file": "components/analyzer/settings/SettingsMultiChatAlerts.tsx",
       "rule": "hex-outside-visualization",
       "signature": "47d2ca0ca5ec7906d0982c71aa6b1d233a6da51e9480ec6e48a42cb7b3b50bb6",
@@ -961,20 +891,6 @@
       "signature": "5231220e314f5499b2103e190d73bacdee8e2bc2d9fd66c862c003322ee4695e",
       "count": 2,
       "example": "\"repeating-conic-gradient(#2a2f3a 0% 25%, #1c212b 0% 50%) 0 0 / 18px 18px\""
-    },
-    {
-      "file": "components/analyzer/settings/SettingsMultiChatAppearance.tsx",
-      "rule": "focus-without-ring",
-      "signature": "4cb352343d5162667b5dfdab258ebccff1c758d5f9d3bc20787ebe47e1112be5",
-      "count": 1,
-      "example": "\"w-full min-w-0 max-w-md rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none\""
-    },
-    {
-      "file": "components/analyzer/settings/SettingsMultiChatAppearance.tsx",
-      "rule": "focus-without-ring",
-      "signature": "d18f96d11e5ff297793fe85a6f62d2fffa3476ce3c666fbbea997462f5a2ad68",
-      "count": 1,
-      "example": "\"w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none\""
     },
     {
       "file": "components/analyzer/settings/SettingsMultiChatAppearance.tsx",
@@ -1010,34 +926,6 @@
       "signature": "f20b2835e975e13c9ff0f69848ea9664dfa6e8a75e2ff4d1d0fcf87000f8734b",
       "count": 1,
       "example": "\"#1E90FF\""
-    },
-    {
-      "file": "components/analyzer/settings/SettingsMultiChatSounds.tsx",
-      "rule": "focus-without-ring",
-      "signature": "a7fd0aef130c1d2481ca1c772f5f16d92925ee5d364f90641aadf485e3053cdc",
-      "count": 1,
-      "example": "\"min-w-0 flex-1 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none\""
-    },
-    {
-      "file": "components/analyzer/settings/SettingsMultiChatSounds.tsx",
-      "rule": "focus-without-ring",
-      "signature": "dfba8c0d082e597f4a2ecba4ebb28a464fafd0037bbc5ee91952d8122404cd5e",
-      "count": 2,
-      "example": "\"w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none\""
-    },
-    {
-      "file": "components/analyzer/settings/SettingsMultiChatSounds.tsx",
-      "rule": "focus-without-ring",
-      "signature": "ea91acdf0df74282d9f684b08c404118231e1c69e315d3966b250f8227f61843",
-      "count": 1,
-      "example": "\"min-w-0 flex-1 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none\""
-    },
-    {
-      "file": "components/analyzer/settings/SettingsMultiChatTts.tsx",
-      "rule": "focus-without-ring",
-      "signature": "d18f96d11e5ff297793fe85a6f62d2fffa3476ce3c666fbbea997462f5a2ad68",
-      "count": 2,
-      "example": "\"w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none\""
     },
     {
       "file": "components/analyzer/settings/SettingsMultiChatTts.tsx",
@@ -1080,13 +968,6 @@
       "signature": "bdcba23b1aa9335c9b7533a746c82dc7b27d922d0006da2b451c4d6dafc67726",
       "count": 1,
       "example": "\"flex w-full items-center justify-center rounded-xl border border-border bg-[#0b0d12] p-6\""
-    },
-    {
-      "file": "components/build-checkin/BuildCheckInAlert.tsx",
-      "rule": "small-arbitrary-text",
-      "signature": "c90a4480e04d3179fc0cd14ff185be518846dedccff897b9dc69ae4bbee37b52",
-      "count": 1,
-      "example": "\"absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white\""
     },
     {
       "file": "components/build-checkin/BuildCheckInQueue.tsx",
@@ -1136,20 +1017,6 @@
       "signature": "df8c482ac0f715e0f5138c51db312ee186464816dde5c29b52046343ba57835e",
       "count": 1,
       "example": "\"h-8 w-16 rounded border border-accent-cyan bg-bg-elevated px-1 font-mono text-caption tabular-nums text-text focus:outline-none\""
-    },
-    {
-      "file": "components/chrome/CoachingBookingAlert.tsx",
-      "rule": "handrolled-link-button",
-      "signature": "5b9d7e257ccf0c26d47c4cef88c8b299f1f2751a17cebeab5415812b6b3555c8",
-      "count": 1,
-      "example": "<Link href=\"/coaching?view=schedule\" aria-label={`${label}. ${data.unreadCount} unread. Open Coaching.`} title={`${label} — open Coaching`} className={[ \"hard-press relative inline"
-    },
-    {
-      "file": "components/chrome/CoachingBookingAlert.tsx",
-      "rule": "small-arbitrary-text",
-      "signature": "c90a4480e04d3179fc0cd14ff185be518846dedccff897b9dc69ae4bbee37b52",
-      "count": 1,
-      "example": "\"absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white\""
     },
     {
       "file": "components/community/CommunityOwnerMenu.tsx",
@@ -1362,20 +1229,6 @@
       "example": "\"font-display text-h3 text-text focus:outline-none\""
     },
     {
-      "file": "components/landing/CompanionShowcase.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "2b6cdc76dee94b75655ba85b90e69e60bd775afbb91768891f8f6b61e8769cf1",
-      "count": 4,
-      "example": "\"overflow-hidden rounded-md border border-border-strong bg-[#10131f]\""
-    },
-    {
-      "file": "components/landing/CompanionShowcase.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "ad6a31b71e8a46f3639438666bed79a94f81523150bace149bab82ca85d1e4e4",
-      "count": 1,
-      "example": "\"overflow-hidden rounded-md border border-border-strong bg-[#10131f] shadow-hard\""
-    },
-    {
       "file": "components/landing/ProductShowcases.tsx",
       "rule": "hex-outside-visualization",
       "signature": "0c67076dcebb56383a962cf646ac218edd278a3c73e398f761016e4c14c80da8",
@@ -1402,13 +1255,6 @@
       "signature": "2c776162340bcdb4dd237f22356c2a1ffc0065602aba3d99780a139709796b6b",
       "count": 1,
       "example": "\"bg-[#ff2c2c]\""
-    },
-    {
-      "file": "components/landing/ProductShowcases.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "2fd4029b1ea4a7f68105b9ba85dc878b1906a1f02f32094ed3db644af9256a36",
-      "count": 2,
-      "example": "\"mt-3 rounded-md border border-[#f5b84a]/35 bg-[#f5b84a]/10 p-3\""
     },
     {
       "file": "components/landing/ProductShowcases.tsx",
@@ -1441,6 +1287,13 @@
     {
       "file": "components/landing/ProductShowcases.tsx",
       "rule": "hex-outside-visualization",
+      "signature": "b9e638a85b001a7ad91ce1387b30d82ad76b0d1193dcd13c2c99f09e55ac54f3",
+      "count": 2,
+      "example": "\"mt-3 rounded-xl border border-[#f5b84a]/35 bg-[#f5b84a]/10 p-3\""
+    },
+    {
+      "file": "components/landing/ProductShowcases.tsx",
+      "rule": "hex-outside-visualization",
       "signature": "bd71be9d5df5da1c8eb0406f009fcaf4c8c5e245f700948cb314fd8c8e262a83",
       "count": 1,
       "example": "\"h-3.5 w-3.5 text-[#3ce0d6]\""
@@ -1465,13 +1318,6 @@
       "signature": "dc8ed2ace8be8409b131591053a29740ed7322fe3f18bb58dae269433d381391",
       "count": 2,
       "example": "\"rounded-full bg-[#3ec884]/15 px-2 py-1 text-micro font-bold text-[#66e1a2]\""
-    },
-    {
-      "file": "components/landing/ProductShowcases.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "ed9519205e3f3a79eca36eef6d9bb40d741538dc88f7f4aa11c8129b12f2769c",
-      "count": 1,
-      "example": "\"replay-scope overflow-hidden rounded-md border-2 border-line bg-[#070a0f] shadow-hard\""
     },
     {
       "file": "components/landing/ProductShowcases.tsx",
@@ -1549,13 +1395,6 @@
       "signature": "117f62b167e6e902038a88ee8ed92b28d6602353937879efcee13900a9b6ca4e",
       "count": 2,
       "example": "\"text-[9px]\""
-    },
-    {
-      "file": "components/notifications/NotificationBell.tsx",
-      "rule": "small-arbitrary-text",
-      "signature": "c90a4480e04d3179fc0cd14ff185be518846dedccff897b9dc69ae4bbee37b52",
-      "count": 1,
-      "example": "\"absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white\""
     },
     {
       "file": "components/onboarding/OnboardingDone.tsx",
@@ -2183,23 +2022,16 @@
     {
       "file": "components/scouting/ForecastExplanation.tsx",
       "rule": "dialog-outside-ui",
-      "signature": "6c9afc4987450926354cc45adaad00eeb6fb214a416cc5acaf4e2d3dbcbf4adf",
+      "signature": "324a59a6a7957732de47dc6c3365550eee2c05f04fddbbb72d2c1c73536eeab5",
       "count": 1,
       "example": "<div ref={panel} id={id} role=\"dialog\" aria-modal=\"true\" aria-label=\"How the opening forecast works\" tabIndex={-1} style={position} className=\"fixed z-50 space-y-3 overflow-y-auto "
     },
     {
       "file": "components/scouting/ScoutingNotePopover.tsx",
       "rule": "dialog-outside-ui",
-      "signature": "dd2a0af4858728743eeac9438deb3d140db1c0949b1ed4023895810d3366f530",
+      "signature": "591c477557c3e44079da6d8cfe8f44204cb09e6fe3a371f7ebb55cd414520443",
       "count": 1,
-      "example": "<div ref={dialog} role=\"dialog\" aria-modal=\"true\" aria-label=\"Opponent note\" tabIndex={-1} style={position} className=\"fixed z-40 space-y-3 overflow-y-auto rounded-xl border-2 bord"
-    },
-    {
-      "file": "components/stream-studio/WidgetExplorer.tsx",
-      "rule": "focus-without-ring",
-      "signature": "b4ca80ef84eeae7f695b97ae589b2616e3e3be74a82f7fed7e48c0895c0b1464",
-      "count": 1,
-      "example": "\"min-w-0 scroll-mt-28 overflow-hidden rounded-md border-2 border-line bg-bg-surface shadow-hard focus:outline-none\""
+      "example": "<div ref={dialog} role=\"dialog\" aria-modal=\"true\" aria-label=\"Opponent note\" tabIndex={-1} style={position} className=\"fixed z-40 space-y-3 overflow-y-auto rounded-xl border border"
     },
     {
       "file": "components/ui/Tabs.tsx",
@@ -3184,9 +3016,9 @@
     {
       "file": "lib/theme/tokens.ts",
       "rule": "hex-outside-visualization",
-      "signature": "133f5fb1066c9de4fcb3c817266bffde7262bfde75ce23d2609ab06b5e34a795",
+      "signature": "03b8dc1ae44fa82ceeed750b0aeeb6bd2c684dfed15bac75f12d67e4da7fdea0",
       "count": 1,
-      "example": "\"#e7edf0\""
+      "example": "\"#121722\""
     },
     {
       "file": "lib/theme/tokens.ts",
@@ -3205,16 +3037,9 @@
     {
       "file": "lib/theme/tokens.ts",
       "rule": "hex-outside-visualization",
-      "signature": "41c4c6cc11e4c59486a9fad0deff988f82109832bf3c436b0fe688dbe3cc1cb7",
+      "signature": "3b79559e52fdf991124d53fd51bff5ccae73459f10512b020f917d187944cf0b",
       "count": 1,
-      "example": "\"#9fadb9\""
-    },
-    {
-      "file": "lib/theme/tokens.ts",
-      "rule": "hex-outside-visualization",
-      "signature": "4f55c3160d3df51fb33da7bacfa118437b6490608f3a7db23bba1c0f896754dd",
-      "count": 1,
-      "example": "\"#111720\""
+      "example": "\"#a3afbf\""
     },
     {
       "file": "lib/theme/tokens.ts",
@@ -3240,16 +3065,16 @@
     {
       "file": "lib/theme/tokens.ts",
       "rule": "hex-outside-visualization",
-      "signature": "798272b1abf3424e54b95912892ae39e2e02bd3c87858a5db5a5864ef3e3752b",
+      "signature": "73e60b7734fd72760cc4a1ed50a32dd9fff756d68d2215fb0301852e1f1117d8",
       "count": 1,
-      "example": "\"#3ec884\""
+      "example": "\"#fafbfd\""
     },
     {
       "file": "lib/theme/tokens.ts",
       "rule": "hex-outside-visualization",
-      "signature": "8bcdff7d6ed37dc58826299b703b75d36703cb6fc6de0f19e6c4cd76744e3193",
+      "signature": "798272b1abf3424e54b95912892ae39e2e02bd3c87858a5db5a5864ef3e3752b",
       "count": 1,
-      "example": "\"#0d121a\""
+      "example": "\"#3ec884\""
     },
     {
       "file": "lib/theme/tokens.ts",
@@ -3261,9 +3086,23 @@
     {
       "file": "lib/theme/tokens.ts",
       "rule": "hex-outside-visualization",
-      "signature": "ced70b0c59a26796a0c06f12c2f03ba92f07356d418693b4f999a05afa335dbc",
+      "signature": "98950cc523927e0390f02528870e2ce8ef8b0730b3cc2b5f2b194a3d36034fe8",
       "count": 1,
-      "example": "\"#0c1017\""
+      "example": "\"#0b1220\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "d16d8abefee9a3dd1d2de19fe6f5df70e87e7f710f0169d20165cbae3d8ec01d",
+      "count": 1,
+      "example": "\"#edf2f7\""
+    },
+    {
+      "file": "lib/theme/tokens.ts",
+      "rule": "hex-outside-visualization",
+      "signature": "dc01ad90e6215e955439eba6bb5940ec1d3cb499d7df48a8afe73c5428f2b4a3",
+      "count": 1,
+      "example": "\"#0b0f16\""
     },
     {
       "file": "lib/theme/tokens.ts",
@@ -3285,13 +3124,6 @@
       "signature": "fcca4e9af640c0d82ae3798785b2e77b19c1df5e514684c976293d742addba5a",
       "count": 1,
       "example": "\"#3f4856\""
-    },
-    {
-      "file": "lib/theme/tokens.ts",
-      "rule": "hex-outside-visualization",
-      "signature": "fe6960cd2a97cb751e09ccbd0fae1c8cdb890dabc23b73c14b7b0784989d8627",
-      "count": 1,
-      "example": "\"#f9fbfe\""
     }
   ]
 }

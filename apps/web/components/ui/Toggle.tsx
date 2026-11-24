@@ -28,10 +28,12 @@ export const Toggle = forwardRef<HTMLButtonElement, ToggleProps>(function Toggle
       onClick={() => onChange(!checked)}
       className={[
         "relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full",
-        "border border-border transition-colors",
+        "border border-border-strong transition-[background-color,border-color,box-shadow]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        checked ? "bg-accent" : "bg-bg-elevated",
+        checked
+          ? "border-accent bg-accent shadow-[0_0_14px_rgb(var(--accent-cyan)/0.35)]"
+          : "bg-bg-subtle",
         className,
       ]
         .filter(Boolean)
@@ -41,8 +43,8 @@ export const Toggle = forwardRef<HTMLButtonElement, ToggleProps>(function Toggle
       <span
         aria-hidden
         className={[
-          "inline-block h-4 w-4 rounded-full bg-white shadow-sm",
-          "transition-transform duration-150",
+          "inline-block h-4 w-4 rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/0.35)]",
+          "transition-transform duration-200 ease-out",
           checked ? "translate-x-6" : "translate-x-1",
         ].join(" ")}
       />

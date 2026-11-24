@@ -37,10 +37,12 @@ SPACE_S = 8
 SPACE_M = 12
 SPACE_L = 16
 SPACE_XL = 24
-RADIUS_S = 4
-RADIUS_M = 6
-RADIUS_L = 8
-RADIUS_XL = 12
+RADIUS_S = 6
+RADIUS_M = 10
+RADIUS_L = 12
+RADIUS_XL = 16
+# Chips and badges: as round as their height allows.
+RADIUS_PILL = 14
 # The inset of a page's content inside the display.
 PAGE_MARGIN_X = 28
 PAGE_MARGIN_Y = 24
@@ -57,23 +59,23 @@ STREAM_CANVAS_WIDTH = 58
 
 # ---- surfaces: elevation is tone, never a shadow; each level is one step lighter
 # The window canvas below them belongs to each skin (``Skin.canvas``; ``BG`` is the default's).
-SURFACE = "#15161a"
-ELEVATED = "#1c1d22"
-SUBTLE = "#25262c"
-SUNKEN = "#101114"
-BUTTON = "#27282e"
-BUTTON_HOVER = "#303139"
-BUTTON_PRESSED = "#393a43"
-BORDER = "#26272e"
-BORDER_STRONG = "#383a43"
+SURFACE = "#0b0f16"
+ELEVATED = "#121722"
+SUBTLE = "#1a202e"
+SUNKEN = "#070a10"
+BUTTON = "#1a2130"
+BUTTON_HOVER = "#242d40"
+BUTTON_PRESSED = "#2e3850"
+BORDER = "#222a38"
+BORDER_STRONG = "#283141"
 # Outlines that alone mark a field or a check box: at least 3:1 on every surface.
-BORDER_CONTROL = "#70737f"
+BORDER_CONTROL = "#6c7889"
 
 # ---- text: TEXT, TEXT_MUTED and TEXT_DIM read at 4.5:1 or more on every surface
-TEXT = "#ececf1"
-TEXT_MUTED = "#a8aab6"
-TEXT_DIM = "#9597a4"
-TEXT_DISABLED = "#5f616c"
+TEXT = "#eef2f8"
+TEXT_MUTED = "#a9b3c4"
+TEXT_DIM = "#8f9aae"
+TEXT_DISABLED = "#5a6477"
 
 
 
@@ -115,6 +117,27 @@ def blend(color, base, amount):
     return "#" + "".join(f"{round(top * amount + bottom * (1 - amount)):02x}" for top, bottom in pairs)
 
 
+def lit(color, amount=0.035):
+    """``color`` with a faint top light: the stop a card's gradient starts from."""
+    return blend("#ffffff", color, amount)
+
+
+def vertical(top, bottom):
+    """A top-to-bottom ``qlineargradient`` between two ``#rrggbb`` colours."""
+    return f"qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 {top}, stop: 1 {bottom})"
+
+
+# Depth from light: each raised surface starts a few percent lighter at its top edge.
+CARD_FILL = vertical(lit(ELEVATED), ELEVATED)
+CARD_RAISED_FILL = vertical(lit(SUBTLE), SUBTLE)
+CARD_PAGE_FILL = vertical(lit(SURFACE, 0.025), SURFACE)
+BUTTON_FILL = vertical(lit(BUTTON, 0.05), BUTTON)
+BUTTON_HOVER_FILL = vertical(lit(BUTTON_HOVER, 0.05), BUTTON_HOVER)
+# Table and log rows tint on hover with a hint of light rather than a solid step.
+ROW_HOVER = tint("#ffffff", 0.04)
+HAIRLINE_TOP = lit(BORDER, 0.06)
+
+
 @dataclass(frozen=True)
 class Skin:
     """One skin's colours: the window canvas, its accent family and the focus ring."""
@@ -134,12 +157,24 @@ class Skin:
     def progress(self):
         return blend(self.accent, SURFACE, PROGRESS_TINT)
 
+    @property
+    def primary_fill(self):
+        return vertical(self.accent_hover, self.accent)
+
+    @property
+    def primary_hover_fill(self):
+        return vertical(self.accent_hover, self.accent_hover)
+
+    @property
+    def primary_pressed_fill(self):
+        return vertical(self.accent_pressed, self.accent_pressed)
+
 
 SKINS = {
-    "default": Skin("#100f15", "#a78bfa", "#b8a1fb", "#9677f2", "#170c2e", "#d4c8fd"),
-    "protoss": Skin("#11100d", "#dfbd6a", "#e8cc8a", "#cfa955", "#1f1606", "#f2e2b3"),
-    "terran": Skin("#0d1014", "#7eb0e3", "#9bc3eb", "#689dd4", "#08182a", "#c3dcf6"),
-    "zerg": Skin("#120e10", "#ec8b5e", "#f1a27d", "#dd774a", "#2a1004", "#f8c9b0"),
+    "default": Skin("#08060e", "#a78bfa", "#b8a1fb", "#9677f2", "#170c2e", "#d4c8fd"),
+    "protoss": Skin("#080806", "#dfbd6a", "#e8cc8a", "#cfa955", "#1f1606", "#f2e2b3"),
+    "terran": Skin("#05080d", "#7eb0e3", "#9bc3eb", "#689dd4", "#08182a", "#c3dcf6"),
+    "zerg": Skin("#0a0708", "#ec8b5e", "#f1a27d", "#dd774a", "#2a1004", "#f8c9b0"),
 }
 DEFAULT_SKIN = SKINS["default"]
 BG = DEFAULT_SKIN.canvas
@@ -220,7 +255,7 @@ QLabel#agentEdition {{
 QLabel#agentBreadcrumb {{ color: {TEXT_MUTED}; font-size: {TYPE_SMALL}px; }}
 QFrame#agentSidebar {{ background: transparent; border: none; }}
 QFrame#agentDisplay {{
-    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: {RADIUS_L}px;
+    background: {CARD_PAGE_FILL}; border: 1px solid {BORDER}; border-radius: {RADIUS_L}px;
 }}
 QWidget[agentPage="true"], QScrollArea[agentPage="true"] > QWidget > QWidget {{ background: transparent; }}
 QWidget#agentPageToolbar QPushButton, QToolButton#agentMenuButton {{
@@ -243,10 +278,10 @@ def _content(skin):
     """Cards, headings and the labels pages share."""
     return f"""
 QFrame#card, QFrame#studioCard, QFrame#studioDestination {{
-    background: {ELEVATED}; border: 1px solid {BORDER}; border-radius: {RADIUS_L}px;
+    background: {CARD_FILL}; border: 1px solid {BORDER}; border-top-color: {HAIRLINE_TOP}; border-radius: {RADIUS_L}px;
 }}
 QFrame#cardElevated, QFrame#studioCommand {{
-    background: {SUBTLE}; border: 1px solid {BORDER}; border-radius: {RADIUS_L}px;
+    background: {CARD_RAISED_FILL}; border: 1px solid {BORDER_STRONG}; border-top-color: {HAIRLINE_TOP}; border-radius: {RADIUS_L}px;
 }}
 QFrame#cardArchive {{
     background: {skin.selected}; border: 1px solid {BORDER}; border-color: {skin.accent}; border-radius: {RADIUS_L}px;
@@ -267,7 +302,7 @@ QLabel#code {{
     border: 1px solid {BORDER_STRONG}; border-radius: {RADIUS_L}px; padding: 14px {SPACE_XL}px;
 }}
 QLabel#badgeInfo, QLabel#badgeOk, QLabel#badgeWarn, QLabel#badgeErr, QLabel#badgeNeutral {{
-    border-radius: {RADIUS_L}px; padding: {SPACE_XS}px 10px; font-weight: {WEIGHT_SEMIBOLD};
+    border-radius: {RADIUS_PILL}px; padding: {SPACE_XS}px 10px; font-weight: {WEIGHT_SEMIBOLD};
 }}
 QLabel#badgeInfo {{ color: {INFO}; background: {INFO_TINT}; }}
 QLabel#badgeOk {{ color: {SUCCESS}; background: {SUCCESS_TINT}; }}
@@ -281,12 +316,12 @@ def _buttons(skin):
     """Secondary by default, one accent-filled primary, quiet flat and navigation buttons."""
     return f"""
 QPushButton, QToolButton {{
-    background: {BUTTON}; color: {TEXT};
+    background: {BUTTON_FILL}; color: {TEXT};
     border: 1px solid {BORDER_STRONG}; border-radius: {RADIUS_M}px;
     padding: 7px 10px; font-weight: {WEIGHT_SEMIBOLD};
 }}
 QPushButton {{ min-height: 20px; text-align: center; }}
-QPushButton:hover, QToolButton:hover {{ background: {BUTTON_HOVER}; }}
+QPushButton:hover, QToolButton:hover {{ background: {BUTTON_HOVER_FILL}; }}
 QPushButton:pressed, QToolButton:pressed {{ background: {BUTTON_PRESSED}; color: {TEXT_MUTED}; }}
 QPushButton:checked, QToolButton:checked {{ background: {skin.selected}; border-color: {skin.accent}; color: {TEXT}; }}
 QPushButton:focus, QToolButton:focus {{ border-color: {skin.focus}; }}
@@ -295,16 +330,16 @@ QPushButton:flat:hover {{ background: {BUTTON_HOVER}; color: {TEXT}; }}
 QPushButton:flat:focus {{ border-color: {skin.focus}; }}
 QPushButton#danger, QPushButton#dangerButton {{ color: {DANGER}; border-color: {DANGER_EDGE}; }}
 QPushButton#danger:hover, QPushButton#dangerButton:hover {{ background: {DANGER_TINT}; border-color: {DANGER}; }}
-QPushButton#primary {{ background: {skin.accent}; border-color: {skin.accent}; color: {skin.on_accent}; }}
-QPushButton#primary:hover {{ background: {skin.accent_hover}; border-color: {skin.accent_hover}; }}
-QPushButton#primary:pressed {{ background: {skin.accent_pressed}; border-color: {skin.accent_pressed}; }}
+QPushButton#primary {{ background: {skin.primary_fill}; border-color: {skin.accent}; color: {skin.on_accent}; }}
+QPushButton#primary:hover {{ background: {skin.primary_hover_fill}; border-color: {skin.accent_hover}; }}
+QPushButton#primary:pressed {{ background: {skin.primary_pressed_fill}; border-color: {skin.accent_pressed}; }}
 QPushButton#primary:focus, QPushButton#danger:focus, QPushButton#dangerButton:focus {{ border-color: {skin.focus}; }}
 QPushButton#navItem {{
     background: transparent; color: {TEXT_MUTED}; font-weight: {WEIGHT_REGULAR};
     border: 1px solid transparent; border-left: 3px solid transparent;
     border-radius: {RADIUS_M}px; padding: 9px 14px 9px 12px; text-align: left;
 }}
-QPushButton#navItem:hover {{ background: {BUTTON_HOVER}; color: {TEXT}; }}
+QPushButton#navItem:hover {{ background: {ROW_HOVER}; color: {TEXT}; }}
 QPushButton#navItem:checked {{
     background: {skin.selected}; color: {TEXT}; font-weight: {WEIGHT_SEMIBOLD}; border-left-color: {skin.accent};
 }}
@@ -422,7 +457,7 @@ QTableView::item, QTableWidget::item, QTreeView::item, QTreeWidget::item, QListV
     padding: 6px {SPACE_S}px; border-bottom: 1px solid {BORDER};
 }}
 QTableView::item:hover, QTableWidget::item:hover, QTreeView::item:hover,
-QTreeWidget::item:hover, QListView::item:hover, QListWidget::item:hover {{ background: {BUTTON_HOVER}; }}
+QTreeWidget::item:hover, QListView::item:hover, QListWidget::item:hover {{ background: {ROW_HOVER}; }}
 QTableView::item:selected, QTableWidget::item:selected, QTreeView::item:selected,
 QTreeWidget::item:selected, QListView::item:selected, QListWidget::item:selected {{ background: {skin.selected}; color: {TEXT}; }}
 QTableView:focus, QTableWidget:focus, QTreeView:focus, QTreeWidget:focus,
@@ -431,7 +466,7 @@ QTableView:disabled, QTableWidget:disabled, QTreeView:disabled, QTreeWidget:disa
 QListView:disabled, QListWidget:disabled {{ color: {TEXT_DISABLED}; border-color: {BORDER}; }}
 QHeaderView::section {{
     background: {ELEVATED}; color: {TEXT_MUTED}; border: none; border-bottom: 1px solid {BORDER_STRONG};
-    padding: {SPACE_S}px; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_SEMIBOLD};
+    padding: {SPACE_S}px; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_SEMIBOLD}; letter-spacing: 1px;
 }}
 QTableCornerButton::section {{ background: {ELEVATED}; border: none; }}
 QTabWidget::pane {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: {RADIUS_M}px; }}
@@ -444,7 +479,7 @@ QTabBar::tab:selected {{ color: {TEXT}; border-bottom-color: {skin.accent}; }}
 QTabBar::tab:focus {{ color: {TEXT}; border-bottom-color: {skin.focus}; }}
 QTabBar::tab:disabled {{ color: {TEXT_DISABLED}; }}
 QGroupBox {{
-    background: {ELEVATED}; border: 1px solid {BORDER}; border-radius: {RADIUS_L}px;
+    background: {CARD_FILL}; border: 1px solid {BORDER}; border-radius: {RADIUS_L}px;
     margin-top: 14px; padding-top: 14px;
 }}
 QGroupBox::title {{
@@ -470,8 +505,8 @@ QSplitter::handle:hover {{ background: {BORDER_STRONG}; }}
 QMenuBar {{ background: {SURFACE}; color: {TEXT}; }}
 QMenuBar::item {{ background: transparent; padding: 6px 10px; }}
 QMenuBar::item:selected {{ background: {BUTTON_HOVER}; }}
-QMenu {{ background: {ELEVATED}; color: {TEXT}; border: 1px solid {BORDER_STRONG}; padding: {SPACE_XS}px; }}
-QMenu::item {{ padding: {SPACE_S}px {SPACE_XL}px {SPACE_S}px {SPACE_M}px; border-radius: {RADIUS_M}px; }}
+QMenu {{ background: {ELEVATED}; color: {TEXT}; border: 1px solid {BORDER_STRONG}; border-radius: {RADIUS_M}px; padding: {SPACE_XS}px; }}
+QMenu::item {{ padding: {SPACE_S}px {SPACE_XL}px {SPACE_S}px {SPACE_M}px; border-radius: {RADIUS_S}px; }}
 QMenu::item:selected {{ background: {skin.selected}; color: {TEXT}; }}
 QMenu::item:disabled {{ color: {TEXT_DISABLED}; }}
 QMenu::separator {{ height: 1px; background: {BORDER_STRONG}; margin: {SPACE_XS}px {SPACE_S}px; }}
@@ -505,7 +540,7 @@ QLabel#canvasLandscape, QLabel#canvasPortrait {{
 }}
 QLabel#studioBadge {{
     background: {SUBTLE}; color: {TEXT_MUTED}; border: 1px solid {BORDER_STRONG};
-    border-radius: {RADIUS_L}px; padding: {SPACE_XS}px {SPACE_S}px; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_SEMIBOLD};
+    border-radius: {RADIUS_PILL}px; padding: {SPACE_XS}px {SPACE_S}px; font-size: {TYPE_CAPTION}px; font-weight: {WEIGHT_SEMIBOLD};
 }}
 QLabel#studioBadge[tone="good"] {{ background: {SUCCESS_TINT}; border-color: {SUCCESS_TINT}; color: {SUCCESS}; }}
 QLabel#studioBadge[tone="live"] {{ background: {DANGER_TINT}; border-color: {DANGER_TINT}; color: {DANGER}; }}
@@ -530,7 +565,7 @@ QWidget#companionDesk, QWidget#companionContent, QWidget#companionPanel {{
 QWidget#companionDesk[textOverlay="true"], QWidget#companionPanel[textOverlay="true"] {{
     background: transparent; border: none;
 }}
-QFrame#companionCard {{ background: {ELEVATED}; border: none; border-radius: {RADIUS_L}px; }}
+QFrame#companionCard {{ background: {CARD_FILL}; border: 1px solid {BORDER}; border-radius: {RADIUS_L}px; }}
 QLabel#companionHeading {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
 QLabel#companionHeading[scoutingCompact="true"] {{ font-size: {TYPE_SMALL}px; }}
 QLabel#companionMuted {{ color: {TEXT_MUTED}; font-size: {TYPE_SMALL}px; }}
@@ -561,8 +596,8 @@ def _companion_console(skin):
 QFrame#companionConsole {{
     background: {skin.canvas}; border: 1px solid {BORDER}; border-radius: {RADIUS_XL}px; color: {TEXT};
 }}
-QFrame#consoleProfile {{ background: {ELEVATED}; border: none; border-radius: {RADIUS_L}px; }}
-QFrame#consoleDisplay {{ background: {SURFACE}; border: none; border-radius: {RADIUS_L}px; }}
+QFrame#consoleProfile {{ background: {ELEVATED}; border: 1px solid {BORDER}; border-radius: {RADIUS_L}px; }}
+QFrame#consoleDisplay {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: {RADIUS_L}px; }}
 QWidget#consoleHome, QScrollArea#consoleHomeScroll, QStackedWidget#consolePages, QScrollArea#consoleProfileScroll,
 QScrollArea#consoleHomeScroll > QWidget > QWidget,
 QScrollArea#consoleProfileScroll > QWidget > QWidget {{ background: transparent; border: none; }}
@@ -634,7 +669,7 @@ def card_stylesheet(skin=DEFAULT_SKIN):
     """Compact, self-contained theme for parentless build check-in cards."""
     return f"""
 QWidget {{ background-color: transparent; color: {TEXT}; font-family: {FONT_FAMILY}; font-size: {TYPE_SMALL}px; }}
-QFrame#card {{ background: {SURFACE}; border: 1px solid {BORDER_STRONG}; border-radius: {RADIUS_XL}px; }}
+QFrame#card {{ background: {CARD_PAGE_FILL}; border: 1px solid {BORDER_STRONG}; border-top-color: {HAIRLINE_TOP}; border-radius: {RADIUS_XL}px; }}
 QLabel {{ background: transparent; border: none; }}
 QLabel#checkinPreview {{
     color: {skin.accent}; background: {skin.selected}; border-radius: {RADIUS_M}px; padding: 2px {SPACE_S}px;

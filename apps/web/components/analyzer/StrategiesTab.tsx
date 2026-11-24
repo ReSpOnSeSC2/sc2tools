@@ -150,7 +150,7 @@ function ByOppStrategyView({
       <KpiStrip items={kpis} />
       <div className="flex flex-wrap items-center gap-3">
         <input
-          className="w-full rounded-lg border border-border-strong bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
+          className="w-full rounded-lg border border-border-strong bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
           placeholder="Search strategies"
           value={search}
           onChange={(e) => setSearch(e.target.value)}

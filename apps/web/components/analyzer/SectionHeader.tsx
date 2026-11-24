@@ -42,15 +42,17 @@ export interface SectionHeaderProps {
   title?: ReactNode;
   /** Replaces the tabs.ts description. */
   description?: ReactNode;
+  /** Small cyan HUD eyebrow above the title. */
+  eyebrow?: ReactNode;
   /** Section-level controls, shown before "How to read this". */
   actions?: ReactNode;
   className?: string;
 }
 
 const CONTROL_CLASS =
-  "inline-flex min-h-11 items-center gap-1.5 text-caption";
+  "inline-flex min-h-11 items-center gap-1.5 text-caption text-text-muted transition-colors hover:text-text";
 
-export function SectionHeader({ tab, title, description, actions, className = "" }: SectionHeaderProps) {
+export function SectionHeader({ tab, title, description, eyebrow, actions, className = "" }: SectionHeaderProps) {
   const def = TABS.find((item) => item.id === tab);
   const intro = description ?? def?.description;
   const [hidden, setHidden] = useLocalStorageState<boolean>(introHiddenKey(tab), false, isBoolean);
@@ -69,6 +71,7 @@ export function SectionHeader({ tab, title, description, actions, className = ""
     <PageHeader
       as="h2"
       size="section"
+      eyebrow={eyebrow ? <span className="hud-label">{eyebrow}</span> : undefined}
       title={title ?? def?.label ?? tab}
       description={showIntro ? intro : undefined}
       descriptionId={introId}
@@ -89,7 +92,7 @@ export function SectionHeader({ tab, title, description, actions, className = ""
               aria-controls={introId}
               className={[
                 CONTROL_CLASS,
-                "rounded-sm px-1 text-text-dim hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                "rounded-full px-2 text-text-dim hover:bg-bg-subtle/60 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
               ].join(" ")}
             >
               Hide intro

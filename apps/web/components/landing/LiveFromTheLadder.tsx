@@ -44,10 +44,10 @@ async function LiveTotals() {
   const counts = visibleLandingCounts(totals);
   if (!counts.length) return null;
   return <section className="space-y-3">
-    <h2 className="font-display text-h2 text-text">Live from the ladder</h2>
+    <h2 className="font-display text-h2 tracking-tight text-text">Live from the ladder</h2>
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {counts.map(({ key, label, formatted }) => <li key={key} className="rounded-xl border border-line bg-bg-surface p-4 text-text-muted">
-        <span className="block font-display text-h3 tabular-nums text-text">{formatted}</span> {label}
+      {counts.map(({ key, label, formatted }) => <li key={key} className="rounded-2xl border border-line bg-bg-surface/70 surface-sheen p-5 text-caption text-text-muted shadow-card">
+        <span className="block font-display text-h2 font-bold tabular-nums tracking-tight text-text">{formatted}</span> {label}
       </li>)}
     </ul>
     <Link className="inline-flex min-h-11 items-center text-caption text-link hover:underline" href="/help/how-we-count">How we count these</Link>
@@ -63,7 +63,7 @@ async function ClimbingGuides() {
     <h2 className="font-display text-h3 text-text">Climbing this week</h2>
     <ul className="grid gap-3 md:grid-cols-3">{items.map((item) => {
       const href = guidePaths.build(item.matchupSlug, item.buildSlug);
-      return <li key={href}><Link href={href} className="flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-bg-surface p-3 text-link hover:underline">
+      return <li key={href}><Link href={href} className="flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-bg-surface/70 p-3 text-link transition-colors hover:bg-bg-subtle/60 hover:underline">
         <span>{item.name} <span className="text-caption text-text-muted">{item.matchup}</span></span>
         <TrendBadge trend={item.trend} showDelta />
       </Link></li>;

@@ -52,7 +52,7 @@ export function FilterBar({ globalTrends = false }: { globalTrends?: boolean } =
       {globalTrends ? null : <AnalyzerViewsButton />}
       {desktop ? <MoreFiltersPopover count={describeActiveFilters(filters, { seasons }).length}>{extra}</MoreFiltersPopover> : <FilterSheet><DateFilter stageCustom={globalTrends} /><MatchupPicker /><RegionToggleRow />{extra}</FilterSheet>}
     </div>
-    {desktop ? <div className="flex flex-wrap items-center gap-3"><DateFilter stageCustom={globalTrends} /><MatchupPicker /><RegionToggleRow /></div> : null}
+    {desktop ? <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line glass p-2 shadow-card [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-line [&>*:not(:first-child)]:pl-3"><DateFilter stageCustom={globalTrends} /><MatchupPicker /><RegionToggleRow /></div> : null}
   </div>;
 }
 
@@ -139,7 +139,7 @@ function DateFilter({ stageCustom = false }: { stageCustom?: boolean } = {}) {
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <span className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-text-dim">
+      <span className="inline-flex items-center gap-1.5 overline text-text-dim">
         <CalendarRange className="h-3.5 w-3.5" aria-hidden />
         Date range
       </span>
@@ -152,7 +152,7 @@ function DateFilter({ stageCustom = false }: { stageCustom?: boolean } = {}) {
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={open ? panelId : undefined}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-line bg-bg-surface px-3 py-2 text-sm text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-border-strong bg-bg-elevated px-4 py-2 text-sm text-text transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         >
           <span className="font-medium">{triggerLabel}</span>
           <ChevronDown className="h-3.5 w-3.5 text-text-muted" aria-hidden />
@@ -200,7 +200,7 @@ function DateFilter({ stageCustom = false }: { stageCustom?: boolean } = {}) {
             />
 
             <div className="space-y-2">
-              <h4 className="text-xs uppercase tracking-wider text-text-dim">
+              <h4 className="overline text-text-dim">
                 Custom
               </h4>
               <label className="block">
@@ -231,7 +231,7 @@ function DateFilter({ stageCustom = false }: { stageCustom?: boolean } = {}) {
                 type="button"
                 onClick={() => customRange(customStart, customEnd)}
                 disabled={!customStart && !customEnd}
-                className="mt-1 inline-flex min-h-[44px] w-full items-center justify-center rounded-md border border-border bg-accent/15 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-accent/15"
+                className="mt-1 inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-accent-cyan/30 bg-accent-cyan/10 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent-cyan/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-accent-cyan/10"
               >
                 Apply custom range
               </button>}
@@ -283,7 +283,7 @@ function SegmentedFilter<T extends string>({
       aria-label={ariaLabel}
       className="inline-flex flex-wrap items-center gap-1.5"
     >
-      <legend className="mb-1 text-xs uppercase tracking-wider text-text-dim">
+      <legend className="mb-1 overline text-text-dim">
         {label}
       </legend>
       <PillButton
@@ -422,7 +422,7 @@ function RegionToggleRow() {
       aria-label="Filter by Battle.net region"
       className="inline-flex flex-wrap items-center gap-1.5"
     >
-      <legend className="mb-1 text-xs uppercase tracking-wider text-text-dim">
+      <legend className="mb-1 overline text-text-dim">
         Region
       </legend>
       {ANALYZER_REGIONS.map((code) => {
@@ -439,8 +439,8 @@ function RegionToggleRow() {
               "text-micro font-medium uppercase tracking-wider tabular-nums",
               "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
               on
-                ? "border-accent/40 bg-accent/10 text-accent"
-                : "border-border text-text-dim hover:bg-bg-elevated hover:text-text",
+                ? "border-accent-cyan/30 bg-accent-cyan/10 text-accent"
+                : "border-border text-text-dim hover:bg-bg-subtle/60 hover:text-text",
             ].join(" ")}
           >
             {code}
@@ -487,7 +487,7 @@ function ExcludeTooShortToggle() {
       // to the right edge under the trigger button.
       className={[
         "inline-flex cursor-pointer items-center gap-1.5 sm:ml-auto",
-        "py-1 text-xs uppercase tracking-wider text-text-dim",
+        "py-1 overline text-text-dim",
         "transition-colors hover:text-text",
         "focus-within:text-text",
       ].join(" ")}
@@ -527,7 +527,7 @@ function PresetGroup({
 }) {
   return (
     <div className="space-y-2">
-      <h4 className="text-xs uppercase tracking-wider text-text-dim">{title}</h4>
+      <h4 className="overline text-text-dim">{title}</h4>
       <ul className="-mx-1 flex flex-col gap-0.5">
         {ids.map((id) => {
           const preset = PRESETS.find((p) => p.id === id);
@@ -540,11 +540,11 @@ function PresetGroup({
                 onClick={() => onPick(id)}
                 aria-pressed={selected}
                 className={[
-                  "flex min-h-[44px] w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm",
+                  "flex min-h-[44px] w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                   selected
-                    ? "bg-accent/15 text-accent"
-                    : "text-text-muted hover:bg-bg-elevated hover:text-text",
+                    ? "bg-accent-cyan/10 text-accent ring-1 ring-accent-cyan/30"
+                    : "text-text-muted hover:bg-bg-subtle/60 hover:text-text",
                 ].join(" ")}
               >
                 <span>{preset.label}</span>
@@ -578,7 +578,7 @@ function SeasonGroup({
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
-        <h4 className="text-xs uppercase tracking-wider text-text-dim">{title}</h4>
+        <h4 className="overline text-text-dim">{title}</h4>
         {usingFallback ? (
           <span
             className="text-micro uppercase tracking-wider text-text-muted"
@@ -595,11 +595,11 @@ function SeasonGroup({
             onClick={() => onPick("current_season")}
             aria-pressed={active === "current_season"}
             className={[
-              "flex min-h-[44px] w-full flex-col items-start rounded-md px-3 py-2 text-left",
+              "flex min-h-[44px] w-full flex-col items-start rounded-lg px-3 py-2 text-left",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
               active === "current_season"
-                ? "bg-accent/15 text-accent"
-                : "text-text-muted hover:bg-bg-elevated hover:text-text",
+                ? "bg-accent-cyan/10 text-accent ring-1 ring-accent-cyan/30"
+                : "text-text-muted hover:bg-bg-subtle/60 hover:text-text",
             ].join(" ")}
           >
             <span className="text-sm font-medium">Auto-track current season</span>
@@ -669,11 +669,11 @@ function SeasonRow({
         aria-pressed={selected}
         title={label || ""}
         className={[
-          "flex min-h-[44px] w-full flex-col items-start rounded-md px-3 py-2 text-left",
+          "flex min-h-[44px] w-full flex-col items-start rounded-lg px-3 py-2 text-left",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           selected
-            ? "bg-accent/15 text-accent"
-            : "text-text-muted hover:bg-bg-elevated hover:text-text",
+            ? "bg-accent-cyan/10 text-accent ring-1 ring-accent-cyan/30"
+            : "text-text-muted hover:bg-bg-subtle/60 hover:text-text",
         ].join(" ")}
       >
         <span className="text-sm font-medium">

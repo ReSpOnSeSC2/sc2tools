@@ -10,7 +10,8 @@ describe("public player analysis CTA", () => {
     render(<GetYourOwnCTA />);
     const link = screen.getByRole("link", { name: mode === "all" ? "Analyze your replays free" : "Get yours at sc2tools.com" });
     expect(link.getAttribute("href")).toBe(mode === "all" ? "/try?utm_source=player&utm_medium=link&utm_campaign=instant" : "/");
-    expect(link.className).toContain("hard-press");
+    expect(link.className).toContain("btn-primary");
+    expect(link.className).toContain("bg-accent");
     expect(link.className).toContain("focus-visible:ring-2");
   });
 });

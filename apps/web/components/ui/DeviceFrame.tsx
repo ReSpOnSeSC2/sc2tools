@@ -39,7 +39,7 @@ export function DeviceFrame({
     >
       <div
         className={[
-          "overflow-hidden border border-border bg-bg-surface shadow-[var(--shadow-card)]",
+          "hud-corners overflow-hidden border border-line glass-strong shadow-pop",
           isPhone ? "rounded-[2rem]" : "rounded-xl",
         ].join(" ")}
       >

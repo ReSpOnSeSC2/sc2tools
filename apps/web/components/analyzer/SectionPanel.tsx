@@ -49,7 +49,7 @@ const ArcadeTab = dynamic(
  */
 export function SectionPanel({ tab }: { tab: Exclude<TabId, "opponents"> }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <SectionHeader tab={tab} />
       <SectionBody tab={tab} />
     </div>

@@ -45,7 +45,7 @@ export function StreamManagerShowcase({
     <section
       id={id}
       aria-labelledby={`${id}-title`}
-      className={`scroll-mt-28 overflow-hidden rounded-md border border-line bg-bg-surface shadow-hard ${className}`}
+      className={`scroll-mt-28 overflow-hidden rounded-2xl border border-line bg-bg-surface/70 surface-sheen shadow-pop ${className}`}
     >
       <div className="grid items-center gap-8 p-5 sm:p-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-10 lg:p-10">
         <div className="min-w-0">
@@ -55,7 +55,7 @@ export function StreamManagerShowcase({
           </p>
           <h2
             id={`${id}-title`}
-            className="mt-5 font-display text-[30px] font-bold leading-[1.1] tracking-tight text-text sm:text-[38px]"
+            className="mt-5 font-display text-h2 font-bold leading-[1.1] tracking-tight text-text sm:text-[2.5rem]"
           >
             One title.<br />
             Both YouTube formats.<br />
@@ -133,7 +133,7 @@ function SessionWorkspace() {
           <span className="text-micro text-text-dim">Desktop workspace</span>
         </div>
         <div className="p-4 sm:p-5">
-          <div className="rounded-md border border-border bg-bg-elevated p-3 sm:p-4">
+          <div className="rounded-xl border border-border bg-bg-elevated p-3 sm:p-4">
             <p className="flex items-center gap-2 text-micro text-text-muted">
               <Type className="h-3.5 w-3.5" aria-hidden /> Shared title
             </p>
@@ -168,7 +168,7 @@ function CanvasDestination({ orientation }: { orientation: "horizontal" | "verti
   const vertical = orientation === "vertical";
   const Icon = vertical ? Smartphone : MonitorPlay;
   return (
-    <div className="flex min-w-0 flex-col rounded-md border border-border bg-bg-surface p-3">
+    <div className="flex min-w-0 flex-col rounded-xl border border-border bg-bg-surface p-3">
       <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold text-text">
         <Youtube className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
         YouTube

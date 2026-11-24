@@ -297,9 +297,13 @@ function SettingsShellInner({
 
         {/* Desktop sidebar */}
         <nav aria-label="Settings navigation" className="hidden space-y-2 lg:block">
-          <div className="sticky top-4 grid gap-0.5 rounded-xl border border-line bg-bg-surface p-1 shadow-hard">
+          <div className={["sticky top-4 grid gap-0.5 rounded-2xl border border-line glass p-2 shadow-card",
+              "[&_[role=tab]]:relative [&_[role=tab]]:rounded-xl [&_[role=tab]]:px-3.5 [&_[role=tab]]:transition-colors",
+              "[&_[role=tab][aria-selected=true]]:bg-accent-cyan/10 [&_[role=tab][aria-selected=true]]:text-text",
+              "[&_[role=tab][aria-selected=true]]:before:absolute [&_[role=tab][aria-selected=true]]:before:inset-y-2 [&_[role=tab][aria-selected=true]]:before:left-0 [&_[role=tab][aria-selected=true]]:before:w-[3px] [&_[role=tab][aria-selected=true]]:before:rounded-full [&_[role=tab][aria-selected=true]]:before:bg-aurora",
+              "[&_[role=tab]:not([aria-selected=true])]:hover:bg-bg-subtle/60"].join(" ")}>
             {desktopRows.map((row, index) => row.kind === "heading" ? (
-              <h2 key={row.group.id} id={`${panelScopeId}-group-${row.group.id}`} data-settings-group={row.group.id} style={{ gridRow: index + 1 }} className="px-3 pb-1 pt-3 text-caption font-semibold text-text-muted">{row.group.label}</h2>
+              <h2 key={row.group.id} id={`${panelScopeId}-group-${row.group.id}`} data-settings-group={row.group.id} style={{ gridRow: index + 1 }} className="overline px-3.5 pb-1 pt-3 text-text-dim">{row.group.label}</h2>
             ) : row.kind === "devices" ? (
               <Link key="devices" href="/devices" aria-label="Devices" aria-describedby={`${panelScopeId}-devices-description`} data-settings-group="account" style={{ gridRow: index + 1 }}
                 onNavigate={(event) => {
@@ -311,7 +315,7 @@ function SettingsShellInner({
                     setPending({ kind: "devices", action: attempt, owner });
                   }
                 }}
-                className="block min-h-11 rounded-md px-3 py-2 text-caption font-medium text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                className="block min-h-11 rounded-xl px-3.5 py-2 text-caption font-medium text-text-muted transition-colors hover:bg-bg-subtle/60 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
                 <span className="block">Devices</span>
                 <span id={`${panelScopeId}-devices-description`} className="mt-1 block font-normal leading-snug">Pair and manage your PCs</span>
               </Link>
@@ -424,7 +428,7 @@ function MobileSettingsTabs({ tabs, active, isDirty, requestSwitch }: { tabs: re
   }, []);
   return <div className="relative min-w-0 lg:hidden">
     <div ref={scroller} role="tablist" tabIndex={-1} aria-label="Settings sections" aria-orientation="horizontal" onScroll={measure}
-      className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
+      className="scroll-fade-x -mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
       onKeyDown={(event) => {
         const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
         const index = items.indexOf(event.target as HTMLButtonElement);
@@ -441,7 +445,7 @@ function MobileSettingsTabs({ tabs, active, isDirty, requestSwitch }: { tabs: re
 function MobileTabTrigger({ tab, active, dirty, onActivate }: { tab: TabDef; active: boolean; dirty: boolean; onActivate: () => void }) {
   const { triggerId, panelId } = useTabIds(tab.id);
   return <button type="button" role="tab" id={triggerId + '-mobile'} data-value={tab.id} aria-controls={panelId} aria-selected={active} tabIndex={active ? 0 : -1} onClick={onActivate}
-    className={['relative inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-md border px-3 py-2 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', active ? 'border-accent/40 bg-accent/15 text-accent' : 'border-border bg-bg-surface text-text-muted'].join(' ')}>
+    className={['relative inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', active ? 'border-accent-cyan/30 bg-accent-cyan/10 text-accent ring-1 ring-accent-cyan/30' : 'border-line bg-bg-surface text-text-muted hover:bg-bg-subtle/60 hover:text-text'].join(' ')}>
     <tab.Icon className="h-4 w-4 shrink-0" aria-hidden /><span className="whitespace-nowrap">{tab.label}</span>
     {dirty ? <span role="img" aria-label="Unsaved changes" className="ml-0.5 h-1.5 w-1.5 rounded-full bg-accent-cyan" /> : null}
   </button>;

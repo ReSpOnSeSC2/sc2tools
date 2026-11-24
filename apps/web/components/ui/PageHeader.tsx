@@ -24,12 +24,12 @@ export interface PageHeaderProps {
 }
 
 const TITLE_CLASS: Record<NonNullable<PageHeaderProps["size"]>, string> = {
-  page: "text-h1 font-bold text-text",
-  section: "text-h3 font-bold text-text",
+  page: "text-h2 font-bold tracking-tight text-text sm:text-h1",
+  section: "text-h3 font-bold tracking-tight text-text",
 };
 
 const DESCRIPTION_CLASS: Record<NonNullable<PageHeaderProps["size"]>, string> = {
-  page: "max-w-2xl text-body-lg text-text-muted",
+  page: "max-w-3xl text-body-lg text-text-muted",
   section: "max-w-3xl text-body text-text-muted",
 };
 
@@ -56,7 +56,7 @@ export function PageHeader({
     >
       <div className="space-y-1.5">
         {eyebrow ? (
-          <div className="overline text-accent-cyan">{eyebrow}</div>
+          <div className="hud-label">{eyebrow}</div>
         ) : null}
         <Heading
           className={[

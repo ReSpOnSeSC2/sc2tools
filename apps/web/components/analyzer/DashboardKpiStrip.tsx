@@ -38,6 +38,9 @@ const CurrentSessionCard = dynamic(
   { loading: () => <div data-testid="kpi-today-session" className="col-span-2 min-w-0 lg:col-span-1"><Card><p role="status">Loading session view…</p><Skeleton rows={4} /></Card></div> },
 );
 
+/** Hero tier: the KPI cards sit one step above the quiet cards below. */
+const HERO_CARD = "!rounded-2xl surface-sheen !shadow-card";
+
 const LS_KEY = "analyzer.kpi.winRatePreset";
 
 /** Where the MMR card sends a player with no Pulse ID: the Pulse ID help on Settings → Profile. */
@@ -195,7 +198,7 @@ export function DashboardKpiStrip() {
   // The full-width session must not set the height of both mobile stat rows.
   return (
     <div
-      className="grid auto-rows-auto grid-cols-2 gap-3 lg:auto-rows-fr lg:grid-cols-5"
+      className="grid auto-rows-auto grid-cols-2 gap-3 lg:auto-rows-fr lg:grid-cols-5 [&_.font-display]:tracking-tight"
       data-testid="dashboard-kpi-strip"
     >
       <CurrentSessionCard />
@@ -236,6 +239,7 @@ export function DashboardKpiStrip() {
           </>
         }
         size="md"
+        className={`${HERO_CARD} aurora-ring !border-transparent`}
       />
 
       <StatCard
@@ -270,6 +274,7 @@ export function DashboardKpiStrip() {
           )
         }
         size="md"
+        className={HERO_CARD}
       />
       <MmrPerRegionStat />
       <StatCard
@@ -297,6 +302,7 @@ export function DashboardKpiStrip() {
           )
         }
         size="md"
+        className={HERO_CARD}
       />
     </div>
   );
@@ -379,7 +385,7 @@ function KpiRetry({ message, onRetry }: { message: ReactNode; onRetry: () => unk
         void retry();
       }}
       aria-busy={retrying || undefined}
-      className="-mx-1 inline-flex min-h-8 items-center gap-1.5 rounded px-1 text-left text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="-mx-1 inline-flex min-h-8 items-center gap-1.5 rounded-full px-1.5 text-left text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <RefreshCw
         className={[
@@ -435,6 +441,7 @@ function MmrPerRegionStat() {
         value="—"
         hint={<KpiPendingHint status={status} what="your MMR" q={mmr} />}
         size="md"
+        className={HERO_CARD}
       />
     );
   }
@@ -454,6 +461,7 @@ function MmrPerRegionStat() {
           <KpiRetry message="No current ladder MMR" onRetry={() => mmr.mutate()} />
         )}
         size="md"
+        className={HERO_CARD}
       />
     );
   }
@@ -482,6 +490,7 @@ function MmrPerRegionStat() {
         value={<span className="tabular-nums">{fmtMmr(e.mmr)}</span>}
         hint={truncated ? `${e.region || "—"} · +more` : e.region || "—"}
         size="md"
+        className={HERO_CARD}
       />
     );
   }
@@ -510,6 +519,7 @@ function MmrPerRegionStat() {
       }
       hint={truncated ? "+ more toons not shown" : undefined}
       size="md"
+        className={HERO_CARD}
     />
   );
 }

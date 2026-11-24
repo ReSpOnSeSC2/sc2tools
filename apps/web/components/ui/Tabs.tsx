@@ -120,7 +120,7 @@ Tabs.List = function TabsList({
       className={[
         orientation === "horizontal"
           ? "flex flex-wrap items-center gap-1 border-b border-border overflow-x-auto"
-          : "rounded-xl border border-line bg-bg-surface shadow-hard sticky top-4 flex h-fit flex-col gap-0.5 overflow-hidden p-1",
+          : "rounded-xl border border-line bg-bg-surface surface-sheen shadow-card sticky top-4 flex h-fit flex-col gap-0.5 overflow-hidden p-1",
         className,
       ]
         .filter(Boolean)
@@ -201,14 +201,15 @@ Tabs.Trigger = function TabsTrigger({
           ? [
               "-mb-px border-b-2 px-3 py-2 text-caption whitespace-nowrap",
               selected
-                ? "border-accent text-accent"
+                ? "border-accent-cyan font-semibold text-text"
                 : "border-transparent text-text-muted hover:text-text",
             ].join(" ")
           : [
-              "block w-full rounded-md px-3 py-2 text-left text-caption",
+              "relative block w-full rounded-lg px-3.5 py-2 text-left text-caption",
+              "before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-aurora-1 before:to-aurora-3 before:transition-opacity",
               selected
-                ? "bg-accent/15 text-accent"
-                : "text-text-muted hover:bg-bg-elevated hover:text-text",
+                ? "bg-accent-cyan/10 font-semibold text-text before:opacity-100"
+                : "text-text-muted before:opacity-0 hover:bg-bg-subtle/60 hover:text-text",
             ].join(" "),
         className,
       ]

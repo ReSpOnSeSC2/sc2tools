@@ -155,11 +155,11 @@ export function SortableTh({
         type="button"
         onClick={() => setSort(col)}
         title={title}
-        className={`${info ? "flex min-h-11 min-w-0 flex-1" : "flex w-full"} items-center gap-1 text-micro uppercase tracking-wider hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${
+        className={`${info ? "flex min-h-11 min-w-0 flex-1" : "flex w-full"} items-center gap-1 text-micro uppercase tracking-[0.12em] hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${
           compact ? "px-2 py-1.5" : "px-3 py-2"
         } ${
           align === "right" ? "justify-end text-right" : "justify-start text-left"
-        } ${active ? "text-text" : "text-text-muted"}`}
+        } ${active ? "text-text" : "text-text-dim"}`}
       >
         <span>{label}</span>
         {arrow ? <span aria-hidden>{arrow}</span> : null}

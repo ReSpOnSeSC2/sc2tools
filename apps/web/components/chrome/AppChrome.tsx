@@ -209,15 +209,15 @@ function AppChromeShell({ children }: { children: ReactNode }) {
           aria-label="App navigation"
           className={[
             "app-rail group/rail fixed inset-y-0 left-0 z-nav flex w-16 flex-col gap-1 overflow-y-auto overflow-x-hidden",
-            "border-r border-border bg-bg-surface px-2 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]",
+            "glass border-r border-border px-2 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]",
             "motion-safe:transition-[width] motion-safe:duration-150",
-            "hover:w-56 focus-within:w-56 hover:shadow-hard",
+            "hover:w-56 focus-within:w-56 hover:shadow-pop focus-within:shadow-pop",
           ].join(" ")}
         >
           <Link
             href="/"
             aria-label="SC2 Tools — home"
-            className="mb-1 flex h-11 items-center gap-3 rounded-lg px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="mb-1 flex h-11 items-center gap-3 rounded-xl px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <LogoMark size={30} className="shrink-0" priority />
             <RailLabel><Wordmark size="sm" /></RailLabel>
@@ -260,7 +260,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             ))}
             <span className="min-h-3 flex-1" />
           </SignedOut>
-          <button type="button" aria-pressed={pinned} aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"} onClick={togglePinned} className="mt-auto flex min-h-11 items-center gap-3 rounded-lg px-2.5 text-text-muted hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          <button type="button" aria-pressed={pinned} aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"} onClick={togglePinned} className="mt-auto flex min-h-11 items-center gap-3 rounded-xl border border-transparent px-2.5 text-text-muted motion-safe:transition-colors hover:bg-bg-subtle/70 hover:text-text aria-pressed:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
             {pinned ? <PanelLeftClose className="h-5 w-5 shrink-0" aria-hidden /> : <PanelLeftOpen className="h-5 w-5 shrink-0" aria-hidden />}<RailLabel>{pinned ? "Unpin sidebar" : "Pin sidebar"}</RailLabel>
           </button>
         </nav>
@@ -269,10 +269,10 @@ function AppChromeShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* pt: in the installed iOS app the status bar overlays the page
             (black-translucent), so the bar starts below the notch. */}
-        <header className="sticky top-0 z-30 border-b border-border bg-bg/90 pt-[env(safe-area-inset-top)] supports-[backdrop-filter]:backdrop-blur-md">
+        <header className="glass sticky top-0 z-30 border-b border-border pt-[env(safe-area-inset-top)]">
           <div className="mx-auto flex h-12 w-full max-w-[1680px] items-center gap-3 px-4 sm:px-6 lg:px-8">
             <Link
-              href="/"
+              href={isSignedIn ? "/app" : "/"}
               aria-label="SC2 Tools — home"
               className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:hidden"
             >
@@ -285,7 +285,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
                 onClick={(event) => backToGameSource(event, safeGameSource(backHref))}
                 onNavigate={() => beginNavigation(backHref)}
                 aria-label={backLabel}
-                className="grid h-11 w-11 shrink-0 place-items-center md:h-8 md:w-8 rounded-full border border-border text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line text-text-muted motion-safe:transition-colors hover:bg-bg-subtle hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <ChevronLeft className="h-4 w-4" aria-hidden />
               </Link>
@@ -377,9 +377,9 @@ function AppChromeShell({ children }: { children: ReactNode }) {
       <nav
         ref={tabBarRef}
         aria-label="Quick sections"
-        className="fixed inset-x-0 bottom-0 z-nav border-t border-border bg-bg/95 pb-[env(safe-area-inset-bottom,0px)] supports-[backdrop-filter]:backdrop-blur-md md:hidden"
+        className="glass fixed inset-x-0 bottom-0 z-nav border-t border-border pb-[env(safe-area-inset-bottom,0px)] md:hidden"
       >
-        <div className="mx-auto flex max-w-md items-stretch px-2 py-1.5">
+        <div className="mx-auto flex max-w-lg items-stretch px-2 py-1.5">
           <ClerkLoading>{Array.from({ length: 5 }, (_, index) => <div key={index} aria-hidden className="flex flex-1 flex-col items-center gap-1 py-1.5"><span className="h-5 w-5 rounded bg-bg-elevated motion-safe:animate-pulse" /><span className="h-2 w-7 rounded bg-bg-elevated" /></div>)}</ClerkLoading>
           <SignedIn>
             {mobileTabs.map((entry) => (
@@ -395,13 +395,10 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               onClick={() => setSheetOpen(true)}
               aria-haspopup="dialog"
               aria-expanded={sheetOpen}
-              className={[
-                "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-micro font-bold",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                !inTabBar ? "bg-accent-cyan/10 text-accent-cyan" : "text-text-muted",
-              ].join(" ")}
+              className={[TAB_BASE, !inTabBar ? "text-accent-cyan" : "text-text-muted hover:text-text"].join(" ")}
             >
-              <MoreHorizontal className="h-5 w-5" aria-hidden />
+              {!inTabBar ? <TabBeam /> : null}
+              <span className={[TAB_PILL, !inTabBar ? "bg-accent-cyan/12" : ""].join(" ")}><MoreHorizontal className="h-5 w-5" aria-hidden /></span>
               More
             </button>
           </SignedIn>
@@ -415,9 +412,9 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             ))}
             <AuthContextLink
               kind="sign-in"
-              className="flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-micro font-bold text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className={[TAB_BASE, "text-text-muted hover:text-text"].join(" ")}
             >
-              <LogIn className="h-5 w-5" aria-hidden />
+              <span className={TAB_PILL}><LogIn className="h-5 w-5" aria-hidden /></span>
               Sign in
             </AuthContextLink>
           </SignedOut>
@@ -473,13 +470,20 @@ function TitleTag({
   title: string;
 }) {
   return (
-    <Tag className="flex min-w-0 items-center gap-2 font-display text-body-lg font-extrabold tracking-tight text-text">
+    <Tag className="flex min-w-0 items-center gap-2 font-display text-body-lg font-bold tracking-tight text-text">
       {Icon ? (
         <Icon className="h-[18px] w-[18px] shrink-0 text-accent-cyan" aria-hidden />
       ) : null}
       <span className="truncate">{title}</span>
     </Tag>
   );
+}
+
+const TAB_BASE = "relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl px-1 pb-1 pt-1.5 text-micro font-semibold motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+const TAB_PILL = "grid h-7 w-12 place-items-center rounded-full motion-safe:transition-colors";
+
+function TabBeam() {
+  return <span aria-hidden className="aurora-beam pointer-events-none absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full" />;
 }
 
 function TabBarLink({ entry, active }: { entry: NavEntry; active: boolean }) {
@@ -489,13 +493,10 @@ function TabBarLink({ entry, active }: { entry: NavEntry; active: boolean }) {
       href={entry.href}
       onNavigate={() => beginNavigation(entry.href)}
       aria-current={active ? "page" : undefined}
-      className={[
-        "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-micro font-bold",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        active ? "bg-accent-cyan/10 text-accent-cyan" : "text-text-muted hover:text-text",
-      ].join(" ")}
+      className={[TAB_BASE, active ? "text-accent-cyan" : "text-text-muted hover:text-text"].join(" ")}
     >
-      <Icon className="h-5 w-5" aria-hidden />
+      {active ? <TabBeam /> : null}
+      <span className={[TAB_PILL, active ? "bg-accent-cyan/12" : ""].join(" ")}><Icon className="h-5 w-5" aria-hidden /></span>
       {entry.shortLabel ?? entry.label}
     </Link>
   );

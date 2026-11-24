@@ -139,12 +139,12 @@ function DrawerLink({ href, label, active, onSelect }: DrawerLinkProps) {
         aria-current={active ? "page" : undefined}
         onClick={onSelect}
         className={[
-          "flex h-12 items-center rounded-full px-4 font-display text-body font-bold",
+          "flex h-12 items-center rounded-full px-4 text-body font-medium",
           "motion-safe:transition-colors motion-safe:duration-150",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface",
           active
-            ? "bg-accent/10 text-accent-cyan"
-            : "text-text-muted hover:bg-bg-elevated hover:text-text",
+            ? "bg-bg-subtle text-text"
+            : "text-text-muted hover:bg-bg-subtle/70 hover:text-text",
         ].join(" ")}
       >
         {label}

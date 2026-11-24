@@ -219,14 +219,14 @@ function Bell_({ compact }: { compact: boolean }) {
         aria-label={count ? `Notifications, ${count} unread` : "Notifications"}
         onClick={togglePanel}
         className={[
-          "hard-press relative inline-flex items-center justify-center rounded-full border border-line bg-bg-surface text-text hover:bg-bg-elevated",
+          "relative inline-flex items-center justify-center rounded-full border border-line bg-bg-elevated/60 text-text-muted transition-colors hover:bg-bg-subtle hover:text-text",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           compact ? "h-8 min-w-8 px-2" : "h-9 min-w-9 px-2.5",
         ].join(" ")}
       >
         <Bell className={`h-4 w-4 ${unread.error ? "text-text-dim" : ""}`} aria-hidden />
         {count > 0 ? (
-          <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white">
+          <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border border-bg bg-danger px-1 font-mono text-micro font-bold leading-none text-white">
             {count > 99 ? "99+" : String(count)}
           </span>
         ) : null}

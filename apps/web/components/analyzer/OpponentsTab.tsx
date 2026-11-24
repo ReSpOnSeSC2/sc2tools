@@ -432,7 +432,7 @@ export function OpponentsTab({
       ) : !showSkeleton && rawItems.length === 0 && summary.data?.hasAnyGames === false ? <NoGamesYet /> : quick === "rivals" ? (
         <StarredRivalCards rows={items} summary={summary.data} keyFor={row => rivalKeys(row, pulseLinks?.links).find(key => rivals.keys.includes(key))} onOpen={open} star={star} channelsFor={channelsFor} totalStars={rivals.keys.length} />
       ) : !showSkeleton && items.length === 0 ? (
-        <div className="rounded-xl border border-line bg-bg-surface shadow-hard">
+        <div className="rounded-2xl border border-line bg-bg-surface surface-sheen shadow-card">
           {hasNotes ? <div className="p-6 text-center"><h3 className="font-semibold">No opponents with notes yet. Add one from any dossier.</h3><Button className="mt-3" variant="secondary" onClick={() => setHasNotes(false)}>Show opponents without notes</Button></div> : <NoOpponentsMatch
             minGames={minGames}
             hiddenByMinGames={hiddenByMinGames}

@@ -82,10 +82,10 @@ export function ReplayDemo() {
 
 function ReplayDemoUnavailable() {
   return <section aria-labelledby="home-demo-unavailable-title" className="mx-auto max-w-5xl">
-    <Card className="!rounded-md">
+    <Card className="!rounded-xl">
       <div className="space-y-4">
         <p className="kicker">Build editor demo</p>
-        <h2 id="home-demo-unavailable-title" className="font-serif text-[28px] font-semibold tracking-[-0.01em] text-text md:text-[36px]">Turn a replay into a custom build</h2>
+        <h2 id="home-demo-unavailable-title" className="font-display text-h2 font-bold tracking-tight text-text md:text-[2.5rem]">Turn a replay into a custom build</h2>
         <p className="text-body-lg text-text-muted">The replay demo is currently unavailable. Use the desktop app to sync your games and review their build orders.</p>
         <div className="flex flex-wrap gap-3">
           <LinkButton href="/download" size="lg">Get the desktop app</LinkButton>
@@ -173,7 +173,7 @@ function BrowserReplayDemo() {
 
   return (
     <section className="mx-auto max-w-5xl">
-      <Card {...handlers} onPointerEnter={warm} onFocusCapture={warm} padded={false} className={`relative overflow-hidden !rounded-md ${dragging ? "ring-2 ring-accent" : ""}`}>
+      <Card {...handlers} onPointerEnter={warm} onFocusCapture={warm} padded={false} className={`relative overflow-hidden !rounded-xl ${dragging ? "ring-2 ring-accent" : ""}`}>
         {dragging ? <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-bg/90 text-h3 text-accent">Drop to analyze</div> : null}
         <div className="grid items-center gap-6 p-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:gap-10 md:p-10">
           <div className="space-y-4">
@@ -181,7 +181,7 @@ function BrowserReplayDemo() {
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
               Build editor demo
             </p>
-            <h2 className="font-serif text-[28px] font-semibold tracking-[-0.01em] text-text md:text-[36px]">
+            <h2 className="font-display text-h2 font-bold tracking-tight text-text md:text-[2.5rem]">
               Turn a replay into a custom build
             </h2>
             <p className="text-body-lg text-text-muted">
@@ -306,7 +306,7 @@ function ReplayDropPreview({ onActivate }: { onActivate: () => void }) {
       type="button"
       onClick={onActivate}
       aria-label="Choose a replay file to preview"
-      className="group relative flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-md border border-dashed border-accent-cyan/40 bg-bg-elevated/40 p-6 text-center transition-colors hover:border-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      className="group relative flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-xl border border-dashed border-accent-cyan/40 bg-bg-elevated/40 p-6 text-center transition-colors hover:border-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
     >
       <span
         aria-hidden
@@ -318,7 +318,7 @@ function ReplayDropPreview({ onActivate }: { onActivate: () => void }) {
       />
       <span
         aria-hidden
-        className="relative flex h-16 w-16 items-center justify-center rounded-md border border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan motion-safe:transition-transform motion-safe:duration-200 group-hover:scale-110"
+        className="relative flex h-16 w-16 items-center justify-center rounded-xl border border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan motion-safe:transition-transform motion-safe:duration-200 group-hover:scale-110"
       >
         <FileUp className="h-8 w-8" />
       </span>

@@ -14,17 +14,17 @@ export default function TodayLoading() {
           <div
             key={i}
             className={[
-              "rounded-xl border border-line bg-bg-surface p-4 shadow-hard",
+              "rounded-2xl border border-line bg-bg-surface surface-sheen p-4 shadow-card",
               i === 0 ? "col-span-2 lg:col-span-1" : "",
             ].join(" ")}
           >
-            <div className="h-3 w-16 animate-pulse rounded bg-bg-elevated" />
-            <div className="mt-2 h-6 w-20 animate-pulse rounded bg-bg-elevated" />
+            <div className="skeleton-shimmer h-3 w-16 rounded-full" />
+            <div className="skeleton-shimmer mt-3 h-8 w-24 rounded-lg" />
           </div>
         ))}
       </div>
-      <div className="h-32 animate-pulse rounded-xl border border-line bg-bg-surface shadow-hard" />
-      <div className="h-40 animate-pulse rounded-xl border border-line bg-bg-surface shadow-hard" />
+      <div className="skeleton-shimmer h-32 rounded-2xl border border-line" />
+      <div className="skeleton-shimmer h-40 rounded-2xl border border-line" />
     </div>
   );
 }

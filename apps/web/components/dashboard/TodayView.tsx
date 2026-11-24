@@ -67,7 +67,7 @@ export function TodayView() {
       <SectionBoundary label="your league targets"><TargetsStrip /></SectionBoundary>
 
       {me.weeklyReportWeek ? <Card className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-body font-semibold text-text">Last week</h2>
+        <h2 className="font-display text-body font-bold tracking-tight text-text">Last week</h2>
         <LinkButton href={`/app/reports/weekly/${encodeURIComponent(me.weeklyReportWeek)}`} variant="secondary" size="sm" className="min-h-11">Open weekly report</LinkButton>
       </Card> : null}
 

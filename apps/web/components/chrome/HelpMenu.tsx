@@ -142,9 +142,9 @@ export function HelpMenu({
         onClick={() => (open ? setOpen(false) : openMenu("first"))}
         onKeyDown={onButtonKeyDown}
         className={[
-          "hard-press inline-flex h-9 w-9 items-center justify-center rounded-full",
-          "border border-line bg-bg-surface text-text hover:bg-bg-elevated",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+          "inline-flex h-9 w-9 items-center justify-center rounded-full text-text-muted",
+          "motion-safe:transition-colors hover:bg-bg-subtle hover:text-text",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         ].join(" ")}
       >
         <LifeBuoy className="h-4 w-4" aria-hidden />
@@ -157,7 +157,7 @@ export function HelpMenu({
           aria-labelledby={buttonId}
           onKeyDown={onMenuKeyDown}
           className={[
-            "fixed inset-x-4 top-[calc(env(safe-area-inset-top,0px)+3.5rem)] z-50 rounded-xl border border-line bg-bg-surface p-1.5 shadow-hard",
+            "fixed inset-x-4 top-[calc(env(safe-area-inset-top,0px)+3.5rem)] z-50 rounded-xl border border-line glass-strong p-1.5 shadow-pop motion-safe:animate-scale-in",
             "sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72",
           ].join(" ")}
         >

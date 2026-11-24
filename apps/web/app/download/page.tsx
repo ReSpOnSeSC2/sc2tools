@@ -48,7 +48,8 @@ export default function DownloadPage() {
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(SOFTWARE_JSON_LD) }}
       />
       <header className="space-y-3">
-        <h1 className="text-display-lg font-semibold tracking-tight text-text">
+        <p className="hud-label">Windows agent · free</p>
+        <h1 className="font-display text-h1 font-extrabold tracking-[-0.04em] text-text md:text-display-lg">
           Download the SC2 Tools Agent
         </h1>
         <p className="max-w-2xl text-body-lg text-text-muted">

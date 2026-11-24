@@ -36,8 +36,8 @@ import { PRODUCT_FACTS } from "@/lib/productFacts";
 import { CompanionShowcase } from "@/components/landing/CompanionShowcase";
 import { LiveFromTheLadder } from "@/components/landing/LiveFromTheLadder";
 import { LinkButton } from "@/components/ui/Button";
-import { buttonClassName } from "@/components/ui/buttonStyles";
 
+const TOOL_LINK = "flex min-h-11 items-center justify-between gap-2 border-t border-line px-3 text-caption transition-colors hover:bg-bg-subtle/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent first:border-t-0";
 // A long landing label may grow past one line on a phone.
 const WRAPPING_CTA = "h-auto min-h-12 py-2 text-center";
 const HOME_TOOL_LINKS = [
@@ -78,7 +78,8 @@ export function LandingPageContent({ donationCoverage }: { donationCoverage?: Re
 
 function LandingHero() {
   return (
-    <section className="pt-10 md:pt-16">
+    <section className="relative isolate pt-10 md:pt-16">
+      <div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-80 w-[48rem] max-w-full -translate-x-1/2 rounded-full bg-aurora opacity-10 blur-3xl" />
       <div className="grid grid-cols-1 items-start gap-x-10 gap-y-10 lg:grid-cols-12">
         <div className="min-w-0 lg:col-span-5 lg:pr-2">
           {/* The kicker line is part of the H1 so the page's main heading
@@ -86,13 +87,13 @@ function LandingHero() {
               "starcraft 2 overlay"); visually it stays a kicker above the
               tagline. */}
           <h1>
-            <span className="kicker block">StarCraft II replay analyzer &amp; stream overlays</span>
-            <span className="mt-5 block font-serif text-[44px] font-semibold leading-[1.02] tracking-[-0.01em] text-text md:text-[60px]">
+            <span className="hud-label inline-block rounded-full border border-accent-cyan/30 bg-accent-cyan/10 px-3 py-1">StarCraft II replay analyzer &amp; stream overlays</span>
+            <span className="mt-5 block font-display text-[2.75rem] font-extrabold leading-[1.05] tracking-[-0.04em] text-text md:text-display-xl">
               Built for ladder players,{" "}
-              <em className="font-serif italic text-editorial">by ladder players.</em>
+              <span className="aurora-text">by ladder players.</span>
             </span>
           </h1>
-          <p className="drop-initial mt-6 max-w-prose text-body-lg text-text-muted">
+          <p className="mt-6 max-w-prose text-body-lg text-text-muted">
             Play normally. SC2 Tools reads every replay, reconstructs the
             match, learns the opponents you face, coaches the builds you
             practice, and powers a complete stream production suite.
@@ -102,7 +103,7 @@ function LandingHero() {
           <LandingTrustStrip />
           <Link
             href="#stream-sessions"
-            className="mt-5 inline-flex min-h-11 items-center gap-2 text-caption font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+            className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full text-caption font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
             New: shared stream titles and two YouTube formats
             <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
@@ -121,8 +122,8 @@ function LandingToolLinks() {
   const links = HOME_TOOL_LINKS.filter(({ href }) => browserPublic || (href !== "/wrapped" && href !== "/career"));
 
   return (
-    <nav aria-label="More SC2 Tools" className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-line bg-bg-surface p-1">
-      <Link href="/tools" prefetch={false} className={buttonClassName({ variant: "secondary", size: "sm", className: "col-span-2 min-h-11" })}>
+    <nav aria-label="More SC2 Tools" className="mt-5 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-bg-surface/60">
+      <Link href="/tools" prefetch={false} className={`${TOOL_LINK} col-span-2 font-semibold text-accent`}>
         Explore all tools <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
       </Link>
       {links.map(({ href, label }) => (
@@ -130,7 +131,7 @@ function LandingToolLinks() {
           key={href}
           href={href}
           prefetch={false}
-          className={buttonClassName({ variant: "ghost", size: "sm", className: "min-h-11" })}
+          className={`${TOOL_LINK} text-text-muted hover:text-text`}
         >
           {label}
           <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -247,15 +248,15 @@ function HeroPeekSlide({
   imageAlt,
 }: HeroPeek) {
   return (
-    <div className="grid min-h-[260px] items-center gap-6 px-6 py-8 sm:min-h-[320px] sm:px-9 sm:py-10 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:gap-9">
+    <div className="grid min-h-[260px] items-center gap-6 px-5 py-7 sm:min-h-[320px] sm:px-8 sm:py-9 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:gap-8">
       <div className="space-y-3">
-        <p className="kicker">{eyebrow}</p>
-        <h2 className="font-serif text-[26px] font-semibold leading-tight tracking-[-0.01em] text-text md:text-[30px]">
+        <p className="hud-label">{eyebrow}</p>
+        <h2 className="font-display text-h3 font-bold leading-tight tracking-tight text-text md:text-[1.9rem]">
           {title}
         </h2>
         <p className="text-body-lg text-text-muted">{body}</p>
       </div>
-      <div className="overflow-hidden rounded-md border border-line bg-bg-elevated/40">
+      <div className="overflow-hidden rounded-xl border border-line bg-bg-elevated/40 shadow-card">
         <Image
           src={imageSrc}
           alt={imageAlt}
@@ -278,10 +279,10 @@ const LANDING_TRUST = [
 
 function LandingTrustStrip() {
   return (
-    <ul className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-4 text-text-muted">
+    <ul className="mt-6 flex flex-wrap items-center gap-2 text-text-muted">
       {LANDING_TRUST.map(({ icon: Icon, label }) => (
-        <li key={label} className="flex items-center gap-1.5 text-caption">
-          <Icon className="h-4 w-4 text-editorial" aria-hidden />
+        <li key={label} className="flex items-center gap-1.5 rounded-full border border-line bg-bg-surface/60 px-3 py-1.5 text-caption">
+          <Icon className="h-4 w-4 text-accent-cyan" aria-hidden />
           <span>{label}</span>
         </li>
       ))}
@@ -318,23 +319,25 @@ const OUTCOMES = [
 
 function OutcomeRail() {
   return (
-    <nav aria-label="Explore SC2 Tools features" className="mt-16 border-y border-border-strong md:mt-20">
-      <div className="grid gap-px bg-border md:grid-cols-3">
+    <nav aria-label="Explore SC2 Tools features" className="mt-16 md:mt-24">
+      <div className="grid gap-4 md:grid-cols-3">
         {OUTCOMES.map(({ href, num, kicker, title, body, icon: Icon }) => (
           <Link
             key={href}
             href={href}
-            className="group bg-bg px-5 py-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:px-6"
+            className="group lift surface-sheen rounded-2xl border border-line bg-bg-surface/70 p-5 shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:p-6"
           >
             <div className="flex items-center justify-between gap-3">
-              <span className="font-serif text-h3 text-editorial">{num}</span>
-              <Icon className="h-5 w-5 text-accent-cyan" aria-hidden />
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/30">
+                <Icon className="h-5 w-5" aria-hidden />
+              </span>
+              <span className="rounded-full border border-line px-2.5 py-0.5 font-mono text-caption text-text-dim">{num}</span>
             </div>
-            <p className="kicker mt-5">{kicker}</p>
-            <p className="mt-2 font-serif text-h4 font-semibold text-text group-hover:text-editorial">{title}</p>
+            <p className="hud-label mt-5">{kicker}</p>
+            <p className="mt-2 font-display text-h4 font-bold tracking-tight text-text">{title}</p>
             <p className="mt-2 text-caption text-text-muted">{body}</p>
             <span className="mt-4 inline-flex items-center gap-1.5 text-caption font-semibold text-accent-cyan">
-              Explore {kicker.toLowerCase()} <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+              Explore {kicker.toLowerCase()} <ArrowRight className="h-3.5 w-3.5 motion-safe:transition-transform group-hover:translate-x-0.5" aria-hidden />
             </span>
           </Link>
         ))}
@@ -345,7 +348,7 @@ function OutcomeRail() {
 
 function ImprovementChapter() {
   return (
-    <section id="analyze" className="scroll-mt-24 pt-24 md:pt-32">
+    <section id="analyze" className="scroll-mt-24 pt-20 md:pt-28">
       <EditorialHead
         folio="A"
         kicker="Analyze"
@@ -366,8 +369,8 @@ function ImprovementChapter() {
 
 function ChapterNote({ title, body }: { title: string; body: string }) {
   return (
-    <div className="border-t border-line pt-4">
-      <p className="font-serif text-h4 font-semibold text-text">{title}</p>
+    <div className="rounded-2xl border border-line bg-bg-surface/60 p-5">
+      <p className="font-display text-h4 font-bold tracking-tight text-text">{title}</p>
       <p className="mt-2 text-caption text-text-muted">{body}</p>
     </div>
   );
@@ -375,7 +378,7 @@ function ChapterNote({ title, body }: { title: string; body: string }) {
 
 function PracticeChapter() {
   return (
-    <section id="practice" className="scroll-mt-24 pt-24 md:pt-32">
+    <section id="practice" className="scroll-mt-24 pt-20 md:pt-28">
       <EditorialHead
         folio="B"
         kicker="Practice"
@@ -401,20 +404,20 @@ const ARCADE_ICONS = [
 
 function ArcadeStrip() {
   return (
-    <div className="mt-8 grid gap-6 border-y border-border py-6 lg:grid-cols-[1fr_auto] lg:items-center">
+    <div className="surface-sheen mt-8 grid gap-6 rounded-2xl border border-line bg-bg-surface/70 p-5 shadow-card sm:p-6 lg:grid-cols-[1fr_auto] lg:items-center">
       <div>
-        <p className="kicker">Arcade · {PRODUCT_FACTS.arcadeModes} modes</p>
-        <h3 className="mt-2 font-serif text-h3 font-semibold text-text">Your replay history, turned into daily challenges.</h3>
+        <p className="hud-label">Arcade · {PRODUCT_FACTS.arcadeModes} modes</p>
+        <h3 className="mt-2 font-display text-h3 font-bold tracking-tight text-text">Your replay history, turned into daily challenges.</h3>
         <p className="mt-2 max-w-2xl text-caption text-text-muted">Quizzes, streak hunts, weekly bingo, build portfolios, score cards and season recaps—made from games you actually played.</p>
       </div>
       <ul className="flex flex-wrap gap-2" aria-label="Example Arcade modes">
         {ARCADE_ICONS.map((item) => (
-          <li key={item.label} title={item.label} className="flex h-12 w-12 items-center justify-center rounded-md border border-editorial/30 bg-editorial/10">
+          <li key={item.label} title={item.label} className="flex h-12 w-12 items-center justify-center rounded-xl border border-accent-cyan/30 bg-accent-cyan/10">
             <Image src={item.src} alt="" width={32} height={32} className="h-8 w-8" unoptimized />
             <span className="sr-only">{item.label}</span>
           </li>
         ))}
-        <li className="flex h-12 min-w-12 items-center justify-center rounded-md border border-border bg-bg-elevated px-3 text-caption font-bold text-text-muted">+{PRODUCT_FACTS.arcadeModes - ARCADE_ICONS.length}</li>
+        <li className="flex h-12 min-w-12 items-center justify-center rounded-xl border border-line bg-bg-elevated px-3 text-caption font-bold text-text-muted">+{PRODUCT_FACTS.arcadeModes - ARCADE_ICONS.length}</li>
       </ul>
     </div>
   );
@@ -422,7 +425,7 @@ function ArcadeStrip() {
 
 function StreamChapter() {
   return (
-    <section id="stream" className="scroll-mt-24 pt-24 md:pt-32">
+    <section id="stream" className="scroll-mt-24 pt-20 md:pt-28">
       <EditorialHead
         folio="C"
         kicker="Stream Studio"
@@ -436,8 +439,8 @@ function StreamChapter() {
       <div className="mt-8">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="kicker">Built-in virtual sets</p>
-            <h3 className="mt-2 font-serif text-h3 font-semibold text-text">{numberWord(PRODUCT_FACTS.virtualSets)} broadcast backdrops, ready at 1080p and 4K.</h3>
+            <p className="hud-label">Built-in virtual sets</p>
+            <h3 className="mt-2 font-display text-h3 font-bold tracking-tight text-text">{numberWord(PRODUCT_FACTS.virtualSets)} broadcast backdrops, ready at 1080p and 4K.</h3>
           </div>
           <p className="max-w-md text-caption text-text-muted">One-click OBS layouts, automatic scene switching, and synchronized landscape or portrait B-roll keep every canvas in step.</p>
         </div>
@@ -446,7 +449,7 @@ function StreamChapter() {
       <p className="mt-8">
         <Link
           href="/stream-studio"
-          className="inline-flex min-h-[44px] items-center gap-2 font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         >
           See every StarCraft II overlay in Stream Studio
           <ArrowRight className="h-4 w-4" aria-hidden />
@@ -500,24 +503,29 @@ const INCLUDED_GROUPS = [
 
 function IncludedChapter() {
   return (
-    <section className="pt-24 md:pt-32">
+    <section className="pt-20 md:pt-28">
       <EditorialHead
         folio="D"
         kicker="Everything included"
         title="One replay pipeline. A whole ladder toolkit."
         standfirst="The headline features are only the start. Everything below ships in the same free product and stays fed by the same automatic replay sync."
       />
-      <div className="mt-10 grid gap-6 lg:grid-cols-3">
-        {INCLUDED_GROUPS.map(({ title, stat, icon: Icon, items }) => (
-          <article key={title} className="rounded-md border border-line bg-bg-surface p-5 shadow-hard sm:p-6">
+      <div className="mt-10 grid gap-4 lg:grid-cols-4">
+        {INCLUDED_GROUPS.map(({ title, stat, icon: Icon, items }, index) => (
+          <article
+            key={title}
+            className={`surface-sheen relative rounded-2xl bg-bg-surface/70 p-5 shadow-card sm:p-6 ${index === 0 ? "aurora-ring lg:col-span-2 lg:row-span-2" : "border border-line lg:col-span-2"}`}
+          >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="kicker">{title}</p>
-                <p className="mt-2 text-caption font-semibold text-text">{stat}</p>
+                <p className="hud-label">{title}</p>
+                <p className="mt-2 font-display text-h4 font-bold tracking-tight text-text">{stat}</p>
               </div>
-              <Icon className="h-6 w-6 text-accent-cyan" aria-hidden />
+              <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/30">
+                <Icon className="h-5 w-5" aria-hidden />
+              </span>
             </div>
-            <ul className="mt-5 space-y-3">
+            <ul className={`mt-5 grid gap-3 ${index === 0 ? "" : "sm:grid-cols-2"}`}>
               {items.map((item) => (
                 <li key={item} className="flex gap-2.5 text-caption text-text-muted">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
@@ -534,21 +542,25 @@ function IncludedChapter() {
 
 function LandingHowItWorks() {
   return (
-    <section className="mt-24 md:mt-32">
+    <section className="mt-20 md:mt-28">
       <EditorialHead
         folio="E"
         kicker="Getting started"
         title="Install once. Then just play."
       />
-      <div className="mt-10 grid gap-x-10 gap-y-10 md:grid-cols-3">
+      <div className="relative mt-10 grid gap-x-10 gap-y-8 md:grid-cols-3">
+        <div aria-hidden className="absolute left-[8%] right-[8%] top-5 hidden h-px bg-gradient-to-r from-transparent via-border-strong to-transparent md:block" />
         {[
           { num: "01", title: "Install the agent", body: "Sign in and install the small Windows agent. Setup takes about a minute." },
           { num: "02", title: "Play normally", body: "Every finished replay is read, classified and synced automatically in the background." },
           { num: "03", title: "Review, practice, stream", body: "Your dashboard, coaching views and OBS sources update between games." },
         ].map((step) => (
-          <div key={step.num} className="border-t border-line pt-5">
-            <span className="block font-serif text-display-lg font-normal leading-none text-editorial">{step.num}</span>
-            <h3 className="mt-4 font-serif text-h3 font-semibold text-text">{step.title}</h3>
+          <div key={step.num} className="relative">
+            <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-bg ring-1 ring-accent-cyan/30 shadow-glow">
+              <span className="absolute inset-0 rounded-full bg-accent-cyan/10" />
+              <span className="relative font-display text-caption font-bold text-accent-cyan">{step.num}</span>
+            </span>
+            <h3 className="mt-4 font-display text-h3 font-bold tracking-tight text-text">{step.title}</h3>
             <p className="mt-2 text-body text-text-muted">{step.body}</p>
             {step.num === "01" && getInstantImportMode() === "all" ? <p className="mt-2 text-caption text-text-muted">On a Mac or Chromebook? <Link href="/try" className="font-semibold text-accent-cyan underline underline-offset-2">Analyze replays in your browser</Link></p> : null}
           </div>
@@ -560,14 +572,17 @@ function LandingHowItWorks() {
 
 function SupportTeaser() {
   return (
-    <section className="mt-20 border-y border-border py-8">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="max-w-2xl">
-          <p className="kicker">Free and community-supported</p>
-          <h2 className="mt-2 font-serif text-h3 font-semibold text-text">No paywall between you and your replays.</h2>
-          <p className="mt-2 text-caption text-text-muted">SC2 Tools publishes its real infrastructure costs and keeps support optional.</p>
+    <section className="mt-20">
+      <div className="aurora-ring surface-sheen relative overflow-hidden rounded-2xl bg-bg-surface/80 p-6 shadow-card sm:p-8">
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-aurora opacity-10 blur-3xl" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-2xl">
+            <p className="hud-label">Free and community-supported</p>
+            <h2 className="mt-2 font-display text-h3 font-bold tracking-tight text-text">No paywall between you and your replays.</h2>
+            <p className="mt-2 text-caption text-text-muted">SC2 Tools publishes its real infrastructure costs and keeps support optional.</p>
+          </div>
+          <LinkButton href="/donate" variant="secondary" size="md" className="h-auto min-h-11 py-2 text-center">See costs or chip in</LinkButton>
         </div>
-        <LinkButton href="/donate" variant="secondary" size="md" className="h-auto min-h-11 py-2 text-center">See costs or chip in</LinkButton>
       </div>
     </section>
   );
@@ -576,17 +591,20 @@ function SupportTeaser() {
 function LandingFinalCta() {
   return (
     <section className="mt-20 md:mt-24">
-      <div className="rounded-md border border-accent bg-bg-surface px-6 py-12 shadow-hard md:px-12 md:py-16 ring-1 ring-accent">
-        <p className="kicker">Ready for the next game?</p>
-        <h2 className="mt-4 max-w-3xl font-serif text-[40px] font-semibold leading-[1.04] tracking-[-0.01em] text-text md:text-display-lg">
-          Your replay already has the answers.{" "}
-          <em className="font-serif italic text-editorial">Put them to work.</em>
-        </h2>
-        <p className="mt-5 max-w-2xl text-body-lg text-text-muted">Free to start, no card needed. Sync privately across devices and add OBS whenever you are ready.</p>
-        <HeroAuthCtas>
-          <LinkButton href="/download" size="lg" className={WRAPPING_CTA} iconLeft={<Download className="h-5 w-5" aria-hidden />} iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Download the agent</LinkButton>
-          <LinkButton href="/community" variant="secondary" size="lg" className={WRAPPING_CTA} iconLeft={<Users className="h-5 w-5" aria-hidden />}>Browse community builds</LinkButton>
-        </HeroAuthCtas>
+      <div className="aurora-ring surface-sheen relative overflow-hidden rounded-2xl bg-bg-surface/80 px-6 py-12 shadow-pop md:px-12 md:py-16">
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_80%_at_85%_0%,rgb(var(--aurora-2)/0.18),transparent_70%),radial-gradient(50%_70%_at_0%_100%,rgb(var(--aurora-1)/0.12),transparent_70%)]" />
+        <div className="relative">
+          <p className="hud-label">Ready for the next game?</p>
+          <h2 className="mt-4 max-w-3xl font-display text-[2.5rem] font-extrabold leading-[1.05] tracking-[-0.04em] text-text md:text-display-lg">
+            Your replay already has the answers.{" "}
+            <span className="aurora-text">Put them to work.</span>
+          </h2>
+          <p className="mt-5 max-w-2xl text-body-lg text-text-muted">Free to start, no card needed. Sync privately across devices and add OBS whenever you are ready.</p>
+          <HeroAuthCtas>
+            <LinkButton href="/download" size="lg" className={WRAPPING_CTA} iconLeft={<Download className="h-5 w-5" aria-hidden />} iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Download the agent</LinkButton>
+            <LinkButton href="/community" variant="secondary" size="lg" className={WRAPPING_CTA} iconLeft={<Users className="h-5 w-5" aria-hidden />}>Browse community builds</LinkButton>
+          </HeroAuthCtas>
+        </div>
       </div>
     </section>
   );
@@ -594,7 +612,7 @@ function LandingFinalCta() {
 
 function ReplaySection() {
   return (
-    <section id="replay-demo" className="scroll-mt-24 mt-24 md:mt-32">
+    <section id="replay-demo" className="scroll-mt-24 mt-20 md:mt-28">
       <ReplayDemo />
     </section>
   );
@@ -617,27 +635,22 @@ interface EditorialHeadProps {
 
 function EditorialHead({ folio, kicker, title, standfirst }: EditorialHeadProps) {
   return (
-    <div className="grid gap-x-10 gap-y-4 lg:grid-cols-12">
-      <div className="flex items-start gap-4 lg:col-span-4">
-        <span
-          aria-hidden
-          className="select-none font-serif text-display-lg font-normal leading-[0.8] text-editorial/30"
-        >
+    <div className="max-w-3xl">
+      <div className="flex items-center gap-3">
+        <span aria-hidden className="select-none rounded-full border border-line bg-bg-surface/60 px-2.5 py-0.5 font-mono text-caption text-text-dim">
           {folio}
         </span>
-        <p className="kicker pt-2">{kicker}</p>
+        <p className="hud-label">{kicker}</p>
       </div>
-      <div className="lg:col-span-8">
-        <hr className="ed-rule mb-5" />
-        <h2 className="font-serif text-[32px] font-semibold leading-tight tracking-[-0.01em] text-text md:text-[40px]">
-          {title}
-        </h2>
-        {standfirst ? (
-          <p className="mt-3 max-w-2xl text-body-lg text-text-muted">
-            {standfirst}
-          </p>
-        ) : null}
-      </div>
+      <hr className="ed-rule my-5" />
+      <h2 className="font-display text-h2 font-bold leading-tight tracking-tight text-text md:text-[2.5rem]">
+        {title}
+      </h2>
+      {standfirst ? (
+        <p className="mt-3 max-w-2xl text-body-lg text-text-muted">
+          {standfirst}
+        </p>
+      ) : null}
     </div>
   );
 }

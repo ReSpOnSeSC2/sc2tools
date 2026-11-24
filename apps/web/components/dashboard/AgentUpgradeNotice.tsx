@@ -152,7 +152,7 @@ function AgentNoticeBanner({
     <section
       aria-label="Required agent update"
       aria-live="polite"
-      className="rounded-xl border-2 border-warning/50 bg-warning/10 px-4 py-3 shadow-hard"
+      className="rounded-2xl border border-warning/50 bg-warning/10 px-4 py-3 shadow-card ring-1 ring-warning/20"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
@@ -160,10 +160,10 @@ function AgentNoticeBanner({
             <ShieldAlert className="h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0">
-            <p className="text-micro font-semibold uppercase tracking-wider text-warning">
+            <p className="text-micro font-semibold uppercase tracking-[0.12em] text-warning">
               Latest agent · v{latestVersion}
             </p>
-            <h2 className="mt-0.5 text-body font-bold text-text">
+            <h2 className="mt-0.5 font-display text-body font-bold tracking-tight text-text">
               {state.title}
             </h2>
             {state.message && (

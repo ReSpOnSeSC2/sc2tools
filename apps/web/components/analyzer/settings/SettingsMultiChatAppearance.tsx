@@ -390,7 +390,7 @@ export function SettingsMultiChatAppearance({
                 value={value.blockedUsers}
                 onChange={(e) => set({ blockedUsers: e.target.value })}
                 placeholder="e.g. mybot, spamaccount"
-                className="w-full min-w-0 max-w-md rounded-lg border border-border-strong bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+                className="w-full min-w-0 max-w-md rounded-lg border border-border-strong bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
               />
             </div>
           </ControlGroup>
@@ -470,7 +470,7 @@ function SelectField<T extends string>({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
-        className="w-full min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
+        className="w-full min-w-0 rounded-lg border border-border-strong bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
       >
         {options.map((opt) => (
           <option key={opt} value={opt}>

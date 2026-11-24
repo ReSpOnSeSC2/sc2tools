@@ -85,7 +85,7 @@ export function MinGamesPicker({
       <div
         role="radiogroup"
         aria-label="Minimum games preset"
-        className="inline-flex overflow-hidden rounded-lg border border-line"
+        className="inline-flex gap-0.5 rounded-full border border-line bg-bg/60 p-1"
       >
         {steps.map((n) => {
           const active = !isCustom && value === n;
@@ -97,10 +97,10 @@ export function MinGamesPicker({
               aria-checked={active}
               onClick={() => pickStep(n)}
               title={`Show only rows with at least ${n} game${n === 1 ? "" : "s"}`}
-              className={`min-h-[32px] min-w-[32px] px-2.5 text-xs tabular-nums transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+              className={`min-h-11 min-w-11 rounded-full px-2.5 sm:min-h-8 sm:min-w-8 text-xs tabular-nums transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 active
-                  ? "bg-accent/20 text-accent"
-                  : "text-text-muted hover:bg-bg-elevated"
+                  ? "bg-bg-elevated text-text shadow-card ring-1 ring-line"
+                  : "text-text-muted hover:text-text"
               }`}
             >
               {n}
@@ -119,7 +119,7 @@ export function MinGamesPicker({
           onBlur={handleCustomBlur}
           placeholder="—"
           aria-label="Custom minimum games"
-          className="min-h-[32px] w-16 rounded-lg border border-line bg-bg-surface px-2 text-xs tabular-nums text-text outline-none transition placeholder:text-text-dim focus:border-accent focus:ring-2 focus:ring-accent/40"
+          className="min-h-11 sm:min-h-8 w-16 rounded-lg border border-border-strong bg-bg-subtle/40 px-2 text-xs tabular-nums text-text outline-none transition placeholder:text-text-dim focus:border-accent focus:ring-4 focus:ring-accent/20"
         />
       </label>
     </div>

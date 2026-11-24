@@ -179,7 +179,7 @@ export function AllGamesTable({
       {pageLocalSort && sort.sortBy !== SORT_COLS.date ? <p role="status" className="text-caption text-text-muted">Sorting applies to {games.length === 1 ? "this game" : `these ${games.length} games`} only</p> : null}
       <div className="relative hidden overflow-x-auto md:block">
         <table ref={tableRef} className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-bg-elevated text-micro uppercase text-text-muted">
+          <thead className="sticky top-0 z-10 border-b border-line bg-bg-elevated text-micro uppercase tracking-[0.12em] text-text-dim">
             <tr>
               <th className="w-6 px-2 py-1 text-left" aria-hidden></th>
               <SortableTh col={SORT_COLS.date} label="Date" {...sort} />
@@ -299,8 +299,8 @@ function GameRow({
       <tr
         data-game-row-id={game.id || ""}
         className={[
-          "border-t border-border transition-colors",
-          expandable ? "cursor-pointer hover:bg-bg-elevated/60" : "",
+          "border-t border-line transition-colors",
+          expandable ? "cursor-pointer hover:bg-bg-subtle/60" : "",
           expanded ? "bg-bg-elevated/40" : "",
           highlighted ? "ring-2 ring-accent ring-offset-1 ring-offset-bg" : "",
         ]
@@ -857,7 +857,7 @@ function BuildOrderRow({
         errorTitle="Build order"
         skeleton={
           <Card title="Loading build order…">
-            <div className="h-4 animate-pulse rounded bg-bg-elevated" />
+            <div className="skeleton-shimmer h-4 rounded-full" />
           </Card>
         }
       />

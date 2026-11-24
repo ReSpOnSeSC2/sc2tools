@@ -96,7 +96,7 @@ function SectionCrash({
     <div
       role="alert"
       data-testid="section-boundary"
-      className="rounded-xl border-2 border-danger/30 bg-danger/5 p-4"
+      className="rounded-xl border border-danger/30 bg-danger/[0.08] p-4"
     >
       <div className="flex items-start gap-3">
         <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden />

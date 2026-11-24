@@ -41,12 +41,12 @@ export function EmptyStatePanel({
         .join(" ")}
     >
       {icon ? (
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg-elevated text-text-muted">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-cyan/10 text-accent-cyan shadow-[0_0_24px_rgb(var(--accent-cyan)/0.18)] ring-1 ring-accent-cyan/25">
           {icon}
         </div>
       ) : null}
       <div className="space-y-1">
-        <div className="text-body font-medium text-text">{title}</div>
+        <div className="text-h4 text-text">{title}</div>
         {description ? (
           <p className="text-caption text-text-muted">{description}</p>
         ) : null}

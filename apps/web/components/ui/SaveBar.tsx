@@ -61,11 +61,11 @@ export function SaveBar({
       aria-label="Unsaved changes"
       className="pointer-events-none fixed inset-x-0 bottom-above-chrome z-banner flex justify-center px-4"
     >
-      <div className={`pointer-events-auto flex w-full max-w-3xl justify-between gap-3 rounded-xl border border-accent-cyan/40 bg-bg-surface px-4 py-3 shadow-[var(--shadow-card)] sm:gap-4 ${stackOnMobile ? "flex-col items-stretch sm:flex-row sm:items-center" : "items-center"}`}>
+      <div className={`pointer-events-auto flex w-full max-w-3xl justify-between gap-3 rounded-xl border border-line glass-strong px-4 py-3 shadow-pop ring-1 ring-accent-cyan/20 motion-safe:animate-rise-in sm:gap-4 ${stackOnMobile ? "flex-col items-stretch sm:flex-row sm:items-center" : "items-center"}`}>
         <div className="flex min-w-0 items-center gap-2 text-caption text-text">
           <span
             aria-hidden
-            className="inline-block h-2 w-2 flex-shrink-0 rounded-full bg-accent-cyan"
+            className="inline-block h-2 w-2 flex-shrink-0 rounded-full bg-accent-cyan shadow-[0_0_8px_rgb(var(--accent-cyan)/0.6)]"
           />
           <span className={stackOnMobile ? "min-w-0 break-words" : "truncate"}>{message}</span>
         </div>

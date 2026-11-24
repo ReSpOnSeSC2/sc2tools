@@ -40,7 +40,7 @@ export function NoGamesYet({
   if (browserImportEnabled) return <NoGamesYetChoices />;
   return (
     <section
-      className="relative overflow-hidden rounded-2xl border border-line bg-bg-surface shadow-hard px-4 py-12 sm:px-6 sm:py-20"
+      className="relative overflow-hidden rounded-2xl border border-line bg-bg-surface surface-sheen shadow-card px-4 py-12 sm:px-6 sm:py-20"
       data-testid="dashboard-no-games"
     >
       <GlowHalo color="cyan" position="top" opacity={0.85} size={70} />
@@ -82,16 +82,16 @@ export function NoGamesYet({
 function NoGamesYetChoices() {
   return (
     <section
-      className="relative overflow-hidden rounded-2xl border border-line bg-bg-surface shadow-hard px-4 py-10 sm:px-6 sm:py-16"
+      className="relative overflow-hidden rounded-2xl border border-line bg-bg-surface surface-sheen shadow-card px-4 py-10 sm:px-6 sm:py-16"
       data-testid="dashboard-no-games"
     >
       <GlowHalo color="cyan" position="top" opacity={0.85} size={70} />
       <div className="relative z-10 mx-auto max-w-3xl space-y-6">
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg-elevated text-text-muted">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg-elevated text-accent-cyan ring-1 ring-line shadow-card">
             <Gamepad2 className="h-6 w-6" aria-hidden />
           </div>
-          <h2 className="text-body font-medium text-text">No games synced yet</h2>
+          <h2 className="font-display text-h4 font-bold tracking-tight text-text">No games synced yet</h2>
           <p className="text-caption text-text-muted">
             Choose how your replays reach SC2 Tools — you can use both.
           </p>
@@ -135,7 +135,7 @@ function ChoiceCard({
   variant: "primary" | "secondary";
 }) {
   return (
-    <li className="flex flex-col gap-3 rounded-xl border border-line bg-bg-elevated/40 p-4">
+    <li className="flex flex-col gap-3 rounded-xl border border-line bg-bg-elevated/40 p-4 transition-colors hover:bg-bg-elevated/70">
       <div className="flex items-center gap-2 text-text">
         <span className="text-accent-cyan">{icon}</span>
         <h3 className="text-body font-semibold">{title}</h3>

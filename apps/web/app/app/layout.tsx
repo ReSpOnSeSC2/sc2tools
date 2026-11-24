@@ -32,13 +32,13 @@ async function AnalyzerWithMe({ children }: { children: ReactNode }) {
   if (!meRes.ok) {
     const signedOut = meRes.status === 401 || meRes.status === 403;
     return (
-      <Card className="mx-auto max-w-2xl" padded>
+      <Card variant="elevated" className="mx-auto max-w-2xl" padded>
         <div className="flex items-start gap-3">
           <span className="mt-0.5 rounded-full bg-danger/10 p-2 text-danger">
             <AlertTriangle className="h-5 w-5" aria-hidden />
           </span>
           <div className="min-w-0">
-            <h1 className="text-h2 font-semibold">
+            <h1 className="font-display text-h2 font-bold tracking-tight">
               {signedOut ? "Sign in again" : "Dashboard temporarily unavailable"}
             </h1>
             <p className="mt-2 text-body text-text-muted">
@@ -69,7 +69,7 @@ async function AnalyzerWithMe({ children }: { children: ReactNode }) {
 function AnalyzerSkeleton() {
   return (
     <div className="space-y-5" aria-busy="true" aria-label="Loading dashboard">
-      <div className="h-14 animate-pulse rounded-xl border border-line bg-bg-surface" />
+      <div className="skeleton-shimmer h-14 rounded-2xl border border-line" />
       {/* Same grid as DashboardKpiStrip: the lead card spans both
           columns on phones, so nothing shifts when the cards arrive. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -77,17 +77,17 @@ function AnalyzerSkeleton() {
           <div
             key={i}
             className={[
-              "rounded-xl border border-line bg-bg-surface p-4 shadow-hard",
+              "rounded-2xl border border-line bg-bg-surface surface-sheen p-4 shadow-card",
               i === 0 ? "col-span-2 lg:col-span-1" : "",
             ].join(" ")}
           >
-            <div className="h-3 w-16 animate-pulse rounded bg-bg-elevated" />
-            <div className="mt-2 h-6 w-20 animate-pulse rounded bg-bg-elevated" />
+            <div className="skeleton-shimmer h-3 w-16 rounded-full" />
+            <div className="skeleton-shimmer mt-3 h-8 w-24 rounded-lg" />
           </div>
         ))}
       </div>
-      <div className="h-32 animate-pulse rounded-xl border border-line bg-bg-surface shadow-hard" />
-      <div className="h-40 animate-pulse rounded-xl border border-line bg-bg-surface shadow-hard" />
+      <div className="skeleton-shimmer h-32 rounded-2xl border border-line" />
+      <div className="skeleton-shimmer h-40 rounded-2xl border border-line" />
     </div>
   );
 }

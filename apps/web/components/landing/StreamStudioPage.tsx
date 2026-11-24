@@ -122,8 +122,8 @@ const FAQ: ReadonlyArray<{ q: string; a: string }> = [
 function SectionTitle({ kicker, title }: { kicker: string; title: string }) {
   return (
     <div className="max-w-3xl">
-      <p className="kicker">{kicker}</p>
-      <h2 className="mt-3 font-serif text-[30px] font-semibold leading-tight tracking-[-0.01em] text-text md:text-[38px]">
+      <p className="hud-label">{kicker}</p>
+      <h2 className="mt-3 font-display text-h2 font-bold leading-tight tracking-tight text-text md:text-[2.5rem]">
         {title}
       </h2>
     </div>
@@ -135,8 +135,8 @@ function Hero() {
     <header className="grid items-center gap-x-10 gap-y-8 pt-4 md:pt-10 lg:grid-cols-12">
       <div className="min-w-0 lg:col-span-5">
         <h1>
-          <span className="kicker block">Stream Studio · free for StarCraft II streamers</span>
-          <span className="mt-5 block font-serif text-[40px] font-semibold leading-[1.04] tracking-[-0.01em] text-text md:text-[56px]">
+          <span className="hud-label inline-block rounded-full border border-accent-cyan/30 bg-accent-cyan/10 px-3 py-1">Stream Studio · free for StarCraft II streamers</span>
+          <span className="mt-5 block font-display text-[2.75rem] font-extrabold leading-[1.05] tracking-[-0.04em] text-text md:text-display-xl">
             StarCraft II overlays for OBS
           </span>
         </h1>
@@ -166,7 +166,7 @@ function Hero() {
           height={1124}
           sizes="(min-width: 1024px) 58vw, 100vw"
           priority
-          className="h-auto w-full rounded-md border border-line shadow-hard"
+          className="h-auto w-full rounded-xl border border-line shadow-pop"
         />
       </figure>
     </header>
@@ -181,7 +181,7 @@ function Features() {
       </div>
       <div className="mt-10 grid gap-6 md:grid-cols-2">
         {FEATURE_GROUPS.map(({ title, icon: Icon, items }) => (
-          <article key={title} className="min-w-0 rounded-md border border-line bg-bg-surface p-5 shadow-hard sm:p-6">
+          <article key={title} className="min-w-0 rounded-xl border border-line bg-bg-surface p-5 shadow-pop sm:p-6">
             <h3 className="flex items-center gap-2 text-h3 font-semibold text-text">
               <Icon className="h-5 w-5 flex-shrink-0 text-accent" aria-hidden />
               {title}
@@ -203,7 +203,7 @@ function Features() {
           width={2000}
           height={1114}
           sizes="(min-width: 1152px) 1152px, 100vw"
-          className="h-auto w-full rounded-md border border-line shadow-hard"
+          className="h-auto w-full rounded-xl border border-line shadow-pop"
         />
         <figcaption className="mt-3 text-caption text-text-dim">
           Facing someone again? The rematch card shows how your last games against them went.
@@ -221,8 +221,8 @@ function Setup() {
       </div>
       <ol className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {SETUP_STEPS.map((step, index) => (
-          <li key={step.title} className="min-w-0 rounded-md border border-line bg-bg-surface p-5 shadow-hard">
-            <span className="font-serif text-[32px] font-semibold leading-none text-editorial" aria-hidden>
+          <li key={step.title} className="min-w-0 rounded-xl border border-line bg-bg-surface p-5 shadow-pop">
+            <span className="font-display text-h2 font-bold leading-none text-accent-cyan" aria-hidden>
               {index + 1}
             </span>
             <h3 className="mt-3 text-body-lg font-semibold text-text">{step.title}</h3>
@@ -264,8 +264,8 @@ function Questions() {
 
 function FinalCta({ tryEnabled }: { tryEnabled: boolean }) {
   return (
-    <section className="mt-20 rounded-md border border-line bg-bg-surface p-6 shadow-hard md:mt-28 md:p-10">
-      <h2 className="font-serif text-[28px] font-semibold leading-tight text-text md:text-[36px]">
+    <section className="mt-20 rounded-xl border border-line bg-bg-surface p-6 shadow-pop md:mt-28 md:p-10">
+      <h2 className="font-display text-h2 font-bold leading-tight tracking-tight text-text md:text-[2.5rem]">
         Put your opponent on screen before the game starts.
       </h2>
       <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -296,7 +296,7 @@ export function StreamStudioPage({ tryEnabled }: { tryEnabled: boolean }) {
       <Hero />
       <StreamManagerShowcase className="mt-16 md:mt-20" />
       <Features />
-      <section id="widget-playground" className="mt-16 space-y-5 scroll-mt-28"><h2 className="font-serif text-h2">Try the widgets here</h2><p className="text-body text-text-muted">Explore sample scenarios and themes before adding a Browser Source. Nothing is sent to OBS.</p><LazyWidgetPlayground /></section>
+      <section id="widget-playground" className="mt-16 space-y-5 scroll-mt-28"><h2 className="font-display text-h2">Try the widgets here</h2><p className="text-body text-text-muted">Explore sample scenarios and themes before adding a Browser Source. Nothing is sent to OBS.</p><LazyWidgetPlayground /></section>
       <Setup />
       <Questions />
       <FinalCta tryEnabled={tryEnabled} />

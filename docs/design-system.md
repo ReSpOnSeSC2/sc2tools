@@ -24,25 +24,38 @@ web utilities.
 
 ## Color roles
 
-The ground is cool blue-black in Dark and pale paper in Light. Cards use solid
-surfaces, a visible outline and a hard offset shadow. Cyan/teal marks interaction;
-amber `signal` is reserved for occasional emphasis. Clay `editorial` colors give
-public editorial layouts a separate accent.
+The system is **Command Glass** (ADR 0099): depth comes from light, not
+outlines. The ground is deep blue-black in Dark and cool porcelain in Light.
+Surfaces step lighter as they rise (`bg-surface`, `bg-elevated`, `bg-subtle`),
+carry a faint top sheen and a 1px hairline edge, and rest on soft layered
+shadows; floating chrome is frosted glass. Cyan/teal marks interaction; a
+cyan, azure and violet aurora is reserved for brand moments (hero type, the
+active-navigation beam, featured surfaces); amber `signal` is reserved for
+occasional emphasis. Clay `editorial` remains for the few long-form layouts that
+still use it.
+
+Boundaries have two roles. `--border` and `--line` are decorative hairlines for
+dividers and card or panel edges; they are never the only cue that something is
+a control. `--border-strong` is the control boundary for text fields, selects,
+switches and outlined controls, and keeps at least 3:1 on every surface.
 
 | Token | Dark | Light | Role |
 | --- | --- | --- | --- |
-| `--bg` | `#06090e` | `#f4f6fa` | Page ground |
-| `--bg-surface` | `#0c1017` | `#ffffff` | Card/control surface |
-| `--bg-elevated` | `#111720` | `#f9fbfe` | Raised/hover surface |
-| `--bg-subtle` | `#1a212e` | `#ebeff5` | Subtle fill |
-| `--text` | `#e7edf0` | `#0d121a` | Primary text |
-| `--text-muted` | `#9fadb9` | `#3f4856` | Secondary text |
-| `--text-dim` | `#86929f` | `#515b6b` | Low-priority text |
+| `--bg` | `#05070b` | `#f5f7fa` | Page ground |
+| `--bg-surface` | `#0b0f16` | `#ffffff` | Card/control surface |
+| `--bg-elevated` | `#121722` | `#fafbfd` | Raised/floating surface |
+| `--bg-subtle` | `#1a202e` | `#edf1f6` | Subtle fill, hover |
+| `--text` | `#edf2f7` | `#0b1220` | Primary text |
+| `--text-muted` | `#a3afbf` | `#3f4856` | Secondary text |
+| `--text-dim` | `#8895a6` | `#515b6b` | Low-priority text |
 | `--accent` | `#157d8c` | `#0e7d8c` | Primary fill |
 | `--accent-hover` | `#096875` | `#096875` | Primary hover fill |
-| `--accent-ink` | `#1f9eaf` | `#08666d` | Accent text |
+| `--accent-ink` | `#34bac9` | `#08666d` | Accent text |
 | `--accent-ink-hover` | `#3ce0d6` | `#096875` | Accent hover text |
 | `--accent-cyan` | `#3ce0d6` | `#08666d` | Cyan emphasis |
+| `--aurora-1` | `#3ce0d6` | `#08737c` | Aurora stop (decorative gradients) |
+| `--aurora-2` | `#608cff` | `#2f57d6` | Aurora stop (decorative gradients) |
+| `--aurora-3` | `#a78bfa` | `#6545d6` | Aurora stop (decorative gradients) |
 | `--signal` | `#f5b84a` | `#8f5c0c` | Rare warm emphasis |
 | `--signal-hover` | `#fac86e` | `#7a4e0a` | Warm hover |
 | `--editorial` | `#d6846e` | `#a54834` | Editorial accent |
@@ -59,9 +72,9 @@ public editorial layouts a separate accent.
 | `--race-random` | `#96a4b0` | `#546072` | Random series |
 
 Overlay race colours use the dark tokens in the table for every OBS theme. The overlay cards, race icons and StarCraft backdrop share those colours.
-| `--border` | `#5c697c` | `#7c879b` | Control boundary |
-| `--border-strong` | `#75849b` | `#65738a` | Stronger boundary |
-| `--line` | `#5c697c` | `#0d121a` | Structural outline |
+| `--border` | `#222a38` | `#dde3eb` | Decorative hairline (dividers) |
+| `--border-strong` | `#5c697c` | `#7c879b` | Control boundary (3:1) |
+| `--line` | `#283141` | `#d6dde7` | Card and panel edge hairline |
 
 ### Separate text ink from filled controls
 
@@ -76,7 +89,8 @@ these utilities deliberately:
 | `text-danger` / `--danger` | Error and loss text |
 | `bg-danger` / `--danger-fill` | Destructive control fill with `text-white` |
 | `text-accent-cyan` | Strong cyan emphasis; uses a darker teal in Light |
-| `border-border`, `border-border-strong`, `border-line` | Boundaries and structural outlines |
+| `border-border`, `border-line` | Decorative hairlines: dividers, card and panel edges |
+| `border-border-strong` | Control boundaries: fields, selects, switches, outlined controls |
 
 `text-accent` does **not** read `--accent`. Likewise, `bg-danger` does **not** read
 `--danger`. For inline styles, choose the equivalent ink or fill token explicitly.
@@ -115,43 +129,44 @@ For text and boundaries, each cell is the **lowest** ratio across ground
 white directly with that fill. Replay on light combines the Light root with its
 replay overrides, including tokens that would otherwise inherit.
 
-The contract uses at least 4.5:1 for these text pairs and at least 3:1 for the
-listed boundaries and chart marks. It does not rely on a large-text exception. Ratios displayed
+The contract uses at least 4.5:1 for these text pairs, at least 3:1 for the
+control boundary and chart marks, and a 1.15:1 visibility floor for the
+decorative hairlines. It does not rely on a large-text exception. Ratios displayed
 here are rounded; tests compare the unrounded values.
 
 | Pair (worst of ground, surface and raised) | Dark | Light | Replay on light | Minimum |
 | --- | ---: | ---: | ---: | ---: |
-| text | 15.22:1 | 17.35:1 | 15.06:1 | 4.5:1 |
-| text-muted | 7.84:1 | 8.54:1 | 8.92:1 | 4.5:1 |
-| text-dim | 5.68:1 | 6.35:1 | 6.15:1 | 4.5:1 |
-| accent-ink | 5.63:1 | 6.20:1 | 5.46:1 | 4.5:1 |
-| accent-ink-hover | 10.99:1 | 5.97:1 | 10.66:1 | 4.5:1 |
-| accent-cyan | 10.99:1 | 6.20:1 | 10.67:1 | 4.5:1 |
-| signal | 10.14:1 | 5.24:1 | 9.84:1 | 4.5:1 |
-| signal-hover | 11.61:1 | 6.64:1 | 11.27:1 | 4.5:1 |
-| editorial | 6.33:1 | 5.43:1 | 6.14:1 | 4.5:1 |
-| editorial-soft | 9.70:1 | 5.37:1 | 9.41:1 | 4.5:1 |
-| success | 8.40:1 | 4.98:1 | 8.15:1 | 4.5:1 |
-| warning | 7.92:1 | 5.09:1 | 7.68:1 | 4.5:1 |
-| danger | 6.48:1 | 5.43:1 | 6.29:1 | 4.5:1 |
-| player-you | 6.04:1 | 4.78:1 | 5.86:1 | 4.5:1 |
-| player-opp | 6.18:1 | 4.60:1 | 6.00:1 | 4.5:1 |
-| race-protoss | 6.04:1 | 4.98:1 | 5.86:1 | 4.5:1 |
-| race-terran | 6.48:1 | 5.43:1 | 6.29:1 | 4.5:1 |
-| race-zerg | 6.61:1 | 4.91:1 | 6.41:1 | 4.5:1 |
-| race-random | 7.05:1 | 5.89:1 | 6.84:1 | 4.5:1 |
-| chart-low-sample | 7.84:1 | 6.35:1 | 7.61:1 | 4.5:1 |
-| chart-wr-low | 6.48:1 | 5.43:1 | 6.29:1 | 4.5:1 |
-| chart-wr-mid | 10.14:1 | 5.24:1 | 9.84:1 | 4.5:1 |
-| chart-wr-high | 8.40:1 | 4.98:1 | 8.15:1 | 4.5:1 |
+| text | 15.92:1 | 17.45:1 | 15.06:1 | 4.5:1 |
+| text-muted | 8.06:1 | 8.61:1 | 8.92:1 | 4.5:1 |
+| text-dim | 5.89:1 | 6.40:1 | 6.15:1 | 4.5:1 |
+| accent-ink | 7.69:1 | 6.25:1 | 5.46:1 | 4.5:1 |
+| accent-ink-hover | 10.95:1 | 6.02:1 | 10.66:1 | 4.5:1 |
+| accent-cyan | 10.95:1 | 6.25:1 | 10.67:1 | 4.5:1 |
+| signal | 10.11:1 | 5.28:1 | 9.84:1 | 4.5:1 |
+| signal-hover | 11.57:1 | 6.70:1 | 11.27:1 | 4.5:1 |
+| editorial | 6.30:1 | 5.47:1 | 6.14:1 | 4.5:1 |
+| editorial-soft | 9.66:1 | 5.41:1 | 9.41:1 | 4.5:1 |
+| success | 8.37:1 | 5.02:1 | 8.15:1 | 4.5:1 |
+| warning | 7.89:1 | 5.13:1 | 7.68:1 | 4.5:1 |
+| danger | 6.46:1 | 5.48:1 | 6.29:1 | 4.5:1 |
+| player-you | 6.02:1 | 4.82:1 | 5.86:1 | 4.5:1 |
+| player-opp | 6.16:1 | 4.63:1 | 6.00:1 | 4.5:1 |
+| race-protoss | 6.02:1 | 5.02:1 | 5.86:1 | 4.5:1 |
+| race-terran | 6.46:1 | 5.48:1 | 6.29:1 | 4.5:1 |
+| race-zerg | 6.59:1 | 4.95:1 | 6.41:1 | 4.5:1 |
+| race-random | 7.03:1 | 5.94:1 | 6.84:1 | 4.5:1 |
+| chart-low-sample | 7.81:1 | 6.40:1 | 7.61:1 | 4.5:1 |
+| chart-wr-low | 6.46:1 | 5.48:1 | 6.29:1 | 4.5:1 |
+| chart-wr-mid | 10.11:1 | 5.28:1 | 9.84:1 | 4.5:1 |
+| chart-wr-high | 8.37:1 | 5.02:1 | 8.15:1 | 4.5:1 |
 | white on accent | 4.83:1 | 4.85:1 | 4.83:1 | 4.5:1 |
 | white on accent-hover | 6.46:1 | 6.46:1 | 6.46:1 | 4.5:1 |
 | white on danger-fill | 5.15:1 | 5.88:1 | 5.15:1 | 4.5:1 |
-| border | 3.23:1 | 3.35:1 | 3.13:1 | 3:1 |
-| border-strong | 4.74:1 | 4.44:1 | 4.60:1 | 3:1 |
-| line | 3.23:1 | 17.35:1 | 3.13:1 | 3:1 |
-| chart-low-sample mark | 7.84:1 | 6.35:1 | 7.61:1 | 3:1 |
-| chart-wr-mid mark | 10.14:1 | 5.24:1 | 9.84:1 | 3:1 |
+| border-strong | 3.22:1 | 3.38:1 | 4.60:1 | 3:1 |
+| border | 1.24:1 | 1.20:1 | 1.31:1 | 1.15:1 |
+| line | 1.37:1 | 1.27:1 | 1.45:1 | 1.15:1 |
+| chart-low-sample mark | 7.81:1 | 6.40:1 | 7.61:1 | 3:1 |
+| chart-wr-mid mark | 10.11:1 | 5.28:1 | 9.84:1 | 3:1 |
 
 Regenerate the table after a token change; do not hand-edit ratios:
 
@@ -188,7 +203,7 @@ resolved palette (`light` or `dark`). Keep these types separate when consuming
 - The layout exports Light and Dark media variants for `theme-color`. Bootstrap
   and runtime updates rewrite the meta elements to the resolved palette, so a
   forced choice also controls supported browser chrome. The colors are
-  `#f4f6fa` for Light and `#06090e` for Dark.
+  `#f5f7fa` for Light and `#05070b` for Dark.
 
 The More sheet and MobileNav footer contain `ThemeChoice`: Sun, Moon and Monitor
 buttons in a three-option radiogroup. Arrow keys wrap through choices; Home and
@@ -203,15 +218,16 @@ chooser; it is not the only way to reach System.
 
 ## Typography
 
-Fonts are committed Latin WOFF2 files loaded through `next/font/local`, so the
-production build does not depend on Google Fonts. The layout uses `display: swap`
-and fallback metrics.
+Command Glass uses one variable family, Hanken Grotesk (100-900), committed as a
+Latin WOFF2 file and loaded through `next/font/local`, so the production build
+does not depend on Google Fonts and every route preloads exactly one font file.
+The layout uses `display: swap` and fallback metrics.
 
 | Utility | Family | Use |
 | --- | --- | --- |
 | `font-sans` | Hanken Grotesk, then system sans | Body, labels and regular UI |
-| `font-display` | Bricolage Grotesque, then Hanken/system sans | Headings, wordmark, prominent numbers and button labels |
-| `font-serif` | Fraunces, then system serif | Editorial landing-page headings; not preloaded on every route |
+| `font-display` | Hanken Grotesk at heavier weights, tight tracking | Headings, wordmark, prominent numbers and button labels |
+| `font-serif` | Resolves to Hanken Grotesk (the serif treatment was retired) | Kept so older long-form markup keeps working |
 | `font-mono` | System monospace | Atomic timings, aligned counts and technical values |
 
 The root heading rules apply the display face to `h1` through `h4`. Heading
@@ -246,16 +262,26 @@ card headers (`px-4 py-3`), and 8–16px gaps between related controls or sectio
 Responsive layouts can use other existing scale steps where their content needs
 them.
 
-`Card` uses `rounded-xl`, a 2px structural outline and `shadow-hard`. Default and
-elevated variants currently share `bg-bg-surface`; the feature variant changes
-the outline to accent. Its default `overflow-hidden` clips descendants, so menus
+`Card` uses `rounded-xl` (14px), `bg-bg-surface` with `surface-sheen`, a 1px
+`border-line` hairline and `shadow-card`. The elevated variant sits on
+`bg-bg-elevated` with `shadow-pop`; the feature variant draws the aurora edge
+(`aurora-ring`); the interactive variant lifts and glows on hover. Its default `overflow-hidden` clips descendants, so menus
 that must escape a card need an intentional portal or a scoped overflow change.
 `Card.Header`, `.Body` and `.Footer` support explicit composition; the legacy
 `title`/`right` props remain available.
 
-The hard shadow is 3px by 3px without blur: cyan-tinted in Dark and near-black in
-Light. `shadow-halo-cyan` and `shadow-halo-accent` are decorative emphasis, not a
+Elevation tokens: `shadow-card` (rest; `shadow-hard` is its legacy alias),
+`shadow-pop` (dialogs, popovers, menus, toasts, sheets) and `shadow-glow`
+(interactive emphasis). Floating chrome uses `glass` (74%) or `glass-strong`
+(88%) with an opaque fallback where `backdrop-filter` is unsupported. The radius
+scale is softened in Tailwind: `rounded-md` 7px, `lg` 10px, `xl` 14px, `2xl` 18px.
+`shadow-halo-cyan` and `shadow-halo-accent` are decorative emphasis, not a
 replacement for a visible boundary.
+
+The shared kit in `globals.css`: `glass`, `glass-strong`, `surface-sheen`,
+`aurora-text` (large headings only), `aurora-ring`, `aurora-beam`, `hud-label`,
+`hud-corners`, `skeleton-shimmer`, `lift`, `scroll-fade-x`, and the restyled
+legacy names `overline`, `title-spine`, `hard-press`, `kicker`, `ed-rule`.
 
 AppChrome content is capped at 1680px, with 16px phone padding, 24px from `sm` and
 32px from `lg`. Reading pages can use a narrower measure. Keep grid/flex children
@@ -307,10 +333,12 @@ Both share `primary`, `secondary`, `ghost` and `danger` variants. Sizes are
 touch target. Use a larger size or an explicit minimum height (`min-h-11`) for
 phone actions that need it. Give icon-only actions an accessible name.
 
-Every variant and size is a pill: `rounded-full`, in the display face, and all
-but `ghost` wear the 2px `line` border with the hard offset shadow that collapses
-on press (`hard-press`). Do not hand-write that recipe, or a `rounded-md` accent
-link, on a link. The UI lint rejects new pill copies anywhere outside
+Every variant and size is a pill: `rounded-full`, in the display face. Primary
+and danger are lit fills with a top highlight and a soft glow on hover
+(`btn-primary`, `btn-danger`); secondary is a raised `bg-bg-elevated` surface on
+a hairline (`btn-secondary`); ghost stays flat. Every variant presses in with a
+gentle scale. Do not hand-write that recipe, or a `rounded-md` accent link, on a
+link. The UI lint rejects new pill copies anywhere outside
 `components/ui`, and new `rounded-md` or `rounded-lg` accent links under `app/`
 and `components/landing/`. For a link that is not a `next/link` (an external
 `<a>`, `AuthContextLink`), pass `buttonClassName({ variant, size })` as its

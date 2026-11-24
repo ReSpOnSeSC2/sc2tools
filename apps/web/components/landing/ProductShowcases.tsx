@@ -39,8 +39,8 @@ const UNIT_MARKERS = [
 export function ReplayTheaterPreview({ priority = false }: { priority?: boolean }) {
   return (
     <figure className="min-w-0">
-      <div className="replay-scope overflow-hidden rounded-md border border-line bg-[#070a0f] shadow-hard">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-strong bg-bg-surface px-4 py-3">
+      <div className="replay-scope overflow-hidden rounded-2xl border border-line bg-bg shadow-pop">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-bg-surface px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <CirclePlay className="h-4 w-4 shrink-0 text-accent-cyan" aria-hidden />
             <div className="min-w-0">
@@ -49,7 +49,7 @@ export function ReplayTheaterPreview({ priority = false }: { priority?: boolean 
             </div>
           </div>
           <div className="flex items-center gap-2 text-micro text-text-muted">
-            <span className="rounded-sm border border-border-strong px-2 py-1">PRODUCT PREVIEW</span>
+            <span className="rounded-sm border border-border px-2 py-1">PRODUCT PREVIEW</span>
             <Maximize2 className="h-4 w-4" aria-hidden />
           </div>
         </div>
@@ -108,7 +108,7 @@ export function ReplayTheaterPreview({ priority = false }: { priority?: boolean 
             </div>
           </div>
 
-          <aside className="border-t border-border-strong bg-bg-surface lg:border-l lg:border-t-0" aria-label="Replay build feed example">
+          <aside className="border-t border-border bg-bg-surface lg:border-l lg:border-t-0" aria-label="Replay build feed example">
             <div className="border-b border-border px-4 py-3">
               <p className="text-micro font-bold uppercase tracking-[.14em] text-text-dim">Build feed</p>
               <p className="mt-1 text-caption font-semibold text-text">Both players, second by second</p>
@@ -125,7 +125,7 @@ export function ReplayTheaterPreview({ priority = false }: { priority?: boolean 
           </aside>
         </div>
 
-        <div className="border-t border-border-strong bg-bg-surface px-4 py-3">
+        <div className="border-t border-border bg-bg-surface px-4 py-3">
           <div className="flex items-center gap-3">
             <CirclePlay className="h-5 w-5 shrink-0 text-accent-cyan" aria-hidden />
             <span className="font-mono text-micro tabular-nums text-text-muted">06:31</span>
@@ -157,7 +157,7 @@ const TREND_BARS = [42, 58, 39, 67, 54, 76, 63, 84, 70, 92, 79, 88] as const;
 
 export function ImprovementPreview() {
   return (
-    <figure className="min-w-0 overflow-hidden rounded-md border border-line bg-bg-surface shadow-hard">
+    <figure className="min-w-0 overflow-hidden rounded-2xl border border-line bg-bg-surface/70 surface-sheen shadow-pop">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
         <div className="flex items-center gap-2">
           <ChartNoAxesCombined className="h-4 w-4 text-accent-cyan" aria-hidden />
@@ -170,11 +170,11 @@ export function ImprovementPreview() {
         <div className="p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="kicker">Skill Fingerprint</p>
-              <h3 className="mt-2 font-serif text-[26px] font-semibold leading-tight text-text">Adaptive Timing Specialist</h3>
+              <p className="hud-label">Skill Fingerprint</p>
+              <h3 className="mt-2 font-display text-h3 font-bold tracking-tight leading-tight text-text">Adaptive Timing Specialist</h3>
               <p className="mt-2 max-w-md text-caption text-text-muted">One reproducible archetype for this matchup, calibrated against real player windows.</p>
             </div>
-            <span className="rounded-sm border border-editorial/35 bg-editorial/10 px-2.5 py-1 text-micro font-bold text-editorial">1 OF {PRODUCT_FACTS.fingerprintArchetypes}</span>
+            <span className="rounded-full border border-accent-cyan/35 bg-accent-cyan/10 px-2.5 py-1 text-micro font-bold text-accent-cyan">1 OF {PRODUCT_FACTS.fingerprintArchetypes}</span>
           </div>
           <dl className="mt-6 space-y-4">
             {FINGERPRINT_TRACKS.map((track) => (
@@ -190,12 +190,12 @@ export function ImprovementPreview() {
         </div>
 
         <div className="bg-bg-elevated/30 p-5 sm:p-6">
-          <p className="kicker">Trends, with sharper filters</p>
+          <p className="hud-label">Trends, with sharper filters</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <Metric label="Best MMR day" value="+126" note="7–2 · 9 games" tone="good" />
             <Metric label="Toughest day" value="−84" note="3–6 · 9 games" tone="bad" />
           </div>
-          <div className="mt-5 rounded-md border border-border bg-bg-surface p-4">
+          <div className="mt-5 rounded-xl border border-border bg-bg-surface p-4">
             <div className="flex items-baseline justify-between gap-3">
               <div>
                 <p className="text-micro font-bold uppercase tracking-[.12em] text-text-dim">MMR progression</p>
@@ -209,7 +209,7 @@ export function ImprovementPreview() {
               ))}
             </div>
           </div>
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-border bg-bg-surface px-4 py-3">
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-bg-surface px-4 py-3">
             <div>
               <p className="text-caption font-semibold text-text">Opponent MMR 4,000–4,499</p>
               <p className="text-micro text-text-dim">Meaningful 500-point bracket</p>
@@ -233,7 +233,7 @@ export function ImprovementPreview() {
 
 function Metric({ label, value, note, tone }: { label: string; value: string; note: string; tone: "good" | "bad" }) {
   return (
-    <div className="rounded-md border border-border bg-bg-surface p-3">
+    <div className="rounded-xl border border-border bg-bg-surface p-3">
       <p className="text-micro font-semibold uppercase tracking-[.1em] text-text-dim">{label}</p>
       <p className={`mt-1 font-mono text-h3 font-bold ${tone === "good" ? "text-success" : "text-danger"}`}>{value}</p>
       <p className="text-micro text-text-muted">{note}</p>
@@ -245,7 +245,7 @@ function ProofPoint({ icon: Icon, title, body }: { icon: typeof Archive; title: 
   return (
     <div className="bg-bg-surface p-4">
       <div className="flex items-center gap-2 text-text">
-        <Icon className="h-4 w-4 text-editorial" aria-hidden />
+        <Icon className="h-4 w-4 text-accent-cyan" aria-hidden />
         <p className="text-caption font-bold">{title}</p>
       </div>
       <p className="mt-1 text-micro text-text-muted">{body}</p>
@@ -261,20 +261,20 @@ const GHOST_STEPS = [
 
 export function PracticePreview() {
   return (
-    <figure className="overflow-hidden rounded-md border border-line bg-bg-surface shadow-hard">
+    <figure className="overflow-hidden rounded-2xl border border-line bg-bg-surface/70 surface-sheen shadow-pop">
       <div className="grid lg:grid-cols-[1.05fr_.95fr]">
         <div className="border-b border-border p-5 sm:p-6 lg:border-b-0 lg:border-r">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="kicker">Ghost Build coach</p>
-              <h3 className="mt-2 font-serif text-[26px] font-semibold text-text">Practice the timing, not the notes.</h3>
+              <p className="hud-label">Ghost Build coach</p>
+              <h3 className="mt-2 font-display text-h3 font-bold tracking-tight text-text">Practice the timing, not the notes.</h3>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-sm border border-success/30 bg-success/10 px-2.5 py-1 text-micro font-bold text-success">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-micro font-bold text-success">
               <Mic2 className="h-3.5 w-3.5" aria-hidden /> LIVE COACH
             </span>
           </div>
 
-          <div className="mt-5 rounded-md border border-border bg-bg-elevated/50 p-4">
+          <div className="mt-5 rounded-xl border border-border bg-bg-elevated/50 p-4">
             <div className="flex items-baseline justify-between gap-3">
               <div>
                 <p className="text-caption font-bold text-text">PvT · 4 Gate Blink</p>
@@ -297,16 +297,16 @@ export function PracticePreview() {
         <div className="bg-bg-elevated/25 p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="kicker">Build Roulette · Act II</p>
-              <h3 className="mt-2 font-serif text-[24px] font-semibold text-text">Now roll the opening units.</h3>
+              <p className="hud-label">Build Roulette · Act II</p>
+              <h3 className="mt-2 font-display text-h3 font-bold tracking-tight text-text">Now roll the opening units.</h3>
             </div>
-            <Gamepad2 className="h-6 w-6 text-editorial" aria-hidden />
+            <Gamepad2 className="h-6 w-6 text-accent-cyan" aria-hidden />
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3">
             <UnitPick src="/icons/sc2/units/stalker.png" name="Stalker" odds="45%" />
             <UnitPick src="/icons/sc2/units/adept.png" name="Adept" odds="30%" />
           </div>
-          <div className="mt-4 rounded-md border border-border bg-bg-surface p-4">
+          <div className="mt-4 rounded-xl border border-border bg-bg-surface p-4">
             <div className="flex items-center justify-between gap-3">
               <span className="text-caption font-bold text-text">Custom build rules</span>
               <span className="text-micro text-text-dim">BACKGROUND MATCHING</span>
@@ -329,8 +329,8 @@ export function PracticePreview() {
 
 function UnitPick({ src, name, odds }: { src: string; name: string; odds: string }) {
   return (
-    <div className="relative overflow-hidden rounded-md border border-editorial/30 bg-editorial/10 p-3 text-center">
-      <Sparkles className="absolute right-2 top-2 h-4 w-4 text-editorial" aria-hidden />
+    <div className="relative overflow-hidden rounded-xl border border-accent-cyan/30 bg-accent-cyan/10 p-3 text-center">
+      <Sparkles className="absolute right-2 top-2 h-4 w-4 text-accent-cyan" aria-hidden />
       <Image src={src} alt="" width={76} height={76} className="mx-auto h-16 w-16 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,.6)]" />
       <p className="mt-2 text-caption font-bold text-text">{name}</p>
       <p className="text-micro text-text-dim">{odds} roll weight</p>
@@ -353,7 +353,7 @@ const CHAT_LINES = [
 
 export function StreamStudioPreview() {
   return (
-    <figure className="replay-scope overflow-hidden rounded-md border border-line bg-bg shadow-hard">
+    <figure className="replay-scope overflow-hidden rounded-2xl border border-line bg-bg shadow-pop">
       <div className="grid xl:grid-cols-[minmax(0,1.25fr)_22rem]">
         <div className="relative min-h-[430px] overflow-hidden border-b border-white/10 xl:border-b-0 xl:border-r">
           <Image
@@ -378,7 +378,7 @@ export function StreamStudioPreview() {
             <p className="mt-2 font-display text-[34px] font-extrabold tracking-[.08em] text-white sm:text-[48px]">STARTING SOON</p>
             <p className="mt-1 font-mono text-[28px] font-bold text-accent-cyan sm:text-[36px]">04:59</p>
           </div>
-          <div className="absolute bottom-4 left-4 right-4 rounded-md border border-white/15 bg-black/75 p-3 backdrop-blur-sm">
+          <div className="absolute bottom-4 left-4 right-4 rounded-xl border border-white/15 bg-black/75 p-3 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-micro font-bold uppercase tracking-[.1em] text-accent-cyan">
               <Film className="h-4 w-4" aria-hidden /> Highlight reel · clip 3 of 14
             </div>
@@ -397,7 +397,7 @@ export function StreamStudioPreview() {
             <span className="rounded-full bg-[#3ec884]/15 px-2 py-1 text-micro font-bold text-[#66e1a2]">LIVE</span>
           </div>
 
-          <div className="mt-4 space-y-2 rounded-md border border-white/10 bg-white/[.03] p-3">
+          <div className="mt-4 space-y-2 rounded-xl border border-white/10 bg-white/[.03] p-3">
             {CHAT_LINES.map((line) => (
               <div key={`${line.name}-${line.body}`} className="text-[11px] leading-5 text-white/75">
                 <span className="mr-1 rounded-sm bg-white/10 px-1 py-0.5 text-[8px] font-bold text-white/65">{line.platform}</span>
@@ -406,7 +406,7 @@ export function StreamStudioPreview() {
             ))}
           </div>
 
-          <div className="mt-3 rounded-md border border-[#f5b84a]/35 bg-[#f5b84a]/10 p-3">
+          <div className="mt-3 rounded-xl border border-[#f5b84a]/35 bg-[#f5b84a]/10 p-3">
             <div className="flex items-center gap-2">
               <BellRing className="h-4 w-4 text-[#f5b84a]" aria-hidden />
               <span className="text-micro font-bold uppercase tracking-[.12em] text-[#f5b84a]">Incoming raid</span>
@@ -439,7 +439,7 @@ export function StreamStudioPreview() {
 
 function DockAction({ icon: Icon, label, value }: { icon: typeof Video; label: string; value: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[.04] p-2.5">
+    <div className="rounded-xl border border-white/10 bg-white/[.04] p-2.5">
       <div className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-[.1em] text-white/55">
         <Icon className="h-3.5 w-3.5 text-[#3ce0d6]" aria-hidden /> {label}
       </div>
@@ -458,7 +458,7 @@ export function VirtualSetStrip() {
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       {SETS.map((set) => (
-        <figure key={set.src} className="overflow-hidden rounded-md border border-border bg-bg-surface">
+        <figure key={set.src} className="overflow-hidden rounded-2xl border border-line bg-bg-surface/70 surface-sheen shadow-card">
           <div className="relative aspect-video overflow-hidden">
             <Image src={set.src} alt={`${set.label} built-in virtual set`} fill sizes="(min-width: 640px) 33vw, 100vw" className="object-cover motion-safe:transition-transform motion-safe:duration-300 motion-safe:hover:scale-[1.02]" />
           </div>

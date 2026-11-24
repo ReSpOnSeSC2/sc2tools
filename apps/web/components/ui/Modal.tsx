@@ -168,8 +168,9 @@ export function Modal({
           ...(placement === "right" ? { height: viewport.height } : {}),
         } : undefined}
         className={[
-          "relative w-full min-w-0 bg-bg-surface text-text border border-border shadow-[var(--shadow-card)]",
+          "relative w-full min-w-0 glass-strong text-text border border-line shadow-pop",
           "overflow-hidden flex flex-col",
+          placement === "bottom" ? "motion-safe:animate-sheet-up" : placement === "right" ? "motion-safe:animate-scale-in" : centerOnMobile ? "motion-safe:animate-scale-in" : "motion-safe:animate-sheet-up sm:motion-safe:animate-scale-in",
           placement !== "responsive" ? sheetPlacement : [
           centerOnMobile ? "max-h-[85dvh]" : "max-h-[100dvh]",
           // The side panel spans the full height; 3xl gets more vertical
@@ -191,6 +192,9 @@ export function Modal({
           placement === "right" ? SIDE_SIZE_CLASSES[size] : SIZE_CLASSES[size],
         ].join(" ")}
       >
+        {placement === "bottom" || (placement === "responsive" && !centerOnMobile) ? (
+          <span aria-hidden className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border-strong sm:hidden" />
+        ) : null}
         <header role="presentation" className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div className="min-w-0 flex-1 space-y-1">
             <h2 id={titleId} className="text-h4 font-semibold text-text">
@@ -207,7 +211,7 @@ export function Modal({
               type="button"
               aria-label="Close"
               onClick={onClose}
-              className="-mr-1.5 -mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="-mr-1.5 -mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-subtle hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:h-9 sm:w-9"
             >
               <X className="h-5 w-5" aria-hidden />
             </button>

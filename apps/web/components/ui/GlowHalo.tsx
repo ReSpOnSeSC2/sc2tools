@@ -37,7 +37,7 @@ export function GlowHalo({
   const style: CSSProperties = {
     background:
       color === "mixed"
-        ? `radial-gradient(ellipse ${size}% ${size}% at ${x} ${y}, var(--halo-cyan) 0%, transparent 60%), radial-gradient(ellipse ${size}% ${size}% at calc(100% - ${x}) calc(100% - ${y}), var(--halo-accent) 0%, transparent 60%)`
+        ? `radial-gradient(ellipse ${size}% ${size}% at ${x} ${y}, rgb(var(--aurora-1) / 0.16) 0%, transparent 60%), radial-gradient(ellipse ${size}% ${size}% at calc(100% - ${x}) calc(100% - ${y}), rgb(var(--aurora-3) / 0.14) 0%, transparent 60%)`
         : `radial-gradient(ellipse ${size}% ${size}% at ${x} ${y}, ${colorStop} 0%, transparent 60%)`,
     opacity,
   };
@@ -58,11 +58,11 @@ export function GlowHalo({
 function colorVarFor(color: GlowHaloColor): string {
   switch (color) {
     case "cyan":
-      return "var(--halo-cyan)";
+      return "rgb(var(--aurora-1) / 0.16)";
     case "accent":
-      return "var(--halo-accent)";
+      return "rgb(var(--aurora-2) / 0.16)";
     case "mixed":
-      return "var(--halo-cyan)";
+      return "rgb(var(--aurora-1) / 0.16)";
   }
 }
 
