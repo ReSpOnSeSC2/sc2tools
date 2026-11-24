@@ -3,6 +3,7 @@
 const { AggregationsService } = require("./aggregations");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { myLadderRaceExpr } = require("./trendsRegionExpr");
+const { mongoOrder } = require("./sessions");
 const { parseGlobalTrendsFilters, playerIncluded } = require("./adminGlobalTrendsScope");
 const { readGlobalPlayers, paginatePlayers } = require("./adminGlobalTrendsPlayers");
 const { globalMmrProgression, fitGlobalInterval } = require("./adminGlobalTrendsMmr");
@@ -247,7 +248,7 @@ function adaptPipeline(pipeline, method, cohort, sequenceHistory = false) {
       return [
         // $documentNumber accepts exactly one sort key. A composite value
         // keeps equal-timestamp replays ordered consistently in all windows.
-        ...(window.output._prevDate ? [{ $addFields: { _globalSequenceOrder: "$_sessionOrder" } }] : []),
+        ...(window.output._prevDate ? [{ $addFields: { _globalSequenceOrder: mongoOrder() } }] : []),
         { $setWindowFields: { ...window, partitionBy: partition, sortBy: { _globalSequenceOrder: 1 } } },
       ];
     }

@@ -8,6 +8,7 @@ const { COMMUNITY_SEARCH_COMMENT, REPLAY_SEARCH_COMMENT } = require("../middlewa
 const { REPLAY_DOWNLOAD_COMMENT } = require("../middleware/replayDownloadBatchBoundary");
 const { STORAGE_TOTALS_COMMENT } = require("../services/infrastructureStorageComment");
 const { NET_MMR_WINDOW_INDEX } = require("../services/trendsNetMmr");
+const { MOMENTUM_ORDER_INDEX } = require("../services/trendsInsights");
 const { startPrivateSearchIndex } = require("./privateSearchIndexes");
 const { ensureNotesIndexes } = require("../services/notes");
 const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("../services/gameStatsMaintenance");
@@ -528,6 +529,9 @@ async function ensureIndexes(ctx, opts = {}) {
   // Trends verified-MMR charts never sort a whole history in memory: Atlas
   // Flex caps that at 32 MB with no disk spill (services/trendsNetMmr.js).
   await ctx.games.createIndex({ ...NET_MMR_WINDOW_INDEX.key }, { name: NET_MMR_WINDOW_INDEX.name });
+  // Supplies the session-momentum windows' order (oldest first, ties by game
+  // id) for the same reason (services/trendsInsights.js).
+  await ctx.games.createIndex({ ...MOMENTUM_ORDER_INDEX.key }, { name: MOMENTUM_ORDER_INDEX.name });
   // Public infrastructure usage counts only completed original-replay
   // markers. A partial index keeps that global count index-only without
   // allocating entries for the much larger set of pre-archive game rows.
