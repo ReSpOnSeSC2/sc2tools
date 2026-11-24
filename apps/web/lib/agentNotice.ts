@@ -12,7 +12,7 @@
  * change once that version is published (raising it then is optional).
  * `version-check` accepts the agent package version or the release before it.
  */
-export const FALLBACK_LATEST_AGENT_VERSION = "0.25.8";
+export const FALLBACK_LATEST_AGENT_VERSION = "0.25.9";
 export const STREAMS_MIN_AGENT_VERSION = "0.18.0";
 
 export function inactiveAgentMessage(
