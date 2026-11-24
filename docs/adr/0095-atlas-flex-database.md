@@ -115,8 +115,9 @@ remains the backup provider, now with the Flex tier's fixed snapshot policy.
   The admin Global Trends history build sorted more than 32 MB; it now
   inserts each game once and removes duplicates in index-ordered window
   passes, and no Global Trends query asks for disk use. Its Momentum and
-  Net MMR cards still sort more than 32 MB over the whole platform and need
-  a follow-up; user-facing pages were checked against the limits.
+  Net MMR cards read their windows' order from snapshot indexes instead of
+  sorting the whole platform (ADR 0097); user-facing pages were checked
+  against the limits.
 - Atlas schedules Flex upgrades; the Node driver (6.13) is supported for 8.0.
 - Other applications' databases were copied to Flex as well. Each gets a
   final re-sync and its app is repointed; the M10 is then deleted with its

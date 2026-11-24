@@ -45,10 +45,13 @@ corresponding GitHub Release.
   sorted every game (about 225 MB). The build now inserts each eligible game
   once and removes duplicate uploads in two index-ordered passes, keeping the
   same rows as before. MMR progression no longer sorts every eligible game,
-  and no Global Trends query asks for disk use. The Momentum and Net MMR
-  (by matchup and by opponent) cards still need more than 32 MB for the whole
-  platform and fail on Flex until a follow-up; a player cohort of a few
-  thousand games fits.
+  and no Global Trends query asks for disk use.
+- Admin Global Trends' Momentum and Net MMR (by matchup and by opponent)
+  cards work again for the whole platform on Atlas Flex. Each sorted the
+  whole player history in memory, momentum about 530 MB per sort. The
+  history now stores momentum's session keys and has two indexes that supply
+  every window's order, so no card sorts the history. The opponent table
+  also holds half as much per opponent. Results are unchanged. See ADR 0097.
 
 ### Website navigation
 
