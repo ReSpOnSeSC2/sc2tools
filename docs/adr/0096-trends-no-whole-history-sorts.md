@@ -40,6 +40,12 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
 3. Order-dependent group outputs use `$top` and `$bottom` instead of a
    `$sort` stage followed by `$first` or `$last`. This covers the opponent
    table's newest name and race, and progression's open and close MMR.
+   - Only admin Global Trends can tie on `(date, gameId)`, because its history
+     may keep one replay for two accounts. For example, both players uploaded
+     it, or one account was uploaded under the `S2` and `s2` spellings.
+   - The label order therefore adds `myToonHandle` and the ladder race as
+     tiebreakers. That picks the row the old stable `$sort` plus `$last`
+     picked: the one from the greater account.
 4. Session momentum orders the filtered history by `date` and then `gameId`.
    That is the `sessions.mongoOrder()` order whenever every game id is a
    non-empty string, which validation requires. The games index
@@ -77,7 +83,28 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
 - Admin Global Trends reuses these pipelines on its history collection, which
   has no such indexes, so its windows still sort there. Momentum there now
   uses two windows instead of four sorts.
-- A row whose game id is missing, empty or not a string (only possible by
-  bypassing validation) sorts differently than in `mongoOrder()`. That
-  matters only for a tie at the same millisecond within one filtered
-  history.
+- An adversarial pass compared the old and new code on generated histories:
+  about 85,000 comparisons in five areas (personal and global momentum, net
+  MMR, progression, plans and sort memory), each difference re-checked by a
+  separate verifier. Results:
+  - Intended change: a stored `myToonHandle` equal to the literal
+    `__missing_account__` no longer pairs with games that have no handle.
+    The old partition key mapped a missing handle to that literal, so such
+    games ended up in the real account's partition.
+  - Fixed in this change: the Global Trends tie labels (Decision 3).
+  - Everything else needs data that validation rejects (below), or comes
+    from the old code's own nondeterminism, such as the order of matchups
+    with equal net MMR.
+- A row that validation rejects can still behave differently:
+  - A game id that is missing, empty or not a string sorts differently than
+    in `mongoOrder()`. That matters only for a tie at the same millisecond
+    within one filtered history.
+  - An array-valued `myToonHandle` makes the net-MMR window throw.
+  - An array-valued `date` or `myToonHandle` anywhere in `games` makes these
+    indexes multikey. Momentum then sorts the filtered history in memory
+    again (slim rows, about 8 MiB for 14,000 games).
+- With a selective filter (one map or build, for example) MongoDB may pick
+  that filter's index for momentum and sort the smaller filtered set in
+  memory. That was seen without any memory failure.
+- Progression still sorts its grouped rows (one per bucket and series),
+  which the bucket cap bounds to a few MB at most.

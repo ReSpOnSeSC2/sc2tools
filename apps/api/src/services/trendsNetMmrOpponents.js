@@ -12,6 +12,14 @@
 
 const { netMmrPairStages } = require("./trendsNetMmr");
 
+/** Order that picks an opponent's newest label (see netMmrByOpponent). */
+const OPPONENT_LABEL_ORDER = Object.freeze({
+  date: 1,
+  gameId: 1,
+  myToonHandle: 1,
+  _myLadderRace: 1,
+});
+
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
 const SORT_FIELDS = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
@@ -158,12 +166,15 @@ async function netMmrByOpponent(deps, userId, filters, opts = {}) {
         pulseCharacterId: { $max: "$_pulseCharacterId" },
         // The newest game's name and race. $bottom picks that game without
         // a $sort stage, which would hold every kept game in memory (Atlas
-        // Flex caps an in-memory sort at 32 MB).
+        // Flex caps an in-memory sort at 32 MB). Only admin Global Trends
+        // can tie on (date, gameId): its history may keep one replay for two
+        // accounts. The account and ladder race then pick the same row as
+        // the old $sort + $last did, the one from the greater account.
         displayName: {
-          $bottom: { sortBy: { date: 1, gameId: 1 }, output: "$_displayName" },
+          $bottom: { sortBy: OPPONENT_LABEL_ORDER, output: "$_displayName" },
         },
         opponentRace: {
-          $bottom: { sortBy: { date: 1, gameId: 1 }, output: "$_oppRace" },
+          $bottom: { sortBy: OPPONENT_LABEL_ORDER, output: "$_oppRace" },
         },
         netMmr: { $sum: "$_delta" },
         mmrWon: {

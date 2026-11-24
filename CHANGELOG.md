@@ -25,6 +25,10 @@ corresponding GitHub Release.
   times by a large composite key and needed 70 MB for the largest one. A new
   games index (`momentum_order`) now supplies its order, and two windows
   replace the four sorts. Results are unchanged.
+- Admin Global Trends' Net MMR opponent table again names an opponent from
+  the greater account's row when two kept games of one replay tie. A stored
+  account handle equal to the literal `__missing_account__` no longer pairs
+  with games that have no handle.
 
 ### Hosting costs
 

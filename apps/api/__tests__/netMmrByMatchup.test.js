@@ -70,6 +70,22 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
     return matchups.find((m) => m.race === race);
   }
 
+  test("a stored \"__missing_account__\" handle pairs only with that handle", async () => {
+    // The old partition key turned a missing handle into this literal, so a
+    // stored handle equal to it paired with games that have no handle.
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    const noHandle = makeGame({ gameId: "g2", date: new Date(t0 + 10 * MIN_AGO), myMmr: 4020 });
+    delete noHandle.myToonHandle;
+    await db.games.insertMany([
+      makeGame({ gameId: "g1", myToonHandle: "__missing_account__", date: new Date(t0), myMmr: 4000 }),
+      noHandle,
+      makeGame({ gameId: "g3", myToonHandle: "__missing_account__", date: new Date(t0 + 20 * MIN_AGO), myMmr: 4100 }),
+    ]);
+    const out = await svc.netMmrByMatchup("u1", {});
+    expect(out.matchups).toEqual([expect.objectContaining({ race: "Z", netMmr: 100, pairs: 1 })]);
+    expect(out.dropped).toMatchObject({ missingIdentity: 1, terminalGame: 1 });
+  });
+
   test("back-to-back wins vs Protoss come out net-positive", async () => {
     // Three wins vs Protoss, all in the same session (≈5 min apart),
     // each climbing the ladder by +25 MMR. The fourth (Zerg) game
