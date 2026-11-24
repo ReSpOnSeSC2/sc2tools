@@ -385,6 +385,96 @@ describe("admin infrastructure health", () => {
     expect(within(renderCard!).getAllByText("Unavailable").length).toBeGreaterThan(0);
     expect(within(renderCard!).getByText("Live provider metrics unavailable")).toBeTruthy();
   });
+
+  it("shows Atlas Flex storage against its allowance instead of missing disk and CPU metrics", () => {
+    const flexMongo = {
+      ...INFRASTRUCTURE.providers.mongo,
+      status: "healthy",
+      cluster: {
+        tier: "flex",
+        flexStorage: {
+          usedBytes: 2_247_000_000,
+          limitBytes: 5_000_000_000,
+          utilizationPercent: 44.9,
+          scope: "all_databases",
+          databaseCount: 8,
+        },
+        provisionedDiskGb: 5,
+        diskUsedBytes: null,
+        diskCapacityBytes: null,
+        diskUtilizationPercent: null,
+        diskMeasuredAt: null,
+        autoExpandStorage: false,
+        performance: null,
+      },
+      cost: {
+        ...INFRASTRUCTURE.providers.mongo.cost,
+        pricingMode: "planning_fallback",
+        planningMonthlyUsd: 8,
+        projectedMonthlyUsd: null,
+      },
+    };
+    useApiMock.mockImplementation((path: string) => ({
+      data: path === "/v1/admin/infrastructure"
+        ? { ...INFRASTRUCTURE, providers: { ...INFRASTRUCTURE.providers, mongo: flexMongo } }
+        : HEALTH,
+      error: null,
+      isLoading: false,
+    }));
+
+    render(<AdminHealthPage />);
+
+    const mongo = screen.getByRole("heading", { name: "MongoDB Atlas" }).closest("section");
+    expect(mongo).not.toBeNull();
+    expect(within(mongo!).getByText("FLEX")).toBeTruthy();
+    expect(within(mongo!).getByText("Flex base price")).toBeTruthy();
+    expect(within(mongo!).getByText("$8.00/mo")).toBeTruthy();
+    expect(within(mongo!).getByText(/backups and data transfer included/)).toBeTruthy();
+    expect(within(mongo!).getByText("Flex storage")).toBeTruthy();
+    expect(within(mongo!).getByText("44.9%")).toBeTruthy();
+    // Decimal units, like Atlas's "5 GB" Flex allowance.
+    expect(within(mongo!).getByText(/2\.25 GB of 5\.00 GB · all 8 databases on the cluster \(documents \+ indexes\)/)).toBeTruthy();
+    expect(within(mongo!).getByText(/does not report host CPU or cache metrics for Flex/)).toBeTruthy();
+    expect(within(mongo!).queryByText("Provider disk metric unavailable")).toBeNull();
+    expect(within(mongo!).queryByText(/storage auto-expand/)).toBeNull();
+  });
+
+  it("labels a Flex storage figure covering only the SC2 Tools database as a lower bound", () => {
+    const mongoProvider = INFRASTRUCTURE.providers.mongo;
+    const partialMongo = {
+      ...mongoProvider,
+      status: "watch",
+      cluster: {
+        tier: "flex",
+        flexStorage: {
+          usedBytes: 2_247_000_000,
+          limitBytes: 5_000_000_000,
+          utilizationPercent: 44.9,
+          scope: "sc2tools_database_only",
+          databaseCount: null,
+        },
+        provisionedDiskGb: 5,
+        diskUsedBytes: null,
+        diskCapacityBytes: null,
+        diskUtilizationPercent: null,
+        diskMeasuredAt: null,
+        autoExpandStorage: false,
+        performance: null,
+      },
+    };
+    useApiMock.mockImplementation((path: string) => ({
+      data: path === "/v1/admin/infrastructure"
+        ? { ...INFRASTRUCTURE, providers: { ...INFRASTRUCTURE.providers, mongo: partialMongo } }
+        : HEALTH,
+      error: null,
+      isLoading: false,
+    }));
+
+    render(<AdminHealthPage />);
+
+    const mongo = screen.getByRole("heading", { name: "MongoDB Atlas" }).closest("section");
+    expect(within(mongo!).getByText(/SC2 Tools database only \(documents \+ indexes\); other databases also count, so the cluster total may be higher/)).toBeTruthy();
+  });
 });
 
 const FIVE_MINUTES_MS = 5 * 60_000;

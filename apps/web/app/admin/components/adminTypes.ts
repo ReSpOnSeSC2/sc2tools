@@ -332,9 +332,31 @@ export type AdminInfrastructureResp = {
         allocatedTotalBytes: number | null;
         measuredAt: string | null;
         scope: "sc2tools_database_only";
+        /** Documents + indexes over every database the app's user can read. */
+        allDatabases?: {
+          logicalDataBytes: number;
+          indexBytes: number;
+          databaseCount: number;
+          measuredAt: string | null;
+        } | null;
+        /** Why allDatabases is missing, when it is. */
+        allDatabasesError?: string | null;
       } | null;
       cluster: {
         tier: string | null;
+        /**
+         * Present for Atlas Flex: its fixed data allowance against the whole
+         * cluster ("all_databases") or, when that total could not be read,
+         * the SC2 Tools database alone as a lower bound.
+         */
+        flexStorage?: {
+          usedBytes: number | null;
+          limitBytes: number | null;
+          utilizationPercent: number | null;
+          scope: "all_databases" | "sc2tools_database_only";
+          databaseCount?: number | null;
+          unmeasuredReason?: string | null;
+        } | null;
         provisionedDiskGb: number | null;
         diskUsedBytes: number | null;
         diskCapacityBytes: number | null;

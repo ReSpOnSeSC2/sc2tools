@@ -1,9 +1,12 @@
 import { getJson } from "@/lib/serverApi";
 
-/** Public-list planning baseline used only when live Atlas billing is absent. */
-export const FIXED_MONTHLY_FALLBACK_USD = 65.19;
+/** Public-list planning baseline used only when live Atlas billing is absent:
+ * the non-Mongo fixed costs plus the Atlas Flex base price ($8/month). */
+export const FIXED_MONTHLY_FALLBACK_USD = 16.25;
 /** Render Starter ($7) plus the domain monthly equivalent ($1.25). */
 export const NON_MONGO_FIXED_MONTHLY_USD = 8.25;
+/** Atlas Flex includes this much data (uncompressed documents + indexes). */
+export const ATLAS_FLEX_STORAGE_LIMIT_GB = 5;
 
 export interface MongoAppDataUsage {
   logicalDataBytes: number;
@@ -36,6 +39,11 @@ export interface AtlasBillingUsage {
     other: number;
   } | null;
   projectedMonthlyRunRateUsd: number | null;
+  /**
+   * What set the run rate: the posted-charge projection, or Atlas Flex's base
+   * price / monthly cap when the projection fell outside the tier's range.
+   */
+  projectionBasis?: "posted" | "flex_base_price" | "flex_cap" | null;
 }
 
 export interface InfrastructureCosts {
@@ -196,6 +204,13 @@ export function monthlyCostSummary(
     r2Usd,
     totalUsd: baseUsd + (hasAtlasProjection ? atlasUsd : 0) + r2Usd,
   };
+}
+
+/** Atlas Flex reports no disk telemetry; its limit is a data allowance. */
+export function isAtlasFlex(
+  cluster: Pick<AtlasClusterUsage, "tier"> | null | undefined,
+): boolean {
+  return cluster?.tier?.toUpperCase() === "FLEX";
 }
 
 /** Decimal units match Cloudflare's GB-month pricing language. */

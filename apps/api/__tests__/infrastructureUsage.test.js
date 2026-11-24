@@ -71,6 +71,7 @@ function service(opts = {}) {
         indexSize: 200,
       })),
     },
+    mongoClient: opts.mongoClient,
     cloudflareAnalytics:
       opts.cloudflareAnalytics === undefined
         ? configured()
@@ -130,13 +131,13 @@ describe("InfrastructureUsageService", () => {
           cluster: null,
           billing: null,
         },
-        planning: { monthlyUsd: 56.94 },
+        planning: { monthlyUsd: 8 },
       },
       site: {
-        fixedMonthlyEquivalentUsd: 65.19,
+        fixedMonthlyEquivalentUsd: 16.25,
         nonMongoFixedMonthlyUsd: 8.25,
         pricingMode: "planning_fallback",
-        estimatedCurrentMonthlyTotalUsd: 70.095,
+        estimatedCurrentMonthlyTotalUsd: 21.155,
       },
     });
     expect(games.countDocuments).toHaveBeenCalledWith(
@@ -188,6 +189,9 @@ describe("InfrastructureUsageService", () => {
           },
           projectedMonthlyRunRateCents: 6_000,
           projectedMonthlyRunRateUsd: 60,
+          projectionBasis: "posted",
+          // Admin-only: other clusters' charges never reach the public payload.
+          otherClustersPostedCents: 1_970,
           rawSku: "SECRET_SKU",
         },
       })),
@@ -227,9 +231,10 @@ describe("InfrastructureUsageService", () => {
           },
           projectedMonthlyRunRateCents: 6_000,
           projectedMonthlyRunRateUsd: 60,
+          projectionBasis: "posted",
         },
       },
-      planning: { monthlyUsd: 56.94 },
+      planning: { monthlyUsd: 8 },
     });
     expect(result.site).toMatchObject({
       nonMongoFixedMonthlyUsd: 8.25,
@@ -265,8 +270,8 @@ describe("InfrastructureUsageService", () => {
     const result = await service({ atlasClient }).snapshot();
     expect(result.site).toMatchObject({
       pricingMode: "planning_fallback",
-      fixedMonthlyEquivalentUsd: 65.19,
-      estimatedCurrentMonthlyTotalUsd: 70.095,
+      fixedMonthlyEquivalentUsd: 16.25,
+      estimatedCurrentMonthlyTotalUsd: 21.155,
     });
     expect(result.mongo.atlas.billing).toMatchObject({
       available: false,
@@ -290,9 +295,11 @@ describe("InfrastructureUsageService", () => {
         allocatedTotalBytes: 2_500,
         scope: "sc2tools_database_only",
         measuredAt: NOW.toISOString(),
+        allDatabases: null,
+        allDatabasesError: "not_configured",
       },
       pricing: {
-        monthlyPlanningEstimateUsd: 56.94,
+        monthlyPlanningEstimateUsd: 8,
         includedInSiteFixedMonthlyEquivalent: true,
         estimate: true,
         basis: "repo_budget_assumption",
@@ -316,6 +323,130 @@ describe("InfrastructureUsageService", () => {
       scale: 1,
       maxTimeMS: 8_000,
     });
+  });
+
+  test("totals every readable database for the Flex allowance without publishing it", async () => {
+    const sizes = {
+      sc2tools_saas: { dataSize: 2_130_000_000, indexSize: 117_000_000 },
+      other_app: { dataSize: 400_000_000, indexSize: 30_000_000 },
+    };
+    const commands = [];
+    const mongoClient = {
+      db: (name) => ({
+        command: jest.fn(async (command) => {
+          commands.push([name, Object.keys(command)[0]]);
+          // Log-private, and every database, so a scoped user fails instead of
+          // listing only its own database as if it were the whole cluster.
+          expect(command.comment).toBe("sc2tools-infra-storage-totals-v1");
+          if (command.listDatabases) {
+            expect(command).toMatchObject({ nameOnly: true, authorizedDatabases: false, maxTimeMS: 8_000 });
+            return {
+              databases: [
+                { name: "admin" }, { name: "sc2tools_saas" }, { name: "local" },
+                { name: "other_app" }, { name: "config" },
+              ],
+            };
+          }
+          return sizes[name];
+        }),
+      }),
+    };
+    const usage = service({ mongoClient, atlasClient: null });
+    const admin = await usage.mongoStorageSnapshot();
+    expect(admin.appData.allDatabases).toEqual({
+      logicalDataBytes: 2_530_000_000,
+      indexBytes: 147_000_000,
+      databaseCount: 2,
+      measuredAt: NOW.toISOString(),
+    });
+    // Server-internal databases are neither listed into the total nor read.
+    expect(commands.filter(([, cmd]) => cmd === "dbStats").map(([name]) => name).sort())
+      .toEqual(["other_app", "sc2tools_saas"]);
+
+    const pub = await usage.snapshot();
+    expect(pub.mongo.appData).not.toHaveProperty("allDatabases");
+    expect(JSON.stringify(pub)).not.toMatch(/other_app|2530000000/);
+  });
+
+  test("reports why there is no cluster-wide total", async () => {
+    const unauthorized = Object.assign(new Error("not authorized on admin to execute command"), { code: 13, codeName: "Unauthorized" });
+    const failingList = { db: () => ({ command: jest.fn(async () => { throw unauthorized; }) }) };
+    expect((await service({ mongoClient: failingList, atlasClient: null }).mongoStorageSnapshot())
+      .appData).toMatchObject({ logicalDataBytes: 1_200, allDatabases: null, allDatabasesError: "unauthorized" });
+
+    const failingStats = {
+      db: (name) => ({
+        command: jest.fn(async (command) => {
+          if (command.listDatabases) return { databases: [{ name: "sc2tools_saas" }, { name: "locked" }] };
+          if (name === "locked") throw new Error("not authorized on locked to execute command");
+          return { dataSize: 10, indexSize: 5 };
+        }),
+      }),
+    };
+    expect((await service({ mongoClient: failingStats, atlasClient: null }).mongoStorageSnapshot())
+      .appData).toMatchObject({ allDatabases: null, allDatabasesError: "unauthorized" });
+
+    const many = {
+      db: () => ({
+        command: jest.fn(async () => ({
+          databases: Array.from({ length: 101 }, (_, index) => ({ name: `app_${index}` })),
+        })),
+      }),
+    };
+    expect((await service({ mongoClient: many, atlasClient: null }).mongoStorageSnapshot())
+      .appData).toMatchObject({ allDatabases: null, allDatabasesError: "too_many_databases" });
+
+    const badStats = {
+      db: () => ({
+        command: jest.fn(async (command) => (command.listDatabases
+          ? { databases: [{ name: "sc2tools_saas" }] }
+          : { dataSize: -1, indexSize: 5 })),
+      }),
+    };
+    expect((await service({ mongoClient: badStats, atlasClient: null }).mongoStorageSnapshot())
+      .appData).toMatchObject({ allDatabases: null, allDatabasesError: "invalid_stats" });
+  });
+
+  test("a transient failure keeps the last good cluster-wide total", async () => {
+    let fail = false;
+    const mongoClient = {
+      db: () => ({
+        command: jest.fn(async (command) => {
+          if (fail) throw Object.assign(new Error("operation exceeded time limit"), { code: 50, codeName: "MaxTimeMSExpired" });
+          return command.listDatabases ? { databases: [{ name: "sc2tools_saas" }] } : { dataSize: 10, indexSize: 5 };
+        }),
+      }),
+    };
+    let now = NOW;
+    const usage = service({ mongoClient, atlasClient: null, now: () => now });
+    const first = (await usage.mongoStorageSnapshot()).appData.allDatabases;
+    expect(first).toMatchObject({ logicalDataBytes: 10, indexBytes: 5, databaseCount: 1 });
+    fail = true;
+    now = new Date(NOW.getTime() + 60 * 60 * 1000);
+    expect((await usage.mongoStorageSnapshot()).appData).toMatchObject({ allDatabases: first, allDatabasesError: null });
+    // After a day the stale total is no longer offered.
+    now = new Date(NOW.getTime() + 25 * 60 * 60 * 1000);
+    expect((await usage.mongoStorageSnapshot()).appData).toMatchObject({ allDatabases: null, allDatabasesError: "timeout" });
+  });
+
+  test("a definitive failure forgets the last good total", async () => {
+    let mode = "ok";
+    const mongoClient = {
+      db: () => ({
+        command: jest.fn(async (command) => {
+          if (mode === "unauthorized") throw Object.assign(new Error("not authorized"), { code: 13 });
+          if (mode === "timeout") throw Object.assign(new Error("time limit"), { code: 50 });
+          return command.listDatabases ? { databases: [{ name: "sc2tools_saas" }] } : { dataSize: 10, indexSize: 5 };
+        }),
+      }),
+    };
+    const usage = service({ mongoClient, atlasClient: null });
+    expect((await usage.mongoStorageSnapshot()).appData.allDatabases).toMatchObject({ databaseCount: 1 });
+    mode = "unauthorized";
+    expect((await usage.mongoStorageSnapshot()).appData.allDatabasesError).toBe("unauthorized");
+    // A later timeout must not bring back the total from before access changed.
+    mode = "timeout";
+    expect((await usage.mongoStorageSnapshot()).appData).toMatchObject({ allDatabases: null, allDatabasesError: "timeout" });
   });
 
   test("admin diagnostics expose config health but never provider identifiers", async () => {
@@ -525,7 +656,7 @@ describe("infrastructure usage cost model", () => {
       storageMonthlyMills: 0,
       classAMonthlyMills: 0,
       classBMonthlyMills: 0,
-      estimatedTotalMonthlyMills: 65_190,
+      estimatedTotalMonthlyMills: 16_250,
     });
     expect(_internals.calculateCosts({
       payloadBytes: 10_000_000_001,

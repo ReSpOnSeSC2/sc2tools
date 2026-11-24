@@ -6,6 +6,7 @@ const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndex
 const { PRIVATE_SEARCH_COMMENT } = require("../services/privateSearchReader");
 const { COMMUNITY_SEARCH_COMMENT, REPLAY_SEARCH_COMMENT } = require("../middleware/searchQueryPrivacy");
 const { REPLAY_DOWNLOAD_COMMENT } = require("../middleware/replayDownloadBatchBoundary");
+const { STORAGE_TOTALS_COMMENT } = require("../services/infrastructureStorageComment");
 const { startPrivateSearchIndex } = require("./privateSearchIndexes");
 const { ensureNotesIndexes } = require("../services/notes");
 const { PROTOCOL_VERSION, MAINTENANCE_VERSION } = require("../services/gameStatsMaintenance");
@@ -249,8 +250,9 @@ const SLOW_QUERY_IGNORED_COMMANDS = new Set([
   "getParameter",
 ]);
 
-// Reads whose filter or pipeline holds typed search text: their failures log a code only.
-const PRIVATE_COMMENTS = new Set([PRIVATE_SEARCH_COMMENT, REPLAY_SEARCH_COMMENT, COMMUNITY_SEARCH_COMMENT, REPLAY_DOWNLOAD_COMMENT]);
+// Reads whose filter or pipeline holds typed search text, or whose errors can
+// name other applications' databases: their failures log a code only.
+const PRIVATE_COMMENTS = new Set([PRIVATE_SEARCH_COMMENT, REPLAY_SEARCH_COMMENT, COMMUNITY_SEARCH_COMMENT, REPLAY_DOWNLOAD_COMMENT, STORAGE_TOTALS_COMMENT]);
 
 /**
  * Wire the driver's command-monitoring events into a slow-query log.

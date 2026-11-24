@@ -19,17 +19,32 @@ const {
 const {
   buildInfrastructureAdminSnapshot,
 } = require("./infrastructureAdvisories");
+const { STORAGE_TOTALS_COMMENT } = require("./infrastructureStorageComment");
+const { withoutTracing } = require("../util/sentry");
 
 const CLOUDFLARE_GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
 const CACHE_TTL_MS = 15 * 60 * 1000;
+// Server-internal databases do not count toward an Atlas data allowance.
+const SYSTEM_DATABASES = new Set(["admin", "local", "config"]);
+// Atlas Flex allows at most 100 databases; anything longer is not a cluster
+// this advisory was built for, so it reports a lower bound instead.
+const MAX_MEASURED_DATABASES = 100;
+// A transient failure keeps the previous cluster-wide total this long.
+const ALL_DATABASES_REUSE_MS = 24 * 60 * 60 * 1000;
+const PROJECTION_BASES = new Set(["posted", "flex_base_price", "flex_cap"]);
 const ERROR_RETRY_MS = 60 * 1000;
 const REQUEST_TIMEOUT_MS = 8 * 1000;
 const STORAGE_LOOKBACK_MS = 31 * 24 * 60 * 60 * 1000;
 
 // All monetary values are integer mills (1 mill = $0.001).  Integer math
 // prevents display drift around Cloudflare's rounded billing units.
-const FIXED_MONTHLY_MILLS = 65_190;
-const MONGO_MONTHLY_PLANNING_MILLS = 56_940;
+// The Mongo planning figure is the Atlas Flex base price ($8/month at 0-100
+// operations per second; Flex is billed hourly by ops band up to a $30
+// monthly cap). It is shown only while live Atlas billing is unavailable,
+// for example before the first day of a new cluster's charges has posted.
+// The non-Mongo part is Render Starter ($7) plus the domain ($1.25/month).
+const FIXED_MONTHLY_MILLS = 16_250;
+const MONGO_MONTHLY_PLANNING_MILLS = 8_000;
 const NON_MONGO_FIXED_MONTHLY_MILLS =
   FIXED_MONTHLY_MILLS - MONGO_MONTHLY_PLANNING_MILLS;
 const STANDARD_FREE_STORAGE_GB = 10;
@@ -140,6 +155,7 @@ class InfrastructureUsageService {
    * @param {{
    *   games: import('mongodb').Collection,
    *   mongoDb: import('mongodb').Db,
+   *   mongoClient?: import('mongodb').MongoClient | null,
    *   cloudflareAnalytics?: {
    *     accountId: string,
    *     apiToken: string,
@@ -174,6 +190,9 @@ class InfrastructureUsageService {
     }
     this.games = deps.games;
     this.mongoDb = deps.mongoDb;
+    this.mongoClient = deps.mongoClient || null;
+    /** @type {{logicalDataBytes: number, indexBytes: number, databaseCount: number, measuredAt: string}|null} */
+    this._lastAllDatabases = null;
     this.config = deps.cloudflareAnalytics || null;
     this.fetchImpl = deps.fetchImpl || globalThis.fetch;
     this.now = deps.now || (() => new Date());
@@ -439,11 +458,14 @@ class InfrastructureUsageService {
 
   /** @param {Date} [measuredAt] */
   async _readMongoStorage(measuredAt = this._now()) {
-    const stats = await this.mongoDb.command({
-      dbStats: 1,
-      scale: 1,
-      maxTimeMS: this.timeoutMs,
-    });
+    const [stats, clusterWide] = await Promise.all([
+      this.mongoDb.command({
+        dbStats: 1,
+        scale: 1,
+        maxTimeMS: this.timeoutMs,
+      }),
+      this._readAllDatabasesStorage(measuredAt),
+    ]);
     const allocatedDocumentBytes = nonNegativeSafeInteger(
       stats?.storageSize,
       "Mongo storageSize",
@@ -466,7 +488,111 @@ class InfrastructureUsageService {
       allocatedTotalBytes,
       scope: "sc2tools_database_only",
       measuredAt: measuredAt.toISOString(),
+      allDatabases: clusterWide.totals,
+      allDatabasesError: clusterWide.error,
     };
+  }
+
+  /**
+   * Documents plus indexes summed over every database on the cluster. Atlas
+   * Flex counts all of them against one data allowance, so the admin storage
+   * advisory needs this total rather than the SC2 Tools share. The listing
+   * asks for every database (authorizedDatabases: false): a user scoped to
+   * its own database gets "unauthorized" instead of a one-database listing
+   * that would look like the whole cluster. Names stay here (the commands
+   * are log-private and run untraced); only sums, a count and a reason code
+   * leave.
+   * A transient failure reuses the last good total for a day. Never part of
+   * the public cost payload.
+   *
+   * @param {Date} measuredAt
+   * @returns {Promise<{
+   *   totals: {logicalDataBytes: number, indexBytes: number, databaseCount: number, measuredAt: string}|null,
+   *   error: "not_configured"|"unauthorized"|"too_many_databases"|"invalid_stats"|"timeout"|"failed"|null,
+   * }>}
+   */
+  async _readAllDatabasesStorage(measuredAt) {
+    const client = this.mongoClient;
+    if (!client) return { totals: null, error: "not_configured" };
+    // Tracing would record each database's name in its spans; keep those
+    // spans from being created at all.
+    const outcome = await withoutTracing(() => this._sumAllDatabases(client));
+    if (outcome.totals) {
+      const totals = { ...outcome.totals, measuredAt: measuredAt.toISOString() };
+      this._lastAllDatabases = totals;
+      return { totals, error: null };
+    }
+    if (outcome.error === "timeout" || outcome.error === "failed") {
+      // A transient failure reuses the last good total for a while.
+      const last = this._lastAllDatabases;
+      if (last
+        && measuredAt.getTime() - new Date(last.measuredAt).getTime() < ALL_DATABASES_REUSE_MS) {
+        return { totals: last, error: null };
+      }
+    } else {
+      // A definitive answer (no access, too many databases, unusable stats)
+      // means the last good total no longer describes the cluster.
+      this._lastAllDatabases = null;
+    }
+    return { totals: null, error: outcome.error };
+  }
+
+  /**
+   * @param {import('mongodb').MongoClient} client
+   * @returns {Promise<{
+   *   totals: {logicalDataBytes: number, indexBytes: number, databaseCount: number}|null,
+   *   error: "unauthorized"|"too_many_databases"|"invalid_stats"|"timeout"|"failed"|null,
+   * }>}
+   */
+  async _sumAllDatabases(client) {
+    const options = { maxTimeMS: this.timeoutMs, comment: STORAGE_TOTALS_COMMENT };
+    try {
+      const listing = await client.db("admin").command({
+        listDatabases: 1,
+        nameOnly: true,
+        authorizedDatabases: false,
+        ...options,
+      });
+      const names = (Array.isArray(listing?.databases) ? listing.databases : [])
+        .map((row) => String(row?.name || ""))
+        .filter((name) => name && !SYSTEM_DATABASES.has(name));
+      if (names.length === 0) return { totals: null, error: "invalid_stats" };
+      if (names.length > MAX_MEASURED_DATABASES) {
+        return { totals: null, error: "too_many_databases" };
+      }
+      const stats = await Promise.all(names.map((name) => client.db(name).command({
+        dbStats: 1,
+        scale: 1,
+        ...options,
+      })));
+      let logicalDataBytes = 0;
+      let indexBytes = 0;
+      for (const row of stats) {
+        const data = Number(row?.dataSize);
+        const index = Number(row?.indexSize);
+        if (!Number.isSafeInteger(data) || data < 0
+          || !Number.isSafeInteger(index) || index < 0) {
+          return { totals: null, error: "invalid_stats" };
+        }
+        logicalDataBytes += data;
+        indexBytes += index;
+      }
+      if (!Number.isSafeInteger(logicalDataBytes + indexBytes)) {
+        return { totals: null, error: "invalid_stats" };
+      }
+      return {
+        totals: { logicalDataBytes, indexBytes, databaseCount: names.length },
+        error: null,
+      };
+    } catch (err) {
+      const failure = /** @type {any} */ (err);
+      if (failure?.code === 13 || failure?.codeName === "Unauthorized"
+        || /not authorized/i.test(String(failure?.message || ""))) {
+        return { totals: null, error: "unauthorized" };
+      }
+      const timeout = failure?.code === 50 || failure?.codeName === "MaxTimeMSExpired";
+      return { totals: null, error: timeout ? "timeout" : "failed" };
+    }
   }
 
   async _readAtlas() {
@@ -778,6 +904,11 @@ function publicMongoSnapshot(value) {
         sourceBilling.projectedMonthlyRunRateCents ?? null,
       projectedMonthlyRunRateUsd:
         sourceBilling.projectedMonthlyRunRateUsd ?? null,
+      // Whether the run rate is the posted-charge projection or Flex's base
+      // price or cap; lets public copy say which.
+      projectionBasis: PROJECTION_BASES.has(sourceBilling.projectionBasis)
+        ? sourceBilling.projectionBasis
+        : null,
     }
     : null;
 

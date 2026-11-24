@@ -527,25 +527,30 @@ After these 7 steps:
   still works for users who don't want cloud — both paths use the
   same parsers, so feature parity is maintained.
 
-The repo-declared planning baseline is about **$65.19/month**
-(**$782.28/year**): [Render Starter](https://render.com/pricing) at $7,
-the current [Atlas](https://www.mongodb.com/pricing) M10 planning assumption
-of $56.94, and $1.25/month as the domain's annualized cost.
+The repo-declared planning baseline is about **$16.25/month**
+(**$195/year**): [Render Starter](https://render.com/pricing) at $7,
+the [Atlas Flex](https://www.mongodb.com/pricing) base price of $8 (Flex is
+billed hourly by operations-per-second band, capped at $30 a month, with 5 GB
+of data, backups and data transfer included), and $1.25/month as the domain's
+annualized cost. Production moved from a dedicated M10 to Flex in November
+2026 ([ADR 0095](../adr/0095-atlas-flex-database.md)).
 [Vercel](https://vercel.com/pricing) and [Clerk](https://clerk.com/pricing)
-can remain $0 while usage stays within their free allowances. Atlas pricing
-varies by cloud provider and region, and backup storage, taxes, and overages
-are not included. If the Render dashboard actually uses Standard at $25
-rather than the repo-declared Starter plan, the same baseline is about
-$83.19/month before R2.
+can remain $0 while usage stays within their free allowances. Taxes are not
+included. If the Render dashboard actually uses Standard at $25 rather than
+the repo-declared Starter plan, the same baseline is about $34.25/month
+before R2.
 
 The landing and support pages replace that planning amount with a live Atlas
 monthly projection when the read-only provider integrations above are healthy.
 They show the pending-invoice amount posted so far and its through-date
 separately from the projection: the posted amount is not presented as a full
-month or final invoice. Atlas disk telemetry is shown in binary GiB, while
-Mongo `dbStats` is labeled as application-database allocation rather than
-billed cluster disk. If Atlas billing is unavailable, the UI falls back to the
-$65.19 planning baseline and still adds the current R2 estimate.
+month or final invoice. The projection measures a cluster from its first
+billed day and never exceeds Flex's $30 cap. Flex reports no disk telemetry,
+so the pages describe its 5 GB data allowance instead, while Mongo `dbStats`
+is labeled as application-database allocation. If Atlas billing is
+unavailable (for example before a new cluster's first day of charges posts),
+the UI falls back to the $16.25 planning baseline and still adds the current
+R2 estimate.
 
 [Cloudflare R2 storage](https://developers.cloudflare.com/r2/pricing/) is
 usage-based. The public landing and support pages derive the current storage

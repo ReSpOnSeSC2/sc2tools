@@ -3,6 +3,7 @@ import { ArrowRight, Heart } from "lucide-react";
 import { CoverageMeter } from "@/components/donate/CoverageMeter";
 import type { Coverage } from "@/lib/donationCoverage";
 import {
+  ATLAS_FLEX_STORAGE_LIMIT_GB,
   FIXED_MONTHLY_FALLBACK_USD,
   formatAtlasDiskBytes,
   formatBinaryStorageBytes,
@@ -10,6 +11,7 @@ import {
   formatReplayCount,
   formatStorageBytes,
   formatUsd,
+  isAtlasFlex,
   monthlyCostSummary,
   type InfrastructureCosts,
 } from "@/lib/infrastructureCosts";
@@ -72,7 +74,10 @@ export function DonateBanner({ costs, coverage }: { costs: InfrastructureCosts |
                   )}{" "}
                   allocated and{" "}
                   {formatBinaryStorageBytes(costs.mongo.appData.logicalDataBytes)}{" "}
-                  logical data; live Atlas disk telemetry is unavailable.{" "}
+                  logical data
+                  {isAtlasFlex(cluster)
+                    ? ` on Atlas Flex, which includes up to ${ATLAS_FLEX_STORAGE_LIMIT_GB} GB of data and indexes.`
+                    : "; live Atlas disk telemetry is unavailable."}{" "}
                 </>
               )}
               {billing?.available &&

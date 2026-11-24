@@ -213,12 +213,15 @@ function MongoCard({
 }) {
   const cluster = provider.cluster;
   const performance = cluster?.performance ?? null;
+  const flexStorage = cluster?.flexStorage ?? null;
   const costValue = provider.cost.pricingMode === "atlas_projected"
     ? provider.cost.projectedMonthlyUsd
     : provider.cost.planningMonthlyUsd;
   const costLabel = provider.cost.pricingMode === "atlas_projected"
     ? "Projected month"
-    : "Planning baseline";
+    : flexStorage
+      ? "Flex base price"
+      : "Planning baseline";
 
   return (
     <ProviderCard
@@ -233,18 +236,35 @@ function MongoCard({
       <MetricRow
         label="Cluster"
         value={cluster?.tier?.toUpperCase() || "Unavailable"}
-        detail={cluster
-          ? `${cluster.autoExpandStorage ? "storage auto-expand on" : "storage auto-expand off"}${cluster.provisionedDiskGb !== null ? ` · ${cluster.provisionedDiskGb} GB provisioned` : ""}`
-          : "Atlas capacity monitoring unavailable"}
+        detail={!cluster
+          ? "Atlas capacity monitoring unavailable"
+          : flexStorage
+            ? "$8–$30/month by usage · backups and data transfer included"
+            : `${cluster.autoExpandStorage ? "storage auto-expand on" : "storage auto-expand off"}${cluster.provisionedDiskGb !== null ? ` · ${cluster.provisionedDiskGb} GB provisioned` : ""}`}
       />
-      <UtilizationRow
-        label="Disk"
-        value={cluster?.diskUtilizationPercent ?? null}
-        detail={cluster?.diskUsedBytes !== null && cluster?.diskUsedBytes !== undefined
-          && cluster.diskCapacityBytes !== null
-          ? `${formatBinaryBytes(cluster.diskUsedBytes)} / ${formatBinaryBytes(cluster.diskCapacityBytes)}`
-          : "Provider disk metric unavailable"}
-      />
+      {flexStorage ? (
+        <UtilizationRow
+          label="Flex storage"
+          value={flexStorage.utilizationPercent}
+          detail={flexStorage.usedBytes !== null && flexStorage.limitBytes !== null
+            ? `${formatBytes(flexStorage.usedBytes)} of ${formatBytes(flexStorage.limitBytes)} · ${flexStorageScope(flexStorage)}`
+            : "Flex storage usage unavailable"}
+        />
+      ) : (
+        <UtilizationRow
+          label="Disk"
+          value={cluster?.diskUtilizationPercent ?? null}
+          detail={cluster?.diskUsedBytes !== null && cluster?.diskUsedBytes !== undefined
+            && cluster.diskCapacityBytes !== null
+            ? `${formatBinaryBytes(cluster.diskUsedBytes)} / ${formatBinaryBytes(cluster.diskCapacityBytes)}`
+            : "Provider disk metric unavailable"}
+        />
+      )}
+      {flexStorage ? (
+        <p className="text-caption text-text-dim">
+          Atlas does not report host CPU or cache metrics for Flex clusters.
+        </p>
+      ) : null}
       {performance && !performance.complete ? (
         <p
           className="rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2 text-caption text-warning"
@@ -520,6 +540,20 @@ function nodeCoverage(
     return "Partial node coverage";
   }
   return `${performance.processCount}/${performance.expectedProcessCount} nodes measured`;
+}
+
+function flexStorageScope(
+  storage: NonNullable<
+    NonNullable<AdminInfrastructureResp["providers"]["mongo"]["cluster"]>["flexStorage"]
+  >,
+): string {
+  if (storage.scope !== "all_databases") {
+    return "SC2 Tools database only (documents + indexes); other databases also count, so the cluster total may be higher";
+  }
+  const count = storage.databaseCount ?? null;
+  return count === null
+    ? "all databases on the cluster (documents + indexes)"
+    : `all ${count} ${count === 1 ? "database" : "databases"} on the cluster (documents + indexes)`;
 }
 
 function formatNullable(value: number | null, suffix: string): string {

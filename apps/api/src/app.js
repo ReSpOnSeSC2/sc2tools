@@ -504,6 +504,8 @@ function makeServices(deps, clerk, adminClerkIds) {
   const infrastructureUsage = new InfrastructureUsageService({
     games: deps.db.games,
     mongoDb: deps.db.db,
+    // Lets the admin Flex storage advisory total every database on the cluster.
+    mongoClient: deps.db.client,
     cloudflareAnalytics: deps.config.cloudflareAnalytics || null,
     atlasAdmin: deps.config.atlasAdmin || null,
     atlasClient,

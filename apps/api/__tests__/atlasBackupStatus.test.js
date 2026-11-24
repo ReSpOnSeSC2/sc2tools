@@ -47,6 +47,10 @@ function atlasFetch(statuses = {}) {
     if (url.endsWith("/api/oauth/token")) {
       return response({ access_token: "bearer-secret", expires_in: 3600 });
     }
+    // A dedicated cluster is not a Flex cluster: the Flex probe answers 404.
+    if (url.includes("/flexClusters/")) {
+      return response({ errorCode: "FLEX_CLUSTER_NOT_FOUND" }, 404);
+    }
     if (url.includes(`${CLUSTER_PATH}/backup/snapshots`)) {
       expect(url).toContain("itemsPerPage=500");
       return response(SNAPSHOTS, statuses.snapshots || 200);
@@ -178,11 +182,110 @@ describe("AtlasInfrastructureClient.backupStatus", () => {
       if (url.endsWith("/api/oauth/token")) {
         return response({ access_token: "bearer-secret", expires_in: 3600 });
       }
+      if (url.includes("/flexClusters/")) return response({}, 404);
       if (url.includes("/backup/snapshots")) return response(SNAPSHOTS);
       if (url.endsWith("/backup/schedule")) return response(SCHEDULE);
       return response({ backupEnabled: true, pitEnabled: false });
     });
     const result = await client(fetchImpl).backupStatus();
     expect(result.pointInTime).toEqual({ enabled: false, windowDays: null });
+  });
+});
+
+const FLEX_PATH = `/api/atlas/v2/groups/${PROJECT_ID}/flexClusters/sample-cluster`;
+
+// Shaped like GET /flexClusters/{name}/backup/snapshots (API 2024-11-13).
+const FLEX_SNAPSHOTS = {
+  results: [
+    {
+      id: "66b8a0f3aaaaaaaaaaaaaaaa",
+      startTime: "2026-08-10T06:00:00Z",
+      finishTime: "2026-08-10T06:02:10Z",
+      scheduledTime: "2026-08-10T06:00:00Z",
+      expiration: "2026-08-18T06:00:00Z",
+      status: "COMPLETED",
+      mongoDBVersion: "8.0.39",
+    },
+    {
+      id: "66b8a0f3bbbbbbbbbbbbbbbb",
+      startTime: "2026-08-11T06:00:00Z",
+      finishTime: "2026-08-11T06:01:55Z",
+      scheduledTime: "2026-08-11T06:00:00Z",
+      expiration: "2026-08-19T06:00:00Z",
+      status: "COMPLETED",
+      mongoDBVersion: "8.0.39",
+    },
+    {
+      id: "66b8a0f3cccccccccccccccc",
+      startTime: null,
+      finishTime: null,
+      scheduledTime: "2026-08-12T06:00:00Z",
+      status: "QUEUED",
+    },
+  ],
+};
+
+describe("Atlas Flex backups", () => {
+  test("maps Flex snapshot times and statuses onto the shared shape", () => {
+    expect(_internals.parseFlexBackupSnapshots(FLEX_SNAPSHOTS)).toEqual({
+      lastSnapshotAt: "2026-08-11T06:01:55.000Z",
+      latestStatus: "queued",
+      completedSnapshotCount: 2,
+    });
+    expect(_internals.parseFlexBackupSnapshots({
+      results: [
+        { startTime: "2026-08-11T06:00:00Z", status: "RUNNING" },
+        { startTime: "2026-08-10T06:00:00Z", status: "FAILED" },
+        { startTime: "2026-08-09T06:00:00Z", status: "<script>" },
+      ],
+    })).toEqual({
+      lastSnapshotAt: null,
+      latestStatus: "inProgress",
+      completedSnapshotCount: 0,
+    });
+  });
+
+  test("reports the fixed Flex policy without touching the classic cluster API", async () => {
+    const seenVersions = [];
+    const fetchImpl = jest.fn(async (url, init) => {
+      if (url.endsWith("/api/oauth/token")) {
+        return response({ access_token: "bearer-secret", expires_in: 3600 });
+      }
+      if (url.includes("/clusters/")) throw new Error(`classic API called: ${url}`);
+      seenVersions.push(init.headers.accept);
+      if (url.includes(`${FLEX_PATH}/backup/snapshots`)) {
+        expect(url).toContain("itemsPerPage=500");
+        return response(FLEX_SNAPSHOTS);
+      }
+      if (url.endsWith(FLEX_PATH)) {
+        return response({ name: "sample-cluster", providerSettings: { providerName: "FLEX" } });
+      }
+      throw new Error(`unexpected URL ${url}`);
+    });
+    const result = await client(fetchImpl).backupStatus();
+    expect(result).toEqual({
+      lastSnapshotAt: "2026-08-11T06:01:55.000Z",
+      latestStatus: "queued",
+      completedSnapshotCount: 2,
+      nextSnapshotAt: null,
+      retention: [{ frequency: "daily", everyHours: null, keep: 8, unit: "days" }],
+      cloudBackupEnabled: true,
+      pointInTime: { enabled: false, windowDays: null },
+    });
+    expect(new Set(seenVersions)).toEqual(new Set(["application/vnd.atlas.2024-11-13+json"]));
+    expect(JSON.stringify(result)).not.toMatch(/sample-cluster|89abcdef|66b8a0f3|bearer-secret|8\.0\.39/);
+  });
+
+  test("does not misread an Atlas outage during detection as a dedicated cluster", async () => {
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.endsWith("/api/oauth/token")) {
+        return response({ access_token: "bearer-secret", expires_in: 3600 });
+      }
+      if (url.includes("/flexClusters/")) return response({}, 503);
+      throw new Error(`unexpected URL ${url}`);
+    });
+    await expect(client(fetchImpl).backupStatus())
+      .rejects.toMatchObject({ code: "atlas_admin_http_503" });
+    expect(fetchImpl.mock.calls.some(([url]) => url.includes("/clusters/"))).toBe(false);
   });
 });

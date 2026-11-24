@@ -1,15 +1,16 @@
 # SC2Tools — Cloud Deployment Guide
 
-> **Production (October 2026):** the API runs on Render's **starter**
-> plan, one instance (`apps/api/render.yaml`). The accepted database
-> architecture is a dedicated Atlas M10 cluster with Cloud Backup
-> ([ADR 0073](adr/0073-database-backups-atlas-cloud-backup.md)); the
-> production API's public backup summary shows a readable Cloud Backup
-> policy, and Admin → Infrastructure shows the live cluster tier. Check
-> the tier there before relying on M10-only index or performance
-> headroom. The `api-keepalive.yml` workflow exists solely to keep the
-> starter instance awake. A July 2026 version of this note described a
-> free-tier Atlas cluster, which has no Cloud Backup.
+> **Production (November 2026):** the API runs on Render's **starter**
+> plan, one instance (`apps/api/render.yaml`). The database runs on an
+> **Atlas Flex** cluster (`unified-flex`, AWS `us-west-2`) with Flex's fixed
+> daily snapshots ([ADR 0095](adr/0095-atlas-flex-database.md), which
+> supersedes the M10 assumption in
+> [ADR 0073](adr/0073-database-backups-atlas-cloud-backup.md)). Flex limits:
+> 5 GB of data plus indexes, 500 operations per second, no aggregation disk
+> spill, no point-in-time restore. Admin → Infrastructure shows the live tier
+> and Flex storage. The `api-keepalive.yml` workflow exists solely to keep
+> the starter instance awake. The Part 1 walkthrough below still describes
+> creating a dedicated M10; for Flex choose the Flex tier instead.
 
 The keepalive workflow targets the Render API only. Do not add Vercel page
 warmups to its five-minute schedule: those requests consume the website's

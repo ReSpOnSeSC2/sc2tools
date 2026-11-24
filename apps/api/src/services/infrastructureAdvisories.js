@@ -198,9 +198,13 @@ function buildMongo(source) {
     ));
   }
   const cluster = monitoringAvailable
-    ? sanitiseMongoCluster(atlas.cluster)
+    ? sanitiseMongoCluster(atlas.cluster, appData)
     : null;
-  if (cluster && !stale) {
+  if (cluster && !stale && cluster.flexStorage) {
+    // Atlas reports no host CPU, cache or disk metrics for Flex clusters, so
+    // their absence is expected. The binding limit is the 5 GB data allowance.
+    pushFlexStorageAdvisory(advisories, cluster.flexStorage);
+  } else if (cluster && !stale) {
     const performance = cluster.performance;
     if (!performance?.cpu) {
       advisories.push(advisory(
@@ -252,6 +256,7 @@ function buildMongo(source) {
     });
   }
   const billing = atlas.billing || {};
+  pushOtherClusterChargesAdvisory(advisories, billing, atlas.measuredAt);
   const projected = moneyOrNull(billing.projectedMonthlyRunRateUsd);
   const planning = moneyOrNull(source?.pricing?.monthlyPlanningEstimateUsd);
   const provider = {
@@ -412,15 +417,61 @@ function sanitiseAppData(source) {
     allocatedTotalBytes: integerOrNull(source.allocatedTotalBytes),
     measuredAt: validIso(source.measuredAt),
     scope: "sc2tools_database_only",
+    allDatabases: sanitiseAllDatabases(source.allDatabases),
+    allDatabasesError: ALL_DATABASES_ERRORS.has(source.allDatabasesError)
+      ? source.allDatabasesError
+      : null,
   };
 }
 
-/** @param {Record<string, any>} source */
-function sanitiseMongoCluster(source) {
+// Atlas posts usage about a day late; three days without a new line for
+// another cluster means it stopped billing (for example it was deleted).
+const OTHER_CLUSTER_ACTIVE_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** Why the cluster-wide storage total is missing (see _readAllDatabasesStorage). */
+const ALL_DATABASES_ERRORS = new Set([
+  "not_configured",
+  "unauthorized",
+  "too_many_databases",
+  "invalid_stats",
+  "timeout",
+  "failed",
+]);
+
+/**
+ * Cluster-wide totals (every database the application's user can read).
+ * Counts and byte sums only; database names never reach this payload.
+ *
+ * @param {Record<string, any>|null|undefined} source
+ */
+function sanitiseAllDatabases(source) {
+  if (!source) return null;
+  const logicalDataBytes = integerOrNull(source.logicalDataBytes);
+  const indexBytes = integerOrNull(source.indexBytes);
+  const databaseCount = integerOrNull(source.databaseCount);
+  if (logicalDataBytes === null || indexBytes === null
+    || databaseCount === null || databaseCount < 1) return null;
+  return {
+    logicalDataBytes,
+    indexBytes,
+    databaseCount,
+    measuredAt: validIso(source.measuredAt),
+  };
+}
+
+/**
+ * @param {Record<string, any>} source
+ * @param {ReturnType<typeof sanitiseAppData>} [appData]
+ */
+function sanitiseMongoCluster(source, appData = null) {
   const used = integerOrNull(source.diskUsedBytes);
   const capacity = integerOrNull(source.diskCapacityBytes);
+  const tier = safeLabel(source.tier);
   return {
-    tier: safeLabel(source.tier),
+    tier,
+    flexStorage: tier === "flex"
+      ? flexStorageUsage(source.provisionedDiskGb, appData)
+      : null,
     provisionedDiskGb: finiteNumberOrNull(source.provisionedDiskGb),
     diskUsedBytes: used,
     diskCapacityBytes: capacity,
@@ -500,6 +551,152 @@ function sanitiseCredential(source) {
     daysRemaining: days,
     expiringSoon: days !== null && days <= 30,
   };
+}
+
+/**
+ * Flex counts uncompressed documents plus index bytes of every database on
+ * the cluster against one data allowance (5 GB). The cluster-wide dbStats
+ * total is used when it was measured; otherwise the SC2 Tools database alone
+ * stands in as a lower bound and the scope says so. Decimal GB keeps the
+ * limit conservative.
+ *
+ * @param {unknown} rawLimitGb
+ * @param {ReturnType<typeof sanitiseAppData>} appData
+ */
+function flexStorageUsage(rawLimitGb, appData) {
+  const limitGb = finiteNumberOrNull(rawLimitGb);
+  const limitBytes = limitGb !== null && limitGb > 0
+    ? Math.round(limitGb * 1_000_000_000)
+    : null;
+  const all = appData?.allDatabases ?? null;
+  const logical = integerOrNull(appData?.logicalDataBytes);
+  const indexes = integerOrNull(appData?.allocatedIndexBytes);
+  const appOnlyBytes = logical !== null && indexes !== null ? logical + indexes : null;
+  // The cluster holds at least the SC2 Tools database, so a cluster total
+  // (for example one reused from an earlier read) never reports less.
+  const usedBytes = all
+    ? Math.max(all.logicalDataBytes + all.indexBytes, appOnlyBytes ?? 0)
+    : appOnlyBytes;
+  return {
+    usedBytes,
+    limitBytes,
+    utilizationPercent: usedBytes !== null && limitBytes !== null
+      ? roundPercent((usedBytes / limitBytes) * 100)
+      : null,
+    scope: all ? "all_databases" : "sc2tools_database_only",
+    databaseCount: all ? all.databaseCount : null,
+    unmeasuredReason: all ? null : (appData?.allDatabasesError ?? "failed"),
+  };
+}
+
+/**
+ * Public cost pages count only the configured cluster. Charges posted this
+ * cycle for the project's other clusters (for example a dedicated cluster
+ * kept for rollback after a move to Flex) are real spending, so admins see
+ * them here instead of nowhere.
+ *
+ * Only a cluster that is still billing raises it: once a deleted cluster's
+ * lines stop posting, its earlier charges this cycle no longer call for
+ * action, so the advisory clears after OTHER_CLUSTER_ACTIVE_MS.
+ *
+ * @param {any[]} out
+ * @param {Record<string, any>} billing
+ * @param {unknown} measuredAt
+ */
+function pushOtherClusterChargesAdvisory(out, billing, measuredAt) {
+  const cents = integerOrNull(billing?.otherClustersPostedCents);
+  if (cents === null || cents <= 0) return;
+  const through = validIso(billing?.otherClustersBilledThrough);
+  const now = validIso(measuredAt);
+  if (through && now
+    && new Date(now).getTime() - new Date(through).getTime() > OTHER_CLUSTER_ACTIVE_MS) {
+    return;
+  }
+  out.push(advisory(
+    "mongo",
+    "watch",
+    "mongo_other_cluster_charges",
+    "Atlas is billing other clusters in this project",
+    `$${(cents / 100).toFixed(2)} has posted this cycle for other clusters in the Atlas project. Public cost pages count only the configured cluster.`,
+    "Delete clusters nothing uses any more. A paused cluster still bills storage and backups, and Atlas resumes it after 30 days.",
+  ));
+}
+
+/**
+ * The partial-storage advisory's copy for each reason the cluster total is
+ * missing. A permissions gap names a metadata-only grant, because the broad
+ * "any database" roles would also let the public API read other apps' data.
+ *
+ * @param {string|null} reason
+ * @param {number} value the SC2 Tools share in percent
+ */
+function partialStorageCopy(reason, value) {
+  const share = `only the SC2 Tools database (${value}%) was measured; the cluster total may be higher`;
+  if (reason === "unauthorized") {
+    return {
+      message: `Atlas Flex counts every database on the cluster against its data allowance, but the application's database user cannot list or measure them all: ${share}.`,
+      action: "Grant the user a custom role with only listDatabases on the cluster and dbStats on every database. Do not use readAnyDatabase or readWriteAnyDatabase for this: they also grant reading other applications' data.",
+    };
+  }
+  if (reason === "too_many_databases") {
+    return {
+      message: `The cluster lists more databases than the advisory totals: ${share}.`,
+      action: "Check the cluster's data size in Atlas.",
+    };
+  }
+  if (reason === "not_configured") {
+    return {
+      message: `This deployment does not measure storage across the cluster: ${share}.`,
+      action: "Check the cluster's data size in Atlas.",
+    };
+  }
+  return {
+    message: `The cluster-wide storage read did not complete (${reason ?? "failed"}): ${share}.`,
+    action: "The read is retried on the next refresh; if this persists, check the cluster's data size in Atlas.",
+  };
+}
+
+/**
+ * Flex storage cannot auto-expand: at the limit Atlas refuses writes, so the
+ * action threshold escalates to "upgrade" rather than a storage tweak.
+ *
+ * @param {any[]} out
+ * @param {ReturnType<typeof flexStorageUsage>} usage
+ */
+function pushFlexStorageAdvisory(out, usage) {
+  const value = percentOrNull(usage.utilizationPercent);
+  const clusterWide = usage.scope === "all_databases";
+  if (value !== null && !clusterWide) {
+    // A breach on the lower bound is real, but staying under it proves
+    // nothing about the cluster, so say the total is unmeasured.
+    const copy = partialStorageCopy(usage.unmeasuredReason ?? null, value);
+    out.push(advisory(
+      "mongo",
+      "watch",
+      "mongo_flex_storage_partial",
+      "Flex storage covers only the SC2 Tools database",
+      copy.message,
+      copy.action,
+    ));
+  }
+  if (value === null || value < THRESHOLDS.mongo.disk.watch) return;
+  const actionNow = value >= THRESHOLDS.mongo.disk.upgrade;
+  const count = usage.databaseCount ?? 0;
+  out.push(advisory(
+    "mongo",
+    actionNow ? "upgrade" : "watch",
+    actionNow ? "mongo_flex_storage_action" : "mongo_flex_storage_watch",
+    actionNow ? "Atlas Flex storage is nearly full" : "Watch Atlas Flex storage",
+    clusterWide
+      ? `The cluster's ${count} ${count === 1 ? "database uses" : "databases use"} ${value}% of the Flex data allowance (documents plus indexes).`
+      : `The SC2 Tools database alone uses ${value}% of the Flex data allowance (documents plus indexes); other databases on the cluster also count.`,
+    actionNow
+      ? "Free space, for example by moving bulky fields to R2, or move to a dedicated tier before Atlas stops accepting writes."
+      : "Plan for the limit: Flex storage cannot expand, so trim bulky fields or budget for a dedicated tier.",
+    "flex_storage_utilization_percent",
+    value,
+    actionNow ? THRESHOLDS.mongo.disk.upgrade : THRESHOLDS.mongo.disk.watch,
+  ));
 }
 
 /**

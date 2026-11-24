@@ -65,6 +65,21 @@ function captureException(err) {
   if (s) s.captureException(err);
 }
 
+/**
+ * Run `fn` with tracing suppressed, so the spans its database calls would
+ * record (they carry database names and connection strings) never leave the
+ * server. A plain call when Sentry is off.
+ *
+ * @template T
+ * @param {() => T} fn
+ * @returns {T}
+ */
+function withoutTracing(fn) {
+  const s = tryRequireSentry();
+  if (!s || typeof s.suppressTracing !== "function") return fn();
+  return s.suppressTracing(fn);
+}
+
 /** Keep request-scoped tracing and body capture out of private search.
  * Example: app.use(privateSearchRequestScope) before JSON parsing.
  * @type {import('express').RequestHandler}
@@ -91,4 +106,6 @@ async function flush(timeoutMs = 2000) {
   }
 }
 
-module.exports = { init, captureException, flush, privateSearchRequestScope };
+module.exports = {
+  init, captureException, flush, privateSearchRequestScope, withoutTracing,
+};

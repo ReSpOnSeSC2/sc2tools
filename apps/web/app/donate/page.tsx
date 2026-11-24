@@ -28,6 +28,7 @@ import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { Badge, Card, GlowHalo, Section } from "@/components/ui";
 import { buttonClassName } from "@/components/ui/buttonStyles";
 import {
+  ATLAS_FLEX_STORAGE_LIMIT_GB,
   FIXED_MONTHLY_FALLBACK_USD,
   formatAtlasDiskBytes,
   formatBinaryStorageBytes,
@@ -36,6 +37,7 @@ import {
   formatStorageBytes,
   formatUsd,
   getInfrastructureCosts,
+  isAtlasFlex,
   monthlyCostSummary,
   type InfrastructureCosts,
 } from "@/lib/infrastructureCosts";
@@ -226,10 +228,10 @@ const COST_LINES: ReadonlyArray<CostLine> = [
   {
     id: "mongo",
     icon: Database,
-    label: "MongoDB Atlas — M10",
+    label: "MongoDB Atlas — Flex",
     detail:
-      "Dedicated M10 base tier for accounts, searchable replay metadata, opponent histories and aggregates. Backups, added storage and data transfer are usage-priced separately.",
-    approxMonthlyUsd: 56.94,
+      "Atlas Flex holds accounts, searchable replay metadata, opponent histories and aggregates. It is billed hourly by usage, from $8 up to a $30 monthly cap, and includes up to 5 GB of data, daily backups and data transfer.",
+    approxMonthlyUsd: 8,
     includedInBase: true,
     pricingHref: "https://www.mongodb.com/pricing",
   },
@@ -416,18 +418,33 @@ function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
       const allocated = formatBinaryStorageBytes(
         costs.mongo.appData.allocatedTotalBytes,
       );
-      const disk =
-        cluster?.diskUsedBytes !== null &&
-        cluster?.diskUsedBytes !== undefined &&
-        cluster.diskCapacityBytes !== null
+      const flex = isAtlasFlex(cluster);
+      const disk = flex
+        ? `Atlas Flex includes up to ${ATLAS_FLEX_STORAGE_LIMIT_GB} GB of data and indexes`
+        : cluster?.diskUsedBytes !== null &&
+            cluster?.diskUsedBytes !== undefined &&
+            cluster.diskCapacityBytes !== null
           ? `${formatAtlasDiskBytes(cluster.diskUsedBytes)} of ${formatAtlasDiskBytes(cluster.diskCapacityBytes)} Atlas disk used`
           : "Atlas disk telemetry unavailable";
+      // Flex's allowance counts uncompressed data plus indexes (decimal GB),
+      // so show that figure, not the smaller compressed allocation.
+      const usage = flex
+        ? `SC2 Tools data and indexes: ${formatStorageBytes(costs.mongo.appData.logicalDataBytes + costs.mongo.appData.allocatedIndexBytes)}`
+        : `SC2 Tools database allocation: ${allocated}`;
       return {
         ...line,
+        // Name the tier Atlas reports, not the one this page was written for.
+        // The planning fallback is Flex's price, so a dedicated tier is only
+        // named next to its own live billing.
+        label: flex
+          ? line.label
+          : cluster?.tier && projected !== null
+            ? `MongoDB Atlas — ${cluster.tier}`
+            : "MongoDB Atlas",
         approxMonthlyUsd: projected ?? costs.mongo.planning.monthlyUsd,
         detail:
-          `${cluster?.tier ?? "Dedicated Atlas"} stores searchable replay metadata, opponent histories and aggregates. `
-          + `SC2 Tools database allocation: ${allocated}; ${disk}.`,
+          `${flex ? "Atlas Flex" : (cluster?.tier ?? "Atlas")} stores searchable replay metadata, opponent histories and aggregates. `
+          + `${usage}; ${disk}.`,
         priceLabel:
           projected === null
             ? `~${formatUsd(costs.mongo.planning.monthlyUsd)}/mo`
@@ -505,6 +522,17 @@ function MongoUsageDetails({ costs }: { costs: InfrastructureCosts }) {
           )}
           .
         </p>
+      ) : isAtlasFlex(cluster) ? (
+        <p>
+          The database runs on Atlas Flex, which includes up to{" "}
+          {ATLAS_FLEX_STORAGE_LIMIT_GB} GB of data and indexes and does not
+          report disk usage, so no disk-used amount is shown. SC2 Tools&rsquo;
+          uncompressed data plus indexes come to{" "}
+          {formatStorageBytes(
+            appData.logicalDataBytes + appData.allocatedIndexBytes,
+          )}
+          .
+        </p>
       ) : (
         <p>
           Live Atlas disk telemetry is unavailable; no disk-used amount has
@@ -522,7 +550,7 @@ function MongoUsageDetails({ costs }: { costs: InfrastructureCosts }) {
             billing!.categoryCents,
           )}. The{" "}
           {billing?.projectedMonthlyRunRateUsd !== null
-            ? `${formatUsd(billing.projectedMonthlyRunRateUsd)} monthly Atlas run rate is a projection from posted charges`
+            ? `${formatUsd(billing.projectedMonthlyRunRateUsd)} monthly Atlas run rate ${runRateBasis(billing.projectionBasis)}`
             : "monthly Atlas run-rate projection is unavailable"}
           ; Atlas charges usually post about one day later, and provider
           billing remains authoritative.
@@ -536,6 +564,16 @@ function MongoUsageDetails({ costs }: { costs: InfrastructureCosts }) {
       )}
     </>
   );
+}
+
+function runRateBasis(
+  basis: NonNullable<InfrastructureCosts["mongo"]["atlas"]["billing"]>["projectionBasis"],
+): string {
+  if (basis === "flex_base_price") {
+    return "is Atlas Flex's minimum for this billing cycle, because the charges posted so far (for example a partly billed first day) project lower";
+  }
+  if (basis === "flex_cap") return "is Atlas Flex's monthly price cap";
+  return "is a projection from posted charges";
 }
 
 function formatAtlasCategories(
