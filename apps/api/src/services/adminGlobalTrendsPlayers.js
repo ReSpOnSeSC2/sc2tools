@@ -1,6 +1,6 @@
 "use strict";
 
-const { globalHistoryStages, playerIncluded, GLOBAL_ROSTER_PROJECTION } = require("./adminGlobalTrendsScope");
+const { playerIncluded } = require("./adminGlobalTrendsScope");
 const { QUERY_MAX_TIME_MS } = require("./adminGlobalTrendsQueries");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 
@@ -8,8 +8,10 @@ const { regionFromToonHandle } = require("../util/regionFromToonHandle");
  * There is no total-row cap: HTTP pagination happens after all identities
  * have been resolved, so search/MMR sorting always cover the entire roster.
  * @param {import('../db/connect').DbContext} db
- * @param {Array<Record<string, any>>} [historyStages] */
-async function readGlobalPlayers(db, historyStages = globalHistoryStages({}, GLOBAL_ROSTER_PROJECTION)) {
+ * @param {Array<Record<string, any>>} historyStages canonical rows, normally
+ *   one snapshot of GlobalTrendsHistory (deduplicating the raw games here
+ *   would sort the whole corpus in memory, past Atlas Flex's 32 MB cap) */
+async function readGlobalPlayers(db, historyStages) {
   const rows = await db.games.aggregate([
     ...historyStages,
     { $group: {
@@ -30,7 +32,7 @@ async function readGlobalPlayers(db, historyStages = globalHistoryStages({}, GLO
       from: db.users.collectionName, localField: "userIds", foreignField: "userId", as: "owners",
       pipeline: [{ $project: { _id: 0, displayName: 1 } }],
     } },
-  ], { allowDiskUse: true, maxTimeMS: QUERY_MAX_TIME_MS }).toArray();
+  ], { maxTimeMS: QUERY_MAX_TIME_MS }).toArray();
   return rows.map((row) => shapePlayer(row));
 }
 

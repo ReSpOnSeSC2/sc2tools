@@ -259,7 +259,12 @@ describe("admin Global Trends", () => {
       const rangeReads = read.mock.calls.filter(([pipeline]) => pipeline.at(-1)?.$group?.first?.$min === "$date");
       expect(rangeReads).toHaveLength(1);
       expect(sourceRead).toHaveBeenCalledTimes(1);
-      expect(read.mock.calls.every(([, options]) => options.maxTimeMS < 30000)).toBe(true);
+      // The snapshot build's duplicate passes share its own longer deadline.
+      const chartReads = read.mock.calls.filter(([pipeline]) => !pipeline.some((stage) => stage.$setWindowFields?.output?._globalDuplicate));
+      expect(chartReads.length).toBeLessThan(read.mock.calls.length);
+      expect(chartReads.every(([, options]) => options.maxTimeMS < 30000)).toBe(true);
+      // Atlas Flex does not support allowDiskUse.
+      expect([...read.mock.calls, ...sourceRead.mock.calls].some(([, options]) => options && "allowDiskUse" in options)).toBe(false);
     } finally { read.mockRestore(); sourceRead.mockRestore(); }
   });
 
