@@ -432,7 +432,8 @@ describe("admin infrastructure health", () => {
     expect(within(mongo!).getByText(/backups and data transfer included/)).toBeTruthy();
     expect(within(mongo!).getByText("Flex storage")).toBeTruthy();
     expect(within(mongo!).getByText("44.9%")).toBeTruthy();
-    expect(within(mongo!).getByText(/2.09 GiB of 4.66 GiB · all 8 databases on the cluster \(documents \+ indexes\)/)).toBeTruthy();
+    // Decimal units, like Atlas's "5 GB" Flex allowance.
+    expect(within(mongo!).getByText(/2\.25 GB of 5\.00 GB · all 8 databases on the cluster \(documents \+ indexes\)/)).toBeTruthy();
     expect(within(mongo!).getByText(/does not report host CPU or cache metrics for Flex/)).toBeTruthy();
     expect(within(mongo!).queryByText("Provider disk metric unavailable")).toBeNull();
     expect(within(mongo!).queryByText(/storage auto-expand/)).toBeNull();
@@ -472,7 +473,7 @@ describe("admin infrastructure health", () => {
     render(<AdminHealthPage />);
 
     const mongo = screen.getByRole("heading", { name: "MongoDB Atlas" }).closest("section");
-    expect(within(mongo!).getByText(/SC2 Tools database only \(documents \+ indexes\); other databases also count, so the cluster total is higher/)).toBeTruthy();
+    expect(within(mongo!).getByText(/SC2 Tools database only \(documents \+ indexes\); other databases also count, so the cluster total may be higher/)).toBeTruthy();
   });
 });
 

@@ -247,7 +247,7 @@ function MongoCard({
           label="Flex storage"
           value={flexStorage.utilizationPercent}
           detail={flexStorage.usedBytes !== null && flexStorage.limitBytes !== null
-            ? `${formatBinaryBytes(flexStorage.usedBytes)} of ${formatBinaryBytes(flexStorage.limitBytes)} · ${flexStorageScope(flexStorage)}`
+            ? `${formatBytes(flexStorage.usedBytes)} of ${formatBytes(flexStorage.limitBytes)} · ${flexStorageScope(flexStorage)}`
             : "Flex storage usage unavailable"}
         />
       ) : (
@@ -548,7 +548,7 @@ function flexStorageScope(
   >,
 ): string {
   if (storage.scope !== "all_databases") {
-    return "SC2 Tools database only (documents + indexes); other databases also count, so the cluster total is higher";
+    return "SC2 Tools database only (documents + indexes); other databases also count, so the cluster total may be higher";
   }
   const count = storage.databaseCount ?? null;
   return count === null

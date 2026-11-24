@@ -226,7 +226,7 @@ deployed with the R2 stores enabled.
    | `ATLAS_PROJECT_ID`       | Atlas project containing the API database  |
    | `ATLAS_CLUSTER_NAME`     | Production Atlas cluster name               |
    | `ATLAS_SERVICE_ACCOUNT_SECRET_EXPIRES_AT` | ISO-8601 expiry shown in Admin Health for rotation reminders |
-   | `LEGACY_BACKUP_RETENTION` | Optional. A previous cluster's backup schedule while its snapshots still exist, e.g. `7 days, 4 weeks, 12 months, 1 year`; the privacy notice states it until the old cluster is deleted |
+   | `LEGACY_BACKUP_RETENTION` | Required while a previous cluster or its snapshots exist (set it in the dashboard; Blueprint updates ignore `sync: false` keys): that cluster's backup schedule, e.g. `7 days, 4 weeks, 12 months, 1 year`. The privacy notice discloses the old cluster's copy and backups until you delete them and remove this setting |
 
    The Cloudflare analytics token is intentionally separate from the R2 S3
    access key. Give it only **Account Analytics: Read**; it does not need

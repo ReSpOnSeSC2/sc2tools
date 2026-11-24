@@ -433,6 +433,12 @@ function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
         : `SC2 Tools database allocation: ${allocated}`;
       return {
         ...line,
+        // Name the tier Atlas reports, not the one this page was written for.
+        label: flex
+          ? line.label
+          : cluster?.tier
+            ? `MongoDB Atlas — ${cluster.tier}`
+            : "MongoDB Atlas",
         approxMonthlyUsd: projected ?? costs.mongo.planning.monthlyUsd,
         detail:
           `${flex ? "Atlas Flex" : (cluster?.tier ?? "Atlas")} stores searchable replay metadata, opponent histories and aggregates. `
@@ -518,7 +524,12 @@ function MongoUsageDetails({ costs }: { costs: InfrastructureCosts }) {
         <p>
           The database runs on Atlas Flex, which includes up to{" "}
           {ATLAS_FLEX_STORAGE_LIMIT_GB} GB of data and indexes and does not
-          report disk usage, so no disk-used amount is shown.
+          report disk usage, so no disk-used amount is shown. SC2 Tools&rsquo;
+          uncompressed data plus indexes come to{" "}
+          {formatStorageBytes(
+            appData.logicalDataBytes + appData.allocatedIndexBytes,
+          )}
+          .
         </p>
       ) : (
         <p>
@@ -537,7 +548,7 @@ function MongoUsageDetails({ costs }: { costs: InfrastructureCosts }) {
             billing!.categoryCents,
           )}. The{" "}
           {billing?.projectedMonthlyRunRateUsd !== null
-            ? `${formatUsd(billing.projectedMonthlyRunRateUsd)} monthly Atlas run rate is a projection from posted charges`
+            ? `${formatUsd(billing.projectedMonthlyRunRateUsd)} monthly Atlas run rate ${runRateBasis(billing.projectionBasis)}`
             : "monthly Atlas run-rate projection is unavailable"}
           ; Atlas charges usually post about one day later, and provider
           billing remains authoritative.
@@ -551,6 +562,16 @@ function MongoUsageDetails({ costs }: { costs: InfrastructureCosts }) {
       )}
     </>
   );
+}
+
+function runRateBasis(
+  basis: NonNullable<InfrastructureCosts["mongo"]["atlas"]["billing"]>["projectionBasis"],
+): string {
+  if (basis === "flex_base_price") {
+    return "is Atlas Flex's base price, because the charges posted so far (for example a partly billed first day) project lower";
+  }
+  if (basis === "flex_cap") return "is Atlas Flex's monthly price cap";
+  return "is a projection from posted charges";
 }
 
 function formatAtlasCategories(

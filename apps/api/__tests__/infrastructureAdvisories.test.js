@@ -406,6 +406,9 @@ describe("Atlas Flex advisories", () => {
     expect(partial.advisories.map((row) => [row.code, row.level])).toEqual([
       ["mongo_flex_storage_partial", "watch"],
     ]);
+    // An unknown failure is not blamed on permissions.
+    expect(partial.advisories[0].message).toMatch(/did not complete \(failed\).*may be higher/);
+    expect(partial.advisories[0].action).toMatch(/retried on the next refresh/);
     // A breach measured on the lower bound is still reported.
     const breach = buildInfrastructureAdminSnapshot(flexInput(3_400_000_000, 200_000_000));
     expect(breach.advisories.map((row) => row.code)).toEqual([
@@ -413,6 +416,33 @@ describe("Atlas Flex advisories", () => {
       "mongo_flex_storage_watch",
     ]);
     expect(breach.advisories[1].message).toMatch(/SC2 Tools database alone uses 72%/);
+  });
+
+  test("a permissions gap names a metadata-only grant, never the read-any roles", () => {
+    const input = flexInput(2_130_000_000, 117_000_000);
+    input.mongo.appData.allDatabasesError = "unauthorized";
+    const result = buildInfrastructureAdminSnapshot(input);
+    expect(result.providers.mongo.cluster.flexStorage.unmeasuredReason).toBe("unauthorized");
+    const [partial] = result.advisories;
+    expect(partial.code).toBe("mongo_flex_storage_partial");
+    expect(partial.message).toMatch(/cannot list or measure them all/);
+    expect(partial.action).toMatch(/only listDatabases on the cluster and dbStats/);
+    expect(partial.action).toMatch(/Do not use readAnyDatabase or readWriteAnyDatabase/);
+    // An unrecognised reason is dropped rather than echoed.
+    input.mongo.appData.allDatabasesError = "<script>";
+    expect(buildInfrastructureAdminSnapshot(input).providers.mongo.appData.allDatabasesError).toBeNull();
+  });
+
+  test("surfaces charges for the project's other clusters to admins", () => {
+    const input = flexInput(2_130_000_000, 117_000_000, cluster(2_530_000_000, 147_000_000));
+    input.mongo.atlas.billing.otherClustersPostedCents = 4_012;
+    const result = buildInfrastructureAdminSnapshot(input);
+    expect(result.advisories.map((row) => [row.code, row.level])).toEqual([
+      ["mongo_other_cluster_charges", "watch"],
+    ]);
+    expect(result.advisories[0].message).toMatch(/\$40\.12 has posted this cycle for other clusters/);
+    input.mongo.atlas.billing.otherClustersPostedCents = 0;
+    expect(buildInfrastructureAdminSnapshot(input).advisories).toEqual([]);
   });
 
   test("ignores a malformed cluster-wide total", () => {

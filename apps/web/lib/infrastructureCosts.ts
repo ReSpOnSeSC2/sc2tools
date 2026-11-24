@@ -39,6 +39,11 @@ export interface AtlasBillingUsage {
     other: number;
   } | null;
   projectedMonthlyRunRateUsd: number | null;
+  /**
+   * What set the run rate: the posted-charge projection, or Atlas Flex's base
+   * price / monthly cap when the projection fell outside the tier's range.
+   */
+  projectionBasis?: "posted" | "flex_base_price" | "flex_cap" | null;
 }
 
 export interface InfrastructureCosts {

@@ -33,23 +33,35 @@ remains the backup provider, now with the Flex tier's fixed snapshot policy.
    project. `MONGODB_URI` points at it and `ATLAS_CLUSTER_NAME` names it.
 2. `AtlasInfrastructureClient` detects a Flex cluster through the Flex Admin
    API resource (version 2024-11-13) and caches the kind for six hours. A 400
-   or 404 from that resource means "dedicated". Any other failure keeps the
-   last known kind and propagates only before a kind has been learned, so an
-   outage is never read as a tier. A fresh probe's response doubles as the
-   cluster read. For Flex the client reports the provider settings only (no
-   disk or host metrics) and reads backups from the Flex snapshot list,
-   reporting the tier's fixed policy (daily, last 8 kept, no point-in-time
-   restore).
+   or 404 from that resource means "dedicated". Atlas keeps the name when it
+   upgrades Flex to a dedicated tier in place, so a 400/404 from any read
+   that assumed the cached kind drops the cache and the next call probes
+   again. Any other probe failure keeps the last known kind for five minutes
+   (so an outage costs one probe per window) and propagates only before a
+   kind has been learned, so an outage is never read as a tier. A fresh
+   probe's response doubles as the cluster read, a failed one is not
+   repeated, and the invoice request runs alongside the probe. For Flex the
+   client reports the provider settings only (no disk or host metrics) and
+   reads backups from the Flex snapshot list, reporting the tier's fixed
+   policy (daily, last 8 kept, no point-in-time restore).
 3. The billing run rate is measured from the configured cluster's first line
    item to the end of its newest one (the invoice's own "updated" time moves
    whenever any line posts, so it only caps a line that claims to end later).
    A cluster that started mid-cycle is not diluted over days it did not
-   exist. A Flex projection stays within $8–$30: never above the cap, and,
-   unless credits were posted, never below the base band that a partly billed
-   first day would otherwise suggest. The range applies when the probe says
-   Flex or the line items are Flex SKUs, so a failed cluster read cannot skip
-   it. Flex SKUs count as compute: the band price includes storage, backups
-   and transfer.
+   exist. A Flex run rate stays within the tier's range for the cycle: never
+   above the $30 cap, never below the base band's hourly price ($0.011) for
+   the cycle's hours (a partly billed first day would otherwise pull it
+   under, for the whole cutover month), with line discounts scaling that
+   floor, and never below what has already posted. A definite tier from the
+   probe decides whether that range applies; only when the tier is unknown do
+   Flex SKUs on every matching line imply it, so a cluster upgraded in place
+   (mixed Flex and dedicated lines) is never clamped. The billing payload
+   says which of these set the number (`projectionBasis`), and the donate page
+   words it accordingly. Flex SKUs count as compute: the band price includes
+   storage, backups and transfer. Charges posted this cycle for the project's
+   other clusters (for example the paused M10) are totalled for admins
+   (`otherClustersPostedCents`, with a watch advisory); public pages count
+   only the configured cluster.
 4. The planning fallback, shown only while live billing is unavailable (for
    example before a new cluster's first day of charges posts), is the Flex base
    price of $8, so the public fixed baseline is $16.25 (Render $7, domain
@@ -58,27 +70,42 @@ remains the backup provider, now with the Flex tier's fixed snapshot policy.
    Flex cannot supply, with a storage advisory against the 5 GB allowance
    (watch at 70%, upgrade at 80%, because Flex storage cannot expand). The
    allowance counts every database on the cluster, so the API sums `dbStats`
-   data and index sizes over all databases its user can read (names never
-   leave the server, and the total is admin-only). If that read fails, the
-   SC2 Tools database stands in as a labelled lower bound and a watch
-   advisory says the cluster total is unmeasured.
+   data and index sizes over every database (`listDatabases` with
+   `authorizedDatabases: false`, so a user scoped to its own database gets an
+   error instead of a one-database listing that looks like the whole
+   cluster). Names never leave the server, the commands are log-private, and
+   the total is admin-only. If the read fails, the SC2 Tools database stands
+   in as a labelled lower bound with a watch advisory whose text depends on
+   the reason: a permissions gap names a metadata-only custom role
+   (`listDatabases` plus `dbStats`, not the read-any roles), a transient
+   failure keeps the last good total for a day. The figure is conservative:
+   on cutover day Atlas's own Flex "data size" read 1.87 GB for the whole
+   cluster while the SC2 Tools database's uncompressed `dbStats` alone was
+   2.13 GB.
 6. The public retention notice (privacy page, account-deletion dialog,
-   goodbye page) keeps stating the previous cluster's backup schedule while
-   its snapshots exist, from `LEGACY_BACKUP_RETENTION`, next to Flex's
-   8-day policy. The operator removes the setting only after the old cluster
-   and its snapshots are deleted.
+   goodbye page) keeps disclosing the previous cluster while it or its
+   snapshots exist: that it holds a copy of accounts as of the move,
+   including accounts deleted since, until the cluster is deleted, and that
+   its backups last up to the longest entry of `LEGACY_BACKUP_RETENTION`
+   (7 days, 4 weeks, 12 months, 1 year). Render ignores `sync: false` keys
+   when it updates an existing Blueprint, so the operator sets the value in
+   the dashboard together with `ATLAS_CLUSTER_NAME`, and removes it only
+   after the old cluster and its snapshots are deleted. The privacy page's
+   "last updated" date moved with this change.
 
 ## Consequences
 
 - The public cost display drops from about $91 to about $16-23 a month.
 - Backups: daily snapshots, the last 8 kept, no point-in-time restore and no
   on-demand snapshots. The privacy page's retention line follows the API: 8
-  days, plus the previous cluster's schedule (7 days, 4 weeks, 12 months,
-  1 year) while `LEGACY_BACKUP_RETENTION` is set. The restore runbook's
-  point-in-time steps do not apply.
+  days for the current database, plus the previous cluster's disclosure while
+  `LEGACY_BACKUP_RETENTION` is set. The restore runbook's point-in-time steps
+  do not apply.
 - Until the M10 is deleted, it also holds a frozen copy of every account as of
   cutover, including accounts deleted afterwards, so deleting it (with its
-  snapshots) promptly after the rollback window keeps the privacy notice true.
+  snapshots) promptly after the rollback window is what ends that copy. A
+  paused M10 still bills storage and backups, and Atlas resumes a paused
+  cluster after 30 days.
 - Capacity: 5 GB including indexes, counted over every database on the
   cluster (the SC2 Tools database alone was about 45% at cutover), 500
   operations per second, and no disk spill for aggregations (in-memory sort

@@ -698,17 +698,21 @@ function parseAtlasAdminConfig(env) {
  * for example the dedicated cluster kept after a move to Atlas Flex. The
  * public retention notice keeps stating that schedule next to the current
  * one until the operator deletes the old cluster and its snapshots and then
- * removes this setting. Comma-separated "<count> <unit>" entries, e.g.
- * "7 days, 4 weeks, 12 months, 1 year". A malformed value fails startup so a
- * privacy notice is never silently shortened.
+ * removes this setting. "<count> <unit>" entries separated by commas or
+ * semicolons (the format the site displays), e.g.
+ * "7 days, 4 weeks, 12 months, 1 year"; surrounding quotes are ignored. A
+ * malformed value fails startup so a privacy notice is never silently
+ * shortened (Render then keeps the previous instance serving).
  *
  * @param {NodeJS.ProcessEnv} env
  * @returns {{unit: "days"|"weeks"|"months"|"years", value: number}[]}
  */
 function parseLegacyBackupRetention(env) {
-  const raw = String(env.LEGACY_BACKUP_RETENTION || "").trim();
+  const raw = String(env.LEGACY_BACKUP_RETENTION || "").trim()
+    .replace(/^(["'])(.*)\1$/, "$2")
+    .trim();
   if (!raw) return [];
-  return raw.split(",").map((part) => {
+  return raw.split(/[,;]/).map((part) => {
     const match = /^(\d{1,4})\s*(day|week|month|year)s?$/i.exec(part.trim());
     const value = match ? Number(match[1]) : 0;
     if (!match || value < 1) {

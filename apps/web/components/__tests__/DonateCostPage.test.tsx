@@ -114,6 +114,42 @@ test("separates live usage, posted Atlas charges, and the projected run rate", a
     .toBeNull();
   expect(screen.getByText(/dashboard and invoice remain authoritative/i))
     .toBeTruthy();
+  // The row names the tier Atlas reports.
+  expect(screen.getByText("MongoDB Atlas — M10")).toBeTruthy();
+  expect(screen.queryByText("MongoDB Atlas — Flex")).toBeNull();
+});
+
+test("says when the Flex run rate is the base price rather than a projection", async () => {
+  getInfrastructureCostsMock.mockResolvedValue({
+    ...COSTS,
+    mongo: {
+      ...COSTS.mongo,
+      atlas: {
+        available: true,
+        cluster: {
+          tier: "FLEX",
+          provisionedDiskGb: 5,
+          diskUsedBytes: null,
+          diskCapacityBytes: null,
+          diskMeasuredAt: null,
+          autoExpandStorage: false,
+        },
+        billing: {
+          ...COSTS.mongo.atlas.billing,
+          postedCycleCents: 36,
+          categoryCents: { compute: 36, storage: 0, transfer: 0, other: 0 },
+          projectedMonthlyRunRateUsd: 8.18,
+          projectionBasis: "flex_base_price",
+        },
+      },
+    },
+  });
+
+  render(await DonatePage());
+
+  expect(screen.getByText(/\$8\.18 monthly Atlas run rate is Atlas Flex's base price, because the charges posted so far/))
+    .toBeTruthy();
+  expect(screen.queryByText(/run rate is a projection from posted charges/)).toBeNull();
 });
 
 test("adds live R2 to the planning baseline when Atlas billing is unavailable", async () => {
@@ -140,6 +176,8 @@ test("adds live R2 to the planning baseline when Atlas billing is unavailable", 
     .toBeTruthy();
   expect(screen.getAllByText(/\$16\.30/).length).toBeGreaterThan(0);
   expect(screen.getByText(/instead of claiming a zero charge/i)).toBeTruthy();
+  // No live tier: no tier is claimed.
+  expect(screen.getByText("MongoDB Atlas")).toBeTruthy();
 });
 
 test("describes Atlas Flex pricing and storage without inventing disk telemetry", async () => {
@@ -181,6 +219,7 @@ test("describes Atlas Flex pricing and storage without inventing disk telemetry"
     .toBeGreaterThan(0);
   expect(screen.queryByText(/SC2 Tools database allocation/)).toBeNull();
   expect(screen.getByText(/runs on Atlas Flex, which includes up to\s+5 GB/)).toBeTruthy();
+  expect(screen.getByText(/uncompressed data plus indexes come to\s+1\.28 GB/)).toBeTruthy();
   expect(screen.getByText(/\$8\.25 non-Mongo fixed \+ \$9\.30 projected Atlas \+ \$0\.05 R2 estimate/))
     .toBeTruthy();
   expect(screen.queryByText(/M10/)).toBeNull();

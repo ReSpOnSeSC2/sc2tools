@@ -25,6 +25,12 @@ describe("config loader - legacy backup retention", () => {
     ]);
   });
 
+  test("accepts the semicolon format the site displays and ignores surrounding quotes", () => {
+    const expected = [{ unit: "days", value: 7 }, { unit: "years", value: 1 }];
+    expect(parseLegacyBackupRetention({ LEGACY_BACKUP_RETENTION: "7 days; 1 year" })).toEqual(expected);
+    expect(parseLegacyBackupRetention({ LEGACY_BACKUP_RETENTION: "\"7 days, 1 year\"" })).toEqual(expected);
+  });
+
   test("fails startup on a malformed schedule instead of shortening the notice", () => {
     for (const value of ["7 fortnights", "0 days", "days 7", "7 days,,1 year", "-1 years"]) {
       expect(() => parseLegacyBackupRetention({ LEGACY_BACKUP_RETENTION: value }))

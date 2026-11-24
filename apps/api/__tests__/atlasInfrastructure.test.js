@@ -464,15 +464,27 @@ describe("Atlas Flex billing helpers", () => {
     expect(_internals.atlasCostCategory("FLEX_CLUSTER_OPS_BAND_2")).toBe("compute");
   });
 
-  test("keeps a Flex run rate inside the tier's $8-$30 price range", () => {
-    const clamp = _internals.clampFlexProjection;
-    expect(clamp(812, { discounted: false })).toBe(812);
-    expect(clamp(558, { discounted: false })).toBe(800);
-    expect(clamp(4_650, { discounted: false })).toBe(3_000);
-    // Credits can bring the real charge under $8, so no floor then.
-    expect(clamp(558, { discounted: true })).toBe(558);
-    expect(clamp(4_650, { discounted: true })).toBe(3_000);
-    expect(clamp(null, { discounted: false })).toBeNull();
+  test("keeps a Flex run rate inside the tier's price range for the cycle", () => {
+    const august = { cycleStart: "2026-08-01T00:00:00.000Z", cycleEnd: "2026-09-01T00:00:00.000Z" };
+    const run = (projected, extra = {}) => _internals.flexRunRate({
+      projected, postedCycleCents: 60, grossCents: 60, discountCents: 0, ...august, ...extra,
+    });
+    expect(run(900)).toEqual({ cents: 900, basis: "posted" });
+    // 744 hours at the base band's 1.1 cents.
+    expect(run(558)).toEqual({ cents: 818, basis: "flex_base_price" });
+    expect(run(4_650)).toEqual({ cents: 3_000, basis: "flex_cap" });
+    // A 28-day February's base band is $7.39, not $8.
+    expect(run(700, { cycleStart: "2027-02-01T00:00:00.000Z", cycleEnd: "2027-03-01T00:00:00.000Z" }))
+      .toEqual({ cents: 739, basis: "flex_base_price" });
+    // Discounts scale the floor instead of removing it.
+    expect(run(465, { postedCycleCents: 30, grossCents: 36, discountCents: 6 }))
+      .toEqual({ cents: 682, basis: "flex_base_price" });
+    // Nothing billed at list price: no floor to invent.
+    expect(run(0, { postedCycleCents: 0, grossCents: 0 })).toEqual({ cents: 0, basis: "posted" });
+    // Never below what has already posted.
+    expect(run(4_800, { postedCycleCents: 3_100, grossCents: 3_100 }))
+      .toEqual({ cents: 3_100, basis: "posted" });
+    expect(run(null)).toEqual({ cents: null, basis: null });
   });
 
   test("bills through the newest line item, not the invoice's last update", () => {
@@ -499,29 +511,82 @@ describe("Atlas Flex billing helpers", () => {
     });
   });
 
-  test("a partly billed first Flex day cannot pull the run rate under the $8 base band", () => {
+  test("a partly billed first Flex day cannot pull the run rate under the base band", () => {
     const body = flexInvoiceBody(26);
     // The cutover-day line starts at midnight but bills only the evening.
     body.lineItems[0].totalPriceCents = 10;
     const target = { projectId: PROJECT_ID, clusterName: "sample-cluster" };
     expect(_internals.parsePendingInvoices(body, target)).toMatchObject({
       postedCycleCents: 36,
-      projectedMonthlyRunRateCents: 800,
-      projectedMonthlyRunRateUsd: 8,
+      projectedMonthlyRunRateCents: 818,
+      projectedMonthlyRunRateUsd: 8.18,
+      projectionBasis: "flex_base_price",
     });
-    // With credits posted, the honest projection is kept.
+    // A line discount scales the floor rather than dropping it.
     body.lineItems[1].discountCents = 6;
     expect(_internals.parsePendingInvoices(body, target)).toMatchObject({
       postedCycleCents: 30,
-      projectedMonthlyRunRateCents: 465,
+      projectedMonthlyRunRateCents: 682,
     });
-    // A dedicated cluster's projection is never clamped.
+  });
+
+  test("a definite tier from the probe decides; Flex SKUs only fill in an unknown tier", () => {
+    const target = { projectId: PROJECT_ID, clusterName: "sample-cluster" };
     const dedicated = flexInvoiceBody(10);
     for (const item of dedicated.lineItems) item.sku = "GCP_INSTANCE_M10";
-    expect(_internals.parsePendingInvoices(dedicated, target).projectedMonthlyRunRateCents).toBe(310);
-    // Unless the tier is known to be Flex from the cluster probe.
-    expect(_internals.parsePendingInvoices(dedicated, target, { flex: true })
-      .projectedMonthlyRunRateCents).toBe(800);
+    expect(_internals.parsePendingInvoices(dedicated, target)).toMatchObject({
+      projectedMonthlyRunRateCents: 310,
+      projectionBasis: "posted",
+    });
+    expect(_internals.parsePendingInvoices(dedicated, target, { kind: "flex" })
+      .projectedMonthlyRunRateCents).toBe(818);
+    // The probe says dedicated: Flex SKUs do not clamp it.
+    const flexDays = flexInvoiceBody(26);
+    flexDays.lineItems[0].totalPriceCents = 10;
+    expect(_internals.parsePendingInvoices(flexDays, target, { kind: "dedicated" })
+      .projectedMonthlyRunRateCents).toBe(558);
+  });
+
+  test("a cluster upgraded in place from Flex is never clamped below what has posted", () => {
+    // Flex on Aug 1-2, then an M10 under the same name from Aug 3.
+    const body = {
+      startDate: "2026-08-01T00:00:00.000Z",
+      endDate: "2026-09-01T00:00:00.000Z",
+      updated: "2026-08-26T05:00:00.000Z",
+      lineItems: [
+        line("ATLAS_FLEX_AWS_100_USAGE_HOURS", 60, {
+          startDate: "2026-08-01T00:00:00.000Z", endDate: "2026-08-03T00:00:00.000Z",
+        }),
+        line("ATLAS_AWS_INSTANCE_M10", 4_180, {
+          startDate: "2026-08-03T00:00:00.000Z", endDate: "2026-08-26T00:00:00.000Z",
+        }),
+      ],
+    };
+    const target = { projectId: PROJECT_ID, clusterName: "sample-cluster" };
+    for (const kind of ["dedicated", null]) {
+      const billing = _internals.parsePendingInvoices(body, target, { kind });
+      expect(billing.postedCycleCents).toBe(4_240);
+      // 4240 cents over 25 of 31 days, unclamped.
+      expect(billing.projectedMonthlyRunRateCents).toBe(5_258);
+      expect(billing.projectionBasis).toBe("posted");
+    }
+  });
+
+  test("totals other clusters' charges in the project for admins", () => {
+    const target = { projectId: PROJECT_ID, clusterName: "sample-cluster" };
+    // flexInvoiceBody carries 1970 cents for "old-dedicated-cluster".
+    expect(_internals.parsePendingInvoices(flexInvoiceBody(30), target).otherClustersPostedCents)
+      .toBe(1_970);
+    // Still reported before the configured cluster's first line posts.
+    const onlyOld = flexInvoiceBody(30);
+    onlyOld.lineItems = onlyOld.lineItems.slice(2);
+    expect(_internals.parsePendingInvoices(onlyOld, target)).toMatchObject({
+      available: false,
+      errorCode: "atlas_billing_no_matching_line_items",
+      otherClustersPostedCents: 1_970,
+    });
+    // Other projects and org-level lines without a cluster never count.
+    expect(_internals.parsePendingInvoices(invoiceBody(), target).otherClustersPostedCents).toBe(0);
   });
 });
 
@@ -549,7 +614,66 @@ describe("Atlas cluster kind detection", () => {
           : Promise.reject(new Error(`unexpected URL ${url}`))));
     const result = await new AtlasInfrastructureClient({ config: atlasConfig(), fetchImpl, now: () => NOW }).snapshot();
     expect(result.cluster).toBeNull();
-    expect(result.billing).toMatchObject({ postedCycleCents: 300, projectedMonthlyRunRateCents: 3_000 });
+    expect(result.billing).toMatchObject({
+      postedCycleCents: 300,
+      projectedMonthlyRunRateCents: 3_000,
+      projectionBasis: "flex_cap",
+    });
+  });
+
+  test("requests invoices alongside the kind probe instead of after it", async () => {
+    let releaseProbe;
+    const probe = new Promise((resolve) => { releaseProbe = resolve; });
+    const fetchImpl = jest.fn(async (url) => token(url)
+      ?? (url.includes("/flexClusters/") ? probe
+        : url.includes("/invoices/pending") ? response(flexInvoiceBody(30))
+          : Promise.reject(new Error(`unexpected URL ${url}`))));
+    const pending = new AtlasInfrastructureClient({ config: atlasConfig(), fetchImpl, now: () => NOW }).snapshot();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fetchImpl.mock.calls.some(([url]) => url.includes("/invoices/pending"))).toBe(true);
+    releaseProbe(response(flexClusterBody()));
+    await expect(pending).resolves.toMatchObject({ cluster: { tier: "FLEX" } });
+  });
+
+  test("an in-place upgrade from Flex drops the cached kind on the first 400", async () => {
+    let upgraded = false;
+    const fetchImpl = jest.fn(async (url) => {
+      const auth = token(url);
+      if (auth) return auth;
+      if (url.includes("/flexClusters/")) return upgraded ? response({ errorCode: "CANNOT_USE_CLUSTER_IN_FLEX_CLUSTER_API" }, 400) : response(flexClusterBody());
+      if (url.includes("/invoices/pending")) return response(flexInvoiceBody(30));
+      if (url.includes("/processes")) return response({ results: [] });
+      if (url.includes("/clusters/sample-cluster")) return response(clusterBody());
+      throw new Error(`unexpected URL ${url}`);
+    });
+    const client = new AtlasInfrastructureClient({ config: atlasConfig(), fetchImpl, now: () => NOW });
+    expect((await client.snapshot()).cluster.tier).toBe("FLEX");
+    upgraded = true;
+    // Still inside the cache window: the Flex read fails once...
+    expect((await client.snapshot()).cluster).toBeNull();
+    // ...and the next refresh probes again and reads the new tier.
+    const after = await client.snapshot();
+    expect(after.cluster.tier).toBe("M10");
+    expect(after.billing.projectionBasis).toBe("posted");
+  });
+
+  test("a stale Flex kind does not re-request the resource the probe just failed on", async () => {
+    let now = NOW;
+    let flexStatus = 200;
+    const fetchImpl = jest.fn(async (url) => token(url)
+      ?? (url.includes("/flexClusters/") ? (flexStatus === 200 ? response(flexClusterBody()) : response({}, flexStatus))
+        : url.includes("/invoices/pending") ? response(flexInvoiceBody(30))
+          : Promise.reject(new Error(`unexpected URL ${url}`))));
+    const client = new AtlasInfrastructureClient({ config: atlasConfig(), fetchImpl, now: () => now });
+    await client.snapshot();
+    now = new Date(NOW.getTime() + 7 * 60 * 60 * 1000);
+    flexStatus = 503;
+    const before = fetchImpl.mock.calls.filter(([url]) => url.includes("/flexClusters/")).length;
+    const result = await client.snapshot();
+    expect(result.cluster).toBeNull();
+    // Billing still knows the cluster is Flex.
+    expect(result.billing.projectedMonthlyRunRateCents).toBe(930);
+    expect(fetchImpl.mock.calls.filter(([url]) => url.includes("/flexClusters/")).length - before).toBe(1);
   });
 
   test("keeps the last known kind through a transient probe failure", async () => {
@@ -571,6 +695,11 @@ describe("Atlas cluster kind detection", () => {
     now = new Date(NOW.getTime() + 7 * 60 * 60 * 1000);
     probeStatus = 503;
     await expect(client.backupStatus()).resolves.toMatchObject({ pointInTime: { enabled: null } });
+    expect(fetchImpl.mock.calls.filter(([url]) => url.includes("/flexClusters/"))).toHaveLength(2);
+    // During the outage the stale kind is reused for a few minutes rather
+    // than probing on every call.
+    now = new Date(now.getTime() + 60 * 1000);
+    await client.backupStatus();
     expect(fetchImpl.mock.calls.filter(([url]) => url.includes("/flexClusters/"))).toHaveLength(2);
   });
 

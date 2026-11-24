@@ -100,8 +100,10 @@ services:
         sync: false
       - key: ATLAS_SERVICE_ACCOUNT_SECRET_EXPIRES_AT
         sync: false
-      # Backup schedule of a previous cluster whose snapshots still exist; the
-      # public retention notice states it until that cluster is deleted.
+      # Backup schedule of a previous cluster while it or its snapshots exist
+      # ("7 days, 4 weeks, 12 months, 1 year"; commas or semicolons). The public
+      # retention notice discloses it until that cluster is deleted. Blueprint
+      # updates ignore sync:false keys, so set the value in the dashboard.
       - key: LEGACY_BACKUP_RETENTION
         sync: false
       # Optional Render CPU/memory monitoring for authenticated Admin. Render

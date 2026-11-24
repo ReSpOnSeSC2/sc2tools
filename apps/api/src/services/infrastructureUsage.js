@@ -19,14 +19,18 @@ const {
 const {
   buildInfrastructureAdminSnapshot,
 } = require("./infrastructureAdvisories");
+const { STORAGE_TOTALS_COMMENT } = require("./infrastructureStorageComment");
 
 const CLOUDFLARE_GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
 const CACHE_TTL_MS = 15 * 60 * 1000;
 // Server-internal databases do not count toward an Atlas data allowance.
 const SYSTEM_DATABASES = new Set(["admin", "local", "config"]);
-// A shared cluster holds a handful of app databases; a longer listing is not
-// a cluster this advisory was built for, so it reports a lower bound instead.
-const MAX_MEASURED_DATABASES = 50;
+// Atlas Flex allows at most 100 databases; anything longer is not a cluster
+// this advisory was built for, so it reports a lower bound instead.
+const MAX_MEASURED_DATABASES = 100;
+// A transient failure keeps the previous cluster-wide total this long.
+const ALL_DATABASES_REUSE_MS = 24 * 60 * 60 * 1000;
+const PROJECTION_BASES = new Set(["posted", "flex_base_price", "flex_cap"]);
 const ERROR_RETRY_MS = 60 * 1000;
 const REQUEST_TIMEOUT_MS = 8 * 1000;
 const STORAGE_LOOKBACK_MS = 31 * 24 * 60 * 60 * 1000;
@@ -186,6 +190,8 @@ class InfrastructureUsageService {
     this.games = deps.games;
     this.mongoDb = deps.mongoDb;
     this.mongoClient = deps.mongoClient || null;
+    /** @type {{logicalDataBytes: number, indexBytes: number, databaseCount: number, measuredAt: string}|null} */
+    this._lastAllDatabases = null;
     this.config = deps.cloudflareAnalytics || null;
     this.fetchImpl = deps.fetchImpl || globalThis.fetch;
     this.now = deps.now || (() => new Date());
@@ -451,7 +457,7 @@ class InfrastructureUsageService {
 
   /** @param {Date} [measuredAt] */
   async _readMongoStorage(measuredAt = this._now()) {
-    const [stats, allDatabases] = await Promise.all([
+    const [stats, clusterWide] = await Promise.all([
       this.mongoDb.command({
         dbStats: 1,
         scale: 1,
@@ -481,54 +487,87 @@ class InfrastructureUsageService {
       allocatedTotalBytes,
       scope: "sc2tools_database_only",
       measuredAt: measuredAt.toISOString(),
-      allDatabases,
+      allDatabases: clusterWide.totals,
+      allDatabasesError: clusterWide.error,
     };
   }
 
   /**
-   * Documents plus indexes summed over every database the application's
-   * user can read. Atlas Flex counts all of them against one data allowance,
-   * so the admin storage advisory needs this total rather than the SC2 Tools
-   * share. Names stay here; only sums and a count leave. Null when no client
-   * is wired or any read fails, which the advisory reports as a lower bound.
-   * Never part of the public cost payload.
+   * Documents plus indexes summed over every database on the cluster. Atlas
+   * Flex counts all of them against one data allowance, so the admin storage
+   * advisory needs this total rather than the SC2 Tools share. The listing
+   * asks for every database (authorizedDatabases: false): a user scoped to
+   * its own database gets "unauthorized" instead of a one-database listing
+   * that would look like the whole cluster. Names stay here (and the
+   * commands are log-private); only sums, a count and a reason code leave.
+   * A transient failure reuses the last good total for a day. Never part of
+   * the public cost payload.
    *
    * @param {Date} measuredAt
+   * @returns {Promise<{
+   *   totals: {logicalDataBytes: number, indexBytes: number, databaseCount: number, measuredAt: string}|null,
+   *   error: "not_configured"|"unauthorized"|"too_many_databases"|"invalid_stats"|"timeout"|"failed"|null,
+   * }>}
    */
   async _readAllDatabasesStorage(measuredAt) {
     const client = this.mongoClient;
-    if (!client) return null;
+    if (!client) return { totals: null, error: "not_configured" };
+    const options = { maxTimeMS: this.timeoutMs, comment: STORAGE_TOTALS_COMMENT };
     try {
       const listing = await client.db("admin").command({
         listDatabases: 1,
         nameOnly: true,
-        authorizedDatabases: true,
-        maxTimeMS: this.timeoutMs,
+        authorizedDatabases: false,
+        ...options,
       });
       const names = (Array.isArray(listing?.databases) ? listing.databases : [])
         .map((row) => String(row?.name || ""))
         .filter((name) => name && !SYSTEM_DATABASES.has(name));
-      if (names.length === 0 || names.length > MAX_MEASURED_DATABASES) return null;
+      if (names.length === 0) return { totals: null, error: "invalid_stats" };
+      if (names.length > MAX_MEASURED_DATABASES) {
+        return { totals: null, error: "too_many_databases" };
+      }
       const stats = await Promise.all(names.map((name) => client.db(name).command({
         dbStats: 1,
         scale: 1,
-        maxTimeMS: this.timeoutMs,
+        ...options,
       })));
       let logicalDataBytes = 0;
       let indexBytes = 0;
       for (const row of stats) {
-        logicalDataBytes += nonNegativeSafeInteger(row?.dataSize, "Mongo dataSize");
-        indexBytes += nonNegativeSafeInteger(row?.indexSize, "Mongo indexSize");
+        const data = Number(row?.dataSize);
+        const index = Number(row?.indexSize);
+        if (!Number.isSafeInteger(data) || data < 0
+          || !Number.isSafeInteger(index) || index < 0) {
+          return { totals: null, error: "invalid_stats" };
+        }
+        logicalDataBytes += data;
+        indexBytes += index;
       }
-      if (!Number.isSafeInteger(logicalDataBytes + indexBytes)) return null;
-      return {
+      if (!Number.isSafeInteger(logicalDataBytes + indexBytes)) {
+        return { totals: null, error: "invalid_stats" };
+      }
+      const totals = {
         logicalDataBytes,
         indexBytes,
         databaseCount: names.length,
         measuredAt: measuredAt.toISOString(),
       };
-    } catch {
-      return null;
+      this._lastAllDatabases = totals;
+      return { totals, error: null };
+    } catch (err) {
+      const failure = /** @type {any} */ (err);
+      if (failure?.code === 13 || failure?.codeName === "Unauthorized"
+        || /not authorized/i.test(String(failure?.message || ""))) {
+        return { totals: null, error: "unauthorized" };
+      }
+      const last = this._lastAllDatabases;
+      if (last
+        && measuredAt.getTime() - new Date(last.measuredAt).getTime() < ALL_DATABASES_REUSE_MS) {
+        return { totals: last, error: null };
+      }
+      const timeout = failure?.code === 50 || failure?.codeName === "MaxTimeMSExpired";
+      return { totals: null, error: timeout ? "timeout" : "failed" };
     }
   }
 
@@ -841,6 +880,11 @@ function publicMongoSnapshot(value) {
         sourceBilling.projectedMonthlyRunRateCents ?? null,
       projectedMonthlyRunRateUsd:
         sourceBilling.projectedMonthlyRunRateUsd ?? null,
+      // Whether the run rate is the posted-charge projection or Flex's base
+      // price or cap; lets public copy say which.
+      projectionBasis: PROJECTION_BASES.has(sourceBilling.projectionBasis)
+        ? sourceBilling.projectionBasis
+        : null,
     }
     : null;
 

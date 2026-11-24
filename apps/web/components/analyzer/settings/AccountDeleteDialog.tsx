@@ -87,7 +87,7 @@ export default function AccountDeleteDialog({ onClose, onExport, exportStatus }:
         <BackupRetention />
       </> : null}
       {step === 3 ? <>
-        <p>This permanently deletes your account and its live data. Your existing private snapshots are deleted too. Service backup copies expire under the backup schedule.</p>
+        <p>This permanently deletes your account and its live data. Your existing private snapshots are deleted too. Service backup copies expire under the backup retention shown above.</p>
         <label className="block space-y-2"><span>Type DELETE to confirm</span><Input value={typed} onChange={(event) => setTyped(event.target.value)} disabled={blocked || deleted} autoComplete="off" spellCheck={false} /></label>
         <p className="text-caption text-text-muted">If the identity provider is unavailable, sign-in deletion is retried automatically. The deleted identity cannot reopen the account while that retry is pending.</p>
       </> : null}

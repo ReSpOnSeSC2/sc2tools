@@ -339,6 +339,8 @@ export type AdminInfrastructureResp = {
           databaseCount: number;
           measuredAt: string | null;
         } | null;
+        /** Why allDatabases is missing, when it is. */
+        allDatabasesError?: string | null;
       } | null;
       cluster: {
         tier: string | null;
@@ -353,6 +355,7 @@ export type AdminInfrastructureResp = {
           utilizationPercent: number | null;
           scope: "all_databases" | "sc2tools_database_only";
           databaseCount?: number | null;
+          unmeasuredReason?: string | null;
         } | null;
         provisionedDiskGb: number | null;
         diskUsedBytes: number | null;
