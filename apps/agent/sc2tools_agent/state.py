@@ -648,23 +648,23 @@ def _runtime_secret(value):
     return None if value == "" else value
 
 
-def _compatible_runtime(state, context):
-    from .agent_credentials import CredentialStorageError, _document
+def _compatible_runtime(state, context, previous):
+    from .agent_credentials import CredentialStorageError
     if context.mode != "selected":
         return
     for field_name, slot in (("device_token", "device"), ("obs_password", "obs")):
         if _runtime_secret(getattr(state, field_name)) != getattr(context.snapshot, slot).value:
             raise CredentialStorageError("invalid_intent")
-    document = _document(context.raw)
     if any(value is not None and type(value) is not str for value in (state.user_id, state.paired_at)):
         raise CredentialStorageError("invalid_intent")
-    if state.user_id != document.get("user_id") or state.paired_at != document.get("paired_at"):
+    if state.user_id != previous.get("user_id") or state.paired_at != previous.get("paired_at"):
         raise CredentialStorageError("invalid_intent")
 
 
-def _state_projection(state, context, device_owner=UNCHANGED):
-    from .agent_credentials import CredentialStorageError, _document, _encode, _owner
-    document = _document(context.raw) if context.raw is not None else {}
+def _state_projection(state, previous, device_owner=UNCHANGED):
+    """A fresh dict: the previous document's other keys under the state snapshot."""
+    from .agent_credentials import CredentialStorageError, _owner
+    document = dict(previous)  # previous is shared and read-only; change only this copy's top level.
     for key in ("credentials", "device_token", "obs_password"):
         document.pop(key, None)
     if any(value is not None and type(value) is not str for value in (state.user_id, state.paired_at)):
@@ -675,7 +675,7 @@ def _state_projection(state, context, device_owner=UNCHANGED):
             raise CredentialStorageError("invalid_intent")
         document["user_id"], document["paired_at"] = device_owner
         _owner(document)
-    return _encode(document)
+    return document
 
 
 def credential_revision(state, slot):
@@ -763,11 +763,11 @@ def _check_credential_admission(state, context, device, obs, device_revision, ob
         raise CredentialStorageError("invalid_intent")
 
 
-def _committed_snapshot(context, committed, device, obs):
+def _committed_snapshot(context, selection, document, device, obs):
     from .agent_credentials import CredentialSnapshot, LoadedSlot
     slots = []
     for slot, intent in (("device", device), ("obs", obs)):
-        reference = getattr(committed.selection, slot)
+        reference = getattr(selection, slot)
         old = getattr(context.snapshot, slot)
         if reference.generation is None:
             slots.append(LoadedSlot(reference, "cleared"))
@@ -775,43 +775,46 @@ def _committed_snapshot(context, committed, device, obs):
             slots.append(LoadedSlot(reference, "available", intent.value))
         else:
             slots.append(LoadedSlot(reference, old.status, old.value, old.code))
-    return CredentialSnapshot("selected", committed.selection, *slots, committed.document,
-        store_id=context.snapshot.store_id)
+    return CredentialSnapshot("selected", selection, *slots, document, store_id=context.snapshot.store_id)
 
 
-def _prepare_state_transaction(context, state, projected, device, obs):
-    from .agent_credentials import _document, _encode, _same_owner, prepare_transaction
+def _prepare_state_transaction(context, state, projected, device, obs, parses):
+    """The prepared transaction and its own parse, validated where it is built."""
+    from .agent_credentials import _document, _encode, _prepare, _same_owner
     pending = getattr(state, "_credential_pending", None)
+    prepared = None
     if (type(pending) is _PendingCredentials and pending.device == device and pending.obs == obs
         and pending.prepared.expected == context.raw and pending.prepared.store_id == context.snapshot.store_id):
         original = _document(pending.prepared.document)
-        current = _document(projected)
-        if _same_owner(original, current):
-            current["credentials"] = original["credentials"]
-            prepared = replace(pending.prepared, document=_encode(current))
-            state._credential_pending = _PendingCredentials(device, obs, prepared)
-            return prepared
-    prepared = prepare_transaction(context.snapshot, projected, crypto=context.crypto, device=device, obs=obs)
+        if _same_owner(original, projected):
+            projected["credentials"] = original["credentials"]
+            prepared = replace(pending.prepared, document=_encode(projected))
+    if prepared is None:
+        prepared = _prepare(context.snapshot, projected, context.crypto, device, obs, parses=parses)
+    document = _document(prepared.document)
     state._credential_pending = _PendingCredentials(device, obs, prepared)
-    return prepared
+    return prepared, document
 
 
 def _commit_state(context, state, device, obs, device_owner=UNCHANGED):
-    from .agent_credentials import CredentialStorageError, commit_transaction
-    _compatible_runtime(state, context)
+    from .agent_credentials import CredentialStorageError, _commit, _document
+    # Parse each distinct document once: every check below shares these parses.
+    previous = _document(context.raw) if context.raw is not None else {}
+    parses = ((context.raw, previous),) if context.raw is not None else ()
+    _compatible_runtime(state, context, previous)
     if context.mode == "missing":
         device = _intent(state.device_token) if device.operation == "keep" else device
         obs = _intent(state.obs_password) if obs.operation == "keep" else obs
-    projected = _state_projection(state, context, device_owner)
-    prepared = _prepare_state_transaction(context, state, projected, device, obs)
+    projected = _state_projection(state, previous, device_owner)
+    prepared, document = _prepare_state_transaction(context, state, projected, device, obs, parses)
     try:
-        committed = commit_transaction(context.storage, context.crypto, prepared)
+        selection = _commit(context.storage, context.crypto, prepared, parses + ((prepared.document, document),))
     except CredentialStorageError as exc:
         if exc.code == "indeterminate":
             state._credential_context = replace(context, mode="unreadable")
         raise
-    snapshot = _committed_snapshot(context, committed, device, obs)
-    state._credential_context = replace(context, mode="selected", raw=committed.document, snapshot=snapshot)
+    snapshot = _committed_snapshot(context, selection, prepared.document, device, obs)
+    state._credential_context = replace(context, mode="selected", raw=prepared.document, snapshot=snapshot)
     state._credential_pending = None
     if device.operation != "keep":
         state._credential_retired = False

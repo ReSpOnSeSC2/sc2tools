@@ -9,7 +9,7 @@ import pytest
 
 from sc2tools_agent.agent_credentials import (
     CredentialIntent, CredentialSelection, CredentialStorageError, PreparedGeneration,
-    PreparedTransaction, SlotReference, commit_transaction, load_credentials, prepare_transaction,
+    PreparedTransaction, SlotReference, _commit, _parsed, commit_transaction, load_credentials, prepare_transaction,
 )
 from sc2tools_agent.state import _STATE_SAVE_LOCK
 
@@ -528,8 +528,10 @@ def test_strict_selector_rejects_invalid_primitive_values_before_generation_read
     assert loaded.device.value is None and loaded.obs.value is None and storage.events == []
 
 
-@pytest.mark.parametrize("raw", [b'{"credentials":{},"credentials":{}}', b'{"x":NaN}', b'\xff', b'[]'],
-    ids=["duplicates", "nonfinite", "invalid-utf8", "wrong-shape"])
+@pytest.mark.parametrize("raw", [b'{"credentials":{},"credentials":{}}',
+    b'{"credentials":{"version":1,"device":{"revision":0,"generation":null},"obs":{"revision":0,"generation":null}},'
+    b'"uploaded":{"a":"1","b":"2","a":"3"}}', b'{"x":NaN}', b'\xff', b'[]'],
+    ids=["duplicates", "valid-but-nested-duplicates", "nonfinite", "invalid-utf8", "wrong-shape"])
 def test_unreadable_pointer_is_preserved_and_cannot_be_blindly_committed(raw):
     storage, crypto = MemoryStorage(raw), SyntheticCrypto()
     loaded = load_credentials(storage, crypto)
@@ -571,6 +573,25 @@ def test_direct_values_are_immutable_and_cannot_smuggle_coercions_or_plaintext_i
     unsafe = replace(prepared, document=json.dumps(forged).encode())
     assert_code("invalid_generation", lambda: commit_transaction(storage, crypto, unsafe))
     assert storage.pointer is None and storage.generations == {}
+
+
+def test_a_caller_parse_vouches_only_for_the_exact_bytes_object_it_was_made_from():
+    raw = projection()
+    vouched = {"window_page": "vouched"}
+    assert _parsed(raw, ((raw, vouched),)) is vouched
+    for other in (bytes(bytearray(raw)), projection(window_page="settings")):
+        assert _parsed(other, ((raw, vouched),)) == json.loads(other)
+    storage, crypto = seed()
+    prepared = prepare(storage, crypto, obs=CredentialIntent("set", "private"))
+    parses = ((prepared.expected, json.loads(prepared.expected)), (prepared.document, json.loads(prepared.document)))
+    forged = json.loads(prepared.document)
+    forged["device_token"] = "raw-private"
+    unsafe = replace(prepared, document=json.dumps(forged).encode())
+    assert_code("invalid_pointer", lambda: _commit(storage, crypto, unsafe, parses))
+    assert storage.pointer == prepared.expected and ("replace",) not in storage.events
+    _commit(storage, crypto, prepared, parses)
+    assert storage.pointer == prepared.document
+    assert load_credentials(storage, crypto).obs.value == "private"
 
 
 def test_prepared_generation_rejects_missing_name_with_closed_error():

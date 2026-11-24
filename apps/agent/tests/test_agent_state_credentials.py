@@ -1,4 +1,5 @@
 """Central credential persistence with owned synthetic storage/crypto only."""
+from dataclasses import replace
 import hashlib
 import json
 import os
@@ -8,7 +9,7 @@ import threading
 
 import pytest
 
-from sc2tools_agent import state as state_module
+from sc2tools_agent import agent_credentials, state as state_module
 from sc2tools_agent.agent_credentials import CredentialIntent, CredentialStorageError
 from sc2tools_agent.instance_lock import AgentInstanceLock
 from sc2tools_agent.state import (
@@ -138,6 +139,66 @@ def test_ordinary_selected_save_is_keep_and_never_drops_a_new_implicit_set(tmp_p
     state.device_token = "uncommitted-private"
     assert_code("invalid_intent", lambda: save_state(tmp_path, state))
     assert storage.pointer == before and load_state(tmp_path, storage=storage, crypto=crypto).device_token == "old-device-private"
+
+
+def test_each_commit_parses_the_old_and_new_document_once_and_encodes_only_the_new_one(tmp_path, monkeypatch):
+    state, storage, crypto = initialized(tmp_path)
+    parsed, encoded = [], []
+    document, encode = agent_credentials._document, agent_credentials._encode
+    monkeypatch.setattr(agent_credentials, "_document", lambda raw: parsed.append(raw) or document(raw))
+    monkeypatch.setattr(agent_credentials, "_encode", lambda value: encoded.append(encode(value)) or encoded[-1])
+    for commit in (lambda: save_state(tmp_path, state), lambda: commit_state_credentials(
+            tmp_path, state, obs=CredentialIntent("set", "new-obs-private"), expected_obs_revision=1)):
+        parsed.clear()
+        encoded.clear()
+        old = storage.pointer
+        state.window_page = "help" if state.window_page != "help" else "settings"
+        commit()
+        assert old != storage.pointer
+        # Small envelope plaintexts aside, the old and new documents are each parsed exactly once.
+        assert [raw for raw in parsed if raw in (old, storage.pointer)] == [old, storage.pointer]
+        assert all(len(raw) < 1024 for raw in parsed if raw not in (old, storage.pointer))
+        assert encoded.count(storage.pointer) == 1 and all(len(item) < 1024 for item in encoded if item != storage.pointer)
+    assert load_state(tmp_path, storage=storage, crypto=crypto).obs_password == "new-obs-private"
+
+
+@pytest.mark.parametrize("forgery,code", [("secret", "invalid_pointer"), ("revision", "invalid_generation")],
+    ids=["secret", "revision"])
+def test_commit_checks_the_built_document_against_its_own_parse(tmp_path, monkeypatch, forgery, code):
+    state, storage, crypto = initialized(tmp_path)
+    before = storage.pointer, dict(storage.generations)
+    prepare = agent_credentials._prepare
+    def forged(*args, **kwargs):
+        prepared = prepare(*args, **kwargs)
+        document = json.loads(prepared.document)
+        if forgery == "secret":
+            document["device_token"] = "smuggled-private"
+        else:
+            document["credentials"]["obs"]["revision"] += 2
+        return replace(prepared, document=json.dumps(document).encode())
+    monkeypatch.setattr(agent_credentials, "_prepare", forged)
+    state.window_page = "help"
+    assert_code(code, lambda: save_state(tmp_path, state))
+    assert (storage.pointer, storage.generations) == before
+
+
+def test_projection_whose_json_repeats_a_member_is_never_published_or_left_to_retry(tmp_path):
+    class Twin(str):
+        """Equal text but distinct keys, so the encoded member name repeats."""
+        __hash__ = object.__hash__
+        def __eq__(self, other):
+            return self is other
+    state, storage, crypto = initialized(tmp_path)
+    before = storage.pointer, dict(storage.generations)
+    state.uploaded[Twin("twin.SC2Replay")] = "2026-11-01"
+    state.uploaded[Twin("twin.SC2Replay")] = "2026-11-02"
+    assert_code("invalid_pointer", lambda: save_state(tmp_path, state))
+    assert (storage.pointer, storage.generations) == before and state._credential_pending is None
+    for key in [key for key in state.uploaded if type(key) is Twin]:
+        del state.uploaded[key]
+    state.window_page = "help"
+    save_state(tmp_path, state)
+    assert json.loads(storage.pointer)["uploaded"] == {"kept.SC2Replay": "2026-11-01"}
 
 
 def test_ordinary_keep_preserves_both_unreadable_slots_without_crypto_or_generation_rewrites(tmp_path):

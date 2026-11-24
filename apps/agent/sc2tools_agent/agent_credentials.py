@@ -236,11 +236,9 @@ def _call(callback, *args, default="unavailable"):
 
 
 def _pairs(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError("duplicate_key")
-        result[key] = value
+    result = dict(pairs)
+    if len(result) != len(pairs):
+        raise ValueError("duplicate_key")
     return result
 
 
@@ -258,6 +256,19 @@ def _document(raw):
     if type(value) is not dict:
         raise CredentialStorageError("invalid_pointer")
     return value
+
+
+def _parsed(raw, parses=()):
+    """raw's validated parse: the caller's own _document parse of this exact object, else a fresh one.
+
+    parses holds (bytes, document) pairs. A pair is bound to the very object
+    it was parsed from (bytes are immutable), so a parse never vouches for
+    other bytes, even equal ones. Shared parses are read-only.
+    """
+    for known, document in parses:
+        if known is raw:
+            return document
+    return _document(raw)
 
 
 def _encode(value):
@@ -422,7 +433,7 @@ def _load(storage, crypto):
     return CredentialSnapshot("selected", selection, *slots, raw, store_id=store_id)
 
 
-def _previous(snapshot):
+def _previous(snapshot, parses=()):
     if type(snapshot) is not CredentialSnapshot or snapshot.status not in ("missing", "selected"):
         raise CredentialStorageError("invalid_pointer")
     _identity_value(snapshot.store_id)
@@ -430,7 +441,7 @@ def _previous(snapshot):
         if snapshot.raw is not None or snapshot.selection != CredentialSelection():
             raise CredentialStorageError("invalid_pointer")
         return {}, CredentialSelection()
-    document = _document(snapshot.raw)
+    document = _parsed(snapshot.raw, parses)
     selection = _selection(document)
     if selection != snapshot.selection:
         raise CredentialStorageError("invalid_pointer")
@@ -441,8 +452,19 @@ def prepare_transaction(snapshot: CredentialSnapshot, document: bytes, *, crypto
                         device: CredentialIntent = KEEP, obs: CredentialIntent = KEEP,
                         generation_id: Callable[[], str] = lambda: uuid.uuid4().hex) -> PreparedTransaction:
     """Prepare immutable encrypted bytes; no storage or runtime publication."""
-    previous, selected = _previous(snapshot)
-    projected = _document(document)
+    previous, _selected = _previous(snapshot)
+    return _prepare(snapshot, _document(document), crypto, device, obs, generation_id,
+        ((snapshot.raw, previous),))
+
+
+def _prepare(snapshot, projected, crypto, device=KEEP, obs=KEEP,
+             generation_id=lambda: uuid.uuid4().hex, parses=()):
+    """prepare_transaction for a fresh projected dict, which this call extends and encodes.
+
+    parses: the caller's own validated parses (see _parsed), so the snapshot's
+    document is not parsed again.
+    """
+    previous, selected = _previous(snapshot, parses)
     if any(key in projected for key in ("credentials", "device_token", "obs_password")):
         raise CredentialStorageError("invalid_pointer")
     references, generations = [], []
@@ -505,17 +527,17 @@ def prepare_legacy_transaction(snapshot: CredentialSnapshot, *, crypto: Credenti
     return replace(prepared, expected=snapshot.raw, legacy=True)
 
 
-def _validate_prepared(prepared):
+def _validate_prepared(prepared, parses=()):
     if type(prepared) is not PreparedTransaction:
         raise CredentialStorageError("invalid_pointer")
-    previous = _document(prepared.expected) if prepared.expected is not None else {}
+    previous = _parsed(prepared.expected, parses) if prepared.expected is not None else {}
     if prepared.legacy:
         if prepared.expected is None or "credentials" in previous:
             raise CredentialStorageError("invalid_pointer")
         selected = CredentialSelection()
     else:
         selected = _selection(previous) if prepared.expected is not None else CredentialSelection()
-    document = _document(prepared.document)
+    document = _parsed(prepared.document, parses)
     if "device_token" in document or "obs_password" in document:
         raise CredentialStorageError("invalid_pointer")
     candidate = _selection(document)
@@ -573,7 +595,16 @@ def commit_transaction(storage: CredentialStorage, crypto: CredentialCrypto,
     A caller owns any runtime epoch check under this same reentrant state lock;
     this dormant core never activates an API, OBS client or shared AgentState.
     """
-    document, selection = _validate_prepared(prepared)
+    return CredentialCommit(_commit(storage, crypto, prepared), prepared.document)
+
+
+def _commit(storage, crypto, prepared, parses=()):
+    """commit_transaction returning only the published selection.
+
+    parses: the caller's own validated parses of prepared.expected and
+    prepared.document (see _parsed); every check still runs on them.
+    """
+    document, selection = _validate_prepared(prepared, parses)
     with _STATE_SAVE_LOCK:
         replaced = None
         try:
@@ -588,7 +619,7 @@ def commit_transaction(storage: CredentialStorage, crypto: CredentialCrypto,
             # check's code stands, as when an earlier re-read failed.
             code = "indeterminate" if replaced else exc.code
         else:
-            return CredentialCommit(selection, prepared.document)
+            return selection
         raise CredentialStorageError(code)
 
 
