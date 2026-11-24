@@ -201,6 +201,20 @@ def test_projection_whose_json_repeats_a_member_is_never_published_or_left_to_re
     assert json.loads(storage.pointer)["uploaded"] == {"kept.SC2Replay": "2026-11-01"}
 
 
+def test_explicit_storage_load_parses_its_pointer_once_selected_or_legacy(tmp_path, monkeypatch):
+    _state, storage, crypto = initialized(tmp_path)
+    parsed, document = [], agent_credentials._document
+    monkeypatch.setattr(agent_credentials, "_document", lambda raw: parsed.append(raw) or document(raw))
+    loaded = load_state(tmp_path, storage=storage, crypto=crypto)
+    assert parsed.count(storage.pointer) == 1 and loaded._credential_context.mode == "selected"
+    assert loaded.obs_password == "old-obs-private" and loaded.uploaded == {"kept.SC2Replay": "2026-11-01"}
+    storage.pointer = json.dumps({"window_page": "help", "device_token": "legacy-private"}).encode()
+    parsed.clear()
+    loaded = load_state(tmp_path, storage=storage, crypto=crypto)
+    assert parsed == [storage.pointer] and loaded._credential_context.mode == "legacy"
+    assert loaded.window_page == "help" and loaded.device_token is None
+
+
 def test_ordinary_keep_preserves_both_unreadable_slots_without_crypto_or_generation_rewrites(tmp_path):
     state, storage, crypto = initialized(tmp_path)
     crypto.plaintexts.clear()

@@ -635,3 +635,18 @@ def test_ordinary_save_pins_each_state_directory_once(tmp_path, monkeypatch):
     assert on(opened) == chain(root)
     loaded = load_state(root)
     assert loaded.uploaded == state.uploaded and loaded.device_token == "synthetic-device-token"
+
+
+def test_default_load_parses_the_saved_document_once(tmp_path, monkeypatch):
+    from sc2tools_agent import agent_credentials
+    from sc2tools_agent.state import AgentState, load_state, save_state
+    root = tmp_path / "state"
+    save_state(root, AgentState(device_token="synthetic-device-token", obs_password="synthetic-obs-password",
+        uploaded={"first.SC2Replay": "2026-11-24T00:00:00+00:00"}))
+    raw = (root / "agent.json").read_bytes()
+    parsed, document = [], agent_credentials._document
+    monkeypatch.setattr(agent_credentials, "_document", lambda value: parsed.append(value) or document(value))
+    loaded = load_state(root)
+    # Both small envelope plaintexts aside, the legacy check, the selector and the fields share one parse.
+    assert parsed.count(raw) == 1 and len(parsed) == 3 and loaded._credential_context.raw == raw
+    assert (loaded.device_token, loaded.obs_password) == ("synthetic-device-token", "synthetic-obs-password")

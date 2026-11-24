@@ -126,22 +126,80 @@ def test_recompute_recaptures_incompatible_recordings(monkeypatch, tmp_path, inv
 
 
 @pytest.mark.parametrize("enabled", [None, False, "true", 1, [], {}])
-def test_runtime_permission_is_explicit_true_only(monkeypatch, tmp_path, enabled):
-    from sc2tools_agent import state
-    monkeypatch.setattr(state, "load_state", lambda _: SimpleNamespace(replay_capture_enabled=enabled))
+def test_runtime_permission_is_explicit_true_only(tmp_path, enabled):
+    (tmp_path / "agent.json").write_text(json.dumps({"replay_capture_enabled": enabled}), encoding="utf-8")
     assert replay_capture.replay_capture_enabled(tmp_path) is False
     assert replay_capture.replay_capture_enabled(None) is False
 
 
-def test_runtime_permission_tracks_durable_state_and_fails_closed(monkeypatch, tmp_path):
-    from sc2tools_agent import state
-    current = SimpleNamespace(replay_capture_enabled=True)
-    monkeypatch.setattr(state, "load_state", lambda _: current)
+def test_runtime_permission_tracks_durable_state_and_fails_closed(tmp_path):
+    from sc2tools_agent.state import AgentState, save_state
+    state = AgentState(replay_capture_enabled=True)
+    save_state(tmp_path, state)
     assert replay_capture.replay_capture_enabled(tmp_path) is True
-    current.replay_capture_enabled = False
+    state.replay_capture_enabled = False
+    save_state(tmp_path, state)
     assert replay_capture.replay_capture_enabled(tmp_path) is False
-    monkeypatch.setattr(state, "load_state", Mock(side_effect=OSError("unreadable state")))
+    target = tmp_path / "agent.json"
+    for saved, enabled in ((b'{"replay_capture_enabled":true}', True),
+                           (b'{"replay_capture_enabled":true,"replay_capture_enabled":true}', False),
+                           (b'{"replay_capture_enabled":true,"x":NaN}', False),
+                           (b'[{"replay_capture_enabled":true}]', False), (b'\xff', False)):
+        target.unlink()
+        target.write_bytes(saved)
+        assert replay_capture.replay_capture_enabled(tmp_path) is enabled, saved
+    target.unlink()
+    target.mkdir()  # It exists, but cannot be read as a file.
     assert replay_capture.replay_capture_enabled(tmp_path) is False
+
+
+def test_permission_rereads_an_unchanged_file_after_a_failed_read(monkeypatch, tmp_path):
+    from sc2tools_agent.state import AgentState, save_state
+    save_state(tmp_path, AgentState(replay_capture_enabled=True))
+    target, read_bytes, failures = tmp_path / "agent.json", Path.read_bytes, [PermissionError(32, "held by a scanner")]
+
+    def briefly_held(path):
+        if path == target and failures:
+            raise failures.pop()
+        return read_bytes(path)
+    monkeypatch.setattr(Path, "read_bytes", briefly_held)
+    assert replay_capture.replay_capture_enabled(tmp_path) is False  # Fails closed,
+    assert failures == [] and replay_capture.replay_capture_enabled(tmp_path) is True  # but is not remembered.
+
+
+def test_permission_reads_saved_state_without_credentials_and_parses_only_changes(monkeypatch, tmp_path):
+    import threading
+    from sc2tools_agent import agent_credentials
+    from sc2tools_agent.state import AgentState, _STATE_SAVE_LOCK, save_state
+    state = AgentState(device_token="synthetic-device-token", replay_capture_enabled=True)
+    save_state(tmp_path, state)
+
+    def save_lock_free():
+        acquired = []
+        def probe():
+            if _STATE_SAVE_LOCK.acquire(timeout=5):
+                _STATE_SAVE_LOCK.release()
+                acquired.append(True)
+        thread = threading.Thread(target=probe)
+        thread.start()
+        thread.join()
+        return acquired == [True]
+
+    parses, watching, document = [], [True], agent_credentials._document
+    def parse(raw):
+        if watching:
+            parses.append(save_lock_free())
+        return document(raw)
+    monkeypatch.setattr(agent_credentials, "_document", parse)
+    monkeypatch.setattr(agent_credentials, "_load_credentials", Mock(side_effect=AssertionError("credential load")))
+    assert [replay_capture.replay_capture_enabled(tmp_path) for _ in range(3)] == [True] * 3
+    assert parses == [True]  # One parse, made after the save lock was released.
+    watching.clear()
+    state.replay_capture_enabled = False
+    save_state(tmp_path, state)
+    watching.append(True)
+    assert [replay_capture.replay_capture_enabled(tmp_path) for _ in range(3)] == [False] * 3
+    assert parses == [True, True]
 
 
 def test_disabled_request_never_launches_or_writes_new_artifact(monkeypatch, tmp_path):
@@ -281,21 +339,48 @@ def test_compactor_retains_only_valid_source_hash(digest):
     ("skipped:parse_failed", "could not parse"),
     ("skipped:playback_budget_exceeded", "upload capacity for accurate playback"),
 ])
-def test_upload_monitor_reports_terminal_outcomes_immediately(monkeypatch, tmp_path, marker, match):
-    from sc2tools_agent import state
+def test_upload_monitor_reports_terminal_outcomes_immediately(tmp_path, marker, match):
     path = tmp_path / "game.SC2Replay"
-    monkeypatch.setattr(state, "load_state", lambda _dir: SimpleNamespace(paused=False, uploaded={str(path): marker}))
+    (tmp_path / "agent.json").write_text(json.dumps({"uploaded": {str(path): marker}}), encoding="utf-8")
     with pytest.raises(RuntimeError, match=match):
         wait_for_replay_upload(path, tmp_path, "old-upload", poll_seconds=0)
 
 
-def test_upload_monitor_requires_a_fresh_success_and_bounds_waiting(monkeypatch, tmp_path):
-    from sc2tools_agent import state
+def test_upload_monitor_reports_a_saved_pause(tmp_path):
+    (tmp_path / "agent.json").write_text(json.dumps({"paused": True, "uploaded": {}}), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="Replay syncing is paused"):
+        wait_for_replay_upload(tmp_path / "game.SC2Replay", tmp_path, None, poll_seconds=0)
+
+
+def test_upload_monitor_requires_a_fresh_success_and_bounds_waiting(tmp_path):
     path = tmp_path / "game.SC2Replay"
-    monkeypatch.setattr(state, "load_state", lambda _dir: SimpleNamespace(paused=False, uploaded={str(path): "2026-09-05T08:00:00Z"}))
+    (tmp_path / "agent.json").write_text(json.dumps({"uploaded": {str(path): "2026-09-05T08:00:00Z"}}), encoding="utf-8")
     wait_for_replay_upload(path, tmp_path, "2026-09-04T08:00:00Z")
     with pytest.raises(TimeoutError, match="upload has not completed"):
         wait_for_replay_upload(path, tmp_path, "2026-09-05T08:00:00Z", timeout_seconds=0)
+
+
+def test_upload_monitor_reads_saved_state_without_credentials_only_after_it_changes(monkeypatch, tmp_path):
+    import time
+    from sc2tools_agent import agent_credentials, state as state_module
+    from sc2tools_agent.state import AgentState, save_state
+    path = tmp_path / "game.SC2Replay"
+    state = AgentState(device_token="synthetic-device-token", uploaded={str(path): "2026-11-23T08:00:00Z"})
+    save_state(tmp_path, state)
+    reads, build = [], state_module._state_from_raw
+    monkeypatch.setattr(state_module, "_state_from_raw", lambda raw: reads.append(raw) or build(raw))
+    monkeypatch.setattr(agent_credentials, "_load_credentials", Mock(side_effect=AssertionError("credential load")))
+    polls = []
+
+    def sleep(_seconds):
+        polls.append(len(reads))
+        if len(polls) == 3:
+            state.uploaded[str(path)] = "2026-11-24T08:00:00Z"  # Same size: a new file, not a longer one.
+            save_state(tmp_path, state)
+    # Only the monitor's own clock: the save's native retries keep the real sleep.
+    monkeypatch.setattr(replay_capture, "time", SimpleNamespace(monotonic=time.monotonic, sleep=sleep))
+    wait_for_replay_upload(path, tmp_path, "2026-11-23T08:00:00Z", timeout_seconds=10)
+    assert polls == [1, 1, 1] and len(reads) == 2
 
 
 @pytest.mark.parametrize("parse_mode", ["thread", "process_result"])

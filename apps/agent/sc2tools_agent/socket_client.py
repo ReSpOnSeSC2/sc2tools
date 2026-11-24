@@ -770,8 +770,11 @@ def make_recompute_handlers(
                     # through that upload would make both sides wait forever.
                     _ENGINE_REBUILD_LOCK.release()
                     capture_lock_held = False
-                    from .state import load_state
-                    previous_marker = load_state(state_dir).uploaded.get(str(paths[0])) if state_dir else None
+                    # Read like wait_for_replay_upload, which compares against it.
+                    from .state import read_saved_state
+                    key = str(paths[0])
+                    previous_marker = read_saved_state(
+                        state_dir, lambda state: state.uploaded.get(key))[1] if state_dir else None
                     # The normal parser loads the matching cached observation
                     # artifact and the existing uploader replaces mapPlayback.
                     queue_resync_for_paths(paths)

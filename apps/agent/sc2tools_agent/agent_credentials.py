@@ -380,39 +380,54 @@ def _pinned(storage):
 
 def load_credentials(storage: CredentialStorage, crypto: CredentialCrypto) -> CredentialSnapshot:
     """Read exactly the selected generations; never migrate, scan or write."""
+    return _load_credentials(storage, crypto)[0]
+
+
+def _load_credentials(storage, crypto, parses=()):
+    """load_credentials and the validated parse it made of the snapshot's raw.
+
+    parses: the caller's own validated parses (see _parsed). Equal bytes parse
+    identically, so a pointer read equal to a parsed object keeps that very
+    object as raw, and its parse is reused instead of repeated.
+    Returns (snapshot, parses for snapshot.raw).
+    """
     with _STATE_SAVE_LOCK:
-        snapshot = None
+        loaded = None
         try:
             with _pinned(storage):
-                snapshot = _load(storage, crypto)
+                loaded = _load(storage, crypto, parses)
         except CredentialStorageError as exc:
-            if snapshot is None:
+            if loaded is None:
                 raise
             code = exc.code
         else:
-            return snapshot
+            return loaded
         # The load finished, but the pinned directories then failed their
         # final verification: fail closed, like an unreadable final re-read.
-        return _unavailable(code, store_id=snapshot.store_id)
+        return _unavailable(code, store_id=loaded[0].store_id), ()
 
 
-def _load(storage, crypto):
+def _load(storage, crypto, parses=()):
     try:
         store_id = _identity_value(_call(storage.identity))
     except CredentialStorageError as exc:
-        return _unavailable(exc.code)
+        return _unavailable(exc.code), ()
     try:
         raw = _pointer(storage, store_id)
     except CredentialStorageError as exc:
-        return _unavailable(exc.code, store_id=store_id)
+        return _unavailable(exc.code, store_id=store_id), ()
     if raw is None:
         slot = LoadedSlot(None, "missing")
-        return CredentialSnapshot("missing", CredentialSelection(), slot, slot, store_id=store_id)
+        return CredentialSnapshot("missing", CredentialSelection(), slot, slot, store_id=store_id), ()
+    # Equal bytes parse identically: keep the caller's object so _parsed reuses its parse.
+    raw = next((known for known, _parse in parses if type(known) is bytes and known == raw), raw)
+    own = ()
     try:
-        document = _document(raw)
+        document = _parsed(raw, parses)
+        own = ((raw, document),)
         selection = _selection(document)
     except CredentialStorageError as exc:
-        return _unavailable(exc.code, raw, store_id)
+        return _unavailable(exc.code, raw, store_id), own
     slots = []
     for name in ("device", "obs"):
         reference = getattr(selection, name)
@@ -427,10 +442,10 @@ def _load(storage, crypto):
             slots.append(LoadedSlot(reference, "unreadable", code=exc.code))
     try:
         if _pointer(storage, store_id) != raw:
-            return _unavailable("conflict", store_id=store_id)
+            return _unavailable("conflict", store_id=store_id), ()
     except CredentialStorageError as exc:
-        return _unavailable(exc.code, store_id=store_id)
-    return CredentialSnapshot("selected", selection, *slots, raw, store_id=store_id)
+        return _unavailable(exc.code, store_id=store_id), ()
+    return CredentialSnapshot("selected", selection, *slots, raw, store_id=store_id), own
 
 
 def _previous(snapshot, parses=()):

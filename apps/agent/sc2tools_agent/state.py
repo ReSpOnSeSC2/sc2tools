@@ -412,12 +412,12 @@ def _state_directory(value):
     return Path(os.path.abspath(os.fspath(value)))
 
 
-def _context_from_snapshot(directory, snapshot, storage, crypto):
-    from .agent_credentials import _document
+def _context_from_snapshot(directory, snapshot, storage, crypto, parses=()):
+    from .agent_credentials import _parsed
     mode = snapshot.status
     if mode == "unreadable" and snapshot.raw is not None:
         try:
-            document = _document(snapshot.raw)
+            document = _parsed(snapshot.raw, parses)
         except Exception:
             document = None
         if document is not None and "credentials" not in document:
@@ -426,35 +426,42 @@ def _context_from_snapshot(directory, snapshot, storage, crypto):
 
 
 def _read_context(state_dir, storage=None, crypto=None):
-    from .agent_credentials import CredentialStorageError, _document, load_credentials
+    """The context and the validated parses made reading it (see agent_credentials._parsed).
+
+    One strict parse serves the legacy check, the credential load and the
+    state fields; the parses are shared read-only and never kept.
+    """
+    from .agent_credentials import CredentialStorageError, _document, _load_credentials
     directory = _state_directory(state_dir)
     if storage is not None:
         storage, crypto = _credential_backends(directory, storage, crypto)
-        return _context_from_snapshot(directory, load_credentials(storage, crypto), storage, crypto)
+        snapshot, parses = _load_credentials(storage, crypto)
+        return _context_from_snapshot(directory, snapshot, storage, crypto, parses), parses
     try:
         encoded = (directory / STATE_FILENAME).read_bytes()
     except FileNotFoundError:
-        return _CredentialContext("missing", None, None, None, None, directory)
+        return _CredentialContext("missing", None, None, None, None, directory), ()
     except OSError:
-        return _CredentialContext("unreadable", None, None, None, None, directory)
+        return _CredentialContext("unreadable", None, None, None, None, directory), ()
     try:
         document = _document(encoded)
     except CredentialStorageError:
-        return _CredentialContext("unreadable", encoded, None, None, None, directory)
+        return _CredentialContext("unreadable", encoded, None, None, None, directory), ()
+    parses = ((encoded, document),)
     if "credentials" not in document:
-        return _CredentialContext("legacy", encoded, None, None, None, directory)
+        return _CredentialContext("legacy", encoded, None, None, None, directory), parses
     try:
         storage, crypto = _credential_backends(directory, storage, crypto)
-        snapshot = load_credentials(storage, crypto)
+        snapshot, loaded = _load_credentials(storage, crypto, parses)
     except CredentialStorageError:
-        return _CredentialContext("unreadable", encoded, None, None, None, directory)
-    return _context_from_snapshot(directory, snapshot, storage, crypto)
+        return _CredentialContext("unreadable", encoded, None, None, None, directory), parses
+    return _context_from_snapshot(directory, snapshot, storage, crypto, loaded), loaded
 
 
-def _from_context(context):
-    from .agent_credentials import CredentialStorageError, _document
+def _from_context(context, parses=()):
+    from .agent_credentials import CredentialStorageError, _parsed
     try:
-        raw = _document(context.raw) if context.raw is not None else {}
+        raw = _parsed(context.raw, parses) if context.raw is not None else {}
     except CredentialStorageError:
         raw = {}
     try:
@@ -474,7 +481,40 @@ def _from_context(context):
 def load_state(state_dir: Path, *, storage=None, crypto=None) -> AgentState:
     """Read only. Preserve provenance so corrupt/legacy data cannot be overwritten."""
     with _STATE_SAVE_LOCK:
-        return _from_context(_read_context(state_dir, storage, crypto))
+        return _from_context(*_read_context(state_dir, storage, crypto))
+
+
+def read_saved_state(state_dir, pick, previous=None):
+    """pick(state) for the state saved in agent.json, without the credential load.
+
+    For durable checks of a saved preference or upload marker. Credentials are
+    never read or decrypted (secrets are None). The save lock is held only to
+    read the file, never to parse it. Missing or unreadable state gives the
+    defaults. previous: this call's earlier result. It is returned unread while
+    the file's size, mtime and file id are unchanged; every change writes a new file.
+    A failed read is never reused: a scanner may hold the file only briefly.
+    Returns (signature, pick(state)): keep only small picks, never the state.
+    """
+    from .agent_credentials import CredentialStorageError, _document
+    path = _state_directory(state_dir) / STATE_FILENAME
+    with _STATE_SAVE_LOCK:
+        try:
+            info = os.stat(path)
+            signature = (info.st_size, info.st_mtime_ns, info.st_ino)
+        except OSError:
+            signature = None
+        if signature is not None and previous is not None and previous[0] == signature:
+            return previous
+        try:
+            encoded = path.read_bytes()
+        except OSError:
+            encoded = signature = None
+    try:
+        state = _state_from_raw(_document(encoded) if encoded is not None else {})
+    except (CredentialStorageError, ValueError, TypeError, OverflowError):
+        state = AgentState()
+    state.device_token = state.obs_password = None
+    return signature, pick(state)
 
 
 def _state_from_raw(raw):
@@ -616,7 +656,7 @@ def _secure_context(state_dir, state, storage=None, crypto=None):
     if context is not None and (type(context) is not _CredentialContext or context.directory != directory):
         raise CredentialStorageError("conflict")
     if context is None:
-        context = _read_context(directory, storage, crypto)
+        context = _read_context(directory, storage, crypto)[0]
     if context.mode in ("legacy", "unreadable"):
         raise CredentialStorageError("invalid_pointer")
     if storage is not None and context.storage is not None and storage is not context.storage:
