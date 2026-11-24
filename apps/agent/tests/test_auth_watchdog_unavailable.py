@@ -13,6 +13,7 @@ import pytest
 from sc2tools_agent import api_client
 from sc2tools_agent.api_client import ApiClient, ApiError, DeviceUnauthorized
 from sc2tools_agent.auth_watchdog import AuthWatchdog
+from sc2tools_agent.errors import classify
 from sc2tools_agent.pairing.recovery import RuntimeRecovery
 from sc2tools_agent.runner import _RuntimeCell
 from sc2tools_agent.state import AgentState
@@ -52,6 +53,8 @@ def test_auth_unavailable_is_a_retried_server_error_not_unauthorized(sleeps):
     assert raised.value.status == 503 and raised.value.code == "auth_unavailable"
     assert sent.call_count == api_client.DEFAULT_RETRIES
     assert sleeps and set(sleeps) == {5.0}  # Retry-After between attempts.
+    # The app says "SC2 Tools is busy", not "This PC needs to be linked again".
+    assert classify(raised.value).kind == "server_busy"
 
 
 def test_watchdog_never_confirms_or_unlinks_on_503s(sleeps):
