@@ -20,6 +20,11 @@ corresponding GitHub Release.
   index (`net_mmr_window`) now supplies that order. The opponent table and
   MMR progression no longer sort a whole history at all. Results are
   unchanged. See ADR 0096.
+- Session momentum (post-win and post-loss win rates and win rate by game
+  number) works again for long histories. It sorted the whole history four
+  times by a large composite key and needed 70 MB for the largest one. A new
+  games index (`momentum_order`) now supplies its order, and two windows
+  replace the four sorts. Results are unchanged.
 
 ### Hosting costs
 
