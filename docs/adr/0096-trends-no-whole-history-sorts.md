@@ -37,9 +37,12 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
    race's value, which is exactly its next game in the old account, ladder
    race and queue partition. No other game ever reads its next game, because
    its drop reason is decided first.
-3. Order-dependent group outputs use `$top` and `$bottom` instead of a
-   `$sort` stage followed by `$first` or `$last`. This covers the opponent
-   table's newest name and race, and progression's open and close MMR.
+3. Order-dependent group outputs use `$top` and `$bottom`, or `$max` of a
+   tuple that starts with the order fields, instead of a `$sort` stage
+   followed by `$first` or `$last`. This covers progression's open and close
+   MMR, and the opponent table's newest name and race: one `$max` of
+   `[date, gameId, myToonHandle, ladder race, name, race]`, which keeps less
+   in memory than `$bottom` (ADR 0098).
    - Only admin Global Trends can tie on `(date, gameId)`, because its history
      may keep one replay for two accounts. For example, both players uploaded
      it, or one account was uploaded under the `S2` and `s2` spellings.
@@ -80,9 +83,9 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
 - Two more indexes on `games` (`net_mmr_window`, `momentum_order`), created
   at startup by `ensureIndexes`. With them, MongoDB can also sort a player's
   games by date and game id on index keys before fetching them.
-- Admin Global Trends reuses these pipelines on its history collection, which
-  has no such indexes, so its windows still sort there. Momentum there now
-  uses two windows instead of four sorts.
+- Admin Global Trends reuses these pipelines on its history collection. Its
+  snapshot stores the windows' sort fields and indexes them, so its windows
+  do not sort either (ADR 0098).
 - An adversarial pass compared the old and new code on generated histories:
   about 85,000 comparisons in five areas (personal and global momentum, net
   MMR, progression, plans and sort memory), each difference re-checked by a

@@ -2,8 +2,10 @@
 
 const { randomUUID } = require("crypto");
 const {
-  globalRowStages, replayKeyExpr, replayFileKeyExpr, GLOBAL_DEDUPE_ORDER,
+  globalRowStages, replayKeyExpr, replayFileKeyExpr, sessionSeriesExpr, GLOBAL_DEDUPE_ORDER,
 } = require("./adminGlobalTrendsScope");
+const { mongoOrder } = require("./sessions");
+const { NET_MMR_WINDOW_INDEX } = require("./trendsNetMmr");
 
 const HISTORY_COLLECTION = "admin_global_trends_history";
 const HISTORY_FRESH_MS = 5 * 60 * 1000;
@@ -24,6 +26,25 @@ const DEDUPE_PASSES = Object.freeze([
   Object.freeze({ key: "_globalReplayKey", index: "global_trends_dedupe_replay" }),
   Object.freeze({ key: "_globalFileKey", index: "global_trends_dedupe_file" }),
 ]);
+
+/** Indexes that supply the order of a card's windows over whole histories,
+ * which Atlas Flex could not sort in memory (ADR 0098). Each window must
+ * follow the snapshot $match directly, and its read hints the index. */
+const WINDOW_INDEXES = Object.freeze({
+  /** Net MMR's pairing window: the games index (NET_MMR_WINDOW_INDEX) with
+   * the snapshot in place of the user. */
+  netMmr: Object.freeze({
+    name: "global_trends_net_mmr",
+    key: Object.freeze(Object.fromEntries(Object.entries(NET_MMR_WINDOW_INDEX.key)
+      .map(([field, direction]) => [field === "userId" ? "_globalSnapshotId" : field, direction]))),
+  }),
+  /** Session momentum's windows: each session series, then the Trends
+   * card's session order. Both are stored when the snapshot is built. */
+  sessions: Object.freeze({
+    name: "global_trends_sessions",
+    key: Object.freeze({ _globalSnapshotId: 1, _globalSessionSeries: 1, _globalSessionOrder: 1 }),
+  }),
+});
 
 /** @param {string} snapshotId @param {string} key
  * @returns {Array<Record<string, any>>} */
@@ -110,6 +131,7 @@ class GlobalTrendsHistory {
         for (const { key, index } of DEDUPE_PASSES) {
           await this.collection.createIndex({ _globalSnapshotId: 1, [key]: 1, ...STORED_DEDUPE_ORDER }, { name: index });
         }
+        for (const { name, key } of Object.values(WINDOW_INDEXES)) await this.collection.createIndex({ ...key }, { name });
       })().catch((err) => { this.indexes = null; throw err; });
     }
     return this.indexes;
@@ -141,6 +163,11 @@ class GlobalTrendsHistory {
             _globalSourceId: "$_id",
             _globalReplayKey: { player: "$_globalPlayerId", replay: replayKeyExpr() },
             _globalFileKey: { player: "$_globalPlayerId", file: replayFileKeyExpr() },
+            // WINDOW_INDEXES.sessions: computed sort keys cannot use an index.
+            // Momentum reads only scalar Dates, the only dates mongoOrder()
+            // can convert.
+            _globalSessionSeries: sessionSeriesExpr(),
+            _globalSessionOrder: { $cond: [{ $eq: [{ $type: "$date" }, "date"] }, mongoOrder(), "$$REMOVE"] },
             _id: { generation: id, source: "$_id" },
           } },
           // Every generation has fresh IDs, so bulk inserts avoid an upsert
@@ -191,5 +218,5 @@ class GlobalTrendsHistory {
 
 module.exports = {
   GlobalTrendsHistory, HISTORY_COLLECTION, HISTORY_FRESH_MS, HISTORY_TTL_MS, HISTORY_BUILD_TIMEOUT_MS,
-  DEDUPE_PASSES, STORED_DEDUPE_ORDER, duplicateRowsPipeline,
+  DEDUPE_PASSES, STORED_DEDUPE_ORDER, WINDOW_INDEXES, duplicateRowsPipeline,
 };

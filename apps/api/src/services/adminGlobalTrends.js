@@ -2,13 +2,11 @@
 
 const { AggregationsService } = require("./aggregations");
 const { gamesMatchStage } = require("../util/parseQuery");
-const { myLadderRaceExpr } = require("./trendsRegionExpr");
-const { mongoOrder } = require("./sessions");
 const { parseGlobalTrendsFilters, playerIncluded } = require("./adminGlobalTrendsScope");
 const { readGlobalPlayers, paginatePlayers } = require("./adminGlobalTrendsPlayers");
 const { globalMmrProgression, fitGlobalInterval } = require("./adminGlobalTrendsMmr");
 const { GlobalTrendsQueries, QUERY_MAX_TIME_MS, globalTrendsBusy, queryKey } = require("./adminGlobalTrendsQueries");
-const { GlobalTrendsHistory } = require("./adminGlobalTrendsHistory");
+const { GlobalTrendsHistory, WINDOW_INDEXES } = require("./adminGlobalTrendsHistory");
 const { EXPLORER_SEQUENCE_HISTORY } = require("./trendsExplorer");
 const { PLAYER_REF, rosterRef } = require("../util/adminTrendViews");
 
@@ -23,6 +21,15 @@ const ALLOWED_METHODS = new Set([
   "oppMmrBuckets", "oppMmrBucketGames", "netMmrByMatchup", "netMmrByOpponent", "mmrProgression", "explorer",
 ]);
 const NET_METHODS = new Set(["netMmrByMatchup", "netMmrByOpponent"]);
+/** Cards whose leading windows read a whole history, and the index that
+ * supplies their order (ADR 0098). */
+const WINDOW_INDEX = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
+  netMmrByMatchup: WINDOW_INDEXES.netMmr.name,
+  netMmrByOpponent: WINDOW_INDEXES.netMmr.name,
+  momentum: WINDOW_INDEXES.sessions.name,
+}));
+/** Shared pipelines see the source game's _id, as on the games collection. */
+const SOURCE_ID_STAGE = Object.freeze({ $set: Object.freeze({ _id: "$_globalSourceId" }) });
 
 class AdminGlobalTrendsService {
   /** @param {{db: import('../db/connect').DbContext,mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'>,rosterPepper?:Buffer}} deps */
@@ -135,6 +142,7 @@ class AdminGlobalTrendsService {
       collection.aggregate(pipeline, { maxTimeMS: QUERY_MAX_TIME_MS,
         ...(options.collation?.locale === "simple" ? { collation: { locale: "simple" } } : {}),
         ...(Number.isInteger(options.batchSize) && options.batchSize > 0 ? { batchSize: options.batchSize } : {}),
+        ...(typeof options.hint === "string" ? { hint: options.hint } : {}),
       }).toArray());
     return { toArray: () => isRange ? this.queries.cached(queryKey(["range", pipeline]), read) : read() };
   }
@@ -184,18 +192,27 @@ class AdminGlobalTrendsService {
     if (cohort.mmrMin !== undefined || cohort.mmrMax !== undefined || !cohort.includeUnrated) {
       playerMatch.$in = (await this._players(snapshot)).filter((p) => playerIncluded(p, cohort)).map((p) => p.playerId);
     }
-    const prefix = [{ $match: {
+    const scope = { $match: {
       _globalSnapshotId: snapshot.id,
       ...(Object.keys(playerMatch).length ? { _globalPlayerId: playerMatch } : {}),
-    } }, { $set: { _id: "$_globalSourceId" } }];
+    } };
     const games = {
       aggregate: (/** @type {Array<Record<string, any>>} */ pipeline, /** @type {Record<PropertyKey, any>} */ options = {}) => {
         // Fail closed if a newly reused helper does not carry the expected
         // explicit scope. No recursive rewrite touches nested lookup scopes.
         if (pipeline[0]?.$match?.userId !== ADMIN_SCOPE) throw new Error("Unscoped global trends pipeline");
         const stages = adaptPipeline(pipeline, method, cohort, options[EXPLORER_SEQUENCE_HISTORY] === true);
-        return this._query([...prefix, ...stages], this.history.collection,
-          options.collation?.locale === "simple" ? { collation: { locale: "simple" } } : {});
+        // Atlas Flex caps an in-memory sort at 32 MB and cannot spill. A
+        // window directly after the $match stages takes its order from the
+        // hinted index instead, and MongoDB skips the sort of one more
+        // window directly after it. Any stage between them brings the sort
+        // back, so _id (which no window reads) is restored after them.
+        const hint = WINDOW_INDEX[method];
+        const windows = hint ? leadingWindows(stages) : 0;
+        return this._query([scope, ...stages.slice(0, windows), SOURCE_ID_STAGE, ...stages.slice(windows)], this.history.collection, {
+          ...(options.collation?.locale === "simple" ? { collation: { locale: "simple" } } : {}),
+          ...(windows ? { hint } : {}),
+        });
       },
     };
     const gameDetails = {
@@ -222,6 +239,17 @@ function distinctFacet(field) {
   return [{ $group: { _id: field } }, { $match: { _id: { $type: "string", $ne: "" } } }, { $sort: { _id: 1 } }];
 }
 
+/** The length of a leading run of $match stages and then windows, or 0
+ * when no window follows the $match stages.
+ * @param {Array<Record<string, any>>} stages */
+function leadingWindows(stages) {
+  let end = 0;
+  while (stages[end]?.$match) end += 1;
+  const matches = end;
+  while (stages[end]?.$setWindowFields) end += 1;
+  return end > matches ? end : 0;
+}
+
 /** @param {Array<Record<string, any>>} pipeline @param {string} method
  * @param {import('./adminGlobalTrendsScope').Cohort} cohort @param {boolean} [sequenceHistory] */
 function adaptPipeline(pipeline, method, cohort, sequenceHistory = false) {
@@ -238,19 +266,12 @@ function adaptPipeline(pipeline, method, cohort, sequenceHistory = false) {
       return [{ $match: match }];
     }
     if (method === "momentum" && stage.$setWindowFields) {
+      // The card sessions one player's games. Here each session series is
+      // a partition, ordered by its stored sessions.mongoOrder() key. Both
+      // are stored fields, so WINDOW_INDEXES.sessions supplies the order.
       const window = stage.$setWindowFields;
-      const partition = {
-        player: "$_globalPlayerId", race: myLadderRaceExpr(),
-        ladder: { $ifNull: ["$isLadderGame", null] },
-        size: { $ifNull: ["$playerCount", null] },
-        ...(window.partitionBy ? { session: window.partitionBy } : {}),
-      };
-      return [
-        // $documentNumber accepts exactly one sort key. A composite value
-        // keeps equal-timestamp replays ordered consistently in all windows.
-        ...(window.output._prevDate ? [{ $addFields: { _globalSequenceOrder: mongoOrder() } }] : []),
-        { $setWindowFields: { ...window, partitionBy: partition, sortBy: { _globalSequenceOrder: 1 } } },
-      ];
+      if (window.partitionBy) throw new Error("Unsupported global momentum window");
+      return [{ $setWindowFields: { ...window, partitionBy: "$_globalSessionSeries", sortBy: { _globalSessionOrder: 1 } } }];
     }
     if (method === "oppMmrBucketGames" && stage.$project?.id === "$gameId") {
       return [{ $project: { ...stage.$project, playerId: "$_globalPlayerId" } }];

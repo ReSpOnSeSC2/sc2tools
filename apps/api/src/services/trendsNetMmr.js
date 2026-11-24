@@ -497,9 +497,11 @@ async function netMmrByMatchup(deps, userId, filters, opts = {}) {
     ? { myRace: "$_myPlayedRace", opponentRace: "$_oppRace" }
     : "$_oppRace";
   const matchupOrder = ["PvP", "PvZ", "PvT", "TvT", "TvZ", "TvP", "ZvZ", "ZvT", "ZvP"];
+  // Races with equal net movement keep race order, so bars never swap
+  // places between two reads of the same history.
   const keptPairSort = groupByOwnRace
     ? { "_id.myRace": 1, "_id.opponentRace": 1 }
-    : { netMmr: -1 };
+    : { netMmr: -1, _id: 1 };
   const [root = {}] = await deps.games
     .aggregate([
       ...netMmrPairStages(deps, userId, filters),
