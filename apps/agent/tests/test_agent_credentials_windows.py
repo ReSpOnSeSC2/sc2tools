@@ -287,13 +287,13 @@ def chain(directory):
 
 
 def opened_directories(monkeypatch):
-    """Record (thread, path) for each directory handle the adapter opens, in order."""
+    """Record (thread, path, handle) for each directory handle the adapter opens."""
     opened, original = [], windows.native.WindowsFiles._open
 
     def recording(self, path, *args, directory=False, **kwargs):
         handle = original(self, path, *args, directory=directory, **kwargs)
         if directory:
-            opened.append((threading.get_ident(), str(path)))
+            opened.append((threading.get_ident(), str(path), handle))
         return handle
 
     monkeypatch.setattr(windows.native.WindowsFiles, "_open", recording)
@@ -303,7 +303,11 @@ def opened_directories(monkeypatch):
 def on(opened, thread=None):
     """Directories one thread opened (default: this one); ignores stray threads."""
     thread = threading.get_ident() if thread is None else thread
-    return [path for ident, path in opened if ident == thread]
+    return [path for ident, path, _handle in opened if ident == thread]
+
+
+def handles(opened):
+    return [handle for ident, _path, handle in opened if ident == threading.get_ident()]
 
 
 def test_transaction_pins_each_directory_once_across_every_operation(tmp_path, monkeypatch):
@@ -329,19 +333,23 @@ def test_transaction_pins_each_directory_once_across_every_operation(tmp_path, m
 
 
 def test_whole_chain_stays_pinned_between_operations_until_the_transaction_ends(tmp_path):
-    parent = tmp_path / "install"
+    parent, elsewhere = tmp_path / "install", tmp_path / "elsewhere"
     root = parent / "state"
+    elsewhere.mkdir()
     store = windows.WindowsCredentialStorage(root)
     store.replace_pointer(None, b'{"first":true}')
     with store.transaction():
         assert store.read_pointer() == b'{"first":true}'
+        # A move to an unpinned parent fails with 32 only while the moved
+        # directory itself is held (a pinned source parent does not block it).
         for directory in (root, parent):
             with pytest.raises(OSError) as error:
-                directory.rename(directory.with_name(directory.name + "-moved"))
+                directory.rename(elsewhere / directory.name)
             assert error.value.winerror == 32
         store.replace_pointer(b'{"first":true}', b'{"second":true}')
-    root.rename(parent / "state-moved")
-    assert (parent / "state-moved" / "agent.json").read_bytes() == b'{"second":true}'
+    root.rename(elsewhere / "state")
+    parent.rename(elsewhere / "install")
+    assert (elsewhere / "state" / "agent.json").read_bytes() == b'{"second":true}'
 
 
 def test_directory_outside_the_transaction_chain_is_still_pinned_by_its_own_hold(tmp_path):
@@ -373,14 +381,82 @@ def test_failed_final_check_of_the_pinned_chain_reports_only_a_fixed_code(tmp_pa
         return verify(handle, expected, directory=directory)
 
     monkeypatch.setattr(windows.native.Handle, "verify", checked)
+    opened = opened_directories(monkeypatch)
     with pytest.raises(CredentialStorageError, match="^unsafe_path$") as failure:
         with store.transaction():
             assert store.read_pointer() == b'{"first":true}'
             finished.append(True)
     assert "synthetic private" not in repr(failure.value)
     assert failure.value.__context__ is None and failure.value.__cause__ is None
-    finished.clear()
-    root.rename(tmp_path / "released")  # Every pinned handle was still closed.
+    assert on(opened) == chain(root) and all(handle.closed for handle in handles(opened))
+
+
+def test_failed_transaction_body_skips_the_final_check_and_closes_every_pin(tmp_path, monkeypatch):
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    store.replace_pointer(None, b'{"first":true}')
+    verify, checks = windows.native.Handle.verify, []
+
+    def counted(handle, expected, *, directory=False):
+        checks.append(str(expected))
+        return verify(handle, expected, directory=directory)
+
+    monkeypatch.setattr(windows.native.Handle, "verify", counted)
+    opened = opened_directories(monkeypatch)
+    with pytest.raises(LookupError, match="^synthetic body failure$"):
+        with store.transaction():
+            assert store.read_pointer() == b'{"first":true}'
+            checks.clear()
+            raise LookupError("synthetic body failure")
+    assert checks == []  # No final verification after a failed body.
+    assert on(opened) == chain(root) and all(handle.closed for handle in handles(opened))
+
+
+def test_nested_transaction_reuses_the_outer_pins_until_the_outer_ends(tmp_path, monkeypatch):
+    root, elsewhere = tmp_path / "install" / "state", tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    store = windows.WindowsCredentialStorage(root)
+    store.replace_pointer(None, b'{"first":true}')
+    opened = opened_directories(monkeypatch)
+    with store.transaction():
+        with store.transaction():
+            assert store.read_pointer() == b'{"first":true}'
+        with pytest.raises(OSError) as error:  # Still held by the outer transaction.
+            root.rename(elsewhere / "state")
+        assert error.value.winerror == 32
+        assert store.read_pointer() == b'{"first":true}'
+    assert on(opened) == chain(root) and all(handle.closed for handle in handles(opened))
+    root.rename(elsewhere / "state")
+
+
+def test_pin_retries_a_brief_sharing_violation_then_falls_back_per_operation(tmp_path, monkeypatch):
+    import ctypes
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    store.replace_pointer(None, b'{"first":true}')
+    opened = opened_directories(monkeypatch)
+    recording, busy, delays = windows.native.WindowsFiles._open, [2], []
+
+    def contended(self, path, *args, directory=False, **kwargs):
+        # Another writer's in-flight rename holds the state directory for write.
+        if directory and busy[0] and str(path) == chain(root)[-1]:
+            busy[0] -= 1
+            raise ctypes.WinError(32)
+        return recording(self, path, *args, directory=directory, **kwargs)
+
+    monkeypatch.setattr(windows.native.WindowsFiles, "_open", contended)
+    monkeypatch.setattr(windows.time, "sleep", delays.append)
+    with store.transaction():
+        assert store.read_pointer() == b'{"first":true}'
+    assert delays == [0.002, 0.004]
+    # Each failed attempt closed its partial chain; the third pinned once for every operation.
+    assert on(opened) == chain(root)[:-1] * 2 + chain(root)
+    assert all(handle.closed for handle in handles(opened))
+    busy[0], delays[:] = 100, []
+    with store.transaction():
+        with pytest.raises(CredentialStorageError, match="^unavailable$"):
+            store.read_pointer()  # After the retries, each operation pins on its own.
+    assert delays == [0.002, 0.004, 0.008, 0.016, 0.032]
 
 
 def test_transaction_pins_are_never_shared_with_another_thread(tmp_path, monkeypatch):

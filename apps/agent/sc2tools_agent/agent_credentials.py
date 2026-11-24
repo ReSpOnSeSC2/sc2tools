@@ -575,25 +575,29 @@ def commit_transaction(storage: CredentialStorage, crypto: CredentialCrypto,
     """
     document, selection = _validate_prepared(prepared)
     with _STATE_SAVE_LOCK:
-        committed = None
+        replaced = None
         try:
             with _pinned(storage):
-                committed = _publish(storage, crypto, prepared, document, selection)
-        except CredentialStorageError:
-            if committed is None:
+                replaced = _publish(storage, crypto, prepared, document)
+        except CredentialStorageError as exc:
+            if replaced is None:
                 raise
+            # The pointer read back as this document, but the pinned directories
+            # then failed their final verification. After this call's own
+            # replacement that is an unreadable final re-read; otherwise the
+            # check's code stands, as when an earlier re-read failed.
+            code = "indeterminate" if replaced else exc.code
         else:
-            return committed
-        # The pointer read back as published, but the pinned directories then
-        # failed their final verification, like an unreadable final re-read.
-        raise CredentialStorageError("indeterminate")
+            return CredentialCommit(selection, prepared.document)
+        raise CredentialStorageError(code)
 
 
-def _publish(storage, crypto, prepared, document, selection):
+def _publish(storage, crypto, prepared, document):
+    """Publish the prepared document; True when this call replaced the pointer."""
     store_id = prepared.store_id
     actual = _pointer(storage, store_id)
     if actual == prepared.document:
-        return CredentialCommit(selection, prepared.document)
+        return False
     if actual != prepared.expected:
         raise CredentialStorageError("conflict")
     for item in prepared.generations:
@@ -612,7 +616,7 @@ def _publish(storage, crypto, prepared, document, selection):
     except CredentialStorageError:
         actual = object()
     if actual == prepared.document:
-        return CredentialCommit(selection, prepared.document)
+        return True
     if actual == prepared.expected:
         raise CredentialStorageError(failure)
     raise CredentialStorageError("indeterminate")

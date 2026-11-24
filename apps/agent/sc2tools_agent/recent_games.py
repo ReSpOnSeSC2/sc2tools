@@ -9,7 +9,7 @@ from pathlib import Path
 import threading
 from types import SimpleNamespace
 
-from .state import _replace_state_file
+from .state import _STATE_SAVE_LOCK, _replace_state_file
 
 MAX_RECENT_GAMES = 200
 RETRYABLE_SKIPS = frozenset({"player_unresolved", "parse_failed", "file_unstable", "filtered"})
@@ -313,11 +313,15 @@ class RecentGamesStore:
                     stream.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
                 stream.flush()
                 os.fsync(stream.fileno())
-            if can_commit is not None and not can_commit():
-                return False
-            # Reuse the state writer's bounded Windows sharing-violation
-            # retry; antivirus/indexer reads can briefly hold this file too.
-            _replace_state_file(temporary, self.path)
+            # An agent.json commit holds this directory without write sharing,
+            # which fails a racing rename: wait for it under the state writer
+            # lock (the ownership check already takes that lock).
+            with _STATE_SAVE_LOCK:
+                if can_commit is not None and not can_commit():
+                    return False
+                # Reuse the state writer's bounded Windows sharing-violation
+                # retry; antivirus/indexer reads can briefly hold this file too.
+                _replace_state_file(temporary, self.path)
             return True
         finally:
             if os.path.exists(temporary):

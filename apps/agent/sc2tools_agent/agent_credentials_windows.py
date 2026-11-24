@@ -95,6 +95,8 @@ class WindowsCredentialStorage:
         and again when the transaction ends; no write/delete sharing keeps each
         directory in place meanwhile, and identity() re-verifies the state
         directory at every operation boundary. Pins belong to this thread only.
+        Held pins also block other writers' renames into these directories, so
+        same-directory writers must serialize with commits (_STATE_SAVE_LOCK).
         If the chain cannot be pinned, each operation pins and fails on its own.
         """
         if self._held():
@@ -103,13 +105,21 @@ class WindowsCredentialStorage:
         paths = [*reversed(self._state_dir.parents), self._state_dir]
         handles = []
         try:
-            try:
-                for path in paths:
-                    handles.append(self._files._open(path, native._LIST_DIRECTORY, native._SHARE_READ, 3, directory=True))
-            except Exception:
+            for attempt in range(6):
+                try:
+                    for path in paths:
+                        handles.append(self._files._open(path, native._LIST_DIRECTORY, native._SHARE_READ, 3, directory=True))
+                    break
+                except Exception as error:
+                    # Another writer's same-directory rename opens that directory
+                    # for write only briefly (sharing violation 32): pin again.
+                    retry = getattr(error, "winerror", None) == 32 and attempt < 5
                 for handle in reversed(handles):
                     handle.close()
                 handles = []
+                if not retry:
+                    break
+                time.sleep(0.002 * 2 ** attempt)
             chain = self._pins.chain = tuple(zip(paths, handles))
             yield
             code = None

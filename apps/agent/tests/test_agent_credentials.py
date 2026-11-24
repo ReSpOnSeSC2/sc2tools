@@ -429,6 +429,10 @@ def test_failed_final_pin_check_fails_closed_after_publication_or_load():
     error = assert_code("indeterminate", lambda: commit_transaction(storage, crypto, prepared))
     assert error.__context__ is None and error.__cause__ is None
     assert storage.pointer == prepared.document  # Published, but not vouched for.
+    # The exact retry replaces nothing, so the failed check keeps its own code.
+    replaces = storage.events.count(("replace",))
+    error = assert_code("unsafe_path", lambda: commit_transaction(storage, crypto, prepared))
+    assert error.__context__ is None and storage.events.count(("replace",)) == replaces
     loaded = load_credentials(storage, crypto)
     assert (loaded.status, loaded.code, loaded.device.value, loaded.raw) == ("unreadable", "unsafe_path", None, None)
     assert loaded.store_id == storage.store_id
