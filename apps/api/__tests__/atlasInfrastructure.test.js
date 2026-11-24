@@ -485,6 +485,12 @@ describe("Atlas Flex billing helpers", () => {
     expect(run(4_800, { postedCycleCents: 3_100, grossCents: 3_100 }))
       .toEqual({ cents: 3_100, basis: "posted" });
     expect(run(null)).toEqual({ cents: null, basis: null });
+    // A stray early line date cannot stretch the floor past a 31-day month.
+    expect(run(100, { cycleStart: "2026-06-15T00:00:00.000Z" }))
+      .toEqual({ cents: 818, basis: "flex_base_price" });
+    // Credits posted as negative lines: no floor to hold, so no base-price label.
+    expect(run(-50, { postedCycleCents: -50, grossCents: -50 }))
+      .toEqual({ cents: -50, basis: "posted" });
   });
 
   test("bills through the newest line item, not the invoice's last update", () => {
@@ -574,9 +580,12 @@ describe("Atlas Flex billing helpers", () => {
 
   test("totals other clusters' charges in the project for admins", () => {
     const target = { projectId: PROJECT_ID, clusterName: "sample-cluster" };
-    // flexInvoiceBody carries 1970 cents for "old-dedicated-cluster".
-    expect(_internals.parsePendingInvoices(flexInvoiceBody(30), target).otherClustersPostedCents)
-      .toBe(1_970);
+    // flexInvoiceBody carries 1970 cents for "old-dedicated-cluster",
+    // billed through Aug 9.
+    expect(_internals.parsePendingInvoices(flexInvoiceBody(30), target)).toMatchObject({
+      otherClustersPostedCents: 1_970,
+      otherClustersBilledThrough: "2026-08-09T00:00:00.000Z",
+    });
     // Still reported before the configured cluster's first line posts.
     const onlyOld = flexInvoiceBody(30);
     onlyOld.lineItems = onlyOld.lineItems.slice(2);

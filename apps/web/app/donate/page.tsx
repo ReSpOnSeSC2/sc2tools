@@ -434,9 +434,11 @@ function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
       return {
         ...line,
         // Name the tier Atlas reports, not the one this page was written for.
+        // The planning fallback is Flex's price, so a dedicated tier is only
+        // named next to its own live billing.
         label: flex
           ? line.label
-          : cluster?.tier
+          : cluster?.tier && projected !== null
             ? `MongoDB Atlas — ${cluster.tier}`
             : "MongoDB Atlas",
         approxMonthlyUsd: projected ?? costs.mongo.planning.monthlyUsd,
@@ -568,7 +570,7 @@ function runRateBasis(
   basis: NonNullable<InfrastructureCosts["mongo"]["atlas"]["billing"]>["projectionBasis"],
 ): string {
   if (basis === "flex_base_price") {
-    return "is Atlas Flex's base price, because the charges posted so far (for example a partly billed first day) project lower";
+    return "is Atlas Flex's minimum for this billing cycle, because the charges posted so far (for example a partly billed first day) project lower";
   }
   if (basis === "flex_cap") return "is Atlas Flex's monthly price cap";
   return "is a projection from posted charges";

@@ -29,6 +29,7 @@ const FLEX_API_VERSION = "2024-11-13";
 // (for example a first line item that starts before the cluster existed).
 const FLEX_BASE_CENTS_PER_HOUR = 1.1;
 const FLEX_MONTHLY_CAP_CENTS = 3_000;
+const MAX_CYCLE_HOURS = 31 * 24;
 const FLEX_STORAGE_LIMIT_GB = 5;
 const FLEX_SNAPSHOT_RETENTION_DAYS = 8;
 /** @type {Readonly<Record<string, string>>} */
@@ -99,7 +100,7 @@ class AtlasInfrastructureClient {
     // One kind probe feeds both reads: the cluster read reuses a fresh Flex
     // response, and billing learns the tier ("flex", "dedicated" or unknown)
     // even when the cluster read itself fails. The invoice request runs
-    // alongside the probe, so an outage costs one timeout, not two.
+    // alongside the probe instead of waiting for it.
     const kind = this._resolveClusterKind();
     const knownKind = kind.then((resolved) => resolved.kind, () => null);
     const invoices = this._pendingInvoices();
@@ -643,9 +644,14 @@ function flexRunRate(input) {
   if (projected === null || !Number.isSafeInteger(projected)) {
     return { cents: projected, basis: null };
   }
+  // A billing cycle is at most 31 days; a stray early line date must not
+  // stretch the floor beyond a month's base price.
   const cycleHours = input.cycleStart && input.cycleEnd
-    ? (new Date(input.cycleEnd).getTime() - new Date(input.cycleStart).getTime())
-      / 3_600_000
+    ? Math.min(
+      MAX_CYCLE_HOURS,
+      (new Date(input.cycleEnd).getTime() - new Date(input.cycleStart).getTime())
+        / 3_600_000,
+    )
     : Number.NaN;
   const netShare = grossCents > 0
     ? Math.min(1, Math.max(0, grossCents - discountCents) / grossCents)
@@ -655,7 +661,7 @@ function flexRunRate(input) {
     : 0;
   /** @type {"posted"|"flex_base_price"|"flex_cap"} */ let basis = "posted";
   let cents = projected;
-  if (cents < floor) {
+  if (floor > 0 && cents < floor) {
     cents = floor;
     basis = "flex_base_price";
   }
@@ -776,6 +782,7 @@ function collectLineItems(invoices, target) {
     flexLineItemCount: 0,
     otherClustersCents: 0,
     categoryCents: { compute: 0, storage: 0, transfer: 0, other: 0 },
+    /** @type {string[]} */ otherClustersLineEnds: [],
     /** @type {string[]} */ cycleStarts: [],
     /** @type {string[]} */ cycleEnds: [],
     /** @type {string[]} */ invoiceUpdates: [],
@@ -805,6 +812,7 @@ function collectLineItems(invoices, target) {
             totals.otherClustersCents,
             itemGross - itemDiscount,
           );
+          pushDate(totals.otherClustersLineEnds, item?.endDate ?? item?.created);
         }
         continue;
       }
@@ -838,16 +846,19 @@ function parsePendingInvoices(raw, target, options = {}) {
     ? raw.results
     : (Array.isArray(raw?.lineItems) ? [raw] : []);
   const lines = collectLineItems(invoices, target);
-  const otherClustersPostedCents = lines.otherClustersCents;
+  const otherClusters = {
+    otherClustersPostedCents: lines.otherClustersCents,
+    otherClustersBilledThrough: maxIso(lines.otherClustersLineEnds),
+  };
   // A valid pending-invoice response with no lines for the configured
   // project/cluster is not evidence of a $0 monthly run rate. It can mean
   // provider posting lag or a target mismatch, so preserve the planning
   // fallback instead of projecting zero.
   if (lines.lineItemCount === 0) {
-    return unavailableBilling(
-      "atlas_billing_no_matching_line_items",
-      otherClustersPostedCents,
-    );
+    return {
+      ...unavailableBilling("atlas_billing_no_matching_line_items"),
+      ...otherClusters,
+    };
   }
   const { grossCents, discountCents } = lines;
   const cycleStart = minIso(lines.cycleStarts);
@@ -892,7 +903,7 @@ function parsePendingInvoices(raw, target, options = {}) {
     clusterPostedDiscountUsd: centsToUsd(discountCents),
     clusterPostedNetUsd: centsToUsd(grossCents - discountCents),
     lineItemCount: lines.lineItemCount,
-    otherClustersPostedCents,
+    ...otherClusters,
     currency: "USD",
     source: "atlas_pending_invoice",
     lagDaysApprox: 1,
@@ -900,14 +911,8 @@ function parsePendingInvoices(raw, target, options = {}) {
   };
 }
 
-/**
- * @param {string} [errorCode]
- * @param {number|null} [otherClustersPostedCents]
- */
-function unavailableBilling(
-  errorCode = "atlas_billing_unavailable",
-  otherClustersPostedCents = null,
-) {
+/** @param {string} [errorCode] */
+function unavailableBilling(errorCode = "atlas_billing_unavailable") {
   return {
     available: false,
     cycleStart: null,
@@ -924,7 +929,9 @@ function unavailableBilling(
     clusterPostedNetUsd: null,
     lineItemCount: 0,
     /** @type {number|null} */
-    otherClustersPostedCents,
+    otherClustersPostedCents: null,
+    /** @type {string|null} */
+    otherClustersBilledThrough: null,
     currency: "USD",
     source: "atlas_pending_invoice",
     lagDaysApprox: 1,

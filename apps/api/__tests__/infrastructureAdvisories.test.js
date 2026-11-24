@@ -436,13 +436,38 @@ describe("Atlas Flex advisories", () => {
   test("surfaces charges for the project's other clusters to admins", () => {
     const input = flexInput(2_130_000_000, 117_000_000, cluster(2_530_000_000, 147_000_000));
     input.mongo.atlas.billing.otherClustersPostedCents = 4_012;
+    input.mongo.atlas.billing.otherClustersBilledThrough = "2026-08-10T00:00:00.000Z";
     const result = buildInfrastructureAdminSnapshot(input);
     expect(result.advisories.map((row) => [row.code, row.level])).toEqual([
       ["mongo_other_cluster_charges", "watch"],
     ]);
     expect(result.advisories[0].message).toMatch(/\$40\.12 has posted this cycle for other clusters/);
+    // Once that cluster stops billing (deleted), its earlier charges this
+    // cycle no longer raise the advisory.
+    input.mongo.atlas.billing.otherClustersBilledThrough = "2026-08-07T00:00:00.000Z";
+    expect(buildInfrastructureAdminSnapshot(input).advisories).toEqual([]);
+    input.mongo.atlas.billing.otherClustersBilledThrough = "2026-08-10T00:00:00.000Z";
     input.mongo.atlas.billing.otherClustersPostedCents = 0;
     expect(buildInfrastructureAdminSnapshot(input).advisories).toEqual([]);
+  });
+
+  test("a cluster total never reports less than the SC2 Tools database alone", () => {
+    // For example a total reused from an earlier read while SC2 Tools grew.
+    const result = buildInfrastructureAdminSnapshot(
+      flexInput(2_130_000_000, 117_000_000, cluster(1_000_000_000, 50_000_000)),
+    );
+    expect(result.providers.mongo.cluster.flexStorage).toMatchObject({
+      usedBytes: 2_247_000_000,
+      scope: "all_databases",
+    });
+  });
+
+  test("a deployment without a database client is not told to retry or grant roles", () => {
+    const input = flexInput(2_130_000_000, 117_000_000);
+    input.mongo.appData.allDatabasesError = "not_configured";
+    const [partial] = buildInfrastructureAdminSnapshot(input).advisories;
+    expect(partial.message).toMatch(/does not measure storage across the cluster: only the SC2 Tools database \(44\.9%\) was measured; the cluster total may be higher\./);
+    expect(partial.action).toBe("Check the cluster's data size in Atlas.");
   });
 
   test("ignores a malformed cluster-wide total", () => {

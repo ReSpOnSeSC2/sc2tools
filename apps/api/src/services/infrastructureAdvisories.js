@@ -256,7 +256,7 @@ function buildMongo(source) {
     });
   }
   const billing = atlas.billing || {};
-  pushOtherClusterChargesAdvisory(advisories, billing.otherClustersPostedCents);
+  pushOtherClusterChargesAdvisory(advisories, billing, atlas.measuredAt);
   const projected = moneyOrNull(billing.projectedMonthlyRunRateUsd);
   const planning = moneyOrNull(source?.pricing?.monthlyPlanningEstimateUsd);
   const provider = {
@@ -424,6 +424,10 @@ function sanitiseAppData(source) {
   };
 }
 
+// Atlas posts usage about a day late; three days without a new line for
+// another cluster means it stopped billing (for example it was deleted).
+const OTHER_CLUSTER_ACTIVE_MS = 3 * 24 * 60 * 60 * 1000;
+
 /** Why the cluster-wide storage total is missing (see _readAllDatabasesStorage). */
 const ALL_DATABASES_ERRORS = new Set([
   "not_configured",
@@ -568,7 +572,11 @@ function flexStorageUsage(rawLimitGb, appData) {
   const logical = integerOrNull(appData?.logicalDataBytes);
   const indexes = integerOrNull(appData?.allocatedIndexBytes);
   const appOnlyBytes = logical !== null && indexes !== null ? logical + indexes : null;
-  const usedBytes = all ? all.logicalDataBytes + all.indexBytes : appOnlyBytes;
+  // The cluster holds at least the SC2 Tools database, so a cluster total
+  // (for example one reused from an earlier read) never reports less.
+  const usedBytes = all
+    ? Math.max(all.logicalDataBytes + all.indexBytes, appOnlyBytes ?? 0)
+    : appOnlyBytes;
   return {
     usedBytes,
     limitBytes,
@@ -587,12 +595,23 @@ function flexStorageUsage(rawLimitGb, appData) {
  * kept for rollback after a move to Flex) are real spending, so admins see
  * them here instead of nowhere.
  *
+ * Only a cluster that is still billing raises it: once a deleted cluster's
+ * lines stop posting, its earlier charges this cycle no longer call for
+ * action, so the advisory clears after OTHER_CLUSTER_ACTIVE_MS.
+ *
  * @param {any[]} out
- * @param {unknown} rawCents
+ * @param {Record<string, any>} billing
+ * @param {unknown} measuredAt
  */
-function pushOtherClusterChargesAdvisory(out, rawCents) {
-  const cents = integerOrNull(rawCents);
+function pushOtherClusterChargesAdvisory(out, billing, measuredAt) {
+  const cents = integerOrNull(billing?.otherClustersPostedCents);
   if (cents === null || cents <= 0) return;
+  const through = validIso(billing?.otherClustersBilledThrough);
+  const now = validIso(measuredAt);
+  if (through && now
+    && new Date(now).getTime() - new Date(through).getTime() > OTHER_CLUSTER_ACTIVE_MS) {
+    return;
+  }
   out.push(advisory(
     "mongo",
     "watch",
@@ -612,21 +631,27 @@ function pushOtherClusterChargesAdvisory(out, rawCents) {
  * @param {number} value the SC2 Tools share in percent
  */
 function partialStorageCopy(reason, value) {
-  const share = `only the SC2 Tools database (${value}%) was measured, so the cluster total may be higher`;
+  const share = `only the SC2 Tools database (${value}%) was measured; the cluster total may be higher`;
   if (reason === "unauthorized") {
     return {
-      message: `Atlas Flex counts every database on the cluster against its data allowance, but the application's database user cannot list or measure them all; ${share}.`,
+      message: `Atlas Flex counts every database on the cluster against its data allowance, but the application's database user cannot list or measure them all: ${share}.`,
       action: "Grant the user a custom role with only listDatabases on the cluster and dbStats on every database. Do not use readAnyDatabase or readWriteAnyDatabase for this: they also grant reading other applications' data.",
     };
   }
   if (reason === "too_many_databases") {
     return {
-      message: `The cluster lists more databases than the advisory totals, so ${share}.`,
+      message: `The cluster lists more databases than the advisory totals: ${share}.`,
+      action: "Check the cluster's data size in Atlas.",
+    };
+  }
+  if (reason === "not_configured") {
+    return {
+      message: `This deployment does not measure storage across the cluster: ${share}.`,
       action: "Check the cluster's data size in Atlas.",
     };
   }
   return {
-    message: `The cluster-wide storage read did not complete (${reason ?? "failed"}), so ${share}.`,
+    message: `The cluster-wide storage read did not complete (${reason ?? "failed"}): ${share}.`,
     action: "The read is retried on the next refresh; if this persists, check the cluster's data size in Atlas.",
   };
 }

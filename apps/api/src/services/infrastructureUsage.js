@@ -20,6 +20,7 @@ const {
   buildInfrastructureAdminSnapshot,
 } = require("./infrastructureAdvisories");
 const { STORAGE_TOTALS_COMMENT } = require("./infrastructureStorageComment");
+const { withoutTracing } = require("../util/sentry");
 
 const CLOUDFLARE_GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -498,8 +499,9 @@ class InfrastructureUsageService {
    * advisory needs this total rather than the SC2 Tools share. The listing
    * asks for every database (authorizedDatabases: false): a user scoped to
    * its own database gets "unauthorized" instead of a one-database listing
-   * that would look like the whole cluster. Names stay here (and the
-   * commands are log-private); only sums, a count and a reason code leave.
+   * that would look like the whole cluster. Names stay here (the commands
+   * are log-private and run untraced); only sums, a count and a reason code
+   * leave.
    * A transient failure reuses the last good total for a day. Never part of
    * the public cost payload.
    *
@@ -512,6 +514,37 @@ class InfrastructureUsageService {
   async _readAllDatabasesStorage(measuredAt) {
     const client = this.mongoClient;
     if (!client) return { totals: null, error: "not_configured" };
+    // Tracing would record each database's name in its spans; keep those
+    // spans from being created at all.
+    const outcome = await withoutTracing(() => this._sumAllDatabases(client));
+    if (outcome.totals) {
+      const totals = { ...outcome.totals, measuredAt: measuredAt.toISOString() };
+      this._lastAllDatabases = totals;
+      return { totals, error: null };
+    }
+    if (outcome.error === "timeout" || outcome.error === "failed") {
+      // A transient failure reuses the last good total for a while.
+      const last = this._lastAllDatabases;
+      if (last
+        && measuredAt.getTime() - new Date(last.measuredAt).getTime() < ALL_DATABASES_REUSE_MS) {
+        return { totals: last, error: null };
+      }
+    } else {
+      // A definitive answer (no access, too many databases, unusable stats)
+      // means the last good total no longer describes the cluster.
+      this._lastAllDatabases = null;
+    }
+    return { totals: null, error: outcome.error };
+  }
+
+  /**
+   * @param {import('mongodb').MongoClient} client
+   * @returns {Promise<{
+   *   totals: {logicalDataBytes: number, indexBytes: number, databaseCount: number}|null,
+   *   error: "unauthorized"|"too_many_databases"|"invalid_stats"|"timeout"|"failed"|null,
+   * }>}
+   */
+  async _sumAllDatabases(client) {
     const options = { maxTimeMS: this.timeoutMs, comment: STORAGE_TOTALS_COMMENT };
     try {
       const listing = await client.db("admin").command({
@@ -547,24 +580,15 @@ class InfrastructureUsageService {
       if (!Number.isSafeInteger(logicalDataBytes + indexBytes)) {
         return { totals: null, error: "invalid_stats" };
       }
-      const totals = {
-        logicalDataBytes,
-        indexBytes,
-        databaseCount: names.length,
-        measuredAt: measuredAt.toISOString(),
+      return {
+        totals: { logicalDataBytes, indexBytes, databaseCount: names.length },
+        error: null,
       };
-      this._lastAllDatabases = totals;
-      return { totals, error: null };
     } catch (err) {
       const failure = /** @type {any} */ (err);
       if (failure?.code === 13 || failure?.codeName === "Unauthorized"
         || /not authorized/i.test(String(failure?.message || ""))) {
         return { totals: null, error: "unauthorized" };
-      }
-      const last = this._lastAllDatabases;
-      if (last
-        && measuredAt.getTime() - new Date(last.measuredAt).getTime() < ALL_DATABASES_REUSE_MS) {
-        return { totals: last, error: null };
       }
       const timeout = failure?.code === 50 || failure?.codeName === "MaxTimeMSExpired";
       return { totals: null, error: timeout ? "timeout" : "failed" };

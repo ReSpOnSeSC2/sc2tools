@@ -429,6 +429,26 @@ describe("InfrastructureUsageService", () => {
     expect((await usage.mongoStorageSnapshot()).appData).toMatchObject({ allDatabases: null, allDatabasesError: "timeout" });
   });
 
+  test("a definitive failure forgets the last good total", async () => {
+    let mode = "ok";
+    const mongoClient = {
+      db: () => ({
+        command: jest.fn(async (command) => {
+          if (mode === "unauthorized") throw Object.assign(new Error("not authorized"), { code: 13 });
+          if (mode === "timeout") throw Object.assign(new Error("time limit"), { code: 50 });
+          return command.listDatabases ? { databases: [{ name: "sc2tools_saas" }] } : { dataSize: 10, indexSize: 5 };
+        }),
+      }),
+    };
+    const usage = service({ mongoClient, atlasClient: null });
+    expect((await usage.mongoStorageSnapshot()).appData.allDatabases).toMatchObject({ databaseCount: 1 });
+    mode = "unauthorized";
+    expect((await usage.mongoStorageSnapshot()).appData.allDatabasesError).toBe("unauthorized");
+    // A later timeout must not bring back the total from before access changed.
+    mode = "timeout";
+    expect((await usage.mongoStorageSnapshot()).appData).toMatchObject({ allDatabases: null, allDatabasesError: "timeout" });
+  });
+
   test("admin diagnostics expose config health but never provider identifiers", async () => {
     const atlasClient = {
       snapshot: jest.fn(async () => ({

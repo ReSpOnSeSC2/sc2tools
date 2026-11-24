@@ -53,7 +53,7 @@ remains the backup provider, now with the Flex tier's fixed snapshot policy.
    A cluster that started mid-cycle is not diluted over days it did not
    exist. A Flex run rate stays within the tier's range for the cycle: never
    above the $30 cap, never below the base band's hourly price ($0.011) for
-   the cycle's hours (a partly billed first day would otherwise pull it
+   the cycle's hours, at most 31 days (a partly billed first day would otherwise pull it
    under, for the whole cutover month), with line discounts scaling that
    floor, and never below what has already posted. A definite tier from the
    probe decides whether that range applies; only when the tier is unknown do
@@ -62,9 +62,10 @@ remains the backup provider, now with the Flex tier's fixed snapshot policy.
    says which of these set the number (`projectionBasis`), and the donate page
    words it accordingly. Flex SKUs count as compute: the band price includes
    storage, backups and transfer. Charges posted this cycle for the project's
-   other clusters (for example the paused M10) are totalled for admins
-   (`otherClustersPostedCents`, with a watch advisory); public pages count
-   only the configured cluster.
+   other clusters (for example the old M10) are totalled for admins
+   (`otherClustersPostedCents`, with a watch advisory while such a cluster
+   is still billing, cleared three days after its last line); public pages
+   count only the configured cluster.
 4. The planning fallback, shown only while live billing is unavailable (for
    example before a new cluster's first day of charges posts), is the Flex base
    price of $8, so the public fixed baseline is $16.25 (Render $7, domain
@@ -76,8 +77,10 @@ remains the backup provider, now with the Flex tier's fixed snapshot policy.
    data and index sizes over every database (`listDatabases` with
    `authorizedDatabases: false`, so a user scoped to its own database gets an
    error instead of a one-database listing that looks like the whole
-   cluster). Names never leave the server, the commands are log-private, and
-   the total is admin-only. If the read fails, the SC2 Tools database stands
+   cluster). Names never leave the server: the commands are log-private and
+   run with tracing suppressed (Sentry's Mongo spans would carry database
+   names), and the total is admin-only. The total never reports less than the
+   SC2 Tools database's own size. If the read fails, the SC2 Tools database stands
    in as a labelled lower bound with a watch advisory whose text depends on
    the reason: a permissions gap names a metadata-only custom role
    (`listDatabases` plus `dbStats`, not the read-any roles), a transient

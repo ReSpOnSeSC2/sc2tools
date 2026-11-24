@@ -214,3 +214,17 @@ test("manual capture skips sanitized private errors and retains unrelated diagno
   sentry.captureException(ordinary);
   expect(mockSdk.captureException).toHaveBeenCalledWith(ordinary);
 });
+
+test("runs work untraced when Sentry is live, and plainly when it is off", async () => {
+  process.env.SENTRY_DSN = "https://example.invalid/fixture";
+  const live = load();
+  mockSdk.suppressTracing.mockClear();
+  await expect(live.withoutTracing(async () => "totals")).resolves.toBe("totals");
+  expect(mockSdk.suppressTracing).toHaveBeenCalledTimes(1);
+
+  delete process.env.SENTRY_DSN;
+  const off = load();
+  mockSdk.suppressTracing.mockClear();
+  expect(off.withoutTracing(() => 42)).toBe(42);
+  expect(mockSdk.suppressTracing).not.toHaveBeenCalled();
+});

@@ -147,7 +147,7 @@ test("says when the Flex run rate is the base price rather than a projection", a
 
   render(await DonatePage());
 
-  expect(screen.getByText(/\$8\.18 monthly Atlas run rate is Atlas Flex's base price, because the charges posted so far/))
+  expect(screen.getByText(/\$8\.18 monthly Atlas run rate is Atlas Flex's minimum for this billing cycle, because the charges posted so far/))
     .toBeTruthy();
   expect(screen.queryByText(/run rate is a projection from posted charges/)).toBeNull();
 });
@@ -178,6 +178,26 @@ test("adds live R2 to the planning baseline when Atlas billing is unavailable", 
   expect(screen.getByText(/instead of claiming a zero charge/i)).toBeTruthy();
   // No live tier: no tier is claimed.
   expect(screen.getByText("MongoDB Atlas")).toBeTruthy();
+});
+
+test("does not pair a dedicated tier with the Flex planning price", async () => {
+  getInfrastructureCostsMock.mockResolvedValue({
+    ...COSTS,
+    mongo: {
+      ...COSTS.mongo,
+      atlas: {
+        available: true,
+        cluster: COSTS.mongo.atlas.cluster,
+        billing: { ...COSTS.mongo.atlas.billing, available: false, projectedMonthlyRunRateUsd: null },
+      },
+    },
+    site: { ...COSTS.site, pricingMode: "planning_fallback", estimatedCurrentMonthlyTotalUsd: 16.295 },
+  });
+
+  render(await DonatePage());
+
+  expect(screen.getByText("MongoDB Atlas")).toBeTruthy();
+  expect(screen.queryByText("MongoDB Atlas — M10")).toBeNull();
 });
 
 test("describes Atlas Flex pricing and storage without inventing disk telemetry", async () => {
