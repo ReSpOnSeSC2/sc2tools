@@ -30,7 +30,10 @@ remains the backup provider, now with the Flex tier's fixed snapshot policy.
 ## Decision
 
 1. Production uses the Flex cluster `unified-flex` in the existing Atlas
-   project. `MONGODB_URI` points at it and `ATLAS_CLUSTER_NAME` names it.
+   project. `MONGODB_URI` points at it. The old M10 is deleted with its
+   snapshots as soon as the other applications that still use it are
+   repointed to Flex: that ends its charges and the only copies kept longer
+   than Flex's 8-day backups.
 2. `AtlasInfrastructureClient` detects a Flex cluster through the Flex Admin
    API resource (version 2024-11-13) and caches the kind for six hours. A 400
    or 404 from that resource means "dedicated". Atlas keeps the name when it
@@ -82,30 +85,26 @@ remains the backup provider, now with the Flex tier's fixed snapshot policy.
    on cutover day Atlas's own Flex "data size" read 1.87 GB for the whole
    cluster while the SC2 Tools database's uncompressed `dbStats` alone was
    2.13 GB.
-6. The public retention notice (privacy page, account-deletion dialog,
-   goodbye page) keeps disclosing the previous cluster while it or its
-   snapshots exist: that it holds a copy of accounts as of the move,
-   including accounts deleted since, until the cluster is deleted, and that
-   its backups last up to the longest entry of `LEGACY_BACKUP_RETENTION`
-   (7 days, 4 weeks, 12 months, 1 year). Render ignores `sync: false` keys
-   when it updates an existing Blueprint, so the operator sets the value in
-   the dashboard together with `ATLAS_CLUSTER_NAME`, and removes it only
-   after the old cluster and its snapshots are deleted. The privacy page's
-   "last updated" date moved with this change.
+6. `ATLAS_CLUSTER_NAME` keeps naming the M10 until the M10 and its snapshots
+   are deleted, and only then moves to `unified-flex`. The public retention
+   notice (privacy page, account-deletion dialog, goodbye page) reads the
+   configured cluster's backup policy, so until the deletion it keeps stating
+   the M10's longer schedule (7 days, 4 weeks, 12 months, 1 year), which is
+   still true while the M10 holds a copy of every account; the cost pages
+   keep showing the M10, which is still billing. A separate disclosure for a
+   retained cluster was considered and dropped in favour of deleting the M10
+   promptly.
 
 ## Consequences
 
 - The public cost display drops from about $91 to about $16-23 a month.
 - Backups: daily snapshots, the last 8 kept, no point-in-time restore and no
-  on-demand snapshots. The privacy page's retention line follows the API: 8
-  days for the current database, plus the previous cluster's disclosure while
-  `LEGACY_BACKUP_RETENTION` is set. The restore runbook's point-in-time steps
-  do not apply.
-- Until the M10 is deleted, it also holds a frozen copy of every account as of
-  cutover, including accounts deleted afterwards, so deleting it (with its
-  snapshots) promptly after the rollback window is what ends that copy. A
-  paused M10 still bills storage and backups, and Atlas resumes a paused
-  cluster after 30 days.
+  on-demand snapshots. After the switch the privacy page's retention line
+  reads 8 days. The restore runbook's point-in-time steps do not apply.
+- Until the M10 is deleted, it holds a frozen copy of every account as of
+  cutover, including accounts deleted afterwards, and keeps billing. Deleting
+  it with its snapshots ends both; pausing does not (a paused M10 still bills
+  storage and backups, and Atlas resumes a paused cluster after 30 days).
 - Capacity: 5 GB including indexes, counted over every database on the
   cluster (the SC2 Tools database alone was about 45% at cutover), 500
   operations per second, and no disk spill for aggregations (in-memory sort
@@ -114,6 +113,6 @@ remains the backup provider, now with the Flex tier's fixed snapshot policy.
   follow-up before that admin page works on Flex; user-facing pages were
   checked against the limits.
 - Atlas schedules Flex upgrades; the Node driver (6.13) is supported for 8.0.
-- The M10 stays paused for a rollback window before it is deleted. Other
-  applications' databases were copied to Flex as well and must be repointed
-  before the M10 is removed.
+- Other applications' databases were copied to Flex as well. Each gets a
+  final re-sync and its app is repointed; the M10 is then deleted with its
+  snapshots rather than kept paused, since a paused cluster keeps billing.

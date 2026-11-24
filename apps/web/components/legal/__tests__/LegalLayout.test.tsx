@@ -4,8 +4,8 @@ import PrivacyPage from "@/app/legal/privacy/page";
 afterEach(cleanup);
 it("provides a table of contents that points to every real policy section", () => {
   const { container } = render(<PrivacyPage />);
-  const updated = screen.getByText("November 23, 2026", { selector: "time" });
-  expect(updated.getAttribute("datetime")).toBe("2026-11-23");
+  const updated = screen.getByText("November 13, 2026", { selector: "time" });
+  expect(updated.getAttribute("datetime")).toBe("2026-11-13");
 
   const sectionHashes = Array.from(container.querySelectorAll("[data-legal] h2[id]"), (heading) => `#${heading.id}`);
   const tablesOfContents = container.querySelectorAll("[data-legal-toc] nav");

@@ -24,7 +24,7 @@ export const metadata = pageMetadata({
     "How SC2 Tools processes replay data, connected streaming accounts, and private StarCraft II replay files.",
 });
 
-const LAST_UPDATED = "2026-11-23";
+const LAST_UPDATED = "2026-11-13";
 /** Settings tab with export, history deletion and account deletion. */
 const DATA_SETTINGS_HREF = "/settings?tab=backups";
 const LIST_CLASS = "list-disc space-y-2 pl-6";

@@ -61,34 +61,18 @@ async function dataInventory(db, userId) {
   return { removed, anonymized, countedAt: new Date().toISOString() };
 }
 
-const RETENTION_UNITS = ["days", "weeks", "months", "years"];
-
-/** Only well-formed unit/count pairs survive.
- * @param {unknown} rows @param {"keep"|"value"} field */
-function retentionRows(rows, field) {
-  return Array.isArray(rows) ? rows.flatMap((row) => {
-    const unit = row?.unit;
-    const value = row?.[field];
-    return RETENTION_UNITS.includes(unit) && Number.isSafeInteger(value) && value > 0
-      ? [{ unit, value }] : [];
-  }) : [];
-}
-
 /** Public subset of the existing cached provider policy. No cluster identifiers,
  * snapshot IDs, private backup counts or credentials cross this boundary.
- * `legacy` is the configured schedule of a previous cluster whose backups still
- * exist (LEGACY_BACKUP_RETENTION); it is published alongside, never merged away.
- * @param {import('./backupStatus').BackupStatusService} backupStatus
- * @param {{unit: string, value: number}[]} [legacy] */
-async function publicDataRetention(backupStatus, legacy = []) {
+ * @param {import('./backupStatus').BackupStatusService} backupStatus */
+async function publicDataRetention(backupStatus) {
   const status = await backupStatus.atlasStatus();
-  const retention = retentionRows(status.retention, "keep");
-  return {
-    available: status.available === true && status.stale !== true && retention.length > 0,
-    retention,
-    legacyRetention: retentionRows(legacy, "value"),
-    checkedAt: status.checkedAt || null,
-  };
+  const retention = Array.isArray(status.retention) ? status.retention.flatMap((row) => {
+    const unit = row.unit;
+    const value = row.keep;
+    return ["days", "weeks", "months", "years"].includes(unit) && Number.isSafeInteger(value) && value > 0
+      ? [{ unit, value }] : [];
+  }) : [];
+  return { available: status.available === true && status.stale !== true && retention.length > 0, retention, checkedAt: status.checkedAt || null };
 }
 
 module.exports = { dataInventory, publicDataRetention };

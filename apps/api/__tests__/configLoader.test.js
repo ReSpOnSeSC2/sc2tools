@@ -2,42 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const {
-  loadConfig,
-  parseGuidesConfig,
-  parseLegacyBackupRetention,
-} = require("../src/config/loader");
-
-describe("config loader - legacy backup retention", () => {
-  test("is empty unless a previous cluster's schedule is configured", () => {
-    expect(parseLegacyBackupRetention({})).toEqual([]);
-    expect(parseLegacyBackupRetention({ LEGACY_BACKUP_RETENTION: "  " })).toEqual([]);
-  });
-
-  test("parses count/unit entries, singular or plural, any case", () => {
-    expect(parseLegacyBackupRetention({
-      LEGACY_BACKUP_RETENTION: "7 days, 4 weeks,12 Months, 1 year",
-    })).toEqual([
-      { unit: "days", value: 7 },
-      { unit: "weeks", value: 4 },
-      { unit: "months", value: 12 },
-      { unit: "years", value: 1 },
-    ]);
-  });
-
-  test("accepts the semicolon format the site displays and ignores surrounding quotes", () => {
-    const expected = [{ unit: "days", value: 7 }, { unit: "years", value: 1 }];
-    expect(parseLegacyBackupRetention({ LEGACY_BACKUP_RETENTION: "7 days; 1 year" })).toEqual(expected);
-    expect(parseLegacyBackupRetention({ LEGACY_BACKUP_RETENTION: "\"7 days, 1 year\"" })).toEqual(expected);
-  });
-
-  test("fails startup on a malformed schedule instead of shortening the notice", () => {
-    for (const value of ["7 fortnights", "0 days", "days 7", "7 days,,1 year", "-1 years"]) {
-      expect(() => parseLegacyBackupRetention({ LEGACY_BACKUP_RETENTION: value }))
-        .toThrow(/LEGACY_BACKUP_RETENTION/);
-    }
-  });
-});
+const { loadConfig, parseGuidesConfig } = require("../src/config/loader");
 
 const BASE_ENV = {
   MONGODB_URI: "mongodb://localhost:27017",

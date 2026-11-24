@@ -1693,7 +1693,6 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       games: services.games,
       gdpr: services.gdpr,
       backupStatus: services.backupStatus,
-      legacyBackupRetention: deps.config.legacyBackupRetention || [],
       dataRepairs: services.dataRepairs,
       pairings: services.pairings, agentVersion: services.agentVersion,
       imports: services.imports,

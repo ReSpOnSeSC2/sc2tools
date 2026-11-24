@@ -21,10 +21,10 @@ corresponding GitHub Release.
   are still posting, and SC2 Tools data plus indexes against Flex's 5 GB
   allowance. The admin view totals storage over every database on the
   cluster, because Flex counts them all, and flags charges still posting for
-  the project's other clusters. The admin backup card reads Flex's daily
-  snapshots (last 8 kept). The privacy page, account-deletion dialog and
-  goodbye page keep disclosing the previous cluster and its backups while
-  they exist (`LEGACY_BACKUP_RETENTION`). See ADR 0095.
+  the project's other clusters. The admin backup card and the privacy page's
+  retention line read Flex's daily snapshots (last 8 kept) once
+  `ATLAS_CLUSTER_NAME` names the Flex cluster, which happens only after the
+  old M10 and its snapshots are deleted. See ADR 0095.
 
 ### Website navigation
 
