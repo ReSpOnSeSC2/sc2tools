@@ -435,12 +435,15 @@ class UploadQueue:
             if self._archive_thread is None or not self._archive_thread.is_alive():
                 self._archive_stop.clear()
                 self._hydrate_archive_ready()
-                self._archive_thread = threading.Thread(
+                archive_thread = threading.Thread(
                     target=self._run_archive,
                     name="sc2tools-replay-archive",
                     daemon=True,
                 )
-                self._archive_thread.start()
+                # Store the worker only once it runs. If the OS refuses the
+                # thread, ``stop()`` must not try to join an unstarted one.
+                archive_thread.start()
+                self._archive_thread = archive_thread
                 self._notify_archive_pending()
                 log.info(
                     "replay_archive_worker_started pending=%d",
