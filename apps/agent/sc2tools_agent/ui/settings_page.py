@@ -465,7 +465,9 @@ def build_settings_page(
     form.addRow(window._help_label("Performance", "desktop-app-performance"), performance)
 
     window._log_combo = QtWidgets.QComboBox()
-    window._log_combo.addItems(["INFO", "DEBUG", "WARNING", "ERROR"])
+    # No WARNING or ERROR: the agent always records INFO and up
+    # (runner._log_level_from_env), so a saved quieter level shows as INFO.
+    window._log_combo.addItems(["INFO", "DEBUG"])
     form.addRow("Log level", window._log_combo)
 
     # Replay folders: a real list, because StarCraft II writes

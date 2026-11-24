@@ -66,6 +66,18 @@ def test_api_reset_validation_and_restart_fields(tmp_path):
     ''')
 
 
+def test_saved_quiet_log_level_shows_and_saves_as_info(tmp_path):
+    run_gui_check(tmp_path, '''
+        ui, win = make_window(initial_settings=SettingsPayload(log_level="ERROR"))
+        assert [win._log_combo.itemText(i) for i in range(win._log_combo.count())] == ["INFO", "DEBUG"]
+        assert win._log_combo.currentText() == "INFO"
+        win._click_save_settings()
+        wait_saved(win)
+        assert saved[-1].log_level == "INFO"
+        assert "Log level" not in win._settings_status.text()
+    ''')
+
+
 def test_api_health_worker_and_changed_text_result(tmp_path):
     run_gui_check(tmp_path, '''
         ui, win = make_window()

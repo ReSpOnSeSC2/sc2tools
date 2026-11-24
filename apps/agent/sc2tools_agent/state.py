@@ -127,8 +127,9 @@ class AgentState:
 
     log_level_override: Optional[str] = None
     """If set, used as the root log level on next start. Editable from
-    the GUI Settings tab. Recognised values: DEBUG, INFO, WARNING,
-    ERROR. Anything else is ignored at load time."""
+    the GUI Settings tab, which offers INFO and DEBUG. WARNING and ERROR
+    (saved by older versions) still load but run as INFO: the runner
+    never logs quieter than INFO."""
 
     autostart_enabled: bool = False
     """Mirrors the Windows HKCU\\...\\Run registry entry. Stored in
