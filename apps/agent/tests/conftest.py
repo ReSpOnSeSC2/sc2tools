@@ -6,7 +6,13 @@ import sys
 
 import pytest
 
-from sc2tools_agent import replay_finder
+from sc2tools_agent import relaunch, replay_finder
+
+
+@pytest.fixture(autouse=True)
+def _no_recorded_launch_environment(monkeypatch):
+    """run_agent records its launch environment process-wide; keep one test's record out of the next."""
+    monkeypatch.setattr(relaunch, "_launch_environ", None)
 
 
 @pytest.fixture(autouse=True)

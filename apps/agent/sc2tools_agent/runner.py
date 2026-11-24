@@ -73,7 +73,7 @@ from .health import HealthMonitor, classify_boot_error
 from .health_notices import HealthNotices, TITLE as HEALTH_NOTICE_TITLE
 from .recent_games import parse_time
 from .milestone_notices import MilestoneNotices
-from .relaunch import AgentRelaunch, take_restart_marker
+from .relaunch import AgentRelaunch, remember_launch_environ, take_restart_marker
 from .status_model import StatusFacts, ConnectionFacts, derive_status
 from .game_activity import GameActivityGate
 from .update_scheduler import UpdateScheduler
@@ -125,8 +125,9 @@ def run_agent(argv: Optional[List[str]] = None) -> int:
     to use ``sys.argv[1:]``.
     """
     args = _parse_args(argv)
-    # Before _bootstrap edits the environment, so a restart reads fresh settings.
-    relaunch = AgentRelaunch(argv)
+    # Before _bootstrap edits the environment, so a copy started by Restart agent
+    # or by an update's installer reads the settings saved since this one started.
+    relaunch = AgentRelaunch(argv, environ=remember_launch_environ())
 
     # The state file may carry an API base override the user set in
     # the GUI Settings tab. Apply it BEFORE load_config() runs so
