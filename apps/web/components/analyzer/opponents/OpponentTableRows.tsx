@@ -36,7 +36,7 @@ export const OpponentRow = memo(function OpponentRow({ row: o, expanded, onToggl
                       className="group cursor-pointer border-t border-border hover:bg-accent/10"
                     >
                       <td
-                        className="sticky left-0 z-10 bg-bg-surface px-2 py-1 text-text group-hover:text-accent"
+                        className="sticky left-0 z-10 bg-bg-surface px-2 py-1 text-text group-hover:bg-[color:color-mix(in_srgb,rgb(var(--accent))_10%,rgb(var(--bg-surface)))] group-hover:text-accent"
                         title={groupRowTitle(o)}
                       >
                         <span className="flex min-w-0 items-center gap-1">
@@ -172,7 +172,7 @@ export function IdentityRow({
       className="group cursor-pointer border-t border-border/60 bg-bg-elevated/40 hover:bg-accent/10"
     >
       <td
-        className="sticky left-0 z-10 bg-bg-elevated py-1 pl-5 pr-2 text-text-muted group-hover:text-accent"
+        className="sticky left-0 z-10 bg-[color:color-mix(in_srgb,rgb(var(--bg-elevated))_40%,rgb(var(--bg-surface)))] py-1 pl-5 pr-2 text-text-muted group-hover:bg-[color:color-mix(in_srgb,rgb(var(--accent))_10%,rgb(var(--bg-surface)))] group-hover:text-accent"
         title={identity.name || ""}
       >
         <span className="flex min-w-0 items-center gap-1">

@@ -73,7 +73,7 @@ export function OpponentHistory({ items, expanded, visibleCount, onMore, sort, c
   const mobile = useMediaQuery("(max-width: 767px)");
   const { window: rows, total } = opponentRowWindow(items, expanded, visibleCount);
   const extra = Object.values(columns).filter(Boolean).length;
-  return <div className="rounded-2xl border border-line bg-bg-surface surface-sheen shadow-card">
+  return <div className="overflow-hidden rounded-2xl border border-line bg-bg-surface shadow-card">
     {mobile ? <>
       <label className="flex items-center gap-3 p-3 text-caption">Sort opponents<Select aria-label="Sort opponents" value={MOBILE_SORTS.some(option => option.key === sort.sortBy) ? sort.sortBy : "lastPlayed"} onChange={event => sort.setSortExplicit(event.target.value, ["name", "race", "region", "map", "myBuild", "opponentBuild", "lastResult"].includes(event.target.value) ? "asc" : "desc")} className="min-h-11 flex-1">{MOBILE_SORTS.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}</Select><Button variant="ghost" aria-label="Reverse sort direction" onClick={() => sort.setSortExplicit(sort.sortBy, sort.sortDir === "asc" ? "desc" : "asc")}>{sort.sortDir === "asc" ? "↑" : "↓"}</Button></label>
       <ul aria-label="Opponent history" aria-busy={busy || undefined} className="divide-y divide-line">
