@@ -7,7 +7,7 @@ const article: HelpArticle = {
   "category": "desktop-app",
   "audience": "all",
   "order": 5,
-  "updated": "2026-10-23",
+  "updated": "2026-11-24",
   "keywords": [
     "updates",
     "installer",
@@ -31,7 +31,7 @@ const article: HelpArticle = {
     },
     {
       "type": "paragraph",
-      "text": "**Install now** works even when automatic updates are turned off. Installation waits until no match has been active for at least two minutes, no OBS output is live, and no replay capture is running. During the hold, the card says **Will install after this match**. The tray also offers **Install update vX**."
+      "text": "**Install now** works even when automatic updates are turned off, and it starts right away unless a match is running, an OBS output is live, or a replay capture is running. Then the button shows **Queued**, the card names what it is waiting for, such as **Installs as soon as this match ends**, and the update installs the moment that ends. **Later** cancels a queued install. Automatic updates also wait until no game has run for two minutes, so the card can say **Will install in about 2 minutes if no game starts**. The tray also offers **Install update vX**."
     },
     {
       "type": "paragraph",

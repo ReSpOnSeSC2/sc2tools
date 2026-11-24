@@ -13,7 +13,7 @@ STARTING = evaluate(HealthFacts(), 0.0)
 ACTION_LABELS = {
     "link_pc": "Link PC", "finish_setup": "Finish setup", "retry_now": "Retry now", "add_folder": "Add folder",
     "set_player_name": "Set player name", "resume": "Resume", "open_obs_settings": "Open OBS settings",
-    "install_update": "Install update", "restart_agent": "Restart agent", "copy_details": "Copy details",
+    "restart_agent": "Restart agent", "copy_details": "Copy details",
     "open_log": "Open log",
 }
 _DOTS = {"error": (palette.RED, "Error"), "warn": (palette.AMBER, "Needs attention"),

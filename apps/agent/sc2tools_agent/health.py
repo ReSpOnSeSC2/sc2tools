@@ -32,7 +32,7 @@ LIVE_CONTACT_SEC = 15  # the client poller backs off to 5 s while SC2 is idle
 STARTING_PHASES = ("starting", "connecting")
 LEVELS = ("ok", "info", "warn", "error", "off")
 ACTIONS = frozenset({"link_pc", "finish_setup", "retry_now", "add_folder", "set_player_name", "resume",
-                     "open_obs_settings", "install_update", "restart_agent", "copy_details", "open_log"})
+                     "open_obs_settings", "restart_agent", "copy_details", "open_log"})
 UNLINKED_SENTENCE = "This PC was unlinked from your account."
 STATUS_HELP = "desktop-app-status"
 SYNC_HELP = "desktop-app-sync-problems"
@@ -307,15 +307,15 @@ def _filter(facts, now):
 
 
 def _updates(facts, now):
+    """Only an update that needs attention is a check. The update card above owns Install now and Retry."""
     version = facts.update_version
     if not version:
         return None
     if facts.update_failed:
-        return HealthRow("updates", "warn", f"Version {version} couldn't install.", "install_update")
+        return HealthRow("updates", "warn", f"Version {version} couldn't install.")
     if facts.update_required:
-        return HealthRow("updates", "warn", f"This version is no longer supported; install version {version}.",
-                         "install_update")
-    return HealthRow("updates", "info", f"Version {version} is ready to install.", "install_update")
+        return HealthRow("updates", "warn", f"This version is no longer supported; install version {version}.")
+    return None
 
 
 def _live(facts, now):

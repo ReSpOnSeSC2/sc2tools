@@ -90,9 +90,9 @@ def monitor():
     ({"last_upload_at": NOW - 180}, "uploads", "ok", None),
     ({"archive_missing": 2, "archive_total": 9}, "archive", "info", None),
     ({"filter_label": "Season 67"}, "filter", "info", None),
-    ({"update_version": "0.25.0"}, "updates", "info", "install_update"),
-    ({"update_version": "0.25.0", "update_required": True}, "updates", "warn", "install_update"),
-    ({"update_version": "0.25.0", "update_failed": True}, "updates", "warn", "install_update"),
+    # The update card above the checks owns Install now and Retry, so these rows carry no button.
+    ({"update_version": "0.25.0", "update_required": True}, "updates", "warn", None),
+    ({"update_version": "0.25.0", "update_failed": True}, "updates", "warn", None),
     ({"live_enabled": False}, "live", "off", None),
     ({"live_enabled": True, "live_contact_at": NOW - 2}, "live", "ok", None),
     ({"live_enabled": True, "live_contact_at": NOW - 60}, "live", "off", None),
@@ -163,10 +163,16 @@ def test_unknown_or_quiet_facts_add_no_row():
     assert row(evaluate(facts(setup_pending=True, unlinked=True), NOW), "setup") is None
 
 
+def test_a_ready_update_is_not_a_check():
+    # The update card says it and holds Install now; a second row and button only repeated it.
+    assert row(evaluate(facts(update_version="0.25.0"), NOW), "updates") is None
+
+
 def test_rows_sort_by_level_then_table_order_and_off_rows_fill_the_footer():
     busy = evaluate(facts(analyzer_ok=False, paused=True, folders=(), filter_label="Season 67",
-                          update_version="0.25.0", live_enabled=False, obs_enabled=False, auto_update=False), NOW)
-    assert [item.id for item in busy.rows] == ["analyzer", "paused", "folders", "filter", "updates", "pairing", "cloud"]
+                          update_version="0.25.0", update_failed=True, live_enabled=False, obs_enabled=False,
+                          auto_update=False), NOW)
+    assert [item.id for item in busy.rows] == ["analyzer", "paused", "folders", "updates", "filter", "pairing", "cloud"]
     assert [item.id for item in busy.footer] == ["live", "obs", "auto_update"]
     calm = evaluate(facts(identity_source="cloud", last_upload_at=NOW - 60, live_enabled=True,
                           live_contact_at=NOW, obs_enabled=True, obs_connected=True), NOW)

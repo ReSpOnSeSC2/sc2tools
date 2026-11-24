@@ -60,8 +60,9 @@ def build_update_card(parent, *, QtCore, QtWidgets, install, later, download, he
             self.notes.setMarkdown(release.release_notes or "No release notes were provided.")
             self.message.setText("Update failed: " + detail if state=="failed" else detail)
             self.message.setVisible(bool(detail))
-            self.install_button.setText("Retry" if state=="failed" else "Install now")
-            self.install_button.setEnabled(state!="installing")
+            # A queued Install now stays pressed until its match, stream or capture ends; Later cancels it.
+            self.install_button.setText("Retry" if state=="failed" else "Queued" if state=="queued" else "Install now")
+            self.install_button.setEnabled(state not in ("installing", "queued"))
             self.later_button.setEnabled(state!="installing")
             self.download_button.setVisible(state=="failed")
             self.show()
