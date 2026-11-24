@@ -6,6 +6,7 @@ Ordinary state loading/saving and the OAuth secret-store APIs are unchanged.
 """
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass, field, replace
 import json
 import re
@@ -41,6 +42,8 @@ class CredentialStorage(Protocol):
     def create_generation(self, name: str, data: bytes) -> None: ...
     def replace_pointer(self, expected: bytes | None, data: bytes) -> None: ...
     def capacity(self) -> tuple[int, int]: ...
+    # Optional: transaction(), a context manager keeping the adapter's
+    # directory pins for one whole load or commit (see _pinned).
 
 
 class CredentialCrypto(Protocol):
@@ -354,43 +357,69 @@ def _unavailable(code, raw=None, store_id=None):
     return CredentialSnapshot("unreadable", None, slot, slot, raw, code, store_id)
 
 
+def _pinned(storage):
+    """The adapter's optional transaction(): one directory pin per load or commit.
+
+    It may raise a closed CredentialStorageError only on a normal exit, when
+    its final verification of the pinned directories fails.
+    """
+    begin = getattr(storage, "transaction", None)
+    return nullcontext() if begin is None else begin()
+
+
 def load_credentials(storage: CredentialStorage, crypto: CredentialCrypto) -> CredentialSnapshot:
     """Read exactly the selected generations; never migrate, scan or write."""
     with _STATE_SAVE_LOCK:
+        snapshot = None
         try:
-            store_id = _identity_value(_call(storage.identity))
+            with _pinned(storage):
+                snapshot = _load(storage, crypto)
         except CredentialStorageError as exc:
-            return _unavailable(exc.code)
+            if snapshot is None:
+                raise
+            code = exc.code
+        else:
+            return snapshot
+        # The load finished, but the pinned directories then failed their
+        # final verification: fail closed, like an unreadable final re-read.
+        return _unavailable(code, store_id=snapshot.store_id)
+
+
+def _load(storage, crypto):
+    try:
+        store_id = _identity_value(_call(storage.identity))
+    except CredentialStorageError as exc:
+        return _unavailable(exc.code)
+    try:
+        raw = _pointer(storage, store_id)
+    except CredentialStorageError as exc:
+        return _unavailable(exc.code, store_id=store_id)
+    if raw is None:
+        slot = LoadedSlot(None, "missing")
+        return CredentialSnapshot("missing", CredentialSelection(), slot, slot, store_id=store_id)
+    try:
+        document = _document(raw)
+        selection = _selection(document)
+    except CredentialStorageError as exc:
+        return _unavailable(exc.code, raw, store_id)
+    slots = []
+    for name in ("device", "obs"):
+        reference = getattr(selection, name)
+        if reference.generation is None:
+            slots.append(LoadedSlot(reference, "cleared"))
+            continue
         try:
-            raw = _pointer(storage, store_id)
+            encrypted = _bound_call(storage, store_id, storage.read_generation, reference.generation)
+            value = _bound_call(storage, store_id, _unprotect, crypto, encrypted, name, reference, document)
+            slots.append(LoadedSlot(reference, "available", value))
         except CredentialStorageError as exc:
-            return _unavailable(exc.code, store_id=store_id)
-        if raw is None:
-            slot = LoadedSlot(None, "missing")
-            return CredentialSnapshot("missing", CredentialSelection(), slot, slot, store_id=store_id)
-        try:
-            document = _document(raw)
-            selection = _selection(document)
-        except CredentialStorageError as exc:
-            return _unavailable(exc.code, raw, store_id)
-        slots = []
-        for name in ("device", "obs"):
-            reference = getattr(selection, name)
-            if reference.generation is None:
-                slots.append(LoadedSlot(reference, "cleared"))
-                continue
-            try:
-                encrypted = _bound_call(storage, store_id, storage.read_generation, reference.generation)
-                value = _bound_call(storage, store_id, _unprotect, crypto, encrypted, name, reference, document)
-                slots.append(LoadedSlot(reference, "available", value))
-            except CredentialStorageError as exc:
-                slots.append(LoadedSlot(reference, "unreadable", code=exc.code))
-        try:
-            if _pointer(storage, store_id) != raw:
-                return _unavailable("conflict", store_id=store_id)
-        except CredentialStorageError as exc:
-            return _unavailable(exc.code, store_id=store_id)
-        return CredentialSnapshot("selected", selection, *slots, raw, store_id=store_id)
+            slots.append(LoadedSlot(reference, "unreadable", code=exc.code))
+    try:
+        if _pointer(storage, store_id) != raw:
+            return _unavailable("conflict", store_id=store_id)
+    except CredentialStorageError as exc:
+        return _unavailable(exc.code, store_id=store_id)
+    return CredentialSnapshot("selected", selection, *slots, raw, store_id=store_id)
 
 
 def _previous(snapshot):
@@ -546,29 +575,48 @@ def commit_transaction(storage: CredentialStorage, crypto: CredentialCrypto,
     """
     document, selection = _validate_prepared(prepared)
     with _STATE_SAVE_LOCK:
-        store_id = prepared.store_id
-        actual = _pointer(storage, store_id)
-        if actual == prepared.document:
+        replaced = None
+        try:
+            with _pinned(storage):
+                replaced = _publish(storage, crypto, prepared, document)
+        except CredentialStorageError as exc:
+            if replaced is None:
+                raise
+            # The pointer read back as this document, but the pinned directories
+            # then failed their final verification. After this call's own
+            # replacement that is an unreadable final re-read; otherwise the
+            # check's code stands, as when an earlier re-read failed.
+            code = "indeterminate" if replaced else exc.code
+        else:
             return CredentialCommit(selection, prepared.document)
-        if actual != prepared.expected:
-            raise CredentialStorageError("conflict")
-        for item in prepared.generations:
-            _stage(storage, crypto, item, document, store_id)
-            if _pointer(storage, store_id) != prepared.expected:
-                raise CredentialStorageError("conflict")
+        raise CredentialStorageError(code)
+
+
+def _publish(storage, crypto, prepared, document):
+    """Publish the prepared document; True when this call replaced the pointer."""
+    store_id = prepared.store_id
+    actual = _pointer(storage, store_id)
+    if actual == prepared.document:
+        return False
+    if actual != prepared.expected:
+        raise CredentialStorageError("conflict")
+    for item in prepared.generations:
+        _stage(storage, crypto, item, document, store_id)
         if _pointer(storage, store_id) != prepared.expected:
             raise CredentialStorageError("conflict")
-        failure = "write_failed"
-        try:
-            _bound_call(storage, store_id, storage.replace_pointer, prepared.expected, prepared.document, default="write_failed")
-        except CredentialStorageError as exc:
-            failure = exc.code
-        try:
-            actual = _pointer(storage, store_id)
-        except CredentialStorageError:
-            actual = object()
-        if actual == prepared.document:
-            return CredentialCommit(selection, prepared.document)
-        if actual == prepared.expected:
-            raise CredentialStorageError(failure)
-        raise CredentialStorageError("indeterminate")
+    if _pointer(storage, store_id) != prepared.expected:
+        raise CredentialStorageError("conflict")
+    failure = "write_failed"
+    try:
+        _bound_call(storage, store_id, storage.replace_pointer, prepared.expected, prepared.document, default="write_failed")
+    except CredentialStorageError as exc:
+        failure = exc.code
+    try:
+        actual = _pointer(storage, store_id)
+    except CredentialStorageError:
+        actual = object()
+    if actual == prepared.document:
+        return True
+    if actual == prepared.expected:
+        raise CredentialStorageError(failure)
+    raise CredentialStorageError("indeterminate")

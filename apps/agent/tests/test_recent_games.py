@@ -1,5 +1,7 @@
 from datetime import datetime, timezone, timedelta
 import json
+import os
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -85,6 +87,34 @@ def test_failed_durable_write_preserves_both_disk_and_visible_history(tmp_path, 
     assert store.path.read_bytes() == before
     assert [row["gameId"] for row in store.snapshot()] == ["first"]
     assert not list(tmp_path.glob("recent-games-*.tmp"))
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows directory sharing")
+def test_save_waits_for_an_agent_json_commit_instead_of_racing_its_pinned_directory(tmp_path):
+    from sc2tools_agent.agent_credentials_windows import WindowsCredentialStorage
+    from sc2tools_agent.state import _STATE_SAVE_LOCK
+    storage = WindowsCredentialStorage(tmp_path)
+    storage.replace_pointer(None, b'{"synthetic":true}')
+    store = RecentGamesStore(tmp_path, owner="owner")
+    failures, done = [], threading.Event()
+
+    def record():
+        try:
+            store.record("during-commit", {"gameId": "during-commit"})
+        except Exception as error:  # noqa: BLE001 - asserted below
+            failures.append(error)
+        finally:
+            done.set()
+
+    # A commit holds the state lock while its transaction pins this directory
+    # without write sharing, which fails any rename into it.
+    with _STATE_SAVE_LOCK, storage.transaction():
+        worker = threading.Thread(target=record)
+        worker.start()
+        assert not done.wait(1.0)  # Well past the replace's own ~0.3 s retry budget.
+    worker.join(timeout=10)
+    assert failures == [] and [row["gameId"] for row in store.snapshot()] == ["during-commit"]
+    assert json.loads(store.path.read_text(encoding="utf-8").splitlines()[0])["gameId"] == "during-commit"
 
 
 def test_today_uses_local_midnight_and_excludes_future_resumed_and_problem_rows():

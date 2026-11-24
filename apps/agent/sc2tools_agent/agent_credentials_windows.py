@@ -11,6 +11,7 @@ import ctypes
 import os
 from pathlib import Path
 import re
+import threading
 import time
 import uuid
 
@@ -22,7 +23,9 @@ from . import support_files_windows as native
 
 _GENERATION = re.compile(r"(?:device|obs)-[0-9a-f]{32}\.dpapi\Z")
 _ROOT_NAME = "credentials-v1"
-_CHUNK = 64 * 1024
+# Handle.read's per-call cap. Every native call releases the GIL, so a
+# multi-megabyte agent.json is read and written in few, large calls.
+_CHUNK = 512 * 1024
 
 
 def _name(value):
@@ -76,10 +79,65 @@ class WindowsCredentialStorage:
         try:
             self._state_dir = native.local_path(state_dir)
             self._files = native.WindowsFiles()
+            self._pins = threading.local()
             return
         except Exception as error:
             code = _error_code(error)
         raise CredentialStorageError(code) from None
+
+    @contextmanager
+    def transaction(self):
+        """Pin the state directory and every ancestor once for a whole transaction.
+
+        Operations inside reuse these held handles instead of reopening each
+        ancestor from the drive root per call (about 14 times per commit, each a
+        GIL-releasing native round trip). Every handle is verified when opened
+        and again when the transaction ends; no write/delete sharing keeps each
+        directory in place meanwhile, and identity() re-verifies the state
+        directory at every operation boundary. Pins belong to this thread only.
+        Held pins also block other writers' renames into these directories, so
+        same-directory writers must serialize with commits (_STATE_SAVE_LOCK).
+        If the chain cannot be pinned, each operation pins and fails on its own.
+        """
+        if self._held():
+            yield  # The outer transaction owns the pins.
+            return
+        paths = [*reversed(self._state_dir.parents), self._state_dir]
+        handles = []
+        try:
+            for attempt in range(6):
+                try:
+                    for path in paths:
+                        handles.append(self._files._open(path, native._LIST_DIRECTORY, native._SHARE_READ, 3, directory=True))
+                    break
+                except Exception as error:
+                    # Another writer's same-directory rename opens that directory
+                    # for write only briefly (sharing violation 32): pin again.
+                    retry = getattr(error, "winerror", None) == 32 and attempt < 5
+                for handle in reversed(handles):
+                    handle.close()
+                handles = []
+                if not retry:
+                    break
+                time.sleep(0.002 * 2 ** attempt)
+            chain = self._pins.chain = tuple(zip(paths, handles))
+            yield
+            code = None
+            try:
+                for path, handle in chain:
+                    handle.verify(path, directory=True)
+            except Exception as error:
+                code = _error_code(error)
+            if code is not None:
+                raise CredentialStorageError(code) from None
+        finally:
+            self._pins.chain = ()
+            for handle in reversed(handles):
+                handle.close()
+
+    def _held(self):
+        """This thread's transaction pins as ((path, handle), ...) from the root."""
+        return getattr(self._pins, "chain", ())
 
     def ensure_state_directory(self):
         """Explicit post-instance-lock setup, never called by ordinary reads."""
@@ -93,38 +151,51 @@ class WindowsCredentialStorage:
     def identity(self):
         """Read-only physical state-root identity; absence remains unavailable."""
         try:
-            with self._hold(self._state_dir):
-                with self._files._open(self._state_dir, native._LIST_DIRECTORY,
-                        native._SHARE_READ, 3, directory=True) as handle:
-                    volume, identifier = handle.verify(self._state_dir, directory=True)["identity"]
-                    return b"SC2Tools-credentials-v1\0" + volume.to_bytes(8, "little") + identifier
+            held = self._held()
+            if held:
+                # Re-verify the transaction's continuously pinned state directory.
+                path, handle = held[-1]
+                volume, identifier = handle.verify(path, directory=True)["identity"]
+            else:
+                with self._hold(self._state_dir):
+                    with self._files._open(self._state_dir, native._LIST_DIRECTORY,
+                            native._SHARE_READ, 3, directory=True) as handle:
+                        volume, identifier = handle.verify(self._state_dir, directory=True)["identity"]
+            return b"SC2Tools-credentials-v1\0" + volume.to_bytes(8, "little") + identifier
         except Exception as error:
             code = _error_code(error)
         raise CredentialStorageError(code) from None
 
     @contextmanager
     def _hold(self, directory, *, create=False):
-        """Pin existing ancestors, creating missing ordinary children one by one."""
+        """Pin existing ancestors, creating missing ordinary children one by one.
+
+        Leading directories this thread's transaction already pins stay held by
+        it; only deeper ones are opened, verified and closed here.
+        """
         paths = [*reversed(directory.parents), directory]
-        handles = []
+        held = self._held()
+        if len(held) > len(paths) or any(str(pinned) != str(path) for (pinned, _), path in zip(held, paths)):
+            held = ()
+        owned = []
         try:
-            for path in paths:
+            for path in paths[len(held):]:
                 try:
                     handle = self._files._open(path, native._LIST_DIRECTORY, native._SHARE_READ, 3, directory=True)
                 except FileNotFoundError:
-                    if not create or not handles:
+                    if not create or not (held or owned):
                         raise
                     try:
                         path.mkdir()  # Non-recursive; the actual parent stays pinned.
                     except FileExistsError:
                         pass
                     handle = self._files._open(path, native._LIST_DIRECTORY, native._SHARE_READ, 3, directory=True)
-                handles.append(handle)
+                owned.append((path, handle))
             yield directory
-            for path, handle in zip(paths, handles):
+            for path, handle in owned:
                 handle.verify(path, directory=True)
         finally:
-            for handle in reversed(handles):
+            for _path, handle in reversed(owned):
                 handle.close()
 
     def _new(self, path):
