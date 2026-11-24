@@ -25,13 +25,14 @@ from . import support_files_windows as native
 _GENERATION = re.compile(r"(?:device|obs)-[0-9a-f]{32}\.dpapi\Z")
 _ROOT_NAME = "credentials-v1"
 # Every native call releases the GIL, and beside a CPU-bound thread each
-# reacquire costs milliseconds, so agent.json moves in few, large calls:
-# writes in _CHUNK pieces, each verified read in one _read_exact call
-# (Handle.read keeps its 512 KiB support-bundle cap).
-_CHUNK = 512 * 1024
-# ReadFile takes a DWORD byte count. One call stays far below that (an
-# agent.json is a few MB); a larger file simply takes more calls.
+# reacquire costs milliseconds, so agent.json moves in few, large calls: one
+# _write_all call per write and one _read_exact call per verified read
+# (Handle.write and Handle.read keep their 1 MiB / 512 KiB support-bundle caps).
+# ReadFile and WriteFile take DWORD byte counts, and ctypes truncates larger
+# values silently. One call stays far below that (an agent.json is a few MB);
+# a larger file simply takes more calls.
 _READ_CALL_MAX = 64 * 1024 * 1024
+_WRITE_CALL_MAX = 64 * 1024 * 1024
 
 
 def _name(value):
@@ -66,6 +67,23 @@ def _read_exact(handle, size):
             raise CredentialStorageError("unavailable")
         done += actual.value
     return buffer.raw
+
+
+def _write_all(handle, data):
+    """All of data at the handle's current offset, normally in one call.
+
+    A short write continues where it stopped; a call that writes nothing is
+    write_failed.
+    """
+    buffer = ctypes.create_string_buffer(data, len(data))
+    done, actual = 0, wintypes.DWORD()
+    while done < len(data):
+        if not handle.kernel.WriteFile(handle.handle, ctypes.byref(buffer, done),
+                min(len(data) - done, _WRITE_CALL_MAX), ctypes.byref(actual), None):
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not actual.value:
+            raise CredentialStorageError("write_failed")
+        done += actual.value
 
 
 class CurrentUserCrypto:
@@ -117,8 +135,9 @@ class WindowsCredentialStorage:
         ancestor from the drive root per call (about 14 times per commit, each a
         GIL-releasing native round trip). Every handle is verified when opened
         and again when the transaction ends; no write/delete sharing keeps each
-        directory in place meanwhile, and identity() re-verifies the state
-        directory at every operation boundary. Pins belong to this thread only.
+        directory in place meanwhile. The state directory is also re-verified
+        after each storage operation, by the next identity() call or else by
+        the final check. Pins belong to this thread only.
         Held pins also block other writers' renames into these directories, so
         same-directory writers must serialize with commits (_STATE_SAVE_LOCK).
         If the chain cannot be pinned, each operation pins and fails on its own.
@@ -131,8 +150,10 @@ class WindowsCredentialStorage:
         try:
             for attempt in range(6):
                 try:
-                    for path in paths:
-                        handles.append(self._files._open(path, native._LIST_DIRECTORY, native._SHARE_READ, 3, directory=True))
+                    for depth, path in enumerate(paths, 1):
+                        # Only the state directory's file ID is ever read (identity()).
+                        handles.append(self._files._open(path, native._LIST_DIRECTORY, native._SHARE_READ, 3,
+                            directory=True, identity=depth == len(paths)))
                     break
                 except Exception as error:
                     # Another writer's same-directory rename opens that directory
@@ -145,17 +166,23 @@ class WindowsCredentialStorage:
                     break
                 time.sleep(0.002 * 2 ** attempt)
             chain = self._pins.chain = tuple(zip(paths, handles))
+            # The pinned state directory has just been verified (identity()).
+            self._pins.verified = handles[-1].opened["identity"] if handles else None
             yield
             code = None
             try:
-                for path, handle in chain:
-                    handle.verify(path, directory=True)
+                for path, handle in chain[:-1]:
+                    handle.verify(path, directory=True, identity=False)
+                if chain and self._pins.verified is None:
+                    # A storage operation ran after the state directory's last check.
+                    path, handle = chain[-1]
+                    handle.verify(path, directory=True, identity=False)
             except Exception as error:
                 code = _error_code(error)
             if code is not None:
                 raise CredentialStorageError(code) from None
         finally:
-            self._pins.chain = ()
+            self._pins.chain, self._pins.verified = (), None
             for handle in reversed(handles):
                 handle.close()
 
@@ -173,18 +200,29 @@ class WindowsCredentialStorage:
         raise CredentialStorageError(code) from None
 
     def identity(self):
-        """Read-only physical state-root identity; absence remains unavailable."""
+        """Read-only physical state-root identity; absence remains unavailable.
+
+        Inside a transaction the pinned state directory is re-verified by the
+        first call after each storage operation (_hold marks the last check
+        stale); later calls return that check's identity. The caller checks
+        before and after every storage call, so this drops only a repeat check
+        of the same held handle with no storage IO since: every operation still
+        has a check before and after it, and the pins keep this directory and
+        each ancestor in place.
+        """
         try:
             held = self._held()
             if held:
-                # Re-verify the transaction's continuously pinned state directory.
-                path, handle = held[-1]
-                volume, identifier = handle.verify(path, directory=True)["identity"]
+                verified = self._pins.verified
+                if verified is None:
+                    path, handle = held[-1]
+                    verified = self._pins.verified = handle.verify(path, directory=True)["identity"]
+                volume, identifier = verified
             else:
                 with self._hold(self._state_dir):
                     with self._files._open(self._state_dir, native._LIST_DIRECTORY,
                             native._SHARE_READ, 3, directory=True) as handle:
-                        volume, identifier = handle.verify(self._state_dir, directory=True)["identity"]
+                        volume, identifier = handle.opened["identity"]
             return b"SC2Tools-credentials-v1\0" + volume.to_bytes(8, "little") + identifier
         except Exception as error:
             code = _error_code(error)
@@ -194,9 +232,12 @@ class WindowsCredentialStorage:
     def _hold(self, directory, *, create=False):
         """Pin existing ancestors, creating missing ordinary children one by one.
 
-        Leading directories this thread's transaction already pins stay held by
-        it; only deeper ones are opened, verified and closed here.
+        Every storage operation starts here, so it marks the transaction's last
+        state-directory check stale (identity()). Leading directories this
+        thread's transaction already pins stay held by it; only deeper ones are
+        opened, verified and closed here.
         """
+        self._pins.verified = None
         paths = [*reversed(directory.parents), directory]
         held = self._held()
         if len(held) > len(paths) or any(str(pinned) != str(path) for (pinned, _), path in zip(held, paths)):
@@ -205,7 +246,8 @@ class WindowsCredentialStorage:
         try:
             for path in paths[len(held):]:
                 try:
-                    handle = self._files._open(path, native._LIST_DIRECTORY, native._SHARE_READ, 3, directory=True)
+                    handle = self._files._open(path, native._LIST_DIRECTORY, native._SHARE_READ, 3,
+                        directory=True, identity=False)
                 except FileNotFoundError:
                     if not create or not (held or owned):
                         raise
@@ -213,11 +255,12 @@ class WindowsCredentialStorage:
                         path.mkdir()  # Non-recursive; the actual parent stays pinned.
                     except FileExistsError:
                         pass
-                    handle = self._files._open(path, native._LIST_DIRECTORY, native._SHARE_READ, 3, directory=True)
+                    handle = self._files._open(path, native._LIST_DIRECTORY, native._SHARE_READ, 3,
+                        directory=True, identity=False)
                 owned.append((path, handle))
             yield directory
             for path, handle in owned:
-                handle.verify(path, directory=True)
+                handle.verify(path, directory=True, identity=False)
         finally:
             for _path, handle in reversed(owned):
                 handle.close()
@@ -241,12 +284,19 @@ class WindowsCredentialStorage:
             raise
 
     @staticmethod
-    def _read(handle, path, *, limit=None):
-        before = handle.verify(path)
+    def _read(handle, path, *, limit=None, opened=None):
+        """All of the file, read between two equal verifications; nothing may follow it.
+
+        opened is the verify() result of a handle opened just now and not used
+        since: it serves as the first verification, and the handle still reads
+        from offset 0.
+        """
+        before = handle.verify(path) if opened is None else opened
         size = before["size"]
         if limit is not None and not 0 < size <= limit:
             raise CredentialStorageError("invalid_generation")
-        handle.seek(0)
+        if opened is None:
+            handle.seek(0)
         data = _read_exact(handle, size)
         if handle.read(1) or handle.verify(path) != before:
             raise CredentialStorageError("unavailable")
@@ -258,7 +308,7 @@ class WindowsCredentialStorage:
                 path = self._state_dir / "agent.json"
                 try:
                     with self._files.open_read(path) as handle:
-                        return self._read(handle, path)
+                        return self._read(handle, path, opened=handle.opened)
                 except FileNotFoundError:
                     return None
         except FileNotFoundError:
@@ -274,7 +324,7 @@ class WindowsCredentialStorage:
             with self._hold(root):
                 path = root / name
                 with self._files.open_read(path) as handle:
-                    return self._read(handle, path, limit=MAX_GENERATION_BYTES)
+                    return self._read(handle, path, limit=MAX_GENERATION_BYTES, opened=handle.opened)
         except Exception as error:
             code = _error_code(error)
         raise CredentialStorageError(code) from None
@@ -288,7 +338,7 @@ class WindowsCredentialStorage:
                     raise CredentialStorageError("store_full")
                 path = root / _name(entry.name)
                 with self._files.open_read(path) as handle:
-                    info = handle.verify(path)
+                    info = handle.opened  # Verified as it opened.
                     if not 0 < info["size"] <= MAX_GENERATION_BYTES:
                         raise CredentialStorageError("invalid_generation")
                     total += info["size"]
@@ -358,9 +408,9 @@ class WindowsCredentialStorage:
                 temporary = self._state_dir / ("agent-credentials-" + uuid.uuid4().hex + ".tmp")
                 destination = self._state_dir / "agent.json"
                 with self._new(temporary) as handle:
+                    published = False
                     try:
-                        for start in range(0, len(data), _CHUNK):
-                            handle.write(data[start:start + _CHUNK])
+                        _write_all(handle, data)
                         handle.flush()
                         if self._read(handle, temporary) != data:
                             raise CredentialStorageError("write_failed")
@@ -374,15 +424,17 @@ class WindowsCredentialStorage:
                                 if getattr(error, "winerror", None) not in (5, 32, 33) or attempt == 5:
                                     raise
                                 time.sleep(0.01 * 2 ** attempt)
-                        handle.verify(destination)
                         handle.flush()
+                        # _read verifies the handle under the destination name before
+                        # reading it back; the flush changes nothing that check covers.
                         if self._read(handle, destination) != data:
                             raise CredentialStorageError("write_failed")
+                        published = True  # Verified under the destination name.
                     finally:
                         # A failed call may already have selected the new document.
                         # Delete only if this exact owned handle still has its temp name.
                         try:
-                            if native._same(handle.final_path(), temporary):
+                            if not published and native._same(handle.final_path(), temporary):
                                 handle.verify(temporary)
                                 handle.discard()
                         except (OSError, ValueError):

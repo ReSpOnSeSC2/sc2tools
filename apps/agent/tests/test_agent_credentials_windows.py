@@ -181,8 +181,8 @@ def test_pointer_changed_after_temp_flush_is_preserved_by_second_raw_fence(tmp_p
     read = store._read
     replaced = []
 
-    def changed_after_readback(handle, path, *, limit=None):
-        result = read(handle, path, limit=limit)
+    def changed_after_readback(handle, path, **options):
+        result = read(handle, path, **options)
         if path.name.startswith("agent-credentials-") and not replaced:
             (root / "agent.json").write_bytes(newer)
             replaced.append(True)
@@ -404,6 +404,130 @@ def test_metadata_changed_during_the_read_reports_only_a_fixed_code(tmp_path, mo
         assert linked.read_bytes() == b'{"synthetic":true}'
 
 
+def native_writes(monkeypatch, store, serve=None):
+    """Record the byte count of each WriteFile through this store's handles.
+
+    serve(call, size) may return a smaller count to write instead (a short write).
+    """
+    kernel, requested = store._files.kernel, []
+    original = kernel.WriteFile
+
+    def recording(handle, buffer, size, actual, overlapped):
+        requested.append(size)
+        served = serve(len(requested), size) if serve else None
+        return original(handle, buffer, size if served is None else served, actual, overlapped)
+
+    monkeypatch.setattr(kernel, "WriteFile", recording)
+    return requested
+
+
+def native_counts(monkeypatch, store, *names):
+    """Count calls to these kernel functions through this store's handles."""
+    kernel, counts = store._files.kernel, dict.fromkeys(names, 0)
+    for function in names:
+        def counting(*args, _name=function, _original=getattr(kernel, function)):
+            counts[_name] += 1
+            return _original(*args)
+        monkeypatch.setattr(kernel, function, counting)
+    return counts
+
+
+def test_pointer_document_is_written_in_one_native_call(tmp_path, monkeypatch):
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    old, new = counted(1 << 20), counted(3 << 20)  # Several 1 MiB support-write bounds.
+    store.replace_pointer(None, old)
+    requested = native_writes(monkeypatch, store)
+    store.replace_pointer(old, new)
+    assert requested == [len(new)]
+    assert (root / "agent.json").read_bytes() == new
+
+
+def test_each_native_write_stays_within_the_per_call_bound(tmp_path, monkeypatch):
+    assert 0 < windows._WRITE_CALL_MAX < 1 << 32  # WriteFile takes a DWORD count.
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    document = counted(10_000)
+    monkeypatch.setattr(windows, "_WRITE_CALL_MAX", 4096)
+    requested = native_writes(monkeypatch, store)
+    store.replace_pointer(None, document)
+    assert requested == [4096, 4096, 10_000 - 8192]
+    assert (root / "agent.json").read_bytes() == document
+
+
+def test_short_native_write_continues_where_it_stopped(tmp_path, monkeypatch):
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    document = counted(1_000_004)
+    first = len(document) // 3
+    requested = native_writes(monkeypatch, store, lambda call, size: first if call == 1 else None)
+    store.replace_pointer(None, document)
+    assert requested == [len(document), len(document) - first]
+    assert (root / "agent.json").read_bytes() == document
+
+
+@pytest.mark.parametrize("failure, code", [("native_error", "unavailable"), ("no_progress", "write_failed")])
+def test_failed_native_write_keeps_the_original_and_leaves_no_temp(tmp_path, monkeypatch, failure, code):
+    import ctypes
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    original, candidate = b'{"old":true}', b'{"candidate":"whole document"}'
+    store.replace_pointer(None, original)
+    kernel, calls = store._files.kernel, []
+    write = kernel.WriteFile
+
+    def failing(handle, buffer, size, actual, overlapped):
+        calls.append(size)
+        if len(calls) > 1:  # Only the first call fails; a retry would succeed.
+            return write(handle, buffer, size, actual, overlapped)
+        if failure == "native_error":
+            ctypes.set_last_error(112)  # ERROR_DISK_FULL
+            return 0
+        actual._obj.value = 0  # Success with nothing written.
+        return 1
+
+    monkeypatch.setattr(kernel, "WriteFile", failing)
+    with pytest.raises(CredentialStorageError, match=f"^{code}$") as error:
+        store.replace_pointer(original, candidate)
+    assert error.value.__context__ is None and error.value.__cause__ is None
+    assert calls == [len(candidate)]
+    assert (root / "agent.json").read_bytes() == original
+    assert sorted(path.name for path in root.iterdir()) == ["agent.json"]
+
+
+def test_fresh_read_reuses_its_open_check_and_offset(tmp_path, monkeypatch):
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    store.replace_pointer(None, b'{"first":true}')
+    with store.transaction():  # The directories stay pinned: only the file is opened.
+        counts = native_counts(monkeypatch, store, "CreateFileW", "GetFinalPathNameByHandleW", "SetFilePointerEx")
+        assert store.read_pointer() == b'{"first":true}'
+        # Verified as it opens and after the read; a new handle starts at offset 0.
+        assert counts == {"CreateFileW": 1, "GetFinalPathNameByHandleW": 2, "SetFilePointerEx": 0}
+
+
+def test_pointer_linked_right_after_its_rename_is_reported_unsafe(tmp_path, monkeypatch):
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    original, candidate = b'{"old":true}', b'{"credentials":{"version":1},"new":true}'
+    store.replace_pointer(None, original)
+    rename = windows.WindowsCredentialStorage._rename_pointer
+    # Every ancestor (tmp_path too) is pinned without write sharing, so the link
+    # goes in an unpinned sibling directory. Exclusive access does not stop it.
+    linked = tmp_path / "elsewhere" / "linked"
+    linked.parent.mkdir()
+
+    def renamed_then_linked(handle, destination):
+        rename(handle, destination)
+        os.link(destination, linked)
+
+    monkeypatch.setattr(windows.WindowsCredentialStorage, "_rename_pointer", staticmethod(renamed_then_linked))
+    with pytest.raises(CredentialStorageError, match="^unsafe_path$") as error:
+        store.replace_pointer(original, candidate)
+    assert error.value.__context__ is None and error.value.__cause__ is None
+    assert linked.read_bytes() == (root / "agent.json").read_bytes() == candidate
+
+
 def chain(directory):
     directory = windows.native.local_path(directory)
     return [str(path) for path in [*reversed(directory.parents), directory]]
@@ -492,16 +616,17 @@ def test_directory_outside_the_transaction_chain_is_still_pinned_by_its_own_hold
     other.rename(other.with_name("moved"))
 
 
-def test_failed_final_check_of_the_pinned_chain_reports_only_a_fixed_code(tmp_path, monkeypatch):
+@pytest.mark.parametrize("failing", [None, 0, -1])  # Every directory, the drive root, the state directory.
+def test_failed_final_check_of_the_pinned_chain_reports_only_a_fixed_code(tmp_path, monkeypatch, failing):
     root = tmp_path / "state"
     store = windows.WindowsCredentialStorage(root)
     store.replace_pointer(None, b'{"first":true}')
     verify, finished = windows.native.Handle.verify, []
 
-    def checked(handle, expected, *, directory=False):
-        if finished:
+    def checked(handle, expected, **options):
+        if finished and (failing is None or str(expected) == chain(root)[failing]):
             raise ValueError("synthetic private path detail")
-        return verify(handle, expected, directory=directory)
+        return verify(handle, expected, **options)
 
     monkeypatch.setattr(windows.native.Handle, "verify", checked)
     opened = opened_directories(monkeypatch)
@@ -520,9 +645,9 @@ def test_failed_transaction_body_skips_the_final_check_and_closes_every_pin(tmp_
     store.replace_pointer(None, b'{"first":true}')
     verify, checks = windows.native.Handle.verify, []
 
-    def counted(handle, expected, *, directory=False):
+    def counted(handle, expected, **options):
         checks.append(str(expected))
-        return verify(handle, expected, directory=directory)
+        return verify(handle, expected, **options)
 
     monkeypatch.setattr(windows.native.Handle, "verify", counted)
     opened = opened_directories(monkeypatch)
@@ -580,6 +705,91 @@ def test_pin_retries_a_brief_sharing_violation_then_falls_back_per_operation(tmp
         with pytest.raises(CredentialStorageError, match="^unavailable$"):
             store.read_pointer()  # After the retries, each operation pins on its own.
     assert delays == [0.002, 0.004, 0.008, 0.016, 0.032]
+
+
+def state_checks(monkeypatch, root, broken=()):
+    """Record each verification of the state directory itself (whether it read
+    the file ID); while broken is non-empty, each one fails."""
+    verify, checks, state = windows.native.Handle.verify, [], chain(root)[-1]
+
+    def recorded(handle, expected, **options):
+        if str(expected) == state:
+            checks.append(options.get("identity", True))
+            if broken:
+                raise ValueError("synthetic private path detail")
+        return verify(handle, expected, **options)
+
+    monkeypatch.setattr(windows.native.Handle, "verify", recorded)
+    return checks
+
+
+def test_transaction_rechecks_the_state_directory_once_after_each_operation(tmp_path, monkeypatch):
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    store.replace_pointer(None, b'{"first":true}')
+    identity = store.identity()
+    checks = state_checks(monkeypatch, root)
+    with store.transaction():
+        assert checks == [True]  # Verified with its file ID as it was pinned.
+        assert store.identity() == store.identity() == identity
+        assert checks == [True]  # No storage operation since that check.
+        assert store.read_pointer() == b'{"first":true}'
+        assert store.identity() == store.identity() == identity
+        assert checks == [True, True]  # Once after the operation.
+    assert checks == [True, True]  # The final check finds the state directory checked since.
+    with store.transaction():
+        assert store.read_pointer() == b'{"first":true}'
+    assert checks == [True, True, True, False]  # An operation ran after the last check.
+
+
+def test_identity_rechecks_the_pinned_state_directory_after_an_operation(tmp_path, monkeypatch):
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    store.replace_pointer(None, b'{"first":true}')
+    broken = []
+    checks = state_checks(monkeypatch, root, broken)
+    with pytest.raises(CredentialStorageError, match="^unsafe_path$"):  # The final check.
+        with store.transaction():
+            identity = store.identity()
+            broken.append(True)  # From now on the state directory fails its check.
+            assert store.identity() == identity  # No storage operation since the last check.
+            assert store.read_pointer() == b'{"first":true}'
+            with pytest.raises(CredentialStorageError, match="^unsafe_path$") as failure:
+                store.identity()
+            assert failure.value.__context__ is None and failure.value.__cause__ is None
+    assert checks == [True, True, False]  # Pinned, after the read, at the end.
+
+
+def test_final_check_covers_the_state_directory_after_a_later_operation(tmp_path, monkeypatch):
+    root = tmp_path / "state"
+    store = windows.WindowsCredentialStorage(root)
+    store.replace_pointer(None, b'{"first":true}')
+    broken = []
+    checks = state_checks(monkeypatch, root, broken)
+    with pytest.raises(CredentialStorageError, match="^unsafe_path$") as failure:
+        with store.transaction():
+            assert store.read_pointer() == b'{"first":true}'
+            store.identity()  # Checked after that operation.
+            assert store.read_pointer() == b'{"first":true}'
+            broken.append(True)
+    assert failure.value.__context__ is None and failure.value.__cause__ is None
+    assert checks == [True, True, False]
+
+
+def test_directory_pins_read_only_the_state_directory_file_id(tmp_path, monkeypatch):
+    root = tmp_path / "install" / "state"
+    store = windows.WindowsCredentialStorage(root)
+    store.replace_pointer(None, b'{"first":true}')
+    links = len(chain(root))
+    counts = native_counts(monkeypatch, store, "GetFileInformationByHandle", "GetFileInformationByHandleEx")
+    identity = store.identity()  # Alone: the whole chain, then the state directory again.
+    assert counts == {"GetFileInformationByHandle": 2 * links + 1, "GetFileInformationByHandleEx": 1}
+    counts.update(dict.fromkeys(counts, 0))
+    with store.transaction():
+        assert store.identity() == identity
+    # Each directory's attributes as it is pinned and released (the state
+    # directory's pinned check still stands); the state directory's file ID once.
+    assert counts == {"GetFileInformationByHandle": 2 * links - 1, "GetFileInformationByHandleEx": 1}
 
 
 def test_transaction_pins_are_never_shared_with_another_thread(tmp_path, monkeypatch):
