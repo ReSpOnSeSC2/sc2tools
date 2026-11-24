@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import ctypes
+from ctypes import wintypes
 import os
 from pathlib import Path
 import re
@@ -23,9 +24,14 @@ from . import support_files_windows as native
 
 _GENERATION = re.compile(r"(?:device|obs)-[0-9a-f]{32}\.dpapi\Z")
 _ROOT_NAME = "credentials-v1"
-# Handle.read's per-call cap. Every native call releases the GIL, so a
-# multi-megabyte agent.json is read and written in few, large calls.
+# Every native call releases the GIL, and beside a CPU-bound thread each
+# reacquire costs milliseconds, so agent.json moves in few, large calls:
+# writes in _CHUNK pieces, each verified read in one _read_exact call
+# (Handle.read keeps its 512 KiB support-bundle cap).
 _CHUNK = 512 * 1024
+# ReadFile takes a DWORD byte count. One call stays far below that (an
+# agent.json is a few MB); a larger file simply takes more calls.
+_READ_CALL_MAX = 64 * 1024 * 1024
 
 
 def _name(value):
@@ -42,6 +48,24 @@ def _error_code(error):
     if isinstance(error, ValueError):
         return "unsafe_path"
     return "unavailable"
+
+
+def _read_exact(handle, size):
+    """Exactly size bytes from the handle's current offset, normally in one call.
+
+    A short read continues where it stopped; end of file before size bytes
+    is unavailable.
+    """
+    buffer = ctypes.create_string_buffer(size)
+    done, actual = 0, wintypes.DWORD()
+    while done < size:
+        if not handle.kernel.ReadFile(handle.handle, ctypes.byref(buffer, done),
+                min(size - done, _READ_CALL_MAX), ctypes.byref(actual), None):
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not actual.value:
+            raise CredentialStorageError("unavailable")
+        done += actual.value
+    return buffer.raw
 
 
 class CurrentUserCrypto:
@@ -223,16 +247,10 @@ class WindowsCredentialStorage:
         if limit is not None and not 0 < size <= limit:
             raise CredentialStorageError("invalid_generation")
         handle.seek(0)
-        chunks, remaining = [], size
-        while remaining:
-            chunk = handle.read(min(remaining, _CHUNK))
-            if not chunk:
-                raise CredentialStorageError("unavailable")
-            chunks.append(chunk)
-            remaining -= len(chunk)
+        data = _read_exact(handle, size)
         if handle.read(1) or handle.verify(path) != before:
             raise CredentialStorageError("unavailable")
-        return b"".join(chunks)
+        return data
 
     def read_pointer(self):
         try:
