@@ -148,8 +148,6 @@ async function netMmrByOpponent(deps, userId, filters, opts = {}) {
       },
     },
     { $addFields: { _opponentIdentity: opponentIdentityExpr() } },
-    // Make the identity fields selected by $last deterministic and current.
-    { $sort: { date: 1, gameId: 1 } },
     {
       $group: {
         _id: "$_opponentIdentity",
@@ -158,8 +156,15 @@ async function netMmrByOpponent(deps, userId, filters, opts = {}) {
         pulseId: { $max: "$_pulseId" },
         toonHandle: { $max: "$_toonHandle" },
         pulseCharacterId: { $max: "$_pulseCharacterId" },
-        displayName: { $last: "$_displayName" },
-        opponentRace: { $last: "$_oppRace" },
+        // The newest game's name and race. $bottom picks that game without
+        // a $sort stage, which would hold every kept game in memory (Atlas
+        // Flex caps an in-memory sort at 32 MB).
+        displayName: {
+          $bottom: { sortBy: { date: 1, gameId: 1 }, output: "$_displayName" },
+        },
+        opponentRace: {
+          $bottom: { sortBy: { date: 1, gameId: 1 }, output: "$_oppRace" },
+        },
         netMmr: { $sum: "$_delta" },
         mmrWon: {
           $sum: { $cond: [{ $gt: ["$_delta", 0] }, "$_delta", 0] },
