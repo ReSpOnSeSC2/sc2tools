@@ -35,6 +35,15 @@ corresponding GitHub Release.
   retention line read Flex's daily snapshots (last 8 kept) once
   `ATLAS_CLUSTER_NAME` names the Flex cluster, which happens only after the
   old M10 and its snapshots are deleted. See ADR 0095.
+- Admin Global Trends loads on Atlas Flex. Flex caps an in-memory sort at
+  32 MB and cannot spill to disk, and building the shared player history
+  sorted every game (about 225 MB). The build now inserts each eligible game
+  once and removes duplicate uploads in two index-ordered passes, keeping the
+  same rows as before. MMR progression no longer sorts every eligible game,
+  and no Global Trends query asks for disk use. The Momentum and Net MMR
+  (by matchup and by opponent) cards still need more than 32 MB for the whole
+  platform and fail on Flex until a follow-up; a player cohort of a few
+  thousand games fits.
 
 ### Device sign-in during database outages
 

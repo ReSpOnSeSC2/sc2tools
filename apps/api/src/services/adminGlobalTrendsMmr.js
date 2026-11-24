@@ -5,6 +5,11 @@ const { myLadderRaceExpr } = require("./trendsRegionExpr");
 const { bucketSwitch, pickInterval, pickTimezone } = require("./aggregations");
 const { LIMITS } = require("../config/constants");
 
+/** Game order within one account/race series. The source game _id (the
+ * snapshot reader maps _id to it) breaks exact ties, so open and close are
+ * the first and last game even when date and gameId repeat. */
+const SERIES_ORDER = Object.freeze({ date: 1, gameId: 1, _id: 1 });
+
 /** Aggregate bucket closes with one vote per active account/ladder race.
  * Upload volume cannot overweight one player and no difference is taken
  * between unrelated players. No per-player series are returned: that payload
@@ -35,10 +40,12 @@ async function globalMmrProgression(agg, scope, filters, opts) {
       } }, { $project: { _id: 0 } }],
       points: [
         { $match: { _eligible: true } },
-        { $sort: { date: 1, gameId: 1 } },
+        // Open/close per series bucket via $top/$bottom rather than a $sort
+        // of every eligible game: Atlas Flex caps an in-memory sort at 32 MB.
         { $group: {
           _id: { player: "$_globalPlayerId", race: "$_ladderRace", bucket: { $dateTrunc: { date: "$date", unit: interval, timezone } } },
-          openMmr: { $first: "$myMmr" }, closeMmr: { $last: "$myMmr" },
+          openMmr: { $top: { sortBy: SERIES_ORDER, output: "$myMmr" } },
+          closeMmr: { $bottom: { sortBy: SERIES_ORDER, output: "$myMmr" } },
           minMmr: { $min: "$myMmr" }, maxMmr: { $max: "$myMmr" },
           total: { $sum: 1 },
           wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },

@@ -129,8 +129,9 @@ class AdminGlobalTrendsService {
   _query(pipeline, collection, options = {}) {
     const finalGroup = pipeline.at(-1)?.$group;
     const isRange = finalGroup?.first?.$min === "$date" && finalGroup?.last?.$max === "$date";
+    // No allowDiskUse: Atlas Flex does not support it (32 MB in-memory sort).
     const read = () => this.queries.execute(() =>
-      collection.aggregate(pipeline, { allowDiskUse: true, maxTimeMS: QUERY_MAX_TIME_MS,
+      collection.aggregate(pipeline, { maxTimeMS: QUERY_MAX_TIME_MS,
         ...(options.collation?.locale === "simple" ? { collation: { locale: "simple" } } : {}),
         ...(Number.isInteger(options.batchSize) && options.batchSize > 0 ? { batchSize: options.batchSize } : {}),
       }).toArray());

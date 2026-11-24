@@ -9,8 +9,9 @@ const {
   DETECTOR_OPP_STRATEGY_FIELD,
 } = require("./buildIntentReaders");
 
-// Dedupe retains $$ROOT twice. Keep legacy detail blobs, signatures and
-// unrelated metadata out of those blocking sorts and accumulator tables.
+// Every card reads these snapshot rows (and the reference dedupe retains
+// $$ROOT twice). Keep legacy detail blobs, signatures and unrelated metadata
+// out of them.
 // ``myBuild`` and ``opponent.strategy`` are remapped here, once, to the
 // classifier's labels: every global chart reads this snapshot, so a build
 // check-in or opponent correction never shows up in platform-wide build or
@@ -78,13 +79,44 @@ function trustedReplayMmrExpr() {
   ] };
 }
 
-/** Keep one uploaded perspective per account/replay. Two opposing players
- * remain two observations. Legacy rows stay scoped to their uploader because
- * an account cannot safely be inferred from a name or another replay.
+/** Which duplicate upload survives: trustworthy/newly computed metadata
+ * first, with a deterministic tie on the source game id. */
+const GLOBAL_DEDUPE_ORDER = Object.freeze({ _globalTrustedMmr: -1, updatedAt: -1, _id: 1 });
+
+/** First-pass identity within one player: the replay id.
+ * @param {string} [sourceId] path of the source game's _id */
+function replayKeyExpr(sourceId = "$_id") {
+  return { $ifNull: ["$gameId", { $toString: sourceId }] };
+}
+
+/** The replay id as text. Ingest requires a string gameId; a legacy
+ * non-string one is prefixed with its type rather than failing $concat, so it
+ * never matches a string id either.
+ * @param {string} [sourceId] path of the source game's _id */
+function replayIdTextExpr(sourceId = "$_id") {
+  return { $let: { vars: { id: replayKeyExpr(sourceId) }, in: { $cond: [
+    { $eq: [{ $type: "$$id" }, "string"] }, "$$id",
+    { $concat: [{ $type: "$$id" }, ":", { $convert: { input: "$$id", to: "string", onError: "", onNull: "" } }] },
+  ] } } };
+}
+
+/** Second-pass identity within one player: a replay renamed between uploads
+ * can have a different legacy gameId, so exact file hashes match as well.
+ * @param {string} [sourceId] path of the source game's _id */
+function replayFileKeyExpr(sourceId = "$_id") {
+  return { $cond: [
+    { $ne: [stringExpr("$replayFile.sha256"), ""] },
+    { $concat: ["sha:", stringExpr("$replayFile.sha256")] },
+    { $concat: ["id:", replayIdTextExpr(sourceId)] },
+  ] };
+}
+
+/** Per-row part of the canonical history: eligibility, the slim projection
+ * and the identity fields. Streams; nothing here holds the corpus in memory.
  * @param {Record<string, any>} [playerMatch]
  * @param {Record<string, unknown>} [projection]
  * @returns {Array<Record<string, any>>} */
-function globalHistoryStages(playerMatch = {}, projection = GLOBAL_HISTORY_PROJECTION) {
+function globalRowStages(playerMatch = {}, projection = GLOBAL_HISTORY_PROJECTION) {
   return [
     { $match: { ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true }, date: { $type: "date" } } },
     { $project: projection },
@@ -100,24 +132,28 @@ function globalHistoryStages(playerMatch = {}, projection = GLOBAL_HISTORY_PROJE
     // precede deduplication and sequence windows, avoiding global sorts when
     // an administrator narrows the cohort to just a few accounts.
     ...(Object.keys(playerMatch).length ? [{ $match: { _globalPlayerId: playerMatch } }] : []),
-    // Prefer trustworthy/newly computed metadata, with a deterministic tie.
-    { $sort: { _globalTrustedMmr: -1, updatedAt: -1, _id: 1 } },
-    { $group: {
-      _id: { player: "$_globalPlayerId", replay: { $ifNull: ["$gameId", { $toString: "$_id" }] } },
-      row: { $first: "$$ROOT" },
-    } },
+  ];
+}
+
+/** Keep one uploaded perspective per account/replay. Two opposing players
+ * remain two observations. Legacy rows stay scoped to their uploader because
+ * an account cannot safely be inferred from a name or another replay.
+ *
+ * This is the reference definition, sorted and grouped in memory, so it is
+ * only for small inputs. The production snapshot (GlobalTrendsHistory) keeps
+ * the same rows from the same keys and order with index-backed passes:
+ * Atlas Flex caps an in-memory sort at 32 MB and cannot spill to disk.
+ * @param {Record<string, any>} [playerMatch]
+ * @param {Record<string, unknown>} [projection]
+ * @returns {Array<Record<string, any>>} */
+function globalHistoryStages(playerMatch = {}, projection = GLOBAL_HISTORY_PROJECTION) {
+  return [
+    ...globalRowStages(playerMatch, projection),
+    { $sort: GLOBAL_DEDUPE_ORDER },
+    { $group: { _id: { player: "$_globalPlayerId", replay: replayKeyExpr() }, row: { $first: "$$ROOT" } } },
     { $replaceWith: "$row" },
-    // A replay renamed between uploads can have a different legacy gameId.
-    // Deduplicate exact file hashes as well, only within the same player.
-    { $sort: { _globalTrustedMmr: -1, updatedAt: -1, _id: 1 } },
-    { $group: {
-      _id: { player: "$_globalPlayerId", replay: { $cond: [
-        { $ne: [stringExpr("$replayFile.sha256"), ""] },
-        { $concat: ["sha:", stringExpr("$replayFile.sha256")] },
-        { $concat: ["id:", { $ifNull: ["$gameId", { $toString: "$_id" }] }] },
-      ] } },
-      row: { $first: "$$ROOT" },
-    } },
+    { $sort: GLOBAL_DEDUPE_ORDER },
+    { $group: { _id: { player: "$_globalPlayerId", replay: replayFileKeyExpr() }, row: { $first: "$$ROOT" } } },
     { $replaceWith: "$row" },
   ];
 }
@@ -135,7 +171,7 @@ function playerIncluded(player, cohort) {
 }
 
 module.exports = {
-  parseGlobalTrendsFilters, globalHistoryStages, playerIncluded,
-  stringExpr, trustedReplayMmrExpr,
-  GLOBAL_HISTORY_PROJECTION, GLOBAL_ROSTER_PROJECTION,
+  parseGlobalTrendsFilters, globalRowStages, globalHistoryStages, playerIncluded,
+  stringExpr, trustedReplayMmrExpr, replayKeyExpr, replayFileKeyExpr,
+  GLOBAL_DEDUPE_ORDER, GLOBAL_HISTORY_PROJECTION, GLOBAL_ROSTER_PROJECTION,
 };
