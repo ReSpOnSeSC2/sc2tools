@@ -31,13 +31,25 @@ class ReplayCaptureCancelled(RuntimeError):
     code = "replay_capture_cancelled"
 
 
+# Last saved permission read per state directory: (file signature, enabled).
+_SAVED_PERMISSION: dict = {}
+
+
 def replay_capture_enabled(state_dir: Optional[Path]) -> bool:
-    """Only a durable explicit true permits automatic StarCraft capture."""
+    """Only a durable explicit true permits automatic StarCraft capture.
+
+    The watcher asks once per replay, so the saved preference is read without
+    the credential load, and read again only after agent.json changes.
+    """
     if state_dir is None:
         return False
     try:
-        from .state import load_state
-        return getattr(load_state(state_dir), "replay_capture_enabled", False) is True
+        from .state import read_saved_state
+        key = str(state_dir)
+        saved = read_saved_state(state_dir, lambda state: state.replay_capture_enabled is True,
+                                 _SAVED_PERMISSION.get(key))
+        _SAVED_PERMISSION[key] = saved
+        return saved[1] is True
     except Exception:
         return False
 
@@ -258,16 +270,21 @@ def capture_exact_replay(path: Path, state_dir: Optional[Path], progress: Option
 
 
 def wait_for_replay_upload(path: Path, state_dir: Optional[Path], previous_marker, *, timeout_seconds: float = 120, poll_seconds: float = 0.5) -> None:
-    """Wait on durable upload outcomes; report rejections or stalls promptly."""
-    from .state import load_state
+    """Wait on durable upload outcomes; report rejections or stalls promptly.
+
+    A poll reads agent.json (without the credential load) only after it
+    changes, so waiting never holds the save lock through a whole load.
+    """
+    from .state import read_saved_state
     if state_dir is None:
         raise RuntimeError("The desktop agent cannot track this upload. Restart the agent and retry.")
+    key, saved = str(path), None
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        state = load_state(state_dir)
-        if state.paused:
+        saved = read_saved_state(state_dir, lambda state: (state.paused, state.uploaded.get(key)), saved)
+        paused, marker = saved[1]
+        if paused:
             raise RuntimeError("Replay syncing is paused. Resume syncing in the desktop agent, then retry.")
-        marker = state.uploaded.get(str(path))
         if marker == "rejected":
             raise RuntimeError("The server rejected the rebuilt replay. Update the desktop agent and retry.")
         if marker == "filtered":

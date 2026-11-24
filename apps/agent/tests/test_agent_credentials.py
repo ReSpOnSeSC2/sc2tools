@@ -7,9 +7,11 @@ import json
 
 import pytest
 
+from sc2tools_agent import agent_credentials
 from sc2tools_agent.agent_credentials import (
     CredentialIntent, CredentialSelection, CredentialStorageError, PreparedGeneration,
-    PreparedTransaction, SlotReference, _commit, _parsed, commit_transaction, load_credentials, prepare_transaction,
+    PreparedTransaction, SlotReference, _commit, _load_credentials, _parsed, commit_transaction, load_credentials,
+    prepare_transaction,
 )
 from sc2tools_agent.state import _STATE_SAVE_LOCK
 
@@ -592,6 +594,21 @@ def test_a_caller_parse_vouches_only_for_the_exact_bytes_object_it_was_made_from
     _commit(storage, crypto, prepared, parses)
     assert storage.pointer == prepared.document
     assert load_credentials(storage, crypto).obs.value == "private"
+
+
+def test_a_load_keeps_an_equal_parsed_object_as_raw_and_parses_any_other_pointer(monkeypatch):
+    storage, crypto = seed()
+    raw = storage.pointer
+    equal, other = bytes(bytearray(raw)), projection(window_page="settings")
+    parse, other_parse = agent_credentials._document(equal), agent_credentials._document(other)
+    parsed, document = [], agent_credentials._document
+    monkeypatch.setattr(agent_credentials, "_document", lambda value: parsed.append(value) or document(value))
+    snapshot, parses = _load_credentials(storage, crypto, ((other, other_parse), (equal, parse)))
+    assert snapshot.raw is equal and len(parses) == 1 and parses[0][0] is equal and parses[0][1] is parse
+    assert snapshot.device.value == "synthetic-device-secret" and raw not in parsed
+    snapshot, parses = _load_credentials(storage, crypto, ((other, other_parse),))
+    assert snapshot.raw is raw and parses[0][0] is raw and parses[0][1] == json.loads(raw)
+    assert parsed.count(raw) == 1 and snapshot.obs.value == "synthetic-obs-secret"
 
 
 def test_prepared_generation_rejects_missing_name_with_closed_error():

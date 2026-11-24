@@ -636,6 +636,54 @@ def test_replay_capture_consent_survives_restart(tmp_path: Path) -> None:
     assert load_state(tmp_path).replay_capture_enabled is False
 
 
+@pytest.mark.parametrize("legacy", [False, True], ids=["selected", "legacy"])
+def test_load_parses_the_saved_document_once(tmp_path: Path, monkeypatch, legacy) -> None:
+    from sc2tools_agent import agent_credentials
+    if legacy:
+        (tmp_path / "agent.json").write_text(json.dumps({"window_page": "help",
+            "uploaded": {"kept.SC2Replay": "2026-11-01"}, "device_token": "legacy-private"}), encoding="utf-8")
+    else:
+        save_state(tmp_path, AgentState(window_page="help", uploaded={"kept.SC2Replay": "2026-11-01"}))
+    raw = (tmp_path / "agent.json").read_bytes()
+    parsed, document = [], agent_credentials._document
+    monkeypatch.setattr(agent_credentials, "_document", lambda value: parsed.append(value) or document(value))
+    loaded = load_state(tmp_path)
+    assert parsed == [raw] and loaded._credential_context.raw == raw
+    assert loaded._credential_context.mode == ("legacy" if legacy else "selected")
+    assert (loaded.window_page, loaded.uploaded, loaded.device_token) == ("help", {"kept.SC2Replay": "2026-11-01"}, None)
+
+
+def test_load_parses_a_pointer_that_changed_after_the_legacy_check(tmp_path: Path, monkeypatch) -> None:
+    from sc2tools_agent import agent_credentials
+    save_state(tmp_path, AgentState(window_page="help"))
+    target = tmp_path / "agent.json"
+    old = target.read_bytes()
+    newer = old.replace(b'"window_page":"help"', b'"window_page":"settings"')
+    assert newer != old
+    read_pointer = FiniteFileStorage.read_pointer
+
+    def replaced_first(storage):
+        if target.read_bytes() == old:
+            target.write_bytes(newer)
+        return read_pointer(storage)
+    monkeypatch.setattr(FiniteFileStorage, "read_pointer", replaced_first)
+    parsed, document = [], agent_credentials._document
+    monkeypatch.setattr(agent_credentials, "_document", lambda value: parsed.append(value) or document(value))
+    loaded = load_state(tmp_path)
+    assert parsed == [old, newer] and loaded._credential_context.raw == newer
+    assert loaded._credential_context.mode == "selected" and loaded.window_page == "settings"
+
+
+def test_saved_state_read_never_surfaces_credentials_and_defaults_when_missing(tmp_path: Path) -> None:
+    from sc2tools_agent.state import read_saved_state
+    pick = lambda state: (state.device_token, state.obs_password, state.window_page)  # noqa: E731
+    assert read_saved_state(tmp_path, pick) == (None, (None, None, None))
+    (tmp_path / "agent.json").write_text(json.dumps(
+        {"device_token": "legacy-private", "obs_password": "legacy-obs", "window_page": "help"}), encoding="utf-8")
+    signature, value = read_saved_state(tmp_path, pick)
+    assert signature is not None and value == (None, None, "help")
+
+
 def test_upload_overrides_garbage_inputs_load_as_none(
     tmp_path: Path,
 ) -> None:
