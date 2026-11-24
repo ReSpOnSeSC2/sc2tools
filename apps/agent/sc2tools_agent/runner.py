@@ -2782,7 +2782,8 @@ def _configure_logging(cfg: AgentConfig) -> Path:
         datefmt="%Y-%m-%dT%H:%M:%S",
     )
     root = logging.getLogger()
-    root.setLevel(_log_level_from_env())
+    level = _log_level_from_env()
+    root.setLevel(level)
     obs_sdk = logging.getLogger("obsws_python")
     obs_sdk.handlers.clear()
     obs_sdk.addHandler(logging.NullHandler())
@@ -2801,6 +2802,13 @@ def _configure_logging(cfg: AgentConfig) -> Path:
     )
     file_handler.setFormatter(fmt)
     root.addHandler(file_handler)
+    requested = os.environ.get("SC2TOOLS_LOG_LEVEL", "").strip().upper()
+    if requested and requested != logging.getLevelName(level):
+        logging.getLogger("sc2tools_agent").info(
+            "log_level_capped requested=%s effective=%s",
+            requested,
+            logging.getLevelName(level),
+        )
     _prune_worker_logs(log_dir)
     return log_dir
 
@@ -2828,8 +2836,18 @@ def _prune_worker_logs(log_dir: Path) -> None:
 
 
 def _log_level_from_env() -> int:
-    raw = os.environ.get("SC2TOOLS_LOG_LEVEL", "INFO").upper()
-    return getattr(logging, raw, logging.INFO)
+    """The root level from ``SC2TOOLS_LOG_LEVEL``, never quieter than INFO.
+
+    ``_bootstrap`` promotes Settings' Log level into that variable. DEBUG
+    adds detail; WARNING and ERROR are capped at INFO because they dropped
+    every startup, update and warning line from agent.log (a saved ERROR
+    hid them for over a month), and the Activity log already filters by
+    level when it reads the file. The cap also covers a quiet level that
+    an older agent's environment passed through the updater's relaunch.
+    """
+    raw = os.environ.get("SC2TOOLS_LOG_LEVEL", "INFO").strip().upper()
+    level = logging.getLevelName(raw)  # an int only for a known level name
+    return min(level, logging.INFO) if isinstance(level, int) else logging.INFO
 
 
 def _running_frozen() -> bool:

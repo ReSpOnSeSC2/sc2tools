@@ -25,10 +25,15 @@ pointed a worker back at ``agent.log``, ``test_parent_log_rotates_while
 _worker_handler_active`` would fail on CI, and the structural invariant
 in ``test_worker_handler_writes_to_per_pid_file_not_shared_log`` would
 fail on every platform.
+
+The parent's level is covered here too: Settings' Log level can add DEBUG
+detail but never drop the INFO and WARNING lines ``agent.log`` exists for
+(a saved ERROR once left it silent while the agent ran).
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import logging.handlers
 import os
@@ -286,6 +291,83 @@ def test_obs_sdk_credentials_and_repeated_errors_do_not_reach_agent_logs(
     assert "SDK connection refused" not in content + captured.out + captured.err
     assert "obs_connect_failed reason=auth_failed" in content
     assert "obs_connect_failed reason=auth_failed" in captured.err
+
+
+# --- parent level: Settings can add DEBUG, never hide INFO or warnings --
+
+
+def test_saved_error_log_level_still_writes_parent_info_and_warnings(
+    tmp_path, restore_root_logger, monkeypatch,
+) -> None:
+    """A saved Log level of ERROR must not empty ``agent.log``.
+
+    ``_bootstrap`` promotes ``log_level_override`` into the root level. A
+    real install had ERROR saved, so every ``agent_starting``,
+    ``update_install_failed`` and other parent INFO or WARNING line was
+    dropped. Once OBS and sc2reader noise was quieted the file went silent
+    while the agent kept running, and the parse workers (which always log
+    at INFO) were the only ones still writing.
+    """
+    from sc2tools_agent import runner
+
+    monkeypatch.setenv("SC2TOOLS_STATE_DIR", str(tmp_path))
+    monkeypatch.delenv("SC2TOOLS_LOG_LEVEL", raising=False)
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"log_level_override": "ERROR"}), encoding="utf-8",
+    )
+
+    _cfg, log_dir = runner._bootstrap(runner._parse_args([]))
+    assert os.environ["SC2TOOLS_LOG_LEVEL"] == "ERROR"
+    assert logging.getLogger().level == logging.INFO
+    logging.getLogger("sc2tools_agent").info("agent_starting version=test")
+    logging.getLogger("sc2tools_agent.updater").warning("update_install_failed reason=test")
+    logging.getLogger("sc2tools_agent").debug("debug detail stays out")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    content = (log_dir / runner.LOG_FILENAME).read_text(encoding="utf-8")
+    assert "log_level_capped requested=ERROR effective=INFO" in content
+    assert "INFO sc2tools_agent | agent_starting version=test" in content
+    assert "WARNING sc2tools_agent.updater | update_install_failed reason=test" in content
+    assert "debug detail stays out" not in content
+
+
+def test_debug_log_level_still_reaches_agent_log(
+    tmp_path, restore_root_logger, monkeypatch,
+) -> None:
+    from sc2tools_agent import runner
+
+    monkeypatch.setenv("SC2TOOLS_LOG_LEVEL", "DEBUG")
+    cfg = AgentConfig(api_base="http://localhost:0", state_dir=tmp_path,
+                      replay_folder=None, poll_interval_sec=10, parse_concurrency=2)
+    log_dir = runner._configure_logging(cfg)
+    logging.getLogger("sc2tools_agent").debug("debug detail kept")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    content = (log_dir / runner.LOG_FILENAME).read_text(encoding="utf-8")
+    assert "debug detail kept" in content
+    assert "log_level_capped" not in content
+
+
+@pytest.mark.parametrize(("requested", "expected"), [
+    ("DEBUG", logging.DEBUG),
+    ("debug", logging.DEBUG),
+    ("INFO", logging.INFO),
+    ("WARNING", logging.INFO),
+    ("WARN", logging.INFO),
+    ("ERROR", logging.INFO),
+    ("CRITICAL", logging.INFO),
+    ("", logging.INFO),
+    ("verbose", logging.INFO),
+])
+def test_log_level_adds_detail_but_never_hides_info(
+    monkeypatch, requested, expected,
+) -> None:
+    from sc2tools_agent import runner
+
+    monkeypatch.setenv("SC2TOOLS_LOG_LEVEL", requested)
+    assert runner._log_level_from_env() == expected
 
 
 def test_prune_worker_logs_removes_only_worker_files(tmp_path) -> None:
