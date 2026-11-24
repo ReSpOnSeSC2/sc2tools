@@ -108,10 +108,11 @@ function handGames() {
     ["h9", at(20, 13, 55), "Victory", { playerCount: 4, matchFormat: "2v2" }],
   ].map(([gameId, date, result, extra]) => game({ userId: "u-hand", gameId, myToonHandle: HAND, date, result, ...extra }))
     // Another player's games between them never join these sessions. Their
-    // game ids run against date order, and their opponent was renamed.
+    // game ids run against date order, and their opponent was renamed and
+    // switched race.
     .concat([at(20, 10, 1), at(20, 10, 11), at(20, 10, 31)].map((date, k) => game({
       userId: "u-other", gameId: `o${2 - k}`, myToonHandle: OTHER, date, result: "Victory",
-      opponent: { race: "Terran", toonHandle: "1-S2-1-555", displayName: k ? "New name" : "Old name" },
+      opponent: { race: k ? "Terran" : "Protoss", toonHandle: "1-S2-1-555", displayName: k ? "New name" : "Old name" },
     })));
 }
 
@@ -227,7 +228,7 @@ describe("Global Trends momentum and net-MMR cards on Atlas Flex limits", () => 
     expect(both.sessionPositions.slice(0, 3).map((row) => row.total)).toEqual([6, 3, 2]);
   });
 
-  test("the opponent drilldown names an opponent after the newest game, not the highest game id", async () => {
+  test("the opponent drilldown labels an opponent from the newest game, not the highest game id", async () => {
     const other = await service.run("netMmrByOpponent", { player_selection: "include", included_players: OTHER }, {});
     expect(other.items).toEqual([expect.objectContaining({
       displayName: "New name", opponentRace: "T", pairs: 2, firstPlayed: at(20, 10, 1), lastPlayed: at(20, 10, 11),

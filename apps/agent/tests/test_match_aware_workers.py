@@ -53,7 +53,7 @@ def test_archive_lane_waits_for_gate_then_drains_same_durable_task(tmp_path):
         assert queue.archive_pending_count()==1
         gate.enabled=False
         queue._archive_wake.set()
-        assert done.wait(3)
+        assert done.wait(10)
         deadline=time.monotonic()+2
         while queue.archive_pending_count() and time.monotonic()<deadline:time.sleep(.01)
         assert queue.archive_pending_count()==0

@@ -3,6 +3,8 @@ const { initializeDeviceSocket, announceDeviceReady } = require("./deviceCapabil
 
 const { verifyToken } = require("@clerk/backend");
 const { sha256 } = require("../util/hash");
+const { AuthUnavailableError, readCredential } = require("../util/credentialRead");
+const sentry = require("../util/sentry");
 const { updatePlaybackJob } = require("../services/replayPlaybackJobs");
 const { scoutingDeviceRoom } = require("../services/agentScouting");
 const { overlayHandshakeDescriptor } = require("../services/overlayPresence");
@@ -37,6 +39,33 @@ async function resolveResyncConfig(opts, userId, token) {
   const current = await opts.resolveOverlayToken?.(token);
   if (current?.userId !== userId) return null;
   return current.profile ? { profile: current.profile, profileRevision: current.profileRevision ?? 0 } : {};
+}
+
+/** The connect_error a failed handshake sends: a fixed code only, because a
+ * raw error can name the database host or carry driver detail. Clients retry
+ * every code except the overlay's invalid and replaced verdicts.
+ * @param {unknown} err @returns {Error} */
+function handshakeError(err) {
+  if (err instanceof AuthUnavailableError) return new Error("auth_unavailable");
+  // Anything else is a server bug, not an outage. Report it here, since the
+  // client no longer sees its message.
+  sentry.captureException(err);
+  return new Error("internal_error");
+}
+
+/** Clerk's verified claims, or null when Clerk rejects the JWT. The caller
+ * sends a fixed code, never Clerk's message.
+ * @param {string} token @param {{secretKey: string, issuer?: string, audience?: string}} opts */
+async function verifySessionJwt(token, opts) {
+  try {
+    return await verifyToken(token, /** @type {any} */ ({
+      secretKey: opts.secretKey,
+      ...(opts.issuer ? { issuer: opts.issuer } : {}),
+      ...(opts.audience ? { audience: opts.audience } : {}),
+    }));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -148,13 +177,15 @@ function attachSocketAuth(io, opts) {
     try {
       const overlayToken = socket.handshake?.auth?.overlayToken;
       if (overlayToken && typeof overlayToken === "string") {
-        if (!opts.resolveOverlayToken) {
+        const resolveOverlayToken = opts.resolveOverlayToken;
+        if (!resolveOverlayToken) {
           next(new Error("overlay_unsupported"));
           return;
         }
-        const hit = await opts.resolveOverlayToken(overlayToken);
+        const hit = await readCredential(() => resolveOverlayToken(overlayToken));
         if (!hit) {
-          next(new Error(await opts.isOverlayTokenReplaced?.(overlayToken) ? "overlay_token_replaced" : "invalid_overlay_token"));
+          const replaced = await readCredential(async () => await opts.isOverlayTokenReplaced?.(overlayToken));
+          next(new Error(replaced ? "overlay_token_replaced" : "invalid_overlay_token"));
           return;
         }
         socket.data.overlayToken = overlayToken;
@@ -176,12 +207,13 @@ function attachSocketAuth(io, opts) {
 
       const deviceToken = socket.handshake?.auth?.deviceToken;
       if (deviceToken && typeof deviceToken === "string") {
-        if (!opts.resolveDeviceToken) {
+        const resolveDeviceToken = opts.resolveDeviceToken;
+        if (!resolveDeviceToken) {
           next(new Error("device_unsupported"));
           return;
         }
         const tokenHash = sha256(deviceToken);
-        const hit = await opts.resolveDeviceToken(tokenHash);
+        const hit = await readCredential(() => resolveDeviceToken(tokenHash));
         if (!hit) {
           next(new Error("invalid_device_token"));
           return;
@@ -196,14 +228,11 @@ function attachSocketAuth(io, opts) {
         next(new Error("missing_token"));
         return;
       }
-      const claims = await verifyToken(
-        token,
-        /** @type {any} */ ({
-          secretKey: opts.secretKey,
-          ...((opts.issuer ? { issuer: opts.issuer } : {})),
-          ...((opts.audience ? { audience: opts.audience } : {})),
-        }),
-      );
+      const claims = await verifySessionJwt(token, opts);
+      if (claims === null) {
+        next(new Error("auth_failed"));
+        return;
+      }
       if (!claims || !claims.sub) {
         next(new Error("invalid_token"));
         return;
@@ -229,7 +258,7 @@ function attachSocketAuth(io, opts) {
       }
       next();
     } catch (err) {
-      next(/** @type {Error} */ (err));
+      next(handshakeError(err));
     }
   });
 

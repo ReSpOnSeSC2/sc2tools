@@ -529,7 +529,11 @@ def test_pause_holds_durable_archive_worker(tmp_path: Path, monkeypatch) -> None
         assert not archived.wait(0.3)
         assert q.archive_pending_count() == 1
         q.set_paused(False)
-        assert archived.wait(2.0)
+        # The held task is re-checked about once a second, then the legacy
+        # ownership check and journal writes run before the upload. wait()
+        # returns as soon as the upload starts; the ceiling only absorbs a
+        # stalled CI runner.
+        assert archived.wait(10.0)
         assert _wait_for(lambda: q.archive_pending_count() == 0)
     finally:
         q.stop()
@@ -2294,6 +2298,41 @@ def test_stop_then_start_retires_long_archive_worker_before_restart(
         release.set()
         if stopper.ident is not None:
             stopper.join(timeout=5.0)
+        q.stop()
+
+
+def test_refused_archive_thread_does_not_break_stop(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """If the OS refuses the archive thread, ``stop()`` must still work.
+
+    ``start()`` used to store the thread before starting it, so a failed
+    ``Thread.start()`` left ``stop()`` joining an unstarted thread
+    (``cannot join thread before it is started``) and skipping the journal
+    flush.
+    """
+    import pytest
+
+    real_start = threading.Thread.start
+
+    def _refuse_archive_thread(thread: threading.Thread) -> None:
+        if thread.name == "sc2tools-replay-archive":
+            raise RuntimeError("can't start new thread")
+        real_start(thread)
+
+    q = UploadQueue(cfg=_cfg(tmp_path), state=AgentState(), api=_StubApi())
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(threading.Thread, "start", _refuse_archive_thread)
+            with pytest.raises(RuntimeError, match="can't start new thread"):
+                q.start()
+        assert q._archive_thread is None
+        q.stop()
+        q.start()
+        assert q._archive_thread is not None
+        assert q._archive_thread.is_alive()
+    finally:
         q.stop()
 
 

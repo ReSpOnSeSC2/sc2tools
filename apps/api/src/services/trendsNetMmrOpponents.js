@@ -12,6 +12,17 @@
 
 const { netMmrPairStages } = require("./trendsNetMmr");
 
+/**
+ * Order that picks an opponent's newest label (see netMmrByOpponent), as
+ * $max compares it: date and game id, then the account and ladder race.
+ */
+const OPPONENT_LABEL_ORDER = Object.freeze([
+  "$date",
+  "$gameId",
+  "$myToonHandle",
+  "$_myLadderRace",
+]);
+
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
 const SORT_FIELDS = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
@@ -151,7 +162,7 @@ async function netMmrByOpponent(deps, userId, filters, opts = {}) {
       $addFields: {
         _opponentIdentity: opponentIdentityExpr(),
         // Compared in order by $max below: the newest game wins.
-        _newest: ["$date", "$gameId", "$_displayName", "$_oppRace"],
+        _newest: [...OPPONENT_LABEL_ORDER, "$_displayName", "$_oppRace"],
       },
     },
     {
@@ -162,11 +173,14 @@ async function netMmrByOpponent(deps, userId, filters, opts = {}) {
         pulseId: { $max: "$_pulseId" },
         toonHandle: { $max: "$_toonHandle" },
         pulseCharacterId: { $max: "$_pulseCharacterId" },
-        // The newest game's date, name and race. $max of [date, game id,
-        // ...] picks that game without a $sort stage, which would hold every
-        // kept game in memory (Atlas Flex caps an in-memory sort at 32 MB).
-        // It keeps one value per opponent where $bottom keeps a sort entry,
-        // which matters when admin Global Trends groups every opponent.
+        // The newest game's date, name and race. $max picks that game
+        // without a $sort stage, which would hold every kept game in memory
+        // (Atlas Flex caps an in-memory sort at 32 MB), and keeps one value
+        // per opponent where $bottom keeps a sort entry, which matters when
+        // admin Global Trends groups every opponent. Only admin Global Trends
+        // can tie on (date, gameId): its history may keep one replay for two
+        // accounts. The account and ladder race then pick the same row as
+        // the old $sort + $last did, the one from the greater account.
         newest: { $max: "$_newest" },
         netMmr: { $sum: "$_delta" },
         mmrWon: {
@@ -194,8 +208,8 @@ async function netMmrByOpponent(deps, userId, filters, opts = {}) {
     },
     {
       $addFields: {
-        displayName: { $arrayElemAt: ["$newest", 2] },
-        opponentRace: { $arrayElemAt: ["$newest", 3] },
+        displayName: { $arrayElemAt: ["$newest", OPPONENT_LABEL_ORDER.length] },
+        opponentRace: { $arrayElemAt: ["$newest", OPPONENT_LABEL_ORDER.length + 1] },
         lastPlayed: { $arrayElemAt: ["$newest", 0] },
       },
     },

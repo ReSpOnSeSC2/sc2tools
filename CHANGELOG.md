@@ -25,6 +25,10 @@ corresponding GitHub Release.
   times by a large composite key and needed 70 MB for the largest one. A new
   games index (`momentum_order`) now supplies its order, and two windows
   replace the four sorts. Results are unchanged.
+- Admin Global Trends' Net MMR opponent table again names an opponent from
+  the greater account's row when two kept games of one replay tie. A stored
+  account handle equal to the literal `__missing_account__` no longer pairs
+  with games that have no handle.
 
 ### Hosting costs
 
@@ -52,6 +56,22 @@ corresponding GitHub Release.
   history now stores momentum's session keys and has two indexes that supply
   every window's order, so no card sorts the history. The opponent table
   also holds half as much per opponent. Results are unchanged. See ADR 0097.
+
+### Device sign-in during database outages
+
+- Keep the desktop app linked when the API can't reach its database. A device
+  token that can't be checked because the database read failed now gets 503
+  with `Retry-After: 5` instead of 401, so the app retries instead of treating
+  the token as revoked and asking you to link your PC again. Unknown and
+  revoked tokens still get 401. Website sign-ins get the same 503 when their
+  account lookup fails, and the error log records only the database failure's
+  type, never the token or its hash.
+- Stop live connections from passing raw errors back when sign-in fails. The
+  desktop app, overlays and the website's live updates now get a fixed code
+  (`auth_unavailable` while the database is unreachable, `auth_failed` for a
+  rejected website sign-in, `internal_error` for anything unexpected) instead
+  of the database or Clerk error text, which could name the database host.
+  Unexpected handshake failures are reported to error tracking instead.
 
 ### Website navigation
 

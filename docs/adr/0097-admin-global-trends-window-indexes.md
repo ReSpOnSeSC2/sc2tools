@@ -50,10 +50,13 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
    itself can follow the snapshot `$match`. That avoids a second write to
    every row of every build.
 6. The opponent drilldown takes each opponent's newest game, name and race
-   with one `$max` of `[date, gameId, name, race]` instead of two `$bottom`
-   accumulators. The result is the same, and `$group` keeps one value per
-   opponent instead of a sort entry per accumulator. Across the platform
-   that is 32 MiB instead of 58 MiB, against `$group`'s 100 MB limit.
+   with one `$max` of `[date, gameId, myToonHandle, ladder race, name, race]`
+   instead of two `$bottom` accumulators sorted by the first four. The
+   account and ladder race break the ties only this history can have (one
+   replay kept for two accounts, ADR 0096), and kept rows never tie on all
+   four, so the result is the same. `$group` keeps one value per opponent
+   instead of a sort entry per accumulator: across the platform about
+   32 MiB instead of 58 MiB, against `$group`'s 100 MB limit.
 
 ## Consequences
 
@@ -84,6 +87,16 @@ Status: Accepted, November 23, 2026. Follows ADR 0095
 - Verified on MongoDB 7.0.14, as CI runs. Flex runs MongoDB 8.0; both the
   index-ordered window and the skipped sort of an adjacent window are
   assumed to behave the same there, as the personal cards also assume.
-- The opponent drilldown's `$group` grows with the number of distinct
-  opponents across the cohort, about 1.3 KB each. A drilldown narrowed to
-  one race, as the chart opens it, needs a fraction of that.
+- Limits that remain:
+  - The opponent drilldown's `$group` grows with the number of distinct
+    opponents across the cohort, about 1.3 KB each, and a page sorts its
+    first `offset + limit` opponents (about 1.4 KB each). An unfiltered
+    whole-platform page past roughly 20,000 opponents would pass 32 MB. A
+    drilldown narrowed to one race, as the chart opens it, needs a fraction.
+  - The build now reads every row's ladder race. A non-string
+    `myLadderRace` (validation requires a string) fails the build and so
+    every card, where before it failed momentum, net MMR and progression.
+  - An array in an indexed field (`date`, `gameId`, `myToonHandle`, which
+    validation rejects) makes `global_trends_net_mmr` multikey for good, and
+    net MMR then sorts in memory again. Momentum's index holds only computed
+    values.
