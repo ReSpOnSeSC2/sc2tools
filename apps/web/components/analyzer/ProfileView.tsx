@@ -336,7 +336,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         ...(selectedBuildMatchup ? [{ key: "build", label: "Build", value: `${selectedBuildMatchup.myBuild} vs ${selectedBuildMatchup.oppStrategy}`, clear: () => setSelectedBuildMatchup(null) }] : []),
       ]} onClear={() => { setSelectedMap(null); setSelectedStrategy(null); setSelectedBuildMatchup(null); setSelectedTiming(null); }} />
       {filterActive && data.gamesTruncated ? <p className="text-caption text-text-muted">Filtered summaries use the loaded meeting sample.{selectedTiming ? " Replay history shows the selected analyzed games." : " Replay history searches all matching games."}</p> : null}
-      <SectionNav variant="bar" aria-label="Dossier sections" items={[{ id: "dossier-brief", label: "Brief" }, { id: "dossier-tendencies", label: "Tendencies" }, { id: "dossier-timings", label: "Timings" }, { id: "dossier-history", label: "History" }, { id: "dossier-notes", label: "Notes" }, { id: "dossier-ladder", label: "Ladder" }, { id: "dossier-identity", label: "Identity" }]} />
+      <SectionNav variant="bar" aria-label="Dossier sections" items={[{ id: "dossier-brief", label: "Brief" }, { id: "dossier-tendencies", label: "Tendencies" }, { id: "dossier-timings", label: "Timings" }, { id: "dossier-history", label: "History" }, { id: "dossier-ladder", label: "Ladder" }, { id: "dossier-notes", label: "Notes" }, { id: "dossier-identity", label: "Identity" }]} />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start lg:gap-8">
       <div className="min-w-0 space-y-6 lg:col-span-8 lg:space-y-8">
       <section id="dossier-brief" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Brief</h2><ScoutingBriefCard profile={briefProfile} /></section>
@@ -423,6 +423,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
       />
 
       </section>
+      <section id="dossier-ladder" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Ladder</h2><DossierOnView label="Ladder context"><LadderContextCard pulseId={pulseId} confirmedIdentity={data.globalIdentity}><RaceMmrPanel embedded breakdown={races} isLoading={racesLoading} confirmedIdentity={data.globalIdentity} /></LadderContextCard></DossierOnView></section>
       </div>
       <div className="min-w-0 space-y-6 lg:col-span-4 lg:space-y-8">
       <section id="dossier-notes" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32">
@@ -442,7 +443,6 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         }}
       />
       </section>
-      <section id="dossier-ladder" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Ladder</h2><DossierOnView label="Ladder context"><LadderContextCard pulseId={pulseId} confirmedIdentity={data.globalIdentity}><RaceMmrPanel embedded breakdown={races} isLoading={racesLoading} confirmedIdentity={data.globalIdentity} /></LadderContextCard></DossierOnView></section>
       <DossierIdentitySection pulseId={pulseId} open={identityOpen} onOpenChange={setIdentityOpen} diagnosticsOpen={diagnosticsOpen} submission={identitySubmissionEnabled} candidates={identityCandidatesEnabled} race={data.oppRaceModal} onChanged={() => { void refreshCache(isOpponentKey(pulseId)); }} onRetried={async response => { await refreshCache(isOpponentKey(pulseId)); if (response.resolvedPulseCharacterId) toast?.success("Pulse data refreshed"); else toast?.info("Still couldn't find their SC2Pulse profile"); }} />
       </div>
       </div>

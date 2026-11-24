@@ -47,8 +47,10 @@ describe("Macro modal overview", () => {
     expect(overview().hasAttribute("tabindex")).toBe(false);
     expect(48 * scale).toBe(24);
     // Dense data remains in the reachable local scroll region rather than being hidden.
+    // The cap is a phone-only CSS variable: tablet and desktop show the full overview.
     height = 1400; updateSize();
-    expect(parseFloat(reservation().style.height)).toBeGreaterThan(parseFloat(overview().style.maxHeight));
+    expect(overview().className).toContain("max-sm:max-h-[var(--macro-overview-max)]");
+    expect(parseFloat(reservation().style.height)).toBeGreaterThan(parseFloat(overview().style.getPropertyValue("--macro-overview-max")));
     const keyboardEntry = screen.getByRole("button", { name: "Selected unit 0" });
     keyboardEntry.focus();
     expect(document.activeElement).toBe(keyboardEntry);
