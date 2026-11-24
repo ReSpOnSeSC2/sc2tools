@@ -25,6 +25,7 @@ const SAFE_CODES = Object.freeze({
   invalid_token: 401,
   auth_failed: 401,
   account_deleted: 401,
+  auth_unavailable: 503,
   gdpr_operation_busy: 503,
 });
 /** @type {Readonly<Record<string, string>>} */
