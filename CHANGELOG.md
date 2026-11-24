@@ -26,6 +26,16 @@ corresponding GitHub Release.
   `ATLAS_CLUSTER_NAME` names the Flex cluster, which happens only after the
   old M10 and its snapshots are deleted. See ADR 0095.
 
+### Device sign-in during database outages
+
+- Keep the desktop app linked when the API can't reach its database. A device
+  token that can't be checked because the database read failed now gets 503
+  with `Retry-After: 5` instead of 401, so the app retries instead of treating
+  the token as revoked and asking you to link your PC again. Unknown and
+  revoked tokens still get 401. Website sign-ins get the same 503 when their
+  account lookup fails, and the error log records only the database failure's
+  type, never the token or its hash.
+
 ### Website navigation
 
 - Find Daily Scout, Match Rooms, the balance tools, Wrapped, and Replay Career

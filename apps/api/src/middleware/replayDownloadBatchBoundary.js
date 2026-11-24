@@ -8,7 +8,7 @@ const PRIVATE_FAILURE = Symbol("replayDownloadBatchFailure");
 const CODES = Object.freeze({ invalid_replay_download_batch: 400, replay_download_body_too_large: 413,
   replay_download_unsupported_media_type: 415, replay_download_unavailable: 503, replay_storage_unavailable: 503,
   export_busy: 503, auth_required: 401, missing_token: 401, invalid_token: 401, auth_failed: 401,
-  account_deleted: 401, gdpr_operation_busy: 409 });
+  account_deleted: 401, auth_unavailable: 503, gdpr_operation_busy: 409 });
 /** @type {Readonly<Record<string,string>>} */
 const PARSER_CODES = Object.freeze({ "entity.parse.failed": "invalid_replay_download_batch",
   "entity.too.large": "replay_download_body_too_large", "request.aborted": "invalid_replay_download_batch",

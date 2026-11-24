@@ -4,6 +4,12 @@ const { verifyToken } = require("@clerk/backend");
 const { sha256 } = require("../util/hash");
 
 const BEARER_PREFIX = "Bearer ";
+// Seconds to wait before retrying when a credential could not be checked.
+// The desktop agent honors Retry-After between its own attempts.
+const AUTH_RETRY_AFTER_SEC = 5;
+// Rejections a credential read raises as a decision about the caller rather
+// than a failure to decide.
+const VERDICT_CODES = new Set(["account_deleted"]);
 
 /**
  * Build the auth middleware. Accepts EITHER a Clerk session JWT (web
@@ -14,6 +20,13 @@ const BEARER_PREFIX = "Bearer ";
  * Clerk identifier (e.g. `user_2abc...`), needed for env-var gates like
  * SC2TOOLS_ADMIN_USER_IDS where admins paste IDs straight from the Clerk
  * dashboard rather than the internal UUID.
+ *
+ * Only a decision about the credential is a 401: a missing, unknown,
+ * revoked or invalid token, or a deleted account. When the database read
+ * behind a device token or a Clerk user throws (unreachable, timed out,
+ * pool closed), nothing was decided, so the request gets 503
+ * `auth_unavailable` with Retry-After. The desktop agent treats repeated
+ * 401s as a revoked token and unpairs, so an outage must never look like one.
  *
  * @param {{
  *   secretKey: string,
@@ -26,7 +39,7 @@ const BEARER_PREFIX = "Bearer ";
  * @returns {import('express').RequestHandler}
  */
 function buildAuth(deps) {
-  return async (req, _res, next) => {
+  return async (req, res, next) => {
     try {
       const raw = extractBearer(req);
       if (!raw) {
@@ -46,17 +59,66 @@ function buildAuth(deps) {
         next(httpError(401, "invalid_token"));
         return;
       }
-      const user = await deps.ensureUser(claims.sub);
+      const clerkUserId = claims.sub;
+      const user = await readCredential(() => deps.ensureUser(clerkUserId));
       req.auth = {
         userId: user.userId,
-        clerkUserId: claims.sub,
+        clerkUserId,
         source: "clerk",
       };
       next();
     } catch (err) {
-      if (/** @type {any} */ (err)?.code === "account_deleted") { next(httpError(401, "account_deleted")); return; }
-      next(httpError(401, "auth_failed", err instanceof Error ? err : undefined));
+      next(authError(err, res));
     }
+  };
+}
+
+/** The error a failed authentication passes on. Retry-After is set here so
+ * every error handler that renders the 503 carries it.
+ * @param {unknown} err @param {import('express').Response} res */
+function authError(err, res) {
+  if (err instanceof AuthUnavailableError) {
+    res.setHeader("Retry-After", String(AUTH_RETRY_AFTER_SEC));
+    return err;
+  }
+  if (/** @type {any} */ (err)?.code === "account_deleted") return httpError(401, "account_deleted");
+  return httpError(401, "auth_failed", err instanceof Error ? err : undefined);
+}
+
+/** A credential read threw before it decided anything about the caller. */
+class AuthUnavailableError extends Error {
+  /** @param {unknown} failure */
+  constructor(failure) {
+    super("auth_unavailable");
+    this.status = 503;
+    this.code = "auth_unavailable";
+    // Only the failure's kind is kept for the error log: a driver message
+    // can carry query detail, and the log must never hold a token or hash.
+    this.cause = failureKind(failure);
+  }
+}
+
+/** Run one database-backed credential read (device token or Clerk user).
+ * A verdict such as account_deleted passes through; any other failure means
+ * the credential could not be checked.
+ * @template T @param {() => Promise<T>} read @returns {Promise<T>} */
+async function readCredential(read) {
+  try {
+    return await read();
+  } catch (err) {
+    if (VERDICT_CODES.has(/** @type {any} */ (err)?.code)) throw err;
+    throw new AuthUnavailableError(err);
+  }
+}
+
+/** Log-safe kind of a failed read, e.g. `{ type: "MongoServerSelectionError" }`.
+ * @param {unknown} err */
+function failureKind(err) {
+  const e = /** @type {any} */ (err);
+  return {
+    type: typeof e?.name === "string" ? e.name : typeof err,
+    ...(typeof e?.code === "string" || Number.isInteger(e?.code) ? { code: e.code } : {}),
+    ...(typeof e?.codeName === "string" ? { codeName: e.codeName } : {}),
   };
 }
 
@@ -76,8 +138,9 @@ async function tryDeviceAuth(deps, raw, req, next) {
   const ticket = deps.deviceTokenReuse ? await prepareDeviceAdmission(deps.deviceTokenReuse, tokenHash) : null;
   const retained = ticket ? consumeDeviceAdmission(deps.deviceTokenReuse, tokenHash, ticket) : null;
   if (retained) { req.auth = { userId: retained.userId, source: "device", tokenHash }; next(); return true; }
-  // New independent original query with original options and error behavior.
-  const original = await deps.getDeviceToken(tokenHash);
+  // New independent original query with original options. A read that
+  // throws is a 503 (`auth_unavailable`), never a 401.
+  const original = await readCredential(() => deps.getDeviceToken(tokenHash));
   if (!original) return false;
   req.auth = { userId: original.userId, source: "device", tokenHash }; next(); return true;
 }
