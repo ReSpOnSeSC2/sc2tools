@@ -467,6 +467,15 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.25.8
+
+- Lighter saves and loads of `agent.json` on large histories: a save makes
+  about a third fewer Windows file calls, and a load parses the file once
+  instead of three times.
+- Replay capture checks its setting without loading credentials and rereads
+  the saved file only after it changes, so waiting for a captured replay's
+  upload no longer holds up the uploader's saves.
+
 ### Agent 0.25.7
 
 - A new look matching the website (Command Glass) with each race skin's

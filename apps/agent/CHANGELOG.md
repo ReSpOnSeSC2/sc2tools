@@ -2,6 +2,13 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.25.8
+
+### Changed
+- Saving `agent.json` makes about a third fewer Windows file calls (131 instead of 193 on a large history), so saves finish sooner while the agent is busy, for example parsing a replay.
+- Loading `agent.json` parses the file once instead of three times, which halves load time on a large history.
+- Replay capture checks whether it is switched on without loading your credentials, and rereads `agent.json` only after it changes. Waiting for a captured replay to upload no longer holds up the uploader's saves. An unreadable credential store no longer turns capture off; capture still needs it switched on in a readable `agent.json`.
+
 ## 0.25.7
 
 ### Changed
