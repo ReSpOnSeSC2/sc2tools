@@ -95,4 +95,41 @@ describe("concrete Net MMR matchups across personal and global routes", () => {
     const excluded = (await request(app).get(`${GLOBAL}/opponents`).query({ ...query, my_race: "T", opp_race: "Z" }).expect(200)).body;
     expect(excluded.items).toEqual([]);
   });
+
+  // The global history can keep one replay for two accounts, so two kept
+  // rows of one opponent can tie on (date, gameId). The label then comes
+  // from the greater account's row, as the old $sort + $last chose.
+  const tied = (userId, toon, gameId, minute, ladderRace, mmr, result, opponent) => ({
+    userId, gameId, myToonHandle: toon, myRace: ladderRace, myLadderRace: ladderRace,
+    date: new Date(Date.UTC(2026, 8, 1, 12, minute)), myMmr: mmr, myMmrSource: "replay",
+    isLadderGame: true, playerCount: 2, matchFormat: "1v1", result, durationSec: 600, map: "Arena", opponent,
+  });
+
+  test("global opponent labels on tied replays come from the greater account", async () => {
+    await db.games.deleteMany({});
+    // One SC2 account uploaded by two users under the S2 and s2 spellings.
+    const tagged = (displayName) => ({ displayName, race: "Zerg", toonHandle: "2-S2-1-300", pulseId: "2-S2-1-300" });
+    const later = { displayName: "Z1", race: "Zerg", toonHandle: "2-S2-1-301" };
+    await db.games.insertMany([
+      tied("a", "1-S2-1-100", "r1", 10, "Protoss", 4020, "Victory", tagged("[TAG]Opp")),
+      tied("a", "1-S2-1-100", "r2", 20, "Protoss", 4040, "Victory", later),
+      tied("alt", "1-s2-1-100", "r1", 10, "Protoss", 4020, "Victory", tagged("Opp")),
+      tied("alt", "1-s2-1-100", "r2", 20, "Protoss", 4040, "Victory", later),
+    ]);
+    const spellings = await new AdminGlobalTrendsService({ db }).run("netMmrByOpponent", {}, {});
+    expect(spellings.items).toEqual([expect.objectContaining({ name: "Opp", opponentRace: "Z", netMmr: 40, pairs: 2 })]);
+  });
+
+  test("global opponent labels on a replay uploaded by both players come from the greater account", async () => {
+    await db.games.deleteMany({});
+    // Neither row has opponent ids, so both get the identity "game:shared".
+    await db.games.insertMany([
+      tied("a", "1-S2-1-100", "shared", 10, "Protoss", 4020, "Victory", { displayName: "PlayerB", race: "Terran" }),
+      tied("a", "1-S2-1-100", "a-next", 20, "Protoss", 4040, "Victory", { displayName: "X", race: "Zerg", toonHandle: "2-S2-1-9" }),
+      tied("b", "1-S2-1-200", "shared", 10, "Terran", 5000, "Defeat", { displayName: "PlayerA", race: "Protoss" }),
+      tied("b", "1-S2-1-200", "b-next", 20, "Terran", 4980, "Victory", { displayName: "Y", race: "Zerg", toonHandle: "2-S2-1-8" }),
+    ]);
+    const shared = await new AdminGlobalTrendsService({ db }).run("netMmrByOpponent", {}, {});
+    expect(shared.items).toEqual([expect.objectContaining({ name: "PlayerA", opponentRace: "P", netMmr: 0, pairs: 2 })]);
+  });
 });

@@ -1,5 +1,4 @@
 "use strict";
-const { mongoOrder } = require("./sessions");
 
 /**
  * Trends-tab "Player Insight" aggregations.
@@ -609,7 +608,35 @@ async function momentum(deps, userId, filters, opts = {}) {
   return shapeMomentum({ post, positions, baseline, gap });
 }
 
-/** @param {Deps} deps @param {object} match @param {number} gapMinutes */
+/**
+ * A player's games in sequence: oldest first, ties by game id.
+ *
+ * This is the order of ``sessions.mongoOrder()`` (and of JS ``ordered()``)
+ * whenever every game id is a non-empty string, which validation requires
+ * of every stored game (validation/gameRecord.js). Its fallback fields only
+ * break ties between rows without a valid game id.
+ */
+const SEQUENCE_ORDER = Object.freeze({ date: 1, gameId: 1 });
+
+/**
+ * The games index that supplies ``SEQUENCE_ORDER`` to momentum's windows:
+ * ``userId``, then the sort fields in the same directions.
+ */
+const MOMENTUM_ORDER_INDEX = Object.freeze({
+  name: "momentum_order",
+  key: Object.freeze({ userId: 1, ...SEQUENCE_ORDER }),
+});
+
+/**
+ * Momentum works on the whole filtered history in sequence. Atlas Flex caps
+ * an in-memory sort at 32 MB with no disk spill, so no stage may sort it:
+ * the windows below follow the $match stages directly and share one stored
+ * sort order, which the ``momentum_order`` index then supplies, and MongoDB
+ * skips the sort of a window that directly follows another with the same
+ * order. Nothing may sit between those stages.
+ *
+ * @param {Deps} deps @param {object} match @param {number} gapMinutes
+ */
 function momentumPipeline(deps, match, gapMinutes) {
   const gapMs = gapMinutes * 60 * 1000;
   return [
@@ -617,58 +644,88 @@ function momentumPipeline(deps, match, gapMinutes) {
     // Query $type also matches arrays containing a Date. Keep indexed bounds
     // above, then require a scalar BSON Date before ordering/date arithmetic.
     { $match: { $expr: { $eq: [{ $type: "$date" }, "date"] } } },
-    { $addFields: { _bucket: deps.bucketSwitch(), _sessionOrder: mongoOrder() } },
-    { $sort: { _sessionOrder: 1 } },
-    ...sequentialContext(gapMs),
+    ...sequentialContext(deps, gapMs),
+    {
+      $addFields: {
+        _bucket: deps.bucketSwitch(),
+        // Position among the session's decided games, from 1.
+        _pos: { $subtract: ["$_decidedSoFar", "$_sessionBase"] },
+        // The previous decided game's result, when it is in this session:
+        // its decided count is then past the session's base.
+        _post: {
+          $cond: [
+            {
+              $and: [
+                { $isArray: "$_prevDecided" },
+                { $gt: [{ $arrayElemAt: ["$_prevDecided", 0] }, "$_sessionBase"] },
+              ],
+            },
+            { $arrayElemAt: ["$_prevDecided", 1] },
+            null,
+          ],
+        },
+      },
+    },
+    // Unknown/draw rows have already bridged session membership above. Only
+    // decided games are counted.
+    { $match: { _bucket: { $in: ["win", "loss"] } } },
     { $facet: momentumFacet() },
   ];
 }
 
 /**
- * Window-field stages that decorate each game row with previous-
- * game context (gap to previous game, previous result, session id,
- * and within-session position).
+ * Window-field stages that give each game its place among its session's
+ * decided games, in ``SEQUENCE_ORDER``. A stage can only read an earlier
+ * stage's outputs, and MongoDB skips the sort of only one following window,
+ * so everything fits in two:
  *
+ * - ``_prevDate``: the previous game's date (null for the first game).
+ * - ``_decidedSoFar``: decided games so far, this one included. It only
+ *   grows, so a game's count also identifies it among decided games.
+ * - ``_sessionBase``: decided games before this session's first game. A
+ *   game opens a session when it has no previous game or follows it by
+ *   more than the gap. The base only grows, so $max carries it forward.
+ * - ``_prevDecided``: [decided count, result] of the latest decided game
+ *   before this one, found by $max of the count.
+ *
+ * Counts, unlike sort keys, mean the same under any order, so the same
+ * stages serve admin Global Trends, which swaps in its own order.
+ *
+ * @param {Deps} deps
  * @param {number} gapMs
  */
-function sequentialContext(gapMs) {
+function sequentialContext(deps, gapMs) {
+  const isDecided = { $in: [deps.bucketSwitch(), ["win", "loss"]] };
+  const decided = { $cond: [isDecided, 1, 0] };
+  const opensSession = {
+    $or: [
+      { $eq: ["$_prevDate", null] },
+      { $gt: [{ $subtract: ["$date", "$_prevDate"] }, gapMs] },
+    ],
+  };
+  const soFar = { documents: ["unbounded", "current"] };
   return [
     {
       $setWindowFields: {
-        sortBy: { _sessionOrder: 1 },
+        sortBy: SEQUENCE_ORDER,
         output: {
           _prevDate: { $shift: { output: "$date", by: -1, default: null } },
+          _decidedSoFar: { $sum: decided, window: soFar },
         },
       },
     },
     {
-      $addFields: {
-        _gapMs: { $cond: [{ $eq: ["$_prevDate", null] }, null, { $subtract: ["$date", "$_prevDate"] }] },
-      },
-    },
-    {
-      $addFields: {
-        _sessionBreak: { $cond: [{ $or: [{ $eq: ["$_gapMs", null] }, { $gt: ["$_gapMs", gapMs] }] }, 1, 0] },
-      },
-    },
-    {
       $setWindowFields: {
-        sortBy: { _sessionOrder: 1 },
+        sortBy: SEQUENCE_ORDER,
         output: {
-          _sessionId: { $sum: "$_sessionBreak", window: { documents: ["unbounded", "current"] } },
-        },
-      },
-    },
-    // Unknown/draw rows have already bridged membership. Only now number the
-    // decided games and carry the previous DECIDED result inside each session.
-    { $match: { _bucket: { $in: ["win", "loss"] } } },
-    {
-      $setWindowFields: {
-        partitionBy: "$_sessionId",
-        sortBy: { _sessionOrder: 1 },
-        output: {
-          _pos: { $documentNumber: {} },
-          _post: { $shift: { output: "$_bucket", by: -1, default: null } },
+          _sessionBase: {
+            $max: { $cond: [opensSession, { $subtract: ["$_decidedSoFar", decided] }, null] },
+            window: soFar,
+          },
+          _prevDecided: {
+            $max: { $cond: [isDecided, ["$_decidedSoFar", deps.bucketSwitch()], null] },
+            window: { documents: ["unbounded", -1] },
+          },
         },
       },
     },
@@ -837,6 +894,7 @@ module.exports = {
   netMmrByOpponent: netMmrOpponents.netMmrByOpponent,
   SESSION_GAP_MINUTES,
   MAX_SESSION_POSITIONS,
+  MOMENTUM_ORDER_INDEX,
   OPP_MMR_BUCKET_WIDTHS: oppMmr.OPP_MMR_BUCKET_WIDTHS,
   OPP_MMR_AUTO_WIDTH_CUTOFF: oppMmr.OPP_MMR_AUTO_WIDTH_CUTOFF,
   NET_MMR_MAX_DELTA: netMmr.NET_MMR_MAX_DELTA,

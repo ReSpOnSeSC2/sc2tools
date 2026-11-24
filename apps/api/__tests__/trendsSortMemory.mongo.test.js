@@ -6,8 +6,8 @@
  * Trends pipeline that sorts a player's whole history in memory therefore
  * fails once that history is large enough (production did at about 14k
  * games). These tests apply a far smaller cap to a history whose
- * whole-document sort is well past it, then run the verified-MMR and MMR
- * progression charts.
+ * whole-document sort is well past it, then run the verified-MMR, MMR
+ * progression and session momentum charts.
  */
 
 const { MongoClient } = require("mongodb");
@@ -19,6 +19,15 @@ const {
   netMmrPairStages,
   NET_MMR_WINDOW_INDEX,
 } = require("../src/services/trendsNetMmr");
+const { MOMENTUM_ORDER_INDEX } = require("../src/services/trendsInsights");
+
+/** @param {Record<string, any>} plan explained aggregation */
+function planSummary(plan) {
+  return {
+    cursor: JSON.stringify(plan.stages[0].$cursor.queryPlanner.winningPlan),
+    stages: plan.stages.map((stage) => Object.keys(stage)[0]),
+  };
+}
 
 // Small enough that each chart's old whole-history sort fails here.
 const SORT_CAP_BYTES = 512 * 1024;
@@ -130,10 +139,39 @@ describe("Trends charts under a Flex-like in-memory sort cap", () => {
       .toEqual(NET_MMR_WINDOW_INDEX.key);
     // The history $match, the window and the display $match.
     const stages = netMmrPairStages(service._trendsDeps(), "u1", {}).slice(0, 3);
-    const plan = await db.games.aggregate(stages).explain("queryPlanner");
-    const cursor = plan.stages[0].$cursor.queryPlanner.winningPlan;
-    expect(JSON.stringify(cursor)).toContain(`"indexName":"${NET_MMR_WINDOW_INDEX.name}"`);
-    expect(JSON.stringify(cursor)).not.toContain('"stage":"SORT"');
-    expect(plan.stages.map((stage) => Object.keys(stage)[0])).not.toContain("$sort");
+    const plan = planSummary(await db.games.aggregate(stages).explain("queryPlanner"));
+    expect(plan.cursor).toContain(`"indexName":"${NET_MMR_WINDOW_INDEX.name}"`);
+    expect(plan.cursor).not.toContain('"stage":"SORT"');
+    expect(plan.stages).not.toContain("$sort");
+  });
+
+  test("session momentum follows one session and session breaks", async () => {
+    // An hour apart: one session under a 90-minute gap, one game per
+    // session under a 15-minute gap. Results alternate from a win.
+    const joined = await service.momentum("u1", {}, { sessionGapMinutes: 90 });
+    expect(joined.baseline).toMatchObject({ wins: 300, losses: 300, total: 600 });
+    expect(joined.postWin).toMatchObject({ wins: 0, losses: 300, total: 300 });
+    expect(joined.postLoss).toMatchObject({ wins: 299, losses: 0, total: 299 });
+    expect(joined.sessionPositions.slice(0, 2).map((row) => [row.pos, row.wins, row.losses]))
+      .toEqual([[1, 1, 0], [2, 0, 1]]);
+    const split = await service.momentum("u1", {}, { sessionGapMinutes: 15 });
+    expect(split.postWin.total + split.postLoss.total).toBe(0);
+    expect(split.sessionPositions.map((row) => [row.pos, row.total])).toEqual([[1, 600]]);
+  });
+
+  test("session momentum's order comes from its index, with no sort stage", async () => {
+    const indexes = await db.games.indexes();
+    expect(indexes.find((ix) => ix.name === MOMENTUM_ORDER_INDEX.name).key)
+      .toEqual(MOMENTUM_ORDER_INDEX.key);
+    const aggregate = jest.spyOn(db.games, "aggregate");
+    await service.momentum("u1", { since: new Date(Date.UTC(2026, 0, 2)) }, { sessionGapMinutes: 90 });
+    const [pipeline, options] = aggregate.mock.calls.at(-1);
+    aggregate.mockRestore();
+    const plan = planSummary(await db.games.aggregate(pipeline, options).explain("queryPlanner"));
+    expect(plan.cursor).toContain(`"indexName":"${MOMENTUM_ORDER_INDEX.name}"`);
+    expect(plan.cursor).not.toContain('"stage":"SORT"');
+    // Both windows run on the index order: neither needs its own sort.
+    expect(plan.stages.filter((stage) => stage === "$_internalSetWindowFields")).toHaveLength(2);
+    expect(plan.stages).not.toContain("$sort");
   });
 });
