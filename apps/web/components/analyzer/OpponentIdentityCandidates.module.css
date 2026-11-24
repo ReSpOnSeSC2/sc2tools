@@ -1,0 +1,58 @@
+.candidate {
+  container: identity-candidate / inline-size;
+}
+
+.summary {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.profile,
+.evidence,
+.actions {
+  grid-column: 1 / -1;
+}
+
+.evidence {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+}
+
+@container identity-candidate (min-width: 13rem) {
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container identity-candidate (min-width: 32rem) {
+  .summary {
+    grid-template-columns: minmax(0, 1fr) minmax(6.5rem, auto) minmax(7rem, auto);
+    align-items: center;
+  }
+
+  .profile {
+    grid-column: auto;
+  }
+
+  .score {
+    text-align: right;
+  }
+
+  .details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container identity-candidate (min-width: 44rem) {
+  .summary {
+    grid-template-columns: minmax(0, 1.1fr) 7.5rem 8rem auto;
+  }
+
+  .evidence {
+    order: 1;
+  }
+
+  .actions {
+    grid-column: auto;
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

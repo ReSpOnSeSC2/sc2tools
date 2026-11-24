@@ -366,7 +366,7 @@ export function OpponentsTab({
           {!onExportAction ? <Button variant="secondary" disabled={exportDisabled} title={`Export all ${formatNumber(items.length)} matching ${groupByPlayer ? "players" : "accounts"}, including rows outside the render window`} onClick={exportRows}>Export CSV</Button> : null}
           <OpponentColumnPicker columns={columns} onChange={(key, checked) => setColumnOverrides({ ...columnOverrides, [key]: checked })} onReset={() => setColumnOverrides({})} />
         </div>
-        <div className="scroll-fade-x -mx-1 overflow-x-auto px-1 sm:mx-0 sm:overflow-visible sm:px-0">
+        <div className="-mx-1 overflow-x-auto p-1 sm:mx-0 sm:overflow-visible sm:p-0">
           <div className="flex min-w-max items-center gap-2 sm:min-w-0 sm:flex-wrap" role="group" aria-label="Quick opponent views">
             <OpponentQuickViews quick={quick} onChange={setQuick} sort={sort} rivalCount={rivals.keys.length} />
           </div>

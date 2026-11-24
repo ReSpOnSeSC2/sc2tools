@@ -16,6 +16,7 @@ import { useApi } from "@/lib/clientApi";
 import { useFilters } from "@/lib/filterContext";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { CandidateEvidenceDetails } from "./OpponentIdentityCandidateEvidence";
+import styles from "./OpponentIdentityCandidates.module.css";
 
 import type { EvidenceMode, EvidenceConfidence, IdentityCandidate, OpponentIdentityCandidatesResponse, OpponentIdentityCandidatesProps } from "./OpponentIdentityCandidates.types";
 import { formatDateTime, formatNumber } from "@/lib/i18n/format";
@@ -383,7 +384,7 @@ function CandidateCard({
     <article
       data-testid="identity-candidate-row"
       className={[
-        "relative min-w-0 overflow-hidden rounded-xl border p-4",
+        `${styles.candidate} relative min-w-0 overflow-hidden rounded-xl border p-4`,
         featured
           ? "border-accent/55 bg-gradient-to-br from-accent/10 via-bg-surface to-bg-elevated/40"
           : "border-border bg-bg-surface",
@@ -396,8 +397,8 @@ function CandidateCard({
         />
       ) : null}
 
-      <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(6.5rem,auto)_minmax(7rem,auto)] md:items-center xl:grid-cols-[minmax(0,1.1fr)_7.5rem_8rem_auto]">
-        <div className="flex min-w-0 items-start gap-3">
+      <div className={`${styles.summary} grid min-w-0 gap-4`}>
+        <div className={`${styles.profile} flex min-w-0 items-start gap-3`}>
           <span
             className={[
               "flex h-8 w-8 flex-none items-center justify-center rounded-full border font-display text-caption font-bold tabular-nums",
@@ -454,7 +455,7 @@ function CandidateCard({
           tone="cyan"
         />
 
-        <div className={`grid min-w-0 gap-2 md:col-span-3 xl:order-last xl:col-span-4 ${showReplayActions || candidate.evidence.actions ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+        <div className={`${styles.evidence} grid min-w-0 gap-2`}>
           <EvidenceBar
             label="Build-order pattern"
             score={candidate.evidence.buildOrders?.score}
@@ -480,27 +481,27 @@ function CandidateCard({
           ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 md:col-span-3 xl:col-span-1 xl:flex-col xl:items-stretch">
+        <div className={`${styles.actions} flex flex-wrap items-center gap-2`}>
           <button
             type="button"
             aria-expanded={expanded}
             aria-controls={detailId}
             onClick={() => setExpanded((current) => !current)}
-            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full border border-line bg-bg-surface px-4 font-display text-caption font-bold text-text shadow-hard transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="inline-flex min-h-[44px] flex-auto items-center justify-center gap-1.5 rounded-full border border-line bg-bg-surface px-4 text-center font-display text-caption font-bold text-text shadow-hard transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {expanded ? "Hide evidence" : "Compare evidence"}
             <ChevronDown
-              className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`}
+              className={`h-4 w-4 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
               aria-hidden
             />
           </button>
           <Link
             href={href}
             aria-label={`Open ${candidate.name || "candidate"} opponent dossier`}
-            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full border border-transparent px-4 font-display text-caption font-bold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="inline-flex min-h-[44px] flex-auto items-center justify-center gap-1.5 rounded-full border border-transparent px-4 text-center font-display text-caption font-bold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Open dossier
-            <ArrowUpRight className="h-4 w-4" aria-hidden />
+            <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden />
           </Link>
         </div>
       </div>
@@ -540,7 +541,7 @@ function ScoreTile({
   tone: "signal" | "cyan";
 }) {
   return (
-    <div className="rounded-lg border border-border bg-bg-elevated/45 px-3 py-2 text-left md:text-right">
+    <div className={`${styles.score} min-w-0 rounded-lg border border-border bg-bg-elevated/45 px-3 py-2`}>
       <p className="text-[0.625rem] uppercase tracking-wider text-text-dim">
         {label}
       </p>

@@ -11,6 +11,7 @@ import type {
   IdentityCandidate,
 } from "./OpponentIdentityCandidates";
 import { formatNumber } from "@/lib/i18n/format";
+import styles from "./OpponentIdentityCandidates.module.css";
 
 /** Expandable, evidence-by-evidence explanation for one identity lead. */
 export function CandidateEvidenceDetails({
@@ -27,7 +28,7 @@ export function CandidateEvidenceDetails({
   const actions = candidate.evidence.actions;
   return (
     <div id={id} className="mt-4 border-t border-border pt-4">
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className={`${styles.details} grid gap-3`}>
         <EvidenceDetailCard
           icon={<ListChecks className="h-4 w-4" aria-hidden />}
           title="Build-order pattern"
