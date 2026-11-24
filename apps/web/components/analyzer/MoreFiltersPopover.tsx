@@ -16,7 +16,7 @@ export function MoreFiltersPopover({ count, children }: { count: number; childre
       {count ? <span className="rounded-full bg-accent-cyan/10 px-2 py-0.5 text-micro font-semibold tabular-nums text-accent ring-1 ring-accent-cyan/30">{count} active</span> : null}
     </button>
     <Popover open={open} onClose={() => setOpen(false)} anchorRef={triggerRef} id={panelId} label="More filters" width={520}
-      className="glass-strong !bg-bg-elevated/90 !shadow-pop flex flex-col items-start gap-5">
+      className="!bg-bg-elevated !shadow-pop flex flex-col items-start gap-5">
       {children}
       <button type="button" className="min-h-11 rounded-full border border-border-strong px-4 text-caption hover:bg-bg-subtle/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         onClick={() => setOpen(false)}>Done</button>

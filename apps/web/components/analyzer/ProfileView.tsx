@@ -424,7 +424,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
 
       </section>
       </div>
-      <aside aria-label="Notes, ladder and identity" className="min-w-0 space-y-6 lg:col-span-4 lg:space-y-8">
+      <div className="min-w-0 space-y-6 lg:col-span-4 lg:space-y-8">
       <section id="dossier-notes" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32">
       <OpponentNotesCard
         headingLevel={2}
@@ -444,7 +444,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
       </section>
       <section id="dossier-ladder" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Ladder</h2><DossierOnView label="Ladder context"><LadderContextCard pulseId={pulseId} confirmedIdentity={data.globalIdentity}><RaceMmrPanel embedded breakdown={races} isLoading={racesLoading} confirmedIdentity={data.globalIdentity} /></LadderContextCard></DossierOnView></section>
       <DossierIdentitySection pulseId={pulseId} open={identityOpen} onOpenChange={setIdentityOpen} diagnosticsOpen={diagnosticsOpen} submission={identitySubmissionEnabled} candidates={identityCandidatesEnabled} race={data.oppRaceModal} onChanged={() => { void refreshCache(isOpponentKey(pulseId)); }} onRetried={async response => { await refreshCache(isOpponentKey(pulseId)); if (response.resolvedPulseCharacterId) toast?.success("Pulse data refreshed"); else toast?.info("Still couldn't find their SC2Pulse profile"); }} />
-      </aside>
+      </div>
       </div>
 
 

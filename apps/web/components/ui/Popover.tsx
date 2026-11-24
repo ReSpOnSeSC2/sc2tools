@@ -76,7 +76,7 @@ export function Popover({ open, onClose, anchorRef, label, id, children, initial
   }, [open, host, anchorRef]);
   if (!open || !host) return null;
   return createPortal(<OverlayLayerProvider value={layer}><div ref={panelRef} id={id} role="dialog" aria-label={label} tabIndex={-1}
-    className={["fixed z-50 overflow-y-auto rounded-xl border border-line glass-strong p-4 text-text shadow-pop motion-safe:animate-scale-in", className].join(" ")}
+    className={["fixed z-50 overflow-y-auto rounded-xl border border-line bg-bg-elevated p-4 text-text shadow-pop motion-safe:animate-[fadeIn_160ms_ease-out]", className].join(" ")}
     style={{ ...(position ?? { visibility: "hidden", width }), zIndex: layer }}>
     {children}
   </div></OverlayLayerProvider>, host);

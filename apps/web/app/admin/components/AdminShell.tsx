@@ -41,7 +41,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         {group.items.map((entry) => navLink(entry, false))}
       </div>)}
     </nav>
-    <aside className="hidden w-64 flex-none md:sticky md:top-20 md:block md:max-h-[calc(100vh-6rem)] md:self-start md:overflow-y-auto" aria-label="Admin navigation">
+    <aside className="hidden w-64 flex-none md:sticky md:top-20 md:-mx-1 md:block md:max-h-[calc(100dvh-6rem)] md:self-start md:overflow-y-auto md:px-1" aria-label="Admin navigation">
       <nav className="space-y-5">{NAV_GROUPS.map((group) => <div key={group.label}>
         <h2 id={"admin-nav-" + group.label.toLowerCase()} className="mb-1 px-3 text-micro font-semibold uppercase tracking-wider text-text-dim">{group.label}</h2>
         <ul aria-labelledby={"admin-nav-" + group.label.toLowerCase()} className="space-y-1">{group.items.map((entry) => <li key={entry.href}>{navLink(entry, true)}</li>)}</ul>

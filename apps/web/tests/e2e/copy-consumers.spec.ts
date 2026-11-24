@@ -54,7 +54,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await expect(page.locator("html")).toHaveAttribute("data-theme-mode", theme);
     await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()))
-      .toBe(theme === "light" ? "244 246 250" : "6 9 14");
+      .toBe(theme === "light" ? "245 247 250" : "5 7 11");
     expect(await page.getByRole("main").evaluate(node => getComputedStyle(node).fontFamily)).toContain("CopyHanken");
     await expect(page.getByRole("link", { name: /^(?:Learn how|Help)$/ })).toHaveCount(0);
     expect(await page.evaluate(() => (window as FixtureWindow).fixtureCopyState.writes)).toEqual([]);

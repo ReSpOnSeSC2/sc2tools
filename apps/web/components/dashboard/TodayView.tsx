@@ -91,7 +91,7 @@ export function TodayView() {
 
         {/* Side rail: what to work on next. Sticky on desktop; on phones it
             follows the performance column in reading order. */}
-        <aside aria-labelledby="today-focus-heading" className="min-w-0 space-y-6 lg:sticky lg:top-20 lg:col-span-4 lg:self-start">
+        <aside aria-labelledby="today-focus-heading" className="min-w-0 space-y-6 lg:col-span-4">
           <ZoneHeading id="today-focus-heading" eyebrow="Focus" title="What to work on" />
           <SectionBoundary label="your goals"><GoalsTodayCard /></SectionBoundary>
           <SectionBoundary label="your league targets"><TargetsStrip /></SectionBoundary>

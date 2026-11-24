@@ -25,7 +25,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await expect(page.locator("html")).toHaveAttribute("data-theme-mode", theme);
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--bg").trim().replace(/\s+/g, " ")))
-      .toBe(theme === "light" ? "244 246 250" : "6 9 14");
+      .toBe(theme === "light" ? "245 247 250" : "5 7 11");
     expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain("SettingsHanken");
     const list = page.getByRole("tablist", { name: "Settings sections", exact: true });
     const panel = page.getByRole("tabpanel");

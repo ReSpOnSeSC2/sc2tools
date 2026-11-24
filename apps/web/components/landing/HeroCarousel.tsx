@@ -42,7 +42,7 @@ export function HeroCarousel({ slides, intervalMs = 5500, ariaLabel = "Product h
   // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Carousel arrow keys operate the focused strip and its controls.
   return <section aria-roledescription="carousel" aria-label={ariaLabel} aria-live={playing ? "off" : "polite"} className="relative isolate min-w-0"
     onKeyDown={(event) => { const next = event.key === "ArrowRight" ? current + 1 : event.key === "ArrowLeft" ? current - 1 : event.key === "Home" ? 0 : event.key === "End" ? total - 1 : null; if (next !== null) { event.preventDefault(); go(next); } }}>
-    <div aria-hidden className="pointer-events-none absolute -inset-x-6 -top-8 bottom-4 -z-10 rounded-full bg-aurora opacity-20 blur-3xl" />
+    <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-8 bottom-4 -z-10 rounded-full bg-aurora opacity-20 blur-3xl" />
     <div className="group hud-corners glass relative overflow-hidden rounded-2xl border border-line shadow-pop">
       <div aria-hidden className="flex h-8 items-center gap-1.5 border-b border-border px-4">
         <span className="h-2 w-2 rounded-full bg-text-dim/40" /><span className="h-2 w-2 rounded-full bg-text-dim/40" /><span className="h-2 w-2 rounded-full bg-text-dim/40" />

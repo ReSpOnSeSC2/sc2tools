@@ -347,7 +347,7 @@ export function OpponentsTab({
     <div className="space-y-4 lg:space-y-5">
       {/* Context zone: one toolbar. Search leads, quick views and filters
           follow, and the column picker closes the row. */}
-      <div role="search" aria-label="Opponent list controls" className="glass space-y-3 rounded-2xl border border-line p-2 sm:p-3">
+      <div role="group" aria-label="Opponent list controls" className="glass space-y-3 rounded-2xl border border-line p-2 sm:p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-0 flex-1 basis-full sm:basis-80">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-dim" aria-hidden />

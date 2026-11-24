@@ -223,7 +223,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.getByRole("heading", { name: "Macro statistics", exact: true })).toBeVisible();
       expect(evidence.definitionLoads).toEqual([]);
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-      expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--bg").trim().replace(/\s+/g, " "))).toBe(theme === "light" ? "244 246 250" : "6 9 14");
+      expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--bg").trim().replace(/\s+/g, " "))).toBe(theme === "light" ? "245 247 250" : "5 7 11");
       const macro = page.getByRole("region", { name: "Macro statistics", exact: true });
       for (const [label, id] of kpis) {
         const tile = macro.getByRole("group", { name: label, exact: true });

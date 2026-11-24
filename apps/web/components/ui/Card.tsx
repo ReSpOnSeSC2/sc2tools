@@ -23,7 +23,7 @@ const VARIANT_CLASSES: Record<CardVariant, string> = {
   elevated: "bg-bg-elevated surface-sheen border border-line shadow-pop",
   feature: "aurora-ring bg-bg-surface surface-sheen border border-transparent shadow-card",
   interactive:
-    "bg-bg-surface surface-sheen border border-line shadow-card cursor-pointer transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-accent-cyan/40 hover:shadow-glow",
+    "bg-bg-surface surface-sheen border border-line shadow-card cursor-pointer transition-[border-color,box-shadow] duration-200 hover:border-accent-cyan/40 hover:shadow-glow",
 };
 
 /** Heading level for the legacy inline `title`. */

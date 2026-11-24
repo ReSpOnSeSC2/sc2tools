@@ -14,11 +14,11 @@ test("System follows device changes and updates browser chrome", async ({ page }
   await expect(root).toHaveAttribute("data-theme", "dark");
   await page.emulateMedia({ colorScheme: "light" });
   await expect(root).toHaveAttribute("data-theme", "light");
-  await expect.poll(() => page.locator('meta[name="theme-color"]').evaluateAll(nodes => nodes.every(node => node.getAttribute("content") === "#f4f6fa"))).toBe(true);
+  await expect.poll(() => page.locator('meta[name="theme-color"]').evaluateAll(nodes => nodes.every(node => node.getAttribute("content") === "#f5f7fa"))).toBe(true);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("sc2tools.theme"))).toBeNull();
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(root).toHaveAttribute("data-theme", "dark");
-  await expect.poll(() => page.locator('meta[name="theme-color"]').evaluateAll(nodes => nodes.every(node => node.getAttribute("content") === "#06090e"))).toBe(true);
+  await expect.poll(() => page.locator('meta[name="theme-color"]').evaluateAll(nodes => nodes.every(node => node.getAttribute("content") === "#05070b"))).toBe(true);
 });
 
 test("a saved palette stays fixed when the device changes", async ({ page }) => {
@@ -399,7 +399,7 @@ for (const theme of ["light", "dark"] as const) {
     const evidence = await openMoreAppearanceFixture(page, theme);
     await expect(page.locator("html")).toHaveAttribute("data-theme-mode", theme);
     await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()))
-      .toBe(theme === "light" ? "244 246 250" : "6 9 14");
+      .toBe(theme === "light" ? "245 247 250" : "5 7 11");
     const more = page.getByRole("button", { name: "More", exact: true });
     await more.focus(); await page.keyboard.press("Enter");
     const sheet = page.getByRole("dialog", { name: "More sections", exact: true });

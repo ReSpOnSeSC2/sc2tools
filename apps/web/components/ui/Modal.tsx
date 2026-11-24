@@ -168,9 +168,9 @@ export function Modal({
           ...(placement === "right" ? { height: viewport.height } : {}),
         } : undefined}
         className={[
-          "relative w-full min-w-0 glass-strong text-text border border-line shadow-pop",
+          "relative w-full min-w-0 bg-bg-elevated text-text border border-line shadow-pop",
           "overflow-hidden flex flex-col",
-          placement === "bottom" ? "motion-safe:animate-sheet-up" : placement === "right" ? "motion-safe:animate-scale-in" : centerOnMobile ? "motion-safe:animate-scale-in" : "motion-safe:animate-sheet-up sm:motion-safe:animate-scale-in",
+          "motion-safe:animate-[fadeIn_160ms_ease-out]",
           placement !== "responsive" ? sheetPlacement : [
           centerOnMobile ? "max-h-[85dvh]" : "max-h-[100dvh]",
           // The side panel spans the full height; 3xl gets more vertical
