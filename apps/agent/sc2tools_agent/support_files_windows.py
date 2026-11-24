@@ -119,6 +119,7 @@ class Handle(io.RawIOBase):
     def __init__(self, kernel, handle, *, writable=False):
         super().__init__()
         self.kernel, self.handle, self._writable = kernel, handle, writable
+        self.opened = None  # WindowsFiles._open's verify() result for this handle.
 
     def _check(self, result):
         if not result:
@@ -183,17 +184,21 @@ class Handle(io.RawIOBase):
             if handle is not None:
                 self.kernel.CloseHandle(handle)
 
-    def information(self):
-        basic, identity = _Info(), _IdInfo()
+    def information(self, *, identity=True):
+        """Metadata; identity=False skips the file ID for callers that never read it."""
+        basic = _Info()
         self._check(self.kernel.GetFileInformationByHandle(self.handle, ctypes.byref(basic)))
-        # FileIdInfo=18 includes the full 128-bit ReFS/NTFS identifier.
-        self._check(self.kernel.GetFileInformationByHandleEx(self.handle, 18, ctypes.byref(identity), ctypes.sizeof(identity)))
-        return {
+        info = {
             "attributes": basic.attributes, "links": basic.links,
-            "identity": (identity.volume, bytes(identity.identifier)),
             "size": (basic.size_high << 32) | basic.size_low,
             "modified": (basic.modified.dwHighDateTime << 32) | basic.modified.dwLowDateTime,
         }
+        if identity:
+            # FileIdInfo=18 includes the full 128-bit ReFS/NTFS identifier.
+            ids = _IdInfo()
+            self._check(self.kernel.GetFileInformationByHandleEx(self.handle, 18, ctypes.byref(ids), ctypes.sizeof(ids)))
+            info["identity"] = (ids.volume, bytes(ids.identifier))
+        return info
 
     def final_path(self):
         buffer = ctypes.create_unicode_buffer(8192)
@@ -205,8 +210,8 @@ class Handle(io.RawIOBase):
             text = text[4:]
         return local_path(text)
 
-    def verify(self, expected, *, directory=False):
-        info = self.information()
+    def verify(self, expected, *, directory=False, identity=True):
+        info = self.information(identity=identity)
         if (bool(info["attributes"] & _DIRECTORY) != directory or info["attributes"] & _REPARSE
             or not directory and info["links"] != 1 or not _same(self.final_path(), expected)):
             raise ValueError("unsafe_path")
@@ -245,14 +250,14 @@ class WindowsFiles:
     def __init__(self):
         self.kernel = _kernel()
 
-    def _open(self, path, access, sharing, creation, *, directory=False, writable=False):
+    def _open(self, path, access, sharing, creation, *, directory=False, writable=False, identity=True):
         flags = _OPEN_REPARSE | (_BACKUP if directory else 0)
         handle = self.kernel.CreateFileW(str(path), access, sharing, None, creation, flags, None)
         if handle == _INVALID or handle is None:
             raise ctypes.WinError(ctypes.get_last_error())
         result = Handle(self.kernel, handle, writable=writable)
         try:
-            result.verify(path, directory=directory)
+            result.opened = result.verify(path, directory=directory, identity=identity)
         except BaseException:
             try:
                 if creation == 1:
