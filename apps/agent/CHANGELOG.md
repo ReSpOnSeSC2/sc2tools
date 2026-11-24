@@ -2,6 +2,18 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.25.9
+
+### Changed
+- The Dashboard has one Install now. The status checks no longer repeat "Version X is ready to install." with a second Install update button. A version that failed to install or is no longer supported still shows there as a warning, with Retry on the update card.
+
+### Fixed
+- Install now works right after a match. It used to wait out the same two-minute quiet period as automatic updates, which also starts every time the agent opens, and it ignored the click without a word while the card said "Will install after this match". Now it installs at once unless a match is running, OBS is streaming or recording, or a replay capture is running. In those cases the button shows Queued, the card says what it is waiting for, and the update installs the moment that ends. Later cancels a queued install.
+- The update card says what an automatic update is waiting for: the match, OBS, a replay capture, or "Will install in about 2 minutes if no game starts" after a game or a restart.
+- The update card keeps showing "Downloading the verified installer…" until the installer starts, instead of clearing after a few seconds.
+- After an update, the relaunched agent reads the settings saved since the previous copy started (API base URL, Workers after restart, Upload concurrency, Upload batch size and Log level), not the values that copy loaded when it started. 0.25.9 is itself started by 0.25.8's updater, so it can still carry those older values, through Restart agent and later updates, until you fully quit the agent and start it again.
+- `agent.log` keeps startup, update and warning lines again. A Log level of WARNING or ERROR saved in Settings had silently dropped them. Levels quieter than INFO now run as INFO and write one `log_level_capped` line, and DEBUG still adds detail. Settings offers INFO and DEBUG; a saved ERROR shows as INFO, and the next Save writes INFO.
+
 ## 0.25.8
 
 ### Changed

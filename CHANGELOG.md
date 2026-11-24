@@ -474,6 +474,23 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.25.9
+
+- Install now installs at once right after a match or a restart, instead of
+  ignoring the click for two minutes. A running match, an OBS stream or
+  recording, or a replay capture queues it: the button shows Queued, the card
+  says what it is waiting for, and Later cancels it.
+- One Install now on the Dashboard: the status checks no longer repeat the
+  ready version with a second install button.
+- After an update, the relaunched agent reads the settings saved since the
+  previous copy started, not the values that copy loaded when it started.
+  0.25.9 is itself started by 0.25.8's updater, so it can still carry those
+  older values, through restarts and later updates, until the agent is fully
+  quit and started again.
+- `agent.log` keeps startup, update and warning lines again. A Log level of
+  WARNING or ERROR saved in Settings had silently dropped them. Quieter levels
+  now run as INFO, and Settings offers INFO and DEBUG.
+
 ### Agent 0.25.8
 
 - Lighter saves and loads of `agent.json` on large histories: a save makes
