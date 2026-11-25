@@ -80,7 +80,12 @@ export function PlayedBuildBadge({
   if (!name) return <span className="text-text-dim">—</span>;
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
-      <Badge size="sm" variant="neutral" title={`The build I played: ${name}`}>
+      <Badge
+        size="sm"
+        variant="neutral"
+        title={`The build I played: ${name}`}
+        className="max-w-full rounded-md [overflow-wrap:anywhere]"
+      >
         {name}
       </Badge>
       {planned ? <PlannedBadge detected={detected} /> : null}

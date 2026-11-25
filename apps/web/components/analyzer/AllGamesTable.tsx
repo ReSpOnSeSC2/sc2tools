@@ -340,10 +340,10 @@ function GameRow({
             {game.opp_mmr != null ? game.opp_mmr : "—"}
           </td>
         ) : null}
-        <td className="px-2 py-1 text-text-muted">
+        <td className="min-w-[9rem] px-2 py-1 text-text-muted [overflow-wrap:anywhere]">
           {game.opp_strategy || "—"}
         </td>
-        <td className="px-2 py-1">
+        <td className="min-w-[13rem] px-2 py-1">
           <PlayedBuildBadge name={game.my_build || null} planned={game.build_planned === true} detected={game.detected_build} />
         </td>
         <td className="px-2 py-1 text-right">
@@ -622,10 +622,10 @@ function GameMobileCard({
             )}
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-micro text-text-muted">
               <span>
-                opp: <span className="text-text">{game.opp_strategy || "—"}</span>
+                opp: <span className="text-text [overflow-wrap:anywhere]">{game.opp_strategy || "—"}</span>
               </span>
               <span>
-                me: <span className="text-text">{game.my_build || "—"}</span>
+                me: <span className="text-text [overflow-wrap:anywhere]">{game.my_build || "—"}</span>
                 {game.build_planned === true && game.my_build ? <PlannedBadge detected={game.detected_build} className="ml-1 align-middle" /> : null}
               </span>
               <span>
