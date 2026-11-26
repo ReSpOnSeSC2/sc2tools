@@ -474,6 +474,11 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.25.10
+
+- The current-match title preset puts your MMR before your opponent, as in
+  5321 MMR v Maru. Saved copies of the previous preset pick up the format.
+
 ### Agent 0.25.9
 
 - Install now installs at once right after a match or a restart, instead of

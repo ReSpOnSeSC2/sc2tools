@@ -2,6 +2,11 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.25.10
+
+### Changed
+- Automatic game-start stream titles show your MMR before your opponent, as in 5321 MMR v Maru. The title still shows your opponent if the rating is unavailable.
+
 ## 0.25.9
 
 ### Changed
