@@ -105,7 +105,7 @@ export function Modal({
   const titleId = useId();
   const descId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
-  const viewport = useVisualViewport(open && placement !== "responsive" && !portalContainer);
+  const viewport = useVisualViewport(open && !portalContainer);
   useFocusTrap({ open, containerRef: dialogRef, onClose, initialFocusRef, returnFocusRef });
 
   // Body scroll lock + Esc + focus management
@@ -163,7 +163,7 @@ export function Modal({
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        style={viewport ? {
+        style={viewport && placement !== "responsive" ? {
           maxHeight: viewport.height * (placement === "bottom" ? 0.9 : 1),
           ...(placement === "right" ? { height: viewport.height } : {}),
         } : undefined}
@@ -172,14 +172,15 @@ export function Modal({
           "overflow-hidden flex flex-col",
           "motion-safe:animate-[fadeIn_160ms_ease-out]",
           placement !== "responsive" ? sheetPlacement : [
-          centerOnMobile ? "max-h-[85dvh]" : "max-h-[100dvh]",
+          // The overlay can be shorter than the layout viewport on mobile.
+          centerOnMobile ? "max-h-[min(85dvh,100%)]" : "max-h-[min(100dvh,100%)]",
           // The side panel spans the full height; 3xl gets more vertical
           // room for the build editor's timeline.
           sideOnDesktop
-            ? "sm:h-[100dvh] sm:max-h-[100dvh]"
+            ? "sm:h-[100dvh] sm:max-h-full"
             : size === "3xl"
-              ? "sm:max-h-[94vh]"
-              : "sm:max-h-[85vh]",
+              ? "sm:max-h-[min(94vh,100%)]"
+              : "sm:max-h-[min(85vh,100%)]",
           centerOnMobile
             ? "rounded-2xl"
             : sideOnDesktop

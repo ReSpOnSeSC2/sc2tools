@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { act, render, screen, cleanup } from "@testing-library/react";
 import { Modal } from "../Modal";
 
 describe("Modal mobileLayout=center", () => {
@@ -72,5 +72,37 @@ describe("Modal mobileLayout=center", () => {
     }
     expect(scrim!.className).toContain("items-end");
     expect(scrim!.className).not.toContain("items-center p-4");
+  });
+});
+
+describe("Modal mobile bottom sheet", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps a responsive sheet within the visual viewport as it shrinks", () => {
+    const viewport = Object.assign(new EventTarget(), { width: 390, height: 800, offsetLeft: 0, offsetTop: 0 });
+    vi.stubGlobal("visualViewport", viewport);
+    render(
+      <Modal
+        open
+        onClose={() => {}}
+        title="Edit player"
+        footer={<button type="button">Approve and save</button>}
+      >
+        <p>Player channels</p>
+      </Modal>,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Edit player" });
+    const overlay = dialog.parentElement!;
+    expect(overlay.style.height).toBe("800px");
+
+    act(() => {
+      viewport.height = 780;
+      viewport.dispatchEvent(new Event("resize"));
+    });
+    expect(overlay.style.height).toBe("780px");
+    expect(dialog.className).toContain("max-h-[min(100dvh,100%)]");
   });
 });

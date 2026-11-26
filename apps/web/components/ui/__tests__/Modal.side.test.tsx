@@ -24,7 +24,7 @@ describe("Modal desktopLayout=side", () => {
     expect(dialog.className).toContain("sm:h-[100dvh]");
     expect(dialog.className).toContain("sm:rounded-none");
     expect(dialog.className).toContain("rounded-t-2xl");
-    expect(dialog.className).not.toContain("sm:max-h-[85vh]");
+    expect(dialog.className).toContain("sm:max-h-full");
   });
 
   it("keeps the centered card by default", () => {
@@ -35,7 +35,7 @@ describe("Modal desktopLayout=side", () => {
     );
     const dialog = screen.getByRole("dialog", { name: "Plain" });
     expect(scrimOf(dialog).className).toContain("sm:items-center sm:p-4");
-    expect(dialog.className).toContain("sm:max-h-[85vh]");
+    expect(dialog.className).toContain("sm:max-h-[min(85vh,100%)]");
     expect(dialog.className).toContain("sm:rounded-xl");
   });
 });
