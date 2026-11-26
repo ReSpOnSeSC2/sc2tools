@@ -35,8 +35,10 @@ either setting, using agent 0.16.11 or newer.
 
 **Streams** accepts statistic tokens such as `SC2 | {mmr} MMR | {record}` and
 shows a live preview. **Use current-match template** keeps your plain-text
-prefix and adds the opponent, known alias, head-to-head record and available
-map, for example `GM Protoss | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}`.
+prefix and puts your current MMR before the opponent. It also adds the known
+alias, head-to-head record and available map.
+`GM Protoss | {match_mmr} v {opp} {aka} | {h2h} ({h2h_wr}) | {map}` can render
+as `GM Protoss | 5321 MMR v Barcode (aka Maru) | 3W–2L (60%) | Alcyone LE`.
 Maps appear only when the live source provides them; ordinary ladder games
 may not report a map. Automatic updates start off: choose the connected
 platforms, enable **Refresh titles at the start of each game** or the independent

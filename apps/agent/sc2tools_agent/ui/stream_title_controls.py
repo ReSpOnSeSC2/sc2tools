@@ -1,7 +1,7 @@
 """Native title-template preview and explicit opt-in controls."""
 from __future__ import annotations
 
-from ..streaming.title_template import TOKEN_REFERENCE, render_values
+from ..streaming.title_template import CURRENT_MATCH_TEMPLATE, TOKEN_REFERENCE, render_values
 from . import theme
 
 
@@ -52,7 +52,7 @@ class StreamTitleControls:
         # Preserve a custom plain-text prefix without repeating match tokens.
         current = self.page.title_input.text().split("|", 1)[0].strip()
         prefix = current if current and "{" not in current and "}" not in current else "SC2"
-        self.page.title_input.setText(prefix + " | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}")
+        self.page.title_input.setText(f"{prefix} | {CURRENT_MATCH_TEMPLATE}")
         self.page._title_edited()
 
     def configure(self):

@@ -8,6 +8,7 @@ import pytest
 from sc2tools_agent.streaming.cloud_client import CloudStreamingClient
 from sc2tools_agent.streaming.service import StreamService
 from sc2tools_agent.streaming.title_settings import configure_title_settings, load_title_settings
+from sc2tools_agent.streaming.title_template import CURRENT_MATCH_TEMPLATE
 
 
 @pytest.fixture(autouse=True)
@@ -223,7 +224,7 @@ def configure_start(instance, stats, *, youtube=False):
     stats["currentMatch"] = {"gameKey": "game-one", "opponent": "Barcode", "alias": "Maru",
                              "race": "Protoss", "map": "Alcyone LE", "h2h": {"wins": 3, "losses": 2}}
     instance.action({"action": "configure_title_automation", "enabled": False, "on_game_start": True,
-        "template": "GM Protoss | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}",
+        "template": f"GM Protoss | {CURRENT_MATCH_TEMPLATE}",
         "platforms": {"twitch": True, "kick": True, "youtube": youtube}})
     now = [1200]
     instance.titles.worker.clock = lambda: now[0]
@@ -231,8 +232,11 @@ def configure_start(instance, stats, *, youtube=False):
     return now
 
 
-def test_game_start_publishes_opponent_alias_and_head_to_head_without_waiting_for_sync(service):
+@pytest.mark.parametrize("has_mmr, rating", [(True, "5000 MMR "), (False, "")])
+def test_game_start_publishes_mmr_and_opponent_without_waiting_for_sync(service, has_mmr, rating):
     instance, calls, stats, _ = service
+    if not has_mmr:
+        stats.pop("mmr")
     now = configure_start(instance, stats)
     assert not calls  # saving the setting never sends a title
     instance.on_game_event(live_event(now[0]))
@@ -241,7 +245,8 @@ def test_game_start_publishes_opponent_alias_and_head_to_head_without_waiting_fo
     assert instance.titles.worker.run_once() is True
     writes = [call for call in calls if call[0] == "POST"]
     assert [call[2]["json"]["platforms"] for call in writes] == [["twitch"], ["kick"]]
-    assert all(call[2]["json"]["title"] == "GM Protoss | v Barcode (aka Maru) | 3W–2L (60%) | Alcyone LE" for call in writes)
+    expected = f"GM Protoss | {rating}v Barcode (aka Maru) | 3W–2L (60%) | Alcyone LE"
+    assert all(call[2]["json"]["title"] == expected for call in writes)
     assert instance.titles.settings["last_start_game"] == "game-one"
     instance.on_game_event(live_event(now[0], phase="match_started", display_time=1))
     assert instance.titles.worker.run_once() is False
@@ -318,7 +323,8 @@ def test_end_during_first_platform_prevents_the_remaining_platform_write(service
     now[0] += 3
     instance.titles.worker.run_once()
     assert len([call for call in calls if call[0] == "POST"]) == 1
-    assert "opp" not in instance.status()["title_automation"]["values"]
+    values = instance.status()["title_automation"]["values"]
+    assert "opp" not in values and "match_mmr" not in values
     assert instance.titles.preview("GM Protoss | v {opp} {aka}") == "GM Protoss"
 
 
@@ -382,7 +388,7 @@ def test_unavailable_history_and_map_are_omitted_after_bounded_wait(service):
     now[0] = 1260
     instance.titles.worker.run_once()
     writes = [call[2]["json"]["title"] for call in calls if call[0] == "POST"]
-    assert writes == ["GM Protoss | v Barcode"] * 2
+    assert writes == ["GM Protoss | 5000 MMR v Barcode"] * 2
     assert instance.titles.worker.match.pending is None
 
 

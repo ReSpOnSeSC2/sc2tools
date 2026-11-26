@@ -1,7 +1,7 @@
 """Local-only rendering: tests prohibit all network/provider operations."""
 import pytest
 
-from sc2tools_agent.streaming.title_template import render_title, title_values, validate_template
+from sc2tools_agent.streaming.title_template import CURRENT_MATCH_TEMPLATE, render_title, title_values, validate_template
 
 
 @pytest.fixture(autouse=True)
@@ -114,6 +114,28 @@ def test_optional_match_details_drop_whole_segments_at_the_title_limit():
     stats = {"currentMatch": {**MATCH, "map": "Map with a very long and descriptive tournament edition name"}}
     assert render_title("GM Protoss v {opp} {aka} | {h2h} | {map}", stats) == (
         "GM Protoss v Barcode (aka Maru) | 3W–2L")
+
+
+def test_current_match_preset_keeps_the_opponent_when_the_rating_does_not_fit():
+    prefix = "A" * 47
+    stats = {**STATS, "currentMatch": MATCH}
+    assert render_title(f"{prefix} | {CURRENT_MATCH_TEMPLATE}", stats) == (
+        f"{prefix} | v Barcode (aka Maru)")
+    assert render_title(f"{prefix} | {CURRENT_MATCH_TEMPLATE}", STATS) == prefix
+
+
+def test_loading_a_saved_match_preset_adds_mmr_and_preserves_custom_templates():
+    from sc2tools_agent.streaming.title_settings import load_title_settings
+
+    prefix = "GM Protoss"
+    old_template = f"{prefix} | v {{opp}} {{aka}} | {{h2h}} ({{h2h_wr}}) | {{map}}"
+    saved = {"owner": "owner", "template": old_template, "on_game_start": True}
+    settings = load_title_settings(saved, "owner")
+    assert settings["template"] == f"{prefix} | {CURRENT_MATCH_TEMPLATE}"
+    assert settings["on_game_start"] is True
+    assert load_title_settings(settings, "owner") == settings
+    custom = "GM Protoss v {opp} | {record}"
+    assert load_title_settings({**saved, "template": custom}, "owner")["template"] == custom
 
 
 def test_game_start_settings_are_independent_owner_bound_and_legacy_compatible():

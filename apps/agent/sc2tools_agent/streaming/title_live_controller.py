@@ -6,7 +6,7 @@ import copy
 from .title_match import game_episode
 from .title_template import render_title
 
-MATCH_VALUE_KEYS = {"opp", "aka", "map", "race", "h2h", "h2h_wr"}
+MATCH_VALUE_KEYS = {"opp", "aka", "map", "race", "h2h", "h2h_wr", "match_mmr"}
 
 
 class LiveTitleControllerMixin:

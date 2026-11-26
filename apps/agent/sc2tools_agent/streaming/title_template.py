@@ -4,9 +4,10 @@ from __future__ import annotations
 import math
 import re
 
-TOKEN_REFERENCE = "{opp} {aka} {map} {race} {h2h} {h2h_wr} {mmr} {league} {record} {wins} {losses} {streak} {peak} {wr:PvZ}"
+CURRENT_MATCH_TEMPLATE = "{match_mmr} v {opp} {aka} | {h2h} ({h2h_wr}) | {map}"
+TOKEN_REFERENCE = "{opp} {aka} {map} {race} {h2h} {h2h_wr} {match_mmr} {mmr} {league} {record} {wins} {losses} {streak} {peak} {wr:PvZ}"
 TOKENS = {"mmr", "league", "record", "wins", "losses", "streak", "peak",
-          "opp", "aka", "map", "race", "h2h", "h2h_wr"}
+          "opp", "aka", "map", "race", "h2h", "h2h_wr", "match_mmr"}
 MATCHUP = re.compile(r"wr:[PTZ]v[PTZ]\Z")
 PLACEHOLDER = re.compile(r"\{([^{}]+)\}")
 MAX_TEMPLATE_LENGTH = 500
@@ -74,6 +75,8 @@ def title_values(stats):
     for field in ("mmr", "peak"):
         if _number(stats.get(field)):
             values[field] = str(int(stats[field]))
+    if "opp" in values:
+        values["match_mmr"] = f"{values['mmr']} MMR" if "mmr" in values else ""
     if isinstance(stats.get("league"), str) and stats["league"] in LEAGUES:
         values["league"] = stats["league"]
     session = stats.get("session")
@@ -108,13 +111,20 @@ def render_title(template, stats):
 def render_values(template, values):
     """Preview only validated token values, also used by the Qt field."""
     from .service import shared_title
+
+    def render_segment(segment):
+        return " ".join(PLACEHOLDER.sub(lambda match: values[match[1]], segment).split())
+
     template = validate_template(template)
     segments = []
     for segment in template.split("|"):
         segment = segment.strip()
         if not segment or any(match[1] not in values for match in PLACEHOLDER.finditer(segment)):
             continue
-        rendered = " ".join(PLACEHOLDER.sub(lambda match: values[match[1]], segment).split())
+        rendered = render_segment(segment)
+        # Keep the opponent if adding the rating would put the matchup over the limit.
+        if "{match_mmr}" in segment and len(" | ".join([*segments, rendered])) > 70:
+            rendered = render_segment(segment.replace("{match_mmr}", ""))
         if rendered:
             segments.append(rendered)
     while segments and len(" | ".join(segments)) > 70 and len(segments) > 1:

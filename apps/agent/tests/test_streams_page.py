@@ -87,10 +87,11 @@ def test_current_match_template_preserves_prefix_and_only_edits_locally(page, mo
     calls = []
     monkeypatch.setattr(widget, "job", calls.append)
     controls = widget.title_controls
-    controls.values = {"opp": "Barcode", "aka": "(aka Maru)", "h2h": "3W–2L", "map": "Alcyone LE", "h2h_wr": "60%"}
+    controls.values = {"match_mmr": "5321 MMR", "opp": "Barcode", "aka": "(aka Maru)",
+                       "h2h": "3W–2L", "map": "Alcyone LE", "h2h_wr": "60%"}
     controls.match_template.click()
-    assert widget.title_input.text() == "GM Protoss | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}"
-    assert controls.preview.text() == "Preview: GM Protoss | v Barcode (aka Maru) | 3W–2L (60%) | Alcyone LE"
+    assert widget.title_input.text() == "GM Protoss | {match_mmr} v {opp} {aka} | {h2h} ({h2h_wr}) | {map}"
+    assert controls.preview.text() == "Preview: GM Protoss | 5321 MMR v Barcode (aka Maru) | 3W–2L (60%) | Alcyone LE"
     assert widget.title_dirty and controls.dirty
     assert not controls.on_game_start.isChecked() and not controls.enabled.isChecked()
     assert calls == []
@@ -143,7 +144,7 @@ def test_template_preset_uses_neutral_prefix_for_dynamic_template(page):
     widget.render(state)
     widget.title_input.setText("{mmr} MMR | {record}")
     widget.title_controls.match_template.click()
-    assert widget.title_input.text().startswith("SC2 | v {opp} {aka}")
+    assert widget.title_input.text().startswith("SC2 | {match_mmr} v {opp} {aka}")
 
 
 def test_youtube_metadata_failure_is_visible_with_connected_account(page):
