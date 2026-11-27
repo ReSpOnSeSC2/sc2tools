@@ -25,7 +25,7 @@ test("lists live streams, filters them and links out without a provider call", a
   await page.route(API, route => route.fulfill({ json: snapshot(LIST), headers }));
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
   await page.goto("/live");
-  await expect(page.getByRole("heading", { level: 1, name: "Live StarCraft II streams" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Live StarCraft\s+II streams/ })).toBeVisible();
   await expect(page.getByText("4 of 4 live streams")).toBeVisible();
   expect(await cardTitles(page)).toEqual([...LIST].sort((a, b) => b.viewers - a.viewers).map(row => row.title));
 
@@ -34,15 +34,15 @@ test("lists live streams, filters them and links out without a provider call", a
   await expect(first).toHaveAttribute("target", "_blank");
   await expect(page.getByText("live for 1 h 3", { exact: false }).first()).toBeVisible();
 
-  await page.getByRole("radio", { name: "Small channels first" }).click();
+  await page.getByLabel("Order").selectOption("small");
   expect((await cardTitles(page))[0]).toBe("Ladder grind with channel 4");
-  await page.getByRole("radio", { name: "Kick" }).click();
+  await page.getByLabel("Platform").selectOption("kick");
   expect(await cardTitles(page)).toEqual(["Ladder grind with channel 2"]);
-  await page.getByRole("radio", { name: "All platforms" }).click();
+  await page.getByLabel("Platform").selectOption("all");
   await page.getByLabel("Language").selectOption("en");
   await expect(page.getByText("2 of 4 live streams")).toBeVisible();
 
-  await page.getByRole("radio", { name: "Kick" }).click();
+  await page.getByLabel("Platform").selectOption("kick");
   await expect(page.getByText("No live streams match these filters.")).toBeVisible();
   await page.getByRole("button", { name: "Show all streams" }).click();
   await expect(page.getByText("4 of 4 live streams")).toBeVisible();
@@ -63,9 +63,9 @@ test("reaches a card with the keyboard", async ({ page }) => {
   const first = page.getByRole("link", { name: /Ladder grind with channel 1/ });
   await first.focus();
   await expect(first).toBeFocused();
-  await page.getByRole("radiogroup", { name: "Order" }).getByRole("radio", { checked: true }).focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("radio", { name: "Small channels first" })).toBeChecked();
+  await page.getByLabel("Order").focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByLabel("Order")).toHaveValue("small");
 });
 
 test("shows an empty state and an error that can be retried", async ({ page }, info) => {

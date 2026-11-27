@@ -69,6 +69,12 @@ function service(fetchImpl, clock, config = { twitch: CREDENTIALS, kick: CREDENT
   return new LiveStreamsService({ config, fetchImpl, now: () => clock.t });
 }
 
+/** Waits for the refresh an expired list started behind its caller. */
+async function refreshed(live) {
+  await live.pending;
+  return live.list();
+}
+
 describe("LiveStreamsService", () => {
   let clock;
   beforeEach(() => { clock = { t: Date.parse("2026-11-27T12:00:00Z") }; });
@@ -129,6 +135,7 @@ describe("LiveStreamsService", () => {
     expect(calls).toHaveLength(after);
     clock.t += 2;
     await live.list();
+    await live.pending;
     expect(calls.length).toBeGreaterThan(after);
     expect(calls.filter(c => c.url.href.startsWith(TWITCH_TOKEN))).toHaveLength(1);
     expect(calls.filter(c => c.url.href.startsWith(KICK_CATEGORIES))).toHaveLength(1);
@@ -143,13 +150,53 @@ describe("LiveStreamsService", () => {
     await live.list();
     kickDown = true;
     clock.t += CACHE_TTL_MS + 1;
-    const stale = await live.list();
+    await live.list();
+    const stale = await refreshed(live);
     expect(stale.platforms).toEqual({ twitch: "ok", kick: "stale" });
     expect(stale.streams.some(s => s.platform === "kick")).toBe(true);
     clock.t += STALE_LIMIT_MS;
-    const failed = await live.list();
+    await live.list();
+    const failed = await refreshed(live);
     expect(failed.platforms).toEqual({ twitch: "ok", kick: "error" });
     expect(failed.streams.some(s => s.platform === "kick")).toBe(false);
+  });
+
+  it("serves the expired list at once while a hanging provider refreshes behind it", async () => {
+    let kickHangs = false;
+    const { fetchImpl } = bothProviders({
+      [KICK_LIVE]: () => (kickHangs ? new Promise(() => {}) : json({ data: [kickRow(1, 250)] })),
+    });
+    const live = new LiveStreamsService({
+      config: { twitch: CREDENTIALS, kick: CREDENTIALS }, fetchImpl, now: () => clock.t, platformDeadlineMs: 20,
+    });
+    const first = await live.list();
+    kickHangs = true;
+    clock.t += CACHE_TTL_MS + 1;
+    expect(await live.list()).toBe(first);
+    const refreshedList = await refreshed(live);
+    expect(refreshedList).not.toBe(first);
+    expect(refreshedList.platforms).toEqual({ twitch: "ok", kick: "stale" });
+    expect(refreshedList.streams.some(s => s.platform === "kick")).toBe(true);
+  });
+
+  it("cuts off a hanging platform on the first load so the other one still answers", async () => {
+    const { fetchImpl } = bothProviders({ [KICK_LIVE]: () => new Promise(() => {}) });
+    const live = new LiveStreamsService({
+      config: { twitch: CREDENTIALS, kick: CREDENTIALS }, fetchImpl, now: () => clock.t, platformDeadlineMs: 20,
+    });
+    const snapshot = await live.list();
+    expect(snapshot.platforms).toEqual({ twitch: "ok", kick: "error" });
+    expect(snapshot.streams.map(s => s.platform)).toEqual(["twitch", "twitch"]);
+  });
+
+  it("keeps one copy of a stream that Twitch repeats across pages", async () => {
+    const { fetchImpl } = bothProviders({
+      [TWITCH]: (url) => (url.searchParams.get("after")
+        ? json({ data: [twitchRow(2, 800), twitchRow(3, 5)], pagination: {} })
+        : json({ data: [twitchRow(1, 900), twitchRow(2, 850)], pagination: { cursor: "c" } })),
+    });
+    const { streams } = await service(fetchImpl, clock, { twitch: CREDENTIALS }).list();
+    expect(streams.map(s => s.id)).toEqual(["twitch:t1", "twitch:t2", "twitch:t3"]);
   });
 
   it("marks a platform without credentials off and never calls it", async () => {
@@ -211,6 +258,19 @@ describe("GET /v1/live-streams", () => {
     expect(res.status).toBe(503);
     expect(res.body.error.code).toBe("live_streams_unavailable");
     expect(res.headers["cache-control"]).toBeUndefined();
+  });
+
+  it("answers 503 when one platform failed and the other is switched off", async () => {
+    const list = async () => snapshot({ twitch: "error", kick: "off" });
+    expect((await request(appFor({ list })).get("/v1/live-streams")).status).toBe(503);
+  });
+
+  it("limits how often one client can read the list", async () => {
+    const app = express();
+    app.use("/v1", buildLiveStreamsRouter({ liveStreams: { list: async () => snapshot({ twitch: "ok", kick: "off" }) }, rateLimitPerMinute: 2 }));
+    expect((await request(app).get("/v1/live-streams")).status).toBe(200);
+    expect((await request(app).get("/v1/live-streams")).status).toBe(200);
+    expect((await request(app).get("/v1/live-streams")).status).toBe(429);
   });
 
   it("still answers 200 when one platform failed but another has a list", async () => {

@@ -4,9 +4,10 @@
  * Live StarCraft II streams, cached for about a minute.
  *
  * `list()` is the one read other server code uses (the public route, and the
- * raid finder built on it). Concurrent callers share one provider fetch, a
- * platform that fails keeps its last good list for a few minutes and is
- * reported as `stale`, and a platform without credentials is `off`.
+ * raid finder built on it). Concurrent callers share one provider fetch, an
+ * expired list is served at once while the refresh runs behind it, a platform
+ * that fails keeps its last good list for a few minutes and is reported as
+ * `stale`, and a platform without credentials is `off`.
  */
 
 const { PlatformOauthError } = require("./platformOauthHttp");
@@ -20,6 +21,12 @@ const {
 
 const CACHE_TTL_MS = 60 * 1000;
 const STALE_LIMIT_MS = 10 * 60 * 1000;
+/**
+ * One platform's share of a refresh. The provider calls time out at 12 s, and
+ * the page gives up at 10 s, so a hanging platform is cut off sooner and the
+ * other platform's list still reaches the visitor.
+ */
+const PLATFORM_DEADLINE_MS = 8 * 1000;
 /** Provider app tokens last days or longer; an hour bounds a revoked one. */
 const TOKEN_TTL_MS = 60 * 60 * 1000;
 const PLATFORMS = /** @type {const} */ (["twitch", "kick"]);
@@ -58,13 +65,15 @@ class LiveStreamsService {
    *   config?: LiveStreamsConfig | null,
    *   fetchImpl?: typeof fetch,
    *   now?: () => number,
+   *   platformDeadlineMs?: number,
    *   log?: { warn?: (fields: object, message: string) => void },
    * }} [options]
    */
-  constructor({ config, fetchImpl = fetch, now = Date.now, log } = {}) {
+  constructor({ config, fetchImpl = fetch, now = Date.now, platformDeadlineMs = PLATFORM_DEADLINE_MS, log } = {}) {
     this.config = config || {};
     this.fetchImpl = fetchImpl;
     this.now = now;
+    this.platformDeadlineMs = platformDeadlineMs;
     this.log = log;
     /** @type {LiveStreamsSnapshot | null} */
     this.snapshot = null;
@@ -79,13 +88,22 @@ class LiveStreamsService {
     this.kickCategoryId = null;
   }
 
-  /** @returns {Promise<LiveStreamsSnapshot>} */
+  /**
+   * A fresh list is returned as is. An expired list that is still inside the
+   * stale window is returned at once and refreshed behind the caller, so a
+   * slow provider never turns a usable list into a wait.
+   *
+   * @returns {Promise<LiveStreamsSnapshot>}
+   */
   list() {
-    if (this.snapshot && this.now() - this.snapshotAt < CACHE_TTL_MS) {
-      return Promise.resolve(this.snapshot);
-    }
+    const age = this.snapshot ? this.now() - this.snapshotAt : Infinity;
+    if (this.snapshot && age < CACHE_TTL_MS) return Promise.resolve(this.snapshot);
     if (!this.pending) {
       this.pending = this.refresh().finally(() => { this.pending = null; });
+    }
+    if (this.snapshot && age < STALE_LIMIT_MS) {
+      this.pending.catch(() => {});
+      return Promise.resolve(this.snapshot);
     }
     return this.pending;
   }
@@ -116,7 +134,7 @@ class LiveStreamsService {
     const credentials = credentialsOf(this.config[platform]);
     if (!credentials) return { status: "off", streams: [] };
     try {
-      const streams = await this.fetchWithTokenRetry(platform, credentials);
+      const streams = await this.withDeadline(this.fetchWithTokenRetry(platform, credentials));
       this.lastGood[platform] = { streams, at: this.now() };
       return { status: "ok", streams };
     } catch (err) {
@@ -127,6 +145,20 @@ class LiveStreamsService {
       }
       return { status: "error", streams: [] };
     }
+  }
+
+  /**
+   * @template T
+   * @param {Promise<T>} work
+   * @returns {Promise<T>}
+   */
+  withDeadline(work) {
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let timer;
+    const deadline = new Promise((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error("platform deadline exceeded")), this.platformDeadlineMs);
+    });
+    return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
   }
 
   /**

@@ -1,13 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   applyFilters,
   DEFAULT_FILTERS,
   degradedPlatforms,
   languageName,
   languagesIn,
+  listedPlatforms,
   listingIsOff,
   liveForLabel,
+  loadLiveStreams,
+  platformList,
   readLiveStreams,
+  reconcileFilters,
   viewerLabel,
   type LiveStream,
 } from "../streams";
@@ -103,5 +107,39 @@ describe("list helpers", () => {
     expect(liveForLabel("2026-11-27T09:55:00Z", now)).toBe("2 h 5 min");
     expect(liveForLabel("2026-11-27T13:00:00Z", now)).toBe("");
     expect(liveForLabel("", now)).toBe("");
+  });
+});
+
+describe("reconcileFilters", () => {
+  it("falls back to all languages when the chosen one is gone, and keeps the rest", () => {
+    const chosen = { platform: "kick", language: "ko", sort: "small" } as const;
+    expect(reconcileFilters(chosen, ["en", "pt"])).toEqual({ platform: "kick", language: "all", sort: "small" });
+    expect(reconcileFilters(chosen, ["en", "ko"])).toBe(chosen);
+    expect(reconcileFilters(DEFAULT_FILTERS, [])).toBe(DEFAULT_FILTERS);
+  });
+});
+
+describe("platform wording", () => {
+  it("joins names and lists the platforms that gave a list", () => {
+    expect(platformList(["twitch"])).toBe("Twitch");
+    expect(platformList(["twitch", "kick"])).toBe("Twitch and Kick");
+    expect(listedPlatforms({ twitch: "error", kick: "ok" })).toEqual(["kick"]);
+    expect(listedPlatforms({ twitch: "stale", kick: "off" })).toEqual(["twitch"]);
+  });
+});
+
+describe("loadLiveStreams", () => {
+  it("leaves no listener on the caller's signal once the answer is in", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => snapshot([stream(1)]) });
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+    const add = vi.spyOn(controller.signal, "addEventListener");
+    const remove = vi.spyOn(controller.signal, "removeEventListener");
+    await loadLiveStreams(controller.signal);
+    await loadLiveStreams(controller.signal);
+    expect(add).toHaveBeenCalledTimes(2);
+    expect(remove).toHaveBeenCalledTimes(2);
+    expect(remove.mock.calls[0][1]).toBe(add.mock.calls[0][1]);
+    vi.unstubAllGlobals();
   });
 });

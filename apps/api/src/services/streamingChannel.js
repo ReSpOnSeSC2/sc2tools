@@ -2,6 +2,7 @@
 
 const { PlatformIntegrationError } = require("./platformIntegrations");
 const { fetchJson, fetchNoContent } = require("./platformOauthHttp");
+const { TWITCH_STARCRAFT_GAME_ID, kickCategorySearchUrl, pickKickCategoryId } = require("./sc2Categories");
 const { safeStreamingReason } = require("./streamingTitles");
 const { channelUrl, channelHeaders, readOwnedChannel } = require("./streamingChannelRead");
 
@@ -11,10 +12,6 @@ const MAX_TAGS = 10;
  * 25 characters, and Kick's documented limit is the count, so the stricter
  * Twitch rule keeps every tag valid on either platform. */
 const TAG_PATTERN = /^[A-Za-z0-9]{1,25}$/;
-/** Twitch's catalogue id for StarCraft II; stable for the life of the game. */
-const TWITCH_STARCRAFT_ID = "490422";
-const KICK_CATEGORY_NAME = "StarCraft II";
-const KICK_CATEGORIES = "https://api.kick.com/public/v2/categories";
 
 /** @typedef {{accessToken:string,platformUserId:string,platformUserName:string,
  * boundedFetch:typeof fetch,assertCurrent:()=>Promise<void>}} ChannelGrant */
@@ -92,7 +89,7 @@ class StreamingChannelService {
     const name = validatePlatform(platform);
     return this._run(userId, name, async (grant) => {
       const observed = await this._read(name, grant);
-      const target = name === "twitch" ? TWITCH_STARCRAFT_ID : await this._kickCategory(grant);
+      const target = name === "twitch" ? TWITCH_STARCRAFT_GAME_ID : await this._kickCategory(grant);
       if (observed.categoryId === target) return { status: "unchanged" };
       await this._patch(name, grant, name === "twitch" ? { game_id: target } : { category_id: Number(target) });
       return { status: "updated" };
@@ -138,15 +135,13 @@ class StreamingChannelService {
   async _kickCategory(grant) {
     if (this.kickCategoryId) return this.kickCategoryId;
     await grant.assertCurrent();
-    const result = await fetchJson(grant.boundedFetch,
-      `${KICK_CATEGORIES}?name=${encodeURIComponent(KICK_CATEGORY_NAME)}`,
+    const result = await fetchJson(grant.boundedFetch, kickCategorySearchUrl(),
       { headers: this._headers("kick", grant) }, "stream_category_lookup");
-    const match = (Array.isArray(result?.data) ? result.data : [])
-      .find((/** @type {{name?:unknown,id?:unknown}} */ row) => String(row?.name).toLowerCase() === KICK_CATEGORY_NAME.toLowerCase());
-    if (!Number.isInteger(match?.id) || match.id < 1) {
+    const id = pickKickCategoryId(result?.data);
+    if (id === null) {
       throw new PlatformIntegrationError(503, "stream_category_unavailable", "The StarCraft II category could not be found.");
     }
-    this.kickCategoryId = String(match.id);
+    this.kickCategoryId = String(id);
     return this.kickCategoryId;
   }
 }

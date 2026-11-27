@@ -50,18 +50,30 @@ function channelUrl(platform: LivePlatform, value: unknown): string | null {
   }
 }
 
+/** The string at `key`, or `fallback` when it is missing, not a string or empty. */
+function textOr(row: Row, key: string, fallback: string): string {
+  const value = row[key];
+  return typeof value === "string" && value ? value : fallback;
+}
+
+function viewerCountOf(value: unknown): number {
+  return typeof value === "number" && value > 0 ? Math.trunc(value) : 0;
+}
+
 function readStream(value: unknown): LiveStream | null {
   if (!isRow(value) || !isPlatform(value.platform)) return null;
   const url = channelUrl(value.platform, value.url);
-  if (!url || typeof value.id !== "string" || typeof value.channel !== "string" || !value.channel) return null;
+  const id = textOr(value, "id", "");
+  const channel = textOr(value, "channel", "");
+  if (!url || !id || !channel) return null;
   return {
-    id: value.id,
+    id,
     platform: value.platform,
-    channel: value.channel,
-    title: typeof value.title === "string" ? value.title : "",
-    language: typeof value.language === "string" && value.language ? value.language : "other",
-    viewers: typeof value.viewers === "number" && value.viewers > 0 ? Math.trunc(value.viewers) : 0,
-    startedAt: typeof value.startedAt === "string" ? value.startedAt : "",
+    channel,
+    title: textOr(value, "title", ""),
+    language: textOr(value, "language", "other"),
+    viewers: viewerCountOf(value.viewers),
+    startedAt: textOr(value, "startedAt", ""),
     url,
   };
 }
@@ -78,7 +90,8 @@ export function readLiveStreams(value: unknown): LiveStreamsSnapshot | null {
 export async function loadLiveStreams(signal?: AbortSignal): Promise<LiveStreamsSnapshot> {
   const request = new AbortController();
   const deadline = setTimeout(() => request.abort(), REQUEST_TIMEOUT_MS);
-  signal?.addEventListener("abort", () => request.abort(), { once: true });
+  const cancel = () => request.abort();
+  signal?.addEventListener("abort", cancel, { once: true });
   try {
     const response = await fetch(`${API_BASE}/v1/live-streams`, { credentials: "omit", signal: request.signal });
     if (!response.ok) throw new Error("The live stream list is unavailable.");
@@ -87,6 +100,7 @@ export async function loadLiveStreams(signal?: AbortSignal): Promise<LiveStreams
     return snapshot;
   } finally {
     clearTimeout(deadline);
+    signal?.removeEventListener("abort", cancel);
   }
 }
 
@@ -100,6 +114,15 @@ export function languagesIn(streams: readonly LiveStream[]): string[] {
 const BY_VIEWERS = (a: LiveStream, b: LiveStream) => b.viewers - a.viewers || a.id.localeCompare(b.id);
 const SMALL_FIRST = (a: LiveStream, b: LiveStream) => a.viewers - b.viewers || a.id.localeCompare(b.id);
 
+/**
+ * The filters as they apply to this list: a language that has dropped out of
+ * the list (its last stream ended) counts as "all languages", which is also
+ * what the language menu then shows.
+ */
+export function reconcileFilters(filters: LiveFilters, languages: readonly string[]): LiveFilters {
+  return filters.language === "all" || languages.includes(filters.language) ? filters : { ...filters, language: "all" };
+}
+
 /** Applies the platform and language filters, then the chosen order. */
 export function applyFilters(streams: readonly LiveStream[], filters: LiveFilters): LiveStream[] {
   return streams
@@ -111,6 +134,16 @@ export function applyFilters(streams: readonly LiveStream[], filters: LiveFilter
 /** A platform whose list could not be refreshed, for the notice above the cards. */
 export function degradedPlatforms(platforms: LiveStreamsSnapshot["platforms"]): LivePlatform[] {
   return (Object.keys(platforms) as LivePlatform[]).filter(key => platforms[key] === "stale" || platforms[key] === "error");
+}
+
+/** Names for a sentence: "Twitch", "Twitch and Kick". */
+export function platformList(keys: readonly LivePlatform[]): string {
+  return keys.map(key => PLATFORM_NAMES[key]).join(" and ");
+}
+
+/** Platforms that gave a list, so an empty result can say where nothing is live. */
+export function listedPlatforms(platforms: LiveStreamsSnapshot["platforms"]): LivePlatform[] {
+  return (Object.keys(platforms) as LivePlatform[]).filter(key => platforms[key] === "ok" || platforms[key] === "stale");
 }
 
 /** True when the server has no platform to ask, so an empty list means nothing. */

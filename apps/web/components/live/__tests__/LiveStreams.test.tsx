@@ -12,6 +12,7 @@ const answer = (streams: unknown[], platforms = { twitch: "ok", kick: "ok" }) =>
 
 const fetchMock = vi.fn();
 const settle = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
+const pick = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 const titles = () => screen.getAllByRole("heading", { level: 3 }).map(node => node.textContent?.replace(/ \(opens.*$/, ""));
 
 beforeEach(() => { vi.stubGlobal("fetch", fetchMock); });
@@ -22,6 +23,7 @@ describe("LiveStreams", () => {
     fetchMock.mockResolvedValue(answer([row(1), kick(2)]));
     render(<LiveStreams />);
     expect(screen.getByText("Loading live streams")).toBeTruthy();
+    expect((screen.getByLabelText("Language", { selector: "select" }) as HTMLSelectElement).disabled).toBe(true);
     await settle();
     expect(fetchMock.mock.calls[0][0]).toMatch(/\/v1\/live-streams$/);
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ credentials: "omit" });
@@ -38,12 +40,12 @@ describe("LiveStreams", () => {
     fetchMock.mockResolvedValue(answer([row(1), row(3), kick(2)]));
     render(<LiveStreams />);
     await settle();
-    fireEvent.click(screen.getByRole("radio", { name: "Small channels first" }));
+    pick("Order", "small");
     expect(titles()).toEqual(["Title 1", "Title 2", "Title 3"]);
-    fireEvent.click(screen.getByRole("radio", { name: "Kick" }));
+    pick("Platform", "kick");
     expect(titles()).toEqual(["Title 2"]);
-    fireEvent.click(screen.getByRole("radio", { name: "All platforms" }));
-    fireEvent.change(screen.getByLabelText("Language"), { target: { value: "en" } });
+    pick("Platform", "all");
+    pick("Language", "en");
     expect(titles()).toEqual(["Title 1", "Title 3"]);
     expect(within(screen.getByLabelText("Language")).getByRole("option", { name: "Portuguese (1)" })).toBeTruthy();
   });
@@ -52,17 +54,32 @@ describe("LiveStreams", () => {
     fetchMock.mockResolvedValue(answer([row(1)]));
     render(<LiveStreams />);
     await settle();
-    fireEvent.click(screen.getByRole("radio", { name: "Kick" }));
+    pick("Platform", "kick");
     expect(screen.getByText("No live streams match these filters.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Show all streams" }));
     expect(titles()).toEqual(["Title 1"]);
+    expect(document.activeElement).toBe(screen.getByText(/1 of 1 live stream/));
+  });
+
+  it("shows every stream again when the chosen language has dropped out of the list", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValueOnce(answer([row(1), kick(2)])).mockResolvedValueOnce(answer([row(1), row(3)]));
+    render(<LiveStreams />);
+    await settle();
+    pick("Language", "pt");
+    expect(titles()).toEqual(["Title 2"]);
+    await act(async () => { vi.advanceTimersByTime(60_000); });
+    await settle();
+    expect((screen.getByLabelText("Language") as HTMLSelectElement).value).toBe("all");
+    expect(titles()).toEqual(["Title 3", "Title 1"]);
+    expect(screen.getByText(/2 of 2 live streams/)).toBeTruthy();
   });
 
   it("explains an empty list, and a listing that is switched off", async () => {
     fetchMock.mockResolvedValue(answer([]));
     const { unmount } = render(<LiveStreams />);
     await settle();
-    expect(screen.getByText(/No StarCraft II streams are live/)).toBeTruthy();
+    expect(screen.getByText(/No StarCraft II streams are live on Twitch and Kick right now/)).toBeTruthy();
     unmount();
     fetchMock.mockResolvedValue(answer([], { twitch: "off", kick: "off" }));
     render(<LiveStreams />);
@@ -74,7 +91,22 @@ describe("LiveStreams", () => {
     fetchMock.mockResolvedValue(answer([row(1)], { twitch: "ok", kick: "stale" }));
     render(<LiveStreams />);
     await settle();
-    expect(screen.getByText(/Kick could not be refreshed/)).toBeTruthy();
+    expect(screen.getByText(/Kick could not be refreshed, so its channels/)).toBeTruthy();
+  });
+
+  it("says their channels when both platforms are stale", async () => {
+    fetchMock.mockResolvedValue(answer([row(1)], { twitch: "stale", kick: "stale" }));
+    render(<LiveStreams />);
+    await settle();
+    expect(screen.getByText(/Twitch and Kick could not be refreshed, so their channels/)).toBeTruthy();
+  });
+
+  it("does not claim a platform that failed has nothing live", async () => {
+    fetchMock.mockResolvedValue(answer([], { twitch: "error", kick: "ok" }));
+    render(<LiveStreams />);
+    await settle();
+    expect(screen.getByText(/No StarCraft II streams are live on Kick right now/)).toBeTruthy();
+    expect(screen.queryByText(/live on Twitch/)).toBeNull();
   });
 
   it("shows an error with Retry, and loads again when it is pressed", async () => {
@@ -83,9 +115,24 @@ describe("LiveStreams", () => {
     await settle();
     expect(screen.getByText(/unavailable right now/)).toBeTruthy();
     fetchMock.mockResolvedValue(answer([row(1)]));
+    const region = screen.getByRole("button", { name: "Retry live streams" }).parentElement?.parentElement;
     fireEvent.click(screen.getByRole("button", { name: "Retry live streams" }));
+    expect(document.activeElement).toBe(region);
     await settle();
     expect(titles()).toEqual(["Title 1"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("skips the minute reload while the tab is hidden", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValue(answer([row(1)]));
+    render(<LiveStreams />);
+    await settle();
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    await act(async () => { vi.advanceTimersByTime(180_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    visibility.mockRestore();
+    await act(async () => { vi.advanceTimersByTime(60_000); });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

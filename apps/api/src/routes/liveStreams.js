@@ -1,10 +1,7 @@
 "use strict";
 
 const express = require("express");
-const rateLimitModule = require("express-rate-limit");
-
-const rateLimit =
-  /** @type {any} */ (rateLimitModule).default || rateLimitModule;
+const { rateLimit } = require("express-rate-limit");
 
 const LIVE_STREAMS_RATE_LIMIT_PER_MIN = 120;
 
@@ -27,7 +24,7 @@ function buildLiveStreamsRouter(deps) {
   const router = express.Router();
   const limiter = rateLimit({
     windowMs: 60 * 1000,
-    max: deps.rateLimitPerMinute || LIVE_STREAMS_RATE_LIMIT_PER_MIN,
+    limit: deps.rateLimitPerMinute || LIVE_STREAMS_RATE_LIMIT_PER_MIN,
     standardHeaders: true,
     legacyHeaders: false,
   });

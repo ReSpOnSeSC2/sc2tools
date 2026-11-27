@@ -19,6 +19,11 @@ Status: Accepted, November 27, 2026. Adds `apps/api/src/services/liveStreams.js`
    keeps a failed platform's last good list for 10 minutes as `stale`, and
    reports a platform without credentials as `off`. Other server code calls
    `list()`; nothing else calls the providers.
+   An expired list is served at once while the refresh runs behind the caller,
+   and each platform gets 8 seconds in a refresh (provider calls time out at 12
+   seconds and the page gives up at 10), so one hanging platform never turns a
+   usable list into an error. The StarCraft II category ids live in one module,
+   `sc2Categories.js`, shared with the channel setup.
 2. `GET /v1/live-streams` is public, rate limited and answers 503 only when
    every configured platform failed and no earlier list remains. Responses are
    cacheable for 30 seconds.

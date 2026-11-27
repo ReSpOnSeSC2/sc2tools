@@ -1,6 +1,5 @@
 "use client";
 
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Select } from "@/components/ui/Select";
 import {
   languageName,
@@ -11,59 +10,55 @@ import {
   type PlatformFilter,
 } from "@/lib/live/streams";
 
-const PLATFORM_OPTIONS = [
-  { value: "all", label: "All", ariaLabel: "All platforms" },
-  { value: "twitch", label: PLATFORM_NAMES.twitch },
-  { value: "kick", label: PLATFORM_NAMES.kick },
-] as const;
-const SORT_OPTIONS = [
-  { value: "viewers", label: "Most viewers" },
-  { value: "small", label: "Small channels first" },
-] as const;
-
 type Props = {
   filters: LiveFilters;
   /** Language codes in the whole list, most streams first. */
   languages: readonly string[];
   streams: readonly LiveStream[];
   onChange: (next: LiveFilters) => void;
+  /** The loading skeleton draws these same controls, switched off, so nothing moves when the list arrives. */
+  disabled?: boolean;
 };
 
-export function LiveStreamFilters({ filters, languages, streams, onChange }: Props) {
+/** Three menus of one height: two share the first row on a phone, all three share one row from 640 px. */
+export function LiveStreamFilters({ filters, languages, streams, onChange, disabled = false }: Props) {
   const countIn = (code: string) => streams.filter(stream => stream.language === code).length;
   return (
-    <div className="grid gap-4 rounded-xl border border-line bg-bg-surface p-4 sm:grid-cols-2 lg:grid-cols-3">
-      <div>
-        <p id="live-platform-label" className="mb-1 text-caption font-semibold text-text">Platform</p>
-        <SegmentedControl<PlatformFilter>
-          labelledBy="live-platform-label"
-          value={filters.platform}
-          options={PLATFORM_OPTIONS}
-          onChange={platform => onChange({ ...filters, platform })}
-        />
-      </div>
-      <div>
-        <label htmlFor="live-language" className="mb-1 block text-caption font-semibold text-text">Language</label>
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
+      <Select
+        aria-label="Platform"
+        selectSize="lg"
+        disabled={disabled}
+        value={filters.platform}
+        onChange={event => onChange({ ...filters, platform: event.target.value as PlatformFilter })}
+      >
+        <option value="all">All platforms</option>
+        <option value="twitch">{PLATFORM_NAMES.twitch}</option>
+        <option value="kick">{PLATFORM_NAMES.kick}</option>
+      </Select>
+      <Select
+        aria-label="Language"
+        selectSize="lg"
+        disabled={disabled}
+        value={filters.language}
+        onChange={event => onChange({ ...filters, language: event.target.value })}
+      >
+        <option value="all">All languages</option>
+        {languages.map(code => (
+          <option key={code} value={code}>{languageName(code)} ({countIn(code)})</option>
+        ))}
+      </Select>
+      <div className="col-span-2 sm:col-span-1">
         <Select
-          id="live-language"
+          aria-label="Order"
           selectSize="lg"
-          value={filters.language}
-          onChange={event => onChange({ ...filters, language: event.target.value })}
-        >
-          <option value="all">All languages</option>
-          {languages.map(code => (
-            <option key={code} value={code}>{languageName(code)} ({countIn(code)})</option>
-          ))}
-        </Select>
-      </div>
-      <div className="sm:col-span-2 lg:col-span-1">
-        <p id="live-sort-label" className="mb-1 text-caption font-semibold text-text">Order</p>
-        <SegmentedControl<LiveSort>
-          labelledBy="live-sort-label"
+          disabled={disabled}
           value={filters.sort}
-          options={SORT_OPTIONS}
-          onChange={sort => onChange({ ...filters, sort })}
-        />
+          onChange={event => onChange({ ...filters, sort: event.target.value as LiveSort })}
+        >
+          <option value="viewers">Most viewers first</option>
+          <option value="small">Small channels first</option>
+        </Select>
       </div>
     </div>
   );

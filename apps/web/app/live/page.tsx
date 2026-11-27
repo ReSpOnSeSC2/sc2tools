@@ -14,10 +14,10 @@ const LINK = "inline-flex min-h-11 items-center rounded-sm text-accent underline
 export default function LivePage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-8">
-      <header className="space-y-2">
+      <header className="space-y-1">
         <Link href="/tools" className={LINK}>All tools</Link>
-        <h1 className="font-display text-display-lg font-bold text-text">Live StarCraft II streams</h1>
-        <p className="max-w-prose text-body text-text-muted">Every StarCraft II channel that is live now on Twitch and Kick. Pick the small channels first to find someone with room for a new viewer. Each card opens the channel on its own site.</p>
+        <h1 className="font-display text-3xl font-bold leading-tight text-text sm:text-display-lg">Live StarCraft&nbsp;II streams</h1>
+        <p className="max-w-prose text-body text-text-muted">Who is live now on Twitch and Kick. Switch the order to find small channels first. Each card opens the channel on its own site.</p>
       </header>
       <LiveStreams />
       <p className="max-w-prose text-caption text-text-muted">Lists come from Twitch and Kick through SC2 Tools and refresh about every minute. Titles and channel names are written by the streamers.</p>

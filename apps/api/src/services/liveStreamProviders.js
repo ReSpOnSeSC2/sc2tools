@@ -10,10 +10,8 @@
  */
 
 const { PlatformOauthError, postForm, fetchJson } = require("./platformOauthHttp");
+const { TWITCH_STARCRAFT_GAME_ID, kickCategorySearchUrl, pickKickCategoryId } = require("./sc2Categories");
 
-/** Twitch's category id for StarCraft II. */
-const TWITCH_STARCRAFT_GAME_ID = "490422";
-const KICK_CATEGORY_NAME = "StarCraft II";
 const PAGE_SIZE = 100;
 /** A full page of 100 is three times the usual number of live channels. */
 const MAX_PAGES = 3;
@@ -108,6 +106,18 @@ function compact(streams) {
 }
 
 /**
+ * Twitch documents that paging can return one stream twice while viewer counts
+ * move; the first copy (the earlier page) is kept.
+ *
+ * @param {LiveStream[]} streams
+ * @returns {LiveStream[]}
+ */
+function uniqueById(streams) {
+  const seen = new Set();
+  return streams.filter(stream => !seen.has(stream.id) && seen.add(stream.id));
+}
+
+/**
  * Twitch lists a game's live streams by viewers, highest first.
  *
  * @param {{ credentials: ProviderCredentials, token: string, fetchImpl: typeof fetch }} input
@@ -134,7 +144,7 @@ async function fetchTwitchStreams({ credentials, token, fetchImpl }) {
     cursor = String(json.pagination?.cursor || "");
     if (!cursor) break;
   }
-  return streams;
+  return uniqueById(streams);
 }
 
 /**
@@ -147,16 +157,12 @@ async function fetchTwitchStreams({ credentials, token, fetchImpl }) {
 async function findKickCategoryId({ token, fetchImpl }) {
   const json = await fetchJson(
     fetchImpl,
-    `${KICK_API}/categories?${new URLSearchParams({ name: KICK_CATEGORY_NAME })}`,
+    kickCategorySearchUrl(),
     { headers: { Authorization: `Bearer ${token}` } },
     "kick_category_search",
   );
-  const match = (Array.isArray(json.data) ? json.data : []).find(
-    (/** @type {{ id?: unknown, name?: unknown }} */ row) =>
-      String(row?.name || "").toLowerCase() === KICK_CATEGORY_NAME.toLowerCase(),
-  );
-  const id = Number(match?.id);
-  if (!Number.isInteger(id) || id < 1) {
+  const id = pickKickCategoryId(json.data);
+  if (id === null) {
     throw new PlatformOauthError("kick_category_missing", "Kick has no StarCraft II category");
   }
   return id;
@@ -186,7 +192,7 @@ async function fetchKickStreams({ categoryId, token, fetchImpl }) {
     cursor = String(json.pagination?.next_cursor || "");
     if (!cursor) break;
   }
-  return streams;
+  return uniqueById(streams);
 }
 
 /**
