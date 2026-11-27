@@ -222,6 +222,7 @@ corresponding GitHub Release.
 
 - Put performance ratings on the matchup chart's vertical scale, label game order horizontally, and inspect rolling windows by mouse, touch or keyboard.
 - Start each newly generated arcade question with fresh answer state, including Streak Hunter and Closer's Eye. Hide old answers while the next question loads, prevent sticky touch hover colors, and improve Next round button contrast.
+- Run the Arcade depth lint in web CI, as the Arcade README already said it did. It now checks only mode files (those that call `registerMode` or export a `Mode`), so the helper files beside Bingo and Two Truths and a Lie no longer fail it. A mode with a missing or unknown `depthTag` still fails it.
 
 ### Re-analysis
 
