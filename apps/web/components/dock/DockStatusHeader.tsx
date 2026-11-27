@@ -5,6 +5,8 @@ import { projectDockScouting } from "@/lib/liveScouting";
 import { formatCountdown } from "@/lib/multichat/countdown";
 import { STUDIO_SCENE_LABELS } from "@/lib/multichat/sceneModes";
 import type { StudioState } from "@/lib/multichat/useStudioState";
+import type { GuardianState } from "@/lib/multichat/streamGuardian";
+import { DockGuardianBanner } from "./DockGuardianBanner";
 import { DockPresenceStrip } from "./DockPresenceStrip";
 
 export function sessionRecord(session: LiveGamePayload["session"] | null) {
@@ -15,9 +17,9 @@ export function sessionRecord(session: LiveGamePayload["session"] | null) {
 
 /** Sticky at every scroll position. Opponent data uses the same public allowlist
  * as Scout; counts have no connection identities or private diagnostic details. */
-export function DockStatusHeader({ token, studio, ready, live, lastLiveAt, session, status, onHeight, children }: {
+export function DockStatusHeader({ token, studio, ready, live, lastLiveAt, session, status, guardian, onHeight, children }: {
   token: string; studio: StudioState; ready: boolean; live: LiveGameEnvelope | null;
-  lastLiveAt: number | null; session: LiveGamePayload["session"] | null; status: string;
+  lastLiveAt: number | null; session: LiveGamePayload["session"] | null; status: string; guardian: GuardianState | null;
   onHeight: (height: number) => void; children: ReactNode;
 }) {
   const host = useRef<HTMLElement>(null), [now, setNow] = useState(() => Date.now());
@@ -46,6 +48,7 @@ export function DockStatusHeader({ token, studio, ready, live, lastLiveAt, sessi
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={`/icons/sc2/races/${race}.svg`} alt="" aria-hidden width={18} height={18} className="mr-1 inline-block align-middle" />
       <strong>{opponent.name || "Identifying opponent…"}</strong> · {opponent.race}{opponent.mmr !== null ? ` · ${opponent.mmr} MMR` : ""}{opponent.h2h ? ` · H2H ${opponent.h2h.wins}W–${opponent.h2h.losses}L` : ""}</p> : null}
+    <DockGuardianBanner guardian={guardian} now={now} />
     <DockPresenceStrip token={token} />
     {children}
   </header>;

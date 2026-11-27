@@ -10,9 +10,10 @@ const { parsePlatform } = require("./platformIntegrations");
  * integrations:import('../services/platformIntegrations').PlatformIntegrationsService,
  * titleSession?:(userId:string, gameId?:string)=>Promise<unknown>,
  * streamingTitles:import('../services/streamingTitles').StreamingTitlesService,
- * streamingChannel?:import('../services/streamingChannel').StreamingChannelService}} deps
+ * streamingChannel?:import('../services/streamingChannel').StreamingChannelService,
+ * streamGuardian?:import('../services/streamGuardian').StreamGuardianService}} deps
  */
-function buildAgentStreamingRouter({ auth, integrations, streamingTitles, streamingChannel, titleSession }) {
+function buildAgentStreamingRouter({ auth, integrations, streamingTitles, streamingChannel, titleSession, streamGuardian }) {
   const router = express.Router();
   router.get("/agent/streaming/session", auth, async (req, res, next) => {
     try {
@@ -51,6 +52,19 @@ function buildAgentStreamingRouter({ auth, integrations, streamingTitles, stream
     (service, userId, body) => service.setTags(userId, body.platform, body.tags, body.previous ?? [])));
   router.post("/agent/streaming/category", auth, channelHandler(streamingChannel, ["platform"],
     (service, userId, body) => service.ensureCategory(userId, body.platform)));
+  router.post("/agent/streaming/guardian", auth, (req, res, next) => {
+    try {
+      const userId = requireAccount(req);
+      const body = req.body;
+      if (!streamGuardian) throw new Error("guardian unavailable");
+      if (!body || typeof body !== "object" || Array.isArray(body) || !Array.isArray(body.warnings)
+        || Object.keys(body).some((key) => key !== "warnings")) {
+        throw new PlatformIntegrationError(400, "stream_guardian_request_invalid", "Send only the list of warnings that are active now.");
+      }
+      res.set("Cache-Control", "no-store");
+      res.json({ warnings: streamGuardian.publish(userId, body.warnings).warnings });
+    } catch (error) { next(safeFailure(error)); }
+  });
   router.post("/agent/streaming/:platform/connect", auth, async (req, res, next) => {
     try {
       const userId = requireAccount(req);

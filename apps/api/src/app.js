@@ -121,6 +121,7 @@ const { OpponentChannelsCache } = require("./services/opponentChannels");
 const { GameMomentsService } = require("./services/gameMoments");
 const { GameDeskService } = require("./services/gameDesk");
 const { StreamSeriesService } = require("./services/streamSeries");
+const { StreamGuardianService } = require("./services/streamGuardian");
 const { StreamingChannelService } = require("./services/streamingChannel");
 const { AggregationsService } = require("./services/aggregations");
 const { SessionPolicyService } = require("./services/sessionPolicy");
@@ -799,6 +800,7 @@ function makeServices(deps, clerk, adminClerkIds) {
         reason: `Series ${series.score.you > series.score.opponent ? "won" : "lost"} — Bo${series.format} vs ${series.opponentName}: ${series.score.you}–${series.score.opponent}` });
     } });
   chatbot.series = streamSeries;
+  const streamGuardian = new StreamGuardianService({ io: deps.io });
   // Reconnect every enabled bot on boot — best-effort, non-blocking.
   void twitchChatBot.restoreAll();
   const aggregations = new AggregationsService(deps.db, { mmrExpectation, details: gameDetails });
@@ -1152,6 +1154,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     youtubeStreaming,
     streamChapters,
     streamSeries,
+    streamGuardian,
     multichatSounds,
     multichatEngagement,
     multichatViewers,
@@ -1635,6 +1638,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     integrations: services.platformIntegrations,
     streamingTitles: new StreamingTitlesService({ integrations: services.platformIntegrations }),
     streamingChannel: new StreamingChannelService({ integrations: services.platformIntegrations }),
+    streamGuardian: services.streamGuardian,
     titleSession: (userId, gameId) => require("./services/streamTitleSession").streamTitleSession(
       deps.db, services.games, userId, () => services.liveGameBroker.latest(userId), gameId, services.scoutingIdentities,
       {

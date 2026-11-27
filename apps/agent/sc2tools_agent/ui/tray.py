@@ -46,6 +46,10 @@ log = logging.getLogger(__name__)
 # NOTIFYICONDATAW.szTip holds 128 UTF-16 units including the terminator;
 # pystray raises on anything longer.
 TOOLTIP_MAX = 127
+# Shell_NotifyIcon values for a balloon that makes no sound (shellapi.h).
+_NIM_MODIFY = 1
+_NIF_INFO = 0x10
+_NIIF_NOSOUND = 0x10
 
 
 def can_use_tray() -> bool:
@@ -226,6 +230,17 @@ class TrayUI:
         icon = self._icon
         if icon is not None and hasattr(icon, "notify"):
             icon.notify(str(message), str(title))
+
+    def show_quiet_notice(self, message: str, *, title: str = "SC2 Tools Agent") -> None:
+        """Like show_notice, but Windows is told to play no sound: a streamer's capture could hear it."""
+        if not self._notifications_enabled():
+            return
+        icon = self._icon
+        send = getattr(icon, "_message", None)
+        if sys.platform != "win32" or send is None:
+            self.show_notice(message, title=title)
+            return
+        send(_NIM_MODIFY, _NIF_INFO, szInfo=str(message), szInfoTitle=str(title), dwInfoFlags=_NIIF_NOSOUND)
 
     def show_pairing_code(self, code: str) -> None:
         with self._lock:

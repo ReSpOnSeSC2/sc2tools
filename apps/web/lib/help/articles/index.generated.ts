@@ -128,6 +128,7 @@ import streamStudio_overlayHealth from "./stream-studio/overlay-health";
 import streamStudio_overlayUrlLeaked from "./stream-studio/overlay-url-leaked";
 import streamStudio_seriesMode from "./stream-studio/series-mode";
 import streamStudio_streamDock from "./stream-studio/stream-dock";
+import streamStudio_streamGuardian from "./stream-studio/stream-guardian";
 import streamStudio_streamReports from "./stream-studio/stream-reports";
 import streamStudio_streamViewerPage from "./stream-studio/stream-viewer-page";
 import streamStudio_viewerEngagement from "./stream-studio/viewer-engagement";
@@ -263,6 +264,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   streamStudio_overlayUrlLeaked,
   streamStudio_seriesMode,
   streamStudio_streamDock,
+  streamStudio_streamGuardian,
   streamStudio_streamReports,
   streamStudio_streamViewerPage,
   streamStudio_viewerEngagement,

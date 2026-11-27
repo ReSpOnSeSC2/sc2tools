@@ -12,6 +12,8 @@ import threading
 import time
 import uuid
 
+from .guardian_probe import ObsGuardianProbe
+from .guardian_service import GuardianServiceMixin
 from .obs_chapters import RecordChapterMarker
 from .obs_reader import OutputReader, DEFAULT_OUTPUTS
 from .youtube_pair_backend import PairBackend, atomic_json
@@ -71,9 +73,9 @@ def discovery_failure_message(http_status, account_mode="sc2tools"):
     return "Your YouTube channel and reusable keys could not be loaded through SC2Tools. Existing selections are unchanged."
 
 
-class StreamService:
+class StreamService(GuardianServiceMixin):
     def __init__(self, state_dir, settings_provider, *, no_obs=False, backend=None,
-                 output_reader=None, adapters=None, cloud_client=None, chapter_marker=None):
+                 output_reader=None, adapters=None, cloud_client=None, chapter_marker=None, guardian_probe=None):
         self.directory = Path(state_dir) / "streaming"
         self.directory.mkdir(parents=True, exist_ok=True)
         self.config_path = self.directory / "youtube-button-helper.config.private.json"
@@ -114,7 +116,8 @@ class StreamService:
         self._cached = {}
         from .title_controller import StreamTitleController
         self.titles = StreamTitleController(self)
-        self.on_game_event = self.titles.worker.on_event
+        self.guardian = self._build_guardian(guardian_probe or ObsGuardianProbe(settings_provider, disabled=no_obs),
+            config.get("stream_guardian"))
         self.on_game_accepted = self.titles.worker.on_game_accepted
         self._publish()
 
@@ -223,7 +226,7 @@ class StreamService:
             "metadata": copy.deepcopy(self.backend.metadata), "metadata_saved": self.metadata_saved, "message": self.message,
             "catalog": copy.deepcopy(self.catalog), "configured": bool(self.backend.config.get("runtime_enabled")),
             "catalog_status": copy.deepcopy(self.catalog_status),
-            "account_mode": self.account_mode, "title_automation": self.titles.snapshot(),
+            "account_mode": self.account_mode, "title_automation": self.titles.snapshot(), "guardian": self.guardian.snapshot(),
             "configuration": {"privacy": self.backend.config.get("streams", {}).get("horizontal", {}).get("privacy", "public"),
                 "channel_id": self.backend.config.get("expected_channel_id"),
                 "horizontal_id": self.backend.config.get("streams", {}).get("horizontal", {}).get("reusable_stream_id"),
@@ -414,6 +417,12 @@ class StreamService:
                 self.message = "Title saved for future YouTube sessions. See each platform below for the current save result."
             elif kind == "configure_title_automation":
                 self.titles.save(payload)
+            elif kind == "configure_guardian":
+                self.guardian.configure(payload)
+                self.message = "Stream Guardian settings saved. Warnings reach you only while OBS is live."
+            elif kind == "list_obs_inputs":
+                self.guardian.refresh_inputs()
+                self.message = "OBS inputs refreshed. Pick the one you speak into."
             elif kind == "refresh_title_preview":
                 self.titles.worker.preview_pending = True
                 self.titles.worker.wake.set()
@@ -716,6 +725,7 @@ class StreamService:
         self.thread = threading.Thread(target=self._run, name="sc2tools-streams", daemon=True)
         self.thread.start()
         self.titles.worker.start()
+        self.guardian.start()
 
     def _run(self):
         # Reconnect only credentials created by this feature. No consent flow
@@ -799,6 +809,7 @@ class StreamService:
             try:
                 self.reader.close()
                 self.chapter_marker.close()
+                self.guardian.close()
                 self.backend.close()
             finally:
                 self.operations.release()

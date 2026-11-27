@@ -20,6 +20,7 @@ def build_stream_studio(page, QtCore, QtWidgets):
     layout.addWidget(page_description("Titles, destinations and OBS setup for your streams", QtWidgets))
 
     layout.addWidget(_command(page, QtCore, QtWidgets))
+    layout.addWidget(_guardian(page, QtCore, QtWidgets))
     layout.addLayout(_youtube(page, QtCore, QtWidgets))
     layout.addLayout(_accounts(page, QtWidgets))
     layout.addWidget(_youtube_setup(page, QtWidgets))
@@ -73,6 +74,13 @@ def _command(page, QtCore, QtWidgets):
     page.notice = page._label("Loading stream settings…", name="studioNotice")
     command_layout.addWidget(page.notice)
     return command
+
+
+def _guardian(page, QtCore, QtWidgets):
+    from .stream_guardian_controls import StreamGuardianControls
+    card, layout = page._card()
+    page.guardian_controls = StreamGuardianControls(page, layout, QtCore, QtWidgets)
+    return card
 
 
 def _youtube(page, QtCore, QtWidgets):

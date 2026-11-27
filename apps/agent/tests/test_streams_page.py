@@ -639,3 +639,43 @@ def test_channel_switches_start_off_show_the_exact_tags_and_save_only_when_asked
     widget.render(state)
     assert controls.category_guard.isChecked()
     assert "Channel tags and category update at game start." in controls.activation.text()
+
+
+def test_stream_guardian_switches_start_off_and_are_saved_with_the_chosen_microphone(page, monkeypatch):
+    widget, state, app = page
+    controls = widget.guardian_controls
+    assert not any(box.isChecked() for box in controls.switches.values())
+    payloads = []
+    monkeypatch.setattr(widget, "job", payloads.append)
+    controls.switches["mic_muted"].setChecked(True)
+    controls.microphone.setEditText("Mic/Aux")
+    controls.configure()
+    assert payloads == [{"action": "configure_guardian", "microphone": "Mic/Aux",
+        "switches": {"mic_muted": True, "stream_unstable": False, "not_recording": False, "stuck_on_break": False}}]
+    assert "Click Save Stream Guardian settings" in controls.status.text()
+    controls.find_inputs.click()
+    assert payloads[-1] == {"action": "list_obs_inputs"}
+
+
+def test_stream_guardian_shows_saved_state_found_inputs_and_what_is_active(page):
+    widget, state, app = page
+    state["guardian"] = {"switches": {"mic_muted": True, "stream_unstable": False, "not_recording": False, "stuck_on_break": True},
+                         "microphone": "Mic/Aux", "inputs": ["Headset", "Mic/Aux"], "active": ["mic_muted"], "dock_ok": False}
+    widget.render(state)
+    controls = widget.guardian_controls
+    assert [box.isChecked() for box in controls.switches.values()] == [True, False, False, True]
+    assert controls.microphone.currentText() == "Mic/Aux"
+    assert [controls.microphone.itemText(index) for index in range(controls.microphone.count())] == ["Headset", "Mic/Aux"]
+    assert "2 of 4 warnings are on" in controls.status.text() and "microphone muted" in controls.status.text()
+    assert "Stream Dock banner could not be updated" in controls.status.text()
+
+
+def test_stream_guardian_keeps_unsaved_edits_until_a_save_completes(page):
+    widget, state, app = page
+    controls = widget.guardian_controls
+    controls.switches["stream_unstable"].setChecked(True)
+    state["guardian"] = {"switches": {}, "microphone": "", "inputs": ["Mic"], "active": []}
+    widget.render(state)
+    assert controls.switches["stream_unstable"].isChecked() and controls.dirty
+    widget._completed({"action": "configure_guardian", "state": state})
+    assert controls.dirty is False and not controls.switches["stream_unstable"].isChecked()

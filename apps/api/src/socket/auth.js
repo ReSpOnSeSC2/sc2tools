@@ -145,6 +145,7 @@ async function verifySessionJwt(token, opts) {
  *   resolveGhostPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveStudioState?: (token: string) => Promise<Record<string, unknown> | null>,
  *   resolveSeries?: (token: string, owner: string) => Promise<Record<string, unknown> | null>,
+ *   resolveGuardian?: (userId: string) => Record<string, unknown> | null,
  *   resolvePlatformEvents?: (userId: string) => Promise<Array<Record<string, unknown>>>,
  *   resolveLiveSnapshot?: (userId: string) => {
  *     prelude?: object|null,
@@ -351,6 +352,7 @@ function attachSocketAuth(io, opts) {
         replayOverlayStudioState(socket, opts.resolveStudioState, t);
       }
       if (t && u && opts.resolveSeries) replayOverlaySeries(socket, opts.resolveSeries, t, u);
+      if (u && opts.resolveGuardian) replayOverlayGuardian(socket, opts.resolveGuardian, u);
       if (u && opts.resolvePlatformEvents) {
         replayOverlayPlatformEvents(socket, opts.resolvePlatformEvents, u);
       }
@@ -450,6 +452,7 @@ function attachSocketAuth(io, opts) {
           replayOverlayStudioState(socket, opts.resolveStudioState, t);
         }
         if (t && opts.resolveSeries) replayOverlaySeries(socket, opts.resolveSeries, t, userId);
+        if (opts.resolveGuardian) replayOverlayGuardian(socket, opts.resolveGuardian, userId);
         if (opts.resolvePlatformEvents) {
           replayOverlayPlatformEvents(socket, opts.resolvePlatformEvents, userId);
         }
@@ -685,6 +688,19 @@ function replayOverlaySeries(socket, resolve, token, owner) {
   Promise.resolve().then(() => resolve(token, owner)).then(series => {
     if (socket.connected !== false && socket.data.overlayToken === token && socket.data.overlayUserId === owner) socket.emit("overlay:series", series);
   }).catch(() => {});
+}
+
+/** A Dock that connects while a Stream Guardian warning is active shows it at once.
+ * @param {{emit:(event:string,payload:unknown)=>unknown}} socket
+ * @param {(userId:string)=>Record<string,unknown>|null} resolve
+ * @param {string} userId */
+function replayOverlayGuardian(socket, resolve, userId) {
+  try {
+    const held = resolve(userId);
+    if (held) socket.emit("overlay:guardian", held);
+  } catch {
+    // A warning is advisory; its replay never decides whether the socket connects.
+  }
 }
 
 /**

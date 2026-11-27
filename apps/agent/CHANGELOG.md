@@ -15,6 +15,14 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   Streams page, off by default. Each game adds a chapter such as
   `Game 4 · PvZ` to the file OBS is recording. It needs OBS 30.2 or newer
   recording Hybrid MP4; otherwise it quietly does nothing.
+- **Stream Guardian** on the Streams page: four optional warnings, all off by
+  default (microphone muted for two minutes while live, frames dropping or the
+  stream reconnecting, a game started with OBS neither streaming nor recording,
+  still live on a break scene long after the last game). You pick which OBS input
+  is your microphone. A warning is a silent tray notice and a banner in the
+  Stream Dock, once per incident and cleared when the cause clears. It reads
+  OBS every few seconds only while live and makes no request when every switch
+  is off.
 
 ## 0.25.11
 
