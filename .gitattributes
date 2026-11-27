@@ -2,3 +2,8 @@
 # intentionally exercises escaped control characters.
 *.ts diff
 *.tsx diff
+
+# Humdingers ships as one prebuilt page (docs/adr/0101-humdingers-static-game-page.md).
+# Keep its bytes exact: it mixes CRLF and LF lines, which core.autocrlf would
+# rewrite. No text diff, and it stays out of the repository's language stats.
+apps/web/public/play/*.html binary linguist-generated

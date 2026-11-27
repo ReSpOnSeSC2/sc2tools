@@ -140,6 +140,23 @@ describe("local replay middleware auth independence", () => {
   });
 });
 
+describe("Humdingers game page", () => {
+  it.each(["/play/humdingers", "/play/humdingers?touch=1"])("serves %s from the static game file without Clerk", async pathname => {
+    authBoundary.unavailable = true;
+    const response = await request(pathname, undefined, { cookie: "__session=synthetic-expired" });
+    const rewrite = new URL(response.headers.get("x-middleware-rewrite")!);
+    expect(rewrite.pathname).toBe("/play/humdingers.html");
+    expect(rewrite.search).toBe(new URL(pathname, "https://sc2tools.com").search);
+    expect(response.headers.get("location")).toBeNull();
+    expect(authBoundary.wrapped).not.toHaveBeenCalled();
+  });
+
+  it.each(["/play/humdingers/", "/play/Humdingers", "/play/humdingers-other", "/play/other"])("keeps lookalike path %s inside Clerk", async pathname => {
+    await request(pathname);
+    expect(authBoundary.wrapped).toHaveBeenCalledOnce();
+  });
+});
+
 describe("dedicated status alias", () => {
   it.each(["/", "/wrapped", "/status?token=private", "/app/game/private-game?owner=private&next=https://evil.test/"])("redirects %s permanently to one clean destination before auth", async pathname => {
     authBoundary.unavailable = true;

@@ -23,6 +23,18 @@ describe("curated product updates", () => {
     expect(entry?.link).toEqual({ href: "/tools", label: "Explore all tools" });
     expect(entry?.major).toBeUndefined();
   });
+  it("links Humdingers to its public page without requesting an inbox announcement yet", () => {
+    // "major" sends a notification once the API deploys. It is switched on in a
+    // follow-up after the page is live, so no one is told before they can play.
+    const entry = WHATS_NEW.find(item => item.id === "humdingers");
+    expect(entry?.link).toEqual({ href: "/play/humdingers", label: "Play Humdingers (about 10 MB)" });
+    expect(entry?.major).toBeUndefined();
+  });
+  it("keeps every inbox announcement within the 280-character notification body", () => {
+    // A "major" entry's summary becomes the notification body, and BODY_MAX in
+    // apps/api/src/services/notifications.js cuts longer bodies mid-word.
+    for (const entry of WHATS_NEW.filter(item => item.major)) expect(entry.summary.length, entry.id).toBeLessThanOrEqual(280);
+  });
   it("publishes a static escaped RSS item for every curated update", async () => {
     const response = GET(); const xml = await response.text(); const parsed = new DOMParser().parseFromString(xml, "application/xml");
     expect(response.headers.get("Content-Type")).toContain("application/rss+xml"); expect(parsed.querySelector("parsererror")).toBeNull();
