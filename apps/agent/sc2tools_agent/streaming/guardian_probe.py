@@ -1,19 +1,20 @@
 """The few obs-websocket reads the Stream Guardian needs, on its own connection.
 
-One reading is two requests while OBS is not live and at most four while it
-is. Nothing here writes to OBS, and nothing raises: an OBS that cannot be
-reached is a reading of None, which no rule treats as a problem.
+One reading is one to five requests, and only for the rules that are switched on.
+Nothing here writes to OBS, and nothing raises: an OBS that cannot be reached is
+a reading of None, which no rule treats as a problem.
 """
 from __future__ import annotations
 
 import logging
 
-from ..obs_activity import outputs_active
-from .obs_reader import ObsConnection
+from .obs_reader import DEFAULT_OUTPUTS, ObsConnection
 
 LOG = logging.getLogger(__name__)
 #: Input kinds that carry sound. A microphone is an "input capture" on every platform.
 AUDIO_KINDS = ("input_capture", "audio")
+#: obs-websocket request status for an input or output that does not exist.
+RESOURCE_NOT_FOUND = 600
 
 
 def _count(value):
@@ -29,12 +30,17 @@ def _scene_name(response):
 
 
 class ObsGuardianProbe(ObsConnection):
-    def __call__(self, microphone="", *, plugin_outputs=False):
+    def __init__(self, settings_provider, *, disabled=False, factory=None, output_names=None):
+        super().__init__(settings_provider, disabled=disabled, factory=factory)
+        self.output_names = output_names or (lambda: tuple(DEFAULT_OUTPUTS.values()))
+
+    def __call__(self, microphone="", *, scene=False, record=False, plugins=False):
         """A reading of OBS, or None when it cannot be reached or read.
 
-        `plugin_outputs` also asks the plugin outputs (Aitum and similar) when the
-        native stream and recording are both off, so a stream that only runs
-        through a plugin is not mistaken for no capture at all.
+        Only the reads the rules that are on need: `microphone` and `scene` apply
+        while live, `record` asks the recording status, and `plugins` also looks at
+        the named plugin outputs (Aitum and similar), so a stream that runs only
+        through a plugin still counts as live and as captured.
         """
         if self.disabled:
             return None
@@ -46,29 +52,39 @@ class ObsGuardianProbe(ObsConnection):
                            "reconnecting": getattr(stream, "output_reconnecting", False) is True,
                            "skipped": _count(getattr(stream, "output_skipped_frames", None)),
                            "total": _count(getattr(stream, "output_total_frames", None)),
-                           "recording": raw.get_record_status().output_active is True,
-                           "scene": None, "muted": None}
+                           "recording": record and raw.get_record_status().output_active is True,
+                           "scene": None, "muted": None, "mic_missing": False}
+                if plugins and not reading["streaming"]:
+                    reading["streaming"] = self._plugin_live(raw)
                 reading["capturing"] = reading["streaming"] or reading["recording"]
                 if reading["streaming"]:
-                    reading["scene"] = _scene_name(raw.get_current_program_scene())
+                    if scene:
+                        reading["scene"] = _scene_name(raw.get_current_program_scene())
                     if microphone:
-                        reading["muted"] = self._muted(raw, microphone)
-                elif plugin_outputs and not reading["capturing"]:
-                    reading["capturing"] = outputs_active(self)
+                        self._read_mute(raw, microphone, reading)
                 return reading
             except Exception as error:
                 LOG.debug("OBS guardian read skipped: %s", type(error).__name__)
                 self.close()
                 return None
 
+    def _plugin_live(self, raw):
+        """True when a named plugin output is running. The virtual camera and replay buffer are not a stream."""
+        listed = {row.get("outputName") for row in raw.get_output_list().outputs if isinstance(row, dict)}
+        return any(raw.get_output_status(name).output_active is True
+                   for name in self.output_names() if name in listed)
+
     @staticmethod
-    def _muted(raw, microphone):
-        """True or False for a known input; None when OBS has no input by that name."""
+    def _read_mute(raw, microphone, reading):
+        """Fill `muted`; an input OBS does not have is `mic_missing`, any other failure is a failed read."""
         try:
             muted = raw.get_input_mute(microphone).input_muted
-        except Exception:
-            return None
-        return muted if isinstance(muted, bool) else None
+        except Exception as error:
+            if getattr(error, "code", None) != RESOURCE_NOT_FOUND:
+                raise
+            reading["mic_missing"] = True
+            return
+        reading["muted"] = muted if isinstance(muted, bool) else None
 
     def inputs(self):
         """Names of the OBS inputs that carry sound, for the microphone picker. Raises ValueError with a reason."""

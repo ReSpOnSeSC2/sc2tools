@@ -9,9 +9,13 @@ const state = (overrides: Partial<GuardianState> = {}): GuardianState => ({
   warnings: [{ rule: "mic_muted", since: NOW - 150_000 }, { rule: "stuck_on_break", since: 0 }], receivedAt: NOW, ...overrides });
 
 describe("DockGuardianBanner", () => {
-  it("lists each active warning in an alert, with how long it has lasted when that is known", () => {
+  it("lists each active warning in a polite status region, with how long it has lasted when that is known", () => {
     render(<DockGuardianBanner guardian={state()} now={NOW} />);
-    const alert = screen.getByRole("alert", { name: "Stream Guardian warnings" });
+    const alert = screen.getByRole("status", { name: "Stream Guardian warnings" });
+    expect(alert.getAttribute("role")).toBe("status");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(alert.querySelector("ul")?.getAttribute("role")).toBeNull();
+    expect(alert.querySelector("[aria-live]")).toBeNull();
     const rows = alert.querySelectorAll("li");
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toBe("Your microphone has been muted for a while and you are live. For 3 min.");
@@ -25,8 +29,15 @@ describe("DockGuardianBanner", () => {
 
   it("goes away when the agent stops refreshing the list", () => {
     const view = render(<DockGuardianBanner guardian={state()} now={NOW + GUARDIAN_EXPIRES_MS} />);
-    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(screen.getByRole("status")).toBeTruthy();
     view.rerender(<DockGuardianBanner guardian={state()} now={NOW + GUARDIAN_EXPIRES_MS + 1} />);
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("keeps the running minutes out of what a screen reader announces", () => {
+    render(<DockGuardianBanner guardian={state()} now={NOW} />);
+    const minutes = screen.getByRole("status").querySelector("li span");
+    expect(minutes?.getAttribute("aria-hidden")).toBe("true");
+    expect(minutes?.textContent).toBe(" For 3 min.");
   });
 });

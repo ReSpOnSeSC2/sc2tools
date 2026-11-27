@@ -670,6 +670,16 @@ def test_stream_guardian_shows_saved_state_found_inputs_and_what_is_active(page)
     assert "Stream Dock banner could not be updated" in controls.status.text()
 
 
+def test_stream_guardian_says_when_the_saved_microphone_is_not_in_obs(page):
+    widget, state, app = page
+    state["guardian"] = {"switches": {"mic_muted": True}, "microphone": "Gone", "inputs": [], "active": [], "mic_missing": True}
+    widget.render(state)
+    assert "no input with the microphone name you saved" in widget.guardian_controls.status.text()
+    state["guardian"]["switches"] = {"mic_muted": False}
+    widget.render(state)
+    assert "no input with the microphone" not in widget.guardian_controls.status.text()
+
+
 def test_stream_guardian_keeps_unsaved_edits_until_a_save_completes(page):
     widget, state, app = page
     controls = widget.guardian_controls

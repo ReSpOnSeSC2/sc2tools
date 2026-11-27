@@ -5123,12 +5123,6 @@ release preparation, not a signed or published 0.24.9 installer.
   cover games that started while that video was running. Agent 0.26.0. See ADR
   0105.
 
-## [agent-v0.5.13] - 2026-05-09
-
-Released as `agent-v0.5.13` on GitHub. Installer:
-`SC2ToolsAgent-Setup-0.5.13.exe`.
-
-
 ### Stream Guardian
 
 - While OBS is live, the desktop app can warn you off-stream about four
@@ -5139,7 +5133,13 @@ Released as `agent-v0.5.13` on GitHub. Installer:
   OBS input is your microphone. A warning is a silent tray notice and a red
   banner in the Stream Dock, once per incident and cleared when the cause
   clears; it never appears on your stream and never plays a sound. OBS is read
-  only every few seconds while you are live. Agent 0.26.0. See ADR 0106.
+  every few seconds while you are live, and only now and then while you are not. Agent 0.26.0. See ADR 0106.
+
+## [agent-v0.5.13] - 2026-05-09
+
+Released as `agent-v0.5.13` on GitHub. Installer:
+`SC2ToolsAgent-Setup-0.5.13.exe`.
+
 
 ### Why the version jumps from 0.5.10 to 0.5.13
 

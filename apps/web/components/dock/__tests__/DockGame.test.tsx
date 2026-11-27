@@ -81,8 +81,8 @@ it("header removes opponent on end/staleness, labels connection and retains coun
 it("header shows Stream Guardian warnings above the jump tabs and drops them when they expire", () => {
   const p = props(); const guardian = { warnings: [{ rule: "stream_unstable" as const, since: NOW - 60_000 }], receivedAt: NOW };
   render(<DockStatusHeader token={p.token} studio={DEFAULT_STUDIO_STATE} ready live={null} lastLiveAt={null} session={p.session} status="connected" guardian={guardian} onHeight={vi.fn()}><nav>Jump tabs</nav></DockStatusHeader>);
-  expect(screen.getByRole("alert", { name: "Stream Guardian warnings" }).textContent).toContain("OBS is dropping frames or reconnecting.");
-  act(() => vi.advanceTimersByTime(181_000)); expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByRole("status", { name: "Stream Guardian warnings" }).textContent).toContain("OBS is dropping frames or reconnecting.");
+  act(() => vi.advanceTimersByTime(181_000)); expect(screen.queryByRole("status", { name: "Stream Guardian warnings" })).toBeNull();
 });
 it("End stream waits for confirmation, then reports the saved stream or that nothing was saved", async () => {
   const p = props();

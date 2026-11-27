@@ -27,12 +27,15 @@ Status: Accepted, November 27, 2026. Extends the agent's streaming service
 4. One warning per incident: a rule is notified when it enters the active set
    and again only after it left. Frame loss needs two bad readings and two good
    ones, so a single hiccup neither warns nor clears.
-5. Cost: no OBS request at all while every switch is off; two status reads
-   every 15 seconds while OBS is not live; one to four reads every 5 seconds
-   while live or in a game. The rules that need a live stream do not run when it
-   is not live. The one exception is the game-with-OBS-not-live rule, which by
-   definition needs the not-live reading, so it also asks the plugin outputs,
-   only while a game is running.
+5. Cost: no OBS request at all while every switch is off. A read asks only for
+   what the rules switched on need. While OBS is not live and a live-only rule
+   is on, one to a few reads every 15 seconds only notice going live; one to
+   five reads every 5 seconds while live or in a game. The game rule alone reads
+   only while a game runs. A stream that runs only through a named plugin output
+   (Aitum, vertical canvas) counts as live and as captured; the virtual camera
+   and replay buffer do not. A failed read is believed only after three in a
+   row, so one slow request does not end a warning. The Dock push runs on its
+   own thread so a slow server never delays a check.
 6. The server (`POST /v1/agent/streaming/guardian`) keeps the newest list per
    user in memory only, emits `overlay:guardian` to the user's room and replays
    it to a Dock that connects later. The agent repeats an unchanged list every

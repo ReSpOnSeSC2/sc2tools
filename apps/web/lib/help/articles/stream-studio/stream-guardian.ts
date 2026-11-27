@@ -26,10 +26,10 @@ const article: HelpArticle = {
     { type: "heading", text: "What it reads and when", anchor: "checks" },
     { type: "list", items: [
       "While every switch is off, SC2 Tools makes no request to OBS for this feature.",
-      "While OBS is not live it makes only two quick status reads every fifteen seconds, to notice that you went live. The rules that need a live stream do not run.",
+      "While OBS is not live and a rule that needs a live stream is on, it makes a couple of quick status reads every fifteen seconds, only to notice that you went live; those rules do not run until you are. The game rule alone reads OBS only while a game runs.",
       "While you are live, or a game is running, it checks every five seconds.",
       "It only reads from OBS. It changes nothing in your scenes or settings.",
-      "If OBS is closed or its WebSocket is off, nothing is known and nothing warns.",
+      "If OBS is closed or its WebSocket is off, nothing is known and nothing warns. A single failed read does not end a warning that is showing.",
     ] },
     { type: "heading", text: "The Dock banner", anchor: "dock" },
     { type: "paragraph", text: "The banner needs the desktop app paired with your SC2 Tools account. It disappears when the cause clears, and also within about three minutes if the desktop app closes. The tray notice works without an account. If your notifications are muted in the desktop app, only the banner shows." },

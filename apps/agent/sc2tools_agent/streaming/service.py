@@ -12,8 +12,7 @@ import threading
 import time
 import uuid
 
-from .guardian_probe import ObsGuardianProbe
-from .guardian_service import GuardianServiceMixin
+from .guardian_service import GUARDIAN_JOBS, GuardianServiceMixin
 from .obs_chapters import RecordChapterMarker
 from .obs_reader import OutputReader, DEFAULT_OUTPUTS
 from .youtube_pair_backend import PairBackend, atomic_json
@@ -116,8 +115,7 @@ class StreamService(GuardianServiceMixin):
         self._cached = {}
         from .title_controller import StreamTitleController
         self.titles = StreamTitleController(self)
-        self.guardian = self._build_guardian(guardian_probe or ObsGuardianProbe(settings_provider, disabled=no_obs),
-            config.get("stream_guardian"))
+        self.guardian = self._build_guardian(guardian_probe, settings_provider, no_obs, config)
         self.on_game_accepted = self.titles.worker.on_game_accepted
         self._publish()
 
@@ -417,12 +415,8 @@ class StreamService(GuardianServiceMixin):
                 self.message = "Title saved for future YouTube sessions. See each platform below for the current save result."
             elif kind == "configure_title_automation":
                 self.titles.save(payload)
-            elif kind == "configure_guardian":
-                self.guardian.configure(payload)
-                self.message = "Stream Guardian settings saved. Warnings reach you only while OBS is live."
-            elif kind == "list_obs_inputs":
-                self.guardian.refresh_inputs()
-                self.message = "OBS inputs refreshed. Pick the one you speak into."
+            elif kind in GUARDIAN_JOBS:
+                self.message = self._guardian_job(kind, payload)
             elif kind == "refresh_title_preview":
                 self.titles.worker.preview_pending = True
                 self.titles.worker.wake.set()

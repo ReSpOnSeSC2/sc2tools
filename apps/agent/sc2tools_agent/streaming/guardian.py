@@ -2,8 +2,9 @@
 
 A warning is a quiet tray notice and a banner in the Stream Dock, never an
 overlay and never a sound. Every rule has its own switch, off until chosen.
-The guardian makes no OBS request at all while every switch is off, and while
-OBS is not live it makes only the two cheap status reads that notice going live.
+The guardian makes no OBS request at all while every switch is off. While OBS is
+not live it only looks often enough to notice going live, and the game rule
+looks only while a game runs.
 """
 from __future__ import annotations
 
@@ -23,6 +24,10 @@ OFF_SECONDS = 60
 #: The server forgets an unrefreshed list after three minutes, so repeat it well inside that.
 HEARTBEAT_SECONDS = 60
 RETRY_SECONDS = 30
+#: A failed read is believed only after this many in a row; one slow request must not end an incident.
+MISS_LIMIT = 3
+#: The rules that need OBS to be live, so OBS is watched for going live whenever one is on.
+LIVE_RULES = ("mic_muted", "stream_unstable", "stuck_on_break")
 MESSAGES = {
     "mic_muted": "Your microphone has been muted for two minutes while you are live.",
     "stream_unstable": "OBS is dropping frames or reconnecting. Check your connection and encoder load.",
@@ -58,9 +63,12 @@ class GameWatch:
 
 
 class StreamGuardian:
-    def __init__(self, probe, settings, *, persist, notify, send, clock=time.time):
+    def __init__(self, probe, settings, *, persist, notify, send, clock=time.time, dispatch=None):
         self.probe, self.settings = probe, settings
         self.persist, self.notify, self.send, self.clock = persist, notify, send, clock
+        self.dispatch = dispatch or self._in_thread
+        self.misses, self.mic_missing, self.sending = 0, False, False
+        self.lock = threading.Lock()
         self.rules, self.game = GuardianRules(), GameWatch()
         self.active = {}
         self.inputs = []
@@ -94,14 +102,21 @@ class StreamGuardian:
     def tick(self):
         """One check. Returns how many seconds to wait before the next."""
         settings = self.settings
-        if not any(settings["switches"].values()):
-            self._settle({}, self.clock())
+        switches = settings["switches"]
+        playing = self.game.active_since is not None
+        if not (any(switches[rule] for rule in LIVE_RULES) or switches["not_recording"] and playing):
+            self._settle(self.rules.evaluate(switches, None, self.game, self.clock()), self.clock())
+            self.mic_missing, self.misses = False, 0
             self.probe.close()
             return OFF_SECONDS
-        playing = self.game.active_since is not None
-        reading = self.probe(settings["microphone"], plugin_outputs=settings["switches"]["not_recording"] and playing)
+        reading = self.probe(settings["microphone"] if switches["mic_muted"] else "", scene=switches["stuck_on_break"],
+                             record=switches["not_recording"], plugins=True)
+        self.misses = self.misses + 1 if reading is None else 0
+        if reading is None and self.misses < MISS_LIMIT:
+            return LIVE_SECONDS
         now = self.clock()
-        self._settle(self.rules.evaluate(settings["switches"], reading, self.game, now), now)
+        self._settle(self.rules.evaluate(switches, reading, self.game, now), now)
+        self.mic_missing = bool(reading and reading["mic_missing"] and switches["mic_muted"])
         if reading is None:
             return UNREACHABLE_SECONDS
         return LIVE_SECONDS if reading["streaming"] or playing else IDLE_SECONDS
@@ -120,14 +135,26 @@ class StreamGuardian:
     def _sync_dock(self, now):
         wanted = set(self.active)
         due = wanted != self.pushed or bool(wanted) and now - self.pushed_at >= HEARTBEAT_SECONDS
-        if not due or now < self.retry_at:
+        if not due or now < self.retry_at or self.sending:
             return
+        warnings = [{"rule": rule, "since": int(since * 1000)} for rule, since in self.active.items()]
+        self.sending = True
+        self.dispatch(lambda: self._push(warnings, wanted))
+
+    def _push(self, warnings, wanted):
+        """Runs off the check loop: a slow server must not delay an OBS check."""
         try:
-            self.send([{"rule": rule, "since": int(since * 1000)} for rule, since in self.active.items()])
+            self.send(warnings)
         except Exception:
-            self.retry_at, self.dock_ok = now + RETRY_SECONDS, False
+            with self.lock:
+                self.retry_at, self.dock_ok, self.sending = self.clock() + RETRY_SECONDS, False, False
             return
-        self.pushed, self.pushed_at, self.dock_ok = wanted, now, True
+        with self.lock:
+            self.pushed, self.pushed_at, self.dock_ok, self.sending = wanted, self.clock(), True, False
+
+    @staticmethod
+    def _in_thread(job):
+        threading.Thread(target=job, name="sc2tools-guardian-dock", daemon=True).start()
 
     def on_game_event(self, event):
         before = self.game.active_since
@@ -145,4 +172,5 @@ class StreamGuardian:
 
     def snapshot(self):
         return {"switches": dict(self.settings["switches"]), "microphone": self.settings["microphone"],
-                "inputs": list(self.inputs), "active": sorted(self.active), "dock_ok": self.dock_ok}
+                "inputs": list(self.inputs), "active": sorted(self.active), "dock_ok": self.dock_ok,
+                "mic_missing": self.mic_missing}

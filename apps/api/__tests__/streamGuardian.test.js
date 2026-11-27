@@ -49,6 +49,14 @@ describe("StreamGuardianService", () => {
     expect(service.latest("fresh")).not.toBeNull();
     expect(service.byUser.has("old")).toBe(false);
   });
+
+  test("a replay says how old the report is by the server clock", () => {
+    let now = NOW;
+    const service = new StreamGuardianService({ now: () => now });
+    expect(service.publish("u", [{ rule: "mic_muted", since: NOW }]).ageMs).toBe(0);
+    now += 170_000;
+    expect(service.latest("u").ageMs).toBe(170_000);
+  });
 });
 
 describe("POST /v1/agent/streaming/guardian", () => {

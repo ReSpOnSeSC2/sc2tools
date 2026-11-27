@@ -6,7 +6,7 @@ import { sanitizeStudioState, type StudioState } from "./useStudioState";
 import type { LiveGameEnvelope, LiveGamePayload } from "@/components/overlay/types";
 import { mergeLiveGameStreamerHistory, type StickyStreamerHistory } from "@/components/overlay/mergeLiveGameStreamerHistory";
 import { newerSession } from "./sessionSnapshot";
-import { readGuardian, type GuardianState } from "./streamGuardian";
+import { readAgeMs, readGuardian, type GuardianState } from "./streamGuardian";
 export type DockGameStatus = { gameKey: string | null; phase: LiveGameEnvelope["phase"]; isReplay: boolean; verified: boolean; endedGameKey?: string | null; endedAt?: number };
 type StudioLiveFacts = { gameStatus: DockGameStatus | null; engagementEvent: unknown; token: string; liveGame: LiveGameEnvelope | null; lastLiveAt: number | null; session: LiveGamePayload["session"] | null };
 
@@ -92,7 +92,7 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
     socket.on("overlay:engagement", receiveEngagement);
     const receiveSeries = (raw: unknown) => { if (current()) setSeries({ token, value: raw }); };
     socket.on("overlay:series", receiveSeries);
-    const receiveGuardian = (raw: unknown) => { if (current()) setGuardian({ token, value: { warnings: readGuardian(raw), receivedAt: Date.now() } }); };
+    const receiveGuardian = (raw: unknown) => { if (current()) setGuardian({ token, value: { warnings: readGuardian(raw), receivedAt: Date.now() - readAgeMs(raw) } }); };
     socket.on("overlay:guardian", receiveGuardian);
     const outgoing = (event: string) => { if (event === "overlay:resync") clearFacts(); };
     socket.on("overlay:liveGame", receiveLive);

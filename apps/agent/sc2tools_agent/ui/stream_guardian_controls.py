@@ -21,7 +21,7 @@ class StreamGuardianControls:
         layout.addWidget(page._label("STREAM GUARDIAN", name="studioEyebrow"))
         layout.addWidget(page._label(
             "While OBS is live, SC2 Tools warns you off-stream with a quiet tray notice and a banner in the Stream Dock. "
-            "It never draws on your stream or plays a sound. It reads OBS every few seconds and does nothing while OBS is not live.", True))
+            "It never draws on your stream or plays a sound. It reads OBS every few seconds while live, and only now and then to notice you going live.", True))
         self.switches = {}
         for rule in RULES:
             text, tip = LABELS[rule]
@@ -61,6 +61,8 @@ class StreamGuardianControls:
         status = f"{len(on)} of {len(RULES)} warnings are on." if on else "All warnings are off."
         if settings.get("active"):
             status += " Active now: " + ", ".join(LABELS[rule][0].lower() for rule in settings["active"] if rule in LABELS) + "."
+        if settings.get("mic_missing") and (settings.get("switches") or {}).get("mic_muted"):
+            status += " OBS has no input with the microphone name you saved, so the muted-microphone warning cannot work. Pick one with Find OBS inputs."
         if settings.get("dock_ok") is False:
             status += " The Stream Dock banner could not be updated; the tray notice still works."
         if self.dirty:

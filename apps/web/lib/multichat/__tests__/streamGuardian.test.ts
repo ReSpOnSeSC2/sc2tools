@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GUARDIAN_COPY, minutesActive, readGuardian } from "../streamGuardian";
+import { GUARDIAN_COPY, minutesActive, readAgeMs, readGuardian } from "../streamGuardian";
 
 describe("readGuardian", () => {
   it("keeps the four known rules once each, in the order sent", () => {
@@ -14,6 +14,12 @@ describe("readGuardian", () => {
 
   it.each([null, undefined, [], "warnings", 3, {}, { warnings: "mic_muted" }])("reads %j as no warnings", (raw) => {
     expect(readGuardian(raw)).toEqual([]);
+  });
+});
+
+describe("readAgeMs", () => {
+  it.each([[{ ageMs: 170_000 }, 170_000], [{ ageMs: -5 }, 0], [{ ageMs: "soon" }, 0], [{ ageMs: Infinity }, 0], [{}, 0], [null, 0], [4, 0]])("reads %j as %i", (raw, age) => {
+    expect(readAgeMs(raw)).toBe(age);
   });
 });
 

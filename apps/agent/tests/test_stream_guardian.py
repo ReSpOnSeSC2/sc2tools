@@ -1,5 +1,6 @@
 """Stream Guardian: settings, the four rules, the OBS reads, the loop, and the service and Dock wiring."""
 import json
+import threading
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -24,7 +25,7 @@ def on(*names):
 
 def reading(**changes):
     base = {"streaming": True, "reconnecting": False, "skipped": 0, "total": 0, "recording": False,
-            "capturing": True, "scene": "Live Scene", "muted": False}
+            "capturing": True, "scene": "Live Scene", "muted": False, "mic_missing": False}
     return {**base, **changes}
 
 
@@ -181,39 +182,87 @@ def probe_for(raw):
 
 def test_a_live_reading_carries_frames_scene_and_the_chosen_inputs_mute():
     raw = fake_obs()
-    assert probe_for(raw)("Mic/Aux") == {"streaming": True, "reconnecting": False, "skipped": 4, "total": 900,
-        "recording": False, "scene": "Live Scene", "muted": True, "capturing": True}
+    assert probe_for(raw)("Mic/Aux", scene=True, record=True) == {"streaming": True, "reconnecting": False, "skipped": 4,
+        "total": 900, "recording": False, "scene": "Live Scene", "muted": True, "mic_missing": False, "capturing": True}
     raw.get_input_mute.assert_called_once_with("Mic/Aux")
 
 
-def test_while_not_live_only_the_two_status_reads_are_made():
+def test_only_the_reads_a_rule_needs_are_made():
+    raw = fake_obs()
+    probe_for(raw)("")
+    raw.get_stream_status.assert_called_once()
+    for unasked in (raw.get_record_status, raw.get_current_program_scene, raw.get_input_mute, raw.get_output_list):
+        unasked.assert_not_called()
+    probe_for(raw)("Mic", scene=True, record=True)
+    raw.get_record_status.assert_called_once()
+    raw.get_current_program_scene.assert_called_once()
+    raw.get_input_mute.assert_called_once_with("Mic")
+
+
+def test_while_not_live_no_scene_or_mute_is_read():
     raw = fake_obs(streaming=False)
-    result = probe_for(raw)("Mic/Aux")
+    result = probe_for(raw)("Mic/Aux", scene=True, record=True)
     assert result["streaming"] is False and result["capturing"] is False and result["scene"] is None and result["muted"] is None
     raw.get_current_program_scene.assert_not_called()
     raw.get_input_mute.assert_not_called()
     raw.get_output_list.assert_not_called()
 
 
-def test_no_chosen_microphone_asks_nothing_and_an_unknown_input_reads_as_unknown():
+class RequestFailed(Exception):
+    def __init__(self, code):
+        super().__init__(f"request failed {code}")
+        self.code = code
+
+
+def test_no_chosen_microphone_asks_nothing_and_an_input_obs_lacks_is_reported_missing():
     raw = fake_obs()
     assert probe_for(raw)("")["muted"] is None
     raw.get_input_mute.assert_not_called()
-    raw.get_input_mute.side_effect = RuntimeError("no such input")
-    assert probe_for(raw)("Gone")["muted"] is None
+    raw.get_input_mute.side_effect = RequestFailed(600)
+    gone = probe_for(raw)("Gone")
+    assert gone["muted"] is None and gone["mic_missing"] is True
+
+
+def test_any_other_failure_reading_the_mute_is_a_failed_read_not_a_missing_input():
+    raw = fake_obs()
+    raw.get_input_mute.side_effect = RequestFailed(500)
+    assert probe_for(raw)("Mic") is None
+
+
+def test_a_stream_that_runs_only_through_a_plugin_output_counts_as_live_and_captured():
+    plugin = [{"outputName": "aitum_multi_output_YouTube Output"}, {"outputName": "virtualcam_output"}]
+    raw = fake_obs(streaming=False, outputs=plugin)
+    raw.get_output_status.side_effect = lambda name: SimpleNamespace(output_active=name.startswith("aitum"))
+    result = probe_for(raw)("Mic", scene=True, plugins=True)
+    assert result["streaming"] is True and result["capturing"] is True and result["muted"] is True
+    raw.get_output_status.assert_called_once_with("aitum_multi_output_YouTube Output")
+
+
+def test_the_virtual_camera_and_replay_buffer_are_not_capture():
+    outputs = [{"outputName": "virtualcam_output"}, {"outputName": "replay_buffer"}, {"outputName": "aitum_multi_output_YouTube Output"}]
+    raw = fake_obs(streaming=False, outputs=outputs)
+    raw.get_output_status.side_effect = lambda name: SimpleNamespace(output_active=name != "aitum_multi_output_YouTube Output")
+    result = probe_for(raw)("", record=True, plugins=True)
+    assert result["streaming"] is False and result["capturing"] is False
+    raw.get_output_status.assert_called_once_with("aitum_multi_output_YouTube Output")
 
 
 def test_plugin_outputs_are_asked_only_on_request_and_only_when_nothing_native_runs():
-    plugin = [{"outputName": "aitum_multi_output"}]
+    plugin = [{"outputName": "aitum_multi_output_YouTube Output"}]
     raw = fake_obs(streaming=False, outputs=plugin)
-    assert probe_for(raw)("", plugin_outputs=True)["capturing"] is False
-    raw.get_output_status.assert_called_once_with("aitum_multi_output")
-    raw = fake_obs(streaming=False, outputs=plugin)
-    raw.get_output_status.return_value = SimpleNamespace(output_active=True)
-    assert probe_for(raw)("", plugin_outputs=True)["capturing"] is True
-    raw = fake_obs(streaming=False, outputs=plugin)
-    assert probe_for(raw)("")["capturing"] is False
+    assert probe_for(raw)("")["streaming"] is False
     raw.get_output_list.assert_not_called()
+    raw = fake_obs(streaming=True, outputs=plugin)
+    probe_for(raw)("", plugins=True)
+    raw.get_output_list.assert_not_called()
+
+
+def test_the_streamers_own_output_names_are_the_ones_asked():
+    raw = fake_obs(streaming=False, outputs=[{"outputName": "mine"}, {"outputName": "aitum_multi_output_YouTube Output"}])
+    raw.get_output_status.return_value = SimpleNamespace(output_active=True)
+    probe = ObsGuardianProbe(lambda: {}, factory=lambda **_: raw, output_names=lambda: ("mine", "absent"))
+    assert probe("", plugins=True)["streaming"] is True
+    raw.get_output_status.assert_called_once_with("mine")
 
 
 def test_an_unreachable_or_disabled_obs_is_no_reading_and_reconnects_next_time():
@@ -254,10 +303,11 @@ class Harness:
         probe = Mock(side_effect=self.read)
         self.probe = probe
         self.guardian = StreamGuardian(probe, {"switches": switches, "microphone": microphone}, persist=self.saved.append,
-                                       notify=self.notices.append, send=self.send, clock=lambda: self.now)
+                                       notify=self.notices.append, send=self.send, clock=lambda: self.now,
+                                       dispatch=lambda job: job())
 
-    def read(self, microphone, plugin_outputs=False):
-        self.calls.append((microphone, plugin_outputs))
+    def read(self, microphone, scene=False, record=False, plugins=False):
+        self.calls.append((microphone, scene, record, plugins))
         return self.readings.pop(0) if len(self.readings) > 1 else self.readings[0]
 
     def send(self, warnings):
@@ -333,23 +383,95 @@ def test_a_failing_notice_never_stops_the_dock_banner():
 
 
 @pytest.mark.parametrize("current,expected", [
-    (None, UNREACHABLE_SECONDS), (reading(streaming=False, capturing=False), IDLE_SECONDS), (reading(), LIVE_SECONDS)])
+    (reading(streaming=False, capturing=False), IDLE_SECONDS), (reading(), LIVE_SECONDS)])
 def test_checks_are_never_closer_than_five_seconds_and_slow_down_while_idle_or_unreachable(current, expected):
     assert Harness(on("mic_muted")).tick(current) == expected
     assert LIVE_SECONDS >= 5
 
 
-def test_plugin_outputs_are_asked_only_while_a_game_runs_with_the_capture_rule_on():
-    harness = Harness(on("not_recording", "mic_muted"))
-    harness.tick(reading(streaming=False, capturing=False))
-    assert harness.calls[-1] == ("Mic", False)
+def test_each_read_asks_only_for_what_the_switches_on_need():
+    harness = Harness(on("mic_muted"))
+    harness.tick(reading())
+    assert harness.calls[-1] == ("Mic", False, False, True)
+    harness.guardian.settings = {"switches": on("stuck_on_break", "not_recording"), "microphone": "Mic"}
+    harness.tick(reading())
+    assert harness.calls[-1] == ("", True, True, True)
+
+
+def test_the_capture_rule_alone_reads_obs_only_while_a_game_runs():
+    harness = Harness(on("not_recording"))
+    assert harness.tick(reading(streaming=False, capturing=False)) == OFF_SECONDS
+    assert harness.calls == []
+    harness.probe.close.assert_called()
     harness.guardian.on_game_event(live_event(1, key="g1"))
-    assert harness.guardian.game.active_since is not None
     assert harness.tick(reading(streaming=False, capturing=False)) == LIVE_SECONDS
-    assert harness.calls[-1] == ("Mic", True)
+    assert len(harness.calls) == 1
+
+
+def test_an_unreachable_obs_is_retried_soon_and_believed_only_after_three_misses():
+    harness = Harness(on("mic_muted"))
+    assert harness.tick(None) == LIVE_SECONDS
+    assert harness.tick(None) == LIVE_SECONDS
+    assert harness.tick(None) == UNREACHABLE_SECONDS
+    assert harness.tick(reading(muted=True)) == LIVE_SECONDS
+    assert harness.guardian.misses == 0
+
+
+def test_one_failed_read_does_not_end_an_incident_or_repeat_its_notice():
+    harness = Harness(on("mic_muted"))
+    harness.tick(reading(muted=True))
+    harness.tick(reading(muted=True), step=rules.MIC_MUTED_SECONDS)
+    assert harness.guardian.snapshot()["active"] == ["mic_muted"]
+    harness.tick(None, step=30)
+    assert harness.guardian.snapshot()["active"] == ["mic_muted"] and harness.sent[-1] != []
+    harness.tick(reading(muted=True), step=5)
+    assert harness.notices == [MESSAGES["mic_muted"]]
+    for _ in range(3):
+        harness.tick(None)
+    assert harness.guardian.snapshot()["active"] == [] and harness.sent[-1] == []
+
+
+def test_a_microphone_obs_does_not_have_is_reported_so_the_card_can_say_so():
+    harness = Harness(on("mic_muted"))
+    harness.tick(reading(muted=None, mic_missing=True))
+    assert harness.guardian.snapshot()["mic_missing"] is True
+    harness.tick(reading(muted=False))
+    assert harness.guardian.snapshot()["mic_missing"] is False
+    harness.tick(reading(muted=None, mic_missing=True))
+    harness.guardian.settings = {"switches": ALL_OFF, "microphone": "Mic"}
+    harness.tick(reading())
+    assert harness.guardian.snapshot()["mic_missing"] is False
+
+
+def test_turning_every_switch_off_forgets_the_clocks_so_turning_one_on_later_starts_fresh():
+    harness = Harness(on("mic_muted"))
+    harness.tick(reading(muted=True))
+    harness.guardian.settings = {"switches": ALL_OFF, "microphone": "Mic"}
+    assert harness.tick(reading(muted=True)) == OFF_SECONDS
     harness.guardian.settings = {"switches": on("mic_muted"), "microphone": "Mic"}
-    harness.tick(reading(streaming=False, capturing=False))
-    assert harness.calls[-1] == ("Mic", False)
+    harness.tick(reading(muted=True), step=3600)
+    assert harness.notices == [] and harness.guardian.snapshot()["active"] == []
+
+
+def test_a_slow_server_never_delays_the_check_loop_and_only_one_push_is_in_flight():
+    harness = Harness(on("mic_muted"))
+    jobs = []
+    harness.guardian.dispatch = jobs.append
+    harness.tick(reading(muted=True))
+    harness.tick(reading(muted=True), step=rules.MIC_MUTED_SECONDS)
+    assert len(jobs) == 1 and harness.sent == [] and harness.notices == [MESSAGES["mic_muted"]]
+    harness.tick(reading(muted=True), step=HEARTBEAT_SECONDS)
+    assert len(jobs) == 1
+    jobs.pop()()
+    assert len(harness.sent) == 1 and harness.guardian.dock_ok is True and harness.guardian.sending is False
+
+
+def test_the_default_dispatch_pushes_on_its_own_thread():
+    done = threading.Event()
+    guardian = StreamGuardian(Mock(), {"switches": ALL_OFF, "microphone": ""}, persist=Mock(), notify=Mock(), send=lambda _: done.set())
+    guardian.active = {"mic_muted": 1.0}
+    guardian._sync_dock(100.0)
+    assert done.wait(3)
 
 
 def test_a_game_that_starts_with_obs_idle_warns_after_the_grace_and_clears_when_obs_goes_live():
@@ -486,3 +608,23 @@ def test_the_quiet_notice_asks_windows_for_no_sound_and_other_systems_use_the_pl
     muted = SimpleNamespace(_notifications_enabled=lambda: False, _icon=icon, show_notice=Mock())
     TrayUI.show_quiet_notice(muted, "x")
     muted.show_notice.assert_not_called()
+
+
+def test_the_output_names_asked_are_the_streamers_own(service):
+    instance, _, _ = service
+    assert instance._output_names() == ("aitum_multi_output_YouTube Output", "vertical_canvas_stream_YouTube Output")
+    instance.backend.config["output_names"] = {"horizontal": "mine", "portrait": ""}
+    assert instance._output_names() == ("mine",)
+
+
+def test_the_runner_points_stream_notices_at_the_quiet_tray_notice_in_both_modes():
+    import inspect
+    from sc2tools_agent import runner
+    tray, instance = Mock(), SimpleNamespace(notify=None)
+    runner._wire_guardian_notice(instance, tray)
+    assert instance.notify == tray.show_quiet_notice
+    runner._wire_guardian_notice(None, tray)
+    runner._wire_guardian_notice(instance, None)
+    assert instance.notify == tray.show_quiet_notice
+    for runtime in (runner._run_headless_runtime, runner._run_with_gui):
+        assert "_wire_guardian_notice(stream_service, tray)" in inspect.getsource(runtime)

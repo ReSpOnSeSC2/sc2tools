@@ -11,7 +11,8 @@
  * banner behind.
  *
  * @typedef {{ rule: string, since: number }} GuardianWarning
- * @typedef {{ warnings: GuardianWarning[], at: number }} GuardianPublication
+ * @typedef {{ warnings: GuardianWarning[], at: number, ageMs: number }} GuardianPublication
+ * `ageMs` is how long the agent's report has been held, so a Dock that gets a replay ages it by the server clock, not its own.
  */
 
 const RULES = Object.freeze(["mic_muted", "stream_unstable", "not_recording", "stuck_on_break"]);
@@ -57,7 +58,7 @@ class StreamGuardianService {
   publish(userId, raw) {
     const now = this.now();
     this.prune(now);
-    const publication = { warnings: this.sanitize(raw), at: now };
+    const publication = { warnings: this.sanitize(raw), at: now, ageMs: 0 };
     if (publication.warnings.length) this.byUser.set(userId, publication);
     else this.byUser.delete(userId);
     this.io?.to(`user:${userId}`).emit(EVENT, publication);
@@ -76,7 +77,7 @@ class StreamGuardianService {
       this.byUser.delete(userId);
       return null;
     }
-    return held;
+    return { ...held, ageMs: this.now() - held.at };
   }
 
   /** @param {number} now */

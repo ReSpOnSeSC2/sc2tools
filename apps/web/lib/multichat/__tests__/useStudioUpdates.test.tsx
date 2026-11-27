@@ -111,6 +111,14 @@ describe("useStudioUpdates guardian warnings", () => {
     expect(seen).toBeNull();
   });
 
+  it("counts a replayed list from when the server first held it, not from when it arrived", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    render(<GuardianProbe token="t" />);
+    act(() => handlers.get("overlay:guardian")?.({ warnings: [{ rule: "mic_muted", since: 5 }], at: 1, ageMs: 170_000 }));
+    expect((seen as { receivedAt: number }).receivedAt).toBe(830_000);
+    now.mockRestore();
+  });
+
   it("shows an empty list as no warnings and ignores a late event from the previous token", () => {
     const view = render(<GuardianProbe token="old" />);
     const late = handlers.get("overlay:guardian");

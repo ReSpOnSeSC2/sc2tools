@@ -25,5 +25,11 @@ export function readGuardian(raw: unknown): GuardianWarning[] {
   return [...seen.values()];
 }
 
+/** How long the server had held a report when it sent it: older than three minutes counts as gone, so a replay is not made fresh by arriving late. */
+export const readAgeMs = (raw: unknown): number => {
+  const age = raw && typeof raw === "object" ? (raw as { ageMs?: unknown }).ageMs : null;
+  return typeof age === "number" && Number.isFinite(age) && age > 0 ? age : 0;
+};
+
 /** Whole minutes a warning has been active, never below one. */
 export const minutesActive = (since: number, now: number) => Math.max(1, Math.round((now - since) / 60_000));
