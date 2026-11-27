@@ -13,6 +13,10 @@ import threading
 
 import requests
 
+from .title_channel import valid_tag
+
+CHANNEL_STATUSES = {"updated", "unchanged", "skipped", "failed"}
+
 
 class CloudStreamError(ValueError):
     def __init__(self, message, *, http_status=None, connection_invalid=False, pairing_changed=False):
@@ -199,6 +203,25 @@ class CloudStreamingClient:
         return {**{key: value for key, value in row.items() if key in public_fields},
             "connected": True, "titleVerified": bool(verified),
             "titleStatus": "verified" if verified else title_status}
+
+
+    def set_tags(self, platform, tags, previous):
+        """Merge our tags into the channel's; hand-set tags stay."""
+        return self._channel_receipt(platform, "/v1/agent/streaming/tags",
+            {"platform": platform, "tags": tags, "previous": previous})
+
+    def ensure_category(self, platform):
+        """Ask the server to put the channel under StarCraft II if it is elsewhere."""
+        return self._channel_receipt(platform, "/v1/agent/streaming/category", {"platform": platform})
+
+    def _channel_receipt(self, platform, path, body):
+        result = self._request("POST", path, body=body)
+        if (not isinstance(result, dict) or result.get("platform") != platform
+                or result.get("status") not in CHANNEL_STATUSES):
+            raise CloudStreamError("SC2Tools returned an incomplete channel receipt.")
+        added = result.get("added")
+        return {"status": result["status"], "reason": result.get("reason") if isinstance(result.get("reason"), str) else "",
+                "added": [tag for tag in added if valid_tag(tag)] if isinstance(added, list) else []}
 
 
 class CloudTitleAdapter:

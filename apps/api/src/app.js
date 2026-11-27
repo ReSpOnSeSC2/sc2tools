@@ -119,6 +119,7 @@ const { OpponentChannelsCache } = require("./services/opponentChannels");
 const { GameMomentsService } = require("./services/gameMoments");
 const { GameDeskService } = require("./services/gameDesk");
 const { StreamSeriesService } = require("./services/streamSeries");
+const { StreamingChannelService } = require("./services/streamingChannel");
 const { AggregationsService } = require("./services/aggregations");
 const { SessionPolicyService } = require("./services/sessionPolicy");
 const { SessionHistoryService } = require("./services/sessionHistory");
@@ -1621,8 +1622,16 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     auth,
     integrations: services.platformIntegrations,
     streamingTitles: new StreamingTitlesService({ integrations: services.platformIntegrations }),
+    streamingChannel: new StreamingChannelService({ integrations: services.platformIntegrations }),
     titleSession: (userId, gameId) => require("./services/streamTitleSession").streamTitleSession(
       deps.db, services.games, userId, () => services.liveGameBroker.latest(userId), gameId, services.scoutingIdentities,
+      {
+        hasActiveSeries: (owner) => services.streamSeries.hasActive(owner),
+        ladderMaps: async () => {
+          const pool = await services.seasons?.ladderMapPool?.get();
+          return pool ? [...pool.maps, ...pool.teamMaps] : [];
+        },
+      },
     ),
   }));
   if (services.twitchRewards) app.use(SERVICE.ROUTE_PREFIX, buildTwitchRewardsRouter({ auth, rewards: services.twitchRewards }));

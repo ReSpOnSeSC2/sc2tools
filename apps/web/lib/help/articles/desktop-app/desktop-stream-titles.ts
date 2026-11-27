@@ -3,11 +3,11 @@ import type { HelpArticle } from "@/lib/help/types";
 const article: HelpArticle = {
   slug: "desktop-stream-titles",
   title: "Stream titles",
-  summary: "Show your session record, head-to-head record, or both in stream titles at game start and after the match syncs.",
+  summary: "Show your session record, head-to-head record, or both in stream titles at game start and after the match syncs, and set channel tags and the StarCraft II category.",
   category: "desktop-app",
   audience: "all",
   order: 15,
-  keywords: ["title", "stream", "Twitch", "Kick", "YouTube", "MMR", "tokens", "automatic", "quota", "session record", "opponent", "head-to-head", "map", "aka"],
+  keywords: ["title", "stream", "Twitch", "Kick", "YouTube", "MMR", "tokens", "automatic", "quota", "session record", "opponent", "head-to-head", "map", "aka", "tags", "category", "StarCraft II"],
   updated: "2026-11-27",
   body: [
     { type: "paragraph", text: "Open **Streams** in the desktop app. Connect the Twitch, Kick or YouTube accounts you want to control through SC2 Tools. Type a title and check its live preview. **Save title and description** explicitly applies the rendered title through your existing platform connections; YouTube also saves it for future sessions. Per-platform receipts distinguish verified titles from accepted requests whose readback is unavailable." },
@@ -37,6 +37,14 @@ const article: HelpArticle = {
       "Game-start refresh runs once per live one-versus-one match after its current opponent is available. It does not wait for a replay upload or the post-sync ten-minute interval. Unknown aliases, maps and records stay absent, and a late response from a previous match cannot supply the next opponent's title.",
       "Post-game refresh waits for the live replay to finish syncing, then uses that match's opponent and includes its result in the available records. It runs at most once every ten minutes. Replays you watch, resumed replay branches and old imports do not trigger updates. Both refresh options send only changed titles.",
       "Turn off either checkbox and save to stop that kind of automatic request. Unpairing, changing the paired account or choosing advanced local account setup turns automatic refresh off; opt in again after reviewing the account and platform selection.",
+    ] },
+    { type: "heading", text: "Channel tags and the StarCraft II category", anchor: "channel-tags" },
+    { type: "list", items: [
+      "Two more switches sit beside the title options and start off: **Set channel tags at the start of each game** and **Switch the category to StarCraft II when a game starts**. They use Twitch and Kick only, follow the platform selection, and need the same stream-control permission as titles. Saving never changes your channel.",
+      "The tags line shows the exact tags for the game being played before you save. Tags are, in this order: **ViewerGames** in a custom game, **Tournament** while a Series is running, the matchup such as **PvZ**, your race, and your league. A fact that is not known is left out, never guessed.",
+      "Tags you set by hand are kept. Only the tags SC2 Tools wrote for your previous game are replaced, and ours fill the places that remain, up to ten. Tags use letters and digits only, up to 25 characters; a tag that breaks a platform rule is never sent. Kick shows your tags only while you are live, so offline it changes nothing.",
+      "The category changes only when a game starts, only when the channel is not already under StarCraft II, and never back on its own. Whatever you pick afterwards stays until the next game start.",
+      "Tags and category run once per game, after the title. If one fails, the title is unaffected and the Streams page says which platform could not be confirmed. The request is not repeated.",
     ] },
     { type: "paragraph", text: "If a platform request cannot be confirmed, check the platform and its receipt before retrying. The app remembers attempted titles across restarts and does not automatically repeat the same ambiguous request. The existing manual title save remains available. Automatic titles require SC2 Tools connections and a server that supports the private session endpoint." },
   ],

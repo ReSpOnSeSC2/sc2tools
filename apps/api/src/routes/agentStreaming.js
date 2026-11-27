@@ -9,9 +9,10 @@ const { parsePlatform } = require("./platformIntegrations");
  * @param {{auth:import('express').RequestHandler,
  * integrations:import('../services/platformIntegrations').PlatformIntegrationsService,
  * titleSession?:(userId:string, gameId?:string)=>Promise<unknown>,
- * streamingTitles:import('../services/streamingTitles').StreamingTitlesService}} deps
+ * streamingTitles:import('../services/streamingTitles').StreamingTitlesService,
+ * streamingChannel?:import('../services/streamingChannel').StreamingChannelService}} deps
  */
-function buildAgentStreamingRouter({ auth, integrations, streamingTitles, titleSession }) {
+function buildAgentStreamingRouter({ auth, integrations, streamingTitles, streamingChannel, titleSession }) {
   const router = express.Router();
   router.get("/agent/streaming/session", auth, async (req, res, next) => {
     try {
@@ -46,6 +47,10 @@ function buildAgentStreamingRouter({ auth, integrations, streamingTitles, titleS
       res.json(await streamingTitles.updateTitle(userId, body.title, body.platforms));
     } catch (error) { next(safeFailure(error)); }
   });
+  router.post("/agent/streaming/tags", auth, channelHandler(streamingChannel, ["platform", "tags", "previous"],
+    (service, userId, body) => service.setTags(userId, body.platform, body.tags, body.previous ?? [])));
+  router.post("/agent/streaming/category", auth, channelHandler(streamingChannel, ["platform"],
+    (service, userId, body) => service.ensureCategory(userId, body.platform)));
   router.post("/agent/streaming/:platform/connect", auth, async (req, res, next) => {
     try {
       const userId = requireAccount(req);
@@ -58,6 +63,26 @@ function buildAgentStreamingRouter({ auth, integrations, streamingTitles, titleS
     } catch (error) { next(safeFailure(error)); }
   });
   return router;
+}
+
+/** Channel operations answer with a receipt, so a failed tag or category call
+ * never turns into an HTTP error the title path could trip over.
+ * @param {import('../services/streamingChannel').StreamingChannelService|undefined} service
+ * @param {string[]} fields
+ * @param {(service:import('../services/streamingChannel').StreamingChannelService, userId:string, body:Record<string, any>)=>Promise<unknown>} run */
+function channelHandler(service, fields, run) {
+  return async (/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res, /** @type {import('express').NextFunction} */ next) => {
+    try {
+      const userId = requireAccount(req);
+      const body = req.body;
+      if (!service || !body || typeof body !== "object" || Array.isArray(body)
+        || Object.keys(body).some((key) => !fields.includes(key))) {
+        throw new PlatformIntegrationError(400, "stream_channel_request_invalid", "Use only the documented channel fields.");
+      }
+      res.set("Cache-Control", "no-store");
+      res.json(await run(service, userId, body));
+    } catch (error) { next(safeFailure(error)); }
+  };
 }
 
 /** @param {import('express').Request} req */

@@ -142,16 +142,24 @@ class StreamSeriesService {
   async ingest(owner, games) {
     if (!games.length) return;
     this.invalidateForUser(owner);
-    const active = (await this.tokens.list(owner)).filter(t => !t.revokedAt && !("rotationPending" in t && t.rotationPending)).slice(0, 32);
-    if (!active.length) return;
-    const rows = await this.studio.col.find({ studioKey: { $in: active.map(t => t.token) }, "streamSeries.status": "active" },
-      { projection: { _id: 0, studioKey: 1 }, maxTimeMS: 1000 }).limit(32).toArray();
-    for (const row of rows) {
-      const token = String(row.studioKey);
+    for (const token of await this.activeTokens(owner)) {
       try { await this.tokens.withWrite(token, () => this.ingestToken(token, owner, games.slice(0, 50))); }
       catch (error) { if (!UNAVAILABLE.includes(/** @type {any} */ (error)?.code)) throw error; }
     }
   }
+
+  /** Overlay tokens of this owner whose Studio document holds a running Series.
+   * @param {string} owner @returns {Promise<string[]>} */
+  async activeTokens(owner) {
+    const active = (await this.tokens.list(owner)).filter(t => !t.revokedAt && !("rotationPending" in t && t.rotationPending)).slice(0, 32);
+    if (!active.length) return [];
+    const rows = await this.studio.col.find({ studioKey: { $in: active.map(t => t.token) }, "streamSeries.status": "active" },
+      { projection: { _id: 0, studioKey: 1 }, maxTimeMS: 1000 }).limit(32).toArray();
+    return rows.map(row => String(row.studioKey));
+  }
+
+  /** @param {string} owner */
+  async hasActive(owner) { return (await this.activeTokens(owner)).length > 0; }
 
   /** Bounded CAS retry replays the pure reducer over fresh state. Receipts
    * dedupe concurrent ingest and are retained until an explicit new Start.

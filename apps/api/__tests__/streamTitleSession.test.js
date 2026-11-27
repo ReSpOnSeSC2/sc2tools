@@ -50,7 +50,7 @@ test("projects only title-safe current-match fields from the existing owner cach
   const snapshot = jest.fn(() => envelope);
   const result = await streamTitleSession(db, games, "owner", snapshot);
   expect(result.currentMatch).toEqual({ gameKey: "current-game", opponent: "Barcode", alias: "KnownPlayer",
-    map: "Alcyone LE", race: "Protoss", h2h: { wins: 3, losses: 2 } });
+    map: "Alcyone LE", race: "Protoss", opponentRace: "Terran", h2h: { wins: 3, losses: 2 } });
   expect(JSON.stringify(result)).not.toMatch(/PRIVATE|S2-1|toon|opponentNotes|recentGames|Previous map/);
   expect(envelope).toEqual(before);
   expect(snapshot).toHaveBeenCalledTimes(1);
@@ -126,7 +126,7 @@ test("no live map, identity history or decided record is invented", () => {
   const envelope = liveMatch();
   delete envelope.map;
   delete envelope.streamerHistory;
-  expect(streamTitleMatch(envelope)).toEqual({ gameKey: "current-game", opponent: "Barcode", alias: "", race: "Protoss" });
+  expect(streamTitleMatch(envelope)).toEqual({ gameKey: "current-game", opponent: "Barcode", alias: "", race: "Protoss", opponentRace: "Terran" });
   envelope.opponent.revealedName = "Direct identity";
   expect(streamTitleMatch(envelope).alias).toBe("Direct identity");
 });
@@ -137,7 +137,7 @@ test.each([
   const envelope = liveMatch();
   Object.assign(envelope.streamerHistory, patch);
   expect(streamTitleMatch(envelope)).toEqual({ gameKey: "current-game", opponent: "Barcode", alias: "",
-    map: "Alcyone LE", race: "Protoss" });
+    map: "Alcyone LE", race: "Protoss", opponentRace: "Terran" });
 });
 
 test("empty or duplicated aliases and missing win-rate samples stay distinct", () => {

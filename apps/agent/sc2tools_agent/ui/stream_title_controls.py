@@ -28,6 +28,18 @@ class StreamTitleControls:
         self.on_game_start.setToolTip("Optional and off by default. Uncheck and save to stop game-start title updates.")
         self.on_game_start.toggled.connect(self.edited)
         layout.addWidget(self.on_game_start)
+        self.channel_tags = QtWidgets.QCheckBox("Set channel tags at the start of each game")
+        self.channel_tags.setChecked(False)
+        self.channel_tags.setToolTip("Optional and off by default. Tags you set yourself are kept; ours fill the places that remain.")
+        self.channel_tags.toggled.connect(self.edited)
+        layout.addWidget(self.channel_tags)
+        self.tag_preview = page._label("Tags: none yet.", True)
+        layout.addWidget(self.tag_preview)
+        self.category_guard = QtWidgets.QCheckBox("Switch the category to StarCraft II when a game starts")
+        self.category_guard.setChecked(False)
+        self.category_guard.setToolTip("Optional and off by default. Changes the category only at a game start, only when it is not StarCraft II, and never back.")
+        self.category_guard.toggled.connect(self.edited)
+        layout.addWidget(self.category_guard)
         self.enabled = QtWidgets.QCheckBox("Refresh titles after each synced game")
         self.enabled.setChecked(False)
         self.enabled.setToolTip("Optional post-sync updates, independent of game-start updates. Uncheck and save to stop.")
@@ -67,6 +79,7 @@ class StreamTitleControls:
     def configure(self):
         self.page.job({"action": "configure_title_automation", "template": self.page.title_input.text(),
             "enabled": self.enabled.isChecked(), "on_game_start": self.on_game_start.isChecked(),
+            "channel_tags": self.channel_tags.isChecked(), "category_guard": self.category_guard.isChecked(),
             "platforms": {name: control.isChecked() for name, control in self.platforms.items()}})
 
     def update_preview(self, *_args):
@@ -85,6 +98,8 @@ class StreamTitleControls:
         return [
             (self.enabled, settings.get("enabled") is True),
             (self.on_game_start, settings.get("on_game_start") is True),
+            (self.channel_tags, settings.get("channel_tags") is True),
+            (self.category_guard, settings.get("category_guard") is True),
             *((control, platforms.get(name, name != "youtube")) for name, control in self.platforms.items()),
         ]
 
@@ -97,6 +112,9 @@ class StreamTitleControls:
         status = "Automatic title refresh is off."
         if modes:
             status = "Automatic titles refresh " + " and ".join(modes) + "."
+        channel = [text for text, on in (("tags", settings.get("channel_tags")), ("category", settings.get("category_guard"))) if on is True]
+        if channel:
+            status += " Channel " + " and ".join(channel) + " update at game start."
         options_changed = any(control.isChecked() != checked for control, checked in self._saved_controls(settings))
         template_changed = self.page.title_dirty and (self.enabled.isChecked() or self.on_game_start.isChecked())
         if options_changed or template_changed:
@@ -112,14 +130,22 @@ class StreamTitleControls:
                 control.setChecked(checked)
                 control.blockSignals(blocked)
         self._update_activation(settings)
+        self.tag_preview.setText(self._tag_text(settings.get("tag_preview")))
         self.note.setText(settings.get("message", "Saving automatic title settings applies them to future games.")
+            + (" " + settings["channel_message"] if settings.get("channel_message") else "")
             + " Game-start refresh runs once per live game. Post-sync refresh runs at most once every 10 minutes. Only changed titles are sent. Session uses your synced wins and losses across the session. H2H uses your confirmed record against the opponent. Matchup rates and peak use at most 512 recorded ladder games from 90 days.")
         self.update_preview()
         self.buttons()
 
+    @staticmethod
+    def _tag_text(tags):
+        if not tags:
+            return "Tags: race, matchup and league tags appear here once a game is loading. Tags you set yourself are kept."
+        return "Tags we add for this game: " + ", ".join(tags) + ". Tags you set yourself are kept; ours fill the places that remain."
+
     def buttons(self):
         usable = not self.page.busy and self.page.state.get("account_mode") == "sc2tools"
-        for control in (self.enabled, self.on_game_start, self.record_style, self.match_template, self.save, self.refresh, *self.platforms.values()):
+        for control in (self.enabled, self.on_game_start, self.channel_tags, self.category_guard, self.record_style, self.match_template, self.save, self.refresh, *self.platforms.values()):
             control.setEnabled(usable)
 
 
