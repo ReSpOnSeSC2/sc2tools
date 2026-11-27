@@ -23,7 +23,7 @@ const article: HelpArticle = {
     { type: "heading", text: "For Twitch and Kick", anchor: "copy" },
     { type: "paragraph", text: "In the Dock's Clips panel press **Show game chapters**, then **Copy game chapters**. The times count from the stream start you marked, the same as the clip moments. Paste the lines into a video description or a Kick or Twitch panel." },
     { type: "heading", text: "In your OBS recording", anchor: "obs" },
-    { type: "paragraph", text: "In the desktop app's Streams page, turn on **Add a chapter marker to the OBS recording at game start**. Each game then adds a chapter such as `Game 4 · PvZ` to the file OBS is recording. It needs OBS 30.2 or newer recording to Hybrid MP4; with an older OBS, another format or no recording it quietly does nothing. A player that shows chapters, such as VLC, lists them." },
+    { type: "paragraph", text: "In the desktop app's Streams page, turn on **Add OBS recording chapters at game start**. Each game then adds a chapter such as `Game 4 · PvZ` to the file OBS is recording. It needs OBS 30.2 or newer recording to Hybrid MP4; with an older OBS, another format or no recording it quietly does nothing. A player that shows chapters, such as VLC, lists them." },
   ],
   related: ["stream-dock", "stream-reports", "desktop-stream-titles"],
 };
