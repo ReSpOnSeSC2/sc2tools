@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "randomizer",
   title: "Build randomizer: let a draw pick your build",
   summary:
-    "Set a pool for each matchup, roll from the desktop card without OBS, and track your private Randomizer challenge.",
+    "Set a pool for each matchup, roll from the desktop card without OBS, see the draw on your own screen, and track your private Randomizer challenge.",
   category: "builds",
   audience: "player",
   signedInOnly: true,
@@ -19,13 +19,16 @@ const article: HelpArticle = {
     "weights",
     "custom weights",
     "opening gateway draw",
+    "opening pair",
+    "first unit",
+    "desktop card",
     "1 gate",
     "2 gate",
     "sound effects",
     "live preview",
     "roll now",
   ],
-  updated: "2026-11-11",
+  updated: "2026-11-27",
   body: [
     { type: "callout", tone: "info", title: "Agent 0.24.1 and later", text: "Update the [Windows agent](/download) for the check-in Randomize control. The separate widget handles animated reveals and audio. See [Desktop Companion](/help/desktop-companion)." },
     {
@@ -62,7 +65,17 @@ const article: HelpArticle = {
     { type: "heading", text: "Opening Gateway draw (Protoss)", anchor: "gateway-draw" },
     {
       type: "paragraph",
-      text: "The Randomizer widget can follow a 1 Gate or 2 Gate build reveal with one opening unit (1 Gate) or two (2 Gate). Each build keeps its own unit odds. Companion only shows the saved build pick; the animated opening-unit sequence belongs to the widget and website preview.",
+      text: "The Randomizer widget can follow a 1 Gate or 2 Gate build reveal with one opening unit (1 Gate) or two (2 Gate). Each build keeps its own unit odds. The animated opening-unit sequence belongs to the widget and website preview.",
+    },
+    { type: "heading", text: "The draw on your own screen", anchor: "desktop-draw" },
+    {
+      type: "list",
+      items: [
+        "From agent 0.26.0 the loading card shows the saved pick's draw as a still, under the pick and in the **Locked in** bar after **Play it**: the build's first steps, then **First unit** for a 1 Gate build or **Opening pair** for a 2 Gate build.",
+        "The card repeats the widget's draw for that game instead of rolling again, so OBS and your screen always show the same units.",
+        "Steps come from your custom build's reference build order, or its older step list. Catalog builds store no steps, so the card shows their name and units only. Terran, Zerg and builds without a Gateway draw show the build and its steps.",
+        "The still has no animation, sound or timer, and the card repaints only when its content changes.",
+      ],
     },
     { type: "heading", text: "Try it before you go live", anchor: "preview" },
     { type: "paragraph", text: "Reveals respect your device's Reduce motion setting and announce the chosen build to screen readers." },
@@ -82,6 +95,7 @@ const article: HelpArticle = {
         "A build you declared yourself takes priority. A retry, refresh or second connected display reuses the first saved pick for the game. The widget reveals the saved selection instead of choosing a second build.",
         "The drawn build is marked **Rolled** and is suggested as your plan after the game. It only counts toward a build's record once you confirm the check-in.",
         "Every eligible build keeps its configured chance in the draw. Sprite-based reveals animate up to 12 contenders so large pools stay manageable while you play; the saved result and its opening-unit draw remain unchanged.",
+        "The check-in cards never animate: each repaints only when its content changes. While no overlay panel is open, the agent no longer checks several times a second which window has focus.",
       ],
     },
     { type: "heading", text: "If it doesn't spin", anchor: "troubleshooting" },

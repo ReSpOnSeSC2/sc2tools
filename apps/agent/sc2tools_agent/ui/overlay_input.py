@@ -16,6 +16,9 @@ WS_EX_LAYERED = 0x00080000
 INPUT_STYLES = WS_EX_TRANSPARENT | WS_EX_LAYERED
 REFRESH_FLAGS = 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020
 NATIVE_RECHECK_SECONDS = 1.0
+POLL_MS = 150
+"""Focus poll while a display-only overlay is up; Qt has no event for
+another app's window taking focus."""
 
 
 class _StyleApi:
@@ -233,10 +236,11 @@ def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, 
             self._updating = False
             if self._application_state_signal is not None:
                 self._application_state_signal.connect(self._foreground_changed)
+            # Polls focus only while a surface is up. Every target is watched
+            # from the first refresh, so its Show event restarts the poll.
             self.timer = QtCore.QTimer(self)
-            self.timer.setInterval(150)
+            self.timer.setInterval(POLL_MS)
             self.timer.timeout.connect(self.refresh)
-            self.timer.start()
             self.refresh()
 
         def _invalidate(self, widget):
@@ -304,10 +308,6 @@ def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, 
                 return
             self._updating = True
             try:
-                try:
-                    locked = self._foreground() is True
-                except Exception:
-                    locked = False
                 targets = list(panels_provider())
                 for widget in [*targets, window]:
                     if widget not in self._watched:
@@ -315,22 +315,23 @@ def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, 
                         widget.installEventFilter(self)
                 if compact_provider():
                     targets.append(window)
+                visible = [widget for widget in targets if widget.isVisible()]
+                locked = bool(visible) and self._game_has_focus()
                 current = {}
                 applied_widgets = set()
                 now = self._clock()
-                for widget in targets:
-                    if widget.isVisible():
-                        hwnd = int(widget.winId())
-                        current[hwnd] = widget
-                        # Scouting is a real, scrollable workspace. Its native
-                        # mouse-activation handler keeps game focus while its
-                        # contents receive wheel/click input normally.
-                        widget_locked = locked and widget.property("gameInteractiveOverlay") is not True
-                        applied = self._apply_native_state(hwnd, widget, widget_locked, now)
-                        if applied:
-                            applied_widgets.add(widget)
-                            if widget.property("gameClickThrough") is not widget_locked:
-                                widget.setProperty("gameClickThrough", widget_locked)
+                for widget in visible:
+                    hwnd = int(widget.winId())
+                    current[hwnd] = widget
+                    # Scouting is a real, scrollable workspace. Its native
+                    # mouse-activation handler keeps game focus while its
+                    # contents receive wheel/click input normally.
+                    widget_locked = locked and widget.property("gameInteractiveOverlay") is not True
+                    applied = self._apply_native_state(hwnd, widget, widget_locked, now)
+                    if applied:
+                        applied_widgets.add(widget)
+                        if widget.property("gameClickThrough") is not widget_locked:
+                            widget.setProperty("gameClickThrough", widget_locked)
                 for hwnd, widget in self._handles.items():
                     if hwnd not in current:
                         self._native_states.pop(hwnd, None)
@@ -344,6 +345,7 @@ def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, 
                             current[hwnd] = widget
                 self._handles = current
                 self._sync_scouting_controls(locked)
+                self._poll_while(bool(current))
             except RuntimeError:
                 self._native_states.clear()
                 self._native.restore_all()
@@ -354,6 +356,19 @@ def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, 
                         pass
             finally:
                 self._updating = False
+
+        def _game_has_focus(self):
+            try:
+                return self._foreground() is True
+            except Exception:
+                return False
+
+        def _poll_while(self, active):
+            """Nothing to keep click-through, or to release, means no poll."""
+            if active and not self.timer.isActive():
+                self.timer.start()
+            elif not active and self.timer.isActive():
+                self.timer.stop()
 
         def _sync_scouting_controls(self, locked):
             if scouting_buttons_provider is None or QtWidgets is None:

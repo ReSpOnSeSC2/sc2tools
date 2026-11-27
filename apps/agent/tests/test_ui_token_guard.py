@@ -17,6 +17,8 @@ CONVERTED = {
     "activity_log.py": None,
     "brand_mark.py": None,
     "build_checkin_cards.py": None,
+    "build_checkin_draw.py": None,
+    "build_checkin_postgame.py": None,
     "build_checkin_settings.py": None,
     "build_checkin_widgets.py": None,
     "build_checkin_window.py": None,

@@ -14,6 +14,7 @@ This package is Qt-free:
 * ``controller`` — the single-threaded actor that owns every policy.
 * ``matching`` / ``render`` / ``records`` — its pure helpers and state.
 * ``links`` — the sc2tools.com pages the cards open.
+* ``randomizer_draw`` — the still of a Randomizer pick on the loading card.
 * ``wiring`` — the one call ``runner`` makes to start it.
 """
 

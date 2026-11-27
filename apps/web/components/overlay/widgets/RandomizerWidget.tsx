@@ -28,6 +28,7 @@ import type {
   RandomizerSpinEvent,
 } from "@/components/overlay/types";
 import type {
+  MatchupConfig,
   MatchupKey,
   RandomizerConfig,
   RandomizerBuild,
@@ -132,17 +133,7 @@ export function RandomizerWidget({
         return () => window.clearTimeout(handle);
       }
     }
-    // Game-key seeding keeps the build and unit pair identical if the same
-    // overlay is refreshed or rendered by both the composite and dedicated
-    // Browser Sources. Test fires carry a unique nonce so every click still
-    // produces a fresh outcome.
-    const configuredWinner = savedPick ? mc.builds.find((build) => build.id === savedPick.key) : null;
-    const winner: RandomizerBuild | undefined = savedPick ? {
-      ...configuredWinner, id: savedPick.key, name: savedPick.name, source: savedPick.source,
-      race: matchup[0] === "P" ? "Protoss" : matchup[0] === "T" ? "Terran" : "Zerg",
-      weight: configuredWinner?.weight ?? 1,
-    } : undefined;
-    const outcome = spinResult(matchup, mc, mulberry32(seedFromString(spinKey)), undefined, winner);
+    const outcome = gameSpin(matchup, mc, spinKey, savedPick);
     if (!outcome) return;
     consumedStarts.current.add(triggerKey);
     spinIdRef.current += 1;
@@ -193,6 +184,30 @@ export function RandomizerWidget({
       />
     </div>
   );
+}
+
+/**
+ * The reveal for one spin key. A saved pick wins and keeps its pool entry's
+ * opening-unit settings. Game-key seeding keeps the build and unit pair
+ * identical if the same overlay is refreshed or rendered by both the composite
+ * and dedicated Browser Sources, and lets the desktop loading card show the
+ * same units (agent `build_checkin/randomizer_draw.py`, pinned by
+ * `lib/randomizer/__tests__/unitDrawParity.json`). Test fires carry a unique
+ * nonce so every click still produces a fresh outcome.
+ */
+export function gameSpin(
+  matchup: MatchupKey,
+  config: MatchupConfig,
+  spinKey: string,
+  savedPick: RandomizerIntentGate["randomizer"] | null,
+): SpinOutcome | null {
+  const configuredWinner = savedPick ? config.builds.find((build) => build.id === savedPick.key) : null;
+  const winner: RandomizerBuild | undefined = savedPick ? {
+    ...configuredWinner, id: savedPick.key, name: savedPick.name, source: savedPick.source,
+    race: matchup[0] === "P" ? "Protoss" : matchup[0] === "T" ? "Terran" : "Zerg",
+    weight: configuredWinner?.weight ?? 1,
+  } : undefined;
+  return spinResult(matchup, config, mulberry32(seedFromString(spinKey)), undefined, winner);
 }
 
 /** Use the current envelope; a cached live payload may belong to the last game. */

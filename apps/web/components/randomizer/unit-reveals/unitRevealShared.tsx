@@ -84,6 +84,12 @@ export function useAnimatedUnitPicks({
 
     let tick = 0;
     const interval = window.setInterval(() => {
+      // Once every Gateway shows its winner a tick changes nothing on screen,
+      // but would still re-render the reveal through its hold in OBS.
+      if (lockedRef.current.every(Boolean)) {
+        window.clearInterval(interval);
+        return;
+      }
       tick += 1;
       setDisplayed((current) =>
         current.map((unit, index) => {

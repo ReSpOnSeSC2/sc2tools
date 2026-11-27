@@ -272,3 +272,19 @@ def test_randomizer_context_rejects_stale_replay_and_unresolved_sources(patch):
     source = snapshot()
     source["liveGame"].update(patch)
     assert randomizer_context(source, now=1800000000) is None
+
+
+def test_a_periodic_read_with_nothing_new_repaints_nothing(panel):
+    widget, state, app = panel
+    first = widget.pool.topLevelItem(0)
+    shown = []
+    widget.status.setText = lambda text, original=widget.status.setText: (shown.append(text), original(text))
+    for _ in range(3):
+        widget._refresh_visible()
+        wait_until(app, lambda: not widget._busy)
+    assert widget.pool.topLevelItem(0) is first
+    assert "Loading widget pool…" not in shown
+    state["options"]["builds"].append({"key": "third", "name": "Gateway expand"})
+    widget._refresh_visible()
+    wait_until(app, lambda: widget.pool.topLevelItemCount() == 3)
+    assert widget.pool.topLevelItem(2).text(0) == "Gateway expand"

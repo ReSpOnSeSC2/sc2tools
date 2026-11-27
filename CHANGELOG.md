@@ -5135,6 +5135,21 @@ release preparation, not a signed or published 0.24.9 installer.
   clears; it never appears on your stream and never plays a sound. OBS is read
   every few seconds while you are live, and only now and then while you are not. Agent 0.26.0. See ADR 0106.
 
+### Randomizer on your own screen
+
+- The desktop loading card shows a Randomizer pick's draw as a still, under the
+  pick and in the Locked in bar: the build's first steps, then its opening
+  Gateway unit, or both units of a 2 Gate build. It repeats the OBS widget's
+  draw for that game, so the stream and your screen always agree, and it has no
+  animation, sound or timer of its own. Catalog builds store no steps, so they
+  show their name and units only. Agent 0.26.0. See ADR 0107.
+- Lighter while you play: the end card's "Checking your replay" bar no longer
+  animates (it repainted the card about 180 times a second), the agent stops
+  asking Windows which window has focus while no overlay panel is open, the
+  Companion's Randomizer page no longer redraws an unchanged pool every 3
+  seconds, and the widget's opening-unit reveal stops re-rendering once both
+  Gateways lock.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

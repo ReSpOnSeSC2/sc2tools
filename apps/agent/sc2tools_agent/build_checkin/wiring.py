@@ -12,10 +12,12 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from ..companion import CompanionClient
 from ..state import AgentState, save_state
 from .controller import BuildCheckinController
 from .links import new_build_url, web_queue_url
 from .models import CheckinPrefs, parse_prefs
+from .randomizer_draw import RandomizerDrawSource
 from .view import BuildCheckinView
 
 _log = logging.getLogger("sc2tools_agent.build_checkin")
@@ -83,6 +85,11 @@ def start_build_checkin(
         bind = getattr(view, "bind_controller", None)
         if callable(bind):
             bind(controller)
+        bind_draws = getattr(view, "bind_randomizer_draws", None)
+        if callable(bind_draws) and connection_provider is not None:
+            # The loading card's still of a saved pick reads account data
+            # the way the Companion does, so it shares that client's checks.
+            bind_draws(RandomizerDrawSource(CompanionClient(connection_provider).action))
         controller.attach(bus)
         controller.start()
     except Exception:  # noqa: BLE001

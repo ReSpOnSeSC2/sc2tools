@@ -5,7 +5,7 @@ from xml.etree import ElementTree
 
 import pytest
 
-from sc2tools_agent.ui import palette, theme
+from sc2tools_agent.ui import checkin_theme, palette, theme
 from tests._contrast import contrast, luminance
 
 RACES = ("protoss", "terran", "zerg")
@@ -215,7 +215,7 @@ def declared_colour(style, selector, properties):
 @pytest.mark.parametrize("name", list(theme.SKINS))
 def test_check_in_cards_keep_a_filled_primary_and_every_field_outlined_at_3_to_1(name):
     skin = theme.SKINS[name]
-    card = theme.card_stylesheet(skin)
+    card = checkin_theme.card_stylesheet(skin)
     fill = declared_colour(card, "QPushButton#checkinPrimary", BACKGROUND)
     assert fill == skin.accent
     assert contrast(fill, theme.SURFACE) >= 3, fill
@@ -233,11 +233,11 @@ def test_check_in_cards_keep_a_filled_primary_and_every_field_outlined_at_3_to_1
 @pytest.mark.parametrize("name", list(theme.SKINS))
 def test_floating_card_chips_and_selected_scouting_rows_keep_readable_contrast(name):
     skin = theme.SKINS[name]
-    card = theme.card_stylesheet(skin)
+    card = checkin_theme.card_stylesheet(skin)
     preview = "QLabel#checkinPreview"
     assert contrast(declared_colour(card, preview, ("color",)), declared_colour(card, preview, BACKGROUND)) >= 4.5
     for tone in ("rolled", "usual", "reason", "suggested"):
-        background, foreground = theme.checkin_chip_colours(skin, tone)
+        background, foreground = checkin_theme.checkin_chip_colours(skin, tone)
         assert contrast(background, foreground) >= 4.5
     assert contrast(skin.focus, skin.selected) >= 3
     for selector in ("QPushButton#checkinPrimary", "QPushButton#checkinLink",

@@ -9,7 +9,7 @@ import pytest
 pytest.importorskip("PySide6")
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from sc2tools_agent.ui.companion_build_chain import BATCH_SIZE, TIME_RANGES, _entity_name, _event_time, build_build_chain
+from sc2tools_agent.ui.companion_build_chain import BATCH_SIZE, TIME_RANGES, _event_time, build_build_chain, entity_name
 
 
 @pytest.fixture
@@ -310,10 +310,10 @@ def test_invalid_times_never_become_guessed_timestamps(value):
 
 
 def test_known_upgrade_names_are_readable_without_changing_icon_lookup():
-    assert _entity_name("BlinkTech") == "Blink"
-    assert _entity_name("ShieldWall") == "Combat Shield"
-    assert _entity_name("PunisherGrenades") == "Concussive Shells"
-    assert _entity_name("CyberneticsCore") == "Cybernetics Core"
+    assert entity_name("BlinkTech") == "Blink"
+    assert entity_name("ShieldWall") == "Combat Shield"
+    assert entity_name("PunisherGrenades") == "Concussive Shells"
+    assert entity_name("CyberneticsCore") == "Cybernetics Core"
 
 
 def test_limits_are_explicit_and_density_does_not_silently_discard_events(chain):

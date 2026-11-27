@@ -1,0 +1,430 @@
+{
+  "$comment": "The opening Gateway units the OBS widget reveals for a saved pick (gameSpin in RandomizerWidget.tsx). The agent repeats this seeded draw for the desktop card (build_checkin/randomizer_draw.py). Change the engine and this file together, then the agent.",
+  "seeds": [
+    {
+      "text": "PvP:Foo|Me|1790000000000",
+      "seed": 3143014076,
+      "values": [
+        0.06946023507043719,
+        0.2722378666512668,
+        0.21388998674228787,
+        0.8302758964709938
+      ]
+    },
+    {
+      "text": "\u00d6lmeister \ud83c\udfb2",
+      "seed": 1337202974,
+      "values": [
+        0.7363913743756711,
+        0.557166620856151,
+        0.5042876692023128,
+        0.5131281812209636
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "name": "a PvP build without saved unit settings draws two Gateways from all four units",
+      "matchup": "PvP",
+      "gameKey": "Foo|Me|1790000000000",
+      "buildKey": "pvp-2-gate-expand",
+      "config": {
+        "matchups": {
+          "PvP": {
+            "enabled": true,
+            "builds": [
+              {
+                "id": "pvp-2-gate-expand",
+                "name": "PvP - 2 Gate Expand",
+                "race": "Protoss",
+                "source": "catalog",
+                "weight": 1
+              }
+            ]
+          }
+        }
+      },
+      "units": [
+        "zealot",
+        "adept"
+      ]
+    },
+    {
+      "name": "a 1 Gate name draws one unit even in PvP",
+      "matchup": "PvP",
+      "gameKey": "Bar|Me|1790000000123",
+      "buildKey": "pvp-1-gate-robo",
+      "config": {
+        "matchups": {
+          "PvP": {
+            "enabled": true,
+            "builds": [
+              {
+                "id": "pvp-1-gate-robo",
+                "name": "PvP - 1 Gate Robo",
+                "race": "Protoss",
+                "source": "catalog",
+                "weight": 1
+              }
+            ]
+          }
+        }
+      },
+      "units": [
+        "sentry"
+      ]
+    },
+    {
+      "name": "custom weights and a saved single Gateway",
+      "matchup": "PvT",
+      "gameKey": "Baz|Me|1790000004567",
+      "buildKey": "custom:stalker-expand",
+      "config": {
+        "matchups": {
+          "PvT": {
+            "enabled": true,
+            "builds": [
+              {
+                "id": "custom:stalker-expand",
+                "name": "Stalker expand",
+                "race": "Protoss",
+                "source": "custom",
+                "weight": 1,
+                "openingUnits": {
+                  "gateCount": 1,
+                  "useCustomWeights": true,
+                  "units": [
+                    {
+                      "id": "stalker",
+                      "weight": 3
+                    },
+                    {
+                      "id": "adept",
+                      "weight": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "units": [
+        "stalker"
+      ]
+    },
+    {
+      "name": "ids are case-insensitive, a zero weight never lands and order is canonical",
+      "matchup": "PvZ",
+      "gameKey": "Qux|Me|1790000009999",
+      "buildKey": "pvz-2-gate",
+      "config": {
+        "matchups": {
+          "PvZ": {
+            "enabled": true,
+            "builds": [
+              {
+                "id": "pvz-2-gate",
+                "name": "PvZ 2 Gate",
+                "race": "Protoss",
+                "source": "catalog",
+                "weight": 1,
+                "openingUnits": {
+                  "gateCount": 2,
+                  "useCustomWeights": true,
+                  "units": [
+                    {
+                      "id": "Adept",
+                      "weight": 5
+                    },
+                    {
+                      "id": "sentry",
+                      "weight": 0
+                    },
+                    {
+                      "id": "ZEALOT",
+                      "weight": 2
+                    },
+                    {
+                      "id": "carrier",
+                      "weight": 9
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "units": [
+        "zealot",
+        "zealot"
+      ]
+    },
+    {
+      "name": "all-zero custom weights fall back to equal odds",
+      "matchup": "PvP",
+      "gameKey": "Zero|Me|1790000000001",
+      "buildKey": "pvp-zero",
+      "config": {
+        "matchups": {
+          "PvP": {
+            "enabled": true,
+            "builds": [
+              {
+                "id": "pvp-zero",
+                "name": "PvP Zero",
+                "race": "Protoss",
+                "source": "catalog",
+                "weight": 1,
+                "openingUnits": {
+                  "gateCount": 2,
+                  "useCustomWeights": true,
+                  "units": [
+                    {
+                      "id": "zealot",
+                      "weight": 0
+                    },
+                    {
+                      "id": "stalker",
+                      "weight": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "units": [
+        "zealot",
+        "stalker"
+      ]
+    },
+    {
+      "name": "the last pool entry for a build wins",
+      "matchup": "PvP",
+      "gameKey": "Dup|Me|1790000000002",
+      "buildKey": "pvp-dup",
+      "config": {
+        "matchups": {
+          "PvP": {
+            "enabled": true,
+            "builds": [
+              {
+                "id": "pvp-dup",
+                "name": "PvP Dup",
+                "race": "Protoss",
+                "source": "catalog",
+                "weight": 1,
+                "openingUnits": {
+                  "gateCount": 1,
+                  "units": [
+                    {
+                      "id": "zealot",
+                      "weight": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "pvp-dup",
+                "name": "PvP Dup",
+                "race": "Protoss",
+                "source": "catalog",
+                "weight": 1,
+                "openingUnits": {
+                  "gateCount": 2,
+                  "units": [
+                    {
+                      "id": "sentry",
+                      "weight": 1
+                    },
+                    {
+                      "id": "adept",
+                      "weight": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "units": [
+        "sentry",
+        "sentry"
+      ]
+    },
+    {
+      "name": "a non-ASCII game key hashes by UTF-16 code unit",
+      "matchup": "PvP",
+      "gameKey": "\u00d6lmeister \ud83c\udfb2|Me|1790000000003",
+      "buildKey": "pvp-2-gate-expand",
+      "config": {
+        "matchups": {
+          "PvP": {
+            "enabled": true,
+            "builds": [
+              {
+                "id": "pvp-2-gate-expand",
+                "name": "PvP - 2 Gate Expand",
+                "race": "Protoss",
+                "source": "catalog",
+                "weight": 1
+              }
+            ]
+          }
+        }
+      },
+      "units": [
+        "stalker",
+        "zealot"
+      ]
+    },
+    {
+      "name": "the unit switch off draws nothing",
+      "matchup": "PvP",
+      "gameKey": "Foo|Me|1790000000000",
+      "buildKey": "pvp-2-gate-expand",
+      "config": {
+        "matchups": {
+          "PvP": {
+            "enabled": true,
+            "unitRandomizerEnabled": false,
+            "builds": [
+              {
+                "id": "pvp-2-gate-expand",
+                "name": "PvP - 2 Gate Expand",
+                "race": "Protoss",
+                "source": "catalog",
+                "weight": 1
+              }
+            ]
+          }
+        }
+      },
+      "units": []
+    },
+    {
+      "name": "a matchup that is off draws nothing",
+      "matchup": "PvP",
+      "gameKey": "Foo|Me|1790000000000",
+      "buildKey": "pvp-2-gate-expand",
+      "config": {
+        "matchups": {
+          "PvP": {
+            "enabled": false,
+            "builds": [
+              {
+                "id": "pvp-2-gate-expand",
+                "name": "PvP - 2 Gate Expand",
+                "race": "Protoss",
+                "source": "catalog",
+                "weight": 1
+              }
+            ]
+          }
+        }
+      },
+      "units": []
+    },
+    {
+      "name": "a saved pick outside the pool draws nothing",
+      "matchup": "PvP",
+      "gameKey": "Foo|Me|1790000000000",
+      "buildKey": "pvp-gone",
+      "config": {
+        "matchups": {
+          "PvP": {
+            "enabled": true,
+            "builds": [
+              {
+                "id": "pvp-2-gate-expand",
+                "name": "PvP - 2 Gate Expand",
+                "race": "Protoss",
+                "source": "catalog",
+                "weight": 1
+              }
+            ]
+          }
+        }
+      },
+      "units": []
+    },
+    {
+      "name": "an empty unit selection draws nothing",
+      "matchup": "PvP",
+      "gameKey": "Foo|Me|1790000000000",
+      "buildKey": "pvp-none",
+      "config": {
+        "matchups": {
+          "PvP": {
+            "enabled": true,
+            "builds": [
+              {
+                "id": "pvp-none",
+                "name": "PvP None",
+                "race": "Protoss",
+                "source": "catalog",
+                "weight": 1,
+                "openingUnits": {
+                  "gateCount": 2,
+                  "units": []
+                }
+              }
+            ]
+          }
+        }
+      },
+      "units": []
+    },
+    {
+      "name": "a pool entry of another race draws nothing",
+      "matchup": "PvT",
+      "gameKey": "Foo|Me|1790000000000",
+      "buildKey": "pvt-odd",
+      "config": {
+        "matchups": {
+          "PvT": {
+            "enabled": true,
+            "builds": [
+              {
+                "id": "pvt-odd",
+                "name": "PvT Odd",
+                "race": "Terran",
+                "source": "catalog",
+                "weight": 1
+              }
+            ]
+          }
+        }
+      },
+      "units": []
+    },
+    {
+      "name": "other races never draw units",
+      "matchup": "TvZ",
+      "gameKey": "Foo|Me|1790000000000",
+      "buildKey": "tvz-reaper",
+      "config": {
+        "matchups": {
+          "TvZ": {
+            "enabled": true,
+            "unitRandomizerEnabled": true,
+            "builds": [
+              {
+                "id": "tvz-reaper",
+                "name": "TvZ Reaper",
+                "race": "Terran",
+                "source": "catalog",
+                "weight": 1
+              }
+            ]
+          }
+        }
+      },
+      "units": []
+    }
+  ]
+}

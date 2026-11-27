@@ -131,3 +131,40 @@ def test_pool_save_cannot_cross_accounts_between_preference_read_and_write():
     with pytest.raises(CompanionError, match="pairing changed"):
         client.action({"action": "randomizer_settings", "matchup": "PvZ", "enabled": True})
     assert calls == ["GET"]
+
+
+def test_randomizer_draw_reads_unit_settings_for_protoss_and_a_custom_builds_steps(client_state):
+    client, state = client_state
+    build = {"slug": "my build", "steps": [{"supply": 14, "action": "Pylon"}]}
+    base_transport = client._transport
+
+    def transport(method, url, **kwargs):
+        if url.endswith("/v1/custom-builds/my%20build"):
+            state["calls"].append((method, url, kwargs))
+            return response(build)
+        if "/v1/custom-builds/" in url:
+            state["calls"].append((method, url, kwargs))
+            return response({}, 404)
+        return base_transport(method, url, **kwargs)
+
+    client._transport = transport
+    assert client.action({"action": "randomizer_draw", "matchup": "PvZ", "customSlug": "my build"}) == {
+        "config": state["config"], "build": build}
+    assert client.action({"action": "randomizer_draw", "matchup": "TvT", "customSlug": "gone"}) == {
+        "config": None, "build": {}}
+    assert client.action({"action": "randomizer_draw", "matchup": "ZvT", "customSlug": None}) == {
+        "config": None, "build": None}
+    assert [(method, url.rsplit("/v1/", 1)[1]) for method, url, _ in state["calls"]] == [
+        ("GET", "me/preferences/randomizer"), ("GET", "custom-builds/my%20build"), ("GET", "custom-builds/gone")]
+
+
+@pytest.mark.parametrize("request_body", [
+    {"action": "randomizer_draw", "matchup": "PvR", "customSlug": None},
+    {"action": "randomizer_draw", "matchup": "PvZ", "customSlug": ""},
+    {"action": "randomizer_draw", "matchup": "PvZ", "customSlug": "x" * 201},
+])
+def test_randomizer_draw_refuses_a_bad_matchup_or_slug_before_any_request(client_state, request_body):
+    client, state = client_state
+    with pytest.raises(CompanionError):
+        client.action(request_body)
+    assert state["calls"] == []

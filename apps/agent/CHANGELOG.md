@@ -24,6 +24,19 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   OBS every few seconds while live, only now and then to notice going live, and
   makes no request when every switch is off. A stream that runs only through an
   Aitum or vertical-canvas output counts as live.
+- The loading card shows a Randomizer pick's draw as a still, under the pick
+  and in the **Locked in** bar: the build's first steps, then **First unit**
+  for a 1 Gate build or **Opening pair** for a 2 Gate build. It repeats the OBS
+  widget's draw for that game instead of rolling again, and has no animation,
+  sound or timer of its own. Catalog builds store no steps.
+
+### Fixed
+- The end card's "Checking your replay" bar no longer animates; it repainted
+  the whole card about 180 times a second.
+- Overlay click-through stops checking which window has focus while no overlay
+  panel is open (it asked about 400 times a minute).
+- Companion's Randomizer page no longer rebuilds an unchanged pool, or flashes
+  its loading line, on each 3-second refresh.
 
 ## 0.25.11
 
