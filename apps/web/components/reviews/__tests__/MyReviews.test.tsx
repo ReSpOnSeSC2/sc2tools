@@ -123,9 +123,13 @@ it("appends request pages without duplicating cards and preserves them while ret
 
 it("resets the written list on Most upvoted and appends its independently sorted pages", async () => {
   const written = (commentId: string, snippet: string, upvotes: number) => ({ ...summary().answered[0], commentId, snippet, upvotes });
-  harness.apiCall.mockImplementation(async (_token, path: string) => path.includes("cursor=")
-    ? { items: [written("TOP2", "Second most upvoted", 8)], nextCursor: null }
-    : { items: [written("TOP1", "Most useful answer", 30)], nextCursor: "top-next" });
+  // Back on Newest, the list shows the summary's page at once and SWR refreshes it about a frame later.
+  // Answer that refresh with Newest's own page, as the API does, so the result can't depend on when it lands.
+  harness.apiCall.mockImplementation(async (_token, path: string) => path.includes("sort=new")
+    ? { items: summary().answered, nextCursor: null }
+    : path.includes("cursor=")
+      ? { items: [written("TOP2", "Second most upvoted", 8)], nextCursor: null }
+      : { items: [written("TOP1", "Most useful answer", 30)], nextCursor: "top-next" });
   mount();
   fireEvent.click(screen.getByRole("radio", { name: "Most upvoted" }));
   expect(screen.queryByText("Scout at 4:30.")).toBeNull();
@@ -137,6 +141,7 @@ it("resets the written list on Most upvoted and appends its independently sorted
   fireEvent.click(screen.getByRole("radio", { name: "Newest" }));
   expect(await screen.findByText("Scout at 4:30.")).toBeTruthy();
   expect(screen.queryByText("Most useful answer")).toBeNull();
+  expect(within(screen.getByRole("list", { name: "Reviews you've written" })).getAllByRole("listitem")).toHaveLength(1);
 });
 
 it("can load beyond a privacy-filtered empty written page", async () => {
