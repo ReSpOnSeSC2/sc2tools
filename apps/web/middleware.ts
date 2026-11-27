@@ -6,6 +6,7 @@ import { isRoomObsPath, ROOM_OBS_PATH } from "./lib/matchRoomRoute";
 import { isPublicReplayReference, legacyReplayArchivePath } from "./lib/replayRouteAccess";
 import { isPublicStatusRequest, statusHostRedirect } from "./lib/publicStatusRoute";
 import { isBalanceToolPath } from "./lib/balance/routes";
+import { HUMDINGERS_FILE, HUMDINGERS_PATH } from "./lib/humdingers";
 
 const PERMANENT_REDIRECT = 308;
 const SESSIONLESS_PAGES = new Set(["/wrapped", "/wrapped/opengraph-image", "/career", "/arcade/scout"]);
@@ -35,6 +36,16 @@ function matchRoomObsResponse(req: NextRequest): NextResponse {
       "X-Robots-Tag": "noindex, nofollow",
     },
   });
+}
+
+/**
+ * The game's clean link serves its static file and keeps the address bar
+ * clean. It needs no session, so it never waits on a Clerk handshake.
+ */
+function humdingersRewrite(req: NextRequest): NextResponse {
+  const file = req.nextUrl.clone();
+  file.pathname = HUMDINGERS_FILE;
+  return NextResponse.rewrite(file);
 }
 
 const isProtected = createRouteMatcher([
@@ -82,6 +93,7 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const statusRedirect = statusHostRedirect(req.url);
   if (statusRedirect) return NextResponse.redirect(statusRedirect, PERMANENT_REDIRECT);
   const pathname = req.nextUrl.pathname;
+  if (pathname === HUMDINGERS_PATH) return humdingersRewrite(req);
   if (isRoomObsPath(pathname)) return matchRoomObsResponse(req);
   // Static replay views work without a Clerk handshake.
   if (isPublicStatusRequest(pathname) || isBalanceToolPath(pathname) || SESSIONLESS_PAGES.has(pathname)
