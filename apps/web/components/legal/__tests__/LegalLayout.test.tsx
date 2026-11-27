@@ -17,6 +17,8 @@ it("provides a table of contents that points to every real policy section", () =
   expect(container.querySelector(".prose")).toBeNull();
   expect(screen.getByRole("heading", { name: /The short version/ })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Backups", level: 2 }).id).toBe("backups");
+  // What's New links the Humdingers privacy notice to this anchor.
+  expect(container.querySelector("#humdingers")?.textContent).toBe("Humdingers");
   expect(screen.getByRole("link", { name: "Link to section: Backups" }).getAttribute("href")).toBe("#backups");
   expect(screen.getByRole("button", { name: "Cookie settings" })).toBeTruthy();
 });

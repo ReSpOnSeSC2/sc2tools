@@ -1,5 +1,14 @@
 [
   {
+    "id": "humdingers-play-sessions-privacy",
+    "date": "2026-11-27",
+    "title": "Humdingers play sessions are kept with your account",
+    "summary": "The privacy policy changed on November 27, 2026. When you play Humdingers, each visit is now kept with your account as a play session for 90 days, and SC2 Tools administrators can see who played and for how long.",
+    "audience": "website",
+    "highlights": ["A session records when you started, your active play time, the chapter you reached and whether you saved.", "Administrators also see a summary of your Humdingers saves: in-game play time, chapter and when you last saved.", "Play sessions are included when you export or delete your account in Settings → Backups & data."],
+    "link": { "href": "/legal/privacy#humdingers", "label": "Read the privacy policy" }
+  },
+  {
     "id": "humdingers",
     "date": "2026-11-26",
     "title": "Humdingers, the game I'm making",

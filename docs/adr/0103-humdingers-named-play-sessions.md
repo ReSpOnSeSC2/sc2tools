@@ -48,7 +48,10 @@ longer stay anonymous. The anonymous daily totals remain.
 5. The privacy policy (last updated November 27, 2026) says that sessions
    are kept with the account for 90 days and that administrators can see who
    played, with their sessions and a summary of their saves. The home-page
-   card says that saves and play time are kept with the account.
+   card says that saves and play time are kept with the account, and a What's
+   New entry (`humdingers-play-sessions-privacy`) links to the policy's
+   Humdingers section. It is not `major`, so it does not go to every inbox:
+   most accounts never played the game.
 
 ## Consequences
 
