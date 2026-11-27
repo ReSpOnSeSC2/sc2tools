@@ -30,6 +30,13 @@ describe("curated product updates", () => {
     expect(entry?.link).toEqual({ href: "/play/humdingers", label: "Play Humdingers (about 10 MB)" });
     expect(entry?.major).toBe(true);
   });
+  it("points the Humdingers privacy notice at the policy section without an inbox announcement", () => {
+    // Most accounts never played Humdingers, so the notice stays in What's New
+    // and the changelog instead of every inbox.
+    const entry = WHATS_NEW.find(item => item.id === "humdingers-play-sessions-privacy");
+    expect(entry?.link).toEqual({ href: "/legal/privacy#humdingers", label: "Read the privacy policy" });
+    expect(entry?.major).toBeUndefined();
+  });
   it("keeps every inbox announcement within the 280-character notification body", () => {
     // A "major" entry's summary becomes the notification body, and BODY_MAX in
     // apps/api/src/services/notifications.js cuts longer bodies mid-word.

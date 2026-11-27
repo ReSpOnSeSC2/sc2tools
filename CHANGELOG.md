@@ -31,8 +31,9 @@ corresponding GitHub Release.
   last play, furthest chapter and in-game play time from their saves; a
   player's session count opens their individual sessions. The game page keeps
   each visit with the account as a play session for 90 days, exported and
-  deleted with the account, and the privacy policy says so. The home-page
-  Humdingers card moved down, after "Everything included". See ADR 0103.
+  deleted with the account, and the privacy policy says so; a What's New
+  entry links to the policy's Humdingers section. The home-page Humdingers
+  card moved down, after "Everything included". See ADR 0103.
 
 ### Agent release notes
 
