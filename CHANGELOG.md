@@ -5150,6 +5150,14 @@ release preparation, not a signed or published 0.24.9 installer.
   seconds, and the widget's opening-unit reveal stops re-rendering once both
   Gateways lock.
 
+### Live streams
+
+- A public page at `/live` lists every StarCraft II stream that is live now on Twitch
+  and Kick, with title, channel, language and viewers. Filter by platform and
+  language, and order by viewers or put small channels first. Cards open the
+  channel on its own site, with no embedded players. The server keeps one copy
+  for about a minute, so your browser never contacts a platform. See ADR 0108.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

@@ -183,6 +183,8 @@ const { LeagueTargetsService } = require("./services/leagueTargets");
 const { buildGoalsRouter } = require("./routes/goals");
 const { LadderMetaService } = require("./services/ladderMeta");
 const { buildLadderMetaRouter } = require("./routes/ladderMeta");
+const { LiveStreamsService } = require("./services/liveStreams");
+const { buildLiveStreamsRouter } = require("./routes/liveStreams");
 const { PublicProfileService } = require("./services/publicProfile");
 const { buildPublicProfileRouter } = require("./routes/publicProfile");
 const { PublicPlayerService } = require("./services/publicPlayer");
@@ -576,6 +578,10 @@ function makeServices(deps, clerk, adminClerkIds) {
   // served PUBLICLY by routes/ladderMeta.js for the analyzer's Ladder
   // Pulse (the old /meta page now redirects to the /guides pages).
   const ladderMeta = new LadderMetaService(deps.db, { logger: deps.logger });
+  const liveStreams = new LiveStreamsService({
+    config: deps.config.platformIntegrations,
+    log: deps.logger,
+  });
   const scoutingIdentities = new ScoutingIdentitiesService(deps.db);
   const scoutingForecast = new ScoutingForecastService(ladderMeta);
   // Skill Fingerprint — replay-derived build, game-length, and matchup
@@ -1197,6 +1203,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     fingerprintPopulationCalibration,
     skillFingerprint,
     ladderMeta,
+    liveStreams,
     scoutingIdentities,
     scoutingForecast,
     guideSamples,
@@ -1568,6 +1575,8 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildLadderMetaRouter({ ladderMeta: services.ladderMeta }),
   );
+  // Live StarCraft II streams (Twitch and Kick), public and server-cached.
+  app.use(SERVICE.ROUTE_PREFIX, buildLiveStreamsRouter({ liveStreams: services.liveStreams }));
   // SC2 Tools Guides — public, SEO-facing build guides over the nightly
   // guide_stats aggregate. No router-level auth (only /guides/me/* applies
   // it per route); every /guides path 404s while GUIDES_ENABLED is off.

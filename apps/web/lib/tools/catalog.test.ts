@@ -6,7 +6,7 @@ describe("public tool directory", () => {
 
   it("shows the released public tools regardless of optional rollouts", () => {
     const base = hrefs({ browser: false, guides: false, reviews: false });
-    expect(base).toEqual(expect.arrayContaining(["/arcade", "/arcade/scout", "/match", "/balance", "/balance/claim", "/permit"]));
+    expect(base).toEqual(expect.arrayContaining(["/arcade", "/arcade/scout", "/match", "/balance", "/balance/claim", "/permit", "/live"]));
     for (const path of ["/try", "/try#balance-court", "/career", "/wrapped", "/guides", "/reviews"]) expect(base).not.toContain(path);
   });
 
