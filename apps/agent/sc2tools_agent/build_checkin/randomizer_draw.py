@@ -210,22 +210,32 @@ def _gate_count(opening: Dict[str, Any], matchup: str, build_name: str) -> int:
     return infer_gate_count(matchup, build_name)
 
 
-def overlay_config(config: Any, matchup: str, options: Any) -> Any:
-    """``config`` as the overlay serves it to the widget (``overlayRandomizerConfig.js``).
+def _field(value: Any, key: str) -> Any:
+    """``value[key]`` when ``value`` is an object, else nothing."""
+    return value.get(key) if isinstance(value, dict) else None
 
-    In an enabled matchup each pool entry the account still offers
-    (``GET /v1/build-intents/options``) takes the build's current name and
-    source and the matchup's race; an entry no longer offered is dropped.
-    """
-    matchups = config.get("matchups") if isinstance(config, dict) else None
-    pool = matchups.get(matchup) if isinstance(matchups, dict) else None
-    if not isinstance(pool, dict) or pool.get("enabled") is not True:
-        return config
-    rows = options.get("builds") if isinstance(options, dict) else None
-    offered = {
+
+def _offered_builds(options: Any) -> Dict[str, Dict[str, Any]]:
+    """The account's builds by key (``GET /v1/build-intents/options``); a later duplicate wins."""
+    rows = _field(options, "builds")
+    return {
         row["key"]: row for row in (rows if isinstance(rows, list) else ())
         if isinstance(row, dict) and isinstance(row.get("key"), str)
     }
+
+
+def overlay_config(config: Any, matchup: str, options: Any) -> Any:
+    """``config`` as the overlay serves it to the widget (``overlayRandomizerConfig.js``).
+
+    In an enabled matchup each pool entry the account still offers takes the
+    build's current name and source and the matchup's race; an entry no
+    longer offered is dropped.
+    """
+    matchups = _field(config, "matchups")
+    pool = _field(matchups, matchup)
+    if not isinstance(pool, dict) or pool.get("enabled") is not True:
+        return config
+    offered = _offered_builds(options)
     builds = pool.get("builds")
     served = [
         {**build, "name": offered[build["id"]].get("name"), "source": offered[build["id"]].get("source"),
@@ -238,8 +248,7 @@ def overlay_config(config: Any, matchup: str, options: Any) -> Any:
 
 def _drawn_entry(config: Any, key: DrawKey) -> Optional[Dict[str, Any]]:
     """The pool entry whose units the widget draws for ``key``, if it draws any."""
-    matchups = config.get("matchups") if isinstance(config, dict) else None
-    matchup_config = matchups.get(key.matchup) if isinstance(matchups, dict) else None
+    matchup_config = _field(_field(config, "matchups"), key.matchup)
     if not key.matchup.startswith("P") or not isinstance(matchup_config, dict):
         return None
     if matchup_config.get("enabled") is not True or matchup_config.get("unitRandomizerEnabled") is False:
