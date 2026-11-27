@@ -6,7 +6,8 @@
     "summary": "Besides StarCraft: Brood War and StarCraft II, the only games I've ever been this passionate about are EarthBound on the SNES and Mother 3. So I'm making a spiritual successor. Worlds 1 and 2 are playable free in your browser, on phone or desktop. Watch the demo or start a New Game.",
     "audience": "website",
     "highlights": ["Play on a phone with touch controls, or on a computer with a keyboard or gamepad.", "Open it from the home page or the Arcade tab. No account needed.", "It's about a 10 MB download. Not affiliated with Nintendo."],
-    "link": { "href": "/play/humdingers", "label": "Play Humdingers (about 10 MB)" }
+    "link": { "href": "/play/humdingers", "label": "Play Humdingers (about 10 MB)" },
+    "major": true
   },
   {
     "id": "find-all-tools",
