@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { overlayRandomizerConfig } from "../../../../api/src/services/overlayRandomizerConfig";
 import { deriveSpinKey, gameSpin } from "@/components/overlay/widgets/RandomizerWidget";
 import { sanitizeRandomizerConfig } from "../config";
 import { mulberry32, seedFromString } from "../engine";
@@ -9,7 +10,9 @@ import fixture from "./unitDrawParity.json";
  * The desktop loading card repeats the widget's seeded opening-unit draw in
  * the agent (build_checkin/randomizer_draw.py, tested against this same
  * fixture by tests/test_randomizer_draw.py), so a stream and the card always
- * show the same Gateway units for a game.
+ * show the same Gateway units for a game. Each case starts from the stored
+ * pool and the builds the account offers, and goes through the overlay's own
+ * config step first, as the widget's config does.
  */
 function matchupOf(value: string): MatchupKey {
   if (!isMatchupKey(value)) throw new Error(`Not a matchup: ${value}`);
@@ -23,9 +26,11 @@ describe("the widget's seeded opening-unit draw", () => {
     expect(values.map(() => next())).toEqual(values);
   });
 
-  it.each(fixture.cases)("$name", (entry) => {
+  it.each(fixture.cases)("$name", async (entry) => {
     const matchup = matchupOf(entry.matchup);
-    const config = sanitizeRandomizerConfig(entry.config).matchups[matchup];
+    const offered = { forMatchup: async () => entry.options };
+    const served = await overlayRandomizerConfig(offered, "streamer", entry.config);
+    const config = sanitizeRandomizerConfig(served).matchups[matchup];
     const source = entry.buildKey.startsWith("custom:") ? "custom" : "catalog";
     const spin = gameSpin(matchup, config, `${matchup}:${entry.gameKey}`, {
       key: entry.buildKey, name: "Saved pick", source,

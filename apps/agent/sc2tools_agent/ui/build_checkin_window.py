@@ -222,9 +222,14 @@ class BuildCheckinHost:
             window.refresh_randomizer_draw()
 
     def randomizer_draw(self, game_key: Optional[str], build_key: Optional[str]) -> Optional[Any]:
-        """The still for this game's saved pick, once it has been read."""
+        """The still for this game's saved pick, once it has been read.
+
+        Nothing while the Randomizer is turned off, in the strip or the
+        Locked in bar alike.
+        """
         draw = self._randomizer_draw
-        if draw is None or draw.game_key != game_key or draw.build_key != build_key:
+        if (not self._randomizer_enabled or draw is None
+                or draw.game_key != game_key or draw.build_key != build_key):
             return None
         return draw
 

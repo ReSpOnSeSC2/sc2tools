@@ -12,7 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest  # noqa: E402
 
 pytest.importorskip("PySide6")
-from PySide6 import QtCore  # noqa: E402
+from PySide6 import QtCore, QtGui  # noqa: E402
 
 from sc2tools_agent.build_checkin.models import LOCKED_IN, RANDOMIZER_ROLLED, RandomizerStripModel  # noqa: E402
 from sc2tools_agent.build_checkin.randomizer_draw import DrawStep, RandomizerDraw  # noqa: E402
@@ -99,11 +99,41 @@ def test_updates_keep_the_draw_and_a_reroll_drops_it(host) -> None:
     assert not window.strip_draw.isVisibleTo(window)
 
 
-def test_turning_the_randomizer_off_takes_the_draw_with_the_strip(host) -> None:
+def test_turning_the_randomizer_off_takes_the_draw_from_the_strip_and_the_bar(host) -> None:
     window = rolled(host)
-    host.set_feature_gates({"randomizer": False, "preGameSelector": True, "postGameSelector": True})
+    gates = {"randomizer": False, "preGameSelector": True, "postGameSelector": True}
+    host.set_feature_gates(gates)
     assert not window.strip.isVisibleTo(window)
     assert not window.strip_draw.isVisibleTo(window)
+    # The row the widget rolled stays marked, and playing it collapses the card.
+    host.dispatch("update_loading", (loading_model(
+        matchup="PvP", randomizer=ROLLED, collapsed=True, locked_key=PICK,
+        locked_label=LOCKED_IN.format(name="PvP - 2 Gate Expand"),
+    ),))
+    assert window.bar.isVisibleTo(window)
+    assert not window.bar_draw.isVisibleTo(window)
+    host.set_feature_gates({**gates, "randomizer": True})
+    assert window.bar_draw.isVisibleTo(window), "turning it back on shows the draw already read"
+
+
+def test_screen_readers_hear_the_steps_themselves(host) -> None:
+    steps = rolled(host).strip_draw.steps
+    spoken = QtGui.QAccessible.queryAccessibleInterface(steps)
+    assert spoken.text(QtGui.QAccessible.Text.Name) == steps.text()
+    assert spoken.text(QtGui.QAccessible.Text.Description) == "First steps of the drawn build"
+
+
+def test_a_draw_arriving_after_the_card_shows_grows_the_card_to_fit(host) -> None:
+    host.dispatch("show_loading", (loading_model(matchup="PvP", randomizer=ROLLED),))
+    window = host.window(LOADING)
+    before = window.content_scroll.height()
+    host.dispatch("show_randomizer_draw", (PAIR,))
+    assert window.content_scroll.height() > before
+    assert window.content_scroll.verticalScrollBar().maximum() == 0
+    viewport = window.content_scroll.viewport()
+    for control in (window.strip_draw.units, window.not_now, window.dont_ask):
+        top = control.mapTo(viewport, QtCore.QPoint()).y()
+        assert 0 <= top and top + control.height() <= viewport.height(), (control.text(), top, viewport.height())
 
 
 def test_the_still_has_no_timer_or_animation_of_its_own(host) -> None:

@@ -22,6 +22,7 @@ from sc2tools_agent.build_checkin.randomizer_draw import (
     mulberry32,
     normalize,
     opening_units,
+    overlay_config,
     seed_from_string,
 )
 
@@ -33,6 +34,8 @@ KEY = DrawKey(game_key="Foo|Me|1790000000000", matchup="PvP", build_key="pvp-2-g
 POOL = {"matchups": {"PvP": {"enabled": True, "builds": [
     {"id": "pvp-2-gate-expand", "name": "PvP - 2 Gate Expand", "race": "Protoss"},
 ]}}}
+OFFERED = {"builds": [{"key": "pvp-2-gate-expand", "name": "PvP - 2 Gate Expand", "source": "catalog"}]}
+ANSWER = {"config": POOL, "options": OFFERED}
 
 
 @pytest.mark.parametrize("seed", FIXTURE["seeds"], ids=lambda seed: seed["text"])
@@ -45,7 +48,8 @@ def test_the_generator_matches_the_widget_value_for_value(seed: Dict[str, Any]) 
 @pytest.mark.parametrize("case", FIXTURE["cases"], ids=lambda case: case["name"])
 def test_the_units_match_the_widget_for_every_fixture_case(case: Dict[str, Any]) -> None:
     key = DrawKey(game_key=case["gameKey"], matchup=case["matchup"], build_key=case["buildKey"])
-    assert list(opening_units(case["config"], key)) == case["units"]
+    served = overlay_config(case["config"], case["matchup"], case["options"])
+    assert list(opening_units(served, key)) == case["units"]
 
 
 def test_the_gateway_count_follows_the_build_name_then_the_matchup() -> None:
@@ -53,6 +57,33 @@ def test_the_gateway_count_follows_the_build_name_then_the_matchup() -> None:
     assert infer_gate_count("PvP", "PvP 1 Gateway Robo") == 1
     assert infer_gate_count("PvP", "PvP - Stargate") == 2
     assert infer_gate_count("PvZ", "PvZ - 12 Gate") == 1
+
+
+def test_the_widget_draws_from_the_pool_as_the_overlay_serves_it() -> None:
+    stored = {"version": 2, "matchups": {
+        "PvP": {"enabled": True, "builds": [
+            {"id": "kept", "name": "Old name", "race": "Terran", "source": "catalog", "weight": 3},
+            {"id": "gone", "name": "Retired", "race": "Protoss"},
+            "not a build",
+        ]},
+        "PvZ": {"enabled": False, "builds": [{"id": "gone", "name": "Retired", "race": "Protoss"}]},
+    }}
+    offered = {"builds": [{"key": "kept", "name": "1 Gate Kept", "source": "custom"}, {"name": "No key"}]}
+    served = overlay_config(stored, "PvP", offered)
+    assert served["matchups"]["PvP"] == {"enabled": True, "builds": [
+        {"id": "kept", "name": "1 Gate Kept", "race": "Protoss", "source": "custom", "weight": 3},
+    ]}
+    assert served["matchups"]["PvZ"] is stored["matchups"]["PvZ"] and served["version"] == 2
+    assert overlay_config(stored, "PvZ", offered) is stored, "a matchup that is off is served as stored"
+    assert overlay_config(stored, "PvP", None)["matchups"]["PvP"]["builds"] == []
+    crowded = {"matchups": {"PvP": {"enabled": True, "builds": [{"id": "kept", "name": "x"}] * 501}}}
+    assert overlay_config(crowded, "PvP", offered)["matchups"]["PvP"]["builds"] == []
+
+
+def test_javascript_spaces_count_between_the_number_and_gate() -> None:
+    for code in (0xA0, 0x2009, 0x3000, 0xFEFF):
+        assert infer_gate_count("PvZ", f"PvZ 2{chr(code)}Gate Blink") == 2, hex(code)
+    assert infer_gate_count("PvP", f"PvP 1{chr(0x85)}Gate") == 2, "U+0085 is no JavaScript space"
 
 
 def sum_left_to_right(values: List[float]) -> float:
@@ -111,7 +142,8 @@ def test_a_draw_combines_the_units_and_the_custom_steps() -> None:
     config = {"matchups": {"PvP": {"enabled": True, "builds": [
         {"id": "custom:two-gate", "name": "My 2 Gate", "race": "Protoss"},
     ]}}}
-    answer = {"config": config, "build": {"steps": [{"supply": 14, "action": "Pylon"}]}}
+    answer = {"config": config, "options": {"builds": [{"key": "custom:two-gate", "name": "My 2 Gate", "source": "custom"}]},
+              "build": {"steps": [{"supply": 14, "action": "Pylon"}]}}
     draw = draw_for(custom, answer)
     assert draw == RandomizerDraw(KEY.game_key, "custom:two-gate", (DrawStep("Pylon", None, "14"),), ("Zealot", "Adept"))
     assert draw_for(KEY, {"config": None, "build": None}).empty
@@ -140,7 +172,7 @@ def test_the_source_reads_once_per_saved_pick_and_delivers_the_still() -> None:
     reads: List[Dict[str, Any]] = []
     delivered: List[RandomizerDraw] = []
     starts = Starts()
-    source = RandomizerDrawSource(lambda request: reads.append(request) or {"config": POOL}, start=starts)
+    source = RandomizerDrawSource(lambda request: reads.append(request) or ANSWER, start=starts)
     source.request(card(), delivered.append)
     source.request(card(), delivered.append)
     starts.run()
@@ -182,7 +214,7 @@ def test_a_failed_read_is_tried_once_more_and_an_empty_draw_is_not_shown() -> No
 def test_a_read_for_a_replaced_pick_is_dropped() -> None:
     delivered: List[RandomizerDraw] = []
     starts = Starts()
-    source = RandomizerDrawSource(lambda _request: {"config": POOL}, start=starts)
+    source = RandomizerDrawSource(lambda _request: ANSWER, start=starts)
     source.request(card(), delivered.append)
     source.request(card(game_key="Next|Me|1790000009999"), delivered.append)
     starts.run()

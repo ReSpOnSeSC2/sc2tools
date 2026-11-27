@@ -148,14 +148,17 @@ def test_randomizer_draw_reads_unit_settings_for_protoss_and_a_custom_builds_ste
         return base_transport(method, url, **kwargs)
 
     client._transport = transport
-    assert client.action({"action": "randomizer_draw", "matchup": "PvZ", "customSlug": "my build"}) == {
-        "config": state["config"], "build": build}
+    drawn = client.action({"action": "randomizer_draw", "matchup": "PvZ", "customSlug": "my build"})
+    assert drawn["config"] == state["config"] and drawn["build"] == build
+    assert [row["name"] for row in drawn["options"]["builds"]] == ["Canonical name", "My build"]
     assert client.action({"action": "randomizer_draw", "matchup": "TvT", "customSlug": "gone"}) == {
-        "config": None, "build": {}}
+        "config": None, "options": None, "build": {}}
     assert client.action({"action": "randomizer_draw", "matchup": "ZvT", "customSlug": None}) == {
-        "config": None, "build": None}
+        "config": None, "options": None, "build": None}
     assert [(method, url.rsplit("/v1/", 1)[1]) for method, url, _ in state["calls"]] == [
-        ("GET", "me/preferences/randomizer"), ("GET", "custom-builds/my%20build"), ("GET", "custom-builds/gone")]
+        ("GET", "me/preferences/randomizer"), ("GET", "build-intents/options"),
+        ("GET", "custom-builds/my%20build"), ("GET", "custom-builds/gone")]
+    assert state["calls"][1][2]["params"] == {"matchup": "PvZ"}
 
 
 @pytest.mark.parametrize("request_body", [

@@ -42,7 +42,9 @@ class RandomizerDrawStill(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(theme.SPACE_2XS)
         self.steps = plain_label("", "checkinDrawSteps", wrap=True)
-        self.steps.setAccessibleName("First steps of the drawn build")
+        # A label's accessible name is its text unless one is set, so the
+        # steps themselves are read; the description only adds context.
+        self.steps.setAccessibleDescription("First steps of the drawn build")
         layout.addWidget(self.steps)
         self.units = plain_label("", "checkinDrawUnits", wrap=True)
         layout.addWidget(self.units)

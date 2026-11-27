@@ -9,6 +9,8 @@ seeded draw exactly, once per game and build. ``tests/test_randomizer_draw.py``
 and the web engine tests pin both sides to the same fixture,
 ``apps/web/lib/randomizer/__tests__/unitDrawParity.json``.
 
+The widget draws from the pool as the overlay serves it, not as it is
+stored: ``overlay_config`` repeats that step (``overlayRandomizerConfig.js``).
 Only the parts of the widget's spin that decide the units are repeated:
 the build pick and the reveal style each take one value from the seeded
 generator before the units, whatever they pick, so they are skipped.
@@ -35,9 +37,20 @@ VALUES_BEFORE_UNITS = 2
 READ_ATTEMPTS = 2
 """A failed read is tried again on the next card update, once."""
 
+MAX_POOL = 500
+"""The overlay serves no pool from a longer stored list."""
+RACES = {"P": "Protoss", "T": "Terran", "Z": "Zerg"}
+
 _UINT32 = 0xFFFFFFFF
-# inferGatewayCount in lib/randomizer/gatewayUnits.ts; JavaScript's \b is ASCII.
-_GATE_COUNT = re.compile(r"(?:^|\b)([12])\s*[- ]?\s*gate(?:way)?s?\b", re.IGNORECASE | re.ASCII)
+JS_SPACE = "\t\n\x0b\x0c\r " + "".join(map(chr, (
+    0xA0, 0x1680, *range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF,
+)))
+"""What JavaScript's ``\\s`` matches and ``trim()`` removes; Python's sets differ."""
+# inferGatewayCount in lib/randomizer/gatewayUnits.ts. JavaScript's \b and
+# case folding are ASCII; its \s is the wider JS_SPACE.
+_GATE_COUNT = re.compile(
+    r"(?:^|\b)([12])[{0}]*[- ]?[{0}]*gate(?:way)?s?\b".format(JS_SPACE), re.IGNORECASE | re.ASCII,
+)
 
 
 @dataclass(frozen=True)
@@ -153,7 +166,7 @@ def _number(raw: Dict[str, Any], key: str) -> float:
 
 def _is_protoss(race: Any) -> bool:
     """``coerceRace(race) === "Protoss"``."""
-    text = race.strip() if isinstance(race, str) else ""
+    text = race.strip(JS_SPACE) if isinstance(race, str) else ""
     return bool(text) and text[0].upper() == "P"
 
 
@@ -184,7 +197,7 @@ def _pool_entry(matchup_config: Dict[str, Any], build_key: str) -> Optional[Dict
     builds = matchup_config.get("builds")
     entry = None
     for build in builds if isinstance(builds, list) else ():
-        named = isinstance(build, dict) and isinstance(build.get("name"), str) and build["name"].strip()
+        named = isinstance(build, dict) and isinstance(build.get("name"), str) and build["name"].strip(JS_SPACE)
         if named and build.get("id") == build_key:
             entry = build
     return entry
@@ -195,6 +208,32 @@ def _gate_count(opening: Dict[str, Any], matchup: str, build_name: str) -> int:
     if type(gates) in (int, float) and gates in (1, 2):
         return int(gates)
     return infer_gate_count(matchup, build_name)
+
+
+def overlay_config(config: Any, matchup: str, options: Any) -> Any:
+    """``config`` as the overlay serves it to the widget (``overlayRandomizerConfig.js``).
+
+    In an enabled matchup each pool entry the account still offers
+    (``GET /v1/build-intents/options``) takes the build's current name and
+    source and the matchup's race; an entry no longer offered is dropped.
+    """
+    matchups = config.get("matchups") if isinstance(config, dict) else None
+    pool = matchups.get(matchup) if isinstance(matchups, dict) else None
+    if not isinstance(pool, dict) or pool.get("enabled") is not True:
+        return config
+    rows = options.get("builds") if isinstance(options, dict) else None
+    offered = {
+        row["key"]: row for row in (rows if isinstance(rows, list) else ())
+        if isinstance(row, dict) and isinstance(row.get("key"), str)
+    }
+    builds = pool.get("builds")
+    served = [
+        {**build, "name": offered[build["id"]].get("name"), "source": offered[build["id"]].get("source"),
+         "race": RACES[matchup[0]]}
+        for build in (builds if isinstance(builds, list) and len(builds) <= MAX_POOL else ())
+        if isinstance(build, dict) and isinstance(build.get("id"), str) and build["id"] in offered
+    ]
+    return {**config, "matchups": {**matchups, matchup: {**pool, "builds": served}}}
 
 
 def _drawn_entry(config: Any, key: DrawKey) -> Optional[Dict[str, Any]]:
@@ -222,7 +261,7 @@ def opening_units(config: Any, key: DrawKey) -> Tuple[str, ...]:
     rng = mulberry32(seed_from_string(f"{key.matchup}:{key.game_key}"))
     for _ in range(VALUES_BEFORE_UNITS):
         rng()
-    gates = _gate_count(opening, key.matchup, entry["name"].strip())
+    gates = _gate_count(opening, key.matchup, entry["name"].strip(JS_SPACE))
     return tuple(pool[pick_index(probabilities, rng)][0] for _ in range(gates))
 
 
@@ -276,11 +315,12 @@ def first_steps(build: Any) -> Tuple[DrawStep, ...]:
 
 def draw_for(key: DrawKey, answer: Dict[str, Any]) -> RandomizerDraw:
     """The still for ``key`` from a ``randomizer_draw`` Companion answer."""
+    served = overlay_config(answer.get("config"), key.matchup, answer.get("options"))
     return RandomizerDraw(
         game_key=key.game_key,
         build_key=key.build_key,
         steps=first_steps(answer.get("build")),
-        units=tuple(UNIT_NAMES[unit] for unit in opening_units(answer.get("config"), key)),
+        units=tuple(UNIT_NAMES[unit] for unit in opening_units(served, key)),
     )
 
 
