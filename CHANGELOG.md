@@ -17,9 +17,9 @@ corresponding GitHub Release.
   successor to EarthBound and Mother 3, is playable by anyone at
   `/play/humdingers`, signed in or not, on phones (with touch controls) and
   on desktops. The home page features it right after the hero, the Arcade
-  tab links to it above its sections, and What's New has an entry. The
-  inbox notification follows once the page is live. The game is one static
-  file of about 10 MB. See ADR 0101.
+  tab links to it above its sections, and What's New has an entry that
+  sends each signed-in user one notification about it. The game is one
+  static file of about 10 MB. See ADR 0101.
 
 ### Agent release notes
 
