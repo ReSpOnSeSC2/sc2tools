@@ -450,18 +450,21 @@ test("the YouTube chapter switch starts off, takes only a boolean and is saved w
 test("End stream writes YouTube chapters only with the switch on, counting from the open stream's start", async () => {
   await db.streamSessions.deleteMany({});
   await post({ action: "sessionReset" });
-  const startMs = (await db.users.findOne({ userId: OWNER })).streamSession.startAt.getTime();
   const off = await post({ action: "streamEnd" });
   expect(off.body.deskAction.chapters).toBeNull();
   expect(chapters.writeToYoutube).not.toHaveBeenCalled();
   await post({ action: "sessionReset" });
+  const reopenedMs = (await db.users.findOne({ userId: OWNER })).streamSession.startAt.getTime();
   await post({ youtubeChapters: true });
+  // A later Mark stream start must not move the window of an open stream.
+  expect((await post({ streamStartMs: MARKED })).status).toBe(200);
   const on = await post({ action: "streamEnd" });
   expect(on.body.deskAction.chapters).toEqual({ state: "written", message: "Added the game chapters to the YouTube archive." });
   expect(chapters.writeToYoutube).toHaveBeenCalledTimes(1);
   const [owner, from, to] = chapters.writeToYoutube.mock.calls[0];
   expect(owner).toBe(OWNER);
-  expect(from).toBeGreaterThanOrEqual(startMs);
+  expect(from).toBe(reopenedMs);
+  expect(from).not.toBe(MARKED);
   expect(to).toBeGreaterThanOrEqual(from);
 });
 test("End stream with no open stream falls back to the marked go-live time", async () => {

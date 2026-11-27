@@ -494,6 +494,15 @@ describe("archiveDescriptions", () => {
     expect(puts(s).at(-1).body.snippet).toMatchObject({ title: "Pair test", description: "Saved description\n\n-- chapters --", categoryId: "20", tags: ["preserve"] });
   });
 
+  test("compose is told where the video ended, or Infinity while it is still live", async () => {
+    const s = setup(), id = await archived(s, { actualEndTime: new Date(NOW - 1_000_000).toISOString() });
+    const ends = [];
+    await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose: (_start, description, end) => { ends.push(end); return keep(description); } });
+    delete s.rows.get(id).snippet.actualEndTime;
+    await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose: (_start, description, end) => { ends.push(end); return keep(description); } });
+    expect(ends).toEqual([NOW - 1_000_000, Infinity]);
+  });
+
   test("a broadcast that was not on air in the window, or never went live, is left alone", async () => {
     const s = setup();
     const later = await archived(s, { actualStartTime: new Date(NOW + 60_000).toISOString() });

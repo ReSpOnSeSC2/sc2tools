@@ -32,6 +32,7 @@ const GDPR_CLASSIFICATION = Object.freeze({
   YOUTUBE_CREATE_OPERATIONS: "purge_only", PLATFORM_WEBHOOK_RECEIPTS: "ttl_ephemeral", PLATFORM_EVENTS: "purge_only",
   TWITCH_AUTOMATION_RECEIPTS: "purge_only",
   TWITCH_REWARD_RECEIPTS: "purge_only",
+  YOUTUBE_CHAPTER_RECEIPTS: "purge_only",
   IMPORT_JOBS: "user_scoped", MACRO_JOBS: "user_scoped", REANALYSIS_JOBS: "purge_only", AGENT_RELEASES: "global", COMMUNITY_BUILDS: "purge_only",
   COMMUNITY_REPORTS: "purge_only", USER_BACKUPS: "user_scoped", BACKUP_RESTORE_STAGING: "ttl_ephemeral",
   PENDING_IDENTITY_DELETIONS: "ttl_ephemeral", ARCADE_LEADERBOARD: "purge_only", ADMIN_EVENTS: "purge_only",
@@ -112,6 +113,7 @@ const PURGE_ONLY_COLLECTIONS = [
   // Provider insertion/settlement receipts must never replay from a snapshot.
   ["twitchAutomationReceipts", "userId"],
   ["twitchRewardReceipts", "userId"],
+  ["youtubeChapterReceipts", "userId"],
   ["platformEvents", "userId"],
   // Public self-submitted links are deleted with their owner; never restore public claims from a backup.
   ["playerChannels", "ownerUserId"],

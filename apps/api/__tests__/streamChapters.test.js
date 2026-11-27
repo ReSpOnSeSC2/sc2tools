@@ -11,6 +11,19 @@ function game(startSec, lengthSec, extra = {}) {
 }
 const three = [game(60, 600), game(900, 700, { result: "Defeat", opponent: { race: "Terran", mmr: 4930 } }), game(2530, 400, { result: "Tie" })];
 
+test("a video that ended early gets no chapter for a game that started after it ended", () => {
+  const rows = [game(60, 300), game(700, 300), game(2000, 300), game(2400, 300)];
+  const { lines } = chapterLines(rows, ORIGIN, { endMs: ORIGIN + 1800_000 });
+  expect(lines).toEqual(["0:00 Stream start", "1:00 Game 1 · PvZ win vs 5.1k", "11:40 Game 2 · PvZ win vs 5.1k"]);
+  expect(chapterLines(rows, ORIGIN).lines).toHaveLength(5);
+});
+
+test("a game start comes from startedAt when there is one, so a row with no duration still gets its chapter and number", () => {
+  const exact = { date: new Date(ORIGIN + 2000_000), startedAt: new Date(ORIGIN + 900_000), result: "Victory", myRace: "Protoss", opponent: { race: "Zerg" } };
+  const { lines } = chapterLines([game(60, 600), exact, game(1500, 400)], ORIGIN);
+  expect(lines).toEqual(["0:00 Stream start", "1:00 Game 1 · PvZ win vs 5.1k", "15:00 Game 2 · PvZ win", "25:00 Game 3 · PvZ win vs 5.1k"]);
+});
+
 test("each chapter names the game, matchup, result and a rating rounded to 100, never a person", () => {
   const { lines } = chapterLines(three, ORIGIN);
   expect(lines).toEqual(["0:00 Stream start", "1:00 Game 1 · PvZ win vs 5.1k", "15:00 Game 2 · PvT loss vs 4.9k", "42:10 Game 3 · PvZ vs 5.1k"]);
@@ -72,16 +85,32 @@ function fakeGames(rows) {
 
 describe("the service", () => {
   test("copyable text counts from the marked stream start and says why when there is none", async () => {
-    const service = new StreamChaptersService({ games: fakeGames(three) });
+    const service = new StreamChaptersService({ enabled: true, games: fakeGames(three) });
     expect(await service.copyable("u", ORIGIN, ORIGIN + 4000_000)).toMatchObject({ message: "", lines: expect.arrayContaining(["1:00 Game 1 · PvZ win vs 5.1k"]) });
     expect(await service.copyable("u", null, ORIGIN)).toEqual({ lines: [], message: MESSAGES.no_start });
-    const sparse = new StreamChaptersService({ games: fakeGames([game(60, 100)]) });
-    expect(await sparse.copyable("u", ORIGIN, ORIGIN + 1e6)).toEqual({ lines: [], message: MESSAGES.too_few });
+    const sparse = new StreamChaptersService({ enabled: true, games: fakeGames([game(60, 100)]) });
+    // Twitch and Kick have no three-chapter or ten-second rule, so one game is still copyable.
+    expect(await sparse.copyable("u", ORIGIN, ORIGIN + 1e6)).toEqual({ lines: ["0:00 Stream start", "1:00 Game 1 · PvZ win vs 5.1k"], message: "" });
+    const empty = new StreamChaptersService({ enabled: true, games: fakeGames([]) });
+    expect(await empty.copyable("u", ORIGIN, ORIGIN + 1e6)).toEqual({ lines: [], message: MESSAGES.no_games });
+  });
+
+  test("the server gate keeps every YouTube write off, and each archive leaves a receipt", async () => {
+    const source = youtube([{ id: "a", state: "written" }, { id: "b", state: "skipped", reason: "too_few" }]);
+    const off = new StreamChaptersService({ games: fakeGames(three), youtube: source });
+    expect(await off.writeToYoutube("u", ORIGIN, ORIGIN + 5e6)).toEqual({ state: "skipped", message: MESSAGES.not_enabled });
+    expect(source.calls).toHaveLength(0);
+    const recorded = [];
+    const receipts = { record: async (userId, rows) => { recorded.push([userId, rows]); } };
+    await new StreamChaptersService({ enabled: true, games: fakeGames(three), youtube: source, receipts }).writeToYoutube("u", ORIGIN, ORIGIN + 5e6);
+    expect(recorded).toEqual([["u", [{ id: "a", state: "written" }, { id: "b", state: "skipped", reason: "too_few" }]]]);
+    const broken = { record: async () => { throw new Error("db down"); } };
+    expect((await new StreamChaptersService({ enabled: true, games: fakeGames(three), youtube: source, receipts: broken }).writeToYoutube("u", ORIGIN, ORIGIN + 5e6)).state).toBe("written");
   });
 
   test("games are read for this owner and the stream window only", async () => {
     const source = fakeGames(three);
-    await new StreamChaptersService({ games: source }).copyable("owner-1", ORIGIN, ORIGIN + 5000);
+    await new StreamChaptersService({ enabled: true, games: source }).copyable("owner-1", ORIGIN, ORIGIN + 5000);
     expect(source.calls[0]).toMatchObject({ userId: "owner-1", date: { $gte: new Date(ORIGIN), $lte: new Date(ORIGIN + 5000) } });
   });
 
@@ -93,7 +122,7 @@ describe("the service", () => {
   test("YouTube is asked once and each video is composed against its own start", async () => {
     const source = youtube((job) => [{ id: "a", state: job.compose(ORIGIN, "Hello").description ? "written" : "failed" },
       { id: "b", state: job.compose(ORIGIN + 30_000, "").description ? "written" : "failed" }]);
-    const result = await new StreamChaptersService({ games: fakeGames(three), youtube: source }).writeToYoutube("u", ORIGIN, ORIGIN + 5e6);
+    const result = await new StreamChaptersService({ enabled: true, games: fakeGames(three), youtube: source }).writeToYoutube("u", ORIGIN, ORIGIN + 5e6);
     expect(result).toEqual({ state: "written", message: "Added the game chapters to 2 YouTube archives." });
     expect(source.calls).toHaveLength(1);
     expect(source.calls[0].job).toMatchObject({ fromMs: ORIGIN, toMs: ORIGIN + 5e6 });
@@ -103,32 +132,56 @@ describe("the service", () => {
 
   test("a list that breaks a YouTube rule is never written, and the Dock is told why", async () => {
     const source = youtube((job) => [{ id: "a", state: "skipped", reason: job.compose(ORIGIN, "x").skip }]);
-    const result = await new StreamChaptersService({ games: fakeGames([game(60, 100)]), youtube: source }).writeToYoutube("u", ORIGIN, ORIGIN + 1e6);
+    const result = await new StreamChaptersService({ enabled: true, games: fakeGames([game(60, 100)]), youtube: source }).writeToYoutube("u", ORIGIN, ORIGIN + 1e6);
     expect(result).toEqual({ state: "skipped", message: MESSAGES.too_few });
   });
 
   test("a description with no room left is skipped", async () => {
     let skipped;
     const source = youtube((job) => { skipped = job.compose(ORIGIN, "x".repeat(4990)); return [{ id: "a", state: "skipped" }]; });
-    const result = await new StreamChaptersService({ games: fakeGames(three), youtube: source }).writeToYoutube("u", ORIGIN, ORIGIN + 5e6);
+    const result = await new StreamChaptersService({ enabled: true, games: fakeGames(three), youtube: source }).writeToYoutube("u", ORIGIN, ORIGIN + 5e6);
     expect(skipped).toEqual({ skip: "too_long" });
     expect(result).toEqual({ state: "skipped", message: MESSAGES.too_long });
   });
 
   test("no broadcast, no stream start, a provider failure and a thrown error each end in an answer, never an exception", async () => {
-    const make = (receipts) => new StreamChaptersService({ games: fakeGames(three), youtube: youtube(receipts) });
+    const make = (receipts) => new StreamChaptersService({ enabled: true, games: fakeGames(three), youtube: youtube(receipts) });
     expect(await make([]).writeToYoutube("u", ORIGIN, ORIGIN + 5e6)).toEqual({ state: "skipped", message: MESSAGES.no_broadcast });
     expect(await make([]).writeToYoutube("u", null, ORIGIN)).toEqual({ state: "skipped", message: MESSAGES.no_start });
     expect(await make([{ id: "a", state: "failed", reason: "youtube_ownership_changed" }]).writeToYoutube("u", ORIGIN, ORIGIN + 5e6))
       .toEqual({ state: "failed", message: MESSAGES.failed });
-    const broken = new StreamChaptersService({ games: fakeGames(three), youtube: { archiveDescriptions: async () => { throw new Error("grant missing"); } } });
+    const broken = new StreamChaptersService({ enabled: true, games: fakeGames(three), youtube: { archiveDescriptions: async () => { throw new Error("grant missing"); } } });
     expect(await broken.writeToYoutube("u", ORIGIN, ORIGIN + 5e6)).toEqual({ state: "failed", message: MESSAGES.failed });
-    expect(await new StreamChaptersService({ games: fakeGames(three) }).writeToYoutube("u", ORIGIN, ORIGIN)).toEqual({ state: "skipped", message: MESSAGES.no_broadcast });
+    expect(await new StreamChaptersService({ enabled: true, games: fakeGames(three) }).writeToYoutube("u", ORIGIN, ORIGIN)).toEqual({ state: "skipped", message: MESSAGES.no_broadcast });
   });
 
   test("one video written and another failed is reported as written with a note", async () => {
-    const result = await new StreamChaptersService({ games: fakeGames(three), youtube: youtube([{ id: "a", state: "written" }, { id: "b", state: "failed" }]) })
+    const result = await new StreamChaptersService({ enabled: true, games: fakeGames(three), youtube: youtube([{ id: "a", state: "written" }, { id: "b", state: "failed" }]) })
       .writeToYoutube("u", ORIGIN, ORIGIN + 5e6);
     expect(result).toEqual({ state: "written", message: "Added the game chapters to the YouTube archive. Another video could not be updated." });
+  });
+});
+
+describe("the server gate and the receipts store", () => {
+  const { loadConfig } = require("../src/config/loader");
+  const { YoutubeChapterReceipts } = require("../src/services/youtubeChapterReceipts");
+
+  test("the gate is false unless the owner sets the exact value true", () => {
+    const env = { MONGODB_URI: "mongodb://fixture.invalid/test", CLERK_SECRET_KEY: "mock-only", SERVER_PEPPER_HEX: "a".repeat(64) };
+    for (const value of [undefined, "", "false", "1", "on"]) expect(loadConfig({ ...env, YOUTUBE_CHAPTERS_ENABLED: value }).youtubeChaptersEnabled).toBe(false);
+    expect(loadConfig({ ...env, YOUTUBE_CHAPTERS_ENABLED: "true" }).youtubeChaptersEnabled).toBe(true);
+  });
+
+  test("a receipt holds the video, the state and the reason only, one row per video, and expires", async () => {
+    const writes = [], indexes = [];
+    const collection = { createIndex: async (...args) => { indexes.push(args); }, updateOne: async (...args) => { writes.push(args); } };
+    const store = new YoutubeChapterReceipts({ collection, now: () => ORIGIN });
+    await store.ensureIndexes();
+    await store.record("u", [{ id: "a", state: "written" }, { id: "b", state: "skipped", reason: "too_few" }]);
+    expect(indexes[0][1]).toEqual({ unique: true });
+    expect(indexes[1][1]).toEqual({ expireAfterSeconds: 0 });
+    expect(writes.map(([filter]) => filter)).toEqual([{ userId: "u", broadcastId: "a" }, { userId: "u", broadcastId: "b" }]);
+    expect(writes[1][1].$set).toEqual({ state: "skipped", reason: "too_few", at: new Date(ORIGIN), expiresAt: new Date(ORIGIN + 90 * 86400_000) });
+    expect(writes[1][2]).toEqual({ upsert: true });
   });
 });

@@ -43,9 +43,9 @@ export function DockGameChapters({ token, enabled, youtube, busy, onToggleYoutub
 }) {
   const chapters = useGameChapters(token);
   return <div className="space-y-1.5" aria-label="Game chapters" role="group">
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex items-center gap-2">
       <DockToggle checked={youtube} disabled={busy || !enabled} onChange={onToggleYoutube} label="Add game chapters to the YouTube archive at End stream" />
-      <span className="text-caption text-text">Add game chapters to the YouTube archive at End stream</span>
+      <span className="min-w-0 flex-1 text-caption text-text">Add game chapters to the YouTube archive at End stream</span>
     </div>
     <p className="text-micro text-text-muted">Off by default. Only the marked block of the description changes; your own text stays.</p>
     <div className="flex flex-wrap items-center gap-2">

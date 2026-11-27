@@ -80,6 +80,7 @@ const COLLECTIONS = Object.freeze({
   PLATFORM_EVENTS: "platform_events",
   TWITCH_AUTOMATION_RECEIPTS: "twitch_automation_receipts",
   TWITCH_REWARD_RECEIPTS: "twitch_reward_receipts",
+  YOUTUBE_CHAPTER_RECEIPTS: "youtube_chapter_receipts",
   IMPORT_JOBS: "import_jobs",
   MACRO_JOBS: "macro_jobs",
   // Managed re-analysis runs (services/reanalysis.js): one active per owner,

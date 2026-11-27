@@ -139,3 +139,11 @@ def test_nothing_is_marked_with_the_switch_off(service):
     start_game(instance, channel_tags=True)
     instance.titles.worker.run_once()
     assert marker.names == []
+
+
+def test_a_corrected_loading_identity_is_still_the_marked_game(service):
+    instance, _, _ = service
+    titles = instance.titles
+    titles.settings = {**titles.settings, "record_chapters": True, "last_record_game": "old-prefix|1700000000123"}
+    assert titles.record_pending("new-prefix|1700000000123") is False
+    assert titles.record_pending("new-prefix|1700000999999") is True

@@ -250,6 +250,11 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.YOUTUBE_CHAPTER_RECEIPTS]: {
+    collection: COLLECTIONS.YOUTUBE_CHAPTER_RECEIPTS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.TWITCH_AUTOMATION_RECEIPTS]: {
     collection: COLLECTIONS.TWITCH_AUTOMATION_RECEIPTS,
     currentVersion: 1,

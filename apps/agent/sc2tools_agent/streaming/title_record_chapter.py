@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 
 from .title_channel import RACE_LETTERS
+from .title_match import game_episode
 
 
 def chapter_name(stats):
@@ -24,7 +25,9 @@ def chapter_name(stats):
 class RecordChapterMixin:
     def record_pending(self, game_key):
         settings = self.settings
-        return settings["record_chapters"] and settings["last_record_game"] != game_key
+        receipt = settings["last_record_game"]
+        # A corrected loading identity keeps its episode, so it is still the same game.
+        return settings["record_chapters"] and not (receipt and game_episode(receipt) == game_episode(game_key))
 
     def mark_recording(self, game_key):
         """One attempt per game. The receipt is saved first, so a restart never marks twice."""

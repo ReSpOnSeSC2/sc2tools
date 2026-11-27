@@ -55,7 +55,7 @@ function registerDockClipRoutes(router, { engagement, chapters, studio, limiter,
       if (!chapters || !studio) { res.status(503).json({ error: { code: "chapters_unavailable" } }); return; }
       const { streamStartMs } = await studio.get(String(req.params.token));
       // The shared tokenAuth middleware sets the owner on the request.
-      res.json(await chapters.copyable(String(/** @type {any} */ (req).overlayUserId), streamStartMs, Date.now()));
+      res.json(await chapters.copyable(String(/** @type {import("express").Request & {overlayUserId?: string}} */ (req).overlayUserId), streamStartMs, Date.now()));
     } catch (error) { next(error); }
   });
 

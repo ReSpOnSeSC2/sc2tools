@@ -99,6 +99,7 @@ const { buildTwitchAutomationRouter } = require("./routes/twitchAutomation");
 const { buildAgentStreamingRouter } = require("./routes/agentStreaming");
 const { YoutubeStreamingService } = require("./services/youtubeStreaming");
 const { StreamChaptersService } = require("./services/streamChapters");
+const { YoutubeChapterReceipts } = require("./services/youtubeChapterReceipts");
 const { buildYoutubeCreateLedger } = require("./services/youtubeCreateOperationLedger");
 const { buildYoutubeStreamingRouter } = require("./routes/youtubeStreaming");
 const { TikTokChatRelay } = require("./services/tiktokChatRelay");
@@ -784,7 +785,10 @@ function makeServices(deps, clerk, adminClerkIds) {
     integrations: platformIntegrations,
     ledger: deps.db.youtubeCreateOperations ? buildYoutubeCreateLedger({ collection: deps.db.youtubeCreateOperations }) : null,
   });
-  const streamChapters = new StreamChaptersService({ games: deps.db.games, youtube: youtubeStreaming });
+  const streamChapters = new StreamChaptersService({
+    games: deps.db.games, youtube: youtubeStreaming, enabled: deps.config.youtubeChaptersEnabled === true,
+    receipts: deps.db.youtubeChapterReceipts ? new YoutubeChapterReceipts({ collection: deps.db.youtubeChapterReceipts }) : null,
+  });
   const gameDesk = new GameDeskService({ users: deps.db.users, studio: multichatStudio, chapters: streamChapters,
     engagement: multichatEngagement, games, broker: liveGameBroker, channels: opponentChannels,
     tokens: overlayTokens, bot: twitchChatBot, io: deps.io, onSessionReset: owner => sessionHistory.invalidateForReset(owner), streams: delivery.streamReports });

@@ -29,9 +29,13 @@ YouTube streaming facade (`apps/api/src/services/youtubeStreaming.js`).
 4. A list that breaks a YouTube rule, or does not fit in 5,000 bytes, is not
    written, and the Dock shows the reason. A failed write is reported and never
    retried.
-5. The streamer's switch is stored in the studio document and starts off. There
-   is no separate server flag: the write needs the streamer's existing
-   streaming consent and the switch.
+5. The YouTube write has two gates that both start off: the server gate
+   `YOUTUBE_CHAPTERS_ENABLED` (exact value `true`, like
+   `TWITCH_AUTOMATION_ENABLED`) and the streamer's switch, stored in the studio
+   document, on top of their existing streaming consent. Each archive offered
+   the chapters leaves a receipt in `youtube_chapter_receipts` (video, state,
+   reason; no text, expires after 90 days, purged with the account). A chapter
+   only covers games that started while its own video was running.
 6. Chapter text is game number, matchup, result and the opponent's rating
    rounded to 100: no names (ADR 0075).
 7. The OBS marker is a separate agent switch on the same game-start claim as

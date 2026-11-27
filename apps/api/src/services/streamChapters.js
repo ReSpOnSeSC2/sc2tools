@@ -2,6 +2,7 @@
 
 const { gamesMatchStage } = require("../util/parseQuery");
 const facts = require("./reportFacts");
+const { gameStartMs } = require("./gameVods");
 
 /**
  * One chapter per game for the stream's video: "0:42:10 Game 4 · PvZ win vs 5.1k".
@@ -21,6 +22,8 @@ const BLOCK_END = "-- end of SC2Tools game chapters --";
 const BLOCK = new RegExp(`${BLOCK_START}[\\s\\S]*?${BLOCK_END}`);
 
 const MESSAGES = Object.freeze({
+  no_games: "No games since the stream start you marked, so there is nothing to copy yet.",
+  not_enabled: "Game chapters for YouTube are not switched on for this server, so nothing was written.",
   too_few: "YouTube needs at least three chapters, so nothing was written. Play more games before ending the stream.",
   too_close: "Two games started less than ten seconds apart, so nothing was written.",
   no_start: "Press Start new session when you go live so chapters know where the stream began.",
@@ -51,21 +54,23 @@ function chapterText(row, number) {
 }
 
 /**
- * @param {any[]} rows games with date (the replay end) and durationSec
- * @param {number} originMs where the video's 0:00 is
- * @returns {{lines: string[]}|{reason: "too_few"|"too_close"}}
+ * @param {any[]} rows games with startedAt or date (the replay end) and durationSec
+ * @param {number} originMs where the 0:00 of the video is
+ * @param {{endMs?: number, youtube?: boolean}} [window] endMs: where the video ends, so later games get no chapter;
+ *   youtube: apply the three-chapter and ten-second rules of YouTube (a text copy for Twitch or Kick has none)
+ * @returns {{lines: string[]}|{reason: "too_few"|"too_close"|"no_games"}}
  */
-function chapterLines(rows, originMs) {
+function chapterLines(rows, originMs, { endMs = Infinity, youtube = true } = {}) {
   const starts = rows
-    .filter((row) => typeof row.durationSec === "number" && row.durationSec > 0 && !Number.isNaN(new Date(row.date).getTime()))
-    .map((row) => ({ row, at: new Date(row.date).getTime() - row.durationSec * 1000 - originMs }))
+    .map((row) => ({ row, at: (gameStartMs(row) ?? NaN) - originMs }))
+    .filter((game) => Number.isFinite(game.at))
     .sort((a, b) => a.at - b.at)
     .map((game, index) => ({ at: game.at, text: chapterText(game.row, index + 1) }))
-    .filter((game) => game.at >= 0);
-  if (!starts.length) return { reason: "too_few" };
+    .filter((game) => game.at >= 0 && game.at + originMs < endMs);
+  if (!starts.length) return { reason: youtube ? "too_few" : "no_games" };
   const chapters = starts[0].at >= MIN_GAP_MS ? [{ at: 0, text: "Stream start" }, ...starts] : [{ ...starts[0], at: 0 }, ...starts.slice(1)];
-  if (chapters.length < MIN_CHAPTERS) return { reason: "too_few" };
-  if (chapters.some((chapter, index) => index > 0 && chapter.at - chapters[index - 1].at < MIN_GAP_MS)) return { reason: "too_close" };
+  if (youtube && chapters.length < MIN_CHAPTERS) return { reason: "too_few" };
+  if (youtube && chapters.some((chapter, index) => index > 0 && chapter.at - chapters[index - 1].at < MIN_GAP_MS)) return { reason: "too_close" };
   return { lines: chapters.map((chapter) => `${formatOffset(chapter.at)} ${chapter.text}`) };
 }
 
@@ -79,16 +84,19 @@ function withChapterBlock(description, lines) {
 }
 
 class StreamChaptersService {
-  /** @param {{games: import('mongodb').Collection, youtube?: {archiveDescriptions: Function}|null}} deps */
+  /** @param {{games: import('mongodb').Collection, youtube?: {archiveDescriptions: Function}|null, enabled?: boolean,
+   *   receipts?: {record: (userId: string, receipts: Array<{id: string, state: string, reason?: string}>) => Promise<void>}|null}} deps */
   constructor(deps) {
     this.games = deps.games;
     this.youtube = deps.youtube || null;
+    this.enabled = deps.enabled === true;
+    this.receipts = deps.receipts || null;
   }
 
   /** @param {string} userId @param {number} fromMs @param {number} toMs */
   async rows(userId, fromMs, toMs) {
     return this.games.find(gamesMatchStage(userId, { since: new Date(fromMs), until: new Date(toMs) }), { projection: {
-      _id: 0, date: 1, result: 1, myRace: 1, "opponent.race": 1, "opponent.mmr": 1, durationSec: 1,
+      _id: 0, date: 1, result: 1, myRace: 1, "opponent.race": 1, "opponent.mmr": 1, durationSec: 1, startedAt: 1,
     } }).sort({ date: 1 }).limit(GAME_LIMIT).toArray();
   }
 
@@ -96,7 +104,7 @@ class StreamChaptersService {
    * @param {string} userId @param {number|null} startMs @param {number} nowMs */
   async copyable(userId, startMs, nowMs) {
     if (startMs === null) return { lines: [], message: MESSAGES.no_start };
-    const found = chapterLines(await this.rows(userId, startMs, nowMs), startMs);
+    const found = chapterLines(await this.rows(userId, startMs, nowMs), startMs, { youtube: false });
     return "lines" in found ? { lines: found.lines, message: "" } : { lines: [], message: MESSAGES[found.reason] };
   }
 
@@ -107,20 +115,22 @@ class StreamChaptersService {
    * @returns {Promise<{state: "written"|"skipped"|"failed", message: string}>}
    */
   async writeToYoutube(userId, startMs, endMs) {
+    if (!this.enabled) return { state: "skipped", message: MESSAGES.not_enabled };
     if (startMs === null) return { state: "skipped", message: MESSAGES.no_start };
     try {
       if (!this.youtube) return { state: "skipped", message: MESSAGES.no_broadcast };
       const rows = await this.rows(userId, startMs, endMs);
       /** @type {Array<keyof typeof MESSAGES>} */
       const refusals = [];
-      const compose = (/** @type {number} */ originMs, /** @type {string} */ description) => {
-        const found = chapterLines(rows, originMs);
+      const compose = (/** @type {number} */ originMs, /** @type {string} */ description, /** @type {number} */ videoEndMs) => {
+        const found = chapterLines(rows, originMs, { endMs: videoEndMs });
         if (!("lines" in found)) { refusals.push(found.reason); return { skip: found.reason }; }
         const next = withChapterBlock(description, found.lines);
         if (Buffer.byteLength(next, "utf8") > DESCRIPTION_BYTES) { refusals.push("too_long"); return { skip: "too_long" }; }
         return { description: next };
       };
       const receipts = await this.youtube.archiveDescriptions(userId, { fromMs: startMs, toMs: endMs, compose });
+      await this.receipts?.record(userId, receipts).catch(() => {});
       return summarize(receipts, refusals[0] || "too_few");
     } catch {
       return { state: "failed", message: MESSAGES.failed };
