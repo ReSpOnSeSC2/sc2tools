@@ -1,7 +1,7 @@
 """Native title-template preview and explicit opt-in controls."""
 from __future__ import annotations
 
-from ..streaming.title_template import CURRENT_MATCH_TEMPLATE, TOKEN_REFERENCE, render_values
+from ..streaming.title_template import MATCH_TEMPLATES, TOKEN_REFERENCE, render_values
 from . import theme
 
 
@@ -12,8 +12,17 @@ class StreamTitleControls:
         self.preview = page._label("Preview: waiting for synced statistics.", True)
         layout.addWidget(self.preview)
         layout.addWidget(page._label("Tokens: " + TOKEN_REFERENCE + ". Separate optional parts with |. Rendered titles must fit 70 characters.", True))
+        preset_row = QtWidgets.QHBoxLayout()
+        self.record_style = QtWidgets.QComboBox()
+        self.record_style.setAccessibleName("Records in the current-match template")
+        self.record_style.addItem("Session", "session")
+        self.record_style.addItem("Head-to-head", "h2h")
+        self.record_style.addItem("Both", "both")
+        self.record_style.activated.connect(self.use_match_template)
+        preset_row.addWidget(self.record_style)
         self.match_template = page._button("Use current-match template", self.use_match_template, quiet=True)
-        layout.addWidget(self.match_template)
+        preset_row.addWidget(self.match_template, 1)
+        layout.addLayout(preset_row)
         self.on_game_start = QtWidgets.QCheckBox("Refresh titles at the start of each game")
         self.on_game_start.setChecked(False)
         self.on_game_start.setToolTip("Optional and off by default. Uncheck and save to stop game-start title updates.")
@@ -48,11 +57,11 @@ class StreamTitleControls:
         self.dirty = True
         self._update_activation(self.page.state.get("title_automation", {}))
 
-    def use_match_template(self):
+    def use_match_template(self, *_args):
         # Preserve a custom plain-text prefix without repeating match tokens.
         current = self.page.title_input.text().split("|", 1)[0].strip()
         prefix = current if current and "{" not in current and "}" not in current else "SC2"
-        self.page.title_input.setText(f"{prefix} | {CURRENT_MATCH_TEMPLATE}")
+        self.page.title_input.setText(f"{prefix} | {MATCH_TEMPLATES[self.record_style.currentData()]}")
         self.page._title_edited()
 
     def configure(self):
@@ -61,8 +70,13 @@ class StreamTitleControls:
             "platforms": {name: control.isChecked() for name, control in self.platforms.items()}})
 
     def update_preview(self, *_args):
+        template = self.page.title_input.text()
+        for style, preset in MATCH_TEMPLATES.items():
+            if template.endswith(f" | {preset}"):
+                self.record_style.setCurrentIndex(self.record_style.findData(style))
+                break
         try:
-            self.preview.setText("Preview: " + render_values(self.page.title_input.text(), self.values))
+            self.preview.setText("Preview: " + render_values(template, self.values))
         except ValueError as error:
             self.preview.setText("Preview: " + str(error))
 
@@ -99,13 +113,13 @@ class StreamTitleControls:
                 control.blockSignals(blocked)
         self._update_activation(settings)
         self.note.setText(settings.get("message", "Saving automatic title settings applies them to future games.")
-            + " Game-start refresh runs once per live game when its opponent is ready. Post-sync refresh runs at most once every 10 minutes. Only changed titles are sent. Head-to-head uses your confirmed record against the current opponent. Map appears only when the live source supplies it. Matchup rates and peak use at most 512 recorded ladder games from 90 days.")
+            + " Game-start refresh runs once per live game. Post-sync refresh runs at most once every 10 minutes. Only changed titles are sent. Session uses your synced wins and losses across the session. H2H uses your confirmed record against the opponent. Matchup rates and peak use at most 512 recorded ladder games from 90 days.")
         self.update_preview()
         self.buttons()
 
     def buttons(self):
         usable = not self.page.busy and self.page.state.get("account_mode") == "sc2tools"
-        for control in (self.enabled, self.on_game_start, self.match_template, self.save, self.refresh, *self.platforms.values()):
+        for control in (self.enabled, self.on_game_start, self.record_style, self.match_template, self.save, self.refresh, *self.platforms.values()):
             control.setEnabled(usable)
 
 

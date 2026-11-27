@@ -80,8 +80,16 @@ describe("real buildApp paired-agent stream control boundary", () => {
     const session = jest.spyOn(services.games, "todaySession").mockResolvedValue({ wins: 1, losses: 0, mmrCurrent: 5001, league: "Grandmaster", region: "NA" });
     await db.games.insertMany([
       { userId: owner, gameId: "title-fixture", date: new Date(), isLadderGame: true, myRace: "Protoss", myMmr: 5000,
-        myToonHandle: "1-S2-1-10", result: "Victory", opponent: { race: "Zerg", displayName: "private-name" } },
-      { userId: "other-owner", gameId: "foreign-fixture", date: new Date(), isLadderGame: true, myMmr: 8000, result: "win" },
+        myToonHandle: "1-S2-1-10", result: "Victory", opponent: { race: "Zerg", displayName: "private-name", toonHandle: "1-S2-1-42", pulseCharacterId: "73" } },
+      { userId: owner, gameId: "prior-fixture", result: "defeat", opponent: { pulseId: "1-s2-1-42", displayName: "different-name" } },
+      { userId: owner, gameId: "older-numeric-id", result: "loss", opponent: { pulseId: "73" } },
+      { userId: owner, gameId: "prior-toon", result: "win", opponent: { pulseId: "1-S2-1-77", pulseCharacterId: "73" } },
+      { userId: owner, gameId: "unrelated-name", result: "win", opponent: { pulseId: "1-S2-1-43", displayName: "private-name" } },
+      { userId: owner, gameId: "resumed-fixture", result: "defeat", isResumedFromReplay: true, opponent: { pulseId: "1-S2-1-42" } },
+      { userId: owner, gameId: "excluded-fixture", result: "win", excluded: true, opponent: { pulseId: "1-S2-1-42", displayName: "private-name" } },
+      { userId: owner, gameId: "team-fixture", result: "win", matchFormat: "team", playerCount: 4, opponent: { pulseId: "1-S2-1-43", displayName: "team-name" } },
+      { userId: "other-owner", gameId: "foreign-fixture", date: new Date(), isLadderGame: true, myMmr: 8000, result: "win",
+        opponent: { pulseId: "1-S2-1-42", displayName: "hidden-foreign" } },
     ]);
     try {
       const response = await agent(request(app).get("/v1/agent/streaming/session")).expect(200);
@@ -89,6 +97,16 @@ describe("real buildApp paired-agent stream control boundary", () => {
       expect(response.body).toMatchObject({ schema: 1, mmr: 5001, league: "Grandmaster", peak: 5000, winRates: { PvZ: { wins: 1, losses: 0 } } });
       expect(JSON.stringify(response.body)).not.toMatch(/private-name|S2-1|8000|fixture-private/);
       expect(session).toHaveBeenCalledWith(owner, undefined, { reuseRecent: true });
+      const completed = await agent(request(app).get("/v1/agent/streaming/session?gameId=title-fixture")).expect(200);
+      expect(completed.body.completedMatch).toEqual({ gameKey: "title-fixture", opponent: "private-name", alias: "", race: "Protoss",
+        h2h: { wins: 2, losses: 2 } });
+      expect(JSON.stringify(completed.body)).not.toMatch(/hidden-foreign|different-name|S2-1/);
+      for (const gameId of ["foreign-fixture", "excluded-fixture", "resumed-fixture", "team-fixture", "missing-fixture"]) {
+        const ordinary = await agent(request(app).get("/v1/agent/streaming/session").query({ gameId })).expect(200);
+        expect(ordinary.body).not.toHaveProperty("completedMatch");
+      }
+      await agent(request(app).get("/v1/agent/streaming/session?gameId[]=title-fixture")).expect(400);
+      await agent(request(app).get("/v1/agent/streaming/session?gameId=title-fixture&gameId=foreign-fixture")).expect(400);
       await agent(request(app).get("/v1/agent/streaming/session?userId=other-owner")).expect(400);
       await request(app).get("/v1/agent/streaming/session").expect(401);
       expect(providerFetch.mock.calls.length).toBe(before);

@@ -71,6 +71,38 @@ test("reads the current envelope after awaited statistics work, never a captured
   expect(result).not.toHaveProperty("currentMatch");
 });
 
+test("returns the selected synced opponent and uses owner-filtered games for head-to-head", async () => {
+  const find = jest.fn(() => ({ sort() { return this; }, limit() { return this; }, toArray: async () => [] }));
+  const findOne = jest.fn(async () => ({ myRace: "Protoss", map: "Alcyone LE", opponent: {
+    displayName: "Barcode", toonHandle: "1-S2-1-42", pulseId: "1-S2-1-42", pulseCharacterId: "73", privateNote: "private",
+  } }));
+  const aggregate = jest.fn(() => ({ toArray: async () => [{ wins: 3, losses: 1 }] }));
+  const findOpponent = jest.fn(async () => ({ pulseId: "1-S2-1-42", revealedName: "KnownPlayer", wins: 1, losses: 1 }));
+  const identities = { resolve: jest.fn(async () => ({ pulseIds: ["1-S2-1-42", "1-S2-1-55"], characterIds: ["73", "74"] })) };
+  const db = { games: { find, findOne, aggregate }, opponents: { findOne: findOpponent } };
+  const result = await streamTitleSession(db, { todaySession: async () => ({ wins: 4, losses: 2 }) }, "owner", liveMatch, "synced-game", identities);
+  expect(result.completedMatch).toEqual({ gameKey: "synced-game", opponent: "Barcode", alias: "KnownPlayer", map: "Alcyone LE",
+    race: "Protoss", h2h: { wins: 3, losses: 1 } });
+  expect(result.session).toEqual({ wins: 4, losses: 2 });
+  expect(result.currentMatch?.gameKey).toBe("current-game");
+  expect(findOne).toHaveBeenCalledWith({ userId: "owner", gameId: "synced-game", _deleted: { $ne: true }, _deletionPending: { $ne: true },
+    excluded: { $ne: true }, isResumedFromReplay: { $ne: true } }, expect.objectContaining({ maxTimeMS: 1000 }));
+  expect(findOpponent).toHaveBeenCalledWith({ userId: "owner", pulseId: { $in: ["1-S2-1-42", "1-s2-1-42"] } }, expect.anything());
+  expect(aggregate).toHaveBeenCalledWith([expect.objectContaining({ $match: expect.objectContaining({ userId: "owner",
+    excluded: { $ne: true }, isResumedFromReplay: { $ne: true }, $or: [
+      { "opponent.pulseId": { $in: ["1-S2-1-42", "1-s2-1-42", "1-S2-1-55", "1-s2-1-55", "73", "74"] } }, { gameId: "synced-game" },
+      { "opponent.pulseCharacterId": { $in: ["73", "74"] } },
+    ] }) }), expect.objectContaining({ $group: expect.anything() })], { maxTimeMS: 1000 });
+});
+
+test("no completed context is inferred from the current match or a failed replay lookup", async () => {
+  const find = () => ({ sort() { return this; }, limit() { return this; }, toArray: async () => [] });
+  const findOne = jest.fn(async () => { throw new Error("lookup unavailable"); });
+  const result = await streamTitleSession({ games: { find, findOne } }, { todaySession: async () => ({ wins: 4, losses: 2 }) }, "owner", liveMatch, "synced-game");
+  expect(result).toMatchObject({ session: { wins: 4, losses: 2 }, currentMatch: { gameKey: "current-game" } });
+  expect(result).not.toHaveProperty("completedMatch");
+});
+
 test.each(["match_loading", "match_started", "match_in_progress"])("projects the %s phase", phase => {
   expect(streamTitleMatch({ ...liveMatch(), phase })).toHaveProperty("opponent", "Barcode");
 });

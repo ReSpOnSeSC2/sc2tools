@@ -34,19 +34,19 @@ Leave the setting off to sync standard analysis only. The website's
 either setting, using agent 0.16.11 or newer.
 
 **Streams** accepts statistic tokens such as `SC2 | {mmr} MMR | {record}` and
-shows a live preview. **Use current-match template** keeps your plain-text
-prefix and puts your current MMR before the opponent. It also adds the known
-alias, head-to-head record and available map.
-`GM Protoss | {match_mmr} v {opp} {aka} | {h2h} ({h2h_wr}) | {map}` can render
-as `GM Protoss | 5321 MMR v Barcode (aka Maru) | 3W–2L (60%) | Alcyone LE`.
-Maps appear only when the live source provides them; ordinary ladder games
-may not report a map. Automatic updates start off: choose the connected
+shows a live preview. Pick **Session**, **Head-to-head**, or **Both** beside
+**Use current-match template** to add your selection to your plain-text
+prefix. **Both** can render as
+`GM Protoss | 5321 MMR v Maru | H2H: 3W–2L (60%) | Session: 4W–2L (67%)`.
+Unknown statistics are omitted. Use `{record_with_wr}` and `{h2h_with_wr}`
+in custom templates to include the win rate when there are decided games.
+Automatic updates start off. Choose the connected
 platforms, enable **Refresh titles at the start of each game** or the independent
 **Refresh titles after each synced game**, and save the settings. Game-start
 updates run once for each live game when the current opponent is ready.
-Post-game updates wait for the live replay to sync and run at most every ten
-minutes. Both skip unchanged titles and use their own worker. Twitch/Kick are
-selected initially; YouTube is not. See [Stream titles](https://sc2tools.com/help/desktop-stream-titles).
+Post-game updates use the opponent and results from that same match after
+its replay syncs and run at most once every ten minutes. Both skip unchanged
+titles. Twitch and Kick are selected initially. See [Stream titles](https://sc2tools.com/help/desktop-stream-titles).
 
 If you unpair this PC on the website, the desktop window says **This PC was
 unlinked from your account**. Click **Link again** and confirm the new code.

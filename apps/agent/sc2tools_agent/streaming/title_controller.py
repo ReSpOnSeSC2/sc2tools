@@ -9,7 +9,7 @@ from __future__ import annotations
 import copy
 
 from .title_automation import GameTitleAutomation
-from .title_live_controller import LiveTitleControllerMixin
+from .title_live_controller import LiveTitleControllerMixin, MATCH_VALUE_KEYS
 from .title_settings import connection_key, configure_title_settings, load_title_settings
 from .title_template import render_title, title_values
 from .youtube_pair_backend import atomic_json
@@ -84,29 +84,34 @@ class StreamTitleController(LiveTitleControllerMixin):
         self._current()
         return render_title(template, self._title_stats())
 
-    def refresh(self, automatic):
+    def refresh(self, automatic, *, game_id=None, valid=None):
         service = self.service
         owner = self.owner()
-        if not owner or service.stop_event.is_set():
+        guard = lambda: (not service.stop_event.is_set() and service.account_mode == "sc2tools"
+                         and (valid is None or valid()))
+        if not owner or not guard():
             return
+        template = self.settings["template"]
+        include_completed = game_id and automatic and self.settings["enabled"] and any(
+            f"{{{token}}}" in template for token in MATCH_VALUE_KEYS)
         try:
             # This client pins the token used by this snapshot. Its guard also
             # prevents a queued old-account write after unlink/account change.
-            client = service.cloud_client.bound(self.connection(),
-                guard=lambda: not service.stop_event.is_set() and service.account_mode == "sc2tools")
-            stats = client.title_session()
+            client = service.cloud_client.bound(self.connection(), guard=guard)
+            stats = client.title_session(game_id=game_id if include_completed else None)
         except Exception:
             with service.operations:
-                if self.owner() == owner:
+                if self.owner() == owner and guard():
                     self.stats = {}
                     self.message = "Statistics could not be refreshed. No automatic title was sent."
                     service._publish()
             return
         with service.operations:
-            if service.stop_event.is_set() or self.owner() != owner:
+            if self.owner() != owner or not guard():
                 return
             self._current()
             service._sync_cloud_owner(service._connection_context())
+            completed = stats.pop("completedMatch", None)
             self.stats = stats
             self.message = "Preview uses your synced cloud session and recorded ladder history."
             # A late upload from the previous game must not overwrite a new
@@ -114,11 +119,16 @@ class StreamTitleController(LiveTitleControllerMixin):
             match_owns_title = self.settings["on_game_start"] and self.worker.match.current_key() is not None
             if automatic and self.settings["enabled"] and not match_owns_title:
                 try:
-                    title = render_title(self.settings["template"], self._title_stats())
+                    title_stats = self._title_stats()
+                    if include_completed:
+                        title_stats.pop("currentMatch", None)
+                        if isinstance(completed, dict) and completed.get("gameKey") == game_id:
+                            title_stats["currentMatch"] = completed
+                    title = render_title(self.settings["template"], title_stats)
                     selected = [name for name, enabled in self.settings["platforms"].items()
                                 if enabled and self.settings["last_titles"].get(name) != title]
                     if selected:
-                        self._deliver(title, selected, client)
+                        self._deliver(title, selected, client, guard=guard if valid is not None else None)
                     else:
                         self.message = "Rendered title is unchanged; no platform request was sent."
                 except ValueError as error:

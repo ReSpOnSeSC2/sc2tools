@@ -12,7 +12,10 @@ from .title_template import CURRENT_MATCH_TEMPLATE, MAX_TEMPLATE_LENGTH, validat
 
 PLATFORMS = ("twitch", "kick", "youtube")
 DEFAULT_SELECTION = {"twitch": True, "kick": True, "youtube": False}
-LEGACY_MATCH_TEMPLATE_SUFFIX = " | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}"
+LEGACY_MATCH_TEMPLATE_SUFFIXES = (
+    " | v {opp} {aka} | {h2h} ({h2h_wr}) | {map}",
+    " | {match_mmr} v {opp} {aka} | {h2h} ({h2h_wr}) | {map}",
+)
 
 
 def connection_key(connection):
@@ -31,12 +34,14 @@ def load_title_settings(value, owner):
         template = validate_template(template)
     except ValueError:
         template = ""
-    # Upgrade the exact old preset with a plain-text prefix.
-    prefix = template.removesuffix(LEGACY_MATCH_TEMPLATE_SUFFIX)
-    if prefix != template and prefix and not any(char in prefix for char in "|{}"):
-        updated = f"{prefix} | {CURRENT_MATCH_TEMPLATE}"
-        if len(updated) <= MAX_TEMPLATE_LENGTH:
-            template = updated
+    # Upgrade saved copies of either old preset with a plain-text prefix.
+    for suffix in LEGACY_MATCH_TEMPLATE_SUFFIXES:
+        prefix = template.removesuffix(suffix)
+        if prefix != template and prefix and not any(char in prefix for char in "|{}"):
+            updated = f"{prefix} | {CURRENT_MATCH_TEMPLATE}"
+            if len(updated) <= MAX_TEMPLATE_LENGTH:
+                template = updated
+            break
     selected = value.get("platforms") if same_owner else None
     selected = selected if isinstance(selected, dict) else {}
     attempt = value.get("last_attempt", 0) if same_owner else 0

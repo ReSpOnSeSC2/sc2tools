@@ -2,6 +2,19 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.25.11
+
+### Added
+- Choose **Session**, **Head-to-head**, or **Both** for automatic stream
+  titles at game start and after the match syncs. Records include wins,
+  losses, and win percentage when decided games are available. **Both**
+  places the labeled head-to-head record right after the opponent and the
+  session record last.
+
+### Fixed
+- After sync, opponent details and head-to-head results use the match that
+  just synced. Saved copies of the previous preset switch to **Session**.
+
 ## 0.25.10
 
 ### Changed

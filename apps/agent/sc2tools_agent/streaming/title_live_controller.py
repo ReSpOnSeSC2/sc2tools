@@ -6,7 +6,8 @@ import copy
 from .title_match import game_episode
 from .title_template import render_title
 
-MATCH_VALUE_KEYS = {"opp", "aka", "map", "race", "h2h", "h2h_wr", "match_mmr"}
+HISTORY_VALUE_KEYS = {"h2h", "h2h_wr", "h2h_with_wr"}
+MATCH_VALUE_KEYS = {"opp", "aka", "map", "race", "match_mmr"} | HISTORY_VALUE_KEYS
 
 
 class LiveTitleControllerMixin:
@@ -56,7 +57,7 @@ class LiveTitleControllerMixin:
                 service._publish()
                 return final
             template = self.settings["template"]
-            needs_history = any("{" + token + "}" in template for token in ("aka", "h2h", "h2h_wr"))
+            needs_history = any(f"{{{token}}}" in template for token in HISTORY_VALUE_KEYS)
             if needs_history and not isinstance(match.get("h2h"), dict) and not final:
                 self.message = "Waiting for the current opponent's head-to-head record."
                 service._publish()

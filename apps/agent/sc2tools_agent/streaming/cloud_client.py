@@ -57,8 +57,15 @@ class CloudStreamingClient:
         return CloudStreamingClient(lambda: connection, transport=self.transport,
             guard=lambda: self.context() == expected and (guard is None or guard()))
 
-    def title_session(self):
-        result = self._request("GET", "/v1/agent/streaming/session")
+    def title_session(self, *, game_id=None):
+        path = "/v1/agent/streaming/session"
+        try:
+            result = self._request("GET", path, params={"gameId": game_id} if game_id else None)
+        except CloudStreamError as error:
+            if not game_id or error.http_status != 400:
+                raise
+            # Older servers reject the replay query but can still supply session stats.
+            result = self._request("GET", path)
         if not isinstance(result, dict) or type(result.get("schema")) is not int or result.get("schema") != 1:
             raise CloudStreamError("Stream-title statistics are unavailable on this server.")
         return result

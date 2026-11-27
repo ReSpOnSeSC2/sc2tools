@@ -4,10 +4,18 @@ from __future__ import annotations
 import math
 import re
 
-CURRENT_MATCH_TEMPLATE = "{match_mmr} v {opp} {aka} | {h2h} ({h2h_wr}) | {map}"
-TOKEN_REFERENCE = "{opp} {aka} {map} {race} {h2h} {h2h_wr} {match_mmr} {mmr} {league} {record} {wins} {losses} {streak} {peak} {wr:PvZ}"
-TOKENS = {"mmr", "league", "record", "wins", "losses", "streak", "peak",
-          "opp", "aka", "map", "race", "h2h", "h2h_wr", "match_mmr"}
+MATCHUP_SEGMENT = "{match_mmr} v {opp} {aka}"
+SESSION_SEGMENT = "Session: {record_with_wr}"
+HEAD_TO_HEAD_SEGMENT = "H2H: {h2h_with_wr}"
+MATCH_TEMPLATES = {
+    "session": f"{SESSION_SEGMENT} | {MATCHUP_SEGMENT} | {{map}}",
+    "h2h": f"{MATCHUP_SEGMENT} | {HEAD_TO_HEAD_SEGMENT} | {{map}}",
+    "both": f"{MATCHUP_SEGMENT} | {HEAD_TO_HEAD_SEGMENT} | {SESSION_SEGMENT}",
+}
+CURRENT_MATCH_TEMPLATE = MATCH_TEMPLATES["session"]
+TOKEN_REFERENCE = "{opp} {aka} {map} {race} {h2h} {h2h_wr} {h2h_with_wr} {match_mmr} {mmr} {league} {record} {record_with_wr} {wins} {losses} {streak} {peak} {wr:PvZ}"
+TOKENS = {"mmr", "league", "record", "record_with_wr", "wins", "losses", "streak", "peak",
+          "opp", "aka", "map", "race", "h2h", "h2h_wr", "h2h_with_wr", "match_mmr"}
 MATCHUP = re.compile(r"wr:[PTZ]v[PTZ]\Z")
 PLACEHOLDER = re.compile(r"\{([^{}]+)\}")
 MAX_TEMPLATE_LENGTH = 500
@@ -39,6 +47,16 @@ def _plain_text(value, maximum=120):
     return value.strip()
 
 
+def _win_percentage(wins, losses):
+    total = wins + losses
+    # Round halves up, independent of Python's banker rounding.
+    return f"{math.floor(wins * 100 / total + 0.5)}%" if total else ""
+
+
+def _record_with_percentage(record, percentage):
+    return f"{record} ({percentage})" if percentage else record
+
+
 def _match_values(stats):
     match = stats.get("currentMatch")
     if not isinstance(match, dict) or not _plain_text(match.get("gameKey"), 300):
@@ -63,8 +81,10 @@ def _match_values(stats):
     if isinstance(h2h, dict) and all(_number(h2h.get(key), 10**7) for key in ("wins", "losses")):
         wins, losses = int(h2h["wins"]), int(h2h["losses"])
         values["h2h"] = f"{wins}W–{losses}L"
-        if wins + losses:
-            values["h2h_wr"] = f"{math.floor(wins * 100 / (wins + losses) + 0.5)}%"
+        percentage = _win_percentage(wins, losses)
+        values["h2h_with_wr"] = _record_with_percentage(values["h2h"], percentage)
+        if percentage:
+            values["h2h_wr"] = percentage
     return values
 
 
@@ -82,7 +102,10 @@ def title_values(stats):
     session = stats.get("session")
     if isinstance(session, dict) and all(_number(session.get(key), 10**7) for key in ("wins", "losses")):
         wins, losses = int(session["wins"]), int(session["losses"])
-        values.update(wins=str(wins), losses=str(losses), record=f"{wins}W–{losses}L")
+        record = f"{wins}W–{losses}L"
+        percentage = _win_percentage(wins, losses)
+        values.update(wins=str(wins), losses=str(losses), record=record,
+                      record_with_wr=_record_with_percentage(record, percentage))
     streak = stats.get("streak")
     if isinstance(streak, dict) and streak.get("kind") in {"win", "loss"} and _number(streak.get("count"), 1000) and streak["count"] > 0:
         values["streak"] = ("W" if streak["kind"] == "win" else "L") + str(int(streak["count"]))
@@ -91,21 +114,41 @@ def title_values(stats):
         for matchup, row in rates.items():
             if (isinstance(matchup, str) and MATCHUP.fullmatch("wr:" + matchup)
                     and isinstance(row, dict) and all(_number(row.get(key), 10**7) for key in ("wins", "losses"))):
-                total = row["wins"] + row["losses"]
-                if total:
-                    # Round halves up, independent of Python's banker rounding.
-                    values["wr:" + matchup] = str(math.floor(row["wins"] * 100 / total + 0.5)) + "%"
+                percentage = _win_percentage(row["wins"], row["losses"])
+                if percentage:
+                    values["wr:" + matchup] = percentage
     return values
 
 
 def render_title(template, stats):
     """Keep the first available segment and drop optional trailing | segments.
 
+    The Both preset prioritizes fitting the opponent and both labeled records.
     A segment with unavailable stats is omitted in full. A required text-only
     segment that cannot fit must be edited; no word or Unicode character is cut.
     Final validation stays owned by the existing cross-platform shared_title.
     """
     return render_values(template, title_values(stats))
+
+
+def _fit_both_records(prefix, values, render_segment):
+    # Keep the opponent and both records in order, even if the full matchup
+    # needs to lose its MMR, alias or separators to fit the platform limit.
+    details = [render_segment(HEAD_TO_HEAD_SEGMENT), render_segment(SESSION_SEGMENT)]
+    for matchup in (MATCHUP_SEGMENT, "v {opp} {aka}", "v {opp}"):
+        if any(match[1] not in values for match in PLACEHOLDER.finditer(matchup)):
+            continue
+        segments = [prefix, render_segment(matchup), *details]
+        title = " | ".join(segments)
+        if len(title) <= 70:
+            return title
+    compact = " ".join(segments)
+    if len(compact) <= 70:
+        return compact
+    title = " | ".join(segments[1:])
+    if len(title) <= 70:
+        return title
+    return None
 
 
 def render_values(template, values):
@@ -116,6 +159,13 @@ def render_values(template, values):
         return " ".join(PLACEHOLDER.sub(lambda match: values[match[1]], segment).split())
 
     template = validate_template(template)
+    both_suffix = " | " + MATCH_TEMPLATES["both"]
+    prefix = template.removesuffix(both_suffix)
+    if (prefix != template and prefix.strip() and not any(char in prefix for char in "|{}")
+            and {"opp", "h2h_with_wr", "record_with_wr"} <= values.keys()):
+        title = _fit_both_records(" ".join(prefix.split()), values, render_segment)
+        if title:
+            return shared_title(title)
     segments = []
     for segment in template.split("|"):
         segment = segment.strip()

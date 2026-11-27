@@ -1,6 +1,7 @@
 """Actual service/controller/cloud contract; every HTTP/provider call is mocked."""
 from types import SimpleNamespace
 import copy
+from datetime import datetime, timezone
 import threading
 
 import pytest
@@ -8,7 +9,7 @@ import pytest
 from sc2tools_agent.streaming.cloud_client import CloudStreamingClient
 from sc2tools_agent.streaming.service import StreamService
 from sc2tools_agent.streaming.title_settings import configure_title_settings, load_title_settings
-from sc2tools_agent.streaming.title_template import CURRENT_MATCH_TEMPLATE
+from sc2tools_agent.streaming.title_template import CURRENT_MATCH_TEMPLATE, MATCH_TEMPLATES
 
 
 @pytest.fixture(autouse=True)
@@ -220,11 +221,11 @@ def live_event(at, key="game-one", phase="match_loading", **changes):
     return LiveLifecycleEvent(phase=LiveLifecyclePhase(phase), captured_at=at, game_key=key, game_state=game)
 
 
-def configure_start(instance, stats, *, youtube=False):
+def configure_start(instance, stats, *, youtube=False, template=CURRENT_MATCH_TEMPLATE):
     stats["currentMatch"] = {"gameKey": "game-one", "opponent": "Barcode", "alias": "Maru",
                              "race": "Protoss", "map": "Alcyone LE", "h2h": {"wins": 3, "losses": 2}}
     instance.action({"action": "configure_title_automation", "enabled": False, "on_game_start": True,
-        "template": f"GM Protoss | {CURRENT_MATCH_TEMPLATE}",
+        "template": f"GM Protoss | {template}",
         "platforms": {"twitch": True, "kick": True, "youtube": youtube}})
     now = [1200]
     instance.titles.worker.clock = lambda: now[0]
@@ -233,7 +234,7 @@ def configure_start(instance, stats, *, youtube=False):
 
 
 @pytest.mark.parametrize("has_mmr, rating", [(True, "5000 MMR "), (False, "")])
-def test_game_start_publishes_mmr_and_opponent_without_waiting_for_sync(service, has_mmr, rating):
+def test_game_start_publishes_session_record_mmr_and_opponent(service, has_mmr, rating):
     instance, calls, stats, _ = service
     if not has_mmr:
         stats.pop("mmr")
@@ -245,7 +246,9 @@ def test_game_start_publishes_mmr_and_opponent_without_waiting_for_sync(service,
     assert instance.titles.worker.run_once() is True
     writes = [call for call in calls if call[0] == "POST"]
     assert [call[2]["json"]["platforms"] for call in writes] == [["twitch"], ["kick"]]
-    expected = f"GM Protoss | {rating}v Barcode (aka Maru) | 3W–2L (60%) | Alcyone LE"
+    expected = f"GM Protoss | Session: 2W–1L (67%) | {rating}v Barcode (aka Maru)"
+    if not has_mmr:
+        expected += " | Alcyone LE"
     assert all(call[2]["json"]["title"] == expected for call in writes)
     assert instance.titles.settings["last_start_game"] == "game-one"
     instance.on_game_event(live_event(now[0], phase="match_started", display_time=1))
@@ -254,7 +257,7 @@ def test_game_start_publishes_mmr_and_opponent_without_waiting_for_sync(service,
 
 def test_slow_enrichment_is_retried_then_only_current_history_is_published(service):
     instance, calls, stats, _ = service
-    now = configure_start(instance, stats)
+    now = configure_start(instance, stats, template="v {opp} {aka} | {h2h} ({h2h_wr})")
     match = stats.pop("currentMatch")
     instance.on_game_event(live_event(now[0]))
     now[0] += 3
@@ -271,7 +274,8 @@ def test_slow_enrichment_is_retried_then_only_current_history_is_published(servi
     stats["currentMatch"] = match
     now[0] += 5
     instance.titles.worker.run_once()
-    assert len([call for call in calls if call[0] == "POST"]) == 2
+    writes = [call[2]["json"]["title"] for call in calls if call[0] == "POST"]
+    assert writes == ["GM Protoss | v Barcode (aka Maru) | 3W–2L (60%)"] * 2
 
 
 @pytest.mark.parametrize("change", ["end", "new_game", "account", "disabled"])
@@ -374,7 +378,7 @@ def test_same_game_rekey_during_receipt_save_releases_only_the_unattempted_recei
     assert instance.titles.settings["last_start_game"] == new
 
 
-def test_unavailable_history_and_map_are_omitted_after_bounded_wait(service):
+def test_game_start_preset_publishes_with_no_head_to_head_or_map(service):
     instance, calls, stats, _ = service
     now = configure_start(instance, stats)
     stats["currentMatch"].pop("h2h")
@@ -384,12 +388,49 @@ def test_unavailable_history_and_map_are_omitted_after_bounded_wait(service):
     instance.on_game_event(live_event(now[0]))
     now[0] += 3
     instance.titles.worker.run_once()
-    assert not any(call[0] == "POST" for call in calls)
-    now[0] = 1260
-    instance.titles.worker.run_once()
     writes = [call[2]["json"]["title"] for call in calls if call[0] == "POST"]
-    assert writes == ["GM Protoss | 5000 MMR v Barcode"] * 2
+    assert writes == ["GM Protoss | Session: 2W–1L (67%) | 5000 MMR v Barcode"] * 2
     assert instance.titles.worker.match.pending is None
+
+
+@pytest.mark.parametrize("style, expected", [
+    ("session", "GM | Session: 4W–2L (67%) | 5000 MMR v Nexus"),
+    ("h2h", "GM | 5000 MMR v Nexus | H2H: 1W–0L (100%)"),
+    ("both", "GM | 5000 MMR v Nexus | H2H: 1W–0L (100%) | Session: 4W–2L (67%)"),
+])
+def test_post_sync_titles_use_the_result_and_opponent_of_the_accepted_game(service, style, expected):
+    instance, calls, stats, _ = service
+    instance.action({"action": "configure_title_automation", "enabled": True, "on_game_start": False,
+        "template": f"GM | {MATCH_TEMPLATES[style]}",
+        "platforms": {"twitch": True, "kick": True, "youtube": False}})
+    stats.update(session={"wins": 4, "losses": 2},
+                 completedMatch={"gameKey": "accepted-replay", "opponent": "Nexus", "alias": "",
+                                 "h2h": {"wins": 1, "losses": 0}},
+                 currentMatch={"gameKey": "new-game", "opponent": "Other", "alias": "",
+                               "h2h": {"wins": 2, "losses": 3}})
+    instance.on_game_event(live_event(1199, phase="match_ended"))
+    instance.on_game_event(live_event(1200, key="new-game"))
+    replay = SimpleNamespace(date_iso=datetime.fromtimestamp(1199, timezone.utc).isoformat())
+    instance.on_game_accepted("fixture.SC2Replay", replay, "accepted-replay", {})
+    assert instance.titles.worker.run_once() is True
+    reads = [call[2]["params"] for call in calls if call[0] == "GET"]
+    writes = [call[2]["json"]["title"] for call in calls if call[0] == "POST"]
+    assert reads == [{"gameId": "accepted-replay"}]
+    assert writes == [expected] * 2
+    assert instance.status()["title_automation"]["values"]["opp"] == "Other"
+
+
+def test_post_sync_without_a_matching_completed_snapshot_omits_opponent_data(service):
+    instance, calls, stats, _ = service
+    instance.action({"action": "configure_title_automation", "enabled": True, "on_game_start": False,
+        "template": f"GM | {MATCH_TEMPLATES['both']}",
+        "platforms": {"twitch": True, "kick": False, "youtube": False}})
+    separate_match = {"gameKey": "new-game", "opponent": "Other", "alias": "", "h2h": {"wins": 5, "losses": 2}}
+    stats.update(completedMatch=separate_match, currentMatch=separate_match)
+    instance.on_game_event(live_event(1200, key="new-game"))
+    instance.titles.refresh(True, game_id="accepted-replay")
+    writes = [call[2]["json"]["title"] for call in calls if call[0] == "POST"]
+    assert writes == ["GM | Session: 2W–1L (67%)"]
 
 
 def test_late_previous_replay_sync_cannot_replace_an_active_match_title(service):

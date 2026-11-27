@@ -1,5 +1,6 @@
 "use strict";
 const express = require("express");
+const { LIMITS } = require("../config/constants");
 const { PlatformIntegrationError } = require("../services/platformIntegrations");
 const { parsePlatform } = require("./platformIntegrations");
 
@@ -7,7 +8,7 @@ const { parsePlatform } = require("./platformIntegrations");
  * Provider credentials stay in services; no route accepts a user/channel ID.
  * @param {{auth:import('express').RequestHandler,
  * integrations:import('../services/platformIntegrations').PlatformIntegrationsService,
- * titleSession?:(userId:string)=>Promise<unknown>,
+ * titleSession?:(userId:string, gameId?:string)=>Promise<unknown>,
  * streamingTitles:import('../services/streamingTitles').StreamingTitlesService}} deps
  */
 function buildAgentStreamingRouter({ auth, integrations, streamingTitles, titleSession }) {
@@ -15,10 +16,15 @@ function buildAgentStreamingRouter({ auth, integrations, streamingTitles, titleS
   router.get("/agent/streaming/session", auth, async (req, res, next) => {
     try {
       const userId = requireAccount(req);
-      if (Object.keys(req.query).length) throw new PlatformIntegrationError(400, "stream_session_request_invalid", "Session statistics use only the paired account.");
+      const gameId = req.query.gameId;
+      if (Object.keys(req.query).some(key => key !== "gameId")
+        || (gameId !== undefined && (typeof gameId !== "string" || !gameId || gameId !== gameId.trim()
+          || gameId.length > LIMITS.GAME_ID_MAX_LENGTH || /[\u0000-\u001f\u007f]/.test(gameId)))) {
+        throw new PlatformIntegrationError(400, "stream_session_request_invalid", "Session statistics accept only one synced game ID for the paired account.");
+      }
       if (!titleSession) throw new Error("session unavailable");
       res.set("Cache-Control", "no-store");
-      res.json(await titleSession(userId));
+      res.json(await titleSession(userId, gameId));
     } catch (error) { next(safeFailure(error)); }
   });
   router.get("/agent/streaming/status", auth, async (req, res, next) => {

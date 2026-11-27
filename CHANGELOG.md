@@ -491,6 +491,13 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.25.11
+
+- Choose **Session**, **Head-to-head**, or **Both** for automatic stream
+  titles at game start and after the match syncs. Each record shows labeled
+  wins, losses, and win percentage when decided games are available.
+  Saved copies of the previous preset switch to **Session**.
+
 ### Agent 0.25.10
 
 - The current-match title preset puts your MMR before your opponent, as in

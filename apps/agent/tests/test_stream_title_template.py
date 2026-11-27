@@ -1,7 +1,9 @@
 """Local-only rendering: tests prohibit all network/provider operations."""
 import pytest
 
-from sc2tools_agent.streaming.title_template import CURRENT_MATCH_TEMPLATE, render_title, title_values, validate_template
+from sc2tools_agent.streaming.title_template import (
+    CURRENT_MATCH_TEMPLATE, MATCH_TEMPLATES, render_title, title_values, validate_template,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -32,7 +34,10 @@ def test_missing_stats_drop_the_whole_optional_segment_without_inventing_zero():
 
 
 def test_known_zero_record_is_different_from_unavailable_record():
-    assert render_title("{record}", {"session": {"wins": 0, "losses": 0}}) == "0W–0L"
+    empty_session = {"session": {"wins": 0, "losses": 0}}
+    assert render_title("{record} | {record_with_wr}", empty_session) == "0W–0L | 0W–0L"
+    assert render_title("SC2 | {record_with_wr}", {}) == "SC2"
+    assert render_title("{record_with_wr}", {"session": {"wins": 0, "losses": 2}}) == "0W–2L (0%)"
     assert "wr:PvZ" not in title_values({"winRates": {"PvZ": {"wins": 0, "losses": 0}}})
 
 
@@ -68,16 +73,18 @@ def test_malformed_unavailable_values_never_enter_a_title(stats):
 
 
 MATCH = {"gameKey": "current-game", "opponent": "Barcode", "alias": "Maru", "map": "Alcyone LE",
-         "race": "Protoss", "h2h": {"wins": 3, "losses": 2}}
+         "race": "Protoss", "h2h": {"wins": 1, "losses": 0}}
 
 
 def test_current_opponent_alias_map_and_head_to_head_are_separate_from_session_stats():
     stats = {**STATS, "currentMatch": MATCH}
     assert render_title("GM {race} v {opp} {aka} | {h2h} | {map} | {h2h_wr}", stats) == (
-        "GM Protoss v Barcode (aka Maru) | 3W–2L | Alcyone LE | 60%")
+        "GM Protoss v Barcode (aka Maru) | 1W–0L | Alcyone LE | 100%")
     values = title_values(stats)
-    assert values["record"] == "3W–2L" and values["h2h"] == "3W–2L"
-    assert values["wr:PvZ"] == "63%" and values["h2h_wr"] == "60%"
+    assert values["record"] == "3W–2L" and values["record_with_wr"] == "3W–2L (60%)"
+    assert values["h2h"] == "1W–0L" and values["h2h_wr"] == "100%"
+    assert values["h2h_with_wr"] == "1W–0L (100%)"
+    assert values["wr:PvZ"] == "63%"
 
 
 def test_known_match_without_an_alias_leaves_no_empty_parentheses_or_extra_spaces():
@@ -92,6 +99,7 @@ def test_missing_match_and_unknown_history_do_not_fabricate_opponent_or_win_rate
     assert "h2h" not in title_values({"currentMatch": unknown})
     first = {"currentMatch": {**MATCH, "h2h": {"wins": 0, "losses": 0}}}
     assert render_title("v {opp} | {h2h} | {h2h_wr}", first) == "v Barcode | 0W–0L"
+    assert render_title("v {opp} | H2H: {h2h_with_wr}", first) == "v Barcode | H2H: 0W–0L"
 
 
 @pytest.mark.parametrize("match", [None, [], {}, {**MATCH, "gameKey": ""}, {**MATCH, "opponent": []},
@@ -113,28 +121,43 @@ def test_malformed_match_fields_are_omitted_without_losing_valid_opponent(field,
 def test_optional_match_details_drop_whole_segments_at_the_title_limit():
     stats = {"currentMatch": {**MATCH, "map": "Map with a very long and descriptive tournament edition name"}}
     assert render_title("GM Protoss v {opp} {aka} | {h2h} | {map}", stats) == (
-        "GM Protoss v Barcode (aka Maru) | 3W–2L")
+        "GM Protoss v Barcode (aka Maru) | 1W–0L")
 
 
 def test_current_match_preset_keeps_the_opponent_when_the_rating_does_not_fit():
-    prefix = "A" * 47
+    prefix = "A" * 21
     stats = {**STATS, "currentMatch": MATCH}
     assert render_title(f"{prefix} | {CURRENT_MATCH_TEMPLATE}", stats) == (
-        f"{prefix} | v Barcode (aka Maru)")
-    assert render_title(f"{prefix} | {CURRENT_MATCH_TEMPLATE}", STATS) == prefix
+        f"{prefix} | Session: 3W–2L (60%) | v Barcode (aka Maru)")
+    assert render_title(f"{prefix} | {CURRENT_MATCH_TEMPLATE}", STATS) == f"{prefix} | Session: 3W–2L (60%)"
+    long_prefix = "A" * 47
+    assert render_title(f"{long_prefix} | {CURRENT_MATCH_TEMPLATE}", stats) == (
+        f"{long_prefix} | Session: 3W–2L (60%)")
 
 
-def test_loading_a_saved_match_preset_adds_mmr_and_preserves_custom_templates():
+def test_both_records_stay_in_order_and_fit_the_title_limit():
+    preset = MATCH_TEMPLATES["both"]
+    stats = {**STATS, "session": {"wins": 4, "losses": 2},
+             "currentMatch": {**MATCH, "opponent": "Nexus", "alias": ""}}
+    assert render_title(f"GM | {preset}", stats) == (
+        "GM | 5321 MMR v Nexus | H2H: 1W–0L (100%) | Session: 4W–2L (67%)")
+    compact = render_title(f"GM Starcraft 2 Protoss | {preset}", stats)
+    assert compact == "GM Starcraft 2 Protoss v Nexus H2H: 1W–0L (100%) Session: 4W–2L (67%)"
+    assert len(compact) <= 70
+
+
+@pytest.mark.parametrize("rating", ["", "{match_mmr} "])
+def test_loading_a_saved_match_preset_updates_session_record_and_preserves_custom_templates(rating):
     from sc2tools_agent.streaming.title_settings import load_title_settings
 
     prefix = "GM Protoss"
-    old_template = f"{prefix} | v {{opp}} {{aka}} | {{h2h}} ({{h2h_wr}}) | {{map}}"
+    old_template = f"{prefix} | {rating}v {{opp}} {{aka}} | {{h2h}} ({{h2h_wr}}) | {{map}}"
     saved = {"owner": "owner", "template": old_template, "on_game_start": True}
     settings = load_title_settings(saved, "owner")
     assert settings["template"] == f"{prefix} | {CURRENT_MATCH_TEMPLATE}"
     assert settings["on_game_start"] is True
     assert load_title_settings(settings, "owner") == settings
-    custom = "GM Protoss v {opp} | {record}"
+    custom = "GM Protoss v {opp} | {h2h} ({h2h_wr})"
     assert load_title_settings({**saved, "template": custom}, "owner")["template"] == custom
 
 

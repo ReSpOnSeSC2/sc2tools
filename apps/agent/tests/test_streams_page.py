@@ -88,10 +88,11 @@ def test_current_match_template_preserves_prefix_and_only_edits_locally(page, mo
     monkeypatch.setattr(widget, "job", calls.append)
     controls = widget.title_controls
     controls.values = {"match_mmr": "5321 MMR", "opp": "Barcode", "aka": "(aka Maru)",
-                       "h2h": "3W–2L", "map": "Alcyone LE", "h2h_wr": "60%"}
+                       "h2h": "1W–0L", "map": "Alcyone LE", "h2h_wr": "100%",
+                       "record_with_wr": "4W–2L (67%)"}
     controls.match_template.click()
-    assert widget.title_input.text() == "GM Protoss | {match_mmr} v {opp} {aka} | {h2h} ({h2h_wr}) | {map}"
-    assert controls.preview.text() == "Preview: GM Protoss | 5321 MMR v Barcode (aka Maru) | 3W–2L (60%) | Alcyone LE"
+    assert widget.title_input.text() == "GM Protoss | Session: {record_with_wr} | {match_mmr} v {opp} {aka} | {map}"
+    assert controls.preview.text() == "Preview: GM Protoss | Session: 4W–2L (67%) | 5321 MMR v Barcode (aka Maru)"
     assert widget.title_dirty and controls.dirty
     assert not controls.on_game_start.isChecked() and not controls.enabled.isChecked()
     assert calls == []
@@ -144,7 +145,31 @@ def test_template_preset_uses_neutral_prefix_for_dynamic_template(page):
     widget.render(state)
     widget.title_input.setText("{mmr} MMR | {record}")
     widget.title_controls.match_template.click()
-    assert widget.title_input.text().startswith("SC2 | {match_mmr} v {opp} {aka}")
+    assert widget.title_input.text().startswith("SC2 | Session: {record_with_wr} | {match_mmr} v {opp} {aka}")
+
+
+def test_match_preset_selector_applies_head_to_head_and_both_order_to_draft(page, monkeypatch):
+    widget, state, _app = page
+    state["account_mode"] = "sc2tools"
+    widget.render(state)
+    widget.title_input.setText("GM")
+    calls = []
+    monkeypatch.setattr(widget, "job", calls.append)
+    controls = widget.title_controls
+    controls.values = {"match_mmr": "5321 MMR", "opp": "Nexus", "aka": "",
+                       "h2h_with_wr": "1W–0L (100%)", "record_with_wr": "4W–2L (67%)"}
+    for style, expected in (
+        ("h2h", "GM | 5321 MMR v Nexus | H2H: 1W–0L (100%)"),
+        ("both", "GM | 5321 MMR v Nexus | H2H: 1W–0L (100%) | Session: 4W–2L (67%)"),
+    ):
+        index = controls.record_style.findData(style)
+        controls.record_style.setCurrentIndex(index)
+        controls.record_style.activated.emit(index)
+        assert controls.preview.text() == f"Preview: {expected}"
+        assert not calls
+    controls.configure()
+    assert calls[0]["template"] == (
+        "GM | {match_mmr} v {opp} {aka} | H2H: {h2h_with_wr} | Session: {record_with_wr}")
 
 
 def test_youtube_metadata_failure_is_visible_with_connected_account(page):
