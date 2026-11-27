@@ -130,6 +130,7 @@ it("features Humdingers right after the hero with a full-page link to the static
   expect(play.hasAttribute("target")).toBe(false);
   for (const icon of play.querySelectorAll("svg")) expect(icon.getAttribute("aria-hidden")).toBe("true");
   expect(within(card).getByRole("img", { name: "Humdingers title screen" })).toBeTruthy();
+  expect(card.textContent).toContain("Besides StarCraft: Brood War and StarCraft II,");
   expect(card.textContent).toContain("Not affiliated with Nintendo.");
   expect(container.querySelector("iframe")).toBeNull();
 });

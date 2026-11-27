@@ -19,10 +19,10 @@ export function HumdingersShowcase() {
             Humdingers
           </h2>
           <p className="mt-3 max-w-prose text-body-lg text-text-muted">
-            Besides StarCraft, the only games I&rsquo;ve ever been this passionate
-            about are EarthBound on the SNES and Mother 3. So I&rsquo;m making a
-            spiritual successor. Worlds 1 and 2 are playable free in your
-            browser, on phone or desktop.
+            Besides StarCraft: Brood War and StarCraft II, the only games
+            I&rsquo;ve ever been this passionate about are EarthBound on the SNES
+            and Mother 3. So I&rsquo;m making a spiritual successor. Worlds 1 and 2
+            are playable free in your browser, on phone or desktop.
           </p>
           <a
             href={HUMDINGERS_PATH}

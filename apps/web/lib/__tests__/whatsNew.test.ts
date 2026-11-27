@@ -30,9 +30,10 @@ describe("curated product updates", () => {
     expect(entry?.link).toEqual({ href: "/play/humdingers", label: "Play Humdingers (about 10 MB)" });
     expect(entry?.major).toBeUndefined();
   });
-  it("keeps every summary within the 280-character notification body", () => {
-    // BODY_MAX in apps/api/src/services/notifications.js clips longer bodies.
-    for (const entry of WHATS_NEW) expect(entry.summary.length, entry.id).toBeLessThanOrEqual(280);
+  it("keeps every inbox announcement within the 280-character notification body", () => {
+    // A "major" entry's summary becomes the notification body, and BODY_MAX in
+    // apps/api/src/services/notifications.js cuts longer bodies mid-word.
+    for (const entry of WHATS_NEW.filter(item => item.major)) expect(entry.summary.length, entry.id).toBeLessThanOrEqual(280);
   });
   it("publishes a static escaped RSS item for every curated update", async () => {
     const response = GET(); const xml = await response.text(); const parsed = new DOMParser().parseFromString(xml, "application/xml");
