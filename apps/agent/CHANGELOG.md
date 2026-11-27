@@ -4,15 +4,19 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## 0.26.0
 
+### Changed
+- The Streams page groups its automatic switches by when they run:
+  **At each game start**, **After each synced game**, then **Channels**.
+
 ### Added
-- Optional **Set channel tags at each game start** and **Set category to
-  StarCraft II at game start** on the Streams page, both off
+- Optional **Set channel tags** and **Set category to StarCraft II**
+  switches under **At each game start** on the Streams page, both off
   by default. Tags follow your matchup, race and league, with `ViewerGames` in
   a custom game (when the live feed reports its map) and `Tournament` during a
   Series. Tags you set by hand are
   kept, and the category only changes at a game start, never back.
-- Optional **Add OBS recording chapters at game start** on the
-  Streams page, off by default. Each game adds a chapter such as
+- Optional **Add a chapter to the OBS recording** under **At each game
+  start** on the Streams page, off by default. Each game adds a chapter such as
   `Game 4 · PvZ` to the file OBS is recording. It needs OBS 30.2 or newer
   recording Hybrid MP4; otherwise it quietly does nothing.
 

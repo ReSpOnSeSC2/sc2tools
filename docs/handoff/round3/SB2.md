@@ -11,5 +11,6 @@
 - **Looked at.** The Game chapters group at 360 and 1280, light and dark, against fixture responses: the toggle row now sits beside its label.
 - **Not verified.** No live YouTube, OBS (`CreateRecordChapter` via `ReqClient.send`, Hybrid MP4) or StarCraft run; `actualStartTime`/`actualEndTime` were read from the docs only. The browser sample was not regenerated (no touched file is in `files.mjs`). The full suites were not run.
 - **Owner checks.** Set `YOUTUBE_CHAPTERS_ENABLED=true`, end a YouTube stream with three or more games, open the archive description. Record one Hybrid MP4 locally and open it in a player that shows chapters.
+- **Design pass (owner's bar: clean, sleek, responsive).** The Streams page groups its switches by when they run (At each game start, After each synced game, Channels), with a test that fails if a switch leaves its group; the Dock group uses shorter labels so Show and Copy sit side by side at 360 px, and the list sits in a bordered box. `/dock/[token]` still reads 225.1 locally. Pictures: C:/SC2TOOLS/.cache/round3-design-tools.
 - **Follow-ups.** A Dock indicator of the last receipt per video.
 - **Ledger.** None.
