@@ -18,7 +18,7 @@ A mode is allowed only if its answer is **not visible by sorting one column on a
 | `forward` | Predicts the future or resolves over a future window |
 | `generative` | Builds new game state (portfolios, cards, daily puzzles) |
 
-The CI script `scripts/depthLint.mjs` walks every mode file, asserts a known `depthTag` literal is present, and that it agrees with the file's `registerMode(...)` call. The unit test `__tests__/depthLint.test.ts` cross-checks at runtime.
+The CI script `scripts/depthLint.mjs` checks every mode file: each file under `modes/` that calls `registerMode(...)` or exports a `Mode` (helper files beside the modes are skipped). It asserts a known `depthTag` literal is present and that it agrees with the file's `registerMode(...)` call. web-ci runs it as `npm run depth-lint`, before the unit tests. The unit test `__tests__/depthLint.test.ts` cross-checks at runtime.
 
 ## Locked catalog
 

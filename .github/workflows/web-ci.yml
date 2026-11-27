@@ -52,6 +52,8 @@ jobs:
         run: npm run lint
       - name: UI baseline ratchet
         run: npm run ui:lint
+      - name: Arcade depth lint
+        run: npm run depth-lint
       - name: Test
         run: npm test
 
