@@ -135892,7 +135892,8 @@ html.touch #touch { display: block; }
  *   story.dl_lane_depot6      humdrum, talking to dl_coach at the lay-by, dl 1, until r6_mast (gives dl_timetable, stamp No. 6)
  *   story.dl_lane_meets       the kit's trigger dl_lane_trg at Depot No. 7, w2 >= 10 (flag dl_lane_met)
  *   story.dl_guide_taught     r6, after the first fight won (flag dl_guide_taught)
- *   story.dl_thought_taught   the walkie, the next free tick after Mia's thought (flag dl_thought_taught)
+ *   story.dl_thought_taught   the walkie, the first free tick after Mia's join scene (she teaches it there), with her
+ *                             present, whether or not Jay has listened yet (flag dl_thought_taught)
  *   story.dl_huddle           the moment Huddle first shows on the menu after dl_mia_joined (the next free tick), or the
  *                             first walkie call or stall call before that (flag dl_huddle_taught)
  *   service dl.dot            int_museum, [tune] on dl_dot_nap from dl 2: the Dot tags along, no dial
@@ -135952,7 +135953,7 @@ html.touch #touch { display: block; }
     laneClear: 'Funny. The road looks the same.',
     laneClearThought: 'I could be early now. I\'ve decided against it.',
     kiloThought: 'This one was the best one. I say that about all of them. I mean it every time.',
-    thoughtTaught: 'For the record, Jay: stand beside any friend and press [tune]. They have a new thought every time something happens. I keep a list.',
+    thoughtTaught: 'For the record, Jay: dots over a friend mean a new thought. One comes each time something happens. To hear Mia\'s, stand next to her, press [tune], and pick Listen. I keep a list.',
     huddle: [[POP, 'There\'s a new line on your menu, kiddo: Huddle. That\'s Mia, not me. Ask whoever\'s standing next to you before you call me.'],
       [MIA, 'He means me. Press [menu], pick Walkie, then Huddle. I\'ll say where we\'re going. I already know where we\'re going.']],
     huddleSprocket: 'I\'m in the Huddle now, chief. Press [menu], pick Walkie, then Huddle. I talk fast. Keep up.',
@@ -135972,7 +135973,7 @@ html.touch #touch { display: block; }
   var CENSUS_PAY = [[20, 200], [30, 400], [45, 800], [59, 1600]];
   // 2.6: each hero is the first teacher of a thought in the join's next minute; the joins (W2, W3, W5) say these word for word
   D.TEACH_THOUGHT = {
-    mia: 'You\'re doing the listening thing. Go on, then. Stand beside me and press [tune].',
+    mia: 'One small thing first. The dots over my head mean I have a new thought. To hear it, stand next to me, press [tune], and pick Listen. I would rather you didn\'t.',
     sprocket: 'You can hear thinking? Do me, chief. Stand beside me and press [tune]. It\'s loud in here.',
     philo: 'I am told I have thoughts now. Stand beside me and press [tune]. I would like to know what they are.'
   };
@@ -136218,10 +136219,15 @@ html.touch #touch { display: block; }
   }
 
   // ================================================================ 2.6 a hero's thought, Huddle; 2.2 the Field Guide's second teacher
-  G.on('dl:thought', function (e) {
-    if (!e || e.hero !== 'mia' || flag('dl_thought_taught')) return;
-    D.later('thought_taught', function (S) { return S.service('story.dl_thought_taught'); });
-  });
+  // A thought's second teacher: Philo on the walkie at the first free tick after Mia's join scene, where she is the first
+  // teacher. Her dots show from the join, so he says it whether or not Jay has listened yet. A save from before this rule
+  // gets the call at its first free tick with Mia present; a Listen on her still brings it if nothing has.
+  function thoughtDue() {
+    return flag('dl_mia_joined') && !flag('dl_thought_taught') && !!(G.party && G.party.has && G.party.has('mia')) &&
+      !(G.party.isAway && G.party.isAway('mia'));
+  }
+  function teachThought() { if (!flag('dl_thought_taught')) D.later('thought_taught', function (S) { return S.service('story.dl_thought_taught'); }); }
+  G.on('dl:thought', function (e) { if (e && e.hero === 'mia') teachThought(); });
   function huddleDue() { return flag('dl_mia_joined') && !flag('dl_huddle_taught'); }
   function teachHuddle() { if (huddleDue()) D.later('huddle', function (S) { return S.service('story.dl_huddle'); }); }
   G.on('walkie:call', teachHuddle);
@@ -136232,6 +136238,7 @@ html.touch #touch { display: block; }
     if (++huddleLook < 30) return;
     huddleLook = 0;
     if (huddleDue() && G.huddle && typeof G.huddle.available === 'function' && G.attempt('dlstory.huddle.available', G.huddle.available)) teachHuddle();
+    if (thoughtDue()) teachThought();            // queued after the Huddle call when both wait: Philo's is the last word
   });
   G.on('dl:huddle', function (e) {
     var heroes = (e && e.heroes) || [];
@@ -141874,7 +141881,7 @@ html.touch #touch { display: block; }
       'You can walk up to it and press [ok], like a tourist. Or stand anywhere you can see it, press [tune], and pick Lob. Then I hit it with a golf ball.',
       'With Lob, I can hit the bell from anywhere I can see it. I can hit other things too, up to ten steps away, even over walls.'],
     newtBell: 'Mia rings the bell from way over HERE. I\'ve seen her do it. ...Have I? Press [tune] and pick the golf one!',
-    teach: 'You\'re doing the listening thing. Go on, then. Stand beside me and press [tune].',          // docs/dl STORY 2.6 (G.dl.TEACH_THOUGHT)
+    teach: 'One small thing first. The dots over my head mean I have a new thought. To hear it, stand next to me, press [tune], and pick Listen. I would rather you didn\'t.',   // docs/dl STORY 2.6 (G.dl.TEACH_THOUGHT; rewritten 27 Nov)
     fine: '...Fine. You can listen to my thoughts now and then. But I\'ll know when you do.',
     // 2.6
     beau: ['Safety first! Fun a close second!', 'That\'s one for the squirrels!'],
@@ -142188,6 +142195,9 @@ html.touch #touch { display: block; }
     // the next minute: the downed disc gets up, and its understudy with it (the fight's own intro); rules noLose
     if (joined && G.reg.has('fight', n.fight)) await S.battle(n.fight);
     if (stale(gen)) return false;
+    // her thought (docs/dl STORY 2.6): the dots have been over her head since the join, so she teaches it now, before the
+    // bell; Philo says it again on the walkie at the first free tick after this scene (js/story/dl_scenes.js)
+    if (joined) await says(S, MIA, (G.dl && G.dl.TEACH_THOUGHT && G.dl.TEACH_THOUGHT.mia) || L.teach);
     await says(S, MIA, L.bell);
     newt = S.ent(n.people.newt) || newt;
     if (newt) S.face(newt, 'player');
@@ -142307,9 +142317,7 @@ html.touch #touch { display: block; }
     var c = core();
     if (stage() === 14 && flag('dl_mia_joined')) {
       S.setFlag('w2_lob_taught');
-      c.setStage(16);
-      var teach = (G.dl && G.dl.TEACH_THOUGHT && G.dl.TEACH_THOUGHT.mia) || L.teach;
-      await says(S, MIA, teach);
+      c.setStage(16);                                            // her thought was taught at the join, before the bell
       return;
     }
     if (stage() === 16 && info.scene === 0 && flag('w2act1_ate') && has('story.w2_first_loop')) await S.service('story.w2_first_loop', 'plan');
@@ -142333,9 +142341,10 @@ html.touch #touch { display: block; }
     if (e.id === n.town && e.from === n.mess && flag('w2act1_ate') && !flag('w2act1_cabin4') && core().miaIn()) core().later('cabin', function (S) { return S.service('story.w2_first_loop', 'cabin'); });
     if (e.id === 'int_mia' && core().miaIn() && !flag('w2act1_home_room')) core().later('home_room', function (S) { S.setFlag('w2act1_home_room'); return says(S, MIA, L.yardage); });
   });
-  // her first thought read: hers alone, before Philo's walkie (docs/dl's job waits for this script to end)
+  // her first thought read: hers alone. Philo's walkie (dl_thought_taught) has come before it since the join teaches the
+  // thought; when it has not (an old save), docs/dl's job waits for this script to end
   G.on('dl:thought', function (e) {
-    if (!e || e.hero !== 'mia' || !e.fresh || flag('dl_thought_taught') || flag('w2act1_fine') || !G.script.running) return;
+    if (!e || e.hero !== 'mia' || !e.fresh || flag('w2act1_fine') || !G.script.running) return;
     G.setFlag('w2act1_fine');
     G.script.run(function (S) { return says(S, MIA, L.fine); });
   });
@@ -142365,6 +142374,9 @@ html.touch #touch { display: block; }
     var c = core();
     if (!G.story || !G.story.scene || !c) return;
     var n = N(), ppl = n.people;
+    // a jump past the join is past Philo's walkie on her thought dots too: it plays at the first free tick after the join
+    // scene (js/story/dl_scenes.js), before the player can move
+    if (c.JUMP && c.JUMP.length > 50) for (var j = 14; j <= 50; j++) if (c.JUMP[j].flags.indexOf('dl_thought_taught') < 0) c.JUMP[j].flags.push('dl_thought_taught');
     G.story.scene('w2_arrive', arrive, { when: function () { return stage() < 10 && c.roadDone(); } });
     G.story.scene('w2_landing', landing, { once: true, when: function () { return stage() >= 10; } });
     G.story.scene('w2_barrier', barrier, { when: function (at) {
@@ -150479,6 +150491,13 @@ else if (typeof G !== 'undefined') G.botkit = api;
       { id: 'mia', run: async () => {
         for (let i = 0; i < 4 && w2() < 14; i++) { await walk('w2_camp_gate'); await settle(() => w2() >= 14, 20000); }
         await bot.run({ scenes });
+        // the walkie calls the join leaves (Huddle, then Philo on her thought dots), then one Listen on Mia, as a player
+        // shown the dots would do (docs/dl STORY 2.6): her thought, then her "...Fine."
+        await settle(() => flag('dl_thought_taught') && !(G.dl && G.dl.pending && G.dl.pending().length), 2400);
+        if (G.world.find('follower:mia') && G.thoughts && G.thoughts.isNew('mia') && G.puppet && G.puppet.available()) {
+          await bot.listen('follower:mia', { scenes });
+          await settle(() => flag('w2act1_fine'), 1200);
+        }
       }, done: () => w2() >= 14 && flag('dl_mia_joined') && G.party.has('mia') },
       { id: 'bell', run: async () => {
         for (let i = 0; i < 4 && w2() < 16; i++) { await lob(bot); await settle(() => w2() >= 16, 4000); }
@@ -150816,6 +150835,10 @@ else if (typeof G !== 'undefined') G.botkit = api;
     if (e) {
       if (e.kind === 'enemy') { var d = enemyDef(e.type), n = d && d.name ? d.name : 'critter'; return { text: article(d, n) + n, kind: 'critter' }; }
       if (e.kind === 'npc' && e.name) return { text: String(e.name), kind: 'person' };
+      if (e.kind === 'follower' && e.member && G.party && G.party.get) {          // a friend in the party: the hero's name
+        var hero = G.party.get(e.member);
+        if (hero && hero.name) return { text: String(hero.name), kind: 'person' };
+      }
       var id = String(e.id || ''), base = id.replace(/(_\d+)+$/, '');
       if (THINGS[base]) return { text: THINGS[base], kind: 'thing' };
       if (e.name) return { text: String(e.name), kind: e.kind === 'npc' ? 'person' : 'thing' };
