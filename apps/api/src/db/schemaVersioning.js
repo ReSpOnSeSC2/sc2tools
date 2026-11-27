@@ -319,6 +319,21 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.HUMDINGERS_SAVES]: {
+    collection: COLLECTIONS.HUMDINGERS_SAVES,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.HUMDINGERS_PLAY_DAYS]: {
+    collection: COLLECTIONS.HUMDINGERS_PLAY_DAYS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.HUMDINGERS_PLAY_PLAYERS]: {
+    collection: COLLECTIONS.HUMDINGERS_PLAY_PLAYERS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.MATCH_ROOMS]: {
     collection: COLLECTIONS.MATCH_ROOMS,
     currentVersion: 1,

@@ -26,10 +26,13 @@ import { CommandSearchProvider } from "@/components/chrome/CommandSearchProvider
 import { AppearanceAccountSync } from "@/components/chrome/AppearanceAccountSync";
 import { applyAppearanceAttributes, readStoredAppearance } from "@/lib/appearance";
 import { isBalanceToolPath } from "@/lib/balance/routes";
+import { HUMDINGERS_PATH } from "@/lib/humdingers";
 
 const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
 const STANDALONE_SURFACES = new Set(["/wrapped", "/career", "/arcade/scout"]);
+/** Full-screen games: Clerk for account saves, nothing drawn over the game (ADR 0102). */
+const GAME_SURFACES = new Set([HUMDINGERS_PATH]);
 
 /**
  * Chooses the browser surface before mounting Clerk or normal site chrome.
@@ -83,6 +86,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Reachability checks must work even when authentication or app APIs fail.
   if (isPublicStatusRoute(pathname)) return <>{children}</>;
+
+  if (pathname && GAME_SURFACES.has(pathname)) {
+    return (
+      <ClerkProvider appearance={clerkAppearanceBase}>
+        <ToastProvider>{children}</ToastProvider>
+      </ClerkProvider>
+    );
+  }
 
   if (isTokenSurface || isBalanceToolPath(pathname) || (pathname && STANDALONE_SURFACES.has(pathname)) || isReportCardPath(pathname)) {
     return (

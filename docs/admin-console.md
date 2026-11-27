@@ -4,7 +4,7 @@
 
 Overview contains Dashboard and Notifications. Community contains Users, Player
 identities, Player channels and Moderation. Insights contains Global players,
-Global trends, Classifier and Web analytics. Content contains Guides. Operations contains
+Global trends, Classifier, Web analytics and Humdingers. Content contains Guides. Operations contains
 Tools, Audit log and Infrastructure. Each page's Help link opens the relevant section here.
 
 ## Granting admin
@@ -289,6 +289,18 @@ GA4 metrics may take 24–48 hours to settle. Realtime is separate and can be re
 without discarding the summary. Export CSV downloads the displayed top pages or
 channels for the selected range. Share percentages use the displayed breakdown's
 total; top pages use total page views when supplied.
+
+## Humdingers plays
+
+**Insights → Humdingers** shows how much the Humdingers browser RPG is played:
+for the last 7, 30 or 90 days, the number of loads, daily players (each player
+counts once a day, added up over the range), active play time with idle time
+left out, plays over a minute, how many daily players had a save, and the
+furthest chapter in players' saves, plus one row per UTC day with plays. Players
+must be signed in to play, but the totals hold no names: a player is counted
+through a hash of the day and their account that is deleted after 35 days. The
+game's saves themselves live with each player's account and leave with it on
+export or deletion. See ADR 0102.
 
 ## Classifier console
 

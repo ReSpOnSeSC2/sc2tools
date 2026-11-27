@@ -130,7 +130,10 @@ it("features Humdingers right after the hero with a full-page link to the static
   expect(play.hasAttribute("target")).toBe(false);
   for (const icon of play.querySelectorAll("svg")) expect(icon.getAttribute("aria-hidden")).toBe("true");
   expect(within(card).getByRole("img", { name: "Humdingers title screen" })).toBeTruthy();
+  expect(within(card).getByRole("img", { name: /^A Humdingers battle/ }).getAttribute("src")).toBe("/landing/humdingers-gameplay-1.png");
+  expect(within(card).getByRole("img", { name: /^Humdrum's main street/ }).getAttribute("src")).toBe("/landing/humdingers-gameplay-2.png");
   expect(card.textContent).toContain("Besides StarCraft: Brood War and StarCraft II,");
+  expect(card.textContent).toContain("Sign in with a free SC2 Tools account to play. Your saves follow your account.");
   expect(card.textContent).toContain("Not affiliated with Nintendo.");
   expect(container.querySelector("iframe")).toBeNull();
 });

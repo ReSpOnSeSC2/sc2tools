@@ -14,12 +14,18 @@ corresponding GitHub Release.
 ### Humdingers
 
 - Humdingers, the browser RPG the site's creator is making as a spiritual
-  successor to EarthBound and Mother 3, is playable by anyone at
-  `/play/humdingers`, signed in or not, on phones (with touch controls) and
+  successor to EarthBound and Mother 3, is playable with a free account at
+  `/play/humdingers`, on phones (with touch controls) and
   on desktops. The home page features it right after the hero, the Arcade
   tab links to it above its sections, and What's New has an entry. The
   inbox notification follows once the page is live. The game is one static
   file of about 10 MB. See ADR 0101.
+- Humdingers saves follow the player's account. `/play/humdingers` is now a
+  signed-in page that runs the game full screen and copies each save to the
+  account, so players can carry on from another device; account export and
+  deletion include the saves. Admins see anonymous daily plays and play time
+  under Admin → Insights → Humdingers. The home-page and Arcade cards show two
+  gameplay screenshots. See ADR 0102.
 
 ### Agent release notes
 

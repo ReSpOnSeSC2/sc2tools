@@ -39,13 +39,13 @@ function matchRoomObsResponse(req: NextRequest): NextResponse {
 }
 
 /**
- * The game's clean link serves its static file and keeps the address bar
- * clean. It needs no session, so it never waits on a Clerk handshake.
+ * The game file runs only inside its host page, which keeps saves in the
+ * player's account (ADR 0102). Opening the file itself goes to the host page.
  */
-function humdingersRewrite(req: NextRequest): NextResponse {
-  const file = req.nextUrl.clone();
-  file.pathname = HUMDINGERS_FILE;
-  return NextResponse.rewrite(file);
+function humdingersHostRedirect(req: NextRequest): NextResponse {
+  const host = req.nextUrl.clone();
+  host.pathname = HUMDINGERS_PATH;
+  return NextResponse.redirect(host);
 }
 
 const isProtected = createRouteMatcher([
@@ -67,6 +67,10 @@ const isProtected = createRouteMatcher([
   "/settings(.*)",
   "/notifications(.*)",
   "/admin(.*)",
+  // Humdingers is for signed-in players: the host page syncs saves to the
+  // account, and the prebuilt file stays behind it (ADR 0102).
+  HUMDINGERS_PATH,
+  HUMDINGERS_FILE,
 ]);
 
 const authenticatedMiddleware = clerkMiddleware(async (auth, req) => {
@@ -93,7 +97,7 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const statusRedirect = statusHostRedirect(req.url);
   if (statusRedirect) return NextResponse.redirect(statusRedirect, PERMANENT_REDIRECT);
   const pathname = req.nextUrl.pathname;
-  if (pathname === HUMDINGERS_PATH) return humdingersRewrite(req);
+  if (pathname === HUMDINGERS_FILE && req.headers.get("sec-fetch-dest") === "document") return humdingersHostRedirect(req);
   if (isRoomObsPath(pathname)) return matchRoomObsResponse(req);
   // Static replay views work without a Clerk handshake.
   if (isPublicStatusRequest(pathname) || isBalanceToolPath(pathname) || SESSIONLESS_PAGES.has(pathname)
@@ -112,5 +116,7 @@ export const config = {
     // Public archives, opaque preview paths and metadata images stay accessible.
     "/players/(.*)",
     "/p/(.*)",
+    // The Humdingers file has a dot too, and it is signed in only.
+    "/play/(.*)",
   ],
 };
