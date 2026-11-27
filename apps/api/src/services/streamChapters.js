@@ -46,7 +46,19 @@ function roundedRating(mmr) {
   return hundreds >= 1000 ? `${(hundreds / 1000).toFixed(1)}k` : String(hundreds);
 }
 
-/** @param {any} row @param {number} number */
+/**
+ * The fields of a stored game that a chapter reads.
+ * @typedef {{
+ *   result?: string,
+ *   myRace?: string,
+ *   opponent?: {race?: string, mmr?: number},
+ *   startedAt?: Date|string,
+ *   date?: Date|string,
+ *   durationSec?: number,
+ * }} ChapterGame
+ */
+
+/** @param {ChapterGame} row @param {number} number */
 function chapterText(row, number) {
   const result = facts.outcome(row);
   const rating = roundedRating(row.opponent?.mmr);
@@ -54,7 +66,7 @@ function chapterText(row, number) {
 }
 
 /**
- * @param {any[]} rows games with startedAt or date (the replay end) and durationSec
+ * @param {ChapterGame[]} rows games with startedAt or date (the replay end) and durationSec
  * @param {number} originMs where the 0:00 of the video is
  * @param {{endMs?: number, youtube?: boolean}} [window] endMs: where the video ends, so later games get no chapter;
  *   youtube: apply the three-chapter and ten-second rules of YouTube (a text copy for Twitch or Kick has none)
@@ -93,11 +105,16 @@ class StreamChaptersService {
     this.receipts = deps.receipts || null;
   }
 
-  /** @param {string} userId @param {number} fromMs @param {number} toMs */
+  /**
+   * The stream's games, oldest first, projected to the fields a chapter reads.
+   * @param {string} userId @param {number} fromMs @param {number} toMs
+   * @returns {Promise<ChapterGame[]>}
+   */
   async rows(userId, fromMs, toMs) {
-    return this.games.find(gamesMatchStage(userId, { since: new Date(fromMs), until: new Date(toMs) }), { projection: {
+    const games = await this.games.find(gamesMatchStage(userId, { since: new Date(fromMs), until: new Date(toMs) }), { projection: {
       _id: 0, date: 1, result: 1, myRace: 1, "opponent.race": 1, "opponent.mmr": 1, durationSec: 1, startedAt: 1,
     } }).sort({ date: 1 }).limit(GAME_LIMIT).toArray();
+    return /** @type {ChapterGame[]} */ (games);
   }
 
   /** Lines for the Dock's copy button, counted from the stream start the Dock marked.
