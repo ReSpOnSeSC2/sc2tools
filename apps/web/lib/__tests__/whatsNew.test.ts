@@ -23,12 +23,12 @@ describe("curated product updates", () => {
     expect(entry?.link).toEqual({ href: "/tools", label: "Explore all tools" });
     expect(entry?.major).toBeUndefined();
   });
-  it("links Humdingers to its public page without requesting an inbox announcement yet", () => {
-    // "major" sends a notification once the API deploys. It is switched on in a
-    // follow-up after the page is live, so no one is told before they can play.
+  it("links Humdingers to its public page and announces it in the inbox", () => {
+    // "major" sends a notification once the API deploys. It was switched on
+    // only after the page was live, so no one was told before they could play.
     const entry = WHATS_NEW.find(item => item.id === "humdingers");
     expect(entry?.link).toEqual({ href: "/play/humdingers", label: "Play Humdingers (about 10 MB)" });
-    expect(entry?.major).toBeUndefined();
+    expect(entry?.major).toBe(true);
   });
   it("keeps every inbox announcement within the 280-character notification body", () => {
     // A "major" entry's summary becomes the notification body, and BODY_MAX in
