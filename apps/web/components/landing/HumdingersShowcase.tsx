@@ -4,7 +4,8 @@ import { buttonClassName } from "@/components/ui/buttonStyles";
 import { HUMDINGERS_GAMEPLAY_SHOTS, HUMDINGERS_PATH, HUMDINGERS_SIZE } from "@/lib/humdingers";
 
 /**
- * Features Humdingers, the site owner's browser RPG, right after the hero.
+ * Features Humdingers, the site owner's browser RPG, after the "Everything
+ * included" chapter near the bottom of the page.
  * Play is a plain anchor, not Next's Link: the game page switches the site
  * shell off and loads a large static file (see isStaticPlayPath). The title
  * screen and two gameplay shots are at the game's exact 2x scale, so they
@@ -12,7 +13,7 @@ import { HUMDINGERS_GAMEPLAY_SHOTS, HUMDINGERS_PATH, HUMDINGERS_SIZE } from "@/l
  */
 export function HumdingersShowcase() {
   return (
-    <section id="humdingers" aria-labelledby="humdingers-heading" className="mt-16 scroll-mt-24 md:mt-20">
+    <section id="humdingers" aria-labelledby="humdingers-heading" className="mt-20 scroll-mt-24 md:mt-28">
       <div className="surface-sheen grid items-center gap-6 overflow-hidden rounded-2xl border border-line bg-bg-surface/70 p-5 shadow-card sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-10 lg:p-8">
         <div className="min-w-0">
           <p className="hud-label">Free browser RPG</p>
@@ -34,7 +35,7 @@ export function HumdingersShowcase() {
             <span>Play Humdingers <span className="whitespace-nowrap">({HUMDINGERS_SIZE})</span></span>
           </a>
           <p className="mt-3 text-caption text-text-dim">
-            Sign in with a free SC2 Tools account to play. Your saves follow your account. Not affiliated with Nintendo.
+            Sign in with a free SC2 Tools account to play. Your saves and play time are kept with your account. Not affiliated with Nintendo.
           </p>
         </div>
         <div className="grid min-w-0 gap-3">

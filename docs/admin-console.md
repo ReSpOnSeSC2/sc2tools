@@ -292,15 +292,28 @@ total; top pages use total page views when supplied.
 
 ## Humdingers plays
 
-**Insights → Humdingers** shows how much the Humdingers browser RPG is played:
-for the last 7, 30 or 90 days, the number of loads, daily players (each player
-counts once a day, added up over the range), active play time with idle time
-left out, plays over a minute, how many daily players had a save, and the
-furthest chapter in players' saves, plus one row per UTC day with plays. Players
-must be signed in to play, but the totals hold no names: a player is counted
-through a hash of the day and their account that is deleted after 35 days. The
-game's saves themselves live with each player's account and leave with it on
-export or deletion. See ADR 0102.
+**Insights → Humdingers** shows who plays the Humdingers browser RPG and how
+much, for the last 7, 30 or 90 days.
+
+- **Totals** at the top: loads, daily players (each player counts once a day,
+  added up over the range), active play time with idle time left out, plays
+  over a minute, how many daily players had a save, and the furthest chapter in
+  players' saves.
+- **Players** lists the accounts that played, most recent first (up to 200).
+  Each row shows the profile display name, with the BattleTag and email under
+  it, and links to the account's admin page. The columns are the range's
+  sessions and active play time, when the player last played, the furthest
+  chapter, and the game clock (the play time stored in the account's saves).
+  Select a player's session count to see each visit: when it started, its
+  active play time, the chapter reached and whether the player saved. Accounts
+  whose saves changed in the range appear even without sessions.
+- **By day** has one row per UTC day with plays.
+
+Every visit to the game page is kept with the account as a play session for 90
+days, starting November 27, 2026; sessions are exported and deleted with the
+account. The totals and the By day table come from anonymous daily counts that
+go further back: a player is counted there through a hash of the day and their
+account that is deleted after 35 days. See ADRs 0102 and 0103.
 
 ## Classifier console
 

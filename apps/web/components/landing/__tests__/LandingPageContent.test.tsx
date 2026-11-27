@@ -119,12 +119,13 @@ it("keeps navigation anchors and decorative icon labels in shared landing action
   }
 });
 
-it("features Humdingers right after the hero with a full-page link to the static game", () => {
+it("features Humdingers after Everything included with a full-page link to the static game", () => {
   const { container } = render(<LandingPageContent />);
-  const hero = screen.getByRole("heading", { level: 1 }).closest("section")!;
+  const included = screen.getByText("Everything included").closest("section")!;
   const card = screen.getByRole("heading", { level: 2, name: "Humdingers" }).closest("section")!;
-  expect(hero.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(card.compareDocumentPosition(screen.getByText("Real game")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByText("Real game").compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(included.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(included.nextElementSibling).toBe(card);
   const play = within(card).getByRole("link", { name: "Play Humdingers (about 10 MB)" });
   expect(play.getAttribute("href")).toBe("/play/humdingers");
   expect(play.hasAttribute("target")).toBe(false);
@@ -133,7 +134,7 @@ it("features Humdingers right after the hero with a full-page link to the static
   expect(within(card).getByRole("img", { name: /^A Humdingers battle/ }).getAttribute("src")).toBe("/landing/humdingers-gameplay-1.png");
   expect(within(card).getByRole("img", { name: /^Humdrum's main street/ }).getAttribute("src")).toBe("/landing/humdingers-gameplay-2.png");
   expect(card.textContent).toContain("Besides StarCraft: Brood War and StarCraft II,");
-  expect(card.textContent).toContain("Sign in with a free SC2 Tools account to play. Your saves follow your account.");
+  expect(card.textContent).toContain("Sign in with a free SC2 Tools account to play. Your saves and play time are kept with your account.");
   expect(card.textContent).toContain("Not affiliated with Nintendo.");
   expect(container.querySelector("iframe")).toBeNull();
 });

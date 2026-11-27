@@ -42,7 +42,8 @@ it("uploads a save the game writes and counts the load", async () => {
   const frame = await screen.findByTitle("Humdingers");
   fireEvent.load(frame);
   await waitFor(() => expect(requests("POST", "/v1/me/humdingers/plays")).toHaveLength(1));
-  expect(JSON.parse(String(requests("POST", "/v1/me/humdingers/plays")[0][1]?.body))).toEqual({ type: "load", chapter: 3, saved: true });
+  expect(JSON.parse(String(requests("POST", "/v1/me/humdingers/plays")[0][1]?.body)))
+    .toEqual({ session: expect.stringMatching(/^[A-Za-z0-9_-]{8,64}$/), type: "load", chapter: 3, saved: true });
   act(() => {
     window.dispatchEvent(new StorageEvent("storage", { key: "humdingers.save.1", newValue: save(300), storageArea: window.localStorage }));
     window.dispatchEvent(new StorageEvent("storage", { key: "humdingers.audio", newValue: "{}", storageArea: window.localStorage }));

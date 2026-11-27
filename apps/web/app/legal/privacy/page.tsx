@@ -24,7 +24,7 @@ export const metadata = pageMetadata({
     "How SC2 Tools processes replay data, connected streaming accounts, and private StarCraft II replay files.",
 });
 
-const LAST_UPDATED = "2026-11-26";
+const LAST_UPDATED = "2026-11-27";
 /** Settings tab with export, history deletion and account deletion. */
 const DATA_SETTINGS_HREF = "/settings?tab=backups";
 const LIST_CLASS = "list-disc space-y-2 pl-6";
@@ -418,10 +418,21 @@ function HumdingersPrivacy() {
         your account and are included when you export or delete it.
       </p>
       <p>
-        To count plays, the game page reports when the game loads and how many
-        seconds you actively play. We keep only daily totals, with no names.
-        To count each player once a day we store a one-way hash of the day and
-        your account, and delete it after 35 days.
+        While you play, the game page reports when the game loads, how many
+        seconds you actively play (time with the page in view and some input
+        from you in the last five minutes), the furthest chapter in your saves
+        and whether you have a save. Each visit is kept with your account as a
+        play session for 90 days: when it started, your active play time, the
+        chapter you reached and whether you saved. SC2 Tools administrators can
+        see which accounts played, with those sessions and a summary of the
+        account&apos;s saves (in-game play time, chapter and when you last saved),
+        to understand how the game is played. Play sessions are included when
+        you export or delete your account.
+      </p>
+      <p>
+        The same reports also add to daily totals that hold no names. To count
+        each player once a day we store a one-way hash of the day and your
+        account, and delete it after 35 days.
       </p>
     </>
   );

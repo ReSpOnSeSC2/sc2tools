@@ -26,6 +26,13 @@ corresponding GitHub Release.
   deletion include the saves. Admins see anonymous daily plays and play time
   under Admin → Insights → Humdingers. The home-page and Arcade cards show two
   gameplay screenshots. See ADR 0102.
+- Admin → Insights → Humdingers now lists the players by name (profile display
+  name, BattleTag and email), with each player's sessions, active play time,
+  last play, furthest chapter and in-game play time from their saves; a
+  player's session count opens their individual sessions. The game page keeps
+  each visit with the account as a play session for 90 days, exported and
+  deleted with the account, and the privacy policy says so. The home-page
+  Humdingers card moved down, after "Everything included". See ADR 0103.
 
 ### Agent release notes
 

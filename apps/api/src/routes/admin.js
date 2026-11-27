@@ -597,7 +597,8 @@ function buildAdminRouter(deps) {
     }
   });
 
-  // Humdingers play totals (anonymous, one row per UTC day; ADR 0102).
+  // Humdingers daily play totals (ADR 0102) and the accounts that played,
+  // with their sessions (ADR 0103).
   router.get("/admin/humdingers/stats", async (req, res, next) => {
     try {
       if (!deps.humdingers) throw Object.assign(new Error("unavailable"), { status: 503 });

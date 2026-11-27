@@ -15,8 +15,9 @@ type Session = { uploader: SaveUploader; tracker: PlayTracker };
 /**
  * Runs Humdingers full screen in a same-origin frame (ADR 0102). Before the
  * game starts it brings the account's newer saves into this browser; while
- * the game runs it uploads each save and reports play time for the
- * anonymous daily totals. Middleware already requires sign-in here.
+ * the game runs it uploads each save and reports play time, which the API
+ * adds to the daily totals and to this visit's play session on the account
+ * (ADR 0103). Middleware already requires sign-in here.
  */
 export function HumdingersHost() {
   const { getToken, isLoaded, isSignedIn } = useAuth();

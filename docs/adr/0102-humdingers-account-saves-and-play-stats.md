@@ -2,7 +2,9 @@
 
 Status: Accepted, November 26, 2026. Amends ADR 0101
 (`docs/adr/0101-humdingers-static-game-page.md`): the game is no longer
-public, and `/play/humdingers` is a host page instead of a rewrite.
+public, and `/play/humdingers` is a host page instead of a rewrite. Amended by
+ADR 0103 (`docs/adr/0103-humdingers-named-play-sessions.md`): each visit is
+also kept as a play session with the account, and admins see who played.
 
 ## Context
 

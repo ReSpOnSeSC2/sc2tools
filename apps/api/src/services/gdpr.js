@@ -38,6 +38,7 @@ const GDPR_CLASSIFICATION = Object.freeze({
   SUPPORT_EMAIL_SYNC: "global", SITE_PRESENCE: "ttl_ephemeral", MATCH_ROOMS: "ttl_ephemeral", COACHING: "user_scoped",
   DAILY_TALLY: "ttl_ephemeral",
   HUMDINGERS_SAVES: "user_scoped", HUMDINGERS_PLAY_DAYS: "global", HUMDINGERS_PLAY_PLAYERS: "ttl_ephemeral",
+  HUMDINGERS_PLAY_SESSIONS: "user_scoped",
   PULSE_ACCOUNTS: "global", PULSE_CHARACTER_LINKS: "global", PLAYER_CHANNELS: "purge_only", PLAYER_IDENTITIES: "global",
   PLAYER_IDENTITY_SUBMISSIONS: "purge_only", PLAYER_IDENTITY_DIRECTORY: "global", REVIEW_REQUESTS: "user_scoped",
   REVIEW_COMMENTS: "user_scoped", REVIEW_KARMA_EVENTS: "purge_only", REVIEW_BLOCKS: "purge_only", NOTIFICATIONS: "purge_only",
@@ -408,11 +409,16 @@ class GdprService {
       counts.gameDetails = res.deletedCount || 0;
     }
 
-    // Humdingers saves belong to the account; play totals hold no user IDs.
+    // Humdingers saves and play sessions belong to the account; the daily
+    // play totals hold no user IDs.
     await gdprFence.assert();
     if (this.db.humdingersSaves) {
       const res = await this.db.humdingersSaves.deleteMany({ userId });
       counts.humdingersSaves = res.deletedCount || 0;
+    }
+    if (this.db.humdingersPlaySessions) {
+      const res = await this.db.humdingersPlaySessions.deleteMany({ userId });
+      counts.humdingersPlaySessions = res.deletedCount || 0;
     }
 
     for (const [key, field] of PURGE_ONLY_COLLECTIONS) {

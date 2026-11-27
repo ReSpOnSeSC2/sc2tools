@@ -5,14 +5,15 @@ jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 const { createHarness } = require("./helpers/reviewsHarness");
 const { MAX_SAVE_BYTES, MAX_SLOTS } = require("../src/services/humdingers");
 
-describe("Humdingers account saves and play totals", () => {
+describe("Humdingers account saves, play totals and play sessions", () => {
   let h; let now;
   beforeAll(async () => { h = await createHarness({ rollout: "off" }); for (const name of ["ann", "bob", "admin"]) await h.seedUser(name); });
   afterAll(async () => h.close());
   beforeEach(async () => {
     now = new Date("2026-11-27T12:00:00Z");
     h.services.humdingers.now = () => now;
-    await Promise.all([h.db.humdingersSaves.deleteMany({}), h.db.humdingersPlayDays.deleteMany({}), h.db.humdingersPlayPlayers.deleteMany({})]);
+    await Promise.all([h.db.humdingersSaves.deleteMany({}), h.db.humdingersPlayDays.deleteMany({}), h.db.humdingersPlayPlayers.deleteMany({}),
+      h.db.humdingersPlaySessions.deleteMany({})]);
   });
   const as = (name, req) => req.set("authorization", h.bearer(name));
   const save = (when, meta = {}, state = { flags: { w1_complete: false } }) =>
@@ -86,13 +87,83 @@ describe("Humdingers account saves and play totals", () => {
     await as("admin", request(h.app).get("/v1/admin/humdingers/stats?days=12")).expect(400);
   });
 
-  test("account export includes the saves and erasure removes them", async () => {
+  test("keeps one session per visit with the account, for 90 days", async () => {
+    await play("ann", { type: "load", chapter: 1, session: "visit-one-0001" }).expect(204);
+    now = new Date("2026-11-27T12:05:00Z");
+    await play("ann", { type: "active", seconds: 300, longPlay: true, saved: true, chapter: 2, session: "visit-one-0001" }).expect(204);
+    now = new Date("2026-11-27T12:06:00Z");
+    await play("ann", { type: "active", seconds: 40, chapter: 1, session: "visit-one-0001" }).expect(204);
+    await play("bob", { type: "load", session: "visit-one-0001" }).expect(204);
+    // A page opened before sessions existed sends no id: its reports share one row a day.
+    await play("ann", { type: "active", seconds: 20 }).expect(204);
+    await play("ann", { type: "active", seconds: 30 }).expect(204);
+    const ann = await h.db.humdingersPlaySessions.find({ userId: h.userId("ann") }, { projection: { _id: 0, _schemaVersion: 0 } }).sort({ session: 1 }).toArray();
+    expect(ann).toEqual([
+      { userId: h.userId("ann"), session: "day-2026-11-27", startedAt: new Date("2026-11-27T12:06:00Z"), lastAt: new Date("2026-11-27T12:06:00Z"),
+        loads: 0, activeSeconds: 50, maxChapter: 0, saved: false, expiresAt: new Date("2027-02-25T12:06:00Z") },
+      { userId: h.userId("ann"), session: "visit-one-0001", startedAt: new Date("2026-11-27T12:00:00Z"), lastAt: new Date("2026-11-27T12:06:00Z"),
+        loads: 1, activeSeconds: 340, maxChapter: 2, saved: true, expiresAt: new Date("2027-02-25T12:00:00Z") },
+    ]);
+    expect(await h.db.humdingersPlaySessions.countDocuments({ userId: h.userId("bob") })).toBe(1);
+    expect(await h.db.humdingersPlayDays.findOne({ _id: "2026-11-27" })).toMatchObject({ loads: 2, uniquePlayers: 2, activeSeconds: 390 });
+    for (const session of ["short", "has space!", 42, "x".repeat(65)]) {
+      expect((await play("ann", { type: "load", session }).expect(400)).body.error.code).toBe("bad_play");
+    }
+  });
+
+  test("admin stats name the accounts that played, with their sessions and saves", async () => {
+    await h.seedUser("ann", { email: "ann@example.com", displayName: "AnnPlays", battleTag: "Ann#1234" });
+    await h.seedUser("bob", { email: "bob@example.com", battleTags: ["Bobby#42"] });
+    // Bob saved before sessions were recorded: his save still lists him.
+    now = new Date("2026-11-26T09:00:00Z");
+    await put("bob", "0", save(1000, { playtime: 4000, chapter: 3 })).expect(200);
+    // Ann's session ten days ago falls outside a 7-day range.
+    now = new Date("2026-11-17T08:00:00Z");
+    await play("ann", { type: "load", session: "old-visit-001" }).expect(204);
+    await play("ann", { type: "active", seconds: 500, session: "old-visit-001" }).expect(204);
+    now = new Date("2026-11-27T10:00:00Z");
+    await play("ann", { type: "load", chapter: 1, session: "visit-a-00001" }).expect(204);
+    await play("ann", { type: "active", seconds: 120, chapter: 1, session: "visit-a-00001" }).expect(204);
+    now = new Date("2026-11-27T11:00:00Z");
+    await play("ann", { type: "load", chapter: 2, session: "visit-b-00001" }).expect(204);
+    await play("ann", { type: "active", seconds: 60, chapter: 2, saved: true, session: "visit-b-00001" }).expect(204);
+    now = new Date("2026-11-27T12:00:00Z");
+    await as("ann", request(h.app).get("/v1/admin/humdingers/stats?days=7")).expect(403);
+    const res = await as("admin", request(h.app).get("/v1/admin/humdingers/stats?days=7")).expect(200);
+    expect(res.headers["cache-control"]).toBe("private, no-store");
+    expect(res.body.playersTruncated).toBe(false);
+    expect(res.body.players).toEqual([
+      {
+        userId: h.userId("ann"), displayName: "AnnPlays", battleTag: "Ann#1234", email: "ann@example.com",
+        sessions: 2, activeSeconds: 180, lastAt: "2026-11-27T11:00:00.000Z", maxChapter: 2, save: null,
+        recent: [
+          { startedAt: "2026-11-27T11:00:00.000Z", lastAt: "2026-11-27T11:00:00.000Z", activeSeconds: 60, maxChapter: 2, saved: true },
+          { startedAt: "2026-11-27T10:00:00.000Z", lastAt: "2026-11-27T10:00:00.000Z", activeSeconds: 120, maxChapter: 1, saved: false },
+        ],
+      },
+      {
+        userId: h.userId("bob"), displayName: null, battleTag: "Bobby#42", email: "bob@example.com",
+        sessions: 0, activeSeconds: 0, lastAt: null, maxChapter: 0,
+        save: { slots: 1, playtime: 4000, chapter: 3, savedAt: "2026-11-26T09:00:00.000Z" }, recent: [],
+      },
+    ]);
+    const month = await as("admin", request(h.app).get("/v1/admin/humdingers/stats?days=30")).expect(200);
+    expect(month.body.players[0]).toMatchObject({ userId: h.userId("ann"), sessions: 3, activeSeconds: 680 });
+    expect(month.body.players[0].recent.map((row) => row.startedAt)).toEqual(["2026-11-27T11:00:00.000Z", "2026-11-27T10:00:00.000Z", "2026-11-17T08:00:00.000Z"]);
+  });
+
+  test("account export includes the saves and sessions, and erasure removes them", async () => {
     await put("ann", "0", save(1000)).expect(200);
+    await play("ann", { type: "load", session: "visit-export-1" }).expect(204);
     const exported = await h.services.gdpr.export(h.userId("ann"));
     expect(exported.data.humdingersSaves).toEqual([expect.objectContaining({ slot: "0", when: 1000, data: save(1000) })]);
     expect(exported.data.humdingersSaves[0]).not.toHaveProperty("_id");
+    expect(exported.data.humdingersPlaySessions).toEqual([expect.objectContaining({ session: "visit-export-1", loads: 1 })]);
+    expect(exported.data.humdingersPlaySessions[0]).not.toHaveProperty("_id");
     const counts = await h.services.gdpr.deleteAll(h.userId("ann"));
     expect(counts.humdingersSaves).toBe(1);
+    expect(counts.humdingersPlaySessions).toBe(1);
     expect(await h.db.humdingersSaves.countDocuments({ userId: h.userId("ann") })).toBe(0);
+    expect(await h.db.humdingersPlaySessions.countDocuments({ userId: h.userId("ann") })).toBe(0);
   });
 });

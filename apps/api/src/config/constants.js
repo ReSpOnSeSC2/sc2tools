@@ -110,6 +110,9 @@ const COLLECTIONS = Object.freeze({
   HUMDINGERS_PLAY_DAYS: "humdingers_play_days",
   // Peppered day+user hashes that count each player once a day (35-day TTL).
   HUMDINGERS_PLAY_PLAYERS: "humdingers_play_players",
+  // One row per visit to the game page, kept with the account for 90 days
+  // so admins can see who played and for how long (ADR 0103).
+  HUMDINGERS_PLAY_SESSIONS: "humdingers_play_sessions",
   GHOST_EXAMPLES: "ghost_examples",
   COACHING: "coaching_locker",
   // Global, cross-user SC2Pulse cache. One row per real SC2 account

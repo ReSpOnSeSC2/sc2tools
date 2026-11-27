@@ -129,6 +129,7 @@ async function* accountExportRecords(db, userId, options = {}) {
   yield* collectionRecords(db, "multichatSounds", { userId }, { _id: 0, data: 0 }, signal);
   yield* collectionRecords(db, "playerGoals", { userId }, { _id: 0, slot: 0, criteriaRevision: 0 }, signal);
   yield* collectionRecords(db, "humdingersSaves", { userId }, { _id: 0 }, signal);
+  yield* collectionRecords(db, "humdingersPlaySessions", { userId }, { _id: 0 }, signal);
   yield* collectionRecords(db, "supporters", { userId }, { _id: 0, editId: 0, reviewedBy: 0 }, signal);
   // Delivery channel exports describe registrations without their credentials.
   yield* collectionRecords(db, "streamSessions", { userId }, { _id: 0 }, signal);

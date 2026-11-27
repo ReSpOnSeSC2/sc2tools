@@ -5,19 +5,29 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 
 /**
- * Humdingers account saves and anonymous play totals (ADR 0102).
+ * Humdingers account saves, daily play totals (ADR 0102) and play sessions
+ * (ADR 0103).
  *
  * The /play/humdingers host page copies the game's localStorage saves
  * ("humdingers.save.<slot>", JSON with fmt "humdingers-save") to the
  * player's account and back. Play totals are one row per UTC day with no
  * user IDs; unique players are counted through a peppered per-day hash
- * that expires after 35 days.
+ * that expires after 35 days. Each visit to the game page is also kept as a
+ * play session with the account for 90 days, so admins can see who played,
+ * when and for how long.
  *
  * @typedef {{userId: string, slot: string, data: string, when: number, playtime: number, chapter: number,
  *   world: string|null, updatedAt: Date}} HumdingersSaveDoc
  * @typedef {{_id: string, loads: number, activeSeconds: number, longPlays: number, uniquePlayers: number,
  *   savers: number, maxChapter: number, updatedAt: Date}} HumdingersPlayDayDoc
  * @typedef {{_id: string, day: string, saved: boolean, expiresAt: Date}} HumdingersPlayPlayerDoc
+ * @typedef {{userId: string, session: string, startedAt: Date, lastAt: Date, loads: number, activeSeconds: number,
+ *   maxChapter: number, saved: boolean, expiresAt: Date}} HumdingersPlaySessionDoc
+ * @typedef {{startedAt: Date, lastAt: Date, activeSeconds: number, maxChapter: number, saved: boolean}} HumdingersSessionRow
+ * @typedef {{userId: string, displayName: string|null, battleTag: string|null, email: string|null,
+ *   sessions: number, activeSeconds: number, lastAt: Date|null, maxChapter: number,
+ *   save: {slots: number, playtime: number, chapter: number, savedAt: Date|null}|null,
+ *   recent: HumdingersSessionRow[]}} HumdingersPlayerRow
  */
 
 const SAVE_FORMAT = "humdingers-save";
@@ -30,7 +40,14 @@ const MAX_SLOTS = 12;
 /** One activity report covers at most the host's 5-minute flush window. */
 const MAX_ACTIVE_SECONDS = 600;
 const MAX_CHAPTER = 99;
-const PLAYER_TTL_MS = 35 * 86_400_000;
+const DAY_MS = 86_400_000;
+const PLAYER_TTL_MS = 35 * DAY_MS;
+/** The host page's random id for one visit; reports without one share a per-day session. */
+const SESSION_RE = /^[A-Za-z0-9_-]{8,64}$/;
+/** Covers the longest admin range (90 UTC days, today included). */
+const SESSION_TTL_MS = 90 * DAY_MS;
+const MAX_PLAYERS = 200;
+const MAX_PLAYER_SESSIONS = 50;
 const STATS_DAYS = [7, 30, 90];
 const DEFAULT_STATS_DAYS = 30;
 
@@ -84,7 +101,8 @@ class HumdingersService {
   }
 
   /**
-   * One host report: a game load, or active play seconds. Totals only.
+   * One host report: a game load, or active play seconds. It adds to the
+   * anonymous daily totals and to the account's session for this visit.
    * @param {string} userId @param {any} body
    */
   async recordPlay(userId, body) {
@@ -118,18 +136,32 @@ class HumdingersService {
       },
       { upsert: true },
     );
+    // $max keeps "saved" true once any report had a save (false < true in BSON).
+    await this.db.humdingersPlaySessions.updateOne(
+      { userId, session: play.session || `day-${day}` },
+      {
+        $inc: { loads: play.type === "load" ? 1 : 0, activeSeconds: play.seconds },
+        $max: { lastAt: now, maxChapter: play.chapter, saved: play.saved },
+        $setOnInsert: stampVersion({ startedAt: now, expiresAt: new Date(now.getTime() + SESSION_TTL_MS) }, COLLECTIONS.HUMDINGERS_PLAY_SESSIONS),
+      },
+      { upsert: true },
+    );
   }
 
   /**
-   * Admin totals for the trailing 7, 30 or 90 UTC days, newest first.
+   * Admin totals for the trailing 7, 30 or 90 UTC days, newest first, and
+   * the accounts that played in them.
    * @param {unknown} rawDays
    */
   async stats(rawDays) {
     const days = rawDays === undefined ? DEFAULT_STATS_DAYS : Number(rawDays);
     if (!STATS_DAYS.includes(days)) throw problem(400, "bad_range", "Choose 7, 30 or 90 days.");
     const today = Date.parse(`${this.now().toISOString().slice(0, 10)}T00:00:00.000Z`);
-    const keys = Array.from({ length: days }, (_, index) => new Date(today - index * 86_400_000).toISOString().slice(0, 10));
-    const rows = await this.db.humdingersPlayDays.find({ _id: { $in: keys } }).toArray();
+    const keys = Array.from({ length: days }, (_, index) => new Date(today - index * DAY_MS).toISOString().slice(0, 10));
+    const [rows, players] = await Promise.all([
+      this.db.humdingersPlayDays.find({ _id: { $in: keys } }).toArray(),
+      this.players(new Date(today - (days - 1) * DAY_MS)),
+    ]);
     const byDay = new Map(rows.map((row) => [row._id, row]));
     const daily = keys.map((day) => {
       const row = byDay.get(day);
@@ -155,8 +187,102 @@ class HumdingersService {
         maxChapter: daily.reduce((max, row) => Math.max(max, row.maxChapter), 0),
       },
       daily,
+      players: players.items,
+      playersTruncated: players.truncated,
     };
   }
+
+  /**
+   * The accounts that played since `since`, most recent first, with their
+   * sessions in the range (newest first) and a summary of the saves they
+   * hold now. Accounts whose saves changed in the range are listed too,
+   * which covers play from before sessions were recorded.
+   * @param {Date} since
+   * @returns {Promise<{items: HumdingersPlayerRow[], truncated: boolean}>}
+   */
+  async players(since) {
+    const played = await this.db.humdingersPlaySessions.aggregate([
+      { $match: { startedAt: { $gte: since } } },
+      {
+        $group: {
+          _id: "$userId",
+          sessions: { $sum: 1 },
+          activeSeconds: { $sum: "$activeSeconds" },
+          lastAt: { $max: "$lastAt" },
+          maxChapter: { $max: "$maxChapter" },
+          recent: {
+            $topN: {
+              n: MAX_PLAYER_SESSIONS,
+              sortBy: { startedAt: -1 },
+              output: { startedAt: "$startedAt", lastAt: "$lastAt", activeSeconds: "$activeSeconds", maxChapter: "$maxChapter", saved: "$saved" },
+            },
+          },
+        },
+      },
+      { $sort: { lastAt: -1, _id: 1 } },
+      { $limit: MAX_PLAYERS + 1 },
+    ], { maxTimeMS: 10_000 }).toArray();
+    const sessionIds = played.slice(0, MAX_PLAYERS).map((row) => String(row._id));
+    const savers = (await this.db.humdingersSaves.distinct("userId", { updatedAt: { $gte: since } }))
+      .filter((id) => !sessionIds.includes(id));
+    const ids = [...sessionIds, ...savers].slice(0, MAX_PLAYERS);
+    const truncated = played.length > MAX_PLAYERS || sessionIds.length + savers.length > MAX_PLAYERS;
+    if (ids.length === 0) return { items: [], truncated: false };
+    const [users, saves] = await Promise.all([
+      this.db.users.find({ userId: { $in: ids } }, { projection: { _id: 0, userId: 1, email: 1, displayName: 1, battleTag: 1, battleTags: 1 } }).toArray(),
+      this.db.humdingersSaves.aggregate([
+        { $match: { userId: { $in: ids } } },
+        { $group: { _id: "$userId", slots: { $sum: 1 }, playtime: { $max: "$playtime" }, chapter: { $max: "$chapter" }, savedAt: { $max: "$updatedAt" } } },
+      ], { maxTimeMS: 10_000 }).toArray(),
+    ]);
+    const userById = new Map(users.map((user) => [user.userId, user]));
+    const saveById = new Map(saves.map((save) => [save._id, save]));
+    const playedById = new Map(played.map((row) => [row._id, row]));
+    const items = ids.map((userId) => playerRow(userId, userById.get(userId), playedById.get(userId), saveById.get(userId)));
+    items.sort((a, b) => lastSeen(b) - lastSeen(a));
+    return { items, truncated };
+  }
+}
+
+/**
+ * @param {string} userId @param {any} user @param {any} played @param {any} save
+ * @returns {HumdingersPlayerRow}
+ */
+function playerRow(userId, user, played, save) {
+  const tags = Array.isArray(user?.battleTags) ? user.battleTags : [];
+  return {
+    userId,
+    displayName: text(user?.displayName),
+    battleTag: text(user?.battleTag) || text(tags[0]),
+    email: text(user?.email),
+    sessions: played?.sessions || 0,
+    activeSeconds: played?.activeSeconds || 0,
+    lastAt: dateOrNull(played?.lastAt),
+    maxChapter: played?.maxChapter || 0,
+    save: save ? { slots: save.slots || 0, playtime: save.playtime || 0, chapter: save.chapter || 0, savedAt: dateOrNull(save.savedAt) } : null,
+    recent: (played?.recent || []).map((/** @type {any} */ row) => ({
+      startedAt: row.startedAt,
+      lastAt: row.lastAt,
+      activeSeconds: row.activeSeconds || 0,
+      maxChapter: row.maxChapter || 0,
+      saved: row.saved === true,
+    })),
+  };
+}
+
+/** The newest session report or save upload. @param {HumdingersPlayerRow} row */
+function lastSeen(row) {
+  return Math.max(row.lastAt?.getTime() || 0, row.save?.savedAt?.getTime() || 0);
+}
+
+/** @param {unknown} value @returns {string|null} */
+function text(value) {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, 120) : null;
+}
+
+/** @param {unknown} value @returns {Date|null} */
+function dateOrNull(value) {
+  return value instanceof Date && Number.isFinite(value.getTime()) ? value : null;
 }
 
 /** @param {unknown} slot @param {any} body */
@@ -199,7 +325,13 @@ function parsePlay(body) {
   if (body.chapter !== undefined && (!Number.isInteger(body.chapter) || body.chapter < 0 || body.chapter > MAX_CHAPTER)) {
     throw problem(400, "bad_play", "Unknown chapter.");
   }
-  return { type, seconds, chapter: body.chapter || 0, saved: body.saved === true, longPlay: body.longPlay === true };
+  // Pages opened before sessions existed send no id; they share a per-day session.
+  if (body.session !== undefined && (typeof body.session !== "string" || !SESSION_RE.test(body.session))) {
+    throw problem(400, "bad_play", "Unknown play session.");
+  }
+  /** @type {string|null} */
+  const session = body.session || null;
+  return { type, seconds, chapter: body.chapter || 0, saved: body.saved === true, longPlay: body.longPlay === true, session };
 }
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */

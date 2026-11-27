@@ -73,6 +73,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   humdingersSaves: import('mongodb').Collection<import('../services/humdingers').HumdingersSaveDoc>,
  *   humdingersPlayDays: import('mongodb').Collection<import('../services/humdingers').HumdingersPlayDayDoc>,
  *   humdingersPlayPlayers: import('mongodb').Collection<import('../services/humdingers').HumdingersPlayPlayerDoc>,
+ *   humdingersPlaySessions: import('mongodb').Collection<import('../services/humdingers').HumdingersPlaySessionDoc>,
  *   ghostExamples: import('mongodb').Collection<any>,
  *   pulseAccounts: import('mongodb').Collection,
  *   pulseCharacterLinks: import('mongodb').Collection,
@@ -126,12 +127,13 @@ function publicLiveCollections(db) {
   };
 }
 
-/** @param {import('mongodb').Db} db @returns {Pick<DbContext, "humdingersSaves"|"humdingersPlayDays"|"humdingersPlayPlayers">} */
+/** @param {import('mongodb').Db} db @returns {Pick<DbContext, "humdingersSaves"|"humdingersPlayDays"|"humdingersPlayPlayers"|"humdingersPlaySessions">} */
 function humdingersCollections(db) {
   return {
     humdingersSaves: db.collection(COLLECTIONS.HUMDINGERS_SAVES),
     humdingersPlayDays: db.collection(COLLECTIONS.HUMDINGERS_PLAY_DAYS),
     humdingersPlayPlayers: db.collection(COLLECTIONS.HUMDINGERS_PLAY_PLAYERS),
+    humdingersPlaySessions: db.collection(COLLECTIONS.HUMDINGERS_PLAY_SESSIONS),
   };
 }
 
@@ -373,6 +375,11 @@ async function ensureHumdingersIndexes(ctx) {
   // The unique slot index also makes "newest save wins" atomic (services/humdingers.js).
   await ctx.humdingersSaves.createIndex({ userId: 1, slot: 1 }, { unique: true });
   await ctx.humdingersPlayPlayers.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  // Upserts by visit, account export and erasure by userId, the admin range
+  // read by start time, and the 90-day expiry.
+  await ctx.humdingersPlaySessions.createIndex({ userId: 1, session: 1 }, { unique: true });
+  await ctx.humdingersPlaySessions.createIndex({ startedAt: -1 });
+  await ctx.humdingersPlaySessions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 }
 
 /**

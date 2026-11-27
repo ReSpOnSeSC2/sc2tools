@@ -54,7 +54,6 @@ export function LandingPageContent({ donationCoverage }: { donationCoverage?: Re
   return (
     <>
       <LandingHero />
-      <HumdingersShowcase />
       <RealGameShowcase />
       <OutcomeRail />
       <LiveFromTheLadder />
@@ -64,6 +63,7 @@ export function LandingPageContent({ donationCoverage }: { donationCoverage?: Re
       <ReplaySection />
       <StreamChapter />
       <IncludedChapter />
+      <HumdingersShowcase />
       <LandingHowItWorks />
       <MobileInstallSection />
       <SupportTeaser />
