@@ -40,7 +40,7 @@ class StreamTitleControls:
         self.category_guard.setToolTip("Optional and off by default. Changes the category only at a game start, only when it is not StarCraft II, and never back.")
         self.category_guard.toggled.connect(self.edited)
         layout.addWidget(self.category_guard)
-        self.record_chapters = QtWidgets.QCheckBox("Add a chapter marker to the OBS recording at game start")
+        self.record_chapters = QtWidgets.QCheckBox("Add OBS recording chapters at game start")
         self.record_chapters.setChecked(False)
         self.record_chapters.setToolTip("Optional and off by default. Needs OBS 30.2 or newer recording hybrid MP4; with anything else it quietly does nothing.")
         self.record_chapters.toggled.connect(self.edited)
