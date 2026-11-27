@@ -40,7 +40,7 @@ const article: HelpArticle = {
     ] },
     { type: "heading", text: "Channel tags and the StarCraft II category", anchor: "channel-tags" },
     { type: "list", items: [
-      "Two more switches sit beside the title options and start off: **Set channel tags at the start of each game** and **Switch the category to StarCraft II when a game starts**. They use Twitch and Kick only, follow the platform selection, and need the same stream-control permission as titles. Saving never changes your channel.",
+      "Two more switches sit beside the title options and start off: **Set channel tags at each game start** and **Set category to StarCraft II at game start**. They use Twitch and Kick only, follow the platform selection, and need the same stream-control permission as titles. Saving never changes your channel.",
       "The tags line shows the exact tags for the game being played before you save. Tags are, in this order: **ViewerGames** in a custom game, **Tournament** while a Series is running, the matchup such as **PvZ**, your race, and your league. A fact that is not known is left out, never guessed.",
       "Tags you set by hand are kept. Only the tags SC2 Tools wrote for your previous game are replaced, and ours fill the places that remain, up to ten. Tags use letters and digits only, up to 25 characters; a tag that breaks a platform rule is never sent. Kick shows your tags only while you are live, so offline it changes nothing.",
       "The category changes only when a game starts, only when the channel is not already under StarCraft II, and never back on its own. Whatever you pick afterwards stays until the next game start.",

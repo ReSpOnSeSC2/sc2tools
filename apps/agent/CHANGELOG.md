@@ -5,8 +5,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 ## 0.26.0
 
 ### Added
-- Optional **Set channel tags at the start of each game** and **Switch the
-  category to StarCraft II when a game starts** on the Streams page, both off
+- Optional **Set channel tags at each game start** and **Set category to
+  StarCraft II at game start** on the Streams page, both off
   by default. Tags follow your matchup, race and league, with `ViewerGames` in
   a custom game and `Tournament` during a Series. Tags you set by hand are
   kept, and the category only changes at a game start, never back.
