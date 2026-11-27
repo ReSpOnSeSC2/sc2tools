@@ -246,6 +246,8 @@ export interface StudioState {
   deskAction?: { shoutoutText: string; queued: boolean };
   /** Ephemeral "End stream" receipt: the saved report's record, or null when nothing was saved. */
   streamEnd?: { id: string; games: number; wins: number; losses: number } | null;
+  /** Ephemeral "End stream" answer from YouTube; null when the switch was off. */
+  streamChapters?: { state: "written" | "skipped" | "failed"; message: string } | null;
   scene: StudioScene | null;
   timer: StudioTimer | null;
   broll: StudioBrollConfig;
@@ -254,6 +256,8 @@ export interface StudioState {
   streamStartMs: number | null;
   /** VOD URL for clickable clip-moment timestamps (https, validated). */
   vodUrl: string | null;
+  /** The streamer's switch: write game chapters into the YouTube archive at End stream. Off by default. */
+  youtubeChapters: boolean;
   updatedAt: string | null;
 }
 
@@ -270,6 +274,7 @@ export const DEFAULT_STUDIO_STATE: StudioState = {
   buildProfile: DEFAULT_BUILD_PROFILE,
   streamStartMs: null,
   vodUrl: null,
+  youtubeChapters: false,
   updatedAt: null,
 };
 
@@ -529,6 +534,7 @@ export function sanitizeStudioState(raw: unknown): StudioState {
         ? Number(s.streamStartMs)
         : null,
     vodUrl: sanitizeVodUrl(s.vodUrl),
+    youtubeChapters: s.youtubeChapters === true,
     blockedUsers: (Array.isArray(s.blockedUsers) ? s.blockedUsers : []).filter(
       (u): u is string => typeof u === "string" && u.length > 0,
     ),
@@ -539,8 +545,16 @@ export function sanitizeStudioState(raw: unknown): StudioState {
       ? { deskAction: { shoutoutText: String((s.deskAction as Record<string, unknown>).shoutoutText).slice(0, 500), queued: (s.deskAction as Record<string, unknown>).queued === true } } : {}),
     ...(s.deskAction && typeof s.deskAction === "object" && !Array.isArray(s.deskAction) && "streamReport" in s.deskAction
       ? { streamEnd: sanitizeStreamEnd((s.deskAction as Record<string, unknown>).streamReport) } : {}),
+    ...(s.deskAction && typeof s.deskAction === "object" && !Array.isArray(s.deskAction) && "chapters" in s.deskAction
+      ? { streamChapters: sanitizeStreamChapters((s.deskAction as Record<string, unknown>).chapters) } : {}),
     updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : null,
   };
+}
+
+function sanitizeStreamChapters(value: unknown): StudioState["streamChapters"] {
+  const row = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  return row && (row.state === "written" || row.state === "skipped" || row.state === "failed") && typeof row.message === "string"
+    ? { state: row.state, message: row.message.slice(0, 300) } : null;
 }
 
 function sanitizeStreamEnd(value: unknown): StudioState["streamEnd"] {

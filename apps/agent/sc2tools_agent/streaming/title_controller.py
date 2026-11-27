@@ -11,12 +11,13 @@ import copy
 from .title_automation import GameTitleAutomation
 from .title_channel_controller import ChannelUpdateMixin
 from .title_live_controller import LiveTitleControllerMixin, MATCH_VALUE_KEYS
+from .title_record_chapter import RecordChapterMixin
 from .title_settings import connection_key, configure_title_settings, load_title_settings
 from .title_template import render_title, title_values
 from .youtube_pair_backend import atomic_json
 
 
-class StreamTitleController(ChannelUpdateMixin, LiveTitleControllerMixin):
+class StreamTitleController(ChannelUpdateMixin, RecordChapterMixin, LiveTitleControllerMixin):
     def __init__(self, service):
         self.service = service
         self.settings = load_title_settings(service.backend.config.get("title_automation"), self.owner())
@@ -54,7 +55,7 @@ class StreamTitleController(ChannelUpdateMixin, LiveTitleControllerMixin):
     def snapshot(self):
         self._current()
         result = {key: copy.deepcopy(self.settings[key]) for key in (
-            "enabled", "on_game_start", "channel_tags", "category_guard", "platforms", "template")}
+            "enabled", "on_game_start", "channel_tags", "category_guard", "record_chapters", "platforms", "template")}
         stats = self._title_stats()
         result.update(values=title_values(stats), message=self.message, tag_preview=self.tag_preview(),
                       channel_message=self.channel_message,

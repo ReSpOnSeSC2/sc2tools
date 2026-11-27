@@ -40,6 +40,11 @@ class StreamTitleControls:
         self.category_guard.setToolTip("Optional and off by default. Changes the category only at a game start, only when it is not StarCraft II, and never back.")
         self.category_guard.toggled.connect(self.edited)
         layout.addWidget(self.category_guard)
+        self.record_chapters = QtWidgets.QCheckBox("Add a chapter marker to the OBS recording at game start")
+        self.record_chapters.setChecked(False)
+        self.record_chapters.setToolTip("Optional and off by default. Needs OBS 30.2 or newer recording hybrid MP4; with anything else it quietly does nothing.")
+        self.record_chapters.toggled.connect(self.edited)
+        layout.addWidget(self.record_chapters)
         self.enabled = QtWidgets.QCheckBox("Refresh titles after each synced game")
         self.enabled.setChecked(False)
         self.enabled.setToolTip("Optional post-sync updates, independent of game-start updates. Uncheck and save to stop.")
@@ -80,6 +85,7 @@ class StreamTitleControls:
         self.page.job({"action": "configure_title_automation", "template": self.page.title_input.text(),
             "enabled": self.enabled.isChecked(), "on_game_start": self.on_game_start.isChecked(),
             "channel_tags": self.channel_tags.isChecked(), "category_guard": self.category_guard.isChecked(),
+            "record_chapters": self.record_chapters.isChecked(),
             "platforms": {name: control.isChecked() for name, control in self.platforms.items()}})
 
     def update_preview(self, *_args):
@@ -100,6 +106,7 @@ class StreamTitleControls:
             (self.on_game_start, settings.get("on_game_start") is True),
             (self.channel_tags, settings.get("channel_tags") is True),
             (self.category_guard, settings.get("category_guard") is True),
+            (self.record_chapters, settings.get("record_chapters") is True),
             *((control, platforms.get(name, name != "youtube")) for name, control in self.platforms.items()),
         ]
 
@@ -115,6 +122,8 @@ class StreamTitleControls:
         channel = [text for text, on in (("tags", settings.get("channel_tags")), ("category", settings.get("category_guard"))) if on is True]
         if channel:
             status += " Channel " + " and ".join(channel) + " update at game start."
+        if settings.get("record_chapters") is True:
+            status += " The OBS recording gets a chapter marker at game start."
         options_changed = any(control.isChecked() != checked for control, checked in self._saved_controls(settings))
         template_changed = self.page.title_dirty and (self.enabled.isChecked() or self.on_game_start.isChecked())
         if options_changed or template_changed:
@@ -145,7 +154,7 @@ class StreamTitleControls:
 
     def buttons(self):
         usable = not self.page.busy and self.page.state.get("account_mode") == "sc2tools"
-        for control in (self.enabled, self.on_game_start, self.channel_tags, self.category_guard, self.record_style, self.match_template, self.save, self.refresh, *self.platforms.values()):
+        for control in (self.enabled, self.on_game_start, self.channel_tags, self.category_guard, self.record_chapters, self.record_style, self.match_template, self.save, self.refresh, *self.platforms.values()):
             control.setEnabled(usable)
 
 

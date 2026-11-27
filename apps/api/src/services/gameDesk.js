@@ -9,7 +9,8 @@ function deskError(status, code) { return Object.assign(new Error(code), { statu
 /** Token-authenticated controls; the enclosing route holds its owner's data lease. */
 class GameDeskService {
   /** @param {{users:import('mongodb').Collection,studio:import('./multichatStudio').MultichatStudioService,engagement:import('./multichatEngagement').MultichatEngagementService,games:import('./games').GamesService,broker:import('./liveGameBroker').LiveGameBroker,channels:import('./opponentChannels').OpponentChannelsCache,tokens:import('./overlayTokens').OverlayTokensService,bot:import('./twitchChatBot').TwitchChatBotService,io?:import('socket.io').Server,onSessionReset?:(owner:string)=>void,now?:()=>number,
-   *   streams?:{start:(userId:string,startMs:number,sourceToken:string)=>Promise<void>,end:(userId:string)=>Promise<unknown>}}} deps */
+   *   streams?:{start:(userId:string,startMs:number,sourceToken:string)=>Promise<void>,end:(userId:string)=>Promise<unknown>},
+   *   chapters?:Pick<import('./streamChapters').StreamChaptersService,'writeToYoutube'>}} deps */
   constructor(deps) { this.deps = deps; this.now = deps.now || Date.now; }
 
   /** @param {string} userId @param {string} token @param {Record<string,any>} body */
@@ -35,8 +36,11 @@ class GameDeskService {
     if (body.action === "sessionReset") return this.resetSession(userId, token);
     // "End stream": close the open stream and build its report (services/streamReports.js).
     if (body.action === "streamEnd") {
+      const state = await studio.get(token);
+      const startMs = await this.streamStartMs(userId, state);
       const streamReport = this.deps.streams ? await this.deps.streams.end(userId) : null;
-      return { ...await studio.get(token), deskAction: { streamReport } };
+      const chapters = state.youtubeChapters && this.deps.chapters ? await this.deps.chapters.writeToYoutube(userId, startMs, this.now()) : null;
+      return { ...state, deskAction: { streamReport, chapters } };
     }
     const gameKey = body.gameKey;
     if (typeof gameKey !== "string" || !gameKey.trim() || gameKey.length > 120) throw deskError(400, "invalid_prediction_game");
@@ -59,6 +63,15 @@ class GameDeskService {
       return { ...await studio.get(token), deskAction: { shoutoutText: text, queued } };
     }
     return studio.get(token);
+  }
+
+  /** Where the stream began: the open stream's start, else the Dock's go-live mark.
+   * @param {string} userId @param {{streamStartMs?: number|null}} state @returns {Promise<number|null>} */
+  async streamStartMs(userId, state) {
+    const user = await this.deps.users.findOne({ userId }, { projection: { _id: 0, streamSession: 1 } });
+    const opened = user?.streamSession?.startAt ? new Date(user.streamSession.startAt).getTime() : NaN;
+    if (Number.isFinite(opened)) return opened;
+    return Number.isFinite(state.streamStartMs) ? Number(state.streamStartMs) : null;
   }
 
   /** @param {string} userId @param {string} [expectedKey] */

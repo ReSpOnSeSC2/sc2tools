@@ -72,11 +72,25 @@ def test_live_title_template_preview_and_explicit_default_off_platform_selection
     controls.enabled.setChecked(True)
     controls.configure()
     assert payloads == [{"action": "configure_title_automation", "template": "SC2 | {mmr} MMR | {record}",
-        "enabled": True, "on_game_start": False, "channel_tags": False, "category_guard": False,
+        "enabled": True, "on_game_start": False, "channel_tags": False, "category_guard": False, "record_chapters": False,
         "platforms": {"twitch": True, "kick": True, "youtube": False}}]
     widget._completed({"action": "configure_title_automation", "error": "Storage unavailable"})
     assert controls.dirty is True
     assert controls.enabled.isChecked()
+
+
+def test_the_obs_recording_marker_switch_starts_off_and_is_saved_with_the_rest(page, monkeypatch):
+    widget, state, app = page
+    state["account_mode"] = "sc2tools"
+    controls = widget.title_controls
+    assert not controls.record_chapters.isChecked()
+    payloads = []
+    monkeypatch.setattr(widget, "job", payloads.append)
+    controls.record_chapters.setChecked(True)
+    controls.configure()
+    assert payloads[0]["record_chapters"] is True
+    controls._update_activation({"record_chapters": True})
+    assert "chapter marker at game start" in controls.activation.text()
 
 
 def test_current_match_template_preserves_prefix_and_only_edits_locally(page, monkeypatch):

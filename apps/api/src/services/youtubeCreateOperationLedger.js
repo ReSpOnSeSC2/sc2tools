@@ -371,6 +371,17 @@ function buildYoutubeCreateLedger(deps) {
     return broadcast;
   }
 
+  /** The newest broadcasts this account created, for work that needs to find them again.
+   * @param {{userId:string,expectedChannelId:string,limit?:number}} args @returns {Promise<string[]>} */
+  async function recentOwnedBroadcastIds(args) {
+    if (!args || typeof args.userId !== "string" || !args.userId
+        || typeof args.expectedChannelId !== "string" || !PROVIDER_ID.test(args.expectedChannelId)) return [];
+    const rows = await collection.find({
+      kind: "operation", userId: args.userId, expectedChannelId: args.expectedChannelId, phase: "succeeded",
+    }, { projection: { broadcastId: 1 } }).sort({ completedAt: -1 }).limit(Math.min(Math.max(args.limit || 10, 1), 50)).toArray();
+    return rows.map((row) => row.broadcastId).filter((id) => typeof id === "string" && PROVIDER_ID.test(id));
+  }
+
   /**
    * Pin BEFORE the first provider bind, then call again with a verified row
    * after binding. An ambiguous bind never permits selecting another stream.
@@ -491,7 +502,7 @@ function buildYoutubeCreateLedger(deps) {
     return safe;
   }
 
-  return { ensureIndexes, execute, inspect, reconcile, getOwnedBroadcast, markBound, claimStream, sanitizeOwnedBroadcast };
+  return { ensureIndexes, execute, inspect, reconcile, getOwnedBroadcast, recentOwnedBroadcastIds, markBound, claimStream, sanitizeOwnedBroadcast };
 }
 
 module.exports = { buildYoutubeCreateLedger, YoutubeCreateOperationError, DEFAULT_MAX_OPERATIONS, DEFAULT_MAX_DAILY_OPERATIONS };

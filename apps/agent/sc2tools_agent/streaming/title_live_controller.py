@@ -40,7 +40,8 @@ class LiveTitleControllerMixin:
         title_pending = self.settings["on_game_start"] and not (
             receipt and game_episode(receipt) == game_episode(game_key))
         channel_pending = self.channel_pending(game_key)
-        if not title_pending and not channel_pending:
+        record_pending = self.record_pending(game_key)
+        if not title_pending and not channel_pending and not record_pending:
             return True
         try:
             client = service.cloud_client.bound(self.connection(), guard=valid)
@@ -61,12 +62,15 @@ class LiveTitleControllerMixin:
                 self.message = "Waiting for the current opponent. No game-start title was sent."
                 service._publish()
                 return final
-            # The title goes first; tags and category follow it and cannot hold it up.
+            # The title goes first; tags, category and the marker follow it and cannot hold it up.
             done = True
             if title_pending and title_valid():
                 done = self._send_match_title(match, title_valid, game_key, final)
             if done and channel_pending and valid():
                 self.update_channel(game_key, client, valid)
+            # The marker is a local OBS call: it neither waits for the head-to-head record nor holds it up.
+            if record_pending and valid():
+                self.mark_recording(game_key)
             service._publish()
         return done
 

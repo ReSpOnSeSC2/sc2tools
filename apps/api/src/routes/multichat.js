@@ -70,6 +70,7 @@ const {
  *   studio: import('../services/multichatStudio').MultichatStudioService,
  *   commands?: import('../services/chatCommandService').ChatCommandService,
  *   gameDesk?: import('../services/gameDesk').GameDeskService,
+ *   chapters?: import('../services/streamChapters').StreamChaptersService,
  *   series?: import('../services/streamSeries').StreamSeriesService,
  *   sounds?: import('../services/multichatSounds').MultichatSoundsService,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
@@ -341,7 +342,7 @@ function buildMultichatRouter(deps) {
     },
   );
 
-  registerDockClipRoutes(router, { engagement: deps.engagement, limiter, tokenAuth });
+  registerDockClipRoutes(router, { engagement: deps.engagement, chapters: deps.chapters, studio: deps.studio, limiter, tokenAuth });
 
   router.get(
     "/multichat/:token/engagement/viewer",

@@ -11,6 +11,10 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   a custom game (when the live feed reports its map) and `Tournament` during a
   Series. Tags you set by hand are
   kept, and the category only changes at a game start, never back.
+- Optional **Add a chapter marker to the OBS recording at game start** on the
+  Streams page, off by default. Each game adds a chapter such as
+  `Game 4 · PvZ` to the file OBS is recording. It needs OBS 30.2 or newer
+  recording Hybrid MP4; otherwise it quietly does nothing.
 
 ## 0.25.11
 
