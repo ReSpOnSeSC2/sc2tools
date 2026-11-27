@@ -215,6 +215,8 @@ const { buildPlayerIdentitiesRouter } = require("./routes/playerIdentities");
 const { SupportMessagesService } = require("./services/supportMessages");
 const { AnnouncementsService } = require("./services/announcements");
 const { buildAnnouncementsRouter } = require("./routes/announcements");
+const { HumdingersService } = require("./services/humdingers");
+const { buildHumdingersRouter } = require("./routes/humdingers");
 const { buildNotificationServices } = require("./services/deliveryServices");
 const { mountNotificationRoutes } = require("./routes/deliveryRoutes");
 const { ReviewerReputationService } = require("./services/reviewerReputation");
@@ -457,6 +459,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const { notifications, delivery, useSessionPolicy } = buildNotificationServices(deps);
   const supportMessages = new SupportMessagesService(deps.db, notifications, adminEvents);
   const announcements = new AnnouncementsService(deps.db, { notifications, io: deps.io, logger: deps.logger });
+  const humdingers = new HumdingersService(deps.db, { secret: deps.config.serverPepper });
   const identityDeletions = new IdentityDeletionsService(deps.db, { clerk, secret: deps.config.serverPepper, logger: deps.logger });
   const privateSearch = new PrivateSearchService(deps.db, {
     identityKeyFor: id => identityDeletions.keyFor(id),
@@ -1202,6 +1205,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     notifications, ...delivery,
     supportMessages,
     announcements,
+    humdingers,
     reviewerReputation,
     reviews, gameShares: new GameSharesService(deps.db, { replayLibrary, perGame, playbackArtifacts, leaguePercentiles, logger: deps.logger }),
   }, deps, gameDetails);
@@ -1458,6 +1462,7 @@ function mountAdminRoutes(app, deps, services, adminClerkIds, auth, isAdmin) {
       buildStudio: { studio: services.buildStudio, policies: services.presetPolicies },
       classifierQuality: services.classifierQuality,
       announcements: services.announcements,
+      humdingers: services.humdingers,
       supportMessages: services.supportMessages,
       jobLedger: services.jobLedger, adminAudit: services.adminAudit,
       protectedAdminIds: deps.config.adminUserIds || [],
@@ -1509,6 +1514,7 @@ function mountAdminRoutes(app, deps, services, adminClerkIds, auth, isAdmin) {
 function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(SERVICE.ROUTE_PREFIX, buildPrivateSearchRouter({ privateSearch: services.privateSearch, auth }));
   app.use(SERVICE.ROUTE_PREFIX, buildAnnouncementsRouter({ announcements: services.announcements }));
+  app.use(SERVICE.ROUTE_PREFIX, buildHumdingersRouter({ humdingers: services.humdingers, auth }));
 
   // Public routers (no `router.use(auth)` — public endpoints OR per-route
   // auth) MUST mount before any auth-using router. Express runs every

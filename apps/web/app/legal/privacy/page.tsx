@@ -24,7 +24,7 @@ export const metadata = pageMetadata({
     "How SC2 Tools processes replay data, connected streaming accounts, and private StarCraft II replay files.",
 });
 
-const LAST_UPDATED = "2026-11-13";
+const LAST_UPDATED = "2026-11-26";
 /** Settings tab with export, history deletion and account deletion. */
 const DATA_SETTINGS_HREF = "/settings?tab=backups";
 const LIST_CLASS = "list-disc space-y-2 pl-6";
@@ -401,7 +401,29 @@ function BrowserStoredData() {
         they sign out. Deleting your account removes it from each browser once
         that browser sees you are signed out.
       </p>
+      <HumdingersPrivacy />
     </PolicySection>
+  );
+}
+
+function HumdingersPrivacy() {
+  return (
+    <>
+      <h3 id="humdingers" className="text-h4 font-semibold">Humdingers</h3>
+      <p>
+        Humdingers, the browser game at /play/humdingers, needs a signed-in
+        account. The game keeps its saves and settings in this site&apos;s
+        storage in your browser, and SC2 Tools copies each save to your account
+        so you can carry on from another device. The saves are stored with
+        your account and are included when you export or delete it.
+      </p>
+      <p>
+        To count plays, the game page reports when the game loads and how many
+        seconds you actively play. We keep only daily totals, with no names.
+        To count each player once a day we store a one-way hash of the day and
+        your account, and delete it after 35 days.
+      </p>
+    </>
   );
 }
 

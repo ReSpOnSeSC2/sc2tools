@@ -23,7 +23,7 @@ describe("curated product updates", () => {
     expect(entry?.link).toEqual({ href: "/tools", label: "Explore all tools" });
     expect(entry?.major).toBeUndefined();
   });
-  it("links Humdingers to its public page and announces it in the inbox", () => {
+  it("links Humdingers to its page and announces it in the inbox", () => {
     // "major" sends a notification once the API deploys. It was switched on
     // only after the page was live, so no one was told before they could play.
     const entry = WHATS_NEW.find(item => item.id === "humdingers");

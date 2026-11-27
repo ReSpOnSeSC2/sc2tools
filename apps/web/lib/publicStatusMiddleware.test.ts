@@ -25,7 +25,7 @@ vi.mock("@clerk/nextjs/server", async () => {
   };
 });
 
-import middleware from "../middleware";
+import middleware, { config } from "../middleware";
 
 beforeEach(() => {
   authBoundary.wrapped.mockClear();
@@ -141,19 +141,30 @@ describe("local replay middleware auth independence", () => {
 });
 
 describe("Humdingers game page", () => {
-  it.each(["/play/humdingers", "/play/humdingers?touch=1"])("serves %s from the static game file without Clerk", async pathname => {
+  it.each(["/play/humdingers", "/play/humdingers.html"])("keeps %s behind sign-in", async pathname => {
+    const response = await request(pathname, undefined, { "sec-fetch-dest": "iframe" });
+    expect(response.headers.get("x-fixture-auth-wrapper")).toBe("visited");
+    expect(authBoundary.protect).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a direct visit to the game file to its host page before auth", async () => {
     authBoundary.unavailable = true;
-    const response = await request(pathname, undefined, { cookie: "__session=synthetic-expired" });
-    const rewrite = new URL(response.headers.get("x-middleware-rewrite")!);
-    expect(rewrite.pathname).toBe("/play/humdingers.html");
-    expect(rewrite.search).toBe(new URL(pathname, "https://sc2tools.com").search);
-    expect(response.headers.get("location")).toBeNull();
+    const response = await request("/play/humdingers.html?touch=1", undefined, { "sec-fetch-dest": "document" });
+    expect(response.status).toBe(307);
+    const location = new URL(response.headers.get("location")!);
+    expect(location.pathname).toBe("/play/humdingers");
+    expect(location.search).toBe("?touch=1");
     expect(authBoundary.wrapped).not.toHaveBeenCalled();
   });
 
-  it.each(["/play/humdingers/", "/play/Humdingers", "/play/humdingers-other", "/play/other"])("keeps lookalike path %s inside Clerk", async pathname => {
-    await request(pathname);
+  it.each(["/play/humdingers-other", "/play/other"])("leaves lookalike path %s unprotected inside Clerk", async pathname => {
+    await request(pathname, undefined, { "sec-fetch-dest": "document" });
     expect(authBoundary.wrapped).toHaveBeenCalledOnce();
+    expect(authBoundary.protect).not.toHaveBeenCalled();
+  });
+
+  it("runs middleware for the dotted game file", () => {
+    expect(config.matcher).toContain("/play/(.*)");
   });
 });
 

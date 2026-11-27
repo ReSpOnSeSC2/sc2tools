@@ -71,6 +71,7 @@ const {
  *   adminGlobalTrends: import('../services/adminGlobalTrends').AdminGlobalTrendsService,
  *   supportMessages?: import('../services/supportMessages').SupportMessagesService,
  *   announcements?: import('../services/announcements').AnnouncementsService,
+ *   humdingers?: import('../services/humdingers').HumdingersService,
  *   adminEvents: import('../services/adminEvents').AdminEventsService,
  *   backupStatus?: import('../services/backupStatus').BackupStatusService,
  *   analytics: import('../services/analytics').AnalyticsService,
@@ -591,6 +592,16 @@ function buildAdminRouter(deps) {
         return;
       }
       res.json(await deps.analytics.realtime());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Humdingers play totals (anonymous, one row per UTC day; ADR 0102).
+  router.get("/admin/humdingers/stats", async (req, res, next) => {
+    try {
+      if (!deps.humdingers) throw Object.assign(new Error("unavailable"), { status: 503 });
+      res.set("Cache-Control", "private, no-store").json(await deps.humdingers.stats(req.query.days));
     } catch (err) {
       next(err);
     }

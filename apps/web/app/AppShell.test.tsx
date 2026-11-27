@@ -143,6 +143,15 @@ describe("isolated broadcast and local recap routes", () => {
   });
 });
 
+it("runs Humdingers under Clerk for account saves with nothing drawn over the game", () => {
+  renderAt("/play/humdingers");
+  expect(screen.getByTestId("route-content")).toBeTruthy();
+  expect(screen.getByTestId("clerk-provider")).toBeTruthy();
+  for (const id of ["site-header", "site-footer", "app-chrome", "cookie-banner", "google-analytics", "service-worker", "site-stats", "site-presence", "realtime-provider"]) {
+    expect(screen.queryByTestId(id)).toBeNull();
+  }
+});
+
 it("renders status without auth, realtime, analytics, background traffic or site chrome", () => {
   renderAt("/status");
   expect(screen.getByTestId("route-content")).toBeTruthy();

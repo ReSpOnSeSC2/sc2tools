@@ -1,6 +1,8 @@
 # ADR 0101: Humdingers ships as a static page, not an Arcade mode
 
-Status: Accepted, November 26, 2026.
+Status: Accepted, November 26, 2026. Amended by ADR 0102
+(`docs/adr/0102-humdingers-account-saves-and-play-stats.md`): the game now needs
+sign-in, and `/play/humdingers` is a host page that keeps saves in the account.
 
 ## Context
 

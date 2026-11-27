@@ -103,6 +103,13 @@ const COLLECTIONS = Object.freeze({
   MATCH_ROOMS: "match_rooms",
   DAILY_TALLY: "daily_tally",
   SITE_CONFIG: "site_config",
+  // Humdingers (ADR 0102): one row per account save slot, synced by the
+  // /play/humdingers host page.
+  HUMDINGERS_SAVES: "humdingers_saves",
+  // Anonymous play totals, one row per UTC day; no user IDs.
+  HUMDINGERS_PLAY_DAYS: "humdingers_play_days",
+  // Peppered day+user hashes that count each player once a day (35-day TTL).
+  HUMDINGERS_PLAY_PLAYERS: "humdingers_play_players",
   GHOST_EXAMPLES: "ghost_examples",
   COACHING: "coaching_locker",
   // Global, cross-user SC2Pulse cache. One row per real SC2 account

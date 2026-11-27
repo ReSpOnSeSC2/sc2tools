@@ -70,6 +70,9 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   matchRooms: import('mongodb').Collection<import('../services/matchRooms').MatchRoomDoc>,
  *   dailyTally: import('mongodb').Collection<import('../services/dailyCrowd').TallyRow>,
  *   siteConfig: import('mongodb').Collection<any>,
+ *   humdingersSaves: import('mongodb').Collection<import('../services/humdingers').HumdingersSaveDoc>,
+ *   humdingersPlayDays: import('mongodb').Collection<import('../services/humdingers').HumdingersPlayDayDoc>,
+ *   humdingersPlayPlayers: import('mongodb').Collection<import('../services/humdingers').HumdingersPlayPlayerDoc>,
  *   ghostExamples: import('mongodb').Collection<any>,
  *   pulseAccounts: import('mongodb').Collection,
  *   pulseCharacterLinks: import('mongodb').Collection,
@@ -120,6 +123,15 @@ function publicLiveCollections(db) {
     sitePresence: db.collection(COLLECTIONS.SITE_PRESENCE),
     matchRooms: db.collection(COLLECTIONS.MATCH_ROOMS),
     dailyTally: db.collection(COLLECTIONS.DAILY_TALLY),
+  };
+}
+
+/** @param {import('mongodb').Db} db @returns {Pick<DbContext, "humdingersSaves"|"humdingersPlayDays"|"humdingersPlayPlayers">} */
+function humdingersCollections(db) {
+  return {
+    humdingersSaves: db.collection(COLLECTIONS.HUMDINGERS_SAVES),
+    humdingersPlayDays: db.collection(COLLECTIONS.HUMDINGERS_PLAY_DAYS),
+    humdingersPlayPlayers: db.collection(COLLECTIONS.HUMDINGERS_PLAY_PLAYERS),
   };
 }
 
@@ -209,6 +221,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     siteConfig: db.collection(COLLECTIONS.SITE_CONFIG),
     ghostExamples: db.collection(COLLECTIONS.GHOST_EXAMPLES),
     ...publicLiveCollections(db),
+    ...humdingersCollections(db),
     coaching: db.collection(COLLECTIONS.COACHING),
     pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
     pulseCharacterLinks: db.collection(COLLECTIONS.PULSE_CHARACTER_LINKS),
@@ -353,6 +366,13 @@ async function ensurePublicLiveIndexes(ctx) {
   await ctx.matchRooms.createIndex({ creationDigest: 1 }, { unique: true });
   await ctx.dailyTally.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await ctx.dailyTally.createIndex({ day: 1, pack: 1 });
+}
+
+/** @param {DbContext} ctx */
+async function ensureHumdingersIndexes(ctx) {
+  // The unique slot index also makes "newest save wins" atomic (services/humdingers.js).
+  await ctx.humdingersSaves.createIndex({ userId: 1, slot: 1 }, { unique: true });
+  await ctx.humdingersPlayPlayers.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 }
 
 /**
@@ -705,6 +725,7 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.deviceTokens.createIndex({ revokedAt: 1, lastSeenAt: -1 });
 
   await ensurePublicLiveIndexes(ctx);
+  await ensureHumdingersIndexes(ctx);
   await ensureBrowserIngestDailyIndexes(ctx);
 
   await ctx.overlayTokens.createIndex({ token: 1 }, { unique: true });
