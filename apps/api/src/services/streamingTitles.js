@@ -2,7 +2,8 @@
 
 const { PlatformIntegrationError } = require("./platformIntegrations");
 const { STREAMING_SCOPES } = require("./platformOauthClients");
-const { fetchJson, fetchNoContent } = require("./platformOauthHttp");
+const { fetchNoContent } = require("./platformOauthHttp");
+const { channelUrl, channelHeaders, readOwnedChannel } = require("./streamingChannelRead");
 
 const TITLE_PLATFORMS = Object.freeze(["twitch", "kick"]);
 const KICK_VERIFICATION_DELAYS_MS = Object.freeze([350, 900]);
@@ -178,9 +179,7 @@ class StreamingTitlesService {
   /** @param {TitlePlatform} platform @param {TitleGrant} grant @param {string} title */
   async _patchTitle(platform, grant, title) {
     await grant.assertCurrent();
-    const url = platform === "twitch"
-      ? `https://api.twitch.tv/helix/channels?broadcaster_id=${encodeURIComponent(grant.platformUserId)}`
-      : "https://api.kick.com/public/v1/channels";
+    const url = channelUrl(platform, grant);
     const updateFetch = /** @type {typeof fetch} */ (async (target, init) => {
       const response = await grant.boundedFetch(target, init);
       // Kick's documented write receipt is 204. An unexpected success shape
@@ -219,35 +218,14 @@ class StreamingTitlesService {
 
   /** @param {TitlePlatform} platform @param {TitleGrant} grant */
   _headers(platform, grant) {
-    return { Authorization: `Bearer ${grant.accessToken}`,
-      ...(platform === "twitch" ? { "Client-Id": this.integrations.config.twitch.clientId } : {}) };
+    return channelHeaders(platform, grant, this.integrations.config.twitch.clientId);
   }
 
   /** @param {TitlePlatform} platform @param {TitleGrant} grant
    * @returns {Promise<TitleObservation>} */
   async _readTitle(platform, grant) {
-    const url = platform === "twitch"
-      ? `https://api.twitch.tv/helix/channels?broadcaster_id=${encodeURIComponent(grant.platformUserId)}`
-      : "https://api.kick.com/public/v1/channels";
-    await grant.assertCurrent();
-    let result;
-    try {
-      result = await fetchJson(grant.boundedFetch, url,
-        { headers: this._headers(platform, grant) }, "stream_title_read");
-    } catch (error) {
-      await grant.assertCurrent();
-      throw error;
-    }
-    const rows = result?.data;
-    const row = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
-    const identity = platform === "twitch" ? row?.broadcaster_id : row?.broadcaster_user_id;
-    const title = platform === "twitch" ? row?.title : row?.stream_title;
-    if (!row || !["string", "number"].includes(typeof identity) || !String(identity)) {
-      throw new PlatformIntegrationError(503, "stream_title_observation_unavailable", "The platform did not return a complete owned title observation.");
-    }
-    if (String(identity) !== grant.platformUserId) {
-      throw new PlatformIntegrationError(409, "streaming_identity_mismatch", "The owned platform title could not be verified.");
-    }
+    const row = await readOwnedChannel(platform, grant, this.integrations.config.twitch.clientId, "title");
+    const title = platform === "twitch" ? row.title : row.stream_title;
     if (typeof title !== "string") {
       throw new PlatformIntegrationError(503, "stream_title_observation_unavailable", "The platform did not return a complete title observation.");
     }

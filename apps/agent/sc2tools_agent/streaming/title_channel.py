@@ -10,7 +10,7 @@ import re
 
 MAX_TAGS = 10
 MAX_TAG_LENGTH = 25
-TAG_PATTERN = re.compile(r"[A-Za-z0-9]{1,25}\Z")
+TAG_PATTERN = re.compile(rf"[A-Za-z0-9]{{1,{MAX_TAG_LENGTH}}}\Z")
 RACE_LETTERS = {"Protoss": "P", "Terran": "T", "Zerg": "Z"}
 LEAGUES = {"Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"}
 CHANNEL_PLATFORMS = ("twitch", "kick")

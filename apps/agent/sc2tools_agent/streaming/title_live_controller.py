@@ -24,6 +24,7 @@ class LiveTitleControllerMixin:
             values = snapshot.get("values", {})
             snapshot["values"] = {key: value for key, value in values.items() if key not in MATCH_VALUE_KEYS}
             snapshot["match_game_key"] = None
+            snapshot["tag_preview"] = []
         return snapshot
 
     def refresh_match(self, game_key, generation, final):
@@ -32,6 +33,7 @@ class LiveTitleControllerMixin:
         valid = lambda: (self.owner() == owner and self.settings["owner"] == owner
                          and self.game_start_active() and not service.stop_event.is_set()
                          and self.worker.match.is_current(game_key, generation))
+        title_valid = lambda: valid() and self.settings["on_game_start"]
         if not owner or not valid():
             return True
         receipt = self.settings.get("last_start_game")
@@ -60,13 +62,15 @@ class LiveTitleControllerMixin:
                 service._publish()
                 return final
             # The title goes first; tags and category follow it and cannot hold it up.
-            done = self._send_match_title(match, client, valid, game_key, final) if title_pending else True
+            done = True
+            if title_pending and title_valid():
+                done = self._send_match_title(match, title_valid, game_key, final)
             if done and channel_pending and valid():
                 self.update_channel(game_key, client, valid)
             service._publish()
         return done
 
-    def _send_match_title(self, match, client, valid, game_key, final):
+    def _send_match_title(self, match, valid, game_key, final):
         """Publish the game-start title; False while the head-to-head record is still loading."""
         template = self.settings["template"]
         needs_history = any(f"{{{token}}}" in template for token in HISTORY_VALUE_KEYS)
@@ -74,6 +78,7 @@ class LiveTitleControllerMixin:
             self.message = "Waiting for the current opponent's head-to-head record."
             return False
         try:
+            client = self.service.cloud_client.bound(self.connection(), guard=valid)
             title = render_title(template, self._title_stats())
             selected = [name for name, enabled in self.settings["platforms"].items()
                         if enabled and self.settings["last_titles"].get(name) != title]

@@ -27,6 +27,13 @@ def connection_key(connection):
     return hashlib.sha256((base + "\0" + token).encode("utf-8")).hexdigest()
 
 
+def _game_receipt(value):
+    """A saved game key, or an empty receipt when it is not a short printable string."""
+    ok = (isinstance(value, str) and value.strip() and len(value) <= 300
+          and not any(ord(char) < 32 or ord(char) == 127 for char in value))
+    return value if ok else ""
+
+
 def load_title_settings(value, owner):
     value = value if isinstance(value, dict) else {}
     same_owner = bool(owner and value.get("owner") == owner)
@@ -51,11 +58,9 @@ def load_title_settings(value, owner):
     titles = value.get("last_titles") if same_owner else None
     titles = titles if isinstance(titles, dict) else {}
     start_game = value.get("last_start_game") if same_owner else None
-    start_game = start_game if (isinstance(start_game, str) and start_game.strip()
-        and len(start_game) <= 300 and not any(ord(char) < 32 or ord(char) == 127 for char in start_game)) else ""
+    start_game = _game_receipt(start_game)
     channel_game = value.get("last_channel_game") if same_owner else None
-    channel_game = channel_game if (isinstance(channel_game, str) and channel_game.strip()
-        and len(channel_game) <= 300 and not any(ord(char) < 32 or ord(char) == 127 for char in channel_game)) else ""
+    channel_game = _game_receipt(channel_game)
     written = value.get("last_tags") if same_owner else None
     written = written if isinstance(written, dict) else {}
     return {"owner": owner, "enabled": same_owner and value.get("enabled") is True,

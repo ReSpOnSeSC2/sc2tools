@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import copy
 
-from .title_channel import CHANNEL_PLATFORMS, channel_tags
+from .title_channel import CHANNEL_PLATFORMS, MAX_TAGS, channel_tags
 
 PLATFORM_NAMES = {"twitch": "Twitch", "kick": "Kick"}
 
@@ -26,8 +26,9 @@ class ChannelUpdateMixin:
                 and settings["last_channel_game"] != game_key)
 
     def tag_preview(self):
-        """The exact tags the next game start would send, from the latest statistics."""
-        return channel_tags(self._title_stats())
+        """The exact tags the game being played would send; none while no game is loading."""
+        stats = self._title_stats()
+        return channel_tags(stats) if stats.get("currentMatch") else []
 
     def update_channel(self, game_key, client, guard):
         """One attempt per game. The receipt is saved first: an ambiguous write is never repeated."""
@@ -48,17 +49,26 @@ class ChannelUpdateMixin:
         self.channel_message = " ".join(lines)
 
     def _send_tags(self, name, tags, client):
+        previous = self.settings["last_tags"].get(name, [])
         try:
-            result = client.set_tags(name, tags, self.settings["last_tags"].get(name, []))
+            result = client.set_tags(name, tags, previous)
         except Exception:
+            self._remember_tags(name, [*tags, *previous])
             return f"{PLATFORM_NAMES[name]} tags could not be confirmed."
         if result["status"] in {"updated", "unchanged"}:
-            written = copy.deepcopy(self.settings)
-            written["last_tags"][name] = result["added"]
-            self._persist(written)
-            self.settings = written
+            self._remember_tags(name, result["added"])
             return f"{PLATFORM_NAMES[name]} tags: {', '.join(result['added']) or 'none added'}."
+        if result["status"] == "failed":
+            # The write may have landed before the answer was lost: keep both lists as ours.
+            self._remember_tags(name, [*tags, *previous])
         return f"{PLATFORM_NAMES[name]} tags not changed. {result['reason']}".rstrip()
+
+    def _remember_tags(self, name, tags):
+        """Save which tags are ours, so only those are replaced at the next game."""
+        written = copy.deepcopy(self.settings)
+        written["last_tags"][name] = list(dict.fromkeys(tags))[:MAX_TAGS]
+        self._persist(written)
+        self.settings = written
 
     def _send_category(self, name, client):
         try:

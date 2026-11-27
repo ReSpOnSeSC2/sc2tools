@@ -14,12 +14,13 @@ const mapKey = (name) => name.trim().toLowerCase().replace(MAP_EDITION, "");
 
 /** What the channel tags need beyond the match: a running Series, and whether
  * the map is outside the ladder pool. An unknown pool never marks a game custom.
- * @param {string} userId @param {Record<string, any>|null} currentMatch
+ * @param {string} userId @param {{map?:string}|null} currentMatch
  * @param {{hasActiveSeries?:(userId:string)=>Promise<boolean>,ladderMaps?:()=>Promise<string[]>}} [extras] */
 async function tagContext(userId, currentMatch, extras) {
   const series = await extras?.hasActiveSeries?.(userId).catch(() => false) === true;
-  const maps = currentMatch?.map ? await extras?.ladderMaps?.().catch(() => null) : null;
-  const custom = maps?.length ? !maps.some((name) => mapKey(name) === mapKey(currentMatch?.map)) : undefined;
+  const played = currentMatch?.map;
+  const maps = played ? await extras?.ladderMaps?.().catch(() => null) : null;
+  const custom = played && maps?.length ? !maps.some((name) => mapKey(name) === mapKey(played)) : undefined;
   return { series, ...(custom === undefined ? {} : { custom }) };
 }
 

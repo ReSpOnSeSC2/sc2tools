@@ -172,8 +172,7 @@ class StreamService:
         unavailable = changed or not context["connectionKey"]
         if unavailable:
             snapshot["title_automation"] = {"enabled": False, "on_game_start": False, "channel_tags": False, "category_guard": False,
-                "template": "", "values": {}, "tag_preview": [],
-                "platforms": {"twitch": True, "kick": True, "youtube": False},
+                "template": "", "values": {}, "tag_preview": [], "platforms": {"twitch": True, "kick": True, "youtube": False},
                 "message": "SC2Tools pairing changed. Automatic titles are off; review settings again."}
             snapshot.update(catalog={"channels": [], "streams": []}, platform_results={},
                 platforms={}, auth_prompt="", metadata=copy.deepcopy(DEFAULT_CONFIG["metadata"]), metadata_saved=False,

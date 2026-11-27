@@ -3,6 +3,7 @@
 const { PlatformIntegrationError } = require("./platformIntegrations");
 const { fetchJson, fetchNoContent } = require("./platformOauthHttp");
 const { safeStreamingReason } = require("./streamingTitles");
+const { channelUrl, channelHeaders, readOwnedChannel } = require("./streamingChannelRead");
 
 const CHANNEL_PLATFORMS = Object.freeze(["twitch", "kick"]);
 const MAX_TAGS = 10;
@@ -13,8 +14,6 @@ const TAG_PATTERN = /^[A-Za-z0-9]{1,25}$/;
 /** Twitch's catalogue id for StarCraft II; stable for the life of the game. */
 const TWITCH_STARCRAFT_ID = "490422";
 const KICK_CATEGORY_NAME = "StarCraft II";
-const TWITCH_CHANNELS = "https://api.twitch.tv/helix/channels";
-const KICK_CHANNELS = "https://api.kick.com/public/v1/channels";
 const KICK_CATEGORIES = "https://api.kick.com/public/v2/categories";
 
 /** @typedef {{accessToken:string,platformUserId:string,platformUserName:string,
@@ -113,24 +112,13 @@ class StreamingChannelService {
 
   /** @param {'twitch'|'kick'} platform @param {ChannelGrant} grant */
   _headers(platform, grant) {
-    return { Authorization: `Bearer ${grant.accessToken}`,
-      ...(platform === "twitch" ? { "Client-Id": this.integrations.config.twitch.clientId } : {}) };
+    return channelHeaders(platform, grant, this.integrations.config.twitch.clientId);
   }
 
   /** @param {'twitch'|'kick'} platform @param {ChannelGrant} grant
    * @returns {Promise<ChannelObservation>} */
   async _read(platform, grant) {
-    await grant.assertCurrent();
-    const url = platform === "twitch"
-      ? `${TWITCH_CHANNELS}?broadcaster_id=${encodeURIComponent(grant.platformUserId)}` : KICK_CHANNELS;
-    const result = await fetchJson(grant.boundedFetch, url,
-      { headers: this._headers(platform, grant) }, "stream_channel_read");
-    const rows = result?.data;
-    const row = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
-    const identity = platform === "twitch" ? row?.broadcaster_id : row?.broadcaster_user_id;
-    if (!row || String(identity ?? "") !== grant.platformUserId) {
-      throw new PlatformIntegrationError(409, "streaming_identity_mismatch", "The owned platform channel could not be verified.");
-    }
+    const row = await readOwnedChannel(platform, grant, this.integrations.config.twitch.clientId, "channel");
     if (platform === "twitch") {
       return { tags: Array.isArray(row.tags) ? row.tags.map(String) : [], categoryId: String(row.game_id ?? "") };
     }
@@ -141,9 +129,7 @@ class StreamingChannelService {
   /** @param {'twitch'|'kick'} platform @param {ChannelGrant} grant @param {Record<string, unknown>} body */
   async _patch(platform, grant, body) {
     await grant.assertCurrent();
-    const url = platform === "twitch"
-      ? `${TWITCH_CHANNELS}?broadcaster_id=${encodeURIComponent(grant.platformUserId)}` : KICK_CHANNELS;
-    await fetchNoContent(grant.boundedFetch, url, { method: "PATCH",
+    await fetchNoContent(grant.boundedFetch, channelUrl(platform, grant), { method: "PATCH",
       headers: { ...this._headers(platform, grant), "Content-Type": "application/json" },
       body: JSON.stringify(body) }, "stream_channel_update");
   }
@@ -156,7 +142,7 @@ class StreamingChannelService {
       `${KICK_CATEGORIES}?name=${encodeURIComponent(KICK_CATEGORY_NAME)}`,
       { headers: this._headers("kick", grant) }, "stream_category_lookup");
     const match = (Array.isArray(result?.data) ? result.data : [])
-      .find((/** @type {any} */ row) => String(row?.name).toLowerCase() === KICK_CATEGORY_NAME.toLowerCase());
+      .find((/** @type {{name?:unknown,id?:unknown}} */ row) => String(row?.name).toLowerCase() === KICK_CATEGORY_NAME.toLowerCase());
     if (!Number.isInteger(match?.id) || match.id < 1) {
       throw new PlatformIntegrationError(503, "stream_category_unavailable", "The StarCraft II category could not be found.");
     }
@@ -165,4 +151,4 @@ class StreamingChannelService {
   }
 }
 
-module.exports = { StreamingChannelService, mergeTags, TAG_PATTERN, MAX_TAGS };
+module.exports = { StreamingChannelService, mergeTags };

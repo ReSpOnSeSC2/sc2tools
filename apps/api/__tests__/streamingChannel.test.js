@@ -87,6 +87,32 @@ describe("setTags", () => {
   });
 });
 
+describe("channel reads", () => {
+  test("a channel row the provider does not return is a gap, not a reconnect instruction", async () => {
+    const { service, calls } = harness(() => json({ data: [] }));
+    const result = await service.setTags("u", "kick", ["PvZ"], []);
+    expect(result).toMatchObject({ ok: false, status: "failed" });
+    expect(result.reason).not.toMatch(/connect|permission/i);
+    expect(writes(calls)).toHaveLength(0);
+  });
+
+  test("a row that belongs to another channel is never merged or written", async () => {
+    const { service, calls } = harness(() => json({ data: [{ broadcaster_id: "99", tags: ["Theirs"] }] }));
+    const result = await service.setTags("u", "twitch", ["PvZ"], []);
+    expect(result).toMatchObject({ ok: false, status: "failed" });
+    expect(writes(calls)).toHaveLength(0);
+  });
+
+  test("an unsupported platform never reaches a provider grant", async () => {
+    const { service, calls } = harness(() => twitchRow({ tags: [] }));
+    const withGrant = jest.spyOn(service.integrations, "withStreamingGrant");
+    await expect(service.setTags("u", "youtube", ["PvZ"], [])).rejects.toMatchObject({ code: "stream_channel_platform_invalid" });
+    await expect(service.ensureCategory("u", "youtube")).rejects.toMatchObject({ code: "stream_channel_platform_invalid" });
+    expect(withGrant).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe("ensureCategory", () => {
   test("Twitch already on StarCraft II sends no write", async () => {
     const { service, calls } = harness(() => twitchRow({ game_id: "490422" }));

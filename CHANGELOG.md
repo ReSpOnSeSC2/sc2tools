@@ -5101,7 +5101,8 @@ release preparation, not a signed or published 0.24.9 installer.
 
 - Two optional switches next to the automatic stream title set Twitch and Kick
   channel tags at the start of each game (matchup, race and league, plus
-  `ViewerGames` in a custom game and `Tournament` during a Series), and move
+  `ViewerGames` in a custom game when the live feed reports its map, and
+  `Tournament` during a Series), and move
   the category to StarCraft II when a game starts under another one. Both start
   off, keep the tags you set by hand, never send a tag that breaks a platform
   rule, and cannot hold up the title update. Agent 0.26.0.

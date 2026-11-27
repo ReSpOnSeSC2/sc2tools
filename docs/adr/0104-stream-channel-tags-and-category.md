@@ -31,7 +31,9 @@ Status: Accepted, November 27, 2026. Extends the automatic stream title
    switches it back. Twitch uses its fixed StarCraft II id; Kick looks the id up
    by name once per server run.
 5. A custom game is a live map outside the current ladder pool (editions
-   ignored). An unknown pool never marks a game custom. A Series is any running
+   ignored). The live feed often reports no map at game start; then the game is
+   never marked custom and `ViewerGames` is simply not sent. An unknown pool
+   never marks a game custom either. A Series is any running
    Series on the account's overlay tokens.
 6. Tags and category run after the title and each call is its own attempt. A
    failure becomes a line in the Streams page and never reaches the title.

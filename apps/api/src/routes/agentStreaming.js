@@ -69,7 +69,7 @@ function buildAgentStreamingRouter({ auth, integrations, streamingTitles, stream
  * never turns into an HTTP error the title path could trip over.
  * @param {import('../services/streamingChannel').StreamingChannelService|undefined} service
  * @param {string[]} fields
- * @param {(service:import('../services/streamingChannel').StreamingChannelService, userId:string, body:Record<string, any>)=>Promise<unknown>} run */
+ * @param {(service:import('../services/streamingChannel').StreamingChannelService, userId:string, body:Record<string, unknown>)=>Promise<unknown>} run */
 function channelHandler(service, fields, run) {
   return async (/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res, /** @type {import('express').NextFunction} */ next) => {
     try {

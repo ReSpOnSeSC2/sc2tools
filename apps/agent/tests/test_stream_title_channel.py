@@ -85,13 +85,15 @@ def test_an_incomplete_receipt_is_an_error(payload):
 
 @pytest.fixture
 def service(tmp_path):
-    calls, fail = [], []
+    calls, fail, on_get = [], [], []
     stats = {"schema": 1, "league": "Diamond", "session": {"wins": 1, "losses": 0},
              "currentMatch": dict(MATCH), "tagContext": {"custom": False, "series": True}}
 
     def transport(method, url, **kwargs):
         calls.append((method, url, kwargs.get("json")))
         if method == "GET":
+            for hook in on_get:
+                hook()
             return SimpleNamespace(status_code=200, json=lambda: copy.deepcopy(stats))
         body = kwargs["json"]
         if url.endswith("/title"):
@@ -105,7 +107,7 @@ def service(tmp_path):
             "status": "updated", "added": body.get("tags", [])})
     client = CloudStreamingClient(lambda: ("https://api.sc2tools.com", "token"), transport=transport)
     instance = StreamService(tmp_path, lambda: {}, no_obs=True, cloud_client=client)
-    instance.served_stats = stats
+    instance.served_stats, instance.on_get = stats, on_get
     yield instance, calls, fail
     instance.close()
 
@@ -170,7 +172,7 @@ def test_a_failed_channel_update_never_blocks_the_title_and_is_not_retried(servi
     assert instance.titles.worker.run_once() is True
     assert [call[2]["platforms"] for call in writes(calls, "/title")] == [["twitch"], ["kick"]]
     assert "could not be confirmed" in instance.titles.snapshot()["channel_message"]
-    assert instance.titles.settings["last_tags"] == {}
+    assert instance.titles.settings["last_tags"]["twitch"] == ["Tournament", "PvZ", "Protoss", "Diamond"]
     count = len(calls)
     instance.titles.worker.run_once()
     assert len(calls) == count
@@ -197,3 +199,46 @@ def test_nothing_is_sent_with_the_switches_off(service):
     start_game(instance)
     instance.titles.worker.run_once()
     assert not [call for call in calls if call[0] == "POST"]
+
+
+def test_unticking_game_start_titles_during_the_fetch_stops_the_title_but_not_the_channel_work(service):
+    instance, calls, _ = service
+    start_game(instance, channel_tags=True, on_game_start=True, template="SC2 | v {opp}")
+    titles = instance.titles
+    instance.on_get.append(lambda: titles.settings.update(on_game_start=False))
+    titles.worker.run_once()
+    assert not writes(calls, "/title")
+    assert writes(calls, "/tags")
+
+
+def test_the_tag_preview_is_empty_when_no_game_is_loading():
+    from sc2tools_agent.streaming.title_channel_controller import ChannelUpdateMixin
+
+    class Idle(ChannelUpdateMixin):
+        def _title_stats(self):
+            return {"league": "Diamond", "tagContext": {"series": True}}
+
+    assert Idle().tag_preview() == []
+
+
+def test_a_cached_snapshot_stops_naming_the_ended_games_tags(service):
+    instance, _, _ = service
+    cached = {"match_game_key": "game-one", "values": {"race": "Protoss"}, "tag_preview": ["PvZ"]}
+    scoped = instance.titles.scope_snapshot(cached)
+    assert scoped["tag_preview"] == [] and "race" not in scoped["values"]
+
+
+@pytest.mark.parametrize("answer", [RuntimeError("timeout"), {"status": "failed", "reason": "Twitch is unavailable."}])
+def test_tags_whose_receipt_was_lost_still_count_as_ours(service, answer):
+    instance, _, _ = service
+    titles = instance.titles
+    titles.settings["last_tags"]["twitch"] = ["PvZ"]
+
+    class Lost:
+        def set_tags(self, *_):
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+
+    titles._send_tags("twitch", ["PvT"], Lost())
+    assert titles.settings["last_tags"]["twitch"] == ["PvT", "PvZ"]
