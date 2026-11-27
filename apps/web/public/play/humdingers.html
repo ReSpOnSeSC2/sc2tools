@@ -390,7 +390,7 @@ html.touch #touch { display: block; }
       var dbg = G && G.debug, top = (G && G.scenes && G.scenes.top) ? G.scenes.top() : null;
       if (dbg) for (var i = 0; i < dbg.errors.length; i++) errors.push(dbg.errors[i].where + ': ' + dbg.errors[i].name + ': ' + dbg.errors[i].message);
       publish({ frame: (G && typeof G.frame === 'number') ? G.frame : -1, errors: errors, ticks: done, scene: top ? top.name : null,
-        warnings: dbg ? dbg.warnings.length : 0, dev: false, scripts: 289, build: true });
+        warnings: dbg ? dbg.warnings.length : 0, dev: false, scripts: 290, build: true });
     }
     if (!G || !G.booted || typeof G.tick !== 'function' || typeof G.render !== 'function') { errors.push('boot: the game did not start'); finish(); return; }
     var channel = (typeof MessageChannel === 'function') ? new MessageChannel() : null;
@@ -437,7 +437,7 @@ html.touch #touch { display: block; }
   };
 })();
 </script>
-<script>window.HUM_BUILD = {"game":"full","hosted":false,"scripts":["js/core/kernel.js","js/core/gfx.js","js/core/input.js","js/core/audio.js","js/core/font.js","js/core/ui.js","js/core/scene.js","js/core/script.js","js/core/persp.js","js/art/arttools.js","js/art/chargen.js","js/art/chargen_act.js","js/art/gear_parts.js","js/art/sprites_animals.js","js/art/sprites_archery.js","js/art/sprites_battle.js","js/art/sprites_clubs.js","js/art/sprites_court.js","js/art/sprites_dl_people.js","js/art/sprites_fleet.js","js/art/sprites_fx.js","js/art/sprites_fx_act.js","js/art/sprites_fx_weather.js","js/art/sprites_gadgets.js","js/art/sprites_icons.js","js/art/sprites_links.js","js/art/sprites_people.js","js/art/sprites_props.js","js/art/sprites_props_act.js","js/art/sprites_r6.js","js/art/sprites_tag_act.js","js/art/sprites_transit.js","js/art/sprites_vehicles.js","js/art/sprites_w2.js","js/art/sprites_w2_people.js","js/art/sprites_w2_talent.js","js/art/tiles.js","js/art/tiles_compose.js","js/art/tiles_dl.js","js/art/tiles_dungeons.js","js/art/tiles_furniture.js","js/art/tiles_interior.js","js/art/tiles_outdoor.js","js/art/tiles_places.js","js/art/tiles_r6.js","js/art/tiles_town.js","js/art/tiles_w2.js","js/art/tiles_w2_islets.js","js/art/tiles_w2_kamp.js","js/art/tiles_w2_places.js","js/art/tiles_w2_woods.js","js/world/canoe.js","js/world/daynight.js","js/world/encounter.js","js/world/entities.js","js/world/jumps.js","js/world/kits.js","js/world/map.js","js/world/overworld.js","js/world/puppet.js","js/world/towns.js","js/world/vehicles.js","js/world/vehicles_more.js","js/battle/actions.js","js/battle/ai.js","js/battle/battle.js","js/battle/battle_bg.js","js/battle/battle_ui.js","js/battle/cmd_build.js","js/battle/cmd_rerun.js","js/battle/cmd_swing.js","js/battle/formulas.js","js/battle/stage.js","js/menu/drumline.js","js/menu/fieldguide.js","js/menu/gameover.js","js/menu/lookscreen.js","js/menu/pause.js","js/menu/saveui.js","js/menu/shop.js","js/menu/title.js","js/menu/townmap.js","js/menu/worldcard.js","js/systems/actioncmd.js","js/systems/arsenal.js","js/systems/bounties.js","js/systems/citylife.js","js/systems/citylife_gates.js","js/systems/citylife_life.js","js/systems/collectibles.js","js/systems/controls.js","js/systems/dealership.js","js/systems/dl_board.js","js/systems/dl_coach.js","js/systems/dl_counters.js","js/systems/dl_freight.js","js/systems/dl_post.js","js/systems/dl_request.js","js/systems/fares.js","js/systems/forecast.js","js/systems/forecast_map.js","js/systems/homes.js","js/systems/huddle.js","js/systems/inventory.js","js/systems/lob.js","js/systems/lodging.js","js/systems/news.js","js/systems/party.js","js/systems/pizza.js","js/systems/quests.js","js/systems/replay.js","js/systems/sides.js","js/systems/stops.js","js/systems/subway.js","js/systems/tagalong.js","js/systems/taxi.js","js/systems/town.js","js/systems/traffic.js","js/systems/travel.js","js/systems/trouble.js","js/systems/tvguide.js","js/systems/w2_cut.js","js/systems/w2_day.js","js/systems/w2_tacos.js","js/systems/walkie.js","js/systems/worlds.js","js/minigames/arcade.js","js/minigames/archery.js","js/minigames/court_ai.js","js/minigames/court_data.js","js/minigames/court_input.js","js/minigames/court_league.js","js/minigames/court_quirks.js","js/minigames/court_sim.js","js/minigames/court_teams.js","js/minigames/court_view.js","js/minigames/fishing.js","js/minigames/golf.js","js/minigames/golf_courses.js","js/minigames/hoops.js","js/minigames/hoops_data.js","js/minigames/links_ai.js","js/minigames/links_club.js","js/minigames/links_courses.js","js/minigames/links_sim.js","js/minigames/links_tour.js","js/minigames/links_view.js","js/minigames/w2_talent.js","js/data/act_recipes.js","js/data/arsenal_data.js","js/data/barks.js","js/data/blueprints.js","js/data/bounties_side.js","js/data/cars.js","js/data/clubs.js","js/data/dl_items.js","js/data/enemies_e_downtown.js","js/data/enemies_e_finale.js","js/data/enemies_e_golf.js","js/data/enemies_e_hill.js","js/data/enemies_e_khum.js","js/data/enemies_e_mart.js","js/data/enemies_e_park.js","js/data/enemies_e_special.js","js/data/enemies_e_yard.js","js/data/enemies_maple.js","js/data/fleet.js","js/data/gear_looks.js","js/data/golf_rivals.js","js/data/heroes.js","js/data/items.js","js/data/party.js","js/data/r6_enemies.js","js/data/r6_items.js","js/data/replay_data.js","js/data/shops.js","js/data/skills.js","js/data/speakers.js","js/data/stations.js","js/data/statuses.js","js/data/traffic_lines.js","js/data/tvguide_data.js","js/data/w2_bosses.js","js/data/w2_enemies.js","js/data/w2_items.js","js/data/w2_shops.js","js/data/wheels_cars.js","js/maps/city.js","js/maps/city_downtown_n.js","js/maps/city_downtown_s.js","js/maps/city_drivein.js","js/maps/city_golf.js","js/maps/city_hill.js","js/maps/city_industrial.js","js/maps/city_lake.js","js/maps/city_maple.js","js/maps/city_mart.js","js/maps/city_park.js","js/maps/dl_humdrum.js","js/maps/dl_kits.js","js/maps/dng_golf.js","js/maps/dng_khum.js","js/maps/dng_mart.js","js/maps/dng_yard.js","js/maps/int_downtown_n.js","js/maps/int_downtown_s.js","js/maps/int_drivein.js","js/maps/int_golf.js","js/maps/int_hill.js","js/maps/int_lake.js","js/maps/int_maple.js","js/maps/int_mart.js","js/maps/int_sports.js","js/maps/lodging.js","js/maps/r6_gorge.js","js/maps/r6_halfway.js","js/maps/r6_hollow.js","js/maps/r6_int_halfway.js","js/maps/r6_kits.js","js/maps/r6_road.js","js/maps/w2_butts.js","js/maps/w2_cabins.js","js/maps/w2_campgate.js","js/maps/w2_dng_islets.js","js/maps/w2_dng_kamp.js","js/maps/w2_dng_woods.js","js/maps/w2_eastcamp.js","js/maps/w2_eastwoods.js","js/maps/w2_gateway.js","js/maps/w2_int_cabins.js","js/maps/w2_int_campgate.js","js/maps/w2_int_eastcamp.js","js/maps/w2_int_gateway.js","js/maps/w2_int_landing.js","js/maps/w2_int_messhall.js","js/maps/w2_int_southshore.js","js/maps/w2_kits.js","js/maps/w2_lake_e.js","js/maps/w2_lake_w.js","js/maps/w2_lakeroad.js","js/maps/w2_landing.js","js/maps/w2_linkside.js","js/maps/w2_messhall.js","js/maps/w2_reeds.js","js/maps/w2_southshore.js","js/maps/w2_tents.js","js/maps/w2_town.js","js/maps/w2_waterfront.js","js/maps/w2_woods.js","js/story/dl_core.js","js/story/dl_epilogue.js","js/story/dl_scenes.js","js/story/dl_voices.js","js/story/r6_core.js","js/story/r6_scenes.js","js/story/w1_act1.js","js/story/w1_act2.js","js/story/w1_act3.js","js/story/w1_core.js","js/story/w1_side.js","js/story/w1_voices.js","js/story/w2_act1.js","js/story/w2_core.js","js/story/w2_end.js","js/story/w2_takes.js","js/music/tracks_core.js","js/music/dl_jingles.js","js/music/music_battle.js","js/music/music_places.js","js/music/music_sports.js","js/music/music_town.js","js/music/r6_tracks.js","js/music/sfx.js","js/music/sfx_archery.js","js/music/sfx_canoe.js","js/music/sfx_dl.js","js/music/sfx_forecast.js","js/music/sfx_jumps.js","js/music/sfx_transit.js","js/music/w2_tracks.js","js/music/w2_tracks2.js","js/watch/bot.js","js/watch/dlwalk.js","js/watch/gamewalk.js","js/watch/r6walk.js","js/watch/w1walk.js","js/watch/w2walk.js","js/watch/watch.js","js/main.js"]};</script>
+<script>window.HUM_BUILD = {"game":"full","hosted":false,"scripts":["js/core/kernel.js","js/core/gfx.js","js/core/input.js","js/core/audio.js","js/core/font.js","js/core/ui.js","js/core/scene.js","js/core/script.js","js/core/persp.js","js/art/arttools.js","js/art/chargen.js","js/art/chargen_act.js","js/art/gear_parts.js","js/art/sprites_animals.js","js/art/sprites_archery.js","js/art/sprites_battle.js","js/art/sprites_clubs.js","js/art/sprites_court.js","js/art/sprites_dl_people.js","js/art/sprites_fleet.js","js/art/sprites_fx.js","js/art/sprites_fx_act.js","js/art/sprites_fx_weather.js","js/art/sprites_gadgets.js","js/art/sprites_icons.js","js/art/sprites_links.js","js/art/sprites_people.js","js/art/sprites_props.js","js/art/sprites_props_act.js","js/art/sprites_r6.js","js/art/sprites_tag_act.js","js/art/sprites_transit.js","js/art/sprites_vehicles.js","js/art/sprites_w2.js","js/art/sprites_w2_people.js","js/art/sprites_w2_talent.js","js/art/tiles.js","js/art/tiles_compose.js","js/art/tiles_dl.js","js/art/tiles_dungeons.js","js/art/tiles_furniture.js","js/art/tiles_interior.js","js/art/tiles_outdoor.js","js/art/tiles_places.js","js/art/tiles_r6.js","js/art/tiles_town.js","js/art/tiles_w2.js","js/art/tiles_w2_islets.js","js/art/tiles_w2_kamp.js","js/art/tiles_w2_places.js","js/art/tiles_w2_woods.js","js/world/canoe.js","js/world/daynight.js","js/world/encounter.js","js/world/entities.js","js/world/jumps.js","js/world/kits.js","js/world/map.js","js/world/overworld.js","js/world/puppet.js","js/world/towns.js","js/world/vehicles.js","js/world/vehicles_more.js","js/battle/actions.js","js/battle/ai.js","js/battle/battle.js","js/battle/battle_bg.js","js/battle/battle_ui.js","js/battle/cmd_build.js","js/battle/cmd_rerun.js","js/battle/cmd_swing.js","js/battle/formulas.js","js/battle/stage.js","js/menu/drumline.js","js/menu/fieldguide.js","js/menu/gameover.js","js/menu/lookscreen.js","js/menu/pause.js","js/menu/saveui.js","js/menu/shop.js","js/menu/title.js","js/menu/townmap.js","js/menu/worldcard.js","js/systems/actioncmd.js","js/systems/arsenal.js","js/systems/bounties.js","js/systems/citylife.js","js/systems/citylife_gates.js","js/systems/citylife_life.js","js/systems/collectibles.js","js/systems/controls.js","js/systems/dealership.js","js/systems/dl_board.js","js/systems/dl_coach.js","js/systems/dl_counters.js","js/systems/dl_freight.js","js/systems/dl_post.js","js/systems/dl_request.js","js/systems/fares.js","js/systems/forecast.js","js/systems/forecast_map.js","js/systems/homes.js","js/systems/huddle.js","js/systems/inventory.js","js/systems/lob.js","js/systems/lodging.js","js/systems/news.js","js/systems/party.js","js/systems/pizza.js","js/systems/quests.js","js/systems/replay.js","js/systems/sides.js","js/systems/stops.js","js/systems/subway.js","js/systems/tagalong.js","js/systems/taxi.js","js/systems/town.js","js/systems/traffic.js","js/systems/travel.js","js/systems/trouble.js","js/systems/tvguide.js","js/systems/w2_cut.js","js/systems/w2_day.js","js/systems/w2_tacos.js","js/systems/walkie.js","js/systems/worlds.js","js/minigames/arcade.js","js/minigames/archery.js","js/minigames/court_ai.js","js/minigames/court_data.js","js/minigames/court_input.js","js/minigames/court_league.js","js/minigames/court_quirks.js","js/minigames/court_sim.js","js/minigames/court_teams.js","js/minigames/court_view.js","js/minigames/fishing.js","js/minigames/golf.js","js/minigames/golf_courses.js","js/minigames/hoops.js","js/minigames/hoops_data.js","js/minigames/links_ai.js","js/minigames/links_club.js","js/minigames/links_courses.js","js/minigames/links_sim.js","js/minigames/links_tour.js","js/minigames/links_view.js","js/minigames/w2_talent.js","js/data/act_recipes.js","js/data/arsenal_data.js","js/data/barks.js","js/data/blueprints.js","js/data/bounties_side.js","js/data/cars.js","js/data/clubs.js","js/data/dl_items.js","js/data/enemies_e_downtown.js","js/data/enemies_e_finale.js","js/data/enemies_e_golf.js","js/data/enemies_e_hill.js","js/data/enemies_e_khum.js","js/data/enemies_e_mart.js","js/data/enemies_e_park.js","js/data/enemies_e_special.js","js/data/enemies_e_yard.js","js/data/enemies_maple.js","js/data/fleet.js","js/data/gear_looks.js","js/data/golf_rivals.js","js/data/heroes.js","js/data/items.js","js/data/party.js","js/data/r6_enemies.js","js/data/r6_items.js","js/data/replay_data.js","js/data/shops.js","js/data/skills.js","js/data/speakers.js","js/data/stations.js","js/data/statuses.js","js/data/traffic_lines.js","js/data/tvguide_data.js","js/data/w2_bosses.js","js/data/w2_clipshow.js","js/data/w2_enemies.js","js/data/w2_items.js","js/data/w2_shops.js","js/data/wheels_cars.js","js/maps/city.js","js/maps/city_downtown_n.js","js/maps/city_downtown_s.js","js/maps/city_drivein.js","js/maps/city_golf.js","js/maps/city_hill.js","js/maps/city_industrial.js","js/maps/city_lake.js","js/maps/city_maple.js","js/maps/city_mart.js","js/maps/city_park.js","js/maps/dl_humdrum.js","js/maps/dl_kits.js","js/maps/dng_golf.js","js/maps/dng_khum.js","js/maps/dng_mart.js","js/maps/dng_yard.js","js/maps/int_downtown_n.js","js/maps/int_downtown_s.js","js/maps/int_drivein.js","js/maps/int_golf.js","js/maps/int_hill.js","js/maps/int_lake.js","js/maps/int_maple.js","js/maps/int_mart.js","js/maps/int_sports.js","js/maps/lodging.js","js/maps/r6_gorge.js","js/maps/r6_halfway.js","js/maps/r6_hollow.js","js/maps/r6_int_halfway.js","js/maps/r6_kits.js","js/maps/r6_road.js","js/maps/w2_butts.js","js/maps/w2_cabins.js","js/maps/w2_campgate.js","js/maps/w2_dng_islets.js","js/maps/w2_dng_kamp.js","js/maps/w2_dng_woods.js","js/maps/w2_eastcamp.js","js/maps/w2_eastwoods.js","js/maps/w2_gateway.js","js/maps/w2_int_cabins.js","js/maps/w2_int_campgate.js","js/maps/w2_int_eastcamp.js","js/maps/w2_int_gateway.js","js/maps/w2_int_landing.js","js/maps/w2_int_messhall.js","js/maps/w2_int_southshore.js","js/maps/w2_kits.js","js/maps/w2_lake_e.js","js/maps/w2_lake_w.js","js/maps/w2_lakeroad.js","js/maps/w2_landing.js","js/maps/w2_linkside.js","js/maps/w2_messhall.js","js/maps/w2_reeds.js","js/maps/w2_southshore.js","js/maps/w2_tents.js","js/maps/w2_town.js","js/maps/w2_waterfront.js","js/maps/w2_woods.js","js/story/dl_core.js","js/story/dl_epilogue.js","js/story/dl_scenes.js","js/story/dl_voices.js","js/story/r6_core.js","js/story/r6_scenes.js","js/story/w1_act1.js","js/story/w1_act2.js","js/story/w1_act3.js","js/story/w1_core.js","js/story/w1_side.js","js/story/w1_voices.js","js/story/w2_act1.js","js/story/w2_core.js","js/story/w2_end.js","js/story/w2_takes.js","js/music/tracks_core.js","js/music/dl_jingles.js","js/music/music_battle.js","js/music/music_places.js","js/music/music_sports.js","js/music/music_town.js","js/music/r6_tracks.js","js/music/sfx.js","js/music/sfx_archery.js","js/music/sfx_canoe.js","js/music/sfx_dl.js","js/music/sfx_forecast.js","js/music/sfx_jumps.js","js/music/sfx_transit.js","js/music/w2_tracks.js","js/music/w2_tracks2.js","js/watch/bot.js","js/watch/dlwalk.js","js/watch/gamewalk.js","js/watch/r6walk.js","js/watch/w1walk.js","js/watch/w2walk.js","js/watch/watch.js","js/main.js"]};</script>
 <script>
 /* HUMDINGERS engine kernel (js/core/kernel.js)
  *
@@ -21708,6 +21708,47 @@ html.touch #touch { display: block; }
       if (f) { k.limb(14, 30, 18, 22, 'gray2', 2, 2, 'gray1').limb(34, 30, 30, 22, 'gray2', 2, 2, 'gray1').tri(19, 21, 29, 21, 24, 13, 'yellow'); t = 1; }
       else { k.limb(14, 30, 19, 34, 'gray2', 2, 2, 'gray1').limb(34, 30, 29, 34, 'gray2', 2, 2, 'gray1').tri(19, 33, 29, 33, 24, 41, 'yellow'); t = 0; }
       if (t) k.speck(21, 25, 'amber', FL()).speck(28, 26, 'amber', FL());
+    });
+  };
+})();
+
+// ---- THE CLIP SHOW (label w2clip; docs/w2/WORLD.md 4: "The reel's best bits of the party's own fights"; SANDBOX 8): World 2's
+// superboss, a pull-down cinema screen on a tripod with two film reels for ears. The screen is its face, and behind the face
+// runs the clip it is showing (frame 0: a bat swinging into a starburst; frame 1: a ball's arc, and the picture jumps a line).
+// Its map rows stay beside its def (js/data/w2_clipshow.js).
+(function () {
+  'use strict';
+  var G = globalThis.G = globalThis.G || {};
+  var A = G.w2art = G.w2art || {};
+  var FOES = A.FOES = A.FOES || {};
+  function FL() { return G.art.FLAT | G.art.NOLINE; }
+  FOES.w2_clip_show = function (s, f) {
+    G.bsprite.paint(s, function (k, p) {
+      var j = f ? 1 : 0, i, t;
+      p.layer(1); k.ell(28, 57, 22, 2.5, 'gray3');
+      p.layer(2); k.line(28, 45, 11, 58, 'metalDark', 2).line(28, 45, 45, 58, 'metalDark', 2).line(28, 45, 28, 58, 'metalDark', 2);
+      k.circ(15, 8, 7, 'gray4').circ(41, 8, 7, 'gray4');
+      p.layer(3); k.circ(15, 8, 2, 'gray1').circ(41, 8, 2, 'gray1');
+      for (i = 0; i < 3; i++) {
+        t = (f ? 0.7 : 0) + i * 2.094;
+        k.circ(15 + Math.cos(t) * 4.4, 8 + Math.sin(t) * 4.4, 1.2, 'gray2', FL());
+        k.circ(41 + Math.cos(t + 1) * 4.4, 8 + Math.sin(t + 1) * 4.4, 1.2, 'gray2', FL());
+      }
+      k.rect(4, 13, 48, 4, 'metalDark').rect(4, 13, 48, 1, 'gray2');
+      k.rect(6, 17, 44, 27, 'white');
+      p.layer(4); k.rect(8, 19 + j, 40, 22, 'navy', FL());
+      if (f) {
+        k.path([[11, 37], [17, 27], [24, 24], [31, 27]], 'yellow', 1).circ(31, 27, 1.5, 'white', FL());
+        k.spark(43, 23, 'lemon');
+      } else {
+        k.line(11, 38, 17, 31, 'wood', 2).spark(19, 29, 'yellow');
+        k.circ(41, 24, 1.5, 'white', FL());
+      }
+      k.rect(8, 41, 40, 2, 'ink', FL());
+      for (i = 0; i < 10; i++) k.rect(9 + i * 4, 41, 2, 1, 'gray1', FL());
+      p.layer(5); k.eyes(28, 28 + j, 14, 2.8, { look: [f ? 0.7 : -0.7, 0] }).mouth(28, 35 + j, f ? 12 : 9, f ? 'open' : 'smile');
+      k.circ(28, 46, 1.6, 'gray1');
+      if (f) k.zig(51, 18, 54, 12, 2, 1, 'yellow', 1, FL()).zig(5, 20, 2, 14, 2, 1, 'yellow', 1, FL());
     });
   };
 })();
@@ -56721,6 +56762,8 @@ html.touch #touch { display: block; }
  *
  *   await S.shop('shop_drugstore');                    // greeting -> Buy / Sell / Eat here / Leave -> goodbye
  *   await S.shop('shop_burger', { mode: 'eatIn' });    // straight to the dishes (a drive-through window)
+ *   a shop def's extras: [{ label, when() -> bool, run() -> Promise }] are rows of the first choice, before Leave (label w2fish:
+ *   Finn Fryer's "Cook my catch", js/data/w2_shops.js); run() plays in the shop's own script
  *   await G.menus.shop(id, { mode: 'buy' | 'sell' | 'eatIn' })   // the same thing without a script
  *
  * The rules (stock, prices, room, what the keeper buys, dishes) are G.shops in the rules module; this file
@@ -57056,10 +57099,16 @@ html.touch #touch { display: block; }
       if ((G.shops.stock(id) || []).length) { acts.push('buy'); labels.push('Buy'); }
       if (def.buys !== false) { acts.push('sell'); labels.push('Sell'); }
       if (dishes.length) { acts.push('eat'); labels.push('Eat here'); }
+      (Array.isArray(def.extras) ? def.extras : []).forEach(function (x) {
+        var on = false;
+        try { on = !!(x && x.label && typeof x.run === 'function' && (typeof x.when !== 'function' || x.when())); } catch (err) { on = false; }
+        if (on) { acts.push(x); labels.push(String(x.label)); }
+      });
       acts.push('leave'); labels.push('Leave');
       var pick = await UI.choice(labels, Object.assign({ prompt: first ? (def.greeting || 'Welcome.') : 'Anything else?' }, who));
       first = false;
       if (pick < 0 || acts[pick] === 'leave') break;
+      if (typeof acts[pick] === 'object') { try { await acts[pick].run(); } catch (err) { G.debug.error(err, 'shop:' + id + ':extra'); } continue; }
       add(await G.scenes.push('shop', { id: id, mode: acts[pick] }));
     }
     if (def.bye) await UI.say(def.bye, who);
@@ -84875,9 +84924,12 @@ html.touch #touch { display: block; }
  *   minigame 'fishing'   start({ spot, night, power }) -> { won, reason, spot, hooked, catch, name, size, sizeText,
  *                         joke, best, legendary }   (reason: landed snapped slipped missed spooked cut quit)
  *   service fishing.cast (spotId)   needs fishing_rod; plays casts until the player packs up; gives the catch
- *   service fishing.cook (fishId?)  Patty fries any fish into a fish_sandwich for $2 (the diner calls it)
- *   spots: park_pond, lake_dock, bungalow_dock (the last two are Lake Ho-Hum: tape_5 once, Ol' Whiskers after dark)
- *   state: G.state.fishing { casts, landed, caught {id: n}, best {id: size}, tape, tapeTries, whiskerTries }
+ *   service fishing.cook (fishId?, keeper?)  Patty fries any fish into a fish_sandwich for $2 (the diner calls it); keeper 'finn':
+ *                                  Finn Fryer, World 2's The Reel Meal, cooks it into a Fish Fry Basket for $5 (his shop's extra row)
+ *   spots: park_pond, lake_dock, bungalow_dock (the last two are Lake Ho-Hum: tape_5 once, Ol' Whiskers after dark); World 2
+ *          (label w2fish, docs/w2/SANDBOX.md 6 "Fishing", WORLD.md 7): w2_dock (any pier or dock end of Lake Lollygag: the Dawdler)
+ *          and w2_creek_pool (the Far Pines: the Dawdler, and The Big Maybe once, its own pity counter)
+ *   state: G.state.fishing { casts, landed, caught {id: n}, best {id: size}, tape, tapeTries, whiskerTries, maybeTries }
  *   event: fishing:catch { spot, id, size, best }
  * The scene is an overlay: the map stays on screen behind a panel. Card: docs/api/fishing.md.
  */
@@ -84912,27 +84964,38 @@ html.touch #touch { display: block; }
     shiny_quarter: { fight: 'junk', sizeText: 'Twenty-five cents. Shiny.', bite: 40,
       jokes: ['The lake was saving up for something.', 'Heads. Lucky, for the quarter.'] },
     tape_5: { fight: 'junk', sizeText: 'Sixty minutes. Side A.', bite: 40,
-      jokes: ['In a sandwich bag, bone dry. Somebody planned this.'] }
+      jokes: ['In a sandwich bag, bone dry. Somebody planned this.'] },
+    // World 2 (WORLD.md 7: the ids, the prices on the items). "Bites slowly": slow stretches the wait before the real bite.
+    // Their jokes are the build desk's: LINE NEEDED (for the top model's lines pass)
+    w2_fish_dawdler: { fight: 'small', fish: true, min: 6, max: 14, len: 30, body: 'sky', belly: 'cream', fin: 'blue', bite: 44, slow: 1.7,
+      jokes: ['It took its time getting on the hook. It is taking its time being caught, too.', 'A Dawdler. It looks at you like you are the one who is late.', 'It yawned. Fish do not yawn. This one has the time.'] },
+    w2_fish_big_maybe: { fight: 'legend', fish: true, min: 38, max: 52, len: 62, body: 'forest', belly: 'lime', fin: 'pine', bite: 28, legend: true,
+      jokes: ['The Big Maybe. So it IS real. It looks a little annoyed that you found out.'] }
   };
   var SPOTS = {
     park_pond: { name: 'The Other Pond', lake: false, table: { fish_sunny: 40, fish_bass: 20, fish_catfish: 8, old_boot: 12, rubber_duck: 10, shiny_quarter: 6 } },
     lake_dock: { name: 'Lake Ho-Hum', lake: true, table: { fish_sunny: 22, fish_bass: 26, fish_catfish: 16, old_boot: 12, rubber_duck: 6, shiny_quarter: 6 } },
-    bungalow_dock: { name: 'The Private Dock', lake: true, table: { fish_sunny: 14, fish_bass: 28, fish_catfish: 22, old_boot: 6, rubber_duck: 6, shiny_quarter: 10 } }
+    bungalow_dock: { name: 'The Private Dock', lake: true, table: { fish_sunny: 14, fish_bass: 28, fish_catfish: 22, old_boot: 6, rubber_duck: 6, shiny_quarter: 10 } },
+    // World 2: no lake: true (Lake Ho-Hum's tape and Ol' Whiskers stay in World 1); legend: the spot's one legend, rolled with its
+    // own pity counter, day or night
+    w2_dock: { name: 'Lake Lollygag', world: 'w2', table: { w2_fish_dawdler: 64, old_boot: 12, rubber_duck: 12, shiny_quarter: 8 } },
+    w2_creek_pool: { name: 'The Creek Pool', world: 'w2', legend: 'w2_fish_big_maybe', table: { w2_fish_dawdler: 56, old_boot: 10, rubber_duck: 8 } }
   };
-  var LIMIT = { fish_ol_whiskers: 1, shiny_quarter: 20, tape_5: 1 };
+  var LIMIT = { fish_ol_whiskers: 1, shiny_quarter: 20, tape_5: 1, w2_fish_big_maybe: 1 };
   var BIG = { fish_bass: 1, fish_catfish: 1, fish_ol_whiskers: 1 }, JUNK = { old_boot: 1, rubber_duck: 1, shiny_quarter: 1 };
   F.SPOTS = SPOTS; F.CATCH = CATCH; F.FIGHT = FIGHT;
 
   // ---- state --------------------------------------------------------------------------------------------------
   G.onNewGame(function fishingState(state) {
-    state.fishing = { casts: 0, landed: 0, caught: {}, best: {}, tape: false, tapeTries: 0, whiskerTries: 0 };
+    state.fishing = { casts: 0, landed: 0, caught: {}, best: {}, tape: false, tapeTries: 0, whiskerTries: 0, maybeTries: 0 };
   });
   function num(v, max) { v = Math.floor(Number(v)); return v >= 0 && v <= max ? v : 0; }
   F.sanitize = function (state) {
     state = state || G.state; if (!state) return 0;
     var s = state.fishing, fixed = 0;
     if (!s || typeof s !== 'object' || Array.isArray(s)) { s = state.fishing = {}; fixed++; }
-    ['casts', 'landed', 'tapeTries', 'whiskerTries'].forEach(function (k) { var v = num(s[k], 999999); if (s[k] !== v) { s[k] = v; fixed++; } });
+    if (s.maybeTries === undefined) s.maybeTries = 0;          // added 27 Nov (World 2's legend): an older save simply has none yet
+    ['casts', 'landed', 'tapeTries', 'whiskerTries', 'maybeTries'].forEach(function (k) { var v = num(s[k], 999999); if (s[k] !== v) { s[k] = v; fixed++; } });
     if (typeof s.tape !== 'boolean') { s.tape = !!s.tape; fixed++; }
     ['caught', 'best'].forEach(function (k) {
       var o = s[k];
@@ -84971,6 +85034,9 @@ html.touch #touch { display: block; }
     });
     if (sp.lake && !tapeDone()) out.push({ id: 'tape_5', w: Math.min(40, 6 + 4 * s.tapeTries) });
     if (sp.lake && night && count('fish_ol_whiskers') < 1) out.push({ id: 'fish_ol_whiskers', w: Math.min(30, 4 + 3 * s.whiskerTries) * (0.5 + p) });
+    if (sp.legend && CATCH[sp.legend] && count(sp.legend) < 1 && !((s.caught || {})[sp.legend] >= 1)) {   // a legend is landed once: sold or fried, it is a story
+      out.push({ id: sp.legend, w: Math.min(30, 3 + 3 * (s.maybeTries || 0)) * (0.5 + p) });
+    }
     return out;
   };
   F.roll = function (spotId, night, power, force) {
@@ -84980,9 +85046,19 @@ html.touch #touch { display: block; }
       if (!tapeDone()) s.tapeTries = id === 'tape_5' ? 0 : s.tapeTries + 1;
       if (night) s.whiskerTries = id === 'fish_ol_whiskers' ? 0 : s.whiskerTries + 1;
     }
+    if (s && sp.legend && count(sp.legend) < 1) s.maybeTries = id === sp.legend ? 0 : (s.maybeTries || 0) + 1;
     var c = CATCH[id], size = 0;
     if (c.fish) size = Math.round(G.rng.range(c.min, c.max) * 10) / 10;
     return { id: id, size: size, sizeText: c.fish ? size.toFixed(1) + ' inches' : c.sizeText, joke: (G.fxrng || G.rng).pick(c.jokes) };
+  };
+
+  // When the fake nibbles and the real bite come, counted from tick pt: a legend nibbles two to four times, a slow biter (the
+  // Dawdler, CATCH slow) waits longer. Rolls G.rng in the order the scene always did (a slow of 1 changes nothing). -> { nibbles, biteAt }
+  F.planBite = function (id, pt) {
+    var c = CATCH[id] || {}, legend = !!c.legend, slow = c.slow > 1 ? c.slow : 1;
+    var t = (pt || 0) + Math.round(G.rng.int(40, 90) * slow), n = G.rng.int(legend ? 2 : 0, legend ? 4 : 3), nibbles = [];
+    for (var i = 0; i < n; i++) { nibbles.push(t); t += Math.round(G.rng.int(30, 70) * slow); }
+    return { nibbles: nibbles, biteAt: t + Math.round(G.rng.int(20, 50) * slow) };
   };
 
   // One tick of the reel. r: { def, tension, reel, surge, warn }. -> null | 'landed' | 'snapped' | 'slipped'
@@ -85075,10 +85151,9 @@ html.touch #touch { display: block; }
     go: function (ph) { this.phase = ph; this.pt = 0; },
     say: function (text, frames) { this.msg = text; this.msgT = frames || 120; },
     plan: function () {                                       // nibbles, then the real bite
-      var t = this.pt + G.rng.int(40, 90), n = G.rng.int(this.hooked.id === 'fish_ol_whiskers' ? 2 : 0, this.hooked.id === 'fish_ol_whiskers' ? 4 : 3);
-      this.nibbles = [];
-      for (var i = 0; i < n; i++) { this.nibbles.push(t); t += G.rng.int(30, 70); }
-      this.biteAt = t + G.rng.int(20, 50);
+      var p = F.planBite(this.hooked.id, this.pt);
+      this.nibbles = p.nibbles;
+      this.biteAt = p.biteAt;
     },
     fail: function (reason) { this.reason = reason; this.say(FAIL[reason], 999); G.audio.sfx(reason === 'snapped' ? 'miss' : 'ui_deny'); this.go('end'); },
     leave: function (reason) { G.scenes.remove(this, result(this.spot, this.hooked, reason)); },
@@ -85254,11 +85329,12 @@ html.touch #touch { display: block; }
   }
 
   // ---- services -----------------------------------------------------------------------------------------------
+  var NO_ROD_W2 = 'Annie Bites sells rods at The Tackle Box, on the Landing. The fish here will wait. They are very good at it.';   // LINE NEEDED
   var TAG = ['The {t} watches the catch very closely.', 'The {t} would like it noted that it helped.', 'The {t} sniffs it and looks at Jay for answers.'];
   async function castLoop(S, spotId) {
     var gen = G.script.gen, spot = F.spot(spotId), last = null;
     if (!S.has('fishing_rod')) {
-      await S.say(['No rod, no fishing. The fish seem fine with this.', 'The Bait Shack by Lake Ho-Hum sells rods. The fish will wait. Waiting is most of what they do.']);
+      await S.say(['No rod, no fishing. The fish seem fine with this.', SPOTS[spot].world === 'w2' ? NO_ROD_W2 : 'The Bait Shack by Lake Ho-Hum sells rods. The fish will wait. Waiting is most of what they do.']);
       return null;
     }
     for (var round = 0; round < 99; round++) {
@@ -85284,34 +85360,50 @@ html.touch #touch { display: block; }
 
   var COOK = { fish_sunny: 'One Sunny, fried. It went out smiling.', fish_bass: 'Bass on a bun. It was a serious fish. It is a serious sandwich.',
     fish_catfish: 'Catfish. Whiskers off, attitude on the side.', fish_ol_whiskers: 'There. The legend, on a bun. Do not tell Rod. I will never tell Rod.' };
-  async function cook(S, want) {
+  // the cooks: Patty at the diner (World 1) and Finn Fryer at The Reel Meal (World 2, his shop's extra row). Finn's lines and his
+  // price are the build desk's: LINE NEEDED (for the top model's lines pass)
+  var COOKS = F.COOKS = {
+    patty: { speaker: 'Patty', price: 2, item: 'fish_sandwich', lines: COOK, legend: 'fish_ol_whiskers',
+      none: 'Bring me a fish and two dollars. I bring you a sandwich. That is the whole deal.', prompt: 'Which one goes in the fryer? $2.',
+      ask: ['...Is that Ol\' Whiskers?', 'I can do it. I want you to know I can do it.'], askQ: 'Fry Ol\' Whiskers?', spare: 'Good. I did not want to. I was being brave for you.',
+      broke: 'Two dollars. The fryer has standards. Low ones, but standards.', full: 'Your bag is full. I am not putting a sandwich in your pocket. Come back with room.',
+      done: 'One Fish Sandwich. Hot. Eat it before it remembers.', other: 'Fried. Do not ask what it was. I did not.' },
+    finn: { speaker: 'Finn Fryer', price: 5, item: 'w2_fish_fry', legend: 'w2_fish_big_maybe',
+      lines: { w2_fish_dawdler: 'A Dawdler. It took its time getting here. It will not take long to fry.', w2_fish_big_maybe: 'The Big Maybe, in my pan. I will tell nobody. Everybody will know by supper.' },
+      none: 'Bring me a fish you caught and five dollars, and I will fry it up as a basket. That is the deal.', prompt: 'Which fish goes in the pan? $5.',
+      ask: ['...Is that The Big Maybe?', 'I have kept a pan hot for that fish for years. I can do it, if you are sure.'], askQ: 'Fry The Big Maybe?', spare: 'Good. Some fish are better as a story.',
+      broke: 'Five dollars for the frying. The fish you brought already paid its share.', full: 'Your bag is full. Eat something, and I will fry this next.',
+      done: 'One Fish Fry Basket, from your own catch. Hot. Mind your fingers.', other: 'Fried. I will not ask where you found it.' }
+  };
+  async function cook(S, want, keeper) {
+    var K = COOKS[keeper] || COOKS.patty, who = K.speaker;
     var gen = G.script.gen, list = (G.inv.list('fish') || []).filter(function (e) { return e && e.n > 0; });
-    if (!list.length) { await S.say('Patty', 'Bring me a fish and two dollars. I bring you a sandwich. That is the whole deal.'); return null; }
+    if (!list.length) { await S.say(who, K.none); return null; }
     var pick = null;
     for (var i = 0; i < list.length; i++) if (list[i].id === want) pick = list[i];
     if (!pick) {
       var labels = list.map(function (e) { return G.ui.fit(G.inv.name(e.id) + ' x' + e.n, 150); }).concat(['Never mind']);
-      var k = await S.choice(labels, { prompt: 'Which one goes in the fryer? $2.', cancelable: true, speaker: 'Patty' });
+      var k = await S.choice(labels, { prompt: K.prompt, cancelable: true, speaker: who });
       if (k < 0 || k >= list.length || G.script.stale(gen)) return null;
       pick = list[k];
     }
-    if (pick.id === 'fish_ol_whiskers') {
-      await S.say('Patty', ['...Is that Ol\' Whiskers?', 'I can do it. I want you to know I can do it.']);
-      if (!(await S.yesno('Fry Ol\' Whiskers?'))) { await S.say('Patty', 'Good. I did not want to. I was being brave for you.'); return null; }
+    if (pick.id === K.legend) {
+      await S.say(who, K.ask);
+      if (!(await S.yesno(K.askQ))) { await S.say(who, K.spare); return null; }
     }
-    if (!S.pay(2)) { await S.say('Patty', 'Two dollars. The fryer has standards. Low ones, but standards.'); return null; }
+    if (!S.pay(K.price)) { await S.say(who, K.broke); return null; }
     S.take(pick.id, 1);
-    if (!(await S.give('fish_sandwich', 1, { silent: true }))) {
-      await S.give(pick.id, 1, { silent: true }); await S.money(2);
-      await S.say('Patty', 'Your bag is full. I am not putting a sandwich in your pocket. Come back with room.');
+    if (!(await S.give(K.item, 1, { silent: true }))) {
+      await S.give(pick.id, 1, { silent: true }); await S.money(K.price);
+      await S.say(who, K.full);
       return null;
     }
     S.sfx('cash_register');
-    await S.say('Patty', [COOK[pick.id] || 'Fried. Do not ask what it was. I did not.', 'One Fish Sandwich. Hot. Eat it before it remembers.']);
-    G.emit('fishing:cook', { id: pick.id });
-    return { ok: true, fish: pick.id, item: 'fish_sandwich' };
+    await S.say(who, [K.lines[pick.id] || K.other, K.done]);
+    G.emit('fishing:cook', { id: pick.id, keeper: COOKS[keeper] ? keeper : 'patty' });
+    return { ok: true, fish: pick.id, item: K.item };
   }
-  G.services.register('fishing.cook', function (fishId) { return G.script.run(function (S) { return cook(S, fishId); }); });
+  G.services.register('fishing.cook', function (fishId, keeper) { return G.script.run(function (S) { return cook(S, fishId, keeper); }); });
 })();
 //# sourceURL=js/minigames/fishing.js
 </script>
@@ -106996,6 +107088,546 @@ html.touch #touch { display: block; }
 //# sourceURL=js/data/w2_bosses.js
 </script>
 <script>
+/* HUMDINGERS - World 2's superboss: THE CLIP SHOW (label w2clip). Card: docs/api/w2_clipshow.md; test: node tools/test-w2-clipshow.js.
+ * The design, binding: docs/w2/SANDBOX.md 8: "THE CLIP SHOW (Clip Show Island, replay.superboss, from w2_complete). It keeps the
+ * eight biggest single hits the party landed in World 2 and throws them back in order. A clip is shown on its screen a round
+ * early: use that same action in the clip's round and it fizzles ("You cannot rerun a rerun."), otherwise Brace it. Between
+ * clips it "previously"s: heals a tenth. Prize: The Best Bits." Its row there: Lv 26, HP about 1,200. WORLD.md 4 (the id, the
+ * name, "The reel's best bits of the party's own fights"), STORY 6 (quest w2_clip_show: the third islet, after w2_complete, a
+ * trophy charm), WORLD.md 7 (The Best Bits, w2_charm_best_bits: js/data/w2_items.js).
+ *   THE REEL     Every fight in World 2 (not a simulated one, not a Rerun Booth tape, not this one) keeps each hero action that
+ *                took HP off a foe: G.state.w2clips.reel holds the eight biggest { hero, key, label, kind, dmg, foe, seq }. The
+ *                key is the rules' count of an action (Whack, Brace and "an item" one each; each Tune skill and each club its
+ *                own: G.w2acts.actionKey). An action that hits several foes is one hit, its HP added up. A reel under eight (a
+ *                save from before the reel was kept, a short stay) is topped up with stock footage: each hero's Whack and best
+ *                skills, at what they would do to THE CLIP SHOW.
+ *   THE FIGHT    (fight w2_clip_show, foe w2_clip_show, Lv 26). Its turns take turns: "Previously, on THE CLIP SHOW...": it
+ *                heals a tenth of its HP (not before the first clip) and cues the next clip on its screen (the telegraph; the
+ *                meter names it); then the clip plays, at the hero who landed it (another hero when that one is down). A hero
+ *                who uses that same action in that round (the order counts, whenever in the round the hero acts) makes it
+ *                fizzle; Brace takes the engine's share off. A clip takes a share of its target's HP by its place in the reel by size
+ *                (RULES.shareLo to shareHi; the engine's hit, so Brace, gear and perks still count, never a KA-BONK), its kind the clip's own. The bound: after RULES.maxHeals "previously"s it heals no more. The reel plays in the order the hits were landed (stock footage first); when
+ *                it runs out it starts over, a tenth harder a lap. Tune-In does not take: it is a rerun (will 'immune').
+ *                The Autopilot hears what the player is told: a hero who can use the cued clip's action uses it (an item is
+ *                never spent on it); else the hero it is aimed at Braces.
+ *   THE PLACE    Clip Show Island (js/maps/w2_lake_w.js): the screen's check calls story.npc('w2_clip_screen'). From w2_complete
+ *                this file's rule plays (the quest starts; S.service('replay.superboss', 'w2') runs the fight); before, the
+ *                map's own lines. While the fight is open the map stamps the screen up and showing (G.w2clip.screenTile).
+ *                Won: boss_w2_clip_show (replay.js), the quest done, The Best Bits. The Rerun Booth has it as World 2's
+ *                superboss from then on. Philo on the walkie (the first time Jay arrives somewhere in World 2 after its
+ *                story) and Cap Sizemore at the marina (once, before his own lines) say where it is and how to get there.
+ * Every line, tip and number here that is not SANDBOX 8's is the build desk's: LINE NEEDED (for the top model's lines pass).
+ */
+(function () {
+  'use strict';
+  var G = globalThis.G = globalThis.G || {};
+  var X = G.w2clip = G.w2clip || {};
+
+  // ---- names and numbers, in one place ----
+  var ID = X.ID = 'w2_clip_show';
+  var NAME = X.NAME = 'THE CLIP SHOW';
+  var FLAG = X.FLAG = 'boss_w2_clip_show';                 // set by G.replay's superboss service on the first win
+  var QUEST = X.QUEST = 'w2_clip_show';
+  var PRIZE = X.PRIZE = 'w2_charm_best_bits';
+  var SCREEN = X.SCREEN = 'w2_clip_screen';               // the check's id on Clip Show Island
+  var CAP = X.CAP = 'w2_cap';                              // Cap Sizemore, the marina (js/maps/w2_waterfront.js)
+  var PLACE = X.PLACE = { map: 'lollygag', x: 125, y: 129 };   // the place w2_superboss
+  var TOLD = X.TOLD = { seen: 'w2clip_seen', philo: 'w2clip_philo', cap: 'w2clip_cap' };
+  var EXP_FACTOR = 1.3;                                     // SPINE 8, w2; a boss pays enemyExp(lv) x 5 (battle sheet)
+  function bossExp(lv) { return Math.round((4 + 1.5 * lv + 0.5 * lv * lv) * 5 * EXP_FACTOR); }
+  // hp: what ships (a superboss's length: tools/test-w2-clipshow.js's table); spine: SANDBOX 8's "HP about"
+  var NUM = X.NUM = { lv: 26, hp: 3400, spine: 1200, off: 60, def: 26, spd: 23, luck: 26, money: 250 };
+  // the dials of the rules (one place for the design desk)
+  var RULES = X.RULES = {
+    reel: 8,                 // "the eight biggest single hits" (SANDBOX 8)
+    heal: 0.1,               // "previously": a tenth of its HP (SANDBOX 8)
+    shareLo: 0.6,            // what a clip nobody stops takes off the hero it is aimed at, as a share of that hero's HP: the
+    shareHi: 1.0,            // smallest clip of the reel to the biggest (the build desk's); Brace takes the engine's share off that
+    lap: 0.1,                // the reel starts over: a tenth harder a lap (the build desk's)
+    maxHeals: 6,             // the bound: after six "previously"s the tape is worn and heals no more (a fight that hits it ends)
+    par: 12                  // the Rerun Booth's par in rounds (the build desk's: the Autopilot's length at level 24)
+  };
+  // SANDBOX 8 word for word: rerun. Everything else: LINE NEEDED (the build desk's stand-ins)
+  var LINES = X.LINES = {
+    rerun: 'You cannot rerun a rerun.',
+    intro: 'The screen unrolled with a snap, and a projector clattered on. THE CLIP SHOW was on the air: the best bits of your summer!',
+    previously: '{e} said, "Previously, on THE CLIP SHOW..."',
+    healed: '{e} played its favorite moments again and got some HP back.',
+    worn: '{e} reached for another "previously", but that tape is worn through. It gets no more HP back.',
+    cue: 'Next on the screen: {clip}.',
+    aim: 'It plays next turn, aimed at {t}!',
+    anyItem: 'It plays next turn, aimed at {t}! Using any item that turn stops it.',
+    tip: 'When a clip plays, anyone who uses that same move in that round makes it fizzle. If nobody can, Brace.',
+    roll: '{e} rolled the clip!',
+    fizzle: '{h} did {move} live, so the old clip of it fell flat.',
+    play: 'It was {clip}, thrown back at {t}!',
+    lap: 'The reel ran out, so {e} rewound it to the start. The clips will hit harder this time around.',
+    test: '{e} showed a test pattern for a moment.',
+    death: 'The last clip ran off the reel. {e} showed THE END and rolled itself up.',
+    tune: 'It is a rerun. It already knows how this part ends, and Jay\'s tune does not take.',
+    mia: 'It\'s playing our own best hits back at us. When a clip comes up, use that same move when it plays, and it won\'t work.',
+    poppop: 'It\'s all reruns, kiddo. Watch which move it puts up next. Use that move when the clip plays, or Brace.',
+    philo: 'An episode made of old episodes. Networks do this when they run out of ideas. I would know.',
+    // the screen on Clip Show Island, from w2_complete
+    open: 'The folded screen has unrolled itself. The stencil on its case now says: "BEST BITS. NOW THERE ARE SOME."',
+    teaser: 'On the screen: {clip}. The picture keeps jumping back to the start, as if it is waiting for you.',
+    teaserStock: 'On the screen: grainy stock footage of you and your friends. It keeps jumping back to the start, as if it is waiting for you.',
+    ask: 'Sit in the middle deckchair and watch?',
+    later: 'You leave the middle deckchair empty. The screen rewinds and waits.',
+    won: 'The screen rolls itself up and drops a small reel into your hands. Its label says THE BEST BITS.',
+    after: 'The screen is rolled up again. The stencil on its case says: "THANKS FOR WATCHING."',
+    // Philo on the walkie, once, the first time Jay arrives somewhere in World 2 after its story
+    philoCall: 'For the record, Jay: the screen on Clip Show Island unrolled itself. It plays your best hits from this week, at you. Take a canoe out and press [ok] at the screen.',
+    // Cap Sizemore at the marina, once, before his own lines
+    cap: ['Something odd on the lake. The screen on Clip Show Island unrolled itself last night. It plays old fights. Yours, I hear.',
+      'The ferry does not stop there. Take a canoe from the first pier and paddle east. The island is near the south shore.']
+  };
+  var QDEF = X.QDEF = { name: 'The Clip Show', giver: 'Clip Show Island', world: 'w2',                                    // LINE NEEDED (name, stage, doneText)
+    stages: ['The screen on Clip Show Island plays your best hits back at you. Watch it, and beat THE CLIP SHOW.'],
+    doneText: 'You sat through the whole reel and kept the best bits.' };
+  var MUSIC = 'w2_boss_part';                               // SPINE's part-boss track: used once it is composed, else 'boss'
+
+  // ---- helpers ----
+  function num(v, d) { v = Number(v); return isFinite(v) ? v : d; }
+  function flag(n) { return !!(G.flag && G.flag(n)); }
+  function up(f) { return !!f && !f.out; }
+  function wild(b, me) { return b.team(me) === 'enemy'; }
+  function kindIs(f, id) { return !!f && (f.id === id || (f.def && f.def.id === id)); }
+  function part(b) { return (b.enemies || []).filter(function (e) { return kindIs(e, ID) && !e.out; })[0] || null; }
+  function mine(b) { return (b.enemies || []).some(function (e) { return kindIs(e, ID); }); }
+  function byUid(b, uid) {
+    if (uid === null || uid === undefined) return null;
+    var l = typeof b.everyone === 'function' ? b.everyone() : (b.heroes || []).concat(b.enemies || []);
+    for (var i = 0; i < l.length; i++) if (l[i].uid === +uid) return l[i];
+    return null;
+  }
+  function keyOf(a) {
+    if (G.w2acts && typeof G.w2acts.actionKey === 'function') return G.w2acts.actionKey(a);
+    switch (a && a.type) {
+      case 'whack': return 'whack';
+      case 'brace': return 'brace';
+      case 'item': return 'item';
+      case 'skill': return a.skill && a.skill.id ? 'skill:' + a.skill.id : null;
+      default: return null;
+    }
+  }
+  function kindOk(k) { var K = G.rules && G.rules.KINDS; return typeof k === 'string' && (!Array.isArray(K) || K.indexOf(k) >= 0); }
+  function itemDef(id) { return id && G.reg && G.reg.peek ? G.reg.peek('item', id) : null; }
+  function labelOf(a) {
+    switch (a && a.type) {
+      case 'whack': return 'WHACK';
+      case 'skill': return String((a.skill && (a.skill.name || a.skill.id)) || '?').toUpperCase();
+      case 'item': { var d = itemDef(a.item); return String((d && d.name) || 'AN ITEM').toUpperCase(); }
+      default: return '?';
+    }
+  }
+  function kindOfAct(a) {
+    var k = 'bonk';
+    if (a && a.type === 'skill' && a.skill) k = a.skill.kind || 'bonk';
+    else if (a && a.type === 'item') { var d = itemDef(a.item); k = (d && (d.kind || (d.battle && d.battle.kind))) || 'bonk'; }
+    return kindOk(k) ? k : 'bonk';
+  }
+  function heroName(b, id) {
+    var h = (b && b.heroes || []).filter(function (x) { return x.id === id; })[0];
+    if (h && b.Name) return b.Name(h);
+    var c = G.reg && G.reg.peek ? G.reg.peek('char', id) : null;
+    var n = (c && c.name) || String(id || 'Jay');
+    return n.charAt(0).toUpperCase() + n.slice(1);
+  }
+  function fill(text, map) { return String(text).replace(/\{(\w+)\}/g, function (m, k) { return map[k] !== undefined ? String(map[k]) : m; }); }
+  function buttons(text) { return G.input && typeof G.input.fmt === 'function' ? G.input.fmt(text) : text; }
+  // a clip in words: "Jay's WHACK, the hit that did 212 damage to THE RUNNING GAG" | "stock footage of Mia's DRIVER"
+  function clipText(b, c) {
+    var who = heroName(b, c.hero) + '\'s ' + c.label;
+    if (c.stock) return 'stock footage of ' + who;
+    return who + ', the hit that did ' + c.dmg + ' damage' + (c.foe ? ' to ' + c.foe : '');
+  }
+  X.clipText = clipText;
+  // a hero's skills as the command lists them (Tune's, Swing's clubs, ...): [skill]
+  function skillsOf(b, h) {
+    var cmd = null, l = [];
+    try {
+      var name = (h.char && h.char.cmd) || 'Tune';
+      cmd = G.battle && G.battle.commands ? G.battle.commands.get(name) : null;
+      l = cmd && typeof cmd.list === 'function' ? cmd.list(h, b) || [] : [];
+    } catch (err) { l = []; }
+    return l.filter(function (s) { return s && s.id; });
+  }
+  function hurts(s) {
+    var aim = s.target || s.shot;
+    return num(s.power, 0) > 0 && aim !== 'ally' && aim !== 'self' && aim !== 'party' && !s.blocked;
+  }
+
+  // ======================================================================================================== THE REEL (the save)
+  function fresh() { return { reel: [], seq: 0 }; }
+  function byDmg(p, q) { return q.dmg - p.dmg || p.seq - q.seq; }
+  function cleanClip(c) {
+    if (!c || typeof c !== 'object') return null;
+    var dmg = Math.round(num(c.dmg, 0));
+    if (!(dmg > 0) || typeof c.key !== 'string' || !c.key || c.key === 'brace') return null;
+    return { hero: String(c.hero || 'jay').slice(0, 16), key: c.key.slice(0, 40), label: String(c.label || '?').slice(0, 24),
+      kind: kindOk(c.kind) ? c.kind : 'bonk', dmg: dmg, foe: c.foe ? String(c.foe).slice(0, 40) : '', seq: Math.max(0, Math.floor(num(c.seq, 0))) };
+  }
+  function store() {
+    if (!G.state) return null;
+    var s = G.state.w2clips;
+    if (!s || typeof s !== 'object' || !Array.isArray(s.reel)) s = G.state.w2clips = fresh();
+    return s;
+  }
+  // -> how many things it put right (a load hook; tools: G.w2clip.sanitize(state))
+  X.sanitize = function (state) {
+    state = state || G.state;
+    if (!state) return 0;
+    var s = state.w2clips, fixed = 0;
+    if (s === undefined) { state.w2clips = fresh(); return 0; }     // a save from before the reel: nothing broken, nothing recorded yet
+    if (!s || typeof s !== 'object' || !Array.isArray(s.reel)) { state.w2clips = fresh(); return 1; }
+    var keep = s.reel.map(cleanClip).filter(Boolean);
+    if (keep.length !== s.reel.length) fixed++;
+    keep.sort(byDmg);
+    if (keep.length > RULES.reel) { keep = keep.slice(0, RULES.reel); fixed++; }
+    s.reel = keep;
+    var seq = Math.max(0, Math.floor(num(s.seq, 0)));
+    keep.forEach(function (c) { if (c.seq >= seq) seq = c.seq + 1; });
+    if (s.seq !== seq) { s.seq = seq; fixed++; }
+    return fixed;
+  };
+  X.reel = function () { var s = store(); return s ? s.reel.map(function (c) { return Object.assign({}, c); }) : []; };
+  // note({ hero, key, label, kind, dmg, foe }) -> true when it made the reel (the eight biggest); event w2:clip { clip }
+  X.note = function (clip) {
+    var s = store(), c = s ? cleanClip(Object.assign({}, clip, { seq: s.seq })) : null;
+    if (!c) return false;
+    s.seq = c.seq + 1;
+    s.reel.push(c);
+    s.reel.sort(byDmg);
+    var kept = s.reel.indexOf(c) < RULES.reel;
+    if (s.reel.length > RULES.reel) s.reel.length = RULES.reel;
+    if (kept && G.emit) G.emit('w2:clip', { clip: Object.assign({}, c) });
+    return kept;
+  };
+  G.onNewGame(function w2clipState(state) { state.w2clips = fresh(); });
+  if (typeof G.on === 'function') G.on('load', function () { X.sanitize(); });
+
+  // the recorder: a fight in World 2 that is not simulated, not a Rerun Booth tape and not THE CLIP SHOW's own
+  function here() { try { return G.replay && G.replay.here ? G.replay.here() : null; } catch (err) { return null; } }
+  X.recording = function (b) {
+    if (!b || b.sim || !G.state || mine(b)) return false;
+    if (b.opts && (b.opts.replayRerun || b.opts.noClips)) return false;
+    return here() === 'w2';
+  };
+  function recStart(b) {
+    var perform = b.perform;
+    if (typeof perform !== 'function' || !b.stats) return;
+    var M = b.mem.w2rec = { acc: 0, noted: 0 };
+    // an action inside an action (an extra turn) is its own hit: the outer one keeps only what it did itself
+    b.perform = async function (c, a) {
+      var before = this.stats.dealt, accBefore = M.acc;
+      try { return await perform.call(this, c, a); }
+      finally {
+        var got = this.stats.dealt - before, own = got - (M.acc - accBefore);
+        M.acc = accBefore + got;
+        if (own > 0 && c && c.isHero && a) {
+          try { if (noteHit(this, c, a, own)) M.noted++; } catch (err) { G.debug.error(err, 'w2clip:note'); }
+        }
+      }
+    };
+  }
+  function noteHit(b, h, a, dmg) {
+    var key = keyOf(a);
+    if (!key || key === 'brace') return false;
+    var t = a.target && a.target.kind === 'foe' ? a.target : null, aim = a.skill && (a.skill.target || a.skill.shot);
+    var foe = aim === 'all' || aim === 'enemies' ? 'a whole group' : t ? b.nameOf(t) : '';             // LINE NEEDED ("a whole group")
+    return X.note({ hero: h.id, key: key, label: labelOf(a), kind: kindOfAct(a), dmg: dmg, foe: foe });
+  }
+
+  // ======================================================================================================== THE FIGHT
+  // the reel of this fight: stock footage (smallest first), then the recorded clips in the order they were landed; each with its
+  // share by size: [{ hero, key, label, kind, dmg, foe, seq, stock, share }]
+  function stockFor(b, me, have, want) {
+    var lists = [];
+    (b.heroes || []).forEach(function (h) {
+      if (!h || !h.isHero) return;
+      var l = [{ key: 'whack', label: 'WHACK', kind: 'bonk', pw: 1 }];
+      skillsOf(b, h).filter(hurts).forEach(function (s) {
+        l.push({ key: 'skill:' + s.id, label: String(s.name || s.id).toUpperCase(), kind: kindOk(s.kind) ? s.kind : 'bonk', pw: num(s.power, 0) * Math.max(1, num(s.hits, 1)) });
+      });
+      l.forEach(function (x) {
+        x.hero = h.id; x.stock = true; x.foe = ''; x.seq = -1;
+        x.dmg = Math.max(1, Math.round(me && typeof b.estimate === 'function' ? b.estimate(h, me, x.pw, x.kind) : 10 * x.pw));
+      });
+      l = l.filter(function (x) { return !have.some(function (c) { return c.hero === x.hero && c.key === x.key; }); });
+      l.sort(function (p, q) { return q.dmg - p.dmg; });
+      lists.push(l);
+    });
+    var out = [];
+    for (var i = 0; out.length < want && lists.some(function (l) { return l.length > i; }); i++) {
+      lists.forEach(function (l) { if (out.length < want && l[i]) out.push(l[i]); });
+    }
+    return out;
+  }
+  X.reelFor = function (b, me) {
+    var rec = X.reel().slice(0, RULES.reel);
+    var stock = rec.length < RULES.reel ? stockFor(b, me, rec, RULES.reel - rec.length) : [];
+    rec.sort(function (p, q) { return p.seq - q.seq; });
+    stock.sort(function (p, q) { return p.dmg - q.dmg; });
+    var reel = stock.concat(rec).map(function (c) { var o = Object.assign({}, c); delete o.pw; return o; });
+    var sizes = reel.map(function (c) { return c.dmg; }).sort(function (p, q) { return p - q; }), n = reel.length;
+    reel.forEach(function (c) { var r = sizes.indexOf(c.dmg); c.share = n > 1 ? RULES.shareLo + (RULES.shareHi - RULES.shareLo) * r / (n - 1) : RULES.shareHi; });
+    return reel;
+  };
+  X.fight = function (b) { return b && b.mem ? b.mem.w2clip || null : null; };
+  function meter(b) {
+    var M = b.mem.w2clip;
+    if (!b.meter || !M || !M.reel.length) return;
+    var q = M.cue, left = M.reel.length - (M.next % M.reel.length);
+    b.meter({ label: q ? 'NEXT: ' + heroName(b, q.clip.hero).toUpperCase() + ' - ' + q.clip.label : 'CLIPS LEFT: ' + left, value: left, max: M.reel.length, color: 'amber' });
+  }
+  // whom a clip is thrown at: the hero who landed it, else another hero still up
+  function aimAt(b, clip) {
+    var hs = (b.heroes || []).filter(up), own = hs.filter(function (h) { return h.id === clip.hero; })[0];
+    return own || (hs.length ? b.rng.pick(hs) : null);
+  }
+  function clipPick(b, me) {
+    var M = b.mem.w2clip, q = M && M.cue, t = q ? byUid(b, q.at) : null;
+    if (up(t) && t.isHero) return t;
+    return q ? aimAt(b, q.clip) : null;
+  }
+  async function cue(b, me) {
+    var M = b.mem.w2clip;
+    if (!M || !M.reel.length || b.result) return;
+    var n = M.reel.length, i = M.next % n, lap = Math.floor(M.next / n), clip = M.reel[i], t = aimAt(b, clip);
+    if (!t) return;
+    if (lap > M.laps) { M.laps = lap; await b.say(b.fmt(LINES.lap, me)); }
+    M.cue = { i: i, lap: lap, clip: clip, at: t.uid, round: b.round };
+    me.charging = 'clip';
+    if (me.view) me.view.mark = '!';
+    if (b.fx) b.fx('telegraph', me);
+    if (b.sfx) b.sfx('alarm');
+    meter(b);                                                  // the meter names the clip as the cue comes up
+    await b.say(fill(LINES.cue, { clip: clipText(b, clip) }));
+    await b.say(b.fmt(clip.key === 'item' ? LINES.anyItem : LINES.aim, me, t));
+    if (!M.taught) { M.taught = true; await b.tip(buttons(LINES.tip)); }
+  }
+  // the hero who is doing the cued clip's action live this round (an order of this round, the hero still up)
+  function liveHero(b, key) {
+    var orders = b.roundOrders || {}, hs = (b.heroes || []).filter(up);
+    for (var i = 0; i < hs.length; i++) { var o = orders[hs[i].uid]; if (o && keyOf(o) === key) return hs[i]; }
+    return null;
+  }
+  X.liveHero = liveHero;
+  async function previously(b, me) {
+    var M = b.mem.w2clip;
+    if (!M) return;
+    var hurt = me.hpMax - me.hp;
+    if ((M.played + M.fizzles) > 0 && hurt > 0 && M.heals >= RULES.maxHeals) {
+      if (!M.worn) { M.worn = b.round; await b.say(b.fmt(LINES.worn, me)); }
+    } else if ((M.played + M.fizzles) > 0 && hurt > 0) {     // "between clips": not before the first one
+      var n = Math.min(hurt, Math.round(me.hpMax * RULES.heal));
+      if (b.fx) b.fx('cheer', me);
+      await b.say(b.fmt(LINES.healed, me));
+      M.healed += await b.heal(me, n, { quiet: true });
+      M.heals++;
+    }
+    await cue(b, me);
+  }
+  async function playClip(b, me, t) {
+    var M = b.mem.w2clip, q = M && M.cue;
+    if (!q) return;
+    M.cue = null;
+    M.next = q.lap * M.reel.length + q.i + 1;
+    var live = liveHero(b, q.clip.key);
+    if (live) {
+      M.fizzles++;
+      if (b.fx) b.fx('miss', me);
+      if (b.sfx) b.sfx('miss');
+      await b.say(LINES.rerun);
+      await b.say(fill(LINES.fizzle, { h: b.Name(live), move: q.clip.label }));
+      meter(b);
+      return;
+    }
+    t = up(t) && t.isHero ? t : aimAt(b, q.clip);
+    if (!t) return;
+    await b.say(fill(LINES.play, { clip: clipText(b, q.clip), t: b.nameOf(t) }));
+    var kind = q.clip.kind || 'bonk', want = t.hpMax * q.clip.share * (1 + RULES.lap * q.lap);
+    var out = await b.attack(me, t, { power: powerFor(b, me, t, kind, want), kind: kind, noMiss: true, crit: false, big: true, name: 'Clip' });
+    M.played++;
+    if (out && out.dmg > 0) { M.taken += out.dmg; if (t.brace) M.braced++; }
+    meter(b);
+  }
+  // the power at which the engine's hit (no variance, no KA-BONK) takes `want` HP off this hero: the damage rule is not
+  // proportional to power (a defence comes off), so it is found on the engine's own estimate. Brace, gear and perks still apply
+  function powerFor(b, me, t, kind, want) {
+    if (typeof b.estimate !== 'function') return 1;
+    var lo = 0, hi = 1, i;
+    for (i = 0; i < 10 && b.estimate(me, t, hi, kind) < want; i++) hi *= 2;
+    for (i = 0; i < 18; i++) { var mid = (lo + hi) / 2; if (b.estimate(me, t, mid, kind) < want) lo = mid; else hi = mid; }
+    return hi;
+  }
+  X.powerFor = powerFor;
+  function clipScript(b, me) {
+    if (!wild(b, me) || me.charging) return;
+    return 'previously';
+  }
+  // the Autopilot: the cued clip's action from a hero who has it (never an item), else a Brace from the hero it is aimed at
+  function matchFor(b, h, key, foe) {
+    if (key === 'whack') return foe ? { type: 'whack', target: foe } : null;
+    if (key.indexOf('skill:') !== 0) return null;
+    var id = key.slice(6), s = skillsOf(b, h).filter(function (x) { return x.id === id; })[0];
+    if (!s || s.blocked || (typeof b.skillCost === 'function' && h.pp < b.skillCost(h, s))) return null;
+    var aim = s.target || s.shot;
+    return { type: 'skill', skill: s, target: aim === 'ally' || aim === 'self' ? h : foe };
+  }
+  function coach(b) {
+    var plan = b.heroPolicy;
+    if (typeof plan !== 'function') return;
+    b.heroPolicy = function (h, orders) {
+      var a = plan.call(this, h, orders);
+      if (typeof this.policy === 'function' || this.policy === 'whack' || !h || !h.isHero) return a;
+      var M = this.mem.w2clip, q = M && M.cue, me = part(this);
+      if (!q || !me || me.charging !== 'clip') return a;
+      var key = q.clip.key, o = orders || {};
+      if (Object.keys(o).some(function (u) { return o[u] && keyOf(o[u]) === key; })) return a;
+      var x = matchFor(this, h, key, me);
+      if (x) return x;
+      if (a && a.type === 'item') return a;
+      var t = byUid(this, q.at);
+      return t === h ? { type: 'brace' } : a;
+    };
+  }
+  function clipStart(b) {
+    var me = part(b);
+    b.mem.w2clip = { reel: X.reelFor(b, me), next: 0, cue: null, laps: 0, played: 0, fizzles: 0, braced: 0, taken: 0, heals: 0, healed: 0, taught: false };
+    coach(b);
+    meter(b);
+  }
+
+  // ---- the def (sprite: G.w2art.FOES.w2_clip_show, js/art/sprites_w2.js) ----
+  function ow(spec, extra) {
+    var impl = null, o = { w: spec.w || 16, h: spec.h || 16, frames: 2,
+      draw: function (s, dir, frame) { (impl || (impl = G.bsprite.owRows(spec))).draw(s, dir, frame); } };
+    for (var k in extra) o[k] = extra[k];
+    return o;
+  }
+  function art(id) {
+    return function (s, f) {
+      var A = G.w2art, fn = A && A.FOES && A.FOES[id];
+      if (typeof fn !== 'function') throw new Error('w2_clipshow: no battle sprite for ' + id);
+      fn(s, f);
+    };
+  }
+  G.reg.define('enemy', ID, {
+    name: NAME, article: '', lv: NUM.lv, hp: NUM.hp, pp: 0, off: NUM.off, def: NUM.def, spd: NUM.spd, luck: NUM.luck,
+    exp: bossExp(NUM.lv), money: NUM.money, drops: [], boss: true,
+    will: 'immune', weak: [], resist: [], immune: ['Snoozing'], bg: 'studio_bars', music: 'boss',
+    idea: 'A cinema screen on a tripod. It plays the best hits of your summer back at you, a turn after it shows them.',
+    sprite: { w: 56, h: 60, frames: 2, draw: art(ID) },
+    ow: ow({ w: 16, h: 16, face: 'ek', back: 'g',
+      pal: { m: 'metalDark', w: 'white', s: 'sky', g: 'gray2', e: ['white', 'F'], k: ['ink', 'F'] },
+      down: ['.mmmmmmmmmmmmmm.', '..wwwwwwwwwwww..', '..wssssssssssw..', '..wseksssseksw..', '..wssssssssssw..', '..wssskkkksssw..', '..wssssssssssw..',
+        '..wwwwwwwwwwww..', '.......mm.......', '.......mm.......', '......m..m......', '.....m....m.....', '....m......m....'],
+      side: ['.mmmmmmmmmmmmmm.', '..wwwwwwwwwwww..', '..wssssssssssw..', '..wssekssssekw..', '..wssssssssssw..', '..wsskkkkssssw..', '..wssssssssssw..',
+        '..wwwwwwwwwwww..', '.......mm.......', '.......mm.......', '......m..m......', '.....m....m.....', '....m......m....']
+    }, { speed: 0, sight: 0, nudge: false,
+      thought: ['Previously, on me: you. Coming up: you again.', 'I only show the good parts. You had eight. I counted.', 'Stay tuned. You cannot change the channel. I am the channel.'] }),   // LINE NEEDED
+    intro: LINES.intro,
+    moves: [
+      { id: 'previously', w: 0, idle: true, name: 'Previously', text: LINES.previously, run: previously },
+      { id: 'clip', w: 0, charged: true, big: true, name: 'The Clip', power: 0, target: 'one', pick: clipPick, text: LINES.roll, run: playClip },
+      { id: 'test_pattern', w: 1, idle: true, text: LINES.test }
+    ],
+    script: clipScript,
+    tuneText: LINES.tune,
+    death: LINES.death
+  });
+  // the fight: Mia in round 1, the walkie in round 2 (SANDBOX 8: every boss); the hooks only speak
+  function miaUp(b) { return (b.heroes || []).filter(function (h) { return h.id === 'mia' && up(h); })[0] || null; }
+  var FIGHT = { enemies: [ID], boss: true, canRun: false, bg: 'studio_bars', intro: LINES.intro,
+    hooks: {
+      onRound: async function (b, n) {
+        if (n === 1 && miaUp(b) && !b.mem.w2cmia) { b.mem.w2cmia = true; await b.say('Mia: "' + LINES.mia + '"'); }
+        if (n === 2 && !b.mem.w2cwalkie) {
+          b.mem.w2cwalkie = true;
+          await b.tip('Pop-Pop, on the walkie: "' + LINES.poppop + '"');
+          await b.tip('Philo, on the walkie: "' + LINES.philo + '"');
+        }
+      },
+      onEnd: function (b) { if (b.meter) b.meter(null); }
+    } };
+  Object.defineProperty(FIGHT, 'music', { enumerable: true, get: function () { return G.audio && typeof G.audio.hasMusic === 'function' && G.audio.hasMusic(MUSIC) ? MUSIC : 'boss'; } });
+  G.reg.define('fight', ID, FIGHT);
+
+  // ---- the rules, in every fight (sims too): the recorder, and THE CLIP SHOW's own reel ----
+  var MOD = X.MOD = {
+    onStart: function (b) {
+      if (mine(b)) clipStart(b);
+      else if (X.recording(b)) recStart(b);
+    }
+  };
+
+  // ======================================================================================================== THE PLACE
+  // the screen's prefab while the fight is open (js/maps/w2_lake_w.js reads it as it builds): up and showing, else folded
+  X.open = function () { return !!(G.replay && typeof G.replay.superbossOpen === 'function' && G.replay.superbossOpen('w2')); };
+  X.screenTile = function () { return X.open() && !flag(FLAG) ? 'w2_clip_screen_up' : 'w2_clip_screen'; };
+  async function prize(S) {
+    if (G.quests && G.quests.isDone(QUEST)) return;
+    await S.say(LINES.won);
+    S.quest.done(QUEST);
+    if (G.reg.has('item', PRIZE)) await S.give(PRIZE, 1);
+  }
+  async function screenTalk(S) {
+    if (flag(FLAG)) {
+      if (G.quests && !G.quests.isDone(QUEST)) await prize(S);           // a win the prize missed (a save from mid-scene)
+      else await S.say(LINES.after);
+      return true;
+    }
+    if (!X.open()) return false;                                         // no fight (a build without it): the map's own lines
+    if (!flag(TOLD.seen)) { S.setFlag(TOLD.seen); await S.say(LINES.open); }
+    var best = X.reel()[0];
+    await S.say(best ? fill(LINES.teaser, { clip: clipText(null, best) }) : LINES.teaserStock);
+    if (G.quests && !G.quests.started(QUEST)) S.quest.start(QUEST);
+    if (!(await S.yesno(LINES.ask))) { await S.say(LINES.later); return true; }
+    var res = await S.service('replay.superboss', 'w2');
+    if (res === 'win') await prize(S);
+    return true;
+  }
+  X.screenTalk = screenTalk;
+  function capDue() { return flag('w2_complete') && !flag(TOLD.cap) && !flag(FLAG); }
+  async function capTalk(S) {                                            // his rumor, then (false) his own lines follow
+    S.setFlag(TOLD.cap);
+    for (var i = 0; i < LINES.cap.length; i++) await S.say('Cap Sizemore', buttons(LINES.cap[i]));
+    return false;
+  }
+  function philoDue() { return flag('w2_complete') && !flag(TOLD.philo) && !flag(FLAG) && flag('got_walkie') && here() === 'w2'; }
+  function callPhilo() {
+    var core = G.stories && G.stories.w2;
+    if (!core || typeof core.later !== 'function' || !philoDue()) return false;
+    return core.later('w2clip_philo', async function (S) {
+      if (!philoDue()) return;
+      S.setFlag(TOLD.philo);
+      if (typeof core.walkie === 'function') await core.walkie(S, [['Philo', LINES.philoCall]]);
+    });
+  }
+  X.callPhilo = callPhilo;
+
+  // ---- registrations: the rules, the superboss, the quest, the carry (after replay.js and World 2's items) ----
+  if (typeof G.onInit === 'function') G.onInit(function w2clipRules() {
+    var BT = G.battle;
+    if (BT && typeof BT.addMod === 'function' && !X.ruled) { BT.addMod(MOD); X.ruled = true; }
+    if (G.replay && typeof G.replay.defineSuperboss === 'function' && !(G.replay.superboss('w2') && G.replay.superboss('w2').id === ID)) {
+      G.replay.defineSuperboss('w2', { id: ID, fight: ID, foe: ID, flag: FLAG, name: NAME, par: RULES.par, place: PLACE });
+    }
+    if (G.quests && typeof G.quests.define === 'function' && !G.reg.has('quest', QUEST)) G.quests.define(QUEST, Object.assign({}, QDEF, { stages: QDEF.stages.slice() }));
+    if (G.replay && typeof G.replay.carry === 'function') G.replay.carry('w2clips', 'drop', 'a new show films its own best bits');
+  }, 964);
+  if (typeof G.onInit === 'function') G.onInit(function w2clipPeople() {
+    if (!G.story || typeof G.story.npc !== 'function') return;
+    G.story.npc(SCREEN, [{ when: function () { return flag('w2_complete'); }, run: screenTalk }]);
+    G.story.npc(CAP, [{ when: capDue, run: capTalk }], { as: 'Cap Sizemore' });
+  }, 215);
+  if (typeof G.on === 'function') G.on('map:enter', function () { callPhilo(); });
+})();
+//# sourceURL=js/data/w2_clipshow.js
+</script>
+<script>
 /* HUMDINGERS - data: World 2's act-1 foes (label w2mia). Card: docs/api/swing.md (section "Act 1's foes").
  * Ids, names, levels, Ideas, Nudges and Tricks are binding: docs/w2/WORLD.md 4 (the Lake Road and the Reed Corner, Camp
  * Lollygag, and the Anywhere kinds of that stretch). The fight w2_first_swing: WORLD 4 and STORY 2.5.
@@ -108368,7 +109000,10 @@ html.touch #touch { display: block; }
     lines: { thanks: 'Hot from the fryer. Mind your fingers.',
       broke: 'Not enough money. Catch a fish, sell it to Annie at the bait shop, then come back.',
       full: 'Your bag is full. Eat it here at the counter.' },
-    stock: [{ item: 'w2_fish_fry' }, { item: 'fish_sandwich', price: 24 }, { item: 'w2_lemonade' }]
+    stock: [{ item: 'w2_fish_fry' }, { item: 'fish_sandwich', price: 24 }, { item: 'w2_lemonade' }],
+    // SANDBOX 6: "Finn Fryer cooks a catch." (label w2fish): a fish of the bag into a Fish Fry Basket, $5 (fishing.cook, keeper 'finn')
+    extras: [{ label: 'Cook my catch', when: function () { return !!(G.inv && (G.inv.list('fish') || []).some(function (e) { return e && e.n > 0; })); },
+      run: function () { return G.services.call('fishing.cook', null, 'finn'); } }]
   });
   shop('shop_w2_bait', {
     name: 'The Tackle Box', keeper: 'Annie Bites',
@@ -130766,8 +131401,9 @@ html.touch #touch { display: block; }
     zone('w2_lw_z_break', 133, 101, 5, 2, { morning: [{ type: 'w2_dragonfly_by', w: 1 }], archery: [{ type: 'w2_paddle_duck', w: 1 }],
       canoes: [{ type: 'w2_snapping_turtleneck', w: 3 }, { type: 'w2_paddle_duck', w: 2 }, { type: 'w2_dragonfly_by', w: 1 }], taco: [{ type: 'w2_second_helping', w: 2 }, { type: 'w2_snapping_turtleneck', w: 1 }] });
 
-    // ---- 8 Clip Show Island: a folded screen nobody explains (quest w2_clip_show, after w2_complete: its fight is not built)
-    put([['w2_clip_screen', 123, 131], ['w2k_deckchair', 124, 136], ['w2k_deckchair', 125, 136], ['w2k_deckchair', 126, 136], ['tree_pine_small', 130, 130], ['bush', 121, 130], ['rock_mossy', 128, 138]]);
+    // ---- 8 Clip Show Island: a folded screen nobody explains (quest w2_clip_show). From w2_complete it is THE CLIP SHOW's (js/data/
+    // w2_clipshow.js): while its fight is open the screen stands up and showing (G.w2clip.screenTile), and story.npc plays it
+    put([[m.flag('w2_complete') && !m.flag('boss_w2_clip_show') && G.w2clip && G.w2clip.screenTile ? G.w2clip.screenTile() : 'w2_clip_screen', 123, 131], ['w2k_deckchair', 124, 136], ['w2k_deckchair', 125, 136], ['w2k_deckchair', 126, 136], ['tree_pine_small', 130, 130], ['bush', 121, 130], ['rock_mossy', 128, 138]]);
     m.scatter(119, 129, 13, 11, ['tuft', 'flowers_wild', 'stones', 'fern'], { count: 8, seed: 26 });
     m.region('Clip Show Island', 118, 128, 15, 13);
     m.place('w2_superboss', 125, 129, { label: 'Clip Show Island', kind: 'fun', dir: 'down' });
