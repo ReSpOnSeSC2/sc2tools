@@ -118,3 +118,18 @@ it("keeps navigation anchors and decorative icon labels in shared landing action
     for (const icon of action.querySelectorAll("svg")) expect(icon.getAttribute("aria-hidden")).toBe("true");
   }
 });
+
+it("features Humdingers right after the hero with a full-page link to the static game", () => {
+  const { container } = render(<LandingPageContent />);
+  const hero = screen.getByRole("heading", { level: 1 }).closest("section")!;
+  const card = screen.getByRole("heading", { level: 2, name: "Humdingers" }).closest("section")!;
+  expect(hero.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(card.compareDocumentPosition(screen.getByText("Real game")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const play = within(card).getByRole("link", { name: "Play Humdingers (about 10 MB)" });
+  expect(play.getAttribute("href")).toBe("/play/humdingers");
+  expect(play.hasAttribute("target")).toBe(false);
+  for (const icon of play.querySelectorAll("svg")) expect(icon.getAttribute("aria-hidden")).toBe("true");
+  expect(within(card).getByRole("img", { name: "Humdingers title screen" })).toBeTruthy();
+  expect(card.textContent).toContain("Not affiliated with Nintendo.");
+  expect(container.querySelector("iframe")).toBeNull();
+});

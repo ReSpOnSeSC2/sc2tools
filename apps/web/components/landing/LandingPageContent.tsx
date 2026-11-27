@@ -22,6 +22,7 @@ import {
 import { HeroAuthCtas } from "@/components/landing/HeroAuthCtas";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { RealGameShowcase } from "@/components/landing/RealGameShowcase";
+import { HumdingersShowcase } from "@/components/landing/HumdingersShowcase";
 import { GuidesStrip } from "@/components/landing/GuidesStrip";
 import { StreamManagerShowcase } from "@/components/landing/StreamManagerShowcase";
 import { ReplayDemo } from "@/components/landing/ReplayDemo";
@@ -53,6 +54,7 @@ export function LandingPageContent({ donationCoverage }: { donationCoverage?: Re
   return (
     <>
       <LandingHero />
+      <HumdingersShowcase />
       <RealGameShowcase />
       <OutcomeRail />
       <LiveFromTheLadder />

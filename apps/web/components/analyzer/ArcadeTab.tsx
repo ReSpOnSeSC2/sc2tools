@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Tabs } from "@/components/ui/Tabs";
 import { CustomBuildCatalogProvider } from "@/components/builds/useCustomBuildCatalog";
 import { SeasonRecap } from "./arcade/SeasonRecap";
+import { HumdingersCard } from "./arcade/HumdingersCard";
 import { TodaySurface } from "./arcade/surfaces/Today";
 import { QuickPlaySurface } from "./arcade/surfaces/QuickPlay";
 import { CollectionSurface } from "./arcade/surfaces/Collection";
@@ -37,6 +38,9 @@ function ArcadeContent({ sub: controlledSub, onSubChange }: { sub?: ArcadeSub; o
           sub-nav so it's the first thing you see when a season winds
           down. Self-gating: shows an unlock prompt below 10 games. */}
       <SeasonRecap />
+
+      {/* Outside the locked mode catalog: a link to a separate game. */}
+      <HumdingersCard />
 
       <Tabs value={sub} onValueChange={(v) => setSub(v as ArcadeSub)} orientation="horizontal">
         <Tabs.List ariaLabel="Arcade sections" className="!flex-nowrap overflow-x-auto">

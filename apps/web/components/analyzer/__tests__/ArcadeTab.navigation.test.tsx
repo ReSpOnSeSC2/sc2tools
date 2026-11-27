@@ -18,3 +18,11 @@ it("calls the daily surface Daily and keeps its navigation working", () => {
   expect(screen.getByText("Quick play challenges")).toBeTruthy();
   fireEvent.click(daily); expect(screen.getByText("Daily challenges")).toBeTruthy();
 });
+it("links Humdingers above the Arcade tabs on every section, outside the mode catalog", () => {
+  render(<ArcadeTab />);
+  const play = screen.getByRole("link", { name: /^Play Humdingers/ });
+  expect(play.getAttribute("href")).toBe("/play/humdingers");
+  expect(play.compareDocumentPosition(screen.getByRole("tablist", { name: "Arcade sections" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Quick Play" }));
+  expect(screen.getByRole("link", { name: /^Play Humdingers/ }).getAttribute("href")).toBe("/play/humdingers");
+});
