@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 function stubFetch(answer: () => Promise<Partial<Response>>) {
-  const fetchMock = vi.fn(answer);
+  const fetchMock = vi.fn((_url: string, _init?: RequestInit) => answer());
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }

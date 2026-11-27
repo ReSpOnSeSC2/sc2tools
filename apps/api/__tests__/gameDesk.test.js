@@ -38,6 +38,7 @@ beforeEach(async () => {
   app = express(); app.use(express.json()); app.use(buildMultichatRouter({ overlayTokens: tokens, users: new UsersService(db), studio, engagement, gameDesk: svc, chapters }));
   app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: { code: error.code || "unknown" } }));
 });
+const MARKED = Date.now() - 3_600_000;
 const post = body => request(app).post(`/multichat/${TOKEN}/studio`).send(body);
 async function round(key = "game-one") {
   await engagement.openPrediction([TOKEN], { gameKey: key, opponent: "Opponent" });
@@ -465,15 +466,15 @@ test("End stream writes YouTube chapters only with the switch on, counting from 
 });
 test("End stream with no open stream falls back to the marked go-live time", async () => {
   await post({ youtubeChapters: true });
-  await post({ streamStartMs: 1_700_000_000_000 });
+  await post({ streamStartMs: MARKED });
   await post({ action: "streamEnd" });
-  expect(chapters.writeToYoutube.mock.calls[0][1]).toBe(1_700_000_000_000);
+  expect(chapters.writeToYoutube.mock.calls[0][1]).toBe(MARKED);
 });
 test("the chapter text route answers for the token's owner and needs a valid token", async () => {
-  await post({ streamStartMs: 1_700_000_000_000 });
+  await post({ streamStartMs: MARKED });
   const answer = await request(app).get(`/multichat/${TOKEN}/chapters`);
   expect(answer.status).toBe(200);
   expect(answer.body).toEqual({ lines: ["0:00 Stream start"], message: "" });
-  expect(chapters.copyable).toHaveBeenCalledWith(OWNER, 1_700_000_000_000, expect.any(Number));
+  expect(chapters.copyable).toHaveBeenCalledWith(OWNER, MARKED, expect.any(Number));
   expect((await request(app).get("/multichat/other-token/chapters")).status).toBe(401);
 });

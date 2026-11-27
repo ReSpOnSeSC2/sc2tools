@@ -29,7 +29,7 @@ test("games that started before the video, or without a length, are left out and
 });
 
 test("fewer than three chapters or two inside ten seconds writes nothing", () => {
-  expect(chapterLines([game(60, 100), game(300, 100)], ORIGIN)).toEqual({ reason: "too_few" });
+  expect(chapterLines([game(4, 100), game(300, 100)], ORIGIN)).toEqual({ reason: "too_few" });
   expect(chapterLines([], ORIGIN)).toEqual({ reason: "too_few" });
   expect(chapterLines([game(60, 100), game(65, 50), game(400, 100)], ORIGIN)).toEqual({ reason: "too_close" });
 });

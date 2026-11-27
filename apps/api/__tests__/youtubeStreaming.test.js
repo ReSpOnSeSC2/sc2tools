@@ -491,13 +491,14 @@ describe("archiveDescriptions", () => {
     const receipts = await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose: (start, description) => { starts.push([start, description]); return keep(description); } });
     expect(receipts).toEqual([{ id, state: "written" }]);
     expect(starts).toEqual([[NOW - 2_000_000, "Saved description"]]);
-    expect(puts(s)[0].body.snippet).toMatchObject({ title: "Pair test", description: "Saved description\n\n-- chapters --", categoryId: "20", tags: ["preserve"] });
+    expect(puts(s).at(-1).body.snippet).toMatchObject({ title: "Pair test", description: "Saved description\n\n-- chapters --", categoryId: "20", tags: ["preserve"] });
   });
 
   test("a broadcast that was not on air in the window, or never went live, is left alone", async () => {
     const s = setup();
     const later = await archived(s, { actualStartTime: new Date(NOW + 60_000).toISOString() });
     const compose = jest.fn(() => keep(""));
+    const before = puts(s).length;
     expect(await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose })).toEqual([]);
     s.rows.get(later).snippet.actualStartTime = new Date(NOW - 9_000_000).toISOString();
     s.rows.get(later).snippet.actualEndTime = new Date(NOW - 8_000_000).toISOString();
@@ -505,7 +506,7 @@ describe("archiveDescriptions", () => {
     delete s.rows.get(later).snippet.actualStartTime;
     expect(await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose })).toEqual([]);
     expect(compose).not.toHaveBeenCalled();
-    expect(puts(s)).toHaveLength(0);
+    expect(puts(s)).toHaveLength(before);
   });
 
   test("only broadcasts this account created are looked at", async () => {
@@ -515,10 +516,10 @@ describe("archiveDescriptions", () => {
   });
 
   test("a refusal from compose writes nothing and a provider failure is reported without stopping the run", async () => {
-    const s = setup(), id = await archived(s);
+    const s = setup(), id = await archived(s), before = puts(s).length;
     expect(await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose: () => ({ skip: "too_few" }) }))
       .toEqual([{ id, state: "skipped", reason: "too_few" }]);
-    expect(puts(s)).toHaveLength(0);
+    expect(puts(s)).toHaveLength(before);
     s.state.failMetadata = true;
     const [failed] = await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose: (_start, description) => keep(description) });
     expect(failed).toMatchObject({ id, state: "failed" });
