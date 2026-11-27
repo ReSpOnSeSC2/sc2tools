@@ -17,9 +17,9 @@ corresponding GitHub Release.
   successor to EarthBound and Mother 3, is playable with a free account at
   `/play/humdingers`, on phones (with touch controls) and
   on desktops. The home page features it right after the hero, the Arcade
-  tab links to it above its sections, and What's New has an entry. The
-  inbox notification follows once the page is live. The game is one static
-  file of about 10 MB. See ADR 0101.
+  tab links to it above its sections, and What's New has an entry that
+  sends each signed-in user one notification about it. The game is one
+  static file of about 10 MB. See ADR 0101.
 - Humdingers saves follow the player's account. `/play/humdingers` is now a
   signed-in page that runs the game full screen and copies each save to the
   account, so players can carry on from another device; account export and
