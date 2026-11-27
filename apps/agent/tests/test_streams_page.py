@@ -93,6 +93,29 @@ def test_the_obs_recording_marker_switch_starts_off_and_is_saved_with_the_rest(p
     assert "chapter marker at game start" in controls.activation.text()
 
 
+def test_automatic_switches_sit_under_the_heading_of_when_they_run(page):
+    widget, _state, app = page
+    controls = widget.title_controls
+    widget.resize(1120, 900)
+    widget.show()
+    app.processEvents()
+    top = lambda control: control.mapTo(widget, QtCore.QPoint(0, 0)).y()
+    headings = {label.text(): label for label in widget.findChildren(QtWidgets.QLabel) if label.objectName() == "studioEyebrow"}
+    groups = [
+        ("At each game start", [controls.on_game_start, controls.channel_tags, controls.category_guard, controls.record_chapters]),
+        ("After each synced game", [controls.enabled]),
+        ("Channels", list(controls.platforms.values())),
+    ]
+    starts = [top(headings[name]) for name, _controls in groups] + [float("inf")]
+    assert starts == sorted(starts)
+    for index, (name, members) in enumerate(groups):
+        for control in members:
+            assert starts[index] < top(control) < starts[index + 1], (name, control.text())
+    # The heading carries the trigger, so the two title switches need it in their accessible names.
+    assert controls.on_game_start.accessibleName() == "Refresh the title at each game start"
+    assert controls.enabled.accessibleName() == "Refresh the title after each synced game"
+
+
 def test_current_match_template_preserves_prefix_and_only_edits_locally(page, monkeypatch):
     widget, state, app = page
     state["account_mode"] = "sc2tools"
