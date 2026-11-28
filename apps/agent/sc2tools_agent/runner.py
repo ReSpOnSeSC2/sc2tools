@@ -664,6 +664,7 @@ def _run_headless_runtime(cfg, log_dir, *, no_live=False, no_obs=False, support_
     )
     stream_service = _build_stream_service(cfg, state, no_obs=no_obs)
     recovery_cell.stream_service = stream_service
+    _wire_guardian_notice(stream_service, tray)
     if live_bus is not None and stream_service:
         live_bus.subscribe(stream_service.on_game_event)
     _publish_companion_socket(recovery_cell, state, socket_client)
@@ -1020,6 +1021,7 @@ def _run_with_gui(
             synced_count_provider=lambda: count_synced(state),
         )
         cell.tray = tray
+        _wire_guardian_notice(stream_service, tray)
         tray.start(on_quit=request_stop)
 
     gui._tray_available = tray is not None
@@ -3849,6 +3851,12 @@ def _build_obs_switcher(
         state.obs_switch_debounce_sec,
     )
     return client, controller
+
+
+def _wire_guardian_notice(stream_service, tray):
+    """Stream Guardian warnings reach the streamer as a quiet tray notice."""
+    if stream_service and tray is not None:
+        stream_service.notify = tray.show_quiet_notice
 
 
 def _build_stream_service(cfg, state, *, no_obs=False):

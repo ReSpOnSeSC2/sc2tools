@@ -6,6 +6,7 @@ import { sanitizeStudioState, type StudioState } from "./useStudioState";
 import type { LiveGameEnvelope, LiveGamePayload } from "@/components/overlay/types";
 import { mergeLiveGameStreamerHistory, type StickyStreamerHistory } from "@/components/overlay/mergeLiveGameStreamerHistory";
 import { newerSession } from "./sessionSnapshot";
+import { readAgeMs, readGuardian, type GuardianState } from "./streamGuardian";
 export type DockGameStatus = { gameKey: string | null; phase: LiveGameEnvelope["phase"]; isReplay: boolean; verified: boolean; endedGameKey?: string | null; endedAt?: number };
 type StudioLiveFacts = { gameStatus: DockGameStatus | null; engagementEvent: unknown; token: string; liveGame: LiveGameEnvelope | null; lastLiveAt: number | null; session: LiveGamePayload["session"] | null };
 
@@ -24,10 +25,11 @@ export function newestStudioSnapshot(current: StudioState | null, next: StudioSt
  * their existing GET fallback; this connection supplies immediate saved-state
  * updates without reconnecting when drafts or callback identities change.
  */
-export function useStudioUpdates(token: string, onUpdate: (state: StudioState) => void, enabled = true, controlOnly = false): { status: OverlayConnectionStatus; liveGame: LiveGameEnvelope | null; lastLiveAt: number | null; session: LiveGamePayload["session"] | null; gameStatus: DockGameStatus | null; engagementEvent: unknown; seriesEvent: unknown; lastOpponent: string | null } {
+export function useStudioUpdates(token: string, onUpdate: (state: StudioState) => void, enabled = true, controlOnly = false): { status: OverlayConnectionStatus; liveGame: LiveGameEnvelope | null; lastLiveAt: number | null; session: LiveGamePayload["session"] | null; gameStatus: DockGameStatus | null; engagementEvent: unknown; seriesEvent: unknown; lastOpponent: string | null; guardian: GuardianState | null } {
   const [connection, setConnection] = useState<{ token: string; status: OverlayConnectionStatus }>({ token, status: "connecting" });
   const [facts, setFacts] = useState<StudioLiveFacts>({ token, liveGame: null, lastLiveAt: null, session: null, gameStatus: null, engagementEvent: null });
   const [series, setSeries] = useState<{ token: string; value: unknown }>({ token, value: undefined });
+  const [guardian, setGuardian] = useState<{ token: string; value: GuardianState | null }>({ token, value: null });
   const [lastOpponent, setLastOpponent] = useState<{ token: string; name: string } | null>(null);
   const callbackRef = useRef({ token, onUpdate });
   callbackRef.current = { token, onUpdate };
@@ -38,7 +40,7 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
     const current = () => !cancelled && callbackRef.current.token === token;
     const clearFacts = () => {
       sticky = null;
-      if (current()) setFacts({ token, liveGame: null, lastLiveAt: null, session: null, gameStatus: null, engagementEvent: null });
+      if (current()) { setFacts({ token, liveGame: null, lastLiveAt: null, session: null, gameStatus: null, engagementEvent: null }); setGuardian({ token, value: null }); }
     };
     const connection = createOverlaySocket(token, { surface: "dock", auth: controlOnly ? { controlOnly: true } : undefined, onStatus: (status) => setConnection({ token, status }) });
     const socket = connection.socket;
@@ -90,6 +92,8 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
     socket.on("overlay:engagement", receiveEngagement);
     const receiveSeries = (raw: unknown) => { if (current()) setSeries({ token, value: raw }); };
     socket.on("overlay:series", receiveSeries);
+    const receiveGuardian = (raw: unknown) => { if (current()) setGuardian({ token, value: { warnings: readGuardian(raw), receivedAt: Date.now() - readAgeMs(raw) } }); };
+    socket.on("overlay:guardian", receiveGuardian);
     const outgoing = (event: string) => { if (event === "overlay:resync") clearFacts(); };
     socket.on("overlay:liveGame", receiveLive);
     socket.on("overlay:session", receiveSession);
@@ -100,7 +104,7 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
       cancelled = true;
       socket.off("overlay:multichat", receive);
       socket.off("overlay:live", receiveVerified); socket.off("overlay:engagement", receiveEngagement);
-      socket.off("overlay:series", receiveSeries);
+      socket.off("overlay:series", receiveSeries); socket.off("overlay:guardian", receiveGuardian);
       socket.off("overlay:liveGame", receiveLive); socket.off("overlay:session", receiveSession);
       socket.off("connect", clearFacts); socket.off("disconnect", clearFacts);
       socket.offAnyOutgoing?.(outgoing);
@@ -114,5 +118,6 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
     gameStatus: enabled && facts.token === token ? facts.gameStatus : null,
     engagementEvent: enabled && facts.token === token ? facts.engagementEvent : null,
     seriesEvent: enabled && series.token === token ? series.value : undefined,
-    lastOpponent: enabled && lastOpponent?.token === token ? lastOpponent.name : null };
+    lastOpponent: enabled && lastOpponent?.token === token ? lastOpponent.name : null,
+    guardian: enabled && guardian.token === token ? guardian.value : null };
 }

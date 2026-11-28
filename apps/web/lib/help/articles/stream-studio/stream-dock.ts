@@ -69,7 +69,7 @@ const article: HelpArticle = {
       text: "Block a chat author with the two-tap Block action. For six seconds, **Undo** removes that Dock block. Open **Blocked users** below Chat to search and **Unblock** someone later; the Dock holds up to 50 users. Users marked **Managed in Settings → Chat & alerts** are read-only here and must be removed in Settings. Names match without regard to letter case. Blocked users' messages and votes are excluded from both the Dock and the on-stream poll.",
     },
   ],
-  related: ["multi-platform-chat", "viewer-engagement"],
+  related: ["multi-platform-chat", "viewer-engagement", "stream-guardian"],
 };
 
 export default article;

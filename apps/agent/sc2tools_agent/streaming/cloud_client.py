@@ -74,6 +74,10 @@ class CloudStreamingClient:
             raise CloudStreamError("Stream-title statistics are unavailable on this server.")
         return result
 
+    def guardian_warnings(self, warnings):
+        """Tell the Stream Dock which Stream Guardian warnings are active now; an empty list clears its banner."""
+        self._request("POST", "/v1/agent/streaming/guardian", body={"warnings": warnings})
+
     def context(self):
         if self.identity_provider is not None:
             base, token, account = self.identity_provider()

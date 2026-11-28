@@ -12,6 +12,8 @@ import threading
 import time
 import uuid
 
+from .discovery_messages import discovery_failure_message
+from .guardian_service import GUARDIAN_JOBS, GuardianServiceMixin
 from .obs_chapters import RecordChapterMarker
 from .obs_reader import OutputReader, DEFAULT_OUTPUTS
 from .youtube_pair_backend import PairBackend, atomic_json
@@ -53,27 +55,9 @@ def shared_title(value):
     return value.strip()
 
 
-def discovery_failure_message(http_status, account_mode="sc2tools"):
-    """Actionable, provider-free explanation for a failed channel/key discovery."""
-    local = account_mode == "local"
-    if http_status in {401, 403}:
-        if local:
-            return "YouTube authorization through your own Google client is missing or expired. Connect YouTube again, then refresh keys."
-        return "YouTube stream-control permission is missing or expired. Connect YouTube again in your browser, then refresh connections."
-    if http_status == 404 and not local:
-        return "This SC2Tools server does not provide YouTube stream controls yet."
-    if http_status == 409:
-        return "Another YouTube request for this account is still running. Your channel and keys were not loaded yet."
-    if http_status == 429:
-        return "YouTube request limit reached. Your channel and keys were not loaded yet."
-    if local:
-        return "Your YouTube channel and reusable keys could not be loaded from YouTube. Existing selections are unchanged."
-    return "Your YouTube channel and reusable keys could not be loaded through SC2Tools. Existing selections are unchanged."
-
-
-class StreamService:
+class StreamService(GuardianServiceMixin):
     def __init__(self, state_dir, settings_provider, *, no_obs=False, backend=None,
-                 output_reader=None, adapters=None, cloud_client=None, chapter_marker=None):
+                 output_reader=None, adapters=None, cloud_client=None, chapter_marker=None, guardian_probe=None):
         self.directory = Path(state_dir) / "streaming"
         self.directory.mkdir(parents=True, exist_ok=True)
         self.config_path = self.directory / "youtube-button-helper.config.private.json"
@@ -114,7 +98,7 @@ class StreamService:
         self._cached = {}
         from .title_controller import StreamTitleController
         self.titles = StreamTitleController(self)
-        self.on_game_event = self.titles.worker.on_event
+        self.guardian = self._build_guardian(guardian_probe, settings_provider, no_obs, config)
         self.on_game_accepted = self.titles.worker.on_game_accepted
         self._publish()
 
@@ -223,7 +207,7 @@ class StreamService:
             "metadata": copy.deepcopy(self.backend.metadata), "metadata_saved": self.metadata_saved, "message": self.message,
             "catalog": copy.deepcopy(self.catalog), "configured": bool(self.backend.config.get("runtime_enabled")),
             "catalog_status": copy.deepcopy(self.catalog_status),
-            "account_mode": self.account_mode, "title_automation": self.titles.snapshot(),
+            "account_mode": self.account_mode, "title_automation": self.titles.snapshot(), "guardian": self.guardian.snapshot(),
             "configuration": {"privacy": self.backend.config.get("streams", {}).get("horizontal", {}).get("privacy", "public"),
                 "channel_id": self.backend.config.get("expected_channel_id"),
                 "horizontal_id": self.backend.config.get("streams", {}).get("horizontal", {}).get("reusable_stream_id"),
@@ -414,6 +398,8 @@ class StreamService:
                 self.message = "Title saved for future YouTube sessions. See each platform below for the current save result."
             elif kind == "configure_title_automation":
                 self.titles.save(payload)
+            elif kind in GUARDIAN_JOBS:
+                self.message = self._guardian_job(kind, payload)
             elif kind == "refresh_title_preview":
                 self.titles.worker.preview_pending = True
                 self.titles.worker.wake.set()
@@ -716,6 +702,7 @@ class StreamService:
         self.thread = threading.Thread(target=self._run, name="sc2tools-streams", daemon=True)
         self.thread.start()
         self.titles.worker.start()
+        self.guardian.start()
 
     def _run(self):
         # Reconnect only credentials created by this feature. No consent flow
@@ -799,6 +786,7 @@ class StreamService:
             try:
                 self.reader.close()
                 self.chapter_marker.close()
+                self.guardian.close()
                 self.backend.close()
             finally:
                 self.operations.release()

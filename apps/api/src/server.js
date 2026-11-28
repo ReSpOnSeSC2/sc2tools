@@ -223,6 +223,10 @@ async function main() {
     resolveStudioState: (token) =>
       /** @type {any} */ (services).multichatStudio.get(token),
     resolveSeries: (token, owner) => /** @type {any} */ (services).streamSeries.get(token, owner),
+    resolveGuardian: (userId) =>
+      /** @type {import("./services/streamGuardian").StreamGuardianService} */ (
+        services.streamGuardian
+      ).latest(userId),
     resolvePlatformEvents: (userId) =>
       /** @type {any} */ (services).platformIntegrations.recentEvents(userId),
     // Synchronous broker-snapshot accessor used by the overlay

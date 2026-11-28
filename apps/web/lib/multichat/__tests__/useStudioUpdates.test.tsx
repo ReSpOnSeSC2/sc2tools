@@ -87,3 +87,45 @@ describe("newestStudioSnapshot", () => {
     expect(newestStudioSnapshot(null, current)).toBe(current);
   });
 });
+
+describe("useStudioUpdates guardian warnings", () => {
+  const handlers = new Map<string, (value: unknown) => void>();
+  let seen: unknown;
+  function GuardianProbe({ token }: { token: string }) {
+    seen = useStudioUpdates(token, () => {}).guardian;
+    return null;
+  }
+  beforeEach(() => {
+    handlers.clear();
+    seen = undefined;
+    socketFactory.mockReset().mockImplementation(() => ({ on: (event: string, callback: (value: unknown) => void) => handlers.set(event, callback),
+      off: vi.fn(), connect: vi.fn(), disconnect: vi.fn() }));
+  });
+
+  it("keeps the warnings the agent sent and drops them when the socket disconnects", () => {
+    render(<GuardianProbe token="t" />);
+    expect(seen).toBeNull();
+    act(() => handlers.get("overlay:guardian")?.({ warnings: [{ rule: "mic_muted", since: 5 }, { rule: "bogus", since: 1 }], at: 1 }));
+    expect(seen).toEqual({ warnings: [{ rule: "mic_muted", since: 5 }], receivedAt: expect.any(Number) });
+    act(() => handlers.get("disconnect")?.(undefined));
+    expect(seen).toBeNull();
+  });
+
+  it("counts a replayed list from when the server first held it, not from when it arrived", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    render(<GuardianProbe token="t" />);
+    act(() => handlers.get("overlay:guardian")?.({ warnings: [{ rule: "mic_muted", since: 5 }], at: 1, ageMs: 170_000 }));
+    expect((seen as { receivedAt: number }).receivedAt).toBe(830_000);
+    now.mockRestore();
+  });
+
+  it("shows an empty list as no warnings and ignores a late event from the previous token", () => {
+    const view = render(<GuardianProbe token="old" />);
+    const late = handlers.get("overlay:guardian");
+    view.rerender(<GuardianProbe token="new" />);
+    act(() => late?.({ warnings: [{ rule: "mic_muted", since: 5 }] }));
+    expect(seen).toBeNull();
+    act(() => handlers.get("overlay:guardian")?.({ warnings: [] }));
+    expect(seen).toEqual({ warnings: [], receivedAt: expect.any(Number) });
+  });
+});

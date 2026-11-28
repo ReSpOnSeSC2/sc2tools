@@ -72,11 +72,17 @@ it("moves focus to progress while a confirmed control is busy and keeps Escape i
   fireEvent.keyDown(document, { key: "Escape" }); expect(screen.getByRole("dialog")).toBe(dialog);
 });
 it("header removes opponent on end/staleness, labels connection and retains counts", () => {
-  const p = props(); const base = { token: p.token, studio: { ...DEFAULT_STUDIO_STATE, scene: { mode: "brb" as const, message: "", countdownEndsAt: NOW + 192_000, setAtMs: NOW } }, ready: true, live: p.live, lastLiveAt: NOW, session: p.session, status: "connected", onHeight: vi.fn(), children: <nav>Jump tabs</nav> };
+  const p = props(); const base = { token: p.token, studio: { ...DEFAULT_STUDIO_STATE, scene: { mode: "brb" as const, message: "", countdownEndsAt: NOW + 192_000, setAtMs: NOW } }, ready: true, live: p.live, lastLiveAt: NOW, session: p.session, status: "connected", guardian: null, onHeight: vi.fn(), children: <nav>Jump tabs</nav> };
   const view = render(<DockStatusHeader {...base} />);
   expect(screen.getByText(/BRB 03:12/)).toBeTruthy(); expect(screen.getByRole("status").textContent).toBe("Connected"); expect(screen.getByLabelText("Current opponent").textContent).toContain("Public Opponent");
   act(() => vi.advanceTimersByTime(31_000)); expect(screen.queryByLabelText("Current opponent")).toBeNull();
   view.rerender(<DockStatusHeader {...base} live={null} status="reconnecting" />); expect(screen.getByRole("status").textContent).toBe("Reconnecting…"); expect(screen.getByText("Counts only")).toBeTruthy();
+});
+it("header shows Stream Guardian warnings above the jump tabs and drops them when they expire", () => {
+  const p = props(); const guardian = { warnings: [{ rule: "stream_unstable" as const, since: NOW - 60_000 }], receivedAt: NOW };
+  render(<DockStatusHeader token={p.token} studio={DEFAULT_STUDIO_STATE} ready live={null} lastLiveAt={null} session={p.session} status="connected" guardian={guardian} onHeight={vi.fn()}><nav>Jump tabs</nav></DockStatusHeader>);
+  expect(screen.getByRole("status", { name: "Stream Guardian warnings" }).textContent).toContain("OBS is dropping frames or reconnecting.");
+  act(() => vi.advanceTimersByTime(181_000)); expect(screen.queryByRole("status", { name: "Stream Guardian warnings" })).toBeNull();
 });
 it("End stream waits for confirmation, then reports the saved stream or that nothing was saved", async () => {
   const p = props();

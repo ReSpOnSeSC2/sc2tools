@@ -187,6 +187,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.obs_reveal.setEnabled(details_available)
             self.obs_destination.setEnabled(not self.busy)
             self.title_controls.buttons()
+            self.guardian_controls.buttons()
 
         def refresh(self):
             if provider is None:
@@ -236,6 +237,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 self.description_dirty = draft
                 self.description_draft = draft
             self.title_controls.render(state)
+            self.guardian_controls.render(state)
             self.loaded = True
             self.notice.setText(state.get("message", "Check your stream connections."))
             youtube = state.get("youtube", {})
@@ -402,6 +404,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 if result["action"] == "set_metadata":
                     self.title_dirty = self.description_dirty = False
                     self.description_draft = False
+                if result["action"] == "configure_guardian":
+                    self.guardian_controls.dirty = False
                 if result["action"] == "configure_title_automation":
                     self.title_controls.dirty = False
                     self.title_dirty = False

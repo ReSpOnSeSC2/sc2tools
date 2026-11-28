@@ -50,7 +50,7 @@ const article: HelpArticle = {
     { type: "paragraph", text: "**Add a chapter to the OBS recording**, also under **At each game start**, starts off. It adds a chapter such as Game 4 · PvZ to the file OBS is recording, on OBS 30.2 or newer recording Hybrid MP4, and quietly does nothing otherwise. See [Game chapters](/help/game-chapters)." },
     { type: "paragraph", text: "If a platform request cannot be confirmed, check the platform and its receipt before retrying. The app remembers attempted titles across restarts and does not automatically repeat the same ambiguous request. The existing manual title save remains available. Automatic titles require SC2 Tools connections and a server that supports the private session endpoint." },
   ],
-  related: ["desktop-app-overview", "obs-overlay-setup", "obs-auto-scene-switching"],
+  related: ["desktop-app-overview", "obs-overlay-setup", "obs-auto-scene-switching", "stream-guardian"],
 };
 
 export default article;

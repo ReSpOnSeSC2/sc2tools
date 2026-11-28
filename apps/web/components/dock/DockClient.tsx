@@ -548,7 +548,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
 
   return (
     <div className={`${styles.root} mx-auto min-h-screen w-full max-w-6xl p-2 font-sans text-text sm:p-3`} style={{ "--dock-sticky-height": `${headerHeight}px` } as CSSProperties}>
-      <DockStatusHeader token={token} studio={studio} ready={studioSnapshotReady} live={updates?.liveGame ?? null} lastLiveAt={updates?.lastLiveAt ?? null} session={updates?.session ?? null} status={connectionStatus} onHeight={setHeaderHeight}>
+      <DockStatusHeader token={token} studio={studio} ready={studioSnapshotReady} live={updates?.liveGame ?? null} lastLiveAt={updates?.lastLiveAt ?? null} session={updates?.session ?? null} status={connectionStatus} guardian={updates?.guardian ?? null} onHeight={setHeaderHeight}>
       {/* Narrow-mode sticky jump tabs — the OBS dock has no room for
           a permanent two-column layout. */}
       <nav aria-label="Dock sections" className="flex items-center gap-1 overflow-x-auto py-1.5 lg:hidden">
