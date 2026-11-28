@@ -119,13 +119,15 @@ it("keeps navigation anchors and decorative icon labels in shared landing action
   }
 });
 
-it("features Humdingers after Everything included with a full-page link to the static game", () => {
+it("features What's new, then Humdingers, after Everything included with a full-page link to the static game", () => {
   const { container } = render(<LandingPageContent />);
   const included = screen.getByText("Everything included").closest("section")!;
   const card = screen.getByRole("heading", { level: 2, name: "Humdingers" }).closest("section")!;
   expect(screen.getByText("Real game").compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(included.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(included.nextElementSibling).toBe(card);
+  const whatsNew = container.querySelector("#whats-new");
+  expect(included.nextElementSibling).toBe(whatsNew);
+  expect(whatsNew?.nextElementSibling).toBe(card);
   const play = within(card).getByRole("link", { name: "Play Humdingers (about 10 MB)" });
   expect(play.getAttribute("href")).toBe("/play/humdingers");
   expect(play.hasAttribute("target")).toBe(false);
