@@ -185,8 +185,7 @@ const { buildGoalsRouter } = require("./routes/goals");
 const { LadderMetaService } = require("./services/ladderMeta");
 const { buildLadderMetaRouter } = require("./routes/ladderMeta");
 const { LiveStreamsService } = require("./services/liveStreams");
-const { buildLiveStreamsRouter } = require("./routes/liveStreams");
-const { buildLadderVodsRouter, ladderVodsFromDeps } = require("./routes/ladderVods");
+const { mountLiveLadderRoutes, proBoardFromDeps } = require("./routes/liveLadderRoutes");
 const { PublicProfileService } = require("./services/publicProfile");
 const { buildPublicProfileRouter } = require("./routes/publicProfile");
 const { PublicPlayerService } = require("./services/publicPlayer");
@@ -581,6 +580,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   // Pulse (the old /meta page now redirects to the /guides pages).
   const ladderMeta = new LadderMetaService(deps.db, { logger: deps.logger });
   const liveStreams = new LiveStreamsService({ config: deps.config.platformIntegrations, log: deps.logger });
+  const proBoard = proBoardFromDeps(deps, liveStreams);
   const scoutingIdentities = new ScoutingIdentitiesService(deps.db);
   const scoutingForecast = new ScoutingForecastService(ladderMeta);
   // Skill Fingerprint — replay-derived build, game-length, and matchup
@@ -1204,6 +1204,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     skillFingerprint,
     ladderMeta,
     liveStreams,
+    proBoard,
     scoutingIdentities,
     scoutingForecast,
     guideSamples,
@@ -1575,10 +1576,8 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildLadderMetaRouter({ ladderMeta: services.ladderMeta }),
   );
-  // Live StarCraft II streams (Twitch and Kick), public and server-cached.
-  app.use(SERVICE.ROUTE_PREFIX, buildLiveStreamsRouter({ liveStreams: services.liveStreams }));
-  // Ladder VOD finder (SC2Pulse matches with a Twitch VOD); off until its gate is set.
-  app.use(SERVICE.ROUTE_PREFIX, buildLadderVodsRouter({ ladderVods: ladderVodsFromDeps(deps, services.seasons?.ladderMapPool) }));
+  // Live streams, the ladder VOD finder and the pros board: public, server-cached, gates off by default.
+  mountLiveLadderRoutes(app, SERVICE.ROUTE_PREFIX, { deps, services });
   // SC2 Tools Guides — public, SEO-facing build guides over the nightly
   // guide_stats aggregate. No router-level auth (only /guides/me/* applies
   // it per route); every /guides path 404s while GUIDES_ENABLED is off.

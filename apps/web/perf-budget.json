@@ -27,6 +27,7 @@
     "/permit": 140,
     "/live": 140,
     "/ladder-vods": 140,
+    "/pros-on-ladder": 140,
     "/match": 215,
     "/match/room": 215,
     "/p/[handle]/live": 200,

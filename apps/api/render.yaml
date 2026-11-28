@@ -129,6 +129,13 @@ services:
       # until the SC2Pulse maintainer has agreed to this use; set to 1 to open it.
       - key: SC2TOOLS_LADDER_VODS_ENABLED
         sync: false
+      # Gates for the public Pros on Ladder board (SC2Pulse teams). Leave both unset (off)
+      # until the SC2Pulse maintainer has agreed and the owner has decided on naming pros;
+      # NAMES only has an effect while ENABLED is 1.
+      - key: SC2TOOLS_PROS_ON_LADDER_ENABLED
+        sync: false
+      - key: SC2TOOLS_PROS_ON_LADDER_NAMES
+        sync: false
       # Official creator-account notifications. Values stay dashboard-managed:
       # sync:false preserves them across Blueprint redeploys and never stores a
       # credential in Git. Callback defaults already target api.sc2tools.com;

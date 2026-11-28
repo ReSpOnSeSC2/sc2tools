@@ -15,18 +15,15 @@
 
 const { parseSearch, shapeMatch } = require("./ladderVodSearch");
 const { buildMapMenu, plainMapName } = require("./ladderVodMaps");
+const { PulseClient, PulseBusyError, PACE_MS } = require("./pulseClient");
 
-const PULSE_MATCHES_URL = "https://sc2pulse.nephest.com/sc2/api/matches";
 const USER_AGENT = "sc2tools.com ladder-vods (+https://sc2tools.com)";
-const REQUEST_TIMEOUT_MS = 8000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const STALE_LIMIT_MS = 60 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 200;
 const MAX_LEARNED_MAPS = 40;
 /** The Twitch channel names are a nicety: past this the games are listed without them. */
 const CHANNEL_DEADLINE_MS = 3000;
-/** At most one SC2Pulse call a second, however many visitors search. */
-const PACE_MS = 1100;
 /** A search that would wait longer than this for its turn is refused, so an outage cannot build a queue. */
 const MAX_WAIT_MS = 4 * PACE_MS;
 /** Later pages (visitor-chosen cursors) may only take the next free slot, so they cannot fill the queue. */
@@ -63,6 +60,7 @@ class LadderVodsService {
   /**
    * @param {{
    *   enabled?: boolean,
+   *   pulse?: PulseClient,
    *   fetchImpl?: typeof fetch,
    *   resolveChannels?: ChannelResolver,
    *   mapPool?: { get: () => Promise<{ maps: string[] }> } | null,
@@ -74,6 +72,7 @@ class LadderVodsService {
    */
   constructor({
     enabled = process.env[ENABLE_FLAG] === "1",
+    pulse,
     fetchImpl = fetch,
     resolveChannels = async () => new Map(),
     mapPool = null,
@@ -83,20 +82,18 @@ class LadderVodsService {
     log,
   } = {}) {
     this.enabled = enabled;
-    this.fetchImpl = fetchImpl;
+    this.now = now;
+    this.pulse = pulse ?? new PulseClient({ fetchImpl, now, sleep });
     this.resolveChannels = resolveChannels;
     this.mapPool = mapPool;
     this.channelDeadlineMs = channelDeadlineMs;
     /** @type {Map<number, string>} maps the match feed showed, by SC2Pulse id */
     this.learnedMaps = new Map();
-    this.now = now;
-    this.sleep = sleep;
     this.log = log;
     /** @type {Map<string, CacheEntry>} */
     this.cache = new Map();
     /** @type {Map<string, Promise<LadderVodsPage>>} */
     this.inflight = new Map();
-    this.nextCallAt = 0;
   }
 
   /**
@@ -186,8 +183,7 @@ class LadderVodsService {
 
   /** @param {Search} search @returns {Promise<LadderVodsPage>} */
   async fetchPage(search) {
-    await this.waitForTurn(search.paged ? MAX_WAIT_PAGED_MS : MAX_WAIT_MS);
-    const json = await this.callPulse(search.query);
+    const json = await this.callPulse(search);
     const rows = Array.isArray(json.result) ? json.result : [];
     this.learnMaps(rows);
     const shaped = rows.flatMap(row => shapeMatch(row, search.matchup, search.ratingBand) ?? []);
@@ -200,26 +196,19 @@ class LadderVodsService {
     };
   }
 
-  /** Reserves the next call slot; refuses when the wait would pass `maxWaitMs`. @param {number} maxWaitMs */
-  async waitForTurn(maxWaitMs) {
-    const now = this.now();
-    const slot = Math.max(now, this.nextCallAt);
-    if (slot - now > maxWaitMs) throw new LadderVodsError("busy");
-    this.nextCallAt = slot + PACE_MS;
-    if (slot > now) await this.sleep(slot - now);
-  }
-
   /**
-   * @param {URLSearchParams} query
+   * @param {Search} search
    * @returns {Promise<{ result?: PulseMatch[], navigation?: { after?: string | null } }>}
+   * @throws {LadderVodsError} busy, when the shared pace has no slot soon enough
    */
-  async callPulse(query) {
-    const response = await this.fetchImpl(`${PULSE_MATCHES_URL}?${query}`, {
-      headers: { accept: "application/json", "user-agent": USER_AGENT },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (!response.ok) throw new Error(`pulse_http_${response.status}`);
-    return response.json();
+  async callPulse(search) {
+    try {
+      return /** @type {{ result?: PulseMatch[], navigation?: { after?: string | null } }} */ (
+        await this.pulse.get("/matches", search.query, { maxWaitMs: search.paged ? MAX_WAIT_PAGED_MS : MAX_WAIT_MS, userAgent: USER_AGENT })
+      );
+    } catch (err) {
+      throw err instanceof PulseBusyError ? new LadderVodsError("busy") : err;
+    }
   }
 
   /**

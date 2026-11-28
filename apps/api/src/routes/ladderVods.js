@@ -29,10 +29,11 @@ const FAILURES = {
  *   logger: { warn?: (fields: object, message: string) => void },
  * }} deps
  * @param {{ get: () => Promise<{ maps: string[] }> } | null} [mapPool] the live 1v1 ladder map pool
+ * @param {import("../services/pulseClient").PulseClient} [pulse] the server's shared, paced SC2Pulse client
  */
-function ladderVodsFromDeps({ config, logger }, mapPool = null) {
+function ladderVodsFromDeps({ config, logger }, mapPool = null, pulse = undefined) {
   const credentials = credentialsOf(config.platformIntegrations?.twitch);
-  return new LadderVodsService({ resolveChannels: buildTwitchVideoChannelResolver({ credentials }), mapPool, log: logger });
+  return new LadderVodsService({ pulse, resolveChannels: buildTwitchVideoChannelResolver({ credentials }), mapPool, log: logger });
 }
 
 /**

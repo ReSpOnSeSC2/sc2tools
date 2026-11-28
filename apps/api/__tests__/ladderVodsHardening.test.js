@@ -131,7 +131,7 @@ describe("cursor searches cannot fill the queue", () => {
     await expect(service.search({ matchup: "tvz", after: "bbb" })).rejects.toMatchObject({ code: "busy" });
     void service.search({ matchup: "tvp" });
     await new Promise(resolve => setImmediate(resolve));
-    expect(service.nextCallAt - service.now()).toBe(PACE_MS * 3);
+    expect(service.pulse.nextCallAt - service.now()).toBe(PACE_MS * 3);
   });
 });
 

@@ -108,6 +108,7 @@ import gettingStarted_ladderVods from "./getting-started/ladder-vods";
 import gettingStarted_liveStreams from "./getting-started/live-streams";
 import gettingStarted_matchRooms from "./getting-started/match-rooms";
 import gettingStarted_practiceLinks from "./getting-started/practice-links";
+import gettingStarted_prosOnLadder from "./getting-started/pros-on-ladder";
 import gettingStarted_replayCareer from "./getting-started/replay-career";
 import gettingStarted_reportCardLinks from "./getting-started/report-card-links";
 import gettingStarted_sc2Daily from "./getting-started/sc2-daily";
@@ -247,6 +248,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_liveStreams,
   gettingStarted_matchRooms,
   gettingStarted_practiceLinks,
+  gettingStarted_prosOnLadder,
   gettingStarted_replayCareer,
   gettingStarted_reportCardLinks,
   gettingStarted_sc2Daily,

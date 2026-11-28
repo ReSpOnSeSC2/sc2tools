@@ -1,14 +1,8 @@
 import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { formatRelative } from "@/lib/i18n/format";
-import { lengthLabel, raceName, ratingLabel, type LadderVod, type Race } from "@/lib/ladder/vods";
-
-const RACE_TEXT: Record<Race, string> = {
-  terran: "text-race-terran",
-  zerg: "text-race-zerg",
-  protoss: "text-race-protoss",
-  random: "text-race-random",
-};
+import { lengthLabel, raceName, ratingLabel, type LadderVod } from "@/lib/ladder/vods";
+import { RACE_TEXT } from "./raceText";
 
 /**
  * One game: the matchup (the streamer's race first), the rating and where it

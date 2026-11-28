@@ -5226,6 +5226,18 @@ release preparation, not a signed or published 0.24.9 installer.
   the page says it is not available yet and nothing calls SC2Pulse. Searches
   are cached for five minutes and leave at most once a second. See ADR 0111.
 
+### Pros on Ladder
+
+- A public Pros on Ladder page at `/pros-on-ladder` lists the Grandmasters who
+  played a ladder game in the last hour by race, league and rating rounded to
+  100. A second setting adds the known pros, named, with their last games and a
+  link when they are live. The board ships closed: until
+  `SC2TOOLS_PROS_ON_LADDER_ENABLED` is set the page says it is not available
+  yet and nothing calls SC2Pulse, and names stay off until
+  `SC2TOOLS_PROS_ON_LADDER_NAMES` is set. One timer refreshes it every five
+  minutes; visitors never reach SC2Pulse. The ladder VOD finder and the board
+  now share one paced SC2Pulse client. See ADR 0112.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:
