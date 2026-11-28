@@ -499,6 +499,14 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.26.1
+
+- Optional **Save an OBS replay-buffer clip** under **After each game** on the
+  Streams page: when a game ends with its result known, the agent asks OBS to
+  save its replay buffer, files the clip in a `Highlights` folder under a name
+  built from the game, and lists it in the Stream Dock's Clips. It never
+  starts a stopped buffer; a hint says so instead.
+
 ### Agent 0.26.0
 
 - Optional **Set channel tags** and **Set category to StarCraft II** switches
