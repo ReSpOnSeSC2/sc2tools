@@ -315,6 +315,33 @@ account. The totals and the By day table come from anonymous daily counts that
 go further back: a player is counted there through a hash of the day and their
 account that is deleted after 35 days. See ADRs 0102 and 0103.
 
+### Humdingers replays
+
+From November 28, 2026 every visit also records a run tape: the player's button
+presses and the few values the game read in their browser, enough to replay the
+visit exactly (ADR 0113). In a player's sessions, **Watch** opens the replay of
+that visit (with its length); a session without a tape shows a dash.
+
+- The game plays in a frame that takes no input. **Play** and **Pause**, speeds
+  1x to 16x, and **Sound** (off at first). Drag the position bar or click a mark
+  to jump; jumping back starts the tape again and fast-forwards, which takes a
+  few seconds for a long visit.
+- The timeline marks fights (amber), wins (green), losses and game overs (red),
+  saves (cyan), level-ups, hints read and new goals. Grey stretches had no
+  button pressed for a minute or more: an idle tab, or a player who is stuck.
+- **What happened** lists every mark and idle stretch with its time; click one
+  to jump there. **Buttons held** shows what the player is pressing right now.
+- The facts at the top give the visit's length, fights won and lost, hints
+  read, and the goal the player spent longest on.
+- A replay is exact on the build it was recorded on. The site keeps the last
+  three builds under `/play/builds/`; an older tape plays on the current build
+  and a notice says so. If the game ever stops matching the tape (a changed
+  build, a lost part of the tape), a notice gives the time it happened; the
+  timeline stays exact.
+
+Tapes are kept for 90 days and are exported and deleted with the account. The
+title's **Watch a demo** shows only for admins; players get **Hints** instead.
+
 ## Classifier console
 
 **Insights → Classifier** shows where confirmed build check-ins disagree with the

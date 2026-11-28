@@ -136,7 +136,7 @@ it("features What's new, then Humdingers, after Everything included with a full-
   expect(within(card).getByRole("img", { name: /^A Humdingers battle/ }).getAttribute("src")).toBe("/landing/humdingers-gameplay-1.png");
   expect(within(card).getByRole("img", { name: /^Humdrum's main street/ }).getAttribute("src")).toBe("/landing/humdingers-gameplay-2.png");
   expect(card.textContent).toContain("Besides StarCraft: Brood War and StarCraft II,");
-  expect(card.textContent).toContain("Sign in with a free SC2 Tools account to play. Your saves and play time are kept with your account.");
+  expect(card.textContent).toContain("Sign in with a free SC2 Tools account to play. Your saves, play time and a replay of each visit are kept with your account.");
   expect(card.textContent).toContain("Not affiliated with Nintendo.");
   expect(container.querySelector("iframe")).toBeNull();
 });

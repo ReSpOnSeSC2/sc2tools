@@ -42,6 +42,19 @@ async function* collectionRecords(db, name, filter, projection, signal, redact =
   }
 }
 
+/** Humdingers run tape chunks (ADR 0113): stored as humdingersTapeChunks, exported as humdingersTapes.
+ * @param {any} db @param {string} userId @param {AbortSignal|undefined} signal
+ * @returns {AsyncGenerator<ExportRecord>}
+ */
+async function* humdingersTapeRecords(db, userId, signal) {
+  if (!db.humdingersTapeChunks) return;
+  checkExportSignal(signal);
+  yield { type: "collection", name: "humdingersTapes" };
+  for await (const row of exportRows(db.humdingersTapeChunks, { userId }, { _id: 0 }, signal)) {
+    yield { type: "record", collection: "humdingersTapes", row };
+  }
+}
+
 /** The same five projections serve the existing reviews API and the full archive.
  * @param {any} db @param {string} userId @param {AbortSignal} [signal]
  * @returns {AsyncGenerator<ExportRecord>}
@@ -130,6 +143,7 @@ async function* accountExportRecords(db, userId, options = {}) {
   yield* collectionRecords(db, "playerGoals", { userId }, { _id: 0, slot: 0, criteriaRevision: 0 }, signal);
   yield* collectionRecords(db, "humdingersSaves", { userId }, { _id: 0 }, signal);
   yield* collectionRecords(db, "humdingersPlaySessions", { userId }, { _id: 0 }, signal);
+  yield* humdingersTapeRecords(db, userId, signal);
   yield* collectionRecords(db, "supporters", { userId }, { _id: 0, editId: 0, reviewedBy: 0 }, signal);
   // Delivery channel exports describe registrations without their credentials.
   yield* collectionRecords(db, "streamSessions", { userId }, { _id: 0 }, signal);

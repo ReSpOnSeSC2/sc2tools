@@ -75,6 +75,7 @@ const { credentialReadinessCapability } = require("../services/deviceCredentialT
  *   humdingersPlayDays: import('mongodb').Collection<import('../services/humdingers').HumdingersPlayDayDoc>,
  *   humdingersPlayPlayers: import('mongodb').Collection<import('../services/humdingers').HumdingersPlayPlayerDoc>,
  *   humdingersPlaySessions: import('mongodb').Collection<import('../services/humdingers').HumdingersPlaySessionDoc>,
+ *   humdingersTapeChunks: import('mongodb').Collection<import('../services/humdingers').HumdingersTapeChunkDoc>,
  *   ghostExamples: import('mongodb').Collection<any>,
  *   pulseAccounts: import('mongodb').Collection,
  *   pulseCharacterLinks: import('mongodb').Collection,
@@ -128,13 +129,17 @@ function publicLiveCollections(db) {
   };
 }
 
-/** @param {import('mongodb').Db} db @returns {Pick<DbContext, "humdingersSaves"|"humdingersPlayDays"|"humdingersPlayPlayers"|"humdingersPlaySessions">} */
+/**
+ * @param {import('mongodb').Db} db
+ * @returns {Pick<DbContext, "humdingersSaves"|"humdingersPlayDays"|"humdingersPlayPlayers"|"humdingersPlaySessions"|"humdingersTapeChunks">}
+ */
 function humdingersCollections(db) {
   return {
     humdingersSaves: db.collection(COLLECTIONS.HUMDINGERS_SAVES),
     humdingersPlayDays: db.collection(COLLECTIONS.HUMDINGERS_PLAY_DAYS),
     humdingersPlayPlayers: db.collection(COLLECTIONS.HUMDINGERS_PLAY_PLAYERS),
     humdingersPlaySessions: db.collection(COLLECTIONS.HUMDINGERS_PLAY_SESSIONS),
+    humdingersTapeChunks: db.collection(COLLECTIONS.HUMDINGERS_TAPE_CHUNKS),
   };
 }
 
@@ -382,6 +387,11 @@ async function ensureHumdingersIndexes(ctx) {
   await ctx.humdingersPlaySessions.createIndex({ userId: 1, session: 1 }, { unique: true });
   await ctx.humdingersPlaySessions.createIndex({ startedAt: -1 });
   await ctx.humdingersPlaySessions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  // One chunk per sequence number: a retried upload hits the unique index and
+  // is not counted twice. It also serves the admin read in order, and export
+  // and erasure by userId. Chunks expire 90 days after they are stored.
+  await ctx.humdingersTapeChunks.createIndex({ userId: 1, session: 1, seq: 1 }, { unique: true });
+  await ctx.humdingersTapeChunks.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 }
 
 /**

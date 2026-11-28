@@ -7,3 +7,5 @@
 # Keep its bytes exact: it mixes CRLF and LF lines, which core.autocrlf would
 # rewrite. No text diff, and it stays out of the repository's language stats.
 apps/web/public/play/*.html binary linguist-generated
+# Copies of recent Humdingers builds, kept for admin replays of run tapes (docs/adr/0113-humdingers-run-tapes.md).
+apps/web/public/play/builds/*.html binary linguist-generated

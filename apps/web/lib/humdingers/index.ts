@@ -11,6 +11,25 @@ export const HUMDINGERS_FILE = "/play/humdingers.html";
 /** The host page that runs the game full screen, signed in only. */
 export const HUMDINGERS_PATH = "/play/humdingers";
 
+/**
+ * Recent builds are also kept under their build id, so the admin page replays
+ * a run tape on the build it was recorded on (ADR 0113). Signed in only, and
+ * like the main file, never opened by itself.
+ */
+export const HUMDINGERS_BUILDS = "/play/builds/";
+const BUILD_ID = /^[0-9a-f]{12}$/;
+
+/** The kept copy of one build, or null for an id that cannot be one (a dev build, junk). */
+export function humdingersBuildFile(build: string): string | null {
+  return BUILD_ID.test(build) ? `${HUMDINGERS_BUILDS}${build}.html` : null;
+}
+
+/** Whether a path is one kept build (`/play/builds/<12 hex>.html`). */
+export function isHumdingersBuildFile(pathname: string): boolean {
+  return pathname.startsWith(HUMDINGERS_BUILDS) && BUILD_ID.test(pathname.slice(HUMDINGERS_BUILDS.length).replace(/\.html$/, ""))
+    && pathname.endsWith(".html");
+}
+
 /** Rounded size of HUMDINGERS_FILE for link copy. The What's New entry repeats it. */
 export const HUMDINGERS_SIZE = "about 10 MB";
 
