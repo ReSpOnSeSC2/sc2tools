@@ -17,7 +17,7 @@ const { SessionPolicyService } = require("../src/services/sessionPolicy");
 const { OwnerRevisions } = require("../src/util/gameVisibility");
 const { StreamReportsService } = require("../src/services/streamReports");
 const { sha256 } = require("../src/util/hash");
-let mongo, db, svc, engagement, studio, games, live, verified, app, directory, channels, events, bot;
+let mongo, db, svc, engagement, studio, games, live, verified, app, directory, channels, events, bot, chapters;
 const TOKEN = "desk-token", OWNER = "desk-owner";
 beforeAll(async () => { mongo = await MongoMemoryServer.create(); db = await connect({ uri: mongo.getUri(), dbName: "game_desk" }); });
 afterAll(async () => { await db?.close(); await mongo?.stop(); });
@@ -32,10 +32,13 @@ beforeEach(async () => {
   live = { type: "liveGameState", gameKey: "game-one", phase: "match_ended", opponent: { toonHandle: "1-S2-1-123" } }; verified = null;
   const tokens = { resolve: async token => token === TOKEN ? { userId: OWNER } : null, list: async () => [{ token: TOKEN }, { token: "revoked", revokedAt: new Date() }, { token: "rotating", rotationPending: true }] };
   const streams = new StreamReportsService(db, { notifications: { notify: async () => null } });
-  svc = new GameDeskService({ users: db.users, studio, engagement, games, broker: { latest: () => live, latestOverlayLive: () => verified }, channels, tokens, bot, io, streams });
-  app = express(); app.use(express.json()); app.use(buildMultichatRouter({ overlayTokens: tokens, users: new UsersService(db), studio, engagement, gameDesk: svc }));
+  chapters = { writeToYoutube: jest.fn(async () => ({ state: "written", message: "Added the game chapters to the YouTube archive." })),
+    copyable: jest.fn(async () => ({ lines: ["0:00 Stream start"], message: "" })) };
+  svc = new GameDeskService({ users: db.users, studio, engagement, games, broker: { latest: () => live, latestOverlayLive: () => verified }, channels, tokens, bot, io, streams, chapters });
+  app = express(); app.use(express.json()); app.use(buildMultichatRouter({ overlayTokens: tokens, users: new UsersService(db), studio, engagement, gameDesk: svc, chapters }));
   app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: { code: error.code || "unknown" } }));
 });
+const MARKED = Date.now() - 3_600_000;
 const post = body => request(app).post(`/multichat/${TOKEN}/studio`).send(body);
 async function round(key = "game-one") {
   await engagement.openPrediction([TOKEN], { gameKey: key, opponent: "Opponent" });
@@ -437,4 +440,44 @@ test("Start new session opens a stream and End stream closes it with its report"
   expect(ended.body.deskAction.streamReport).toMatchObject({ games: 1, wins: 1, losses: 0, endedBy: "manual" });
   expect((await db.users.findOne({ userId: OWNER })).streamSession).toBeUndefined();
   expect((await post({ action: "streamEnd" })).body.deskAction.streamReport).toBeNull();
+});
+test("the YouTube chapter switch starts off, takes only a boolean and is saved with the studio", async () => {
+  expect((await studio.get(TOKEN)).youtubeChapters).toBe(false);
+  expect((await post({ youtubeChapters: "yes" })).status).toBe(400);
+  expect((await post({ youtubeChapters: true })).body.youtubeChapters).toBe(true);
+  expect((await studio.get(TOKEN)).youtubeChapters).toBe(true);
+});
+test("End stream writes YouTube chapters only with the switch on, counting from the open stream's start", async () => {
+  await db.streamSessions.deleteMany({});
+  await post({ action: "sessionReset" });
+  const off = await post({ action: "streamEnd" });
+  expect(off.body.deskAction.chapters).toBeNull();
+  expect(chapters.writeToYoutube).not.toHaveBeenCalled();
+  await post({ action: "sessionReset" });
+  const reopenedMs = (await db.users.findOne({ userId: OWNER })).streamSession.startAt.getTime();
+  await post({ youtubeChapters: true });
+  // A later Mark stream start must not move the window of an open stream.
+  expect((await post({ streamStartMs: MARKED })).status).toBe(200);
+  const on = await post({ action: "streamEnd" });
+  expect(on.body.deskAction.chapters).toEqual({ state: "written", message: "Added the game chapters to the YouTube archive." });
+  expect(chapters.writeToYoutube).toHaveBeenCalledTimes(1);
+  const [owner, from, to] = chapters.writeToYoutube.mock.calls[0];
+  expect(owner).toBe(OWNER);
+  expect(from).toBe(reopenedMs);
+  expect(from).not.toBe(MARKED);
+  expect(to).toBeGreaterThanOrEqual(from);
+});
+test("End stream with no open stream falls back to the marked go-live time", async () => {
+  await post({ youtubeChapters: true });
+  await post({ streamStartMs: MARKED });
+  await post({ action: "streamEnd" });
+  expect(chapters.writeToYoutube.mock.calls[0][1]).toBe(MARKED);
+});
+test("the chapter text route answers for the token's owner and needs a valid token", async () => {
+  await post({ streamStartMs: MARKED });
+  const answer = await request(app).get(`/multichat/${TOKEN}/chapters`);
+  expect(answer.status).toBe(200);
+  expect(answer.body).toEqual({ lines: ["0:00 Stream start"], message: "" });
+  expect(chapters.copyable).toHaveBeenCalledWith(OWNER, MARKED, expect.any(Number));
+  expect((await request(app).get("/multichat/other-token/chapters")).status).toBe(401);
 });

@@ -61,12 +61,16 @@ def load_title_settings(value, owner):
     start_game = _game_receipt(start_game)
     channel_game = value.get("last_channel_game") if same_owner else None
     channel_game = _game_receipt(channel_game)
+    record_game = value.get("last_record_game") if same_owner else None
+    record_game = _game_receipt(record_game)
     written = value.get("last_tags") if same_owner else None
     written = written if isinstance(written, dict) else {}
     return {"owner": owner, "enabled": same_owner and value.get("enabled") is True,
             "on_game_start": same_owner and value.get("on_game_start") is True,
             "channel_tags": same_owner and value.get("channel_tags") is True,
             "category_guard": same_owner and value.get("category_guard") is True,
+            "record_chapters": same_owner and value.get("record_chapters") is True,
+            "last_record_game": record_game,
             "last_channel_game": channel_game,
             "last_tags": {name: [tag for tag in written[name][:MAX_TAGS] if valid_tag(tag)]
                           for name in CHANNEL_PLATFORMS if isinstance(written.get(name), list)},
@@ -90,13 +94,16 @@ def configure_title_settings(current, payload, owner):
     category_guard = payload.get("category_guard", current.get("category_guard", False))
     if type(channel_tags) is not bool or type(category_guard) is not bool:
         raise ValueError("Choose whether channel tags and the category guard are enabled.")
+    record_chapters = payload.get("record_chapters", current.get("record_chapters", False))
+    if type(record_chapters) is not bool:
+        raise ValueError("Choose whether game-start chapters are added to the OBS recording.")
     selected = payload.get("platforms")
     if (not isinstance(selected, dict) or set(selected) != set(PLATFORMS)
             or any(type(selected[name]) is not bool for name in PLATFORMS)):
         raise ValueError("Choose the platforms that may receive automatic stream titles.")
     channel = channel_tags or category_guard
     titles = payload["enabled"] or on_game_start
-    automatic = titles or channel
+    automatic = titles or channel or record_chapters
     if automatic and not owner:
         raise ValueError("Pair this agent with your SC2Tools account first.")
     try:
@@ -110,12 +117,12 @@ def configure_title_settings(current, payload, owner):
             template = validate_template(current.get("template"))
         except ValueError:
             template = ""
-    if automatic and not any(selected.values()):
+    if (titles or channel) and not any(selected.values()):
         raise ValueError("Choose at least one platform for automatic stream titles.")
     if channel and not any(selected[name] for name in CHANNEL_PLATFORMS):
         raise ValueError("Choose Twitch or Kick for channel tags and the category guard.")
     result = copy.deepcopy(current)
     result.update(owner=owner, enabled=payload["enabled"], template=template,
                   on_game_start=on_game_start, channel_tags=channel_tags, category_guard=category_guard,
-                  platforms=copy.deepcopy(selected))
+                  record_chapters=record_chapters, platforms=copy.deepcopy(selected))
     return result

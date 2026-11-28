@@ -141,6 +141,7 @@ const EMPTY_STUDIO: StudioState & {
   buildProfile: DEFAULT_BUILD_PROFILE,
   streamStartMs: null,
   vodUrl: null,
+  youtubeChapters: false,
   updatedAt: null,
   loaded: true,
   snapshotReady: true,

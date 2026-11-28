@@ -118,6 +118,7 @@ import opponents_opponentNotes from "./opponents/opponent-notes";
 import reviewsCoaching_coaching from "./reviews-coaching/coaching";
 import reviewsCoaching_replayReviews from "./reviews-coaching/replay-reviews";
 import streamStudio_customChatCommands from "./stream-studio/custom-chat-commands";
+import streamStudio_gameChapters from "./stream-studio/game-chapters";
 import streamStudio_gameMomentAlerts from "./stream-studio/game-moment-alerts";
 import streamStudio_multiPlatformChat from "./stream-studio/multi-platform-chat";
 import streamStudio_obsAutoSceneSwitching from "./stream-studio/obs-auto-scene-switching";
@@ -252,6 +253,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   reviewsCoaching_coaching,
   reviewsCoaching_replayReviews,
   streamStudio_customChatCommands,
+  streamStudio_gameChapters,
   streamStudio_gameMomentAlerts,
   streamStudio_multiPlatformChat,
   streamStudio_obsAutoSceneSwitching,

@@ -4,8 +4,10 @@ const { CLIP_PAGE_MAX, MANUAL_MOMENT_NOTE_MAX } = require("../services/multichat
 
 /** @param {import('express').Router} router
  * @param {{engagement?: import('../services/multichatEngagement').MultichatEngagementService,
+ *   chapters?: import('../services/streamChapters').StreamChaptersService,
+ *   studio?: import('../services/multichatStudio').MultichatStudioService,
  *   limiter: import('express').RequestHandler, tokenAuth: import('express').RequestHandler}} deps */
-function registerDockClipRoutes(router, { engagement, limiter, tokenAuth }) {
+function registerDockClipRoutes(router, { engagement, chapters, studio, limiter, tokenAuth }) {
   router.post("/multichat/:token/moment", limiter, tokenAuth, async (req, res, next) => {
     res.set("Cache-Control", "no-store");
     try {
@@ -43,6 +45,17 @@ function registerDockClipRoutes(router, { engagement, limiter, tokenAuth }) {
         return;
       }
       res.json(await engagement.listMoments(String(req.params.token), { before, beforeId, limit }));
+    } catch (error) { next(error); }
+  });
+
+  // One chapter per game since the stream start the Dock marked, as text to paste into a Twitch or Kick description.
+  router.get("/multichat/:token/chapters", limiter, tokenAuth, async (req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      if (!chapters || !studio) { res.status(503).json({ error: { code: "chapters_unavailable" } }); return; }
+      const { streamStartMs } = await studio.get(String(req.params.token));
+      // The shared tokenAuth middleware sets the owner on the request.
+      res.json(await chapters.copyable(String(/** @type {import("express").Request & {overlayUserId?: string}} */ (req).overlayUserId), streamStartMs, Date.now()));
     } catch (error) { next(error); }
   });
 

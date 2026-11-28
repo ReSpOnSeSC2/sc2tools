@@ -7,6 +7,7 @@ const LIFE = new Set(["created", "ready", "testing", "testStarting", "liveStarti
 const TERMINAL = new Set(["complete", "revoked"]);
 const ORIGIN = "https://www.googleapis.com/youtube/v3/";
 const PARTS = "id,snippet,status,contentDetails";
+const ARCHIVE_LOOKBACK = 10;
 
 /** @param {number} status @param {string} code @param {unknown} [providerHttpStatus] */
 function fail(status, code, providerHttpStatus) {
@@ -398,6 +399,44 @@ class YoutubeStreamingService {
     const verified = (await this._broadcasts(userId, grant, [broadcastId]))[0];
     if (verified.snippet.title !== title || verified.snippet.description !== description || verified.metadataPending) throw fail(502, "youtube_metadata_unverified");
     return verified;
+  }
+
+  /**
+   * Rewrite the description of each broadcast this account created that was on
+   * air during a window, a completed archive included. `compose` gets the
+   * broadcast's real start and its current description and answers with the new
+   * description or the reason to leave it alone. One failure never stops the
+   * others, and nothing is retried.
+   * @param {string} userId
+   * @param {{fromMs:number,toMs:number,compose:(startMs:number,description:string,endMs:number)=>{description:string}|{skip:string}}} job
+   * @returns {Promise<Array<{id:string,state:"written"|"skipped"|"failed",reason?:string}>>}
+   */
+  async archiveDescriptions(userId, job) {
+    await this._ready();
+    return this._grant(userId, async (grant) => {
+      const recent = await this.ledger.recentOwnedBroadcastIds({ userId, expectedChannelId: grant.platformUserId, limit: ARCHIVE_LOOKBACK });
+      if (!recent.length) return [];
+      const rows = await this._list(grant, "liveBroadcasts", { part: PARTS, id: recent.join(",") });
+      /** @type {Array<{id:string,state:"written"|"skipped"|"failed",reason?:string}>} */
+      const receipts = [];
+      for (const row of rows) {
+        const startMs = Date.parse(row.snippet?.actualStartTime);
+        const endMs = row.snippet?.actualEndTime ? Date.parse(row.snippet.actualEndTime) : Infinity;
+        if (!Number.isFinite(startMs) || startMs > job.toMs || endMs < job.fromMs) continue;
+        try {
+          const safe = await this._safeOwnedRead(userId, grant, row);
+          const outcome = job.compose(startMs, safe.snippet.description, endMs);
+          if ("skip" in outcome) { receipts.push({ id: safe.id, state: "skipped", reason: outcome.skip }); continue; }
+          await this._updateMetadata(userId, grant, safe.id, safe.snippet.title, outcome.description);
+          receipts.push({ id: safe.id, state: "written" });
+        } catch (error) {
+          const code = /** @type {{code?: unknown}|null} */ (error)?.code;
+          receipts.push({ id: String(row.id), state: "failed", reason: typeof code === "string" ? code : "youtube_streaming_unavailable" });
+        }
+      }
+      this._invalidate(userId);
+      return receipts;
+    });
   }
 
   /** @param {string} userId @param {any} payload */

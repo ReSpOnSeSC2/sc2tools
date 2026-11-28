@@ -5108,6 +5108,21 @@ release preparation, not a signed or published 0.24.9 installer.
   off, keep the tags you set by hand, never send a tag that breaks a platform
   rule, and cannot hold up the title update. Agent 0.26.0.
 
+### Game chapters
+
+- Ending a stream can write one chapter per game into your YouTube archive's
+  description ("0:42:10 Game 4 · PvZ win vs 5.1k"), inside a marked block that a
+  second run replaces without touching your own text. The switch is in the
+  Stream Dock's Clips panel and starts off; nothing is written when YouTube's
+  chapter rules (start at 0:00, three or more, ten seconds apart) cannot be met,
+  and the Dock says why. The same chapters can be copied as text for Twitch and
+  Kick descriptions. A new optional agent setting adds a chapter marker to the
+  local OBS recording at each game start (OBS 30.2 or newer, Hybrid MP4).
+  Server owners switch the YouTube write on with `YOUTUBE_CHAPTERS_ENABLED=true`
+  (off by default); each video it touches leaves a small receipt. Chapters only
+  cover games that started while that video was running. Agent 0.26.0. See ADR
+  0105.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

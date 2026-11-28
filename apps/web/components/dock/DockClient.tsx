@@ -511,6 +511,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
         moments: engagement.clipMoments,
         streamStartMs: studio.streamStartMs,
         vodUrl: studio.vodUrl,
+        youtubeChapters: studio.youtubeChapters,
         busy,
         onPost: postStudioAction,
       }}

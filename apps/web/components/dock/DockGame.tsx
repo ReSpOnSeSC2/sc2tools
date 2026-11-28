@@ -47,7 +47,8 @@ export function DockGame({ token, live, lastLiveAt, gameStatus, session, studio,
     if (!canConfirm || !activeConfirm) return;
     const saved = await onPost(activeConfirm);
     if (saved && activeConfirm.action === "streamEnd" && mounted.current) {
-      setStreamNote(saved.streamEnd ? `Stream report saved: ${saved.streamEnd.games} game${saved.streamEnd.games === 1 ? "" : "s"}, ${saved.streamEnd.wins}–${saved.streamEnd.losses}.` : "Stream ended. No games were recorded, so there is no report.");
+      const report = saved.streamEnd ? `Stream report saved: ${saved.streamEnd.games} game${saved.streamEnd.games === 1 ? "" : "s"}, ${saved.streamEnd.wins}–${saved.streamEnd.losses}.` : "Stream ended. No games were recorded, so there is no report.";
+      setStreamNote(saved.streamChapters ? `${report} ${saved.streamChapters.message}` : report);
     }
     if (saved && mounted.current && source.current === identity) setConfirm(null);
   }

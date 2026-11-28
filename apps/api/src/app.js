@@ -98,6 +98,8 @@ const { TwitchAutomationStatus } = require("./services/twitchAutomationStatus");
 const { buildTwitchAutomationRouter } = require("./routes/twitchAutomation");
 const { buildAgentStreamingRouter } = require("./routes/agentStreaming");
 const { YoutubeStreamingService } = require("./services/youtubeStreaming");
+const { StreamChaptersService } = require("./services/streamChapters");
+const { YoutubeChapterReceipts } = require("./services/youtubeChapterReceipts");
 const { buildYoutubeCreateLedger } = require("./services/youtubeCreateOperationLedger");
 const { buildYoutubeStreamingRouter } = require("./routes/youtubeStreaming");
 const { TikTokChatRelay } = require("./services/tiktokChatRelay");
@@ -779,7 +781,15 @@ function makeServices(deps, clerk, adminClerkIds) {
   multichatEngagement.onEvent = (token, msg) => {
     void twitchChatBot.handleEngagementEvent(token, msg).catch(() => {});
   };
-  const gameDesk = new GameDeskService({ users: deps.db.users, studio: multichatStudio,
+  const youtubeStreaming = new YoutubeStreamingService({
+    integrations: platformIntegrations,
+    ledger: deps.db.youtubeCreateOperations ? buildYoutubeCreateLedger({ collection: deps.db.youtubeCreateOperations }) : null,
+  });
+  const streamChapters = new StreamChaptersService({
+    games: deps.db.games, youtube: youtubeStreaming, enabled: deps.config.youtubeChaptersEnabled === true,
+    receipts: deps.db.youtubeChapterReceipts ? new YoutubeChapterReceipts({ collection: deps.db.youtubeChapterReceipts }) : null,
+  });
+  const gameDesk = new GameDeskService({ users: deps.db.users, studio: multichatStudio, chapters: streamChapters,
     engagement: multichatEngagement, games, broker: liveGameBroker, channels: opponentChannels,
     tokens: overlayTokens, bot: twitchChatBot, io: deps.io, onSessionReset: owner => sessionHistory.invalidateForReset(owner), streams: delivery.streamReports });
   twitchChatBot.shoutoutLine = userId => gameDesk.shoutoutLine(userId);
@@ -1139,6 +1149,8 @@ function makeServices(deps, clerk, adminClerkIds) {
     tiktokChatRelay,
     multichatStudio,
     gameDesk,
+    youtubeStreaming,
+    streamChapters,
     streamSeries,
     multichatSounds,
     multichatEngagement,
@@ -1639,13 +1651,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     auth, automation: services.twitchAutomation, tokens: services.overlayTokens,
     status: new TwitchAutomationStatus({ automation: services.twitchAutomation, broker: services.liveGameBroker }),
   }));
-  const youtubeLedgerCollection = deps.db.youtubeCreateOperations;
   app.use(SERVICE.ROUTE_PREFIX, buildYoutubeStreamingRouter({
     auth,
-    youtubeStreaming: new YoutubeStreamingService({
-      integrations: services.platformIntegrations,
-      ledger: youtubeLedgerCollection ? buildYoutubeCreateLedger({ collection: youtubeLedgerCollection }) : null,
-    }),
+    youtubeStreaming: services.youtubeStreaming,
   }));
   // SC2TOOLS_ADMIN_USER_IDS is a CSV of *Clerk* user IDs (the
   // `user_xxx` strings from the Clerk dashboard), so the gate compares
@@ -1796,6 +1804,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       studio: services.multichatStudio,
       commands: services.chatCommands,
       gameDesk: services.gameDesk,
+      chapters: services.streamChapters,
       series: services.streamSeries,
       sounds: services.multichatSounds,
       engagement: services.multichatEngagement,

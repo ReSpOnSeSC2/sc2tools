@@ -12,6 +12,7 @@ import threading
 import time
 import uuid
 
+from .obs_chapters import RecordChapterMarker
 from .obs_reader import OutputReader, DEFAULT_OUTPUTS
 from .youtube_pair_backend import PairBackend, atomic_json
 
@@ -72,7 +73,7 @@ def discovery_failure_message(http_status, account_mode="sc2tools"):
 
 class StreamService:
     def __init__(self, state_dir, settings_provider, *, no_obs=False, backend=None,
-                 output_reader=None, adapters=None, cloud_client=None):
+                 output_reader=None, adapters=None, cloud_client=None, chapter_marker=None):
         self.directory = Path(state_dir) / "streaming"
         self.directory.mkdir(parents=True, exist_ok=True)
         self.config_path = self.directory / "youtube-button-helper.config.private.json"
@@ -88,6 +89,7 @@ class StreamService:
             or backend is not None)
         self.reader = output_reader or OutputReader(settings_provider, disabled=no_obs)
         self.backend.output_reader = self._outputs
+        self.chapter_marker = chapter_marker or RecordChapterMarker(settings_provider, disabled=no_obs)
         self.cloud_client = cloud_client
         self.account_mode = config.get("account_mode", "sc2tools" if cloud_client else "local")
         self.adapters = adapters or {}
@@ -172,7 +174,7 @@ class StreamService:
         unavailable = changed or not context["connectionKey"]
         if unavailable:
             snapshot["title_automation"] = {"enabled": False, "on_game_start": False, "channel_tags": False, "category_guard": False,
-                "template": "", "values": {}, "tag_preview": [], "platforms": {"twitch": True, "kick": True, "youtube": False},
+                "record_chapters": False, "template": "", "values": {}, "tag_preview": [], "platforms": {"twitch": True, "kick": True, "youtube": False},
                 "message": "SC2Tools pairing changed. Automatic titles are off; review settings again."}
             snapshot.update(catalog={"channels": [], "streams": []}, platform_results={},
                 platforms={}, auth_prompt="", metadata=copy.deepcopy(DEFAULT_CONFIG["metadata"]), metadata_saved=False,
@@ -796,6 +798,7 @@ class StreamService:
         if self.operations.acquire(timeout=4):
             try:
                 self.reader.close()
+                self.chapter_marker.close()
                 self.backend.close()
             finally:
                 self.operations.release()

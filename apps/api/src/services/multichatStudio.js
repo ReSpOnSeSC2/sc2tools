@@ -161,6 +161,7 @@ class MultichatStudioService {
         ? Number(doc?.streamStartMs)
         : null,
       vodUrl: typeof doc?.vodUrl === "string" ? doc.vodUrl : null,
+      youtubeChapters: doc?.youtubeChapters === true,
       updatedAt: doc?.updatedAt ?? null,
     };
   }
@@ -286,6 +287,10 @@ class MultichatStudioService {
     }
     if ("streamStartMs" in patch) {
       set.streamStartMs = sanitizeStreamStartMs(patch.streamStartMs);
+    }
+    if ("youtubeChapters" in patch) {
+      if (typeof patch.youtubeChapters !== "boolean") throw Object.assign(new Error("invalid chapter switch"), { status: 400, code: "invalid_youtube_chapters" });
+      set.youtubeChapters = patch.youtubeChapters;
     }
     if ("vodUrl" in patch) {
       set.vodUrl = sanitizeVodUrl(patch.vodUrl);

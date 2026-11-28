@@ -15,7 +15,8 @@ PLATFORM_NAMES = {"twitch": "Twitch", "kick": "Kick"}
 class ChannelUpdateMixin:
     def game_start_active(self):
         settings = self.settings
-        return settings["on_game_start"] or settings["channel_tags"] or settings["category_guard"]
+        return (settings["on_game_start"] or settings["channel_tags"] or settings["category_guard"]
+                or settings["record_chapters"])
 
     def configure_game_start(self):
         self.worker.match.configure(self.game_start_active(), titles=self.settings["on_game_start"])

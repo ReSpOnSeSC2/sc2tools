@@ -94,3 +94,12 @@ it("End stream waits for confirmation, then reports the saved stream or that not
   await act(async () => fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "End stream" })));
   expect(screen.getByText("Stream ended. No games were recorded, so there is no report.")).toBeTruthy();
 });
+it("End stream adds YouTube's answer about the game chapters to the report line", async () => {
+  const p = props();
+  const chapters = { state: "skipped" as const, message: "YouTube needs at least three chapters, so nothing was written." };
+  p.onPost = vi.fn(async () => ({ ...DEFAULT_STUDIO_STATE, streamEnd: { id: "abc123", games: 2, wins: 1, losses: 1 }, streamChapters: chapters }));
+  render(<DockGame {...p} />);
+  fireEvent.click(screen.getByRole("button", { name: "End stream" }));
+  await act(async () => fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "End stream" })));
+  expect(screen.getByText(/Stream report saved: 2 games, 1–1\. YouTube needs at least three chapters/)).toBeTruthy();
+});

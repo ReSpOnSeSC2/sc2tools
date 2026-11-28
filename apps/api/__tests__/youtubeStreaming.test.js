@@ -58,6 +58,10 @@ class MockLedger {
     const row = this.find(args);
     return row ? { ...clone(row.broadcast), ...(row.selectedStreamId ? { selectedStreamId: row.selectedStreamId } : {}) } : null;
   }
+  async recentOwnedBroadcastIds(args) {
+    return Array.from(this.rows.values()).filter((row) => row.userId === args.userId && row.expectedChannelId === args.expectedChannelId && row.broadcast)
+      .map((row) => row.broadcast.id).slice(-args.limit);
+  }
   async markBound(args) {
     const row = this.find(args);
     if (!row || row.selectedStreamId && row.selectedStreamId !== args.streamId) throw error("youtube_broadcast_stream_conflict");
@@ -469,4 +473,65 @@ test.each([399, 600, 400.5, "400", null, {}, true])("route omits invalid provide
   };
   const response = await request(s.app).get("/v1/streaming/youtube/catalog");
   expect(response.body).toEqual({ error: "youtube_provider_unavailable" });
+});
+
+describe("archiveDescriptions", () => {
+  const FROM = NOW - 3_600_000, TO = NOW;
+  const keep = (description) => ({ description: description + "\n\n-- chapters --" });
+  async function archived(s, snippet = {}) {
+    const row = await s.service.create("user-one", s.payload);
+    Object.assign(s.rows.get(row.id).snippet, { actualStartTime: new Date(NOW - 2_000_000).toISOString(), ...snippet });
+    s.rows.get(row.id).status.lifeCycleStatus = "complete";
+    return row.id;
+  }
+  const puts = (s) => s.calls.filter((call) => call.resource === "videos" && call.method === "PUT");
+
+  test("a completed archive gets the composed description and keeps its title, category and tags", async () => {
+    const s = setup(), id = await archived(s), starts = [];
+    const receipts = await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose: (start, description) => { starts.push([start, description]); return keep(description); } });
+    expect(receipts).toEqual([{ id, state: "written" }]);
+    expect(starts).toEqual([[NOW - 2_000_000, "Saved description"]]);
+    expect(puts(s).at(-1).body.snippet).toMatchObject({ title: "Pair test", description: "Saved description\n\n-- chapters --", categoryId: "20", tags: ["preserve"] });
+  });
+
+  test("compose is told where the video ended, or Infinity while it is still live", async () => {
+    const s = setup(), id = await archived(s, { actualEndTime: new Date(NOW - 1_000_000).toISOString() });
+    const ends = [];
+    await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose: (_start, description, end) => { ends.push(end); return keep(description); } });
+    delete s.rows.get(id).snippet.actualEndTime;
+    await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose: (_start, description, end) => { ends.push(end); return keep(description); } });
+    expect(ends).toEqual([NOW - 1_000_000, Infinity]);
+  });
+
+  test("a broadcast that was not on air in the window, or never went live, is left alone", async () => {
+    const s = setup();
+    const later = await archived(s, { actualStartTime: new Date(NOW + 60_000).toISOString() });
+    const compose = jest.fn(() => keep(""));
+    const before = puts(s).length;
+    expect(await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose })).toEqual([]);
+    s.rows.get(later).snippet.actualStartTime = new Date(NOW - 9_000_000).toISOString();
+    s.rows.get(later).snippet.actualEndTime = new Date(NOW - 8_000_000).toISOString();
+    expect(await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose })).toEqual([]);
+    delete s.rows.get(later).snippet.actualStartTime;
+    expect(await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose })).toEqual([]);
+    expect(compose).not.toHaveBeenCalled();
+    expect(puts(s)).toHaveLength(before);
+  });
+
+  test("only broadcasts this account created are looked at", async () => {
+    const s = setup();
+    expect(await s.service.archiveDescriptions("user-two", { fromMs: FROM, toMs: TO, compose: () => keep("") })).toEqual([]);
+    expect(s.calls.filter((call) => call.resource === "liveBroadcasts")).toHaveLength(0);
+  });
+
+  test("a refusal from compose writes nothing and a provider failure is reported without stopping the run", async () => {
+    const s = setup(), id = await archived(s), before = puts(s).length;
+    expect(await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose: () => ({ skip: "too_few" }) }))
+      .toEqual([{ id, state: "skipped", reason: "too_few" }]);
+    expect(puts(s)).toHaveLength(before);
+    s.state.failMetadata = true;
+    const [failed] = await s.service.archiveDescriptions("user-one", { fromMs: FROM, toMs: TO, compose: (_start, description) => keep(description) });
+    expect(failed).toMatchObject({ id, state: "failed" });
+    expect(failed.reason).toMatch(/^youtube_/);
+  });
 });

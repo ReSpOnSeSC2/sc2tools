@@ -574,3 +574,25 @@ testCase("trusted recovery can omit intent but only loads its exact stored owned
   });
   assert.equal(result.phase, "succeeded");
 });
+
+testCase("recentOwnedBroadcastIds lists this owner's succeeded broadcasts newest first and clamps the limit", async () => {
+  const rows = [];
+  const add = (broadcastId, minute, extra = {}) => rows.push({ kind: "operation", userId: "user-one", expectedChannelId: "UC_owned", phase: "succeeded", broadcastId, completedAt: new Date(Date.UTC(2026, 10, 27, 12, minute)), ...extra });
+  for (let minute = 1; minute <= 12; minute += 1) add(`video_${String(minute).padStart(2, "0")}`, minute);
+  add("video_other_owner", 30, { userId: "user-two" });
+  add("video_other_channel", 31, { expectedChannelId: "UC_other" });
+  add("video_unfinished", 32, { phase: "uncertain" });
+  const collection = { find: (filter) => {
+    let found = rows.filter((row) => matches(row, filter));
+    const cursor = { sort: (spec) => { found = [...found].sort((a, b) => (b.completedAt - a.completedAt) * (spec.completedAt < 0 ? 1 : -1)); return cursor; },
+      limit: (count) => { found = found.slice(0, count); return cursor; }, toArray: async () => found };
+    return cursor;
+  } };
+  const { ledger } = { ledger: buildYoutubeCreateLedger({ collection }) };
+  const ask = (extra = {}) => ledger.recentOwnedBroadcastIds({ userId: "user-one", expectedChannelId: "UC_owned", ...extra });
+  assert.deepEqual(await ask(), ["video_12", "video_11", "video_10", "video_09", "video_08", "video_07", "video_06", "video_05", "video_04", "video_03"]);
+  assert.deepEqual(await ask({ limit: 2 }), ["video_12", "video_11"]);
+  assert.equal((await ask({ limit: 500 })).length, 12);
+  assert.equal((await ask({ limit: -5 })).length, 1);
+  assert.deepEqual(await ledger.recentOwnedBroadcastIds({ userId: "user-one", expectedChannelId: "bad channel" }), []);
+});

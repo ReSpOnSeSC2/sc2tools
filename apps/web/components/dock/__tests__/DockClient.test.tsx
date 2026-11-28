@@ -43,6 +43,7 @@ const EMPTY_STUDIO = {
   timer: null,
   streamStartMs: null,
   vodUrl: null,
+  youtubeChapters: false,
   updatedAt: null,
 };
 

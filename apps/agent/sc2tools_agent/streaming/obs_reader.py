@@ -9,7 +9,9 @@ DEFAULT_OUTPUTS = {
 }
 
 
-class OutputReader:
+class ObsConnection:
+    """One lazily opened obs-websocket request client, reopened when its settings change."""
+
     def __init__(self, settings_provider, *, disabled=False, factory=None):
         self.settings_provider = settings_provider
         self.disabled = disabled
@@ -42,6 +44,8 @@ class OutputReader:
             self.settings = settings
         return self.raw
 
+
+class OutputReader(ObsConnection):
     def __call__(self, output_names=None):
         names = output_names or DEFAULT_OUTPUTS
         unknown = {"horizontal": None, "portrait": None}

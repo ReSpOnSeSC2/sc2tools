@@ -87,6 +87,7 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *   delivery: ReturnType<typeof parseDeliveryConfig>,
  *   discordInteractions?: ReturnType<typeof parseDiscordInteractions>,
  *   twitchAutomationEnabled: boolean,
+ *   youtubeChaptersEnabled: boolean,
  *   reviewsEnabled: "off" | "admins" | "on",
  *   guidesEnabled: boolean,
  *   guidesRevalidateUrl: string|null,
@@ -165,6 +166,8 @@ function loadConfig(env = process.env) {
     // Separate from configured credentials and explicit user opt-ins.
     // This implementation never changes the operator's environment.
     twitchAutomationEnabled: env.TWITCH_AUTOMATION_ENABLED === "true",
+    // Separate server gate for writing game chapters into YouTube archives.
+    youtubeChaptersEnabled: env.YOUTUBE_CHAPTERS_ENABLED === "true",
     reviewsEnabled: parseReviewsRollout(env.REVIEWS_ENABLED),
     ...parseGuidesConfig(env),
   };

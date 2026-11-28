@@ -3,6 +3,7 @@
 import { DockCopyText } from "./DockCopyText";
 import { Circle, Flag, Flame, Play } from "lucide-react";
 import { DockInput, DockButton } from "./DockControls";
+import { DockGameChapters } from "./DockGameChapters";
 
 /**
  * DockClips — the clip-moment log for the Stream Dock: every moment
@@ -42,6 +43,7 @@ export function DockClips({
   markUndo,
   streamStartMs,
   vodUrl,
+  youtubeChapters = false,
   busy,
   studioReady = true,
   onPost,
@@ -52,6 +54,7 @@ export function DockClips({
   markUndo?: ReactNode;
   streamStartMs: number | null;
   vodUrl: string | null;
+  youtubeChapters?: boolean;
   busy: boolean;
   studioReady?: boolean;
   onPost: DockPost;
@@ -62,6 +65,7 @@ export function DockClips({
     saveVod: () => vodDraft.trim() ? { patch: { vodUrl: vodDraft.trim() }, message: "VOD link saved", after: () => setVodDraft("") } : null,
     clearVod: () => ({ patch: { vodUrl: null }, message: "VOD link cleared" }),
     mark: () => ({ patch: { streamStartMs: Date.now() }, message: "Stream start marked" }),
+    chapterSwitch: (next: boolean) => ({ patch: { youtubeChapters: next }, message: next ? "YouTube chapters on" : "YouTube chapters off" }),
     clearMark: () => ({ patch: { streamStartMs: null }, message: "Stream start cleared" }),
   });
   if (!studioReady) return <DockSnapshotState />;
@@ -136,6 +140,8 @@ export function DockClips({
         )}
       </div>
 
+      {token ? <DockGameChapters token={token} enabled={studioReady} youtube={youtubeChapters} busy={busy || pending}
+        onToggleYoutube={(next) => void run("chapterSwitch", next)} /> : null}
       {token ? <FlagMoment log={log} /> : null}
       <ClipLog log={log} streamStartMs={streamStartMs} vodUrl={vodUrl} />
     </div></fieldset>

@@ -12,38 +12,56 @@ class StreamTitleControls:
         self.preview = page._label("Preview: waiting for synced statistics.", True)
         layout.addWidget(self.preview)
         layout.addWidget(page._label("Tokens: " + TOKEN_REFERENCE + ". Separate optional parts with |. Rendered titles must fit 70 characters.", True))
-        preset_row = QtWidgets.QHBoxLayout()
+        self._add_template_presets(layout, QtWidgets)
+        self._add_game_start_switches(layout, QtWidgets)
+        self._add_post_sync_switch(layout, QtWidgets)
+        self._add_channels(layout, QtWidgets)
+        self.save = page._button("Save automatic title settings", self.configure, quiet=True)
+        layout.addWidget(self.save)
+        self.activation = page._label("Automatic title refresh is off.", True)
+        layout.addWidget(self.activation)
+        self.refresh = page._button("Refresh preview statistics", lambda: page.job({"action": "refresh_title_preview"}), quiet=True)
+        layout.addWidget(self.refresh)
+        self.note = page._label("", True)
+        layout.addWidget(self.note)
+        page.title_input.textChanged.connect(self.update_preview)
+
+    def _add_template_presets(self, layout, QtWidgets):
+        row = QtWidgets.QHBoxLayout()
         self.record_style = QtWidgets.QComboBox()
         self.record_style.setAccessibleName("Records in the current-match template")
         self.record_style.addItem("Session", "session")
         self.record_style.addItem("Head-to-head", "h2h")
         self.record_style.addItem("Both", "both")
         self.record_style.activated.connect(self.use_match_template)
-        preset_row.addWidget(self.record_style)
-        self.match_template = page._button("Use current-match template", self.use_match_template, quiet=True)
-        preset_row.addWidget(self.match_template, 1)
-        layout.addLayout(preset_row)
-        self.on_game_start = QtWidgets.QCheckBox("Refresh titles at the start of each game")
-        self.on_game_start.setChecked(False)
-        self.on_game_start.setToolTip("Optional and off by default. Uncheck and save to stop game-start title updates.")
-        self.on_game_start.toggled.connect(self.edited)
-        layout.addWidget(self.on_game_start)
-        self.channel_tags = QtWidgets.QCheckBox("Set channel tags at each game start")
-        self.channel_tags.setChecked(False)
-        self.channel_tags.setToolTip("Optional and off by default. Tags you set yourself are kept; ours fill the places that remain.")
-        self.channel_tags.toggled.connect(self.edited)
-        layout.addWidget(self.channel_tags)
-        self.tag_preview = page._label("Tags: none yet.", True)
+        row.addWidget(self.record_style)
+        self.match_template = self.page._button("Use current-match template", self.use_match_template, quiet=True)
+        row.addWidget(self.match_template, 1)
+        layout.addLayout(row)
+
+    def _add_game_start_switches(self, layout, QtWidgets):
+        # Grouped by when they run, so each label says only what it does.
+        self._heading(layout, "At each game start")
+        self.on_game_start = self._switch(layout, QtWidgets, "Refresh the title", "Refresh the title at each game start",
+            "Optional and off by default. Uncheck and save to stop game-start title updates.")
+        self.channel_tags = self._switch(layout, QtWidgets, "Set channel tags", "Set channel tags at each game start",
+            "Optional and off by default. Tags you set yourself are kept; ours fill the places that remain.")
+        self.tag_preview = self.page._label("Tags: none yet.", True)
+        # Line the caption up with the switch text: the indicator width plus its label gap in theme.py.
+        self.tag_preview.setContentsMargins(theme.SPACE_L + theme.SPACE_S, 0, 0, 0)
         layout.addWidget(self.tag_preview)
-        self.category_guard = QtWidgets.QCheckBox("Set category to StarCraft II at game start")
-        self.category_guard.setChecked(False)
-        self.category_guard.setToolTip("Optional and off by default. Changes the category only at a game start, only when it is not StarCraft II, and never back.")
-        self.category_guard.toggled.connect(self.edited)
-        layout.addWidget(self.category_guard)
-        self.enabled = QtWidgets.QCheckBox("Refresh titles after each synced game")
-        self.enabled.setChecked(False)
-        self.enabled.setToolTip("Optional post-sync updates, independent of game-start updates. Uncheck and save to stop.")
-        layout.addWidget(self.enabled)
+        self.category_guard = self._switch(layout, QtWidgets, "Set category to StarCraft II", "Set category to StarCraft II at each game start",
+            "Optional and off by default. Changes the category only at a game start, only when it is not StarCraft II, and never back.")
+        self.record_chapters = self._switch(layout, QtWidgets, "Add a chapter to the OBS recording", "Add a chapter to the OBS recording at each game start",
+            "Optional and off by default. Needs OBS 30.2 or newer recording hybrid MP4; with anything else it quietly does nothing.")
+
+    def _add_post_sync_switch(self, layout, QtWidgets):
+        self._heading(layout, "After each synced game")
+        self.enabled = self._switch(layout, QtWidgets, "Refresh the title with the result", "Refresh the title after each synced game",
+            "Optional post-sync updates, independent of game-start updates. Uncheck and save to stop.")
+
+    def _add_channels(self, layout, QtWidgets):
+        self._heading(layout, "Channels")
         row = QtWidgets.QHBoxLayout()
         self.platforms = {}
         for name, text in (("twitch", "Twitch"), ("kick", "Kick"), ("youtube", "YouTube (uses quota)")):
@@ -54,16 +72,20 @@ class StreamTitleControls:
             row.addWidget(control)
         row.addStretch()
         layout.addLayout(row)
-        self.enabled.toggled.connect(self.edited)
-        self.save = page._button("Save automatic title settings", self.configure, quiet=True)
-        layout.addWidget(self.save)
-        self.activation = page._label("Automatic title refresh is off.", True)
-        layout.addWidget(self.activation)
-        self.refresh = page._button("Refresh preview statistics", lambda: page.job({"action": "refresh_title_preview"}), quiet=True)
-        layout.addWidget(self.refresh)
-        self.note = page._label("", True)
-        layout.addWidget(self.note)
-        page.title_input.textChanged.connect(self.update_preview)
+
+    def _heading(self, layout, text):
+        layout.addSpacing(theme.SPACE_S)
+        layout.addWidget(self.page._label(text, name="studioEyebrow"))
+
+    def _switch(self, layout, QtWidgets, text, accessible_name, tip):
+        """An opt-in check box that starts off. Its group heading names when it runs."""
+        control = QtWidgets.QCheckBox(text)
+        control.setChecked(False)
+        control.setAccessibleName(accessible_name)
+        control.setToolTip(tip)
+        control.toggled.connect(self.edited)
+        layout.addWidget(control)
+        return control
 
     def edited(self, *_args):
         self.dirty = True
@@ -80,6 +102,7 @@ class StreamTitleControls:
         self.page.job({"action": "configure_title_automation", "template": self.page.title_input.text(),
             "enabled": self.enabled.isChecked(), "on_game_start": self.on_game_start.isChecked(),
             "channel_tags": self.channel_tags.isChecked(), "category_guard": self.category_guard.isChecked(),
+            "record_chapters": self.record_chapters.isChecked(),
             "platforms": {name: control.isChecked() for name, control in self.platforms.items()}})
 
     def update_preview(self, *_args):
@@ -100,6 +123,7 @@ class StreamTitleControls:
             (self.on_game_start, settings.get("on_game_start") is True),
             (self.channel_tags, settings.get("channel_tags") is True),
             (self.category_guard, settings.get("category_guard") is True),
+            (self.record_chapters, settings.get("record_chapters") is True),
             *((control, platforms.get(name, name != "youtube")) for name, control in self.platforms.items()),
         ]
 
@@ -115,6 +139,8 @@ class StreamTitleControls:
         channel = [text for text, on in (("tags", settings.get("channel_tags")), ("category", settings.get("category_guard"))) if on is True]
         if channel:
             status += " Channel " + " and ".join(channel) + " update at game start."
+        if settings.get("record_chapters") is True:
+            status += " The OBS recording gets a chapter marker at game start."
         options_changed = any(control.isChecked() != checked for control, checked in self._saved_controls(settings))
         template_changed = self.page.title_dirty and (self.enabled.isChecked() or self.on_game_start.isChecked())
         if options_changed or template_changed:
@@ -145,7 +171,7 @@ class StreamTitleControls:
 
     def buttons(self):
         usable = not self.page.busy and self.page.state.get("account_mode") == "sc2tools"
-        for control in (self.enabled, self.on_game_start, self.channel_tags, self.category_guard, self.record_style, self.match_template, self.save, self.refresh, *self.platforms.values()):
+        for control in (self.enabled, self.on_game_start, self.channel_tags, self.category_guard, self.record_chapters, self.record_style, self.match_template, self.save, self.refresh, *self.platforms.values()):
             control.setEnabled(usable)
 
 
