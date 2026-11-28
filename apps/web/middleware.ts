@@ -6,7 +6,7 @@ import { isRoomObsPath, ROOM_OBS_PATH } from "./lib/matchRoomRoute";
 import { isPublicReplayReference, legacyReplayArchivePath } from "./lib/replayRouteAccess";
 import { isPublicStatusRequest, statusHostRedirect } from "./lib/publicStatusRoute";
 import { isBalanceToolPath } from "./lib/balance/routes";
-import { HUMDINGERS_FILE, HUMDINGERS_PATH } from "./lib/humdingers";
+import { HUMDINGERS_BUILDS, HUMDINGERS_FILE, HUMDINGERS_PATH, isHumdingersBuildFile } from "./lib/humdingers";
 
 const PERMANENT_REDIRECT = 308;
 const SESSIONLESS_PAGES = new Set(["/wrapped", "/wrapped/opengraph-image", "/career", "/arcade/scout"]);
@@ -68,9 +68,11 @@ const isProtected = createRouteMatcher([
   "/notifications(.*)",
   "/admin(.*)",
   // Humdingers is for signed-in players: the host page syncs saves to the
-  // account, and the prebuilt file stays behind it (ADR 0102).
+  // account, and the prebuilt file stays behind it (ADR 0102), with the
+  // copies of recent builds that admin replays load (ADR 0113).
   HUMDINGERS_PATH,
   HUMDINGERS_FILE,
+  `${HUMDINGERS_BUILDS}(.*)`,
 ]);
 
 const authenticatedMiddleware = clerkMiddleware(async (auth, req) => {
@@ -97,7 +99,9 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const statusRedirect = statusHostRedirect(req.url);
   if (statusRedirect) return NextResponse.redirect(statusRedirect, PERMANENT_REDIRECT);
   const pathname = req.nextUrl.pathname;
-  if (pathname === HUMDINGERS_FILE && req.headers.get("sec-fetch-dest") === "document") return humdingersHostRedirect(req);
+  if ((pathname === HUMDINGERS_FILE || isHumdingersBuildFile(pathname)) && req.headers.get("sec-fetch-dest") === "document") {
+    return humdingersHostRedirect(req);
+  }
   if (isRoomObsPath(pathname)) return matchRoomObsResponse(req);
   // Static replay views work without a Clerk handshake.
   if (isPublicStatusRequest(pathname) || isBalanceToolPath(pathname) || SESSIONLESS_PAGES.has(pathname)

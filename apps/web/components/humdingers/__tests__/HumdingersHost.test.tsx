@@ -30,6 +30,9 @@ it("brings account saves in before the game starts, in a full-screen frame that 
   window.localStorage.setItem("humdingers.save.0", save(100));
   render(<HumdingersHost />);
   expect(screen.getByRole("status").textContent).toContain("Loading your saves");
+  // notice B (ADR 0113): the loading screen says replays are kept, with the policy one tap away
+  expect(screen.getByText(/We keep a replay of each visit to improve the game\./)).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Privacy policy" }).getAttribute("href")).toBe("/legal/privacy#humdingers");
   const frame = await screen.findByTitle("Humdingers");
   expect(window.localStorage.getItem("humdingers.save.0")).toBe(save(200));
   expect(frame.getAttribute("src")).toBe("/play/humdingers.html");
@@ -51,4 +54,34 @@ it("uploads a save the game writes and counts the load", async () => {
   await waitFor(() => expect(requests("PUT", "/v1/me/humdingers/saves/1")).toHaveLength(1), { timeout: 4_000 });
   expect(JSON.parse(String(requests("PUT", "/v1/me/humdingers/saves/1")[0][1]?.body))).toEqual({ data: save(300) });
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes("audio"))).toBe(false);
+});
+
+it("tells the game an admin may watch the demo and to record the visit (ADR 0113)", async () => {
+  class Gzip {}
+  vi.stubGlobal("CompressionStream", Gzip);
+  vi.stubGlobal("DecompressionStream", Gzip);
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (String(url).endsWith("/v1/me")) return json({ isAdmin: true });
+    if (String(url).endsWith("/v1/me/humdingers/saves") && !init?.method) return json({ saves: [] });
+    return new Response(null, { status: 204 });
+  });
+  const { unmount } = render(<HumdingersHost />);
+  await screen.findByTitle("Humdingers");
+  expect(window.HUMDINGERS_HOST).toEqual({ v: 1, admin: true, record: true });
+  unmount();
+  expect(window.HUMDINGERS_HOST).toBeUndefined();
+});
+
+it("keeps the demo from a player and records nothing where the browser cannot gzip", async () => {
+  vi.stubGlobal("CompressionStream", undefined);
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (String(url).endsWith("/v1/me")) return json({ isAdmin: false });
+    if (String(url).endsWith("/v1/me/humdingers/saves") && !init?.method) return json({ saves: [] });
+    return new Response(null, { status: 204 });
+  });
+  render(<HumdingersHost />);
+  await screen.findByTitle("Humdingers");
+  expect(window.HUMDINGERS_HOST).toEqual({ v: 1, admin: false, record: false });
+  act(() => { window.dispatchEvent(new Event("pagehide")); });
+  expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/tapes/"))).toBe(false);
 });

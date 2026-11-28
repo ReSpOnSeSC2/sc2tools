@@ -18,7 +18,8 @@ const ann: HumdingersPlayer = {
   userId: "user/ann", displayName: "AnnPlays", battleTag: "Ann#1234", email: "ann@example.com",
   sessions: 2, activeSeconds: 4_500, lastAt: "2026-11-27T11:00:00.000Z", maxChapter: 3, save: { slots: 2, playtime: 9_000, chapter: 4, savedAt: "2026-11-27T10:30:00.000Z" },
   recent: [
-    { startedAt: "2026-11-27T10:00:00.000Z", lastAt: "2026-11-27T11:00:00.000Z", activeSeconds: 3_600, maxChapter: 3, saved: true },
+    { startedAt: "2026-11-27T10:00:00.000Z", lastAt: "2026-11-27T11:00:00.000Z", activeSeconds: 3_600, maxChapter: 3, saved: true,
+      session: "visit-ann-1", tape: { build: "19bbccd577ad", chunks: 12, bytes: 9_000, ticks: 14_700, final: true, summary: null } },
     { startedAt: "2026-11-26T09:00:00.000Z", lastAt: "2026-11-26T09:20:00.000Z", activeSeconds: 900, maxChapter: 2, saved: false },
   ],
 };
@@ -83,6 +84,11 @@ it("names each player and opens their individual sessions", () => {
   expect(sessions[1].textContent).toContain("Yes");
   expect(sessions[2].textContent).toContain("15 min");
   expect(sessions[2].textContent).toContain("No");
+  // a session with a run tape can be watched (ADR 0113); one without shows a dash
+  const watch = within(sessions[1]).getByRole("link", { name: /^Watch the session of .* for AnnPlays$/ });
+  expect(watch.getAttribute("href")).toBe("/admin/humdingers/watch/user%2Fann/visit-ann-1");
+  expect(watch.textContent).toBe("Watch 4:05");
+  expect(within(sessions[2]).queryByRole("link")).toBeNull();
   fireEvent.click(within(annRow).getByRole("button", { name: "Hide 2 sessions for AnnPlays" }));
   expect(screen.queryByRole("table", { name: "Sessions for AnnPlays, newest first" })).toBeNull();
 });

@@ -24,7 +24,7 @@ export const metadata = pageMetadata({
     "How SC2 Tools processes replay data, connected streaming accounts, and private StarCraft II replay files.",
 });
 
-const LAST_UPDATED = "2026-11-27";
+const LAST_UPDATED = "2026-11-28";
 /** Settings tab with export, history deletion and account deletion. */
 const DATA_SETTINGS_HREF = "/settings?tab=backups";
 const LIST_CLASS = "list-disc space-y-2 pl-6";
@@ -428,6 +428,16 @@ function HumdingersPrivacy() {
         account&apos;s saves (in-game play time, chapter and when you last saved),
         to understand how the game is played. Play sessions are included when
         you export or delete your account.
+      </p>
+      <p>
+        Each visit is also recorded as a replay of your play: the buttons you
+        press in the game and when, plus the saves, settings and save times the
+        game reads in your browser, so the replay starts exactly as your visit
+        did. It records nothing outside the game: no screen capture, camera,
+        microphone or other pages. SC2 Tools administrators can watch these
+        replays in the game to see how it is played and where players get
+        stuck. Replays are kept with your account for 90 days and are included
+        when you export or delete your account.
       </p>
       <p>
         The same reports also add to daily totals that hold no names. To count

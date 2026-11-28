@@ -6,8 +6,9 @@ const PRIVATE = "private, no-store";
 
 /**
  * Humdingers account saves and play reports for the /play/humdingers host
- * page (ADR 0102). Every route needs a signed-in website account; desktop
- * agent device tokens cannot read or write game saves.
+ * page (ADR 0102, 0103), and the chunks of each visit's run tape (ADR 0113).
+ * Every route needs a signed-in website account; desktop agent device tokens
+ * cannot read or write game saves or tapes.
  * @param {{humdingers: import('../services/humdingers').HumdingersService, auth: import('express').RequestHandler}} deps
  */
 function buildHumdingersRouter(deps) {
@@ -43,6 +44,15 @@ function buildHumdingersRouter(deps) {
   router.post("/me/humdingers/plays", ...player, async (req, res, next) => {
     try {
       await deps.humdingers.recordPlay(userIdOf(req), req.body);
+      res.status(204).end();
+    } catch (error) { next(error); }
+  });
+
+  // One chunk of the visit's run tape, under the visit's play session id.
+  router.post("/me/humdingers/tapes/:session", ...player, async (req, res, next) => {
+    try {
+      res.set("Cache-Control", PRIVATE);
+      await deps.humdingers.putTapeChunk(userIdOf(req), req.params.session, req.body);
       res.status(204).end();
     } catch (error) { next(error); }
   });

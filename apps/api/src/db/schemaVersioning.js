@@ -339,8 +339,15 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  // The optional ``tape`` totals (ADR 0113) are additive: a row without
+  // them has no tape, so v1 rows need no migration.
   [COLLECTIONS.HUMDINGERS_PLAY_SESSIONS]: {
     collection: COLLECTIONS.HUMDINGERS_PLAY_SESSIONS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.HUMDINGERS_TAPE_CHUNKS]: {
+    collection: COLLECTIONS.HUMDINGERS_TAPE_CHUNKS,
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },

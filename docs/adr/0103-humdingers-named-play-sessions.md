@@ -1,6 +1,7 @@
 # ADR 0103: Humdingers play sessions are kept with the account
 
-Status: Accepted, November 27, 2026. Amends ADR 0102
+Status: Accepted, November 27, 2026. Amended by ADR 0113 (`docs/adr/0113-humdingers-run-tapes.md`):
+a session can also carry a run tape that admins replay. Amends ADR 0102
 (`docs/adr/0102-humdingers-account-saves-and-play-stats.md`): play reports no
 longer stay anonymous. The anonymous daily totals remain.
 
