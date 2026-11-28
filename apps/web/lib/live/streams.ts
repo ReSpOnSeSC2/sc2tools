@@ -60,7 +60,7 @@ function viewerCountOf(value: unknown): number {
   return typeof value === "number" && value > 0 ? Math.trunc(value) : 0;
 }
 
-function readStream(value: unknown): LiveStream | null {
+export function readStream(value: unknown): LiveStream | null {
   if (!isRow(value) || !isPlatform(value.platform)) return null;
   const url = channelUrl(value.platform, value.url);
   const id = textOr(value, "id", "");

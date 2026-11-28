@@ -133,7 +133,7 @@ export const SETTINGS_FIELDS = [
   { id: "chat-tts", tab: "chat", section: "tts", label: "Text-to-speech", synonyms: ["TTS volume", "text to speech", "read chat aloud", "chat voice"] },
   { id: "chat-translation", tab: "chat", section: "translation", label: "Chat translation", synonyms: ["translate", "chat language"] },
   { id: "chat-commands", tab: "chat", section: "commands", label: "Chat commands", synonyms: ["Nightbot", "command snippets", "rank command"] },
-  { id: "twitch-automation", tab: "chat", section: "twitch-automation", label: "Twitch automation", synonyms: ["predictions", "channel points"] },
+  { id: "twitch-automation", tab: "chat", section: "twitch-automation", label: "Twitch automation", synonyms: ["predictions", "channel points", "raids", "raid finder"] },
   { id: "stream-dock", tab: "chat", section: "dock", label: "Stream Dock", synonyms: ["Dock URL", "OBS dock", "stream controls"] },
   { id: "chat-bot", tab: "chat", section: "bot", label: "Chat bot", synonyms: ["bot account", "bot login", "chatbot"] },
   { id: "voice-readout", tab: "voice", section: "voice-readout", label: "Voice readout", synonyms: ["scouting voice", "speech volume", "voice notifications", "spoken opponent"] },
