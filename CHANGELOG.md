@@ -499,6 +499,26 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.26.0
+
+- Optional **Set channel tags** and **Set category to StarCraft II** switches
+  on the Streams page set your Twitch and Kick tags from the matchup, race and
+  league at each game start, keep tags you set by hand, and move the channel
+  to StarCraft II only when a game starts under another category.
+- Optional **Add a chapter to the OBS recording** marks each game start in a
+  Hybrid MP4 recording on OBS 30.2 or newer.
+- **Stream Guardian** warns you off-stream, with a silent tray notice and a
+  Stream Dock banner, when your microphone stays muted, frames drop, a game
+  starts while OBS is neither streaming nor recording, or you stay on a break
+  scene long after your last game. Each warning is off until you turn it on.
+- The loading card shows the Randomizer's draw as a still: the build's first
+  steps and its opening units for every race, or the units alone when only
+  **Draw opening units** is on. It repeats the OBS widget's draw for the game.
+- The Streams page groups its automatic switches by when they run.
+- The check-in cards stop repainting and waking in game: the end card's busy
+  bar no longer animates, and overlay click-through no longer checks focus
+  while no overlay is open.
+
 ### Agent 0.25.11
 
 - Choose **Session**, **Head-to-head**, or **Both** for automatic stream
