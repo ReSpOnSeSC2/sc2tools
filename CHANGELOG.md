@@ -5213,7 +5213,7 @@ release preparation, not a signed or published 0.24.9 installer.
   rounded to 100, the map, the length and the age, and never name the other
   player. The finder ships closed: until `SC2TOOLS_LADDER_VODS_ENABLED` is set
   the page says it is not available yet and nothing calls SC2Pulse. Searches
-  are cached for five minutes and leave at most once a second. See ADR 0110.
+  are cached for five minutes and leave at most once a second. See ADR 0111.
 
 ## [agent-v0.5.13] - 2026-05-09
 

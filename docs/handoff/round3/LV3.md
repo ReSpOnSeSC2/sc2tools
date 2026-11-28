@@ -1,6 +1,6 @@
 # LV3: ladder VODs
 
-**Built, gate off (G2).** `/ladder-vods` finds recent ladder games with a Twitch VOD: pick matchup, rating band, length band and map, get ten a page with a link that opens the VOD at the game. `GET /v1/ladder-vods` is public and rate limited; with `SC2TOOLS_LADDER_VODS_ENABLED` unset it answers `{ available: false }`, the page says the finder is not available yet, and nothing reaches SC2Pulse or Twitch (ADR 0110).
+**Built, gate off (G2).** `/ladder-vods` finds recent ladder games with a Twitch VOD: pick matchup, rating band, length band and map, get ten a page with a link that opens the VOD at the game. `GET /v1/ladder-vods` is public and rate limited; with `SC2TOOLS_LADDER_VODS_ENABLED` unset it answers `{ available: false }`, the page says the finder is not available yet, and nothing reaches SC2Pulse or Twitch (ADR 0111).
 
 **Decisions.**
 - Fixed choices only; the server maps them to SC2Pulse `race`, `raceVersus`, `ratingMin/Max`, `durationMin/Max`, `mapId`, plus an opaque `after` cursor. The Map menu is the live 1v1 pool among the maps SC2Pulse's feed showed (seed 55370 to 55378, new ones learned), sent with each answer.

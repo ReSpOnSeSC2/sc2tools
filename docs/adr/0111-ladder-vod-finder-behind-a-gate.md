@@ -1,4 +1,4 @@
-# ADR 0110: The ladder VOD finder ships behind a gate
+# ADR 0111: The ladder VOD finder ships behind a gate
 
 Status: Accepted, November 28, 2026. Adds `apps/api/src/services/ladderVods.js`,
 `ladderVodSearch.js`, `twitchVideoChannels.js`, `routes/ladderVods.js` and the
