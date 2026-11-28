@@ -199,12 +199,14 @@ badges and records, and tall cards scroll. **Compact build names** restores the
 smaller view. Known opponent identities appear in both check-ins as
 **vs Barcode (aka KnownPlayer)**, including with loading-screen scouting hidden.
 The **Randomizer settings** screen silently manages the matchup's eligible pool
-and shows the saved pick. In the loading check-in, **Randomize** selects and saves
-one build even when the separate widget is closed. Every display uses that same
-result; animation, sounds and Randomizer speech stay in the separate widget.
-Under the saved pick the loading card shows the draw as a still: the build's
-first steps and its opening Gateway unit, or both units of a 2 Gate build, the
-same units the widget reveals for that game.
+and its **Draw a build order** switch, and shows the saved pick. In the loading
+check-in, **Randomize** selects and saves one build even when the separate widget
+is closed. Every display uses that same result; animation, sounds and Randomizer
+speech stay in the separate widget. Under the saved pick the loading card shows
+the draw as a still: the build's first steps and its opening unit, or both units
+of a 2 Gate build or a two-building opener, the same units the widget reveals
+for that game. With only **Draw opening units** on (set on the web), the card
+shows the units alone, and keeps them in the **Locked in** bar.
 Selection failures show a message and allow retry. Hidden settings do not poll
 the account; opening them refreshes the saved pool. Failed saves retain the draft
 and allow retry. The settings page displays the saved result without drawing again.
