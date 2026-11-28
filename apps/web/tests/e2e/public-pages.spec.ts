@@ -229,7 +229,8 @@ test("landing What's new sits above Humdingers with sized pictures and no layout
   expect(await page.evaluate(() => document.querySelector("#whats-new")?.nextElementSibling?.id)).toBe("humdingers");
   const cards = section.locator("article");
   await expect(cards).toHaveCount(6);
-  for (const image of await section.locator("img").all()) {
+  for (const card of await cards.all()) await expect(card.locator("img:visible")).toHaveCount(1);
+  for (const image of await section.locator("img:visible").all()) {
     await image.scrollIntoViewIfNeeded();
     await expect.poll(() => image.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
     expect(await image.getAttribute("alt")).toBeTruthy();
@@ -239,6 +240,18 @@ test("landing What's new sits above Humdingers with sized pictures and no layout
     const box = await card.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThan(0);
     await expect(card.getByRole("link").first()).toHaveCSS("min-height", "44px");
+  }
+  const width = page.viewportSize()?.width ?? 0;
+  if (width >= 768 && width < 1024) {
+    const tools = section.locator("#whats-new-stream-tools + ul article");
+    const [first, last] = [await tools.first().boundingBox(), await tools.last().boundingBox()];
+    expect(last!.width, "the last tile of a three-card group fills its tablet row").toBeGreaterThan(first!.width * 1.8);
+  }
+  const shown = (name: string) => section.locator(`#${name}-title`).locator("xpath=ancestor::article").locator("img:visible").getAttribute("src");
+  for (const [theme, other] of [["light", "dark"], ["dark", "light"]]) {
+    await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+    expect(decodeURIComponent((await shown("randomizer-draws")) ?? "")).toContain(`whats-new-randomizer-${theme}`);
+    expect(decodeURIComponent((await shown("randomizer-draws")) ?? "")).not.toContain(other);
   }
 });
 

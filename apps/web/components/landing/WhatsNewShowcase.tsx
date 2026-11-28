@@ -6,7 +6,9 @@ import {
   NEW_FEATURE_GROUPS,
   type NewFeatureAvailability,
   type NewFeatureCard,
+  type NewFeatureCardSize,
   type NewFeatureGroup,
+  type NewFeatureImage,
 } from "@/lib/landingNewFeatures";
 
 /**
@@ -23,30 +25,40 @@ const BADGE_TONES: Record<NewFeatureAvailability, string> = {
 };
 const CARD = "flex h-full min-w-0 flex-col gap-4 rounded-2xl border border-line bg-bg-surface/70 p-5 shadow-card sm:p-6";
 const GROUP_COLUMNS = { 1: "", 3: "md:grid-cols-2 lg:grid-cols-3" } as const;
-const CARD_SPAN: Record<NewFeatureCard["size"], string> = {
-  lead: "md:col-span-2",
+
+/** The orphan of a three-column group takes the whole tablet row and lays out like a feature card. */
+export const ORPHAN_SPAN = "md:col-span-2 lg:col-span-1";
+const ORPHAN_LAYOUT = "md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-center md:max-lg:gap-6";
+const CARD_LAYOUT: Record<NewFeatureCardSize, string> = {
+  feature: "md:grid md:grid-cols-[minmax(0,1fr)_20rem] md:items-center md:gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]",
   tile: "",
-  wide: "",
+  wide: "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-center lg:gap-8",
+};
+const PICTURE_FIRST: Record<NewFeatureCardSize, string> = { feature: "md:order-last", tile: "", wide: "lg:order-last" };
+const FRAME_WIDTH: Record<NewFeatureCardSize, string> = { feature: "max-w-[22rem]", tile: "max-w-sm", wide: "" };
+
+/** The width each picture is shown at, so next/image serves a file at least that wide. */
+export const PICTURE_SIZES: Record<NewFeatureCardSize, string> = {
+  feature: "(min-width: 1024px) 352px, (min-width: 768px) 320px, calc(100vw - 80px)",
+  tile: "(min-width: 1024px) 376px, (min-width: 768px) 50vw, calc(100vw - 80px)",
+  wide: "(min-width: 1024px) 640px, calc(100vw - 112px)",
 };
 
-const WIDE_LAYOUT = "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-center lg:gap-8";
-const SIDE_BY_SIDE_LAYOUT = "md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-center md:max-lg:gap-6";
-
-function layoutClasses(wide: boolean, sideBySide: boolean): string {
-  if (wide) return WIDE_LAYOUT;
-  return sideBySide ? SIDE_BY_SIDE_LAYOUT : "";
-}
+// The site theme is the data-theme attribute on the root; with none set it is dark.
+const IN_LIGHT_ONLY = "hidden [:root[data-theme=light]_&]:block";
+const IN_DARK_ONLY = "[:root[data-theme=light]_&]:hidden";
 
 export function WhatsNewShowcase() {
   return (
     <section id="whats-new" aria-labelledby="whats-new-heading" className="mt-20 scroll-mt-24 md:mt-28">
-      <p className="hud-label">Just shipped</p>
+      <p className="hud-label">Latest releases</p>
       <h2 id="whats-new-heading" className="mt-2 font-display text-h2 font-bold leading-tight tracking-tight text-text">
         What&rsquo;s new
       </h2>
       <p className="mt-3 max-w-prose text-body-lg text-text-muted">
-        A Randomizer that draws for every race, new tools for your stream and a
-        live directory. Cards marked Desktop app 0.26.0 need the Windows app.
+        A Randomizer that draws for every race and new tools for your stream,
+        with a live stream directory on its way. Cards marked Desktop app 0.26.0
+        need the Windows app.
       </p>
       {NEW_FEATURE_GROUPS.map((group) => <FeatureGroup key={group.id} group={group} />)}
     </section>
@@ -57,44 +69,34 @@ function FeatureGroup({ group }: { group: NewFeatureGroup }) {
   const headingId = `whats-new-${group.id}`;
   return (
     <div className="mt-10">
-      <h3 id={headingId} className="font-display text-2xl font-bold tracking-tight text-text">{group.title}</h3>
+      <h3 id={headingId} className="font-display text-h3 font-bold text-text">{group.title}</h3>
       <ul aria-labelledby={headingId} className={`mt-4 grid gap-4 ${GROUP_COLUMNS[group.columns]}`}>
-        {group.cards.map((card, index) => (
-          <li key={card.id} className={`min-w-0 ${CARD_SPAN[card.size]} ${isOrphan(group, index) ? "md:col-span-2 lg:col-span-1" : ""}`}>
-            <FeatureCard card={card} sideBySide={isOrphan(group, index)} />
-          </li>
-        ))}
+        {group.cards.map((card, index) => {
+          const orphan = isOrphan(group, index);
+          return (
+            <li key={card.id} className={`min-w-0 ${orphan ? ORPHAN_SPAN : ""}`}>
+              <FeatureCard card={card} orphan={orphan} />
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
 }
 
 /** The last card of a three-column group would sit alone in a two-column row on a tablet. */
-function isOrphan(group: NewFeatureGroup, index: number): boolean {
+export function isOrphan(group: NewFeatureGroup, index: number): boolean {
   return group.columns === 3 && index === group.cards.length - 1;
 }
 
-function FeatureCard({ card, sideBySide }: { card: NewFeatureCard; sideBySide: boolean }) {
-  const wide = card.size === "wide";
-  const { image } = card;
+function FeatureCard({ card, orphan }: { card: NewFeatureCard; orphan: boolean }) {
+  const { size } = card;
   return (
-    <article aria-labelledby={`${card.id}-title`} className={`${CARD} ${layoutClasses(wide, sideBySide)}`}>
-      <div
-        className={`grid min-w-0 place-items-center overflow-hidden rounded-xl border border-line bg-bg-elevated/40 ${wide ? "lg:order-last" : ""}`}
-        style={{ aspectRatio: card.size === "tile" ? "2 / 1" : `${image.width} / ${image.height}` }}
-      >
-        <Image
-          src={image.src}
-          alt={image.alt}
-          width={image.width}
-          height={image.height}
-          sizes={wide ? "(min-width: 1024px) 640px, (min-width: 768px) 50vw, 100vw" : "(min-width: 1024px) 380px, (min-width: 768px) 50vw, 100vw"}
-          className="block h-full w-full object-contain"
-        />
-      </div>
+    <article aria-labelledby={`${card.id}-title`} className={`${CARD} ${CARD_LAYOUT[size]} ${orphan ? ORPHAN_LAYOUT : ""}`}>
+      <Picture image={card.image} size={size} />
       <div className="flex min-w-0 flex-1 flex-col gap-3">
         <p><span className={`${BADGE_BASE} ${BADGE_TONES[card.availability]}`}>{AVAILABILITY_LABELS[card.availability]}</span></p>
-        <h4 id={`${card.id}-title`} className="font-display text-xl font-bold leading-snug tracking-tight text-text">{card.title}</h4>
+        <h4 id={`${card.id}-title`} className="font-display text-h4 font-bold text-text">{card.title}</h4>
         <p className="max-w-prose text-body text-text-muted">{card.text}</p>
         {card.note ? <p className="text-caption font-semibold text-warning">{card.note}</p> : null}
         <Link
@@ -106,5 +108,27 @@ function FeatureCard({ card, sideBySide }: { card: NewFeatureCard; sideBySide: b
         </Link>
       </div>
     </article>
+  );
+}
+
+/** A framed picture. The frame keeps the file's aspect ratio, so nothing moves as it loads. */
+function Picture({ image, size }: { image: NewFeatureImage; size: NewFeatureCardSize }) {
+  const themed = Boolean(image.dark);
+  const classes = `block h-full w-full ${image.fade ? "[mask-image:linear-gradient(to_bottom,#000_80%,transparent)]" : ""}`;
+  const shared = { width: image.width, height: image.height, sizes: PICTURE_SIZES[size], className: classes };
+  return (
+    <div
+      className={`w-full min-w-0 overflow-hidden rounded-xl border border-line bg-bg-elevated/40 ${FRAME_WIDTH[size]} ${PICTURE_FIRST[size]}`}
+      style={{ aspectRatio: `${image.width} / ${image.height}` }}
+    >
+      {themed ? (
+        <>
+          <Image src={image.src} alt={image.alt} {...shared} className={`${classes} ${IN_LIGHT_ONLY}`} />
+          <Image src={image.dark!} alt={image.alt} {...shared} className={`${classes} ${IN_DARK_ONLY}`} />
+        </>
+      ) : (
+        <Image src={image.src} alt={image.alt} {...shared} />
+      )}
+    </div>
   );
 }
