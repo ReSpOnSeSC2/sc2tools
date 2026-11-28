@@ -18,7 +18,7 @@ import type {
   StudioTimer,
 } from "@/lib/multichat/useStudioState";
 import { DockLazyPanel } from "./DockLazyPanel";
-import { loadBrollLibrary } from "./dockLazyLoaders";
+import { loadBrollLibrary, loadRaidFinder } from "./dockLazyLoaders";
 import { Timer, Shuffle, ListOrdered, Volume2, VolumeX, SkipForward, X } from "lucide-react";
 
 import type { DockPost } from "./dockActions";
@@ -379,6 +379,7 @@ export function DockScenes({
           {STUDIO_SCENE_LABELS[mode]}
         </DockButton>)}
       </div>
+      {token && scene?.mode === "ending" ? <DockLazyPanel loader={loadRaidFinder} label="raid finder" componentProps={{ token }} reserve="min-h-96 rounded-lg border border-border bg-bg-elevated/40 p-3" /> : null}
     </div></fieldset>
   );
 }

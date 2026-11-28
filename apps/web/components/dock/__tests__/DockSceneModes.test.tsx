@@ -51,3 +51,17 @@ it("keeps scene controls and presets usable when browser storage throws", async 
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Intermission" })); });
   expect(screen.getByRole("button", { name: "Tea break" })).toBeTruthy();
 });
+it.each([["ending", true], ["brb", false], ["starting", false], ["intermission", false]] as const)("%s scene: the raid finder is loaded only for Stream ending (%s)", async (mode, shown) => {
+  const fetcher = vi.fn(async () => new Response(JSON.stringify({ reason: null, platforms: { twitch: "ok", kick: "ok" }, candidates: [], pending: null, history: [] }), { status: 200 }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<DockScenes token="one" scene={{ mode, message: "", countdownEndsAt: null, setAtMs: 1 }} broll={broll} busy={false} onPost={onPost} />);
+  if (shown) await screen.findByText("No StarCraft II channels are live right now.");
+  else await act(async () => { await Promise.resolve(); });
+  expect(screen.queryByRole("heading", { name: "Raid a channel" }) !== null).toBe(shown);
+  expect(fetcher).toHaveBeenCalledTimes(shown ? 1 : 0);
+  vi.unstubAllGlobals();
+});
+it("without a Dock token the raid finder is not offered", () => {
+  render(<DockScenes scene={{ mode: "ending", message: "", countdownEndsAt: null, setAtMs: 1 }} broll={broll} busy={false} onPost={onPost} />);
+  expect(screen.queryByRole("heading", { name: "Raid a channel" })).toBeNull();
+});

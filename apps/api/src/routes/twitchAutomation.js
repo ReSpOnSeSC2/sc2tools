@@ -5,10 +5,13 @@ const { sha256 } = require("../util/hash");
 const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
 const rateLimit = /** @type {any} */ (rateLimitModule).default || rateLimitModule;
 
+const { mountRaidRoutes } = require("./twitchRaidRoutes");
+
 /** @param {{auth:import('express').RequestHandler,
  * automation:import('../services/twitchAutomation').TwitchAutomationService,
  * status:import('../services/twitchAutomationStatus').TwitchAutomationStatus,
- * tokens:import('../services/overlayTokens').OverlayTokensService}} deps */
+ * tokens:import('../services/overlayTokens').OverlayTokensService,
+ * raids?:import('../services/twitchRaids').TwitchRaidsService|null}} deps */
 function buildTwitchAutomationRouter(deps) {
   const router = express.Router();
   /** @param {string} lane @param {number} max @param {number} windowMs */
@@ -16,7 +19,7 @@ function buildTwitchAutomationRouter(deps) {
     store: new BoundedRateLimitStore({ maxEntries: 1024 }),
     /** @param {import('express').Request} req */
     keyGenerator: req => `twitch-automation:${lane}:${sha256(String(req.params.token || req.auth?.userId || ""))}` });
-  router.use(["/me/twitch-automation", "/multichat/:token/twitch-automation"], (_req, res, next) => { res.set("Cache-Control", "private, no-store"); res.vary("Authorization"); next(); });
+  router.use(["/me/twitch-automation", "/multichat/:token/twitch-automation", "/me/twitch-raids", "/multichat/:token/raids"], (_req, res, next) => { res.set("Cache-Control", "private, no-store"); res.vary("Authorization"); next(); });
   router.get("/me/twitch-automation", deps.auth, limiter("settings", 12, 60_000), async (req, res, next) => {
     try {
       if (req.auth?.source !== "clerk") { res.status(403).json({ error: { code: "clerk_required" } }); return; }
@@ -57,6 +60,7 @@ function buildTwitchAutomationRouter(deps) {
       res.json({ current: { gameKey: body.gameKey, ...result } });
     } catch (error) { next(error); }
   });
+  if (deps.raids) mountRaidRoutes(router, { raids: deps.raids, auth: deps.auth, tokens: deps.tokens, tokenAuth, limiter });
   return router;
 }
 module.exports = { buildTwitchAutomationRouter };

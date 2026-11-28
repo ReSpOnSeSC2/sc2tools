@@ -6,6 +6,7 @@ const {
   PLATFORMS,
 } = require("../services/platformIntegrations");
 const { WebhookVerificationError } = require("../services/platformWebhooks");
+const { TWITCH_PURPOSE_SCOPE } = require("../services/twitchPurposes");
 
 /**
  * Mixed-auth router: OAuth callbacks and signed webhooks are public; account
@@ -39,7 +40,7 @@ function buildPlatformIntegrationsRouter(deps) {
       const platform = parsePlatform(req.params.platform);
       res.set("Cache-Control", "no-store");
       const purpose = req.body?.purpose === undefined ? "alerts" : req.body.purpose;
-      if (!["alerts", "streaming", "predictions", "chat", "rewards"].includes(purpose) || (purpose === "predictions" || purpose === "rewards") && platform !== "twitch") {
+      if (!["alerts", "streaming", "chat"].includes(purpose) && !Object.hasOwn(TWITCH_PURPOSE_SCOPE, purpose) || Object.hasOwn(TWITCH_PURPOSE_SCOPE, purpose) && platform !== "twitch") {
         throw new PlatformIntegrationError(400, "oauth_purpose_invalid", "Unsupported account connection purpose.");
       }
       res.json(await deps.integrations.begin(session.userId, platform, { purpose }));

@@ -96,6 +96,7 @@ const { TwitchAutomationProvider } = require("./services/twitchAutomationProvide
 const { TwitchAutomationReceipts } = require("./services/twitchAutomationReceipts");
 const { TwitchAutomationStatus } = require("./services/twitchAutomationStatus");
 const { buildTwitchAutomationRouter } = require("./routes/twitchAutomation");
+const { createTwitchRaids } = require("./services/twitchRaids");
 const { buildAgentStreamingRouter } = require("./routes/agentStreaming");
 const { YoutubeStreamingService } = require("./services/youtubeStreaming");
 const { StreamChaptersService } = require("./services/streamChapters");
@@ -578,10 +579,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   // served PUBLICLY by routes/ladderMeta.js for the analyzer's Ladder
   // Pulse (the old /meta page now redirects to the /guides pages).
   const ladderMeta = new LadderMetaService(deps.db, { logger: deps.logger });
-  const liveStreams = new LiveStreamsService({
-    config: deps.config.platformIntegrations,
-    log: deps.logger,
-  });
+  const liveStreams = new LiveStreamsService({ config: deps.config.platformIntegrations, log: deps.logger });
   const scoutingIdentities = new ScoutingIdentitiesService(deps.db);
   const scoutingForecast = new ScoutingForecastService(ladderMeta);
   // Skill Fingerprint — replay-derived build, game-length, and matchup
@@ -884,6 +882,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     provider: new TwitchRewardProvider(new TwitchAutomationProvider({ clientId: deps.config.platformIntegrations?.twitch?.clientId || "" })),
     actions: new TwitchRewardActions({ users, tokens: overlayTokens, studio: multichatStudio, customBuilds, buildIntents, broker: liveGameBroker, io: deps.io }),
   }) : null;
+  const twitchRaids = createTwitchRaids({ db: deps.db, config: deps.config, integrations: platformIntegrations, liveStreams });
   // A saved, renamed or deleted custom build changes the check-in options:
   // drop the cached lists so "Add new build" can confirm the new build at once.
   customBuilds.onDefinitionsChanged = (userId) => {
@@ -1126,7 +1125,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   } });
   return withOwnerDataServices({
     gameStatsWrites: games.gameStatsWrites,
-    userRevision, userCache, sessionPolicy, sessionHistory, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, twitchRewards, chatStats, chatCommands,
+    userRevision, userCache, sessionPolicy, sessionHistory, jobLedger, adminAudit, gameControls, gameMoments, twitchAutomation, twitchRewards, twitchRaids, chatStats, chatCommands,
     privateSearch,
     users,
     activation, notes: /** @type {import('./services/notes').NotesService} */ (opponents.notes),
@@ -1661,7 +1660,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   }));
   if (services.twitchRewards) app.use(SERVICE.ROUTE_PREFIX, buildTwitchRewardsRouter({ auth, rewards: services.twitchRewards }));
   if (services.twitchAutomation) app.use(SERVICE.ROUTE_PREFIX, buildTwitchAutomationRouter({
-    auth, automation: services.twitchAutomation, tokens: services.overlayTokens,
+    auth, automation: services.twitchAutomation, tokens: services.overlayTokens, raids: services.twitchRaids,
     status: new TwitchAutomationStatus({ automation: services.twitchAutomation, broker: services.liveGameBroker }),
   }));
   app.use(SERVICE.ROUTE_PREFIX, buildYoutubeStreamingRouter({

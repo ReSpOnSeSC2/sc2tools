@@ -5197,6 +5197,17 @@ release preparation, not a signed or published 0.24.9 installer.
 - The widget's unit reveal loads on demand, so the overlay page loads less up
   front. Agent 0.26.0. See ADR 0109.
 
+### Raid finder
+
+- Pick **Stream ending** in the Stream Dock and a **Raid a channel** panel lists the live
+  StarCraft II channels: small channels first, then channels you raided or that raided
+  you, then the rest, never your own. **Start raid** and **Cancel raid** each ask first and
+  show Twitch's answer in place; a raid Twitch accepted is reported as queued, not done.
+  The Dock keeps a history of raids sent and received.
+- Raids use their own Twitch permission (**Connect raids** in Settings, Chat & alerts) and
+  start off, and the server owner turns them on separately. Without the permission the list
+  still shows, with links. Kick has no raid call, so its channels are links only. See ADR 0110.
+
 ### Landing page: what's new
 
 - A What's new section sits directly above Humdingers on the home page. It

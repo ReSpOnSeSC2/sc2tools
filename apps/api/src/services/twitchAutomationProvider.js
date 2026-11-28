@@ -36,7 +36,7 @@ class TwitchAutomationProvider {
   /** @param {{clientId:string,timeoutMs?:number}} deps */
   constructor({ clientId, timeoutMs = 12_000 }) { this.clientId = clientId; this.timeoutMs = timeoutMs; }
 
-  /** @param {Grant} grant @param {string} path @param {'GET'|'POST'|'PATCH'} method @param {object} [body] @param {number} [maxBytes] */
+  /** @param {Grant} grant @param {string} path @param {'GET'|'POST'|'PATCH'|'DELETE'} method @param {object} [body] @param {number} [maxBytes] */
   async request(grant, path, method, body, maxBytes = MAX_BYTES) {
     const controller = new AbortController(); let dispatched = false;
     /** @type {{reader:ReadableStreamDefaultReader<Uint8Array>|null}} */ const stream = { reader: null };
@@ -48,10 +48,11 @@ class TwitchAutomationProvider {
           await grant.assertCurrent(); controller.signal.throwIfAborted(); dispatched = true;
           const response = await grant.boundedFetch(`https://api.twitch.tv/helix/${path}`, { method, redirect: "error", signal: controller.signal,
             headers: { Authorization: `Bearer ${grant.accessToken}`, "Client-Id": this.clientId, ...(body ? { "Content-Type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
-          if (!response.ok || response.status !== 200) {
+          if (!response.ok || response.status !== (method === "DELETE" ? 204 : 200)) {
             void response.body?.cancel().catch(() => {});
             throw new TwitchAutomationProviderError("twitch_automation_rejected", response.status, write && (response.status >= 500 || response.ok));
           }
+          if (response.status === 204) { await grant.assertCurrent(); return null; }
           if (Number(response.headers.get("content-length") || 0) > maxBytes || !response.body) throw new TwitchAutomationProviderError("twitch_automation_response_invalid", 502, write);
           const reader = response.body.getReader(); stream.reader = reader; const chunks = []; let bytes = 0;
           while (true) {
