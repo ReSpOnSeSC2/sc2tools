@@ -21,6 +21,8 @@ const KINDS = new Set([
   "reward",
 ]);
 
+/** @typedef {{ platform: string, kind: string, user: string, amount?: string, atMs: number, id: string }} StoredEvent */
+
 class PlatformEventsService {
   /**
    * @param {{platformEvents: import('mongodb').Collection}} db
@@ -37,6 +39,9 @@ class PlatformEventsService {
     this.overlayTokens = deps.overlayTokens;
     this.now = deps.now || Date.now;
     this.logger = deps.logger || null;
+    /** Told about each newly stored event (never a duplicate); set by a service that keeps its own history.
+     * @type {((userId: string, event: StoredEvent) => void) | null} */
+    this.afterInsert = null;
   }
 
   /**
@@ -73,6 +78,7 @@ class PlatformEventsService {
       if (err && /** @type {any} */ (err).code === 11000) return false;
       throw err;
     }
+    try { this.afterInsert?.(userId, deliveredEvent); } catch (err) { this._log("warn", { err: safeError(err) }, "platform event hook failed"); }
     if (this.io) {
       /** @type {Array<Record<string, any>>} */
       let tokens = [];

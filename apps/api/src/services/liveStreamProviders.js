@@ -19,7 +19,8 @@ const TWITCH_STREAMS_URL = "https://api.twitch.tv/helix/streams";
 const KICK_API = "https://api.kick.com/public/v2";
 
 /**
- * One live broadcast, identical for every platform.
+ * One live broadcast, identical for every platform. `broadcasterId` is the
+ * Twitch user id, which a raid needs; Kick channels have none.
  *
  * @typedef {{
  *   id: string,
@@ -30,6 +31,7 @@ const KICK_API = "https://api.kick.com/public/v2";
  *   viewers: number,
  *   startedAt: string,
  *   url: string,
+ *   broadcasterId?: string,
  * }} LiveStream
  */
 /** @typedef {{ clientId: string, clientSecret: string, redirectUri: string }} ProviderCredentials */
@@ -58,7 +60,7 @@ function cleanText(value, max) {
 
 /**
  * @param {{
- *   id?: unknown, user_login?: unknown, user_name?: unknown, title?: unknown,
+ *   id?: unknown, user_id?: unknown, user_login?: unknown, user_name?: unknown, title?: unknown,
  *   language?: unknown, viewer_count?: unknown, started_at?: unknown,
  * }} row
  * @returns {LiveStream | null}
@@ -75,6 +77,7 @@ function normalizeTwitchStream(row) {
     viewers: viewerCount(row.viewer_count),
     startedAt: cleanText(row.started_at, 40),
     url: `https://www.twitch.tv/${login}`,
+    ...(/^[1-9][0-9]{0,29}$/.test(String(row.user_id)) ? { broadcasterId: String(row.user_id) } : {}),
   };
 }
 

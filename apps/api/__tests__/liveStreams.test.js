@@ -125,6 +125,14 @@ describe("LiveStreamsService", () => {
     expect(streams[0]).toMatchObject({ title: "A B", language: "other" });
   });
 
+  it("keeps the Twitch user id a raid needs, and only when Twitch sent a valid one", async () => {
+    const { fetchImpl } = bothProviders({
+      [TWITCH]: () => json({ data: [twitchRow(1, 5, { user_id: "9001" }), twitchRow(2, 4, { user_id: "../x" }), twitchRow(3, 3)] }),
+    });
+    const { streams } = await service(fetchImpl, clock, { twitch: CREDENTIALS }).list();
+    expect(streams.map(s => s.broadcasterId)).toEqual(["9001", undefined, undefined]);
+  });
+
   it("serves one cached list for a minute and shares one in-flight fetch", async () => {
     const { fetchImpl, calls } = bothProviders();
     const live = service(fetchImpl, clock);
