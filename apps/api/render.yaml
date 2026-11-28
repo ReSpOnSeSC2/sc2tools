@@ -125,6 +125,10 @@ services:
       # Dashboard-managed rollout for the SC2Pulse aggregate snapshot job.
       - key: SC2TOOLS_PULSE_BALANCE_ENABLED
         sync: false
+      # Gate for the public ladder VOD finder (SC2Pulse matches). Leave unset (off)
+      # until the SC2Pulse maintainer has agreed to this use; set to 1 to open it.
+      - key: SC2TOOLS_LADDER_VODS_ENABLED
+        sync: false
       # Official creator-account notifications. Values stay dashboard-managed:
       # sync:false preserves them across Blueprint redeploys and never stores a
       # credential in Git. Callback defaults already target api.sc2tools.com;

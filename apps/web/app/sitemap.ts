@@ -48,6 +48,7 @@ const ROUTES: Route[] = [
   { path: "/balance/claim", priority: 0.7, changeFrequency: "daily" },
   { path: "/permit", priority: 0.7, changeFrequency: "daily" },
   { path: "/live", priority: 0.7, changeFrequency: "hourly" },
+  { path: "/ladder-vods", priority: 0.6, changeFrequency: "hourly" },
   ...BALANCE_MATCHUPS.map(matchup => ({ path: `/balance/${matchup.toLowerCase()}`, priority: 0.6, changeFrequency: "daily" as const })),
   ...BALANCE_LEAGUES.map(league => ({ path: `/balance/league/${league}`, priority: 0.6, changeFrequency: "daily" as const })),
   { path: "/match", priority: 0.6, changeFrequency: "monthly", lastModified: "2026-11-12" },

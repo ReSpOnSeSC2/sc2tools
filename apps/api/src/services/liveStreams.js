@@ -200,4 +200,4 @@ class LiveStreamsService {
   }
 }
 
-module.exports = { LiveStreamsService, CACHE_TTL_MS, STALE_LIMIT_MS };
+module.exports = { LiveStreamsService, credentialsOf, CACHE_TTL_MS, STALE_LIMIT_MS };
