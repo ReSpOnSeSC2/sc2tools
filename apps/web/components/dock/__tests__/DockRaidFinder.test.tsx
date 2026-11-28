@@ -14,7 +14,7 @@ const writes = () => fetcher.mock.calls.filter(call => call[1]?.method === "POST
 
 beforeEach(() => {
   fetcher = vi.fn(async (_url: string, init?: RequestInit) => (init?.method === "POST"
-    ? reply({ ...base, pending: { id: "h1", channel: "Chan1", at: Date.now() }, history: [entry()], result: { state: "queued", channel: "Chan1" } }) : reply(base)));
+    ? reply({ ...base, pending: { id: "h1", channel: "Chan1", at: Date.now(), state: "queued" }, history: [entry()], result: { state: "queued", channel: "Chan1" } }) : reply(base)));
   vi.stubGlobal("fetch", fetcher);
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
@@ -39,9 +39,11 @@ it("Start raid asks first, sends nothing until confirmed, and then shows the que
   expect(writes()).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Start raid on Chan1" }));
   fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Start raid" }));
-  await screen.findByText(/Raid to Chan1 queued/);
+  await screen.findByText(/90 seconds.*unless you cancel/);
   expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({ action: "start", streamId: "twitch:1", confirmed: true });
+  expect(screen.getByText(/raid to Chan1/)).toBeTruthy();
   expect(screen.queryByText(/raid to Chan1 sent|done/i)).toBeNull();
+  expect(screen.queryByRole("status")).toBeNull();
   expect(screen.getByRole("button", { name: "Cancel raid" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Start raid on Chan2" })).toBeNull();
 });
@@ -49,7 +51,7 @@ it("Start raid asks first, sends nothing until confirmed, and then shows the que
 it("cancel is confirmed too, then reports Twitch's answer", async () => {
   fetcher.mockImplementation(async (_url: string, init?: RequestInit) => (init?.method === "POST"
     ? reply({ ...base, history: [entry({ state: "canceled" })], result: { state: "canceled", channel: "Chan1" } })
-    : reply({ ...base, pending: { id: "h1", channel: "Chan1", at: Date.now() }, history: [entry()] })));
+    : reply({ ...base, pending: { id: "h1", channel: "Chan1", at: Date.now(), state: "queued" }, history: [entry()] })));
   render(<DockRaidFinder token="dock-token" />);
   fireEvent.click(await screen.findByRole("button", { name: "Cancel raid" }));
   expect(writes()).toHaveLength(0);
@@ -81,6 +83,14 @@ it("without the permission the list still shows with links, and no Start raid bu
   expect(screen.getByRole("link", { name: "Raid settings" }).getAttribute("href")).toBe("/settings?tab=chat#twitch-raids");
 });
 
+it("the blocker line sits under the list, so the rows are where the skeleton was", async () => {
+  fetcher.mockResolvedValue(reply({ ...base, reason: "raid_permission_required" }));
+  render(<DockRaidFinder token="dock-token" />);
+  const row = await screen.findByRole("link", { name: /Chan1/ });
+  const note = screen.getByText(/Allow raids in Settings/);
+  expect(row.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
 it("a Kick channel is listed for its link only", async () => {
   fetcher.mockResolvedValue(reply({ ...base, candidates: [stream(7, { id: "kick:7", platform: "kick", url: "https://kick.com/k7", raidable: false, channel: "K7" })] }));
   render(<DockRaidFinder token="dock-token" />);
@@ -88,11 +98,12 @@ it("a Kick channel is listed for its link only", async () => {
   expect(screen.queryByRole("button", { name: /Start raid/ })).toBeNull();
 });
 
-it("an empty list and a failed load each say so, and Refresh reads again", async () => {
+it("an empty list and a failed load each say so, and Retry reads again", async () => {
   fetcher.mockResolvedValueOnce(reply({ error: { code: "x", message: "The API is down." } }, 503)).mockResolvedValue(reply({ ...base, candidates: [] }));
   render(<DockRaidFinder token="dock-token" />);
   expect((await screen.findByRole("alert")).textContent).toContain("The API is down.");
-  fireEvent.click(screen.getByRole("button", { name: "Refresh channels" }));
+  expect(screen.queryByText(/Use Refresh to try again/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   await screen.findByText("No StarCraft II channels are live right now.");
   expect(screen.queryByRole("alert")).toBeNull();
 });
@@ -103,4 +114,72 @@ it("the history lists raids sent and received, a queued raid still only queued",
   await screen.findByText("Raid history");
   expect(screen.getByText(/Queued/)).toBeTruthy();
   expect(screen.getByText(/12 viewers joined/)).toBeTruthy();
+});
+
+it("a raid waiting for Twitch is not called queued and cannot be cancelled yet; it is read again soon", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  let calls = 0;
+  fetcher.mockImplementation(async () => reply(++calls === 1
+    ? { ...base, pending: { id: "h1", channel: "Chan1", at: Date.now(), state: "pending" }, history: [entry({ state: "pending" })] }
+    : { ...base, pending: { id: "h1", channel: "Chan1", at: Date.now(), state: "queued" }, history: [entry()] }));
+  render(<DockRaidFinder token="dock-token" />);
+  await screen.findByText(/Waiting for Twitch to answer/);
+  expect(screen.queryByRole("button", { name: "Cancel raid" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Start raid on/ })).toBeNull();
+  await vi.advanceTimersByTimeAsync(5100);
+  await screen.findByRole("button", { name: "Cancel raid" });
+  expect(screen.getByText(/90 seconds/)).toBeTruthy();
+});
+
+it("a raid Twitch did not confirm can be cancelled and blocks a second start", async () => {
+  fetcher.mockResolvedValue(reply({ ...base, pending: { id: "h1", channel: "Chan1", at: Date.now(), state: "unconfirmed" }, history: [entry({ state: "unconfirmed" })] }));
+  render(<DockRaidFinder token="dock-token" />);
+  await screen.findByText(/did not confirm this raid/);
+  expect(screen.getByRole("button", { name: "Cancel raid" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Start raid on/ })).toBeNull();
+});
+
+it("when Twitch says a raid is already queued that this Dock never recorded, Cancel raid is offered", async () => {
+  fetcher.mockImplementation(async (_url: string, init?: RequestInit) => (init?.method === "POST"
+    ? reply({ error: { code: "raid_already_queued", message: "Twitch says a raid is already queued. Cancel it first." } }, 409) : reply(base)));
+  render(<DockRaidFinder token="dock-token" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Start raid on Chan1" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Start raid" }));
+  await screen.findByText(/Twitch already holds a raid/);
+  expect(screen.getByRole("button", { name: "Cancel raid" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Start raid on/ })).toBeNull();
+});
+
+it("Cancel raid disappears with the countdown: the list is read again when the window ends", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const startedAt = Date.now();
+  let calls = 0;
+  fetcher.mockImplementation(async () => reply(++calls === 1
+    ? { ...base, pending: { id: "h1", channel: "Chan1", at: startedAt, state: "queued" }, history: [entry()] } : base));
+  render(<DockRaidFinder token="dock-token" />);
+  await screen.findByRole("button", { name: "Cancel raid" });
+  await vi.advanceTimersByTimeAsync(119_000);
+  expect(calls).toBe(1);
+  await vi.advanceTimersByTimeAsync(2000);
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Cancel raid" })).toBeNull());
+  expect(calls).toBe(2);
+  expect(screen.getByRole("button", { name: "Start raid on Chan1" })).toBeTruthy();
+});
+
+it("keyboard focus lands on Cancel raid after a confirmed start, not on the page body", async () => {
+  render(<DockRaidFinder token="dock-token" />);
+  const opener = await screen.findByRole("button", { name: "Start raid on Chan1" });
+  opener.focus();
+  fireEvent.click(opener);
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Start raid" }));
+  const cancel = await screen.findByRole("button", { name: "Cancel raid" });
+  await waitFor(() => expect(document.activeElement).toBe(cancel));
+});
+
+it("every raid button keeps a 44 px target on touch screens", async () => {
+  render(<DockRaidFinder token="dock-token" />);
+  for (const button of [await screen.findByRole("button", { name: "Start raid on Chan1" }), screen.getByRole("button", { name: "Refresh channels" })]) {
+    expect(button.className).toContain("[@media(pointer:coarse)]:min-h-11");
+    expect(button.className).toContain("min-h-11");
+  }
 });

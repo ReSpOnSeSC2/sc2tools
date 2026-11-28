@@ -17,8 +17,8 @@ class IslandBoundary extends Component<{ label: string; retry: () => void; child
 /** Imports stay outside render. Retry invokes the stable factory again, while
  * a held/failed optional chunk cannot keep an initially suspended Dock in an
  * endless retry cycle as other control snapshots commit. */
-export function DockLazyPanel<Props extends object>({ loader, label, componentProps }: {
-  loader: () => Promise<ComponentType<Props>>; label: string; componentProps: Props;
+export function DockLazyPanel<Props extends object>({ loader, label, componentProps, reserve = "" }: {
+  loader: () => Promise<ComponentType<Props>>; label: string; componentProps: Props; reserve?: string;
 }) {
   const [attempt, retry] = useState(0);
   const [loaded, setLoaded] = useState<{ loader: typeof loader; attempt: number; component: ComponentType<Props> | null; failed: boolean } | null>(null);
@@ -33,6 +33,6 @@ export function DockLazyPanel<Props extends object>({ loader, label, componentPr
   const ready = loaded?.loader === loader && loaded.attempt === attempt ? loaded : null;
   return <IslandBoundary key={attempt} label={label} retry={() => retry(value => value + 1)}>
     {ready?.failed ? <div role="alert" className="space-y-2 text-caption text-text-muted"><p>Couldn&apos;t load {label}. Your other Dock controls still work.</p><DockButton onClick={() => retry(value => value + 1)}>Retry {label}</DockButton></div>
-      : ready?.component ? createElement(ready.component, componentProps) : <p role="status" className="text-caption text-text-muted">Loading {label}…</p>}
+      : ready?.component ? createElement(ready.component, componentProps) : <p role="status" className={`text-caption text-text-muted ${reserve}`}>Loading {label}…</p>}
   </IslandBoundary>;
 }

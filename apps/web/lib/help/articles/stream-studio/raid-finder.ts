@@ -32,7 +32,7 @@ const article: HelpArticle = {
       type: "steps",
       items: [
         "Press **Start raid** next to a Twitch channel and confirm. Twitch accepts the request and counts down 90 seconds.",
-        "The Dock shows **Queued**, not done. Twitch does not report back when a queued raid goes, so the history keeps saying Queued.",
+        "The Dock shows **Queued**, not done, with a Cancel raid button for two minutes. Twitch does not report back when a queued raid goes, so the history keeps saying Queued. A raid Twitch did not confirm shows as **Not confirmed**: it is never sent twice, and you can cancel it or check Twitch.",
         "Press **Cancel raid** and confirm to stop it before the countdown ends. The Dock shows Twitch's answer in place, including when Twitch has no raid left to cancel.",
       ],
     },

@@ -5,7 +5,32 @@ import { RAID_WINDOW_MS, raidResultMessage, readRaidResult, readRaidView, type R
 
 export type RaidBusy = "refresh" | "start" | "cancel";
 type RaidAction = { action: "start"; streamId: string } | { action: "cancel" };
+type Failure = { message: string; code: string };
 const TIMEOUT_MS = 20_000;
+/** While Twitch has not answered, the list is read again this often. */
+const WAITING_POLL_MS = 5000;
+const NO_FAILURE: Failure = { message: "", code: "" };
+
+async function requestRaids(url: string, action: RaidAction | undefined, signal: AbortSignal): Promise<unknown> {
+  const init: RequestInit = action
+    ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...action, confirmed: true }) }
+    : {};
+  const response = await fetch(url, { ...init, signal, cache: "no-store" });
+  if (!response.ok) throw await buildApiError(response);
+  return response.json();
+}
+
+function readAnswer(body: unknown): { view: RaidView; notice: string } {
+  const view = readRaidView(body);
+  if (!view) throw new Error("Twitch raid data was not in the expected shape. Refresh and try again.");
+  const result = readRaidResult(body);
+  return { view, notice: result ? raidResultMessage(result) : "" };
+}
+
+function toFailure(error: unknown): Failure {
+  const { message, code } = error as { message?: string; code?: string };
+  return { message: message || "Raids are unavailable right now. Try again.", code: code ?? "" };
+}
 
 /**
  * The raid finder's data for one Stream Dock: the ranked list, and Start and
@@ -15,7 +40,7 @@ const TIMEOUT_MS = 20_000;
  */
 export function useDockRaids(token: string) {
   const [view, setView] = useState<RaidView | null>(null);
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState(NO_FAILURE);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState<RaidBusy | null>("refresh");
   const running = useRef<AbortController | null>(null);
@@ -27,27 +52,17 @@ export function useDockRaids(token: string) {
     const controller = new AbortController();
     running.current = controller;
     setBusy(kind);
-    if (!keepError) setError("");
+    if (!keepError) setFailure(NO_FAILURE);
     if (kind !== "refresh") setNotice("");
     try {
-      const body = await boundedApiRequest(async signal => {
-        const init: RequestInit = action
-          ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...action, confirmed: true }) }
-          : {};
-        const response = await fetch(url, { ...init, signal, cache: "no-store" });
-        if (!response.ok) throw await buildApiError(response);
-        return response.json() as Promise<unknown>;
-      }, TIMEOUT_MS, controller.signal);
-      const next = readRaidView(body);
+      const body = await boundedApiRequest(signal => requestRaids(url, action, signal), TIMEOUT_MS, controller.signal);
       if (controller.signal.aborted) return false;
-      if (!next) throw new Error("Twitch raid data was not in the expected shape. Refresh and try again.");
-      setView(next);
-      const result = readRaidResult(body);
-      if (result) setNotice(raidResultMessage(result));
+      const answer = readAnswer(body);
+      setView(answer.view);
+      if (answer.notice) setNotice(answer.notice);
       return true;
-    } catch (failure) {
-      if (controller.signal.aborted) return false;
-      setError((failure as { message?: string }).message || "Raids are unavailable right now. Try again.");
+    } catch (error) {
+      if (!controller.signal.aborted) setFailure(toFailure(error));
       return false;
     } finally {
       if (running.current === controller) {
@@ -74,13 +89,18 @@ export function useDockRaids(token: string) {
     return () => { closed.current = true; running.current?.abort(); running.current = null; };
   }, [refresh]);
 
-  // A queued raid stops being cancellable once Twitch's countdown is over.
-  const pendingAt = view?.pending?.at;
+  // A raid that may be live is read again: soon while Twitch has not answered,
+  // and when Twitch's countdown is over, so Cancel raid goes with it.
+  const pending = view?.pending ?? null;
   useEffect(() => {
-    if (!pendingAt) return;
-    const timer = setTimeout(() => { void refresh(); }, Math.max(1000, pendingAt + RAID_WINDOW_MS - Date.now()));
+    if (!pending) return;
+    const wait = pending.state === "pending" ? WAITING_POLL_MS : Math.max(1000, pending.at + RAID_WINDOW_MS - Date.now());
+    const timer = setTimeout(() => { void refresh(); }, wait);
     return () => clearTimeout(timer);
-  }, [pendingAt, refresh]);
+  }, [pending, refresh]);
 
-  return { view, error, notice, busy, refresh, start, cancel };
+  // Twitch itself says a raid is queued that this Dock has no record of
+  // (started in Twitch chat, say), so Cancel raid is offered for it.
+  const queuedElsewhere = failure.code === "raid_already_queued";
+  return { view, error: failure.message, queuedElsewhere, notice, busy, refresh, start, cancel };
 }

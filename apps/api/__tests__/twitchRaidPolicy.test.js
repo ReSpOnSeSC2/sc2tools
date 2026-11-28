@@ -30,8 +30,11 @@ describe("rankCandidates", () => {
     expect(rows[0].relation).toBe("raided_by");
   });
   test("a raid that was cancelled, failed or never confirmed does not count as raided", () => {
-    const history = ["canceled", "failed", "unconfirmed", "pending", "closed"].map((state, i) => entry("out", "Chan1", NOW - i, state));
+    const history = ["canceled", "failed", "unconfirmed", "pending"].map((state, i) => entry("out", "Chan1", NOW - i, state));
     expect(rankCandidates([stream(1, 100)], { history, self })[0].relation).toBeNull();
+  });
+  test("a raid whose cancel found nothing left (it already went) still counts as raided", () => {
+    expect(rankCandidates([stream(1, 100)], { history: [entry("out", "Chan1", NOW, "closed")], self })[0].relation).toBe("raided");
   });
   test("the streamer's own Twitch and Kick channels never appear", () => {
     const streams = [stream(1, 3), stream(2, 4), { ...stream(3, 5), platform: "kick", id: "kick:9", channel: "MyKick", broadcasterId: undefined }];
@@ -65,6 +68,7 @@ describe("history and the pending raid", () => {
   test("only the newest raid out, still inside Twitch's countdown, can be pending", () => {
     expect(livePendingRaid([entry("out", "A", NOW - 1000)], NOW)).toMatchObject({ channel: "A" });
     expect(livePendingRaid([entry("out", "A", NOW - RAID_WINDOW_MS - 1)], NOW)).toBeNull();
+    expect(livePendingRaid([entry("out", "A", NOW - 5, "unconfirmed")], NOW)).toMatchObject({ state: "unconfirmed" });
     expect(livePendingRaid([entry("out", "A", NOW - 5, "canceled")], NOW)).toBeNull();
     expect(livePendingRaid([entry("in", "A", NOW)], NOW)).toBeNull();
   });

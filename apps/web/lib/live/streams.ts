@@ -34,11 +34,11 @@ const CHANNEL_HOSTS: Record<LivePlatform, string> = { twitch: "www.twitch.tv", k
 const STATES: readonly PlatformState[] = ["ok", "stale", "error", "off"];
 const REQUEST_TIMEOUT_MS = 10_000;
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 
-const isRow = (value: unknown): value is Row => typeof value === "object" && value !== null;
+export const isRow = (value: unknown): value is Row => typeof value === "object" && value !== null;
 const isPlatform = (value: unknown): value is LivePlatform => value === "twitch" || value === "kick";
-const isState = (value: unknown): value is PlatformState => STATES.includes(value as PlatformState);
+export const isState = (value: unknown): value is PlatformState => STATES.includes(value as PlatformState);
 
 /** Links go only to the platform's own channel page, whatever the server sent. */
 function channelUrl(platform: LivePlatform, value: unknown): string | null {

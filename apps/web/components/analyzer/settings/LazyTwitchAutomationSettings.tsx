@@ -18,7 +18,7 @@ export function LazyTwitchAutomationSettings({ loader = loadSettings }: { loader
     finally { clearTimeout(timer); }
   }), [loader, attempt]);
   return <details id="twitch-automation" open={open} onToggle={event => setOpen(event.currentTarget.open)} className="min-w-0 rounded-lg border border-border bg-bg-surface p-3">
-    <summary className="min-h-11 cursor-pointer text-body font-semibold">Twitch automation <span className="ml-2 text-caption font-normal text-text-muted">Optional Predictions, markers and rewards</span></summary>
+    <summary className="min-h-11 cursor-pointer text-body font-semibold">Twitch automation <span className="ml-2 text-caption font-normal text-text-muted">Optional Predictions, markers, rewards and raids</span></summary>
     {open ? <div className="mt-3"><SettingsBoundary key={attempt} retry={() => setAttempt(value => value + 1)}><Suspense fallback={<p role="status" className="text-caption">Loading Twitch automation settings…</p>}><Loaded /><div id="twitch-reward-actions" className="mt-4"><RewardSettings /></div><div id="twitch-raids" className="mt-4"><RaidSettings /></div></Suspense></SettingsBoundary></div> : null}
   </details>;
 }

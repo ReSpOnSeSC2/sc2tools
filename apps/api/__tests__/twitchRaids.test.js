@@ -19,6 +19,7 @@ const { PlatformEventsService } = require("../src/services/platformEvents");
 const { buildTwitchAutomationRouter } = require("../src/routes/twitchAutomation");
 const { scopesForPurpose } = require("../src/services/platformOauthClients");
 const { loadConfig } = require("../src/config/loader");
+const { buildErrorHandler } = require("../src/middleware/errorHandler");
 
 const OWNER = "owner-1", OTHER = "owner-2", TOKEN = "dock-token", SELF_ID = "42";
 const NOW = Date.UTC(2026, 10, 28, 12);
@@ -78,7 +79,6 @@ describe("gates", () => {
     link = [{ ...ready(), scopes: [] }];
     await expect(service.start(OWNER, "twitch:1")).rejects.toMatchObject({ code: "raid_permission_required" });
     link = [{ ...ready(), connected: false }];
-    await expect(service.cancel(OWNER)).rejects.toMatchObject({ code: "connect_twitch" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
   test("raids use their own connect scope and only for Twitch", () => {
@@ -148,9 +148,24 @@ describe("start", () => {
     ["a 200 without the receipt", () => reply(200, { data: [] })],
   ])("%s is unconfirmed, and the raid is never sent a second time", async (_name, answer) => {
     fetchMock.mockResolvedValue(answer());
-    await expect(service.start(OWNER, "twitch:1")).rejects.toMatchObject({ code: "raid_unconfirmed", status: 502 });
+    await expect(service.start(OWNER, "twitch:1")).rejects.toMatchObject({ code: "raid_unconfirmed", status: 409 });
     expect(await history()).toEqual([expect.objectContaining({ state: "unconfirmed" })]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  test("an unconfirmed raid blocks a second start for the countdown, and can be cancelled", async () => {
+    fetchMock.mockResolvedValue(reply(503));
+    await expect(service.start(OWNER, "twitch:1")).rejects.toMatchObject({ code: "raid_unconfirmed" });
+    expect((await service.dockView(OWNER)).pending).toMatchObject({ channel: "Chan1", state: "unconfirmed" });
+    await expect(service.start(OWNER, "twitch:2")).rejects.toMatchObject({ code: "raid_already_queued" });
+    fetchMock.mockResolvedValue(reply(204));
+    await expect(service.cancel(OWNER)).resolves.toMatchObject({ state: "canceled", channel: "Chan1" });
+    expect((await history())[0].state).toBe("canceled");
+  });
+  test("a streamer whose own request is not running is not told it is", async () => {
+    const others = ["a", "b"].map(id => { service.inFlight.add(id); return id; });
+    await expect(service.start(OWNER, "twitch:1")).rejects.toMatchObject({ code: "raid_capacity", status: 429 });
+    others.forEach(id => service.inFlight.delete(id));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
   test("a cancel while the raid request is still running waits for Twitch's answer", async () => {
     let release;
@@ -179,6 +194,34 @@ describe("cancel", () => {
     fetchMock.mockResolvedValue(reply(404));
     await expect(service.cancel(OWNER)).rejects.toMatchObject({ code: "raid_not_pending" });
     expect((await history())[0].state).toBe("closed");
+  });
+  test("a raid that already went still counts as raided, and a cancel after the countdown is closed", async () => {
+    await service.start(OWNER, "twitch:1");
+    now += 100_000;
+    fetchMock.mockResolvedValue(reply(404));
+    await expect(service.cancel(OWNER)).rejects.toMatchObject({ code: "raid_not_pending" });
+    expect((await history())[0].state).toBe("closed");
+    expect((await service.dockView(OWNER)).candidates.find(row => row.channel === "Chan1")).toMatchObject({ relation: "raided" });
+  });
+  test("a cancel settles the raid the Dock showed, not an older queued one", async () => {
+    await users.updateOne({ userId: OWNER }, { $set: { "preferences.twitchRaids.history": [
+      { id: "new", dir: "out", channel: "Chan2", viewers: 300, state: "pending", at: now - 1000 },
+      { id: "old", dir: "out", channel: "Chan1", viewers: 4, state: "queued", at: now - 3_600_000 }] } });
+    await expect(service.cancel(OWNER)).rejects.toMatchObject({ code: "raid_busy" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect((await history()).find(row => row.id === "old").state).toBe("queued");
+    await users.updateOne({ userId: OWNER, "preferences.twitchRaids.history.id": "new" }, { $set: { "preferences.twitchRaids.history.$.state": "queued" } });
+    fetchMock.mockResolvedValue(reply(204));
+    await expect(service.cancel(OWNER)).resolves.toMatchObject({ channel: "Chan2" });
+    expect((await history()).map(row => row.state)).toEqual(["canceled", "queued"]);
+  });
+  test("a queued raid can still be cancelled after the switch, the server gate or the permission is gone", async () => {
+    await service.start(OWNER, "twitch:1");
+    await users.updateOne({ userId: OWNER }, { $set: { "preferences.twitchRaids.enabled": false } });
+    fetchMock.mockResolvedValue(reply(204));
+    const off = build({ enabled: false });
+    await expect(off.cancel(OWNER)).resolves.toMatchObject({ state: "canceled", channel: "Chan1" });
+    expect((await service.dockView(OWNER)).reason).toBe("switch_off");
   });
   test("an unclear cancel is reported as unconfirmed and leaves the raid queued", async () => {
     await service.start(OWNER, "twitch:1");
@@ -214,7 +257,7 @@ describe("Stream Dock routes", () => {
     const tokens = { resolve: jest.fn(async token => (token === TOKEN ? { userId: OWNER } : null)), isReplaced: async () => false, withWrite: (_t, work) => work() };
     const router = buildTwitchAutomationRouter({ auth: (req, _res, next) => { req.auth = { userId: OWNER, source: req.get("x-source") || "clerk" }; next(); }, automation: {}, status: {}, tokens, raids: service });
     const instance = express().use(express.json()).use("/v1", router);
-    instance.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: { code: error.code, message: error.message } }));
+    instance.use(buildErrorHandler({ error: () => {} }));
     return instance;
   };
   const post = body => request(app).post(`/v1/multichat/${TOKEN}/raids`).send(body);
@@ -242,6 +285,15 @@ describe("Stream Dock routes", () => {
     fetchMock.mockResolvedValue(reply(400));
     const refused = await post({ action: "start", streamId: "twitch:2", confirmed: true }).expect(409);
     expect(refused.body.error.code).toBe("raid_refused");
+  });
+  test("an unconfirmed raid reaches the Dock in words, not as a blanked server error", async () => {
+    fetchMock.mockResolvedValue(reply(503));
+    const unconfirmed = await post({ action: "start", streamId: "twitch:1", confirmed: true }).expect(409);
+    expect(unconfirmed.body.error).toMatchObject({ code: "raid_unconfirmed", message: expect.stringContaining("Check Twitch") });
+    now += 4 * 60_000;
+    fetchMock.mockRejectedValue(new Error("down"));
+    const down = await post({ action: "start", streamId: "twitch:2", confirmed: true }).expect(res => expect(res.status).toBeLessThan(500));
+    expect(down.body.error.message).not.toBe("internal_error");
   });
   test("the view carries no provider id and the Settings routes need a signed-in owner", async () => {
     const view = await request(app).get(`/v1/multichat/${TOKEN}/raids`).expect(200);

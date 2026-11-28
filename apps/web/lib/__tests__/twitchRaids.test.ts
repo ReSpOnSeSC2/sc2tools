@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { raidResultMessage, readRaidResult, readRaidSettings, readRaidView } from "../twitchRaids";
+import { PENDING_LABELS, PENDING_TEXT, raidResultMessage, readRaidResult, readRaidSettings, readRaidView } from "../twitchRaids";
 
 const stream = (extra: Record<string, unknown> = {}) => ({
   id: "twitch:1", platform: "twitch", channel: "Chan1", title: "Ladder", language: "en", viewers: 4, startedAt: "2026-11-28T10:00:00Z",
@@ -25,11 +25,12 @@ describe("readRaidView", () => {
   });
   it("reads the pending raid and the history, dropping broken rows", () => {
     const read = readRaidView(view({
-      pending: { id: "a", channel: "Chan1", at: 5 },
+      pending: { id: "a", channel: "Chan1", at: 5, state: "unconfirmed" },
       history: [{ id: "a", dir: "out", channel: "Chan1", viewers: 4, state: "queued", at: 5 }, { id: "b", dir: "in", channel: "Raider", viewers: 12, state: "received", at: 6 },
         { id: "c", dir: "out", channel: "X", state: "teleported", at: 7 }, { id: "d" }],
     }));
-    expect(read?.pending).toEqual({ id: "a", channel: "Chan1", at: 5 });
+    expect(read?.pending).toEqual({ id: "a", channel: "Chan1", at: 5, state: "unconfirmed" });
+    expect(readRaidView(view({ pending: { id: "a", channel: "Chan1", at: 5, state: "canceled" } }))?.pending).toBeNull();
     expect(read?.history.map(row => [row.id, row.dir, row.state])).toEqual([["a", "out", "queued"], ["b", "in", "received"]]);
   });
   it("refuses an answer that is not an object with platforms", () => {
@@ -44,10 +45,11 @@ describe("settings and result", () => {
       .toEqual({ serverEnabled: true, enabled: false, connected: true, permission: true, reason: null });
     expect(readRaidSettings("x")).toBeNull();
   });
-  it("words a queued raid as queued, never as done, and a cancel as confirmed by Twitch", () => {
+  it("a queued raid has no line of its own (its banner says queued), and a cancel is confirmed by Twitch", () => {
     const queued = readRaidResult({ result: { state: "queued", channel: "Chan1" } });
-    expect(raidResultMessage(queued!)).toMatch(/queued.*90 seconds.*unless you cancel/);
-    expect(raidResultMessage(queued!)).not.toMatch(/\bsent\b|\bdone\b/);
+    expect(raidResultMessage(queued!)).toBe("");
+    expect(PENDING_TEXT.queued).toMatch(/90 seconds.*unless you cancel/);
+    expect(`${PENDING_LABELS.queued} ${PENDING_TEXT.queued}`).not.toMatch(/\bsent\b|\bdone\b/);
     expect(raidResultMessage({ state: "canceled", channel: "" })).toBe("Raid cancelled. Twitch confirmed it.");
     expect(readRaidResult({ result: { state: "done", channel: "x" } })).toBeNull();
     expect(readRaidResult({})).toBeNull();

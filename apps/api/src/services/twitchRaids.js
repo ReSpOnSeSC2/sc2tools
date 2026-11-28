@@ -112,7 +112,7 @@ class TwitchRaidsService {
       platforms: live.platforms,
       fetchedAt: live.fetchedAt,
       candidates: rankCandidates(live.streams, { history, self: { twitchId: link.twitchId, kickName: link.kickName } }),
-      pending: pending ? { id: pending.id, channel: pending.channel, at: pending.at } : null,
+      pending: pending ? { id: pending.id, channel: pending.channel, at: pending.at, state: pending.state } : null,
       history,
     };
   }
@@ -123,7 +123,8 @@ class TwitchRaidsService {
    * @template T @param {string} userId @param {(grant: Grant) => Promise<T>} work
    */
   async withRaidGrant(userId, work) {
-    if (this.inFlight.has(userId) || this.inFlight.size >= MAX_IN_FLIGHT) throw raidError("A raid request is already running. Wait for Twitch to answer.", 409, "raid_busy");
+    if (this.inFlight.has(userId)) throw raidError("A raid request is already running. Wait for Twitch to answer.", 409, "raid_busy");
+    if (this.inFlight.size >= MAX_IN_FLIGHT) throw raidError("Raid requests are busy right now. Try again in a few seconds.", 429, "raid_capacity");
     this.inFlight.add(userId);
     try {
       return await this.deps.integrations.withTwitchAutomationGrant(userId, { raids: true }, grant => work(grant));
@@ -163,7 +164,7 @@ class TwitchRaidsService {
         const failure = /** @type {{ status?: number, uncertain?: boolean }} */ (error);
         const unconfirmed = failure.uncertain === true;
         await this.settle(userId, entry.id, unconfirmed ? "unconfirmed" : "failed", unconfirmed ? "provider_unconfirmed" : `twitch_${failure.status ?? "error"}`);
-        throw unconfirmed ? raidError("Twitch did not confirm the raid. Check Twitch before trying again; this raid was not sent twice.", 502, "raid_unconfirmed")
+        throw unconfirmed ? raidError("Twitch did not confirm the raid. Check Twitch before trying again; this raid was not sent twice.", 409, "raid_unconfirmed")
           : raidFailureError(failure);
       }
       await this.settle(userId, entry.id, "queued");
@@ -171,11 +172,17 @@ class TwitchRaidsService {
     });
   }
 
-  /** Cancel the pending raid. Twitch answers 404 when none is left.
-   * @param {string} userId */
+  /**
+   * Cancel the raid the Dock showed as pending. Twitch answers 404 when none
+   * is left. A cancel is never blocked by the switch or the server gate, so a
+   * raid started before they went off can still be stopped; the Twitch grant
+   * itself still needs the raid permission.
+   * @param {string} userId
+   */
   async cancel(userId) {
-    const history = await this.requireReady(userId);
-    const latest = history.find(entry => entry.dir === "out" && entry.state === "queued");
+    const { history } = await this.stored(userId);
+    const latest = livePendingRaid(history, this.now());
+    if (latest?.state === "pending") throw raidError("Twitch has not answered the raid yet. Wait a moment, then cancel.", 409, "raid_busy");
     return this.withRaidGrant(userId, async grant => {
       try {
         await this.deps.provider.cancel(grant);
@@ -185,7 +192,7 @@ class TwitchRaidsService {
           if (latest) await this.settle(userId, latest.id, "closed");
           throw raidError("Twitch has no raid to cancel. It may already have started.", 409, "raid_not_pending");
         }
-        if (failure.uncertain === true) throw raidError("Twitch did not confirm the cancel. Check Twitch to see whether the raid is still queued.", 502, "cancel_unconfirmed");
+        if (failure.uncertain === true) throw raidError("Twitch did not confirm the cancel. Check Twitch to see whether the raid is still queued.", 409, "cancel_unconfirmed");
         throw raidFailureError(failure);
       }
       if (latest) await this.settle(userId, latest.id, "canceled");

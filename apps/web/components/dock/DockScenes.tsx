@@ -379,7 +379,7 @@ export function DockScenes({
           {STUDIO_SCENE_LABELS[mode]}
         </DockButton>)}
       </div>
-      {token && scene?.mode === "ending" ? <DockLazyPanel loader={loadRaidFinder} label="raid finder" componentProps={{ token }} /> : null}
+      {token && scene?.mode === "ending" ? <DockLazyPanel loader={loadRaidFinder} label="raid finder" componentProps={{ token }} reserve="min-h-96 rounded-lg border border-border bg-bg-elevated/40 p-3" /> : null}
     </div></fieldset>
   );
 }

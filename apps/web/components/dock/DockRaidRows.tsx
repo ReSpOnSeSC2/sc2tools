@@ -1,5 +1,5 @@
 "use client";
-import { ArrowDownLeft, ArrowUpRight, ExternalLink } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronDown, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { formatDateTime } from "@/lib/i18n/format";
@@ -7,6 +7,8 @@ import { languageName, PLATFORM_NAMES, viewerLabel } from "@/lib/live/streams";
 import { RAID_STATE_LABELS, RELATION_LABELS, type RaidCandidate, type RaidEntry } from "@/lib/twitchRaids";
 import { DockButton } from "./DockControls";
 
+/** The Dock's coarse-pointer sizes (40 px) come later in the stylesheet than a plain min-h, so touch sizes are restated for 44 px targets. */
+export const RAID_TOUCH = "min-h-11 min-w-11 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11";
 const ROW = "grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2";
 
 /** One channel: the whole row opens it; Start raid sits above that link. */
@@ -25,7 +27,7 @@ export function RaidRow({ stream, canStart, busy, onStart }: { stream: RaidCandi
       <p className="truncate text-micro text-text-muted">{facts.join(" · ")}</p>
     </div>
     {canStart && stream.raidable
-      ? <DockButton disabled={busy} onClick={onStart} aria-label={`Start raid on ${stream.channel}`} className="relative z-10 min-h-11 min-w-24">Start raid</DockButton>
+      ? <DockButton disabled={busy} onClick={onStart} aria-label={`Start raid on ${stream.channel}`} className="relative z-10 min-h-11 min-w-24 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-24">Start raid</DockButton>
       : <ExternalLink aria-hidden className="size-4 text-text-muted" />}
   </li>;
 }
@@ -37,14 +39,16 @@ export function RaidListSkeleton() {
       <div className="space-y-1.5"><SkeletonBar className="h-4 w-32 max-w-full" /><SkeletonBar className="h-3 w-44 max-w-full" /></div>
       <SkeletonBar className="h-11 w-24" />
     </div>)}
+    <SkeletonBar className="h-11 w-full" />
   </SkeletonRegion>;
 }
 
 /** Raids out and in, newest first. A queued raid stays "Queued": Twitch does not report when it goes. */
 export function RaidHistory({ entries }: { entries: RaidEntry[] }) {
-  return <details className="rounded-md border border-border">
-    <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 text-caption font-semibold">
+  return <details className="group rounded-md border border-border">
+    <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-caption font-semibold">
       Raid history<span className="font-normal text-text-muted">{entries.length}</span>
+      <ChevronDown aria-hidden className="ml-auto size-4 text-text-muted transition-transform group-open:rotate-180 motion-reduce:transition-none" />
     </summary>
     {entries.length === 0 ? <p className="border-t border-border px-3 py-2 text-caption text-text-muted">No raids yet. Raids you send, and raids you receive while raids are switched on, appear here.</p>
       : <ul className="divide-y divide-border border-t border-border px-3">

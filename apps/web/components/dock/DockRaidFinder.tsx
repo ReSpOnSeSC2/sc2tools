@@ -1,15 +1,27 @@
 "use client";
-import { useId, useState } from "react";
-import Link from "next/link";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { RefreshCw } from "lucide-react";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { degradedPlatforms, listingIsOff, platformList, viewerLabel } from "@/lib/live/streams";
-import { BLOCKER_TEXT, type RaidCandidate } from "@/lib/twitchRaids";
 import { DockButton } from "./DockControls";
-import { RaidHistory, RaidListSkeleton, RaidRow } from "./DockRaidRows";
+import { PendingBanner, RaidConfirmDialog, RaidList, RaidNotes, RaidStatus, type RaidConfirm } from "./DockRaidPanels";
+import { RAID_TOUCH, RaidHistory } from "./DockRaidRows";
 import { useDockRaids } from "./useDockRaids";
 
-type Confirm = { kind: "start"; stream: RaidCandidate } | { kind: "cancel" } | null;
+/**
+ * After a confirmed action the button that opened the dialog may be gone, and
+ * the dialog would leave keyboard focus on the page body. Focus goes to the
+ * next thing to do instead: Cancel raid, or the answer.
+ */
+function useFocusAfterAction(panel: RefObject<HTMLElement | null>, dialogOpen: boolean) {
+  const [requested, setRequested] = useState(false);
+  useEffect(() => {
+    if (!requested || dialogOpen) return;
+    setRequested(false);
+    const root = panel.current;
+    if (!root || root.contains(document.activeElement)) return;
+    (root.querySelector<HTMLElement>("[data-raid-cancel]") ?? root.querySelector<HTMLElement>("[data-raid-notice]"))?.focus();
+  }, [requested, dialogOpen, panel]);
+  return () => setRequested(true);
+}
 
 /**
  * Raid finder for the Stream ending scene: live StarCraft II channels, small
@@ -18,54 +30,33 @@ type Confirm = { kind: "start"; stream: RaidCandidate } | { kind: "cancel" } | n
  */
 export function DockRaidFinder({ token }: { token: string }) {
   const titleId = useId();
-  const { view, error, notice, busy, refresh, start, cancel } = useDockRaids(token);
-  const [confirm, setConfirm] = useState<Confirm>(null);
-  const canStart = view !== null && view.reason === null && view.pending === null;
-  const degraded = view ? degradedPlatforms(view.platforms) : [];
+  const panel = useRef<HTMLElement>(null);
+  const { view, error, queuedElsewhere, notice, busy, refresh, start, cancel } = useDockRaids(token);
+  const [confirm, setConfirm] = useState<RaidConfirm>(null);
+  const focusNext = useFocusAfterAction(panel, confirm !== null);
+  const canStart = view !== null && view.reason === null && view.pending === null && !queuedElsewhere;
   const run = async () => {
     if (!confirm) return;
     await (confirm.kind === "start" ? start(confirm.stream.id) : cancel());
     setConfirm(null);
+    focusNext();
   };
-  return <section aria-labelledby={titleId} className="min-w-0 space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-3">
+  return <section ref={panel} aria-labelledby={titleId} className="min-w-0 space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-3">
     <header className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <h3 id={titleId} className="text-caption font-semibold">Raid a channel</h3>
-        <p className="text-micro text-text-muted">Live StarCraft II channels, smallest first.</p>
+        <p className="text-micro text-text-muted">Small channels first, then channels you raided or that raided you.</p>
       </div>
-      <DockButton aria-label="Refresh channels" disabled={busy !== null} onClick={() => void refresh()} className="min-h-11 min-w-11 shrink-0">
+      <DockButton aria-label="Refresh channels" disabled={busy !== null} onClick={() => void refresh()} className={`shrink-0 ${RAID_TOUCH}`}>
         <RefreshCw aria-hidden className={`size-4 ${busy === "refresh" ? "motion-safe:animate-spin" : ""}`} />
       </DockButton>
     </header>
-    <div aria-live="polite" className="space-y-2 empty:hidden">
-      {notice ? <p role="status" className="rounded-md border border-success/40 bg-success/10 px-2.5 py-2 text-caption">{notice}</p> : null}
-      {error ? <p role="alert" className="rounded-md border border-danger/40 bg-danger/10 px-2.5 py-2 text-caption text-danger">{error}</p> : null}
-    </div>
-    {view?.pending ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-accent-cyan/40 bg-accent-cyan/10 px-2.5 py-2">
-      <p className="min-w-0 text-caption"><span className="font-semibold">Queued</span> · raid to {view.pending.channel}</p>
-      <DockButton danger disabled={busy !== null} onClick={() => setConfirm({ kind: "cancel" })} className="min-h-11">Cancel raid</DockButton>
-    </div> : null}
-    {view?.reason ? <p className="text-caption text-text-muted">
-      {BLOCKER_TEXT[view.reason]}{" "}
-      <Link href="/settings?tab=chat#twitch-raids" target="_blank" rel="noopener noreferrer" prefetch={false} className="inline-flex min-h-11 items-center font-semibold text-link underline">Raid settings</Link>
-    </p> : null}
-    {degraded.length ? <p className="text-micro text-text-muted">{platformList(degraded)} could not be refreshed, so some channels may be missing.</p> : null}
-    {!view && busy ? <RaidListSkeleton /> : null}
-    {!view && !busy ? <p className="text-caption text-text-muted">The channel list could not load. Use Refresh to try again.</p> : null}
-    {view && view.candidates.length === 0 ? <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-caption text-text-muted">
-      {listingIsOff(view.platforms) ? "Live channel lists are not set up on this server." : "No StarCraft II channels are live right now."}
-    </p> : null}
-    {view && view.candidates.length > 0 ? <ul className="divide-y divide-border">
-      {view.candidates.map(stream => <RaidRow key={stream.id} stream={stream} canStart={canStart} busy={busy !== null} onStart={() => setConfirm({ kind: "start", stream })} />)}
-    </ul> : null}
+    <RaidStatus notice={notice} error={error} canRetry={view === null} busy={busy !== null} onRetry={() => void refresh()} />
+    <PendingBanner pending={view?.pending ?? null} queuedElsewhere={queuedElsewhere} busy={busy !== null} onCancel={() => setConfirm({ kind: "cancel" })} />
+    <RaidList view={view} canStart={canStart} busy={busy !== null} loading={busy !== null} onStart={stream => setConfirm({ kind: "start", stream })} />
+    {view ? <RaidNotes view={view} /> : null}
     {view ? <RaidHistory entries={view.history} /> : null}
-    <ConfirmDialog open={confirm !== null} focusCancel loading={busy === "start" || busy === "cancel"}
-      title={confirm?.kind === "start" ? `Raid ${confirm.stream.channel}?` : "Cancel the queued raid?"}
-      description={confirm?.kind === "start"
-        ? `${viewerLabel(confirm.stream.viewers)} now. Twitch counts down 90 seconds, then sends your viewers there. You can cancel until it goes.`
-        : "Twitch stops the countdown if the raid has not started yet. The Dock reports what Twitch answers."}
-      confirmLabel={confirm?.kind === "start" ? "Start raid" : "Cancel raid"} cancelLabel={confirm?.kind === "start" ? "Not now" : "Keep raid"}
-      intent={confirm?.kind === "cancel" ? "danger" : "primary"}
+    <RaidConfirmDialog confirm={confirm} loading={busy === "start" || busy === "cancel"}
       onClose={() => { if (busy === null) setConfirm(null); }} onConfirm={() => void run()} />
   </section>;
 }

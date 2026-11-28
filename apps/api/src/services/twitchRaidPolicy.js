@@ -14,7 +14,7 @@ const SMALL_MAX_VIEWERS = 20;
 const MAX_CANDIDATES = 40;
 const HISTORY_LIMIT = 30;
 /** Twitch counts down 90 seconds before a queued raid goes; the rest is slack. */
-const RAID_WINDOW_MS = 3 * 60_000;
+const RAID_WINDOW_MS = 2 * 60_000;
 /** A receipt still "pending" this long after it was written never got an answer. */
 const PENDING_GRACE_MS = 60_000;
 const OUT_STATES = /** @type {const} */ (["pending", "queued", "canceled", "closed", "failed", "unconfirmed"]);
@@ -57,35 +57,38 @@ function raidSettings(raw, strict = false) {
 const channelKey = name => String(name ?? "").trim().toLowerCase();
 
 /**
- * Stored history, trusted for shape only: a receipt that never got Twitch's
- * answer is shown as unconfirmed, never as queued.
+ * One stored row, trusted for shape only; null when it is not a raid entry.
+ * A receipt that never got Twitch's answer is shown as unconfirmed.
  *
- * @param {unknown} raw @param {number} now
- * @returns {RaidEntry[]}
+ * @param {unknown} item @param {number} now
+ * @returns {RaidEntry | null}
  */
-function sanitizeHistory(raw, now) {
-  if (!Array.isArray(raw)) return [];
-  /** @type {RaidEntry[]} */
-  const entries = [];
-  for (const item of raw.slice(0, HISTORY_LIMIT)) {
-    const row = object(item);
-    const dir = row.dir === "in" ? "in" : row.dir === "out" ? "out" : null;
-    const channel = typeof row.channel === "string" ? clip(row.channel, 60) : "";
-    const at = Number(row.at);
-    if (!dir || !channel || typeof row.id !== "string" || !Number.isFinite(at)) continue;
-    const stored = dir === "in" ? "received" : OUT_STATES.find(state => state === row.state) || "unconfirmed";
-    const state = stored === "pending" && now - at > PENDING_GRACE_MS ? "unconfirmed" : stored;
-    entries.push({ id: row.id, dir, channel, viewers: Math.max(0, Math.trunc(Number(row.viewers)) || 0), state, at: Math.trunc(at),
-      ...(typeof row.reason === "string" && row.reason ? { reason: clip(row.reason, 60) } : {}) });
-  }
-  return entries;
+function readEntry(item, now) {
+  const row = object(item);
+  const dir = row.dir === "in" || row.dir === "out" ? row.dir : null;
+  const channel = typeof row.channel === "string" ? clip(row.channel, 60) : "";
+  const at = Number(row.at);
+  if (!dir || !channel || typeof row.id !== "string" || !Number.isFinite(at)) return null;
+  const stored = dir === "in" ? "received" : OUT_STATES.find(state => state === row.state) || "unconfirmed";
+  const lapsed = stored === "pending" && now - at > PENDING_GRACE_MS;
+  const reason = typeof row.reason === "string" && row.reason ? { reason: clip(row.reason, 60) } : {};
+  return { id: row.id, dir, channel, viewers: Math.max(0, Math.trunc(Number(row.viewers)) || 0), state: lapsed ? "unconfirmed" : stored, at: Math.trunc(at), ...reason };
 }
 
-/** The streamer's newest raid out, when it can still be cancelled.
+/** @param {unknown} raw @param {number} now @returns {RaidEntry[]} */
+function sanitizeHistory(raw, now) {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, HISTORY_LIMIT).map(item => readEntry(item, now)).filter(/** @returns {entry is RaidEntry} */ entry => entry !== null);
+}
+
+/**
+ * The streamer's newest raid out while it may still be live on Twitch: queued,
+ * waiting for Twitch, or not confirmed (Twitch may hold it). It blocks a
+ * second start, and a queued or unconfirmed one can be cancelled.
  * @param {RaidEntry[]} history @param {number} now */
 function livePendingRaid(history, now) {
   const latest = history.find(entry => entry.dir === "out");
-  const open = latest && (latest.state === "queued" || latest.state === "pending");
+  const open = latest && (latest.state === "queued" || latest.state === "pending" || latest.state === "unconfirmed");
   return latest && open && now - latest.at < RAID_WINDOW_MS ? latest : null;
 }
 
@@ -100,7 +103,7 @@ function relations(history) {
   /** @type {Map<string, { relation: "raided" | "raided_by", at: number }>} */
   const byChannel = new Map();
   for (const entry of history) {
-    if (entry.dir === "out" && entry.state !== "queued") continue;
+    if (entry.dir === "out" && entry.state !== "queued" && entry.state !== "closed") continue;
     const key = channelKey(entry.channel);
     const seen = byChannel.get(key);
     if (!seen || entry.at > seen.at) byChannel.set(key, { relation: entry.dir === "out" ? "raided" : "raided_by", at: entry.at });
@@ -149,7 +152,7 @@ function describeRaidFailure(error) {
   if (status === 409) return { status: 409, code: "raid_already_queued", message: "Twitch says a raid is already queued. Cancel it first." };
   if (status === 404) return { status: 409, code: "raid_target_unknown", message: "Twitch cannot find that channel." };
   if (status === 400) return { status: 409, code: "raid_refused", message: "Twitch refused this raid. The channel may block you or not accept raids." };
-  return { status: 502, code: "provider_unavailable", message: "Twitch did not answer. Nothing was changed." };
+  return { status: 424, code: "provider_unavailable", message: "Twitch did not answer. Nothing was changed." };
 }
 
 /** @param {{ status?: number }} failure */

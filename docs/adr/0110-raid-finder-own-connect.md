@@ -32,9 +32,14 @@ Status: Accepted, November 28, 2026. Adds `apps/api/src/services/twitchRaids.js`
 3. Start writes a `pending` receipt before Twitch is called, then records
    `queued`, `failed` (Twitch refused) or `unconfirmed` (no clear answer). An
    unconfirmed raid is never sent again by the server, and a start is refused
-   while a raid from the last three minutes is queued. A pending receipt that
-   never got an answer is shown as unconfirmed. Cancel sends `DELETE` and
-   records `canceled`, or `closed` when Twitch has no raid left.
+   while a raid from the last two minutes is queued, waiting or unconfirmed
+   (Twitch counts down 90 seconds). A pending receipt that never got an answer
+   is shown as unconfirmed. Cancel sends `DELETE` for the raid the Dock showed
+   and records `canceled`, or `closed` when Twitch has no raid left (the raid
+   already went, so the channel still counts as raided). Cancel is never
+   blocked by the switch or the server gate, so a raid started before they
+   went off can still be stopped. Failures reach the Dock as 4xx answers: the
+   error handler blanks the message of any 5xx.
 4. History (the last 30 raids sent and received) lives on the user document, so
    account export and erasure already cover it. Incoming raids reach it from
    the stored platform event, only while the switch is on. A queued raid stays
@@ -46,6 +51,8 @@ Status: Accepted, November 28, 2026. Adds `apps/api/src/services/twitchRaids.js`
 
 - One more write permission to approve, by design; reconnecting it is one
   click in Settings.
-- Channels are matched to raid history by display name, since a raid event
-  carries no stable id; two channels renamed to each other's names would share
-  history, which only changes their order.
+- Channels are matched to raid history by display name. The Twitch raid
+  event does carry the sender's user id, but the stored platform event shape
+  that overlays read has no id field, and widening it for a ranking hint was
+  not worth the change. A channel renamed to a name you raided inherits that
+  tag; it only changes order.
