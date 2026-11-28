@@ -75,13 +75,13 @@ class GameTitleAutomation:
     def _sync_is_current(self, generation):
         with self.lock, self.match.lock:
             return (not self.stop_event.is_set() and self._sync_generation == generation
-                    and (not self.match.enabled or self.match.key is None))
+                    and (not self.match.titles or self.match.key is None))
 
     def on_event(self, event):
         self.match.on_event(event)
         with self.lock, self.match.lock:
             # Menu ticks do not retire a post-sync read. A new live title can.
-            if self.match.enabled and self.match.key is not None and self.match.key != self._observed_live_key:
+            if self.match.titles and self.match.key is not None and self.match.key != self._observed_live_key:
                 self._observed_live_key = self.match.key
                 self._sync_generation += 1
         game = getattr(event, "game_state", None)
@@ -163,7 +163,7 @@ class GameTitleAutomation:
             elapsed = self.clock() - self.last_attempt
             automatic = self.ready and elapsed >= REFRESH_SECONDS
             game_id = self.ready_game_id if automatic else None
-            generation = self._sync_generation if not self.match.enabled or self.match.key is None else None
+            generation = self._sync_generation if not self.match.titles or self.match.key is None else None
             if automatic:
                 self.ready = False
                 self.ready_game_id = None

@@ -46,7 +46,9 @@ platforms, enable **Refresh titles at the start of each game** or the independen
 updates run once for each live game when the current opponent is ready.
 Post-game updates use the opponent and results from that same match after
 its replay syncs and run at most once every ten minutes. Both skip unchanged
-titles. Twitch and Kick are selected initially. See [Stream titles](https://sc2tools.com/help/desktop-stream-titles).
+titles. Twitch and Kick are selected initially. Two further switches, off by default,
+set Twitch and Kick channel tags and the StarCraft II category at game start.
+See [Stream titles](https://sc2tools.com/help/desktop-stream-titles).
 
 If you unpair this PC on the website, the desktop window says **This PC was
 unlinked from your account**. Click **Link again** and confirm the new code.

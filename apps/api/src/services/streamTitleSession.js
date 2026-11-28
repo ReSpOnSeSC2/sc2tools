@@ -8,6 +8,21 @@ const { streamTitleMatch, streamTitleCompletedMatch } = require("./streamTitleMa
 const RACES = new Map([["Protoss", "P"], ["Terran", "T"], ["Zerg", "Z"]]);
 const LEAGUES = new Set(["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"]);
 const HISTORY_LIMIT = 512;
+const MAP_EDITION = /\s+(le|ce)$/;
+/** @param {string} name */
+const mapKey = (name) => name.trim().toLowerCase().replace(MAP_EDITION, "");
+
+/** What the channel tags need beyond the match: a running Series, and whether
+ * the map is outside the ladder pool. An unknown pool never marks a game custom.
+ * @param {string} userId @param {{map?:string}|null} currentMatch
+ * @param {{hasActiveSeries?:(userId:string)=>Promise<boolean>,ladderMaps?:()=>Promise<string[]>}} [extras] */
+async function tagContext(userId, currentMatch, extras) {
+  const series = await extras?.hasActiveSeries?.(userId).catch(() => false) === true;
+  const played = currentMatch?.map;
+  const maps = played ? await extras?.ladderMaps?.().catch(() => null) : null;
+  const custom = played && maps?.length ? !maps.some((name) => mapKey(name) === mapKey(played)) : undefined;
+  return { series, ...(custom === undefined ? {} : { custom }) };
+}
 
 /** Private snapshot using the shared session resolver and bounded indexed reads.
  * The optional completed game is scoped to this owner and exact replay ID.
@@ -17,8 +32,9 @@ const HISTORY_LIMIT = 512;
  * @param {() => Record<string, any>|null|undefined} [liveSnapshot]
  * @param {string} [gameId]
  * @param {import('./scoutingIdentities').ScoutingIdentitiesService} [scoutingIdentities]
+ * @param {Parameters<typeof tagContext>[2]} [tagExtras]
  */
-async function streamTitleSession(db, games, userId, liveSnapshot, gameId, scoutingIdentities) {
+async function streamTitleSession(db, games, userId, liveSnapshot, gameId, scoutingIdentities, tagExtras) {
   const session = await games.todaySession(userId, undefined, { reuseRecent: true });
   const now = new Date();
   const since = new Date(now.getTime() - 90 * 86400000);
@@ -55,7 +71,7 @@ async function streamTitleSession(db, games, userId, liveSnapshot, gameId, scout
     ...(session.league && LEAGUES.has(session.league) ? { league: session.league } : {}),
     ...(session.streak ? { streak: session.streak } : {}),
     ...(peak !== undefined ? { peak } : {}), winRates,
-    ...(currentMatch ? { currentMatch } : {}),
+    ...(currentMatch ? { currentMatch, tagContext: await tagContext(userId, currentMatch, tagExtras) } : {}),
     ...(completedMatch ? { completedMatch } : {}),
     history: { since: since.toISOString(), limit: HISTORY_LIMIT, sampled: rows.length,
       capped: rows.length === HISTORY_LIMIT, scope: "Recorded ladder games in the last 90 days; peak uses the current character and race." } };

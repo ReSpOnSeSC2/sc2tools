@@ -9,21 +9,23 @@ from __future__ import annotations
 import copy
 
 from .title_automation import GameTitleAutomation
+from .title_channel_controller import ChannelUpdateMixin
 from .title_live_controller import LiveTitleControllerMixin, MATCH_VALUE_KEYS
 from .title_settings import connection_key, configure_title_settings, load_title_settings
 from .title_template import render_title, title_values
 from .youtube_pair_backend import atomic_json
 
 
-class StreamTitleController(LiveTitleControllerMixin):
+class StreamTitleController(ChannelUpdateMixin, LiveTitleControllerMixin):
     def __init__(self, service):
         self.service = service
         self.settings = load_title_settings(service.backend.config.get("title_automation"), self.owner())
         self.stats = {}
         self.message = "Waiting for synced game statistics."
+        self.channel_message = ""
         self.worker = GameTitleAutomation(self.refresh, last_attempt=self.settings["last_attempt"],
                                           refresh_match=self.refresh_match)
-        self.worker.match.configure(self.settings["on_game_start"])
+        self.configure_game_start()
 
     def connection(self):
         client = self.service.cloud_client
@@ -44,15 +46,18 @@ class StreamTitleController(LiveTitleControllerMixin):
         if self.settings["owner"] != owner:
             self.settings = load_title_settings({}, owner)
             self.stats = {}
+            self.channel_message = ""
             self.message = "Account changed. Automatic titles are off; review the template and platforms."
             self.worker.reset()
         return owner
 
     def snapshot(self):
         self._current()
-        result = {key: copy.deepcopy(self.settings[key]) for key in ("enabled", "on_game_start", "platforms", "template")}
+        result = {key: copy.deepcopy(self.settings[key]) for key in (
+            "enabled", "on_game_start", "channel_tags", "category_guard", "platforms", "template")}
         stats = self._title_stats()
-        result.update(values=title_values(stats), message=self.message,
+        result.update(values=title_values(stats), message=self.message, tag_preview=self.tag_preview(),
+                      channel_message=self.channel_message,
                       match_game_key=stats.get("currentMatch", {}).get("gameKey"))
         return result
 
@@ -69,7 +74,7 @@ class StreamTitleController(LiveTitleControllerMixin):
         configured = configure_title_settings(self.settings, payload, self.owner())
         self._persist(configured)
         self.settings = configured
-        self.worker.match.configure(self.settings["on_game_start"])
+        self.configure_game_start()
         self.worker.preview_pending = True
         self.worker.wake.set()
         self.message = "Automatic title settings saved. No title was published."

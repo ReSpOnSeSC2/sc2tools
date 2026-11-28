@@ -72,7 +72,7 @@ def test_live_title_template_preview_and_explicit_default_off_platform_selection
     controls.enabled.setChecked(True)
     controls.configure()
     assert payloads == [{"action": "configure_title_automation", "template": "SC2 | {mmr} MMR | {record}",
-        "enabled": True, "on_game_start": False,
+        "enabled": True, "on_game_start": False, "channel_tags": False, "category_guard": False,
         "platforms": {"twitch": True, "kick": True, "youtube": False}}]
     widget._completed({"action": "configure_title_automation", "error": "Storage unavailable"})
     assert controls.dirty is True
@@ -598,3 +598,30 @@ def test_obs_details_fetch_worker_returns_secret_only_to_masked_controls(page):
         widget.close()
         widget.deleteLater()
         app.processEvents()
+
+
+def test_channel_switches_start_off_show_the_exact_tags_and_save_only_when_asked(page, monkeypatch):
+    widget, state, app = page
+    state["account_mode"] = "sc2tools"
+    state["title_automation"] = {"enabled": False, "template": "SC2 | {mmr}", "values": {},
+        "platforms": {"twitch": True, "kick": True, "youtube": False}, "tag_preview": []}
+    widget.render(state)
+    controls = widget.title_controls
+    assert not controls.channel_tags.isChecked() and not controls.category_guard.isChecked()
+    assert "once a game is loading" in controls.tag_preview.text()
+    state["title_automation"]["tag_preview"] = ["PvZ", "Protoss", "Diamond"]
+    state["title_automation"]["channel_message"] = "Twitch tags: PvZ."
+    widget.render(state)
+    assert "PvZ, Protoss, Diamond" in controls.tag_preview.text()
+    assert "Twitch tags: PvZ." in controls.note.text()
+    payloads = []
+    monkeypatch.setattr(widget, "job", payloads.append)
+    controls.channel_tags.setChecked(True)
+    assert "Click Save" in controls.activation.text()
+    controls.configure()
+    assert payloads[0]["channel_tags"] is True and payloads[0]["category_guard"] is False
+    state["title_automation"].update(channel_tags=True, category_guard=True)
+    controls.dirty = False
+    widget.render(state)
+    assert controls.category_guard.isChecked()
+    assert "Channel tags and category update at game start." in controls.activation.text()

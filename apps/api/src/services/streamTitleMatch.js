@@ -59,8 +59,9 @@ function streamTitleMatch(envelope, now = Date.now()) {
   const alias = revealed.toLowerCase() === opponent.toLowerCase() ? "" : revealed;
   const map = titleText(envelope.map, 160);
   const race = RACES.has(envelope.user?.race) ? envelope.user.race : null;
+  const opponentRace = RACES.has(theirs[0].race) ? theirs[0].race : null;
   return { gameKey, opponent, alias,
-    ...(map ? { map } : {}), ...(race ? { race } : {}),
+    ...(map ? { map } : {}), ...(race ? { race } : {}), ...(opponentRace ? { opponentRace } : {}),
     ...(brief?.h2h ? { h2h: { wins: brief.h2h.w, losses: brief.h2h.l } } : {}) };
 }
 

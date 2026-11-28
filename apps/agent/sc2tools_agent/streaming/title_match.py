@@ -29,6 +29,7 @@ class MatchTitleAutomation:
         self.wake, self.stop_event = wake, stop_event
         self.lock = threading.Lock()
         self.enabled = False
+        self.titles = False
         self.key = None
         self.generation = 0
         self.captured_at = float("-inf")
@@ -36,9 +37,15 @@ class MatchTitleAutomation:
         self.inflight = None
         self.seen = []
 
-    def configure(self, enabled):
+    def configure(self, enabled, *, titles=None):
+        """`enabled` claims each game start; `titles` says the claim publishes a title.
+
+        Channel tags and the category guard claim game starts without owning
+        the title, so post-sync title refreshes stay unaffected by them.
+        """
         with self.lock:
             self.enabled = enabled is True
+            self.titles = self.enabled and (enabled if titles is None else titles) is True
             if not self.enabled:
                 self.pending = None
                 self.generation += 1
@@ -47,6 +54,7 @@ class MatchTitleAutomation:
     def reset(self):
         with self.lock:
             self.enabled = False
+            self.titles = False
             self.key = None
             self.pending = None
             self.inflight = None

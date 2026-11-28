@@ -38,6 +38,14 @@ test("default-off reads and ordinary ingest create no state; owner scope is enfo
   await expect(svc.act(other, OWNER, startBody())).rejects.toMatchObject({ status: 401 });
   expect(events).toEqual([]);
 });
+test("hasActive is true only while this owner has a running Series", async () => {
+  expect(await svc.hasActive(OWNER)).toBe(false);
+  await svc.act(token, OWNER, startBody());
+  expect(await svc.hasActive(OWNER)).toBe(true);
+  expect(await svc.hasActive("other-owner")).toBe(false);
+  await svc.act(token, OWNER, { action: "end", revision: 1 });
+  expect(await svc.hasActive(OWNER)).toBe(false);
+});
 test("explicit start persists only the bounded subdocument and preserves other Studio state", async () => {
   await studio.ensureCanonical(token);
   await db.multichatStudio.updateOne({ studioKey: token }, { $set: { goals: [{ label: "Keep me" }], broll: { clips: [{ id: "keep" }] } } });
