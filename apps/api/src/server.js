@@ -26,6 +26,7 @@ const {
   buildOpponentMmrEnrichmentJob,
 } = require("./jobs/opponentMmrEnrichmentJob");
 const { buildLadderMapPoolRefreshJob } = require("./jobs/ladderMapPoolRefreshJob");
+const { buildProBoardRefreshJob } = require("./jobs/proBoardRefreshJob");
 const { buildLadderMapBackfillJob } = require("./jobs/ladderMapBackfillJob");
 const {
   buildLeaguePercentilesRecomputeJob,
@@ -372,6 +373,14 @@ async function main() {
   });
   ladderMapPoolRefresh.start();
 
+  // Pros board: one bounded SC2Pulse refresh every few minutes, only while its gate is on.
+  const proBoardRefresh = buildProBoardRefreshJob({
+    jobLedger: /** @type {any} */ (services).jobLedger,
+    proBoard: /** @type {import("./services/proBoard").ProBoardService} */ (services.proBoard),
+    logger,
+  });
+  proBoardRefresh.start();
+
   // Legacy ladder-map backfill. Stamps ``isLadderMap`` on games that
   // pre-date the ingest-time classifier for compatibility/diagnostics;
   // ranked/custom analyzer filters now require authoritative
@@ -512,7 +521,7 @@ async function main() {
     await pulseBackfill.stop();
     await opponentMmrEnrichment.stop();
     await sessionRefresher.stop();
-    await ladderMapPoolRefresh.stop();
+    await ladderMapPoolRefresh.stop(); await proBoardRefresh.stop();
     await ladderMapBackfill.stop();
     await leaguePercentilesJob.stop();
     await mmrExpectationJob.stop();
