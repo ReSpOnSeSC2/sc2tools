@@ -72,6 +72,14 @@ def test_pool_edits_preserve_other_matchups_weights_and_opening_units(client_sta
     assert own["builds"][1] == {"id": "custom:second", "name": "My build", "race": "Protoss", "source": "custom", "weight": 1}
 
 
+def test_a_matchup_the_companion_adds_draws_no_units_on_its_own(client_state):
+    client, state = client_state
+    client.action({"action": "randomizer_settings", "matchup": "PvT", "buildKeys": ["first"]})
+    added = state["config"]["matchups"]["PvT"]
+    assert added["enabled"] is False and added["unitRandomizerEnabled"] is False
+    assert state["config"]["version"] == 2
+
+
 def test_companion_writes_desktop_opt_in_only_for_the_explicit_switch(client_state):
     client, state = client_state
     base = {"action": "randomizer_settings", "matchup": "PvZ"}
@@ -133,7 +141,7 @@ def test_pool_save_cannot_cross_accounts_between_preference_read_and_write():
     assert calls == ["GET"]
 
 
-def test_randomizer_draw_reads_unit_settings_for_protoss_and_a_custom_builds_steps(client_state):
+def test_randomizer_draw_reads_the_settings_and_under_a_pick_the_offered_builds_and_steps(client_state):
     client, state = client_state
     build = {"slug": "my build", "steps": [{"supply": 14, "action": "Pylon"}]}
     base_transport = client._transport
@@ -148,16 +156,18 @@ def test_randomizer_draw_reads_unit_settings_for_protoss_and_a_custom_builds_ste
         return base_transport(method, url, **kwargs)
 
     client._transport = transport
-    drawn = client.action({"action": "randomizer_draw", "matchup": "PvZ", "customSlug": "my build"})
+    drawn = client.action({"action": "randomizer_draw", "matchup": "PvZ", "buildKey": "custom:my build",
+                           "customSlug": "my build"})
     assert drawn["config"] == state["config"] and drawn["build"] == build
     assert [row["name"] for row in drawn["options"]["builds"]] == ["Canonical name", "My build"]
-    assert client.action({"action": "randomizer_draw", "matchup": "TvT", "customSlug": "gone"}) == {
-        "config": None, "options": None, "build": {}}
-    assert client.action({"action": "randomizer_draw", "matchup": "ZvT", "customSlug": None}) == {
-        "config": None, "options": None, "build": None}
+    assert client.action({"action": "randomizer_draw", "matchup": "TvT", "buildKey": "custom:gone",
+                          "customSlug": "gone"})["build"] == {}
+    assert client.action({"action": "randomizer_draw", "matchup": "ZvT", "buildKey": None, "customSlug": None}) == {
+        "config": state["config"], "options": None, "build": None}
     assert [(method, url.rsplit("/v1/", 1)[1]) for method, url, _ in state["calls"]] == [
-        ("GET", "me/preferences/randomizer"), ("GET", "build-intents/options"),
-        ("GET", "custom-builds/my%20build"), ("GET", "custom-builds/gone")]
+        ("GET", "me/preferences/randomizer"), ("GET", "build-intents/options"), ("GET", "custom-builds/my%20build"),
+        ("GET", "me/preferences/randomizer"), ("GET", "build-intents/options"), ("GET", "custom-builds/gone"),
+        ("GET", "me/preferences/randomizer")]
     assert state["calls"][1][2]["params"] == {"matchup": "PvZ"}
 
 
@@ -165,6 +175,8 @@ def test_randomizer_draw_reads_unit_settings_for_protoss_and_a_custom_builds_ste
     {"action": "randomizer_draw", "matchup": "PvR", "customSlug": None},
     {"action": "randomizer_draw", "matchup": "PvZ", "customSlug": ""},
     {"action": "randomizer_draw", "matchup": "PvZ", "customSlug": "x" * 201},
+    {"action": "randomizer_draw", "matchup": "PvZ", "buildKey": ""},
+    {"action": "randomizer_draw", "matchup": "PvZ", "buildKey": ["pvz"]},
 ])
 def test_randomizer_draw_refuses_a_bad_matchup_or_slug_before_any_request(client_state, request_body):
     client, state = client_state

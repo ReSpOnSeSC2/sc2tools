@@ -34,7 +34,7 @@ export const SETTINGS_SECTIONS = {
     { id: "build-randomizer", label: "Build randomizer" },
     { id: "catalog-builds", label: "Catalog builds" },
     { id: "custom-builds", label: "Build library" },
-    { id: "gateway-draw", label: "Opening Gateway draw" },
+    { id: "unit-draw", label: "Opening units" },
     { id: "sound-effects", label: "Sound effects" },
     { id: "randomizer-preview", label: "Live preview" },
     { id: "randomizer-challenge", label: "Randomizer challenge" },
@@ -90,7 +90,7 @@ export type SettingsFieldEntry = {
   readonly synonyms: readonly string[];
 };
 
-/** Conditional browser/Gateway tools resolve to their always-present parent.
+/** Conditional browser tools resolve to their always-present parent.
  * Their exact targets belong to the admitted panel's live section navigation. */
 export const SETTINGS_FIELDS = [
   { id: "setup-health", tab: "account", section: "setup-health", label: "Setup health", synonyms: ["desktop app", "agent connection", "diagnostics", "pairing"] },
@@ -113,7 +113,7 @@ export const SETTINGS_FIELDS = [
   { id: "delete-history", tab: "backups", section: "delete-history", label: "Delete game history", synonyms: ["wipe games", "reset replay history", "delete replays"] },
   { id: "gdpr", tab: "backups", section: "gdpr", label: "Export & delete account", synonyms: ["Delete account", "GDPR", "export data", "privacy export"] },
   { id: "build-check-in", tab: "checkin", section: "build-check-in", label: "Build check-in prompts", synonyms: ["planned build", "loading screen", "after each game", "check in"] },
-  { id: "randomizer-pool", tab: "randomizer", section: "build-randomizer", label: "Build randomizer pool", synonyms: ["matchup", "build choices", "catalog builds", "custom weights", "Gateway units", "opening unit draw"] },
+  { id: "randomizer-pool", tab: "randomizer", section: "build-randomizer", label: "Build randomizer pool", synonyms: ["matchup", "build choices", "catalog builds", "custom weights", "Gateway units", "opening unit draw", "Terran units", "Zerg units", "units only", "draw opening units"] },
   { id: "randomizer-sounds", tab: "randomizer", section: "sound-effects", label: "Randomizer sound effects", synonyms: ["randomizer volume", "fanfare", "reveal sounds"] },
   { id: "randomizer-preview", tab: "randomizer", section: "randomizer-preview", label: "Randomizer live preview", synonyms: ["spin preview", "build reveal"] },
   { id: "randomizer-desktop", tab: "randomizer", section: "build-randomizer", label: "Roll on the desktop card", synonyms: ["randomize without OBS", "desktop randomizer"] },

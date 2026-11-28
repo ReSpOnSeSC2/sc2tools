@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { candidatePool, customCandidates } from "@/lib/randomizer/pool";
+import { candidatePool, catalogCandidates, customCandidates } from "@/lib/randomizer/pool";
 import type { CustomBuild } from "@/components/builds/types";
 
 const CUSTOM: CustomBuild[] = [
@@ -30,9 +30,9 @@ describe("customCandidates", () => {
   });
 
   it("suggests two Gates for PvP and one for PvT/PvZ", () => {
-    expect(customCandidates("PvP", CUSTOM).find((c) => c.name === "Anti-cheese")?.suggestedGateCount)
+    expect(customCandidates("PvP", CUSTOM).find((c) => c.name === "Anti-cheese")?.openingUnits.gateCount)
       .toBe(2);
-    expect(customCandidates("PvZ", CUSTOM).find((c) => c.name === "Anti-cheese")?.suggestedGateCount)
+    expect(customCandidates("PvZ", CUSTOM).find((c) => c.name === "Anti-cheese")?.openingUnits.gateCount)
       .toBe(1);
   });
 
@@ -41,8 +41,15 @@ describe("customCandidates", () => {
       { slug: "one", name: "My 1 Gate Expand", race: "Protoss", vsRace: "Protoss" },
       { slug: "two", name: "Secret 2-Gate", race: "Protoss", vsRace: "Terran" },
     ];
-    expect(customCandidates("PvP", explicit)[0].suggestedGateCount).toBe(1);
-    expect(customCandidates("PvT", explicit)[0].suggestedGateCount).toBe(2);
+    expect(customCandidates("PvP", explicit)[0].openingUnits.gateCount).toBe(1);
+    expect(customCandidates("PvT", explicit)[0].openingUnits.gateCount).toBe(2);
+  });
+
+  it("gives Terran and Zerg candidates the units their names name", () => {
+    const reaperHellion = catalogCandidates("TvZ").find((c) => c.name === "TvZ - Reaper Hellion Expand");
+    expect(reaperHellion?.openingUnits).toMatchObject({ gateCount: 2, units: [{ id: "reaper" }, { id: "hellion" }] });
+    const zerg: CustomBuild[] = [{ slug: "ling", name: "Speedling flood", race: "Zerg", vsRace: "Zerg" }];
+    expect(customCandidates("ZvZ", zerg)[0].openingUnits.units.map((unit) => unit.id)).toEqual(["zergling"]);
   });
 });
 

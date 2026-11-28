@@ -1,7 +1,7 @@
 "use strict";
 
 const { BUILD_INTENT } = require("../config/constants");
-const { BuildIntentError, normalizeRace, matchupFromRaces, holdRemainingMs, overlayPayload } = require("./buildIntentCommon");
+const { BuildIntentError, normalizeRace, envelopeMatchup, holdRemainingMs, overlayPayload } = require("./buildIntentCommon");
 const { allowAutomaticRoll, requireTrustedEarlyGame } = require("./buildIntentAutoRandomizer");
 const { readBuildIntentPrefs, randomizerPool } = require("./buildIntentPrefs");
 
@@ -36,7 +36,7 @@ function currentEnvelope(service, userId, gameKey, expectedMatchup = null) {
       || Math.abs(service.now() - latest.receivedAt) > 30000)) {
     throw new BuildIntentError(409, "stale_game", "The live game connection is stale. Refresh the Companion.");
   }
-  if (expectedMatchup && matchupFromRaces(normalizeRace(latest.user?.race), normalizeRace(latest.opponent?.race)) !== expectedMatchup) {
+  if (expectedMatchup && envelopeMatchup(latest) !== expectedMatchup) {
     throw new BuildIntentError(409, "matchup_changed", "The current matchup changed. Refresh before rolling.");
   }
   return latest;
@@ -112,7 +112,7 @@ function pickAlternate(config, builds, initial, seed) {
  */
 async function nativeRandomizerRoll(service, userId, gameKey, body, redemptionId) {
   let latest = currentEnvelope(service, userId, gameKey);
-  const matchup = matchupFromRaces(normalizeRace(latest.user?.race), normalizeRace(latest.opponent?.race));
+  const matchup = envelopeMatchup(latest);
   if (!matchup || matchup !== body.matchup) {
     throw new BuildIntentError(409, "matchup_changed", "The current matchup changed. Refresh before rolling.");
   }

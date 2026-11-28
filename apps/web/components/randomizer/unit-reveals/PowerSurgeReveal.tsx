@@ -1,22 +1,34 @@
 "use client";
 
 import { getIconPath } from "@/lib/sc2-icons";
-import { gatewayUnitMeta } from "@/lib/randomizer/gatewayUnits";
+import { openingUnitMeta } from "@/lib/randomizer/openingUnits";
+import type { OpeningUnitId, OpeningUnitsOutcome, PlayedRace } from "@/lib/randomizer/types";
 import { useRevealSound } from "@/components/randomizer/reveals/revealSound";
 import {
+  DECK_NAME_BLANK,
+  TWO_LINES,
+  deckSizes,
   resultAnnouncement,
+  slotLabel,
+  unitModeLabel,
   UnitPortrait,
   UnitResultCard,
   UnitRevealFrame,
+  type DeckSizes,
   type UnitRevealProps,
   useAnimatedUnitPicks,
 } from "./unitRevealShared";
 
 export const POWER_SURGE_DURATION_MS = 4_700;
 const LOCK_TIMES = [2_550, 3_250] as const;
-const PYLON_ICON = getIconPath("Pylon", "building") ?? "/icons/sc2/buildings/pylon.png";
+/** The structure that powers the circuit: each race's own supply or production hub. */
+const POWER_ICONS: Readonly<Record<PlayedRace, string>> = {
+  Protoss: getIconPath("Pylon", "building") ?? "/icons/sc2/buildings/pylon.png",
+  Terran: getIconPath("Supply Depot", "building") ?? "/icons/sc2/buildings/supplydepot.png",
+  Zerg: getIconPath("Hatchery", "building") ?? "/icons/sc2/buildings/hatchery.png",
+};
 
-/** Weighted circuit nodes route a psionic surge into one or two Gate sockets. */
+/** Weighted circuit nodes route a surge into one or two pick sockets. */
 export function PowerSurgeReveal(props: UnitRevealProps) {
   const animation = useAnimatedUnitPicks({
     outcome: props.outcome,
@@ -31,12 +43,13 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
     durationMs: POWER_SURGE_DURATION_MS,
     reducedMotion: animation.reducedMotion,
   });
+  const deck = deckSizes(props.outcome, 43);
 
   return (
     <UnitRevealFrame
       matchupLabel={props.matchupLabel}
       buildName={props.buildName}
-      modeLabel="Pylon circuit"
+      modeLabel={unitModeLabel("power-surge", props.outcome.race)}
       resultText={
         animation.allLocked ? resultAnnouncement(props.outcome) : null
       }
@@ -67,113 +80,19 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${props.outcome.pool.length}, minmax(0, 1fr))`,
-            gap: 8,
+            gap: deck.gap,
           }}
         >
-          {props.outcome.pool.map((entry, index) => {
-            const unit = gatewayUnitMeta(entry.id);
-            const probability = props.outcome.probabilities[index] ?? 0;
-            const active = animation.displayed.some(
-              (id, slot) => id === entry.id && !animation.locked[slot],
-            );
-            const locked = props.outcome.picks.some(
-              (id, slot) => id === entry.id && animation.locked[slot],
-            );
-            return (
-              <div
-                key={entry.id}
-                style={{
-                  position: "relative",
-                  minWidth: 0,
-                  padding: "6px 5px 8px",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  borderRadius: 11,
-                  border: locked
-                    ? "1px solid rgba(246,210,104,.7)"
-                    : active
-                      ? "1px solid rgba(103,235,255,.78)"
-                      : "1px solid rgba(111,137,203,.2)",
-                  background: locked
-                    ? "rgba(122,96,27,.16)"
-                    : active
-                      ? "rgba(45,157,202,.18)"
-                      : "rgba(8,13,26,.6)",
-                  boxShadow: active
-                    ? "0 0 20px rgba(67,221,255,.24)"
-                    : locked
-                      ? "0 0 20px rgba(247,205,88,.18)"
-                      : "none",
-                  transition: "border-color 100ms linear, background 100ms linear",
-                }}
-              >
-                <UnitPortrait id={entry.id} size={43} dim={!active && !locked} />
-                <span
-                  style={{
-                    marginTop: 2,
-                    maxWidth: "100%",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    color: active || locked ? "#edf6ff" : "#9aa6c8",
-                    fontSize: 10,
-                    fontWeight: 800,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {unit.name}
-                </span>
-                <div
-                  style={{
-                    width: "76%",
-                    height: 3,
-                    marginTop: 5,
-                    overflow: "hidden",
-                    borderRadius: 99,
-                    background: "rgba(92,112,167,.22)",
-                  }}
-                >
-                  <div
-                    className={active ? "rdz-unit-motion" : undefined}
-                    style={{
-                      width: `${Math.max(4, probability * 100)}%`,
-                      height: "100%",
-                      borderRadius: 99,
-                      background: locked ? "#f2cb63" : "#63daf5",
-                      boxShadow: active ? "0 0 9px #70eaff" : "none",
-                      animation: active
-                        ? "rdz-unit-beam .36s ease-in-out infinite"
-                        : "none",
-                    }}
-                  />
-                </div>
-                <span
-                  style={{
-                    marginTop: 3,
-                    color: active ? "#72e6ff" : "#7181a9",
-                    fontSize: 9,
-                    fontWeight: 850,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {(probability * 100).toFixed(1)}%
-                </span>
-                <div
-                  style={{
-                    position: "absolute",
-                    left: "50%",
-                    top: "100%",
-                    width: 1,
-                    height: 35,
-                    background: active
-                      ? "linear-gradient(#67e7ff, transparent)"
-                      : "linear-gradient(rgba(91,120,198,.3), transparent)",
-                    boxShadow: active ? "0 0 8px #67e7ff" : "none",
-                  }}
-                />
-              </div>
-            );
-          })}
+          {props.outcome.pool.map((entry, index) => (
+            <SurgeNode
+              key={entry.id}
+              id={entry.id}
+              probability={props.outcome.probabilities[index] ?? 0}
+              active={animation.displayed.some((id, slot) => id === entry.id && !animation.locked[slot])}
+              locked={props.outcome.picks.some((id, slot) => id === entry.id && animation.locked[slot])}
+              deck={deck}
+            />
+          ))}
         </div>
 
         <div
@@ -231,7 +150,7 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
           {/* A direct local PNG avoids an image-optimizer request inside OBS. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={PYLON_ICON}
+            src={POWER_ICONS[props.outcome.race]}
             alt=""
             aria-hidden="true"
             width={64}
@@ -248,86 +167,17 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
         <div
           style={{
             position: "absolute",
-            left: "50%",
+            left: 0,
+            right: 0,
             bottom: 0,
             display: "flex",
+            justifyContent: "center",
             gap: 10,
-            transform: "translateX(-50%)",
           }}
         >
-          {animation.displayed.map((id, index) => {
-            const locked = animation.locked[index];
-            return (
-              <div
-                key={index}
-                style={{
-                  position: "relative",
-                  width:
-                    props.outcome.gateCount === 2
-                      ? "min(180px, calc(50% - 5px))"
-                      : "min(215px, 100%)",
-                  boxSizing: "border-box",
-                  height: 68,
-                  padding: "7px 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 9,
-                  borderRadius: 12,
-                  border: locked
-                    ? "1px solid rgba(247,211,101,.72)"
-                    : "1px solid rgba(103,170,234,.42)",
-                  background: locked
-                    ? "linear-gradient(120deg, rgba(119,91,25,.2), rgba(20,27,48,.88))"
-                    : "rgba(11,18,36,.86)",
-                  boxShadow: locked
-                    ? "0 0 23px rgba(246,205,83,.17)"
-                    : "inset 0 0 18px rgba(79,145,233,.1)",
-                  overflow: "hidden",
-                }}
-              >
-                {!locked ? (
-                  <div
-                    className="rdz-unit-motion"
-                    style={{
-                      position: "absolute",
-                      left: -30,
-                      right: -30,
-                      top: 0,
-                      height: 2,
-                      background:
-                        "linear-gradient(90deg, transparent, #86eeff, transparent)",
-                      boxShadow: "0 0 8px #72dff8",
-                      animation: "rdz-unit-flow .78s linear infinite",
-                    }}
-                  />
-                ) : null}
-                <UnitPortrait id={id} size={49} dim={!locked} />
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      color: locked ? "#f3cf69" : "#7284b4",
-                      fontSize: 9,
-                      fontWeight: 900,
-                      letterSpacing: ".13em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Gate {index + 1} circuit
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 3,
-                      color: locked ? "#f2f6ff" : "#a0acca",
-                      fontSize: 14,
-                      fontWeight: 850,
-                    }}
-                  >
-                    {locked ? gatewayUnitMeta(id).name : "Routing energy…"}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {animation.displayed.map((id, index) => (
+            <SurgeSocket key={index} outcome={props.outcome} id={id} index={index} locked={animation.locked[index]} />
+          ))}
         </div>
       </div>
       <UnitResultCard
@@ -336,5 +186,186 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
         show={animation.allLocked}
       />
     </UnitRevealFrame>
+  );
+}
+
+/** One weighted circuit node: the unit, its odds and its wire to the bus.
+ * A long deck's names leave a blank on narrow screens, so each wire still
+ * meets the bus. */
+function SurgeNode({ id, probability, active, locked, deck }: {
+  id: OpeningUnitId;
+  probability: number;
+  active: boolean;
+  locked: boolean;
+  deck: DeckSizes;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        minWidth: 0,
+        padding: "6px 5px 8px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        borderRadius: 11,
+        border: locked
+          ? "1px solid rgba(246,210,104,.7)"
+          : active
+            ? "1px solid rgba(103,235,255,.78)"
+            : "1px solid rgba(111,137,203,.2)",
+        background: locked
+          ? "rgba(122,96,27,.16)"
+          : active
+            ? "rgba(45,157,202,.18)"
+            : "rgba(8,13,26,.6)",
+        boxShadow: active
+          ? "0 0 20px rgba(67,221,255,.24)"
+          : locked
+            ? "0 0 20px rgba(247,205,88,.18)"
+            : "none",
+        transition: "border-color 100ms linear, background 100ms linear",
+      }}
+    >
+      <UnitPortrait id={id} size={deck.portrait} dim={!active && !locked} />
+      <span
+        className={deck.longDeck ? DECK_NAME_BLANK : undefined}
+        style={{
+          marginTop: 2,
+          maxWidth: "100%",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          color: active || locked ? "#edf6ff" : "#9aa6c8",
+          fontSize: 10,
+          fontWeight: 800,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {openingUnitMeta(id).name}
+      </span>
+      <div
+        style={{
+          width: "76%",
+          height: 3,
+          marginTop: 5,
+          overflow: "hidden",
+          borderRadius: 99,
+          background: "rgba(92,112,167,.22)",
+        }}
+      >
+        <div
+          className={active ? "rdz-unit-motion" : undefined}
+          style={{
+            width: `${Math.max(4, probability * 100)}%`,
+            height: "100%",
+            borderRadius: 99,
+            background: locked ? "#f2cb63" : "#63daf5",
+            boxShadow: active ? "0 0 9px #70eaff" : "none",
+            animation: active
+              ? "rdz-unit-beam .36s ease-in-out infinite"
+              : "none",
+          }}
+        />
+      </div>
+      <span
+        style={{
+          marginTop: 3,
+          color: active ? "#72e6ff" : "#7181a9",
+          fontSize: 9,
+          fontWeight: 850,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {(probability * 100).toFixed(1)}%
+      </span>
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "100%",
+          width: 1,
+          height: 35,
+          background: active
+            ? "linear-gradient(#67e7ff, transparent)"
+            : "linear-gradient(rgba(91,120,198,.3), transparent)",
+          boxShadow: active ? "0 0 8px #67e7ff" : "none",
+        }}
+      />
+    </div>
+  );
+}
+
+/** One pick socket, charging until its unit locks in. */
+function SurgeSocket({ outcome, id, index, locked }: {
+  outcome: OpeningUnitsOutcome;
+  id: OpeningUnitId;
+  index: number;
+  locked: boolean;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: outcome.gateCount === 2 ? "min(180px, calc(50% - 5px))" : "min(215px, 100%)",
+        boxSizing: "border-box",
+        height: 68,
+        padding: "7px 9px",
+        display: "flex",
+        alignItems: "center",
+        gap: 9,
+        borderRadius: 12,
+        border: locked ? "1px solid rgba(247,211,101,.72)" : "1px solid rgba(103,170,234,.42)",
+        background: locked
+          ? "linear-gradient(120deg, rgba(119,91,25,.2), rgba(20,27,48,.88))"
+          : "rgba(11,18,36,.86)",
+        boxShadow: locked ? "0 0 23px rgba(246,205,83,.17)" : "inset 0 0 18px rgba(79,145,233,.1)",
+        overflow: "hidden",
+      }}
+    >
+      {!locked ? (
+        <div
+          className="rdz-unit-motion"
+          style={{
+            position: "absolute",
+            left: -30,
+            right: -30,
+            top: 0,
+            height: 2,
+            background: "linear-gradient(90deg, transparent, #86eeff, transparent)",
+            boxShadow: "0 0 8px #72dff8",
+            animation: "rdz-unit-flow .78s linear infinite",
+          }}
+        />
+      ) : null}
+      <UnitPortrait id={id} size={49} dim={!locked} />
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            color: locked ? "#f3cf69" : "#7284b4",
+            fontSize: 9,
+            fontWeight: 900,
+            letterSpacing: ".13em",
+            textTransform: "uppercase",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {slotLabel(outcome, index)}
+          <span className="rdz-small-hidden"> circuit</span>
+        </div>
+        <div
+          style={{
+            ...TWO_LINES,
+            marginTop: 3,
+            color: locked ? "#f2f6ff" : "#a0acca",
+            fontSize: "clamp(12px, 3.4vw, 14px)",
+            fontWeight: 850,
+          }}
+        >
+          {locked ? openingUnitMeta(id).name : "Charging…"}
+        </div>
+      </div>
+    </div>
   );
 }

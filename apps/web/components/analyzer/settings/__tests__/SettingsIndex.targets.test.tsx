@@ -88,7 +88,7 @@ describe("actual Settings section owners", () => {
     await waitFor(() => expect(document.getElementById("reanalyze")).toBeTruthy());
     expectTargets(SETTINGS_SECTIONS.backups.map(section => section.id));
   });
-  it("includes the nested catalog, library, Gateway and preview Sections in Randomizer", () => {
+  it("includes the nested catalog, library, opening units and preview Sections in Randomizer", () => {
     mount(<SettingsRandomizer />); expectTargets(SETTINGS_SECTIONS.randomizer.map(section => section.id));
   });
   it("keeps the real player channel Section as a navigation target without connecting a provider", () => {
@@ -105,7 +105,7 @@ it("saves the desktop opt-in only after a change to that explicit checkbox", asy
   mount(<SettingsSaveScope tabId="randomizer"><SettingsRandomizer /></SettingsSaveScope>);
   const desktop = screen.getByRole("checkbox", { name: /Roll on the desktop card/ });
   expect(desktop).toHaveProperty("checked", false);
-  const matchup = screen.getByRole("switch", { name: /Enable randomizer for this matchup/ });
+  const matchup = screen.getByRole("switch", { name: /Draw a build order in PvP/ });
   fireEvent.click(matchup);
   const save = () => fireEvent.click(screen.getByRole("button", { name: "Save randomizer" }));
   save();

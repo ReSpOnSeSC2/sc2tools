@@ -1,6 +1,9 @@
 "use client";
 
-/** Dispatches the preselected opening-unit outcome to one of three gamey UIs. */
+/**
+ * Dispatches the preselected opening-unit outcome to one of three gamey UIs.
+ * Loaded on demand by `RandomizerSequence`, with every race's unit names.
+ */
 import type { OpeningUnitsOutcome } from "@/lib/randomizer/types";
 import { HoloDraftReveal } from "./unit-reveals/HoloDraftReveal";
 import { PowerSurgeReveal } from "./unit-reveals/PowerSurgeReveal";
@@ -14,7 +17,8 @@ export interface UnitRandomizerStageProps {
   outcome: OpeningUnitsOutcome;
   spinId: number;
   matchupLabel: string;
-  buildName: string;
+  /** Null when the units are drawn without a build. */
+  buildName: string | null;
   onComplete?: () => void;
 }
 

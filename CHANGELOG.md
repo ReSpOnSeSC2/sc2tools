@@ -5158,6 +5158,25 @@ release preparation, not a signed or published 0.24.9 installer.
   channel on its own site, with no embedded players. The server keeps one copy
   for about a minute, so your browser never contacts a platform. See ADR 0108.
 
+### Randomizer for every race
+
+- Settings → Randomizer reads race, then matchup, then two switches: **Draw a
+  build order** and **Draw opening units**. Either works alone; with both off a
+  matchup draws nothing. Settings saved before keep their meaning.
+- Terran and Zerg draw opening units the way Protoss draws Gateway units: one,
+  or two for a two-building opener such as Reaper Hellion. Each matchup has its
+  own units, the ones its pre-made builds are named for (TvZ offers Hellion and
+  Widow Mine, ZvT the Queen), and each build keeps its own count and odds.
+- With only the unit draw on, the OBS widget reveals the units alone, the
+  desktop loading card shows them, and they hold for whatever build is played.
+  The native randomizer and the channel-point reroll redraw builds, so they
+  need the build draw.
+- A streamer who queued Random gets the draw for the race the game reports,
+  once it reports it, still once per game, on the OBS widget. The desktop card
+  stays hidden in Random games, so it never rolls there.
+- The widget's unit reveal loads on demand, so the overlay page loads less up
+  front. Agent 0.26.0. See ADR 0109.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

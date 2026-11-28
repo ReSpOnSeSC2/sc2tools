@@ -184,6 +184,24 @@ describe("native companion canonical randomizer", () => {
     } finally { spy.mockRestore(); }
   });
 
+  test("units drawn alone leave no build for the server to draw", async () => {
+    const unitsOnly = { version: 3, matchups: { PvZ: { ...randomizerPrefs("PvZ", [PHOENIX, ROBO]).matchups.PvZ,
+      enabled: false, unitRandomizerEnabled: true, units: { gateCount: 1, units: [{ id: "adept", weight: 1 }] } } } };
+    await setPrefs(harness.db, user.userId, { randomizer: unitsOnly });
+    expect((await roll({ matchup: "PvZ", releaseHold: true }).expect(409)).body.error.code).toBe("randomizer_disabled");
+    expect((await harness.db.buildIntentLive.findOne({ userId: user.userId, gameKey: key })).randomizer).toBeNull();
+  });
+
+  test("a streamer who queued Random draws in the matchup the client reveals", async () => {
+    const queuedRandom = { ...envelope, user: { race: "Random", name: "Streamer" }, players: [
+      { name: "Streamer", type: "user", race: "Prot" }, { name: "Opponent", type: "user", race: "Zerg" }] };
+    harness.services.liveGameBroker.publish(user.userId, { ...queuedRandom, players: [
+      { name: "Streamer", type: "user", race: "random" }, { name: "Opponent", type: "user", race: "Zerg" }] });
+    expect((await roll({ matchup: "PvZ", releaseHold: true }).expect(409)).body.error.code).toBe("matchup_changed");
+    harness.services.liveGameBroker.publish(user.userId, queuedRandom);
+    expect([PHOENIX, ROBO]).toContain((await roll({ matchup: "PvZ", releaseHold: true }).expect(200)).body.randomizer.key);
+  });
+
   test("enforces authentication, ownership and request shape", async () => {
     await roll({}, "Bearer invalid-device-token").expect(401);
     const other = await signIn(harness.app, harness.db, `other-native${counter}`);

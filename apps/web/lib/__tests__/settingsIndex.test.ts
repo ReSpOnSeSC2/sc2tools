@@ -22,7 +22,7 @@ describe("Settings section catalog", () => {
     expect(SETTINGS_SECTIONS.help).toEqual([]);
     expect(SETTINGS_SECTIONS.preferences.map(section => section.id)).toEqual(["app-preferences", "appearance", "setup-privacy", "reports", "notifications", "push"]);
     expect(SETTINGS_SECTIONS.randomizer.map(section => section.id)).toEqual([
-      "build-randomizer", "catalog-builds", "custom-builds", "gateway-draw", "sound-effects", "randomizer-preview", "randomizer-challenge",
+      "build-randomizer", "catalog-builds", "custom-builds", "unit-draw", "sound-effects", "randomizer-preview", "randomizer-challenge",
     ]);
     expect(SETTINGS_SECTIONS.import.map(section => section.id)).toContain("folder-sync");
   });
@@ -46,7 +46,7 @@ describe("Settings section catalog", () => {
     expect(matches).toHaveLength(1);
     expect(matches[0]).toMatchObject({ tab, section });
   });
-  it("does not promise unavailable browser-import or Gateway DOM from the global field search", () => {
-    expect(SETTINGS_FIELDS.some(field => ["browser-import", "folder-sync", "gateway-draw"].includes(field.section))).toBe(false);
+  it("does not promise unavailable browser-import DOM from the global field search", () => {
+    expect(SETTINGS_FIELDS.some(field => ["browser-import", "folder-sync"].includes(field.section))).toBe(false);
   });
 });

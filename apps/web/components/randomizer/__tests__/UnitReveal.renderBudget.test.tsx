@@ -21,6 +21,7 @@ const DURATIONS: Record<UnitRevealStyle, number> = {
 
 function outcome(style: UnitRevealStyle): OpeningUnitsOutcome {
   return {
+    race: "Protoss",
     gateCount: 2,
     picks: ["adept", "stalker"],
     style,

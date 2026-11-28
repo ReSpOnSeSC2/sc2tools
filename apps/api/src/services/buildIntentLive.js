@@ -25,7 +25,7 @@ const { nativeRandomizerRoll } = require("./buildIntentNativeRandomizer");
 const {
   BuildIntentError,
   normalizeRace,
-  matchupFromRaces,
+  envelopeMatchup,
   isValidGameKey,
   keyStartedAtMs,
   playerNamesFromKey,
@@ -360,7 +360,7 @@ class BuildIntentLive {
     let doc = await this.collection.findOne({ userId, gameKey: key });
     if (doc && (doc.randomizer || doc.gameId)) return;
     const matchup = (doc && doc.matchup)
-      || matchupFromRaces(normalizeRace(latest.user?.race), normalizeRace(latest.opponent?.race));
+      || envelopeMatchup(latest);
     if (!matchup) return;
     const prefs = await readBuildIntentPrefs(this.users, userId);
     const pool = randomizerPool(prefs.randomizer, matchup);

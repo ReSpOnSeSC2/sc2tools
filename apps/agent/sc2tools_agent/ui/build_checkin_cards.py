@@ -11,8 +11,8 @@ window and can activate it over the game.
 * :class:`LoadingCardWindow`, "What's the plan?", never takes focus
   (``WindowDoesNotAcceptFocus`` + ``WA_ShowWithoutActivating``) and has
   no text input, so clicking it never pulls focus from StarCraft II.
-  Under a Randomizer pick it shows the draw as a still
-  (``build_checkin_draw``).
+  Under a Randomizer pick, or for units drawn without a build, it shows
+  the draw as a still (``build_checkin_draw``).
 * The end-of-game card is ``build_checkin_postgame.PostgameCardWindow``.
 
 The cards never animate. Every repaint of a see-through window redraws
@@ -36,7 +36,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from ..build_checkin.models import LoadingCardModel
 from . import checkin_theme, theme, win32_window
 from .brand_mark import create_brand_mark
-from .build_checkin_draw import RandomizerDrawStill
+from .build_checkin_draw import UNITS_ALONE_LABEL, RandomizerDrawStill
 from .build_checkin_widgets import (
     BuildList,
     button,
@@ -527,17 +527,34 @@ class LoadingCardWindow(CardWindow):
         self.settle()
 
     def refresh_randomizer_draw(self) -> None:
-        """The host has just read the draw of a saved pick."""
-        if self.model is not None:
-            self._render_draw(self.model)
-            self.settle()
+        """The host has just read this game's draw."""
+        model = self.model
+        if model is None:
+            return
+        self._render_draw(model)
+        if not model.scouting_only:
+            self._render_strip(model)
+        self.settle()
 
     def _render_draw(self, model: LoadingCardModel) -> None:
-        """The still under the saved pick, in the strip or the slim bar."""
-        rolled = model.randomizer.rolled_key if model.randomizer is not None else None
-        self.strip_draw.show_draw(self._host.randomizer_draw(model.game_key, rolled) if rolled else None)
-        locked = model.locked_key if model.collapsed else None
-        self.bar_draw.show_draw(self._host.randomizer_draw(model.game_key, locked) if locked else None)
+        """The still in the strip and in the slim bar."""
+        self.strip_draw.show_draw(self._strip_draw(model))
+        self.bar_draw.show_draw(self._bar_draw(model))
+
+    def _strip_draw(self, model: LoadingCardModel) -> Optional[Any]:
+        """Under the saved pick; with no Randomizer row, units drawn alone."""
+        strip = model.randomizer
+        if strip is None:
+            return self._host.randomizer_draw(model.game_key, None)
+        return self._host.randomizer_draw(model.game_key, strip.rolled_key) if strip.rolled_key else None
+
+    def _bar_draw(self, model: LoadingCardModel) -> Optional[Any]:
+        """The played pick's draw, else units drawn alone: those hold for
+        whatever build is locked in."""
+        if not model.collapsed:
+            return None
+        played = self._host.randomizer_draw(model.game_key, model.locked_key) if model.locked_key else None
+        return played if played is not None else self._host.randomizer_draw(model.game_key, None)
 
     def _render(self, model: LoadingCardModel) -> None:
         self.model = model
@@ -598,14 +615,20 @@ class LoadingCardWindow(CardWindow):
         set_tone(self.bar_status, "tone", "warning")
 
     def _render_strip(self, model: LoadingCardModel) -> None:
+        """The Randomizer row; units drawn alone get it with no actions."""
         strip = model.randomizer
-        self.strip.setVisible(strip is not None)
-        if strip is not None:
-            self.strip_label.setText(strip.label)
-            self.roll_now.setVisible(strip.can_roll_now)
-            self.play_roll.setVisible(bool(strip.rolled_key))
-            self.play_roll.setEnabled(strip.can_play)
-            self.reroll.setVisible(strip.can_reroll)
+        alone = strip is None and self.strip_draw.draw is not None
+        self.strip.setVisible(strip is not None or alone)
+        if strip is None:
+            self.strip_label.setText(UNITS_ALONE_LABEL if alone else "")
+            for action in (self.roll_now, self.play_roll, self.reroll):
+                action.setVisible(False)
+            return
+        self.strip_label.setText(strip.label)
+        self.roll_now.setVisible(strip.can_roll_now)
+        self.play_roll.setVisible(bool(strip.rolled_key))
+        self.play_roll.setEnabled(strip.can_play)
+        self.reroll.setVisible(strip.can_reroll)
 
     # ---------------------------------------------------- player out
 

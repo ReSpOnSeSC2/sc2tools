@@ -27,7 +27,7 @@ function outcome(style: SpinOutcome["style"], second = false): SpinOutcome {
     { id: "blink", name: "Blink", race: "Protoss" as const, source: "catalog" as const, weight: 1 },
     { id: "oracle", name: "Oracle", race: "Protoss" as const, source: "catalog" as const, weight: 3 },
   ];
-  return { style, pool, winner: pool[second ? 1 : 0], probabilities: [0.25, 0.75], matchup: "PvT", openingUnits: null };
+  return { style, pool, winner: pool[second ? 1 : 0], probabilities: [0.25, 0.75], matchup: "PvT" };
 }
 afterEach(() => { cleanup(); capture.callbacks.length = 0; capture.props.length = 0; });
 

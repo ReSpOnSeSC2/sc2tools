@@ -26,10 +26,11 @@ from sc2tools_agent.build_checkin.randomizer_draw import (
     seed_from_string,
 )
 
-FIXTURE = json.loads(
-    (Path(__file__).resolve().parents[2] / "web" / "lib" / "randomizer" / "__tests__" / "unitDrawParity.json")
-    .read_text(encoding="utf-8")
-)
+FIXTURES = Path(__file__).resolve().parents[2] / "web" / "lib" / "randomizer" / "__tests__"
+FIXTURE = json.loads((FIXTURES / "unitDrawParity.json").read_text(encoding="utf-8"))
+RACES = json.loads((FIXTURES / "unitDrawParity.races.json").read_text(encoding="utf-8"))
+CASES = FIXTURE["cases"] + RACES["cases"]
+"""The Gateway cases, then every race and the two switches, as the web test reads them."""
 KEY = DrawKey(game_key="Foo|Me|1790000000000", matchup="PvP", build_key="pvp-2-gate-expand")
 POOL = {"matchups": {"PvP": {"enabled": True, "builds": [
     {"id": "pvp-2-gate-expand", "name": "PvP - 2 Gate Expand", "race": "Protoss"},
@@ -45,7 +46,7 @@ def test_the_generator_matches_the_widget_value_for_value(seed: Dict[str, Any]) 
     assert [rng() for _ in seed["values"]] == seed["values"]
 
 
-@pytest.mark.parametrize("case", FIXTURE["cases"], ids=lambda case: case["name"])
+@pytest.mark.parametrize("case", CASES, ids=lambda case: case["name"])
 def test_the_units_match_the_widget_for_every_fixture_case(case: Dict[str, Any]) -> None:
     key = DrawKey(game_key=case["gameKey"], matchup=case["matchup"], build_key=case["buildKey"])
     served = overlay_config(case["config"], case["matchup"], case["options"])
@@ -145,8 +146,42 @@ def test_a_draw_combines_the_units_and_the_custom_steps() -> None:
     answer = {"config": config, "options": {"builds": [{"key": "custom:two-gate", "name": "My 2 Gate", "source": "custom"}]},
               "build": {"steps": [{"supply": 14, "action": "Pylon"}]}}
     draw = draw_for(custom, answer)
-    assert draw == RandomizerDraw(KEY.game_key, "custom:two-gate", (DrawStep("Pylon", None, "14"),), ("Zealot", "Adept"))
+    assert draw == RandomizerDraw(KEY.game_key, "custom:two-gate", (DrawStep("Pylon", None, "14"),), ("Zealot", "Adept"),
+                                  "Protoss")
     assert draw_for(KEY, {"config": None, "build": None}).empty
+
+
+def test_units_drawn_alone_take_the_names_and_race_and_no_steps() -> None:
+    config = {"version": 3, "matchups": {"TvZ": {"enabled": False, "unitRandomizerEnabled": True,
+                                                 "units": {"gateCount": 2, "units": [{"id": "widowmine"}]}}}}
+    alone = DrawKey("Foe|Me|1790000000555", "TvZ")
+    assert draw_for(alone, {"config": config, "build": {"steps": [{"action": "Barracks"}]}}) == RandomizerDraw(
+        alone.game_key, None, (), ("Widow Mine", "Widow Mine"), "Terran")
+
+
+def test_the_unit_switch_keeps_an_older_configs_meaning() -> None:
+    def drawn(config: Dict[str, Any], key: DrawKey) -> tuple:
+        return opening_units(config, key)
+
+    alone = DrawKey("Foe|Me|1790000000555", "PvZ")
+    stored = {"matchups": {"PvZ": {"enabled": False, "unitRandomizerEnabled": True,
+                                   "units": {"units": [{"id": "zealot"}]}}}}
+    assert drawn(stored, alone) == (), "before version 3 units never came alone"
+    assert drawn({**stored, "version": 3}, alone) == ("zealot",)
+    assert drawn({**stored, "version": "3"}, alone) == (), "only the number 3 is version 3"
+
+
+def test_with_the_build_draw_on_units_wait_for_the_saved_pick() -> None:
+    config = {"version": 3, "matchups": {"ZvZ": {"enabled": True, "unitRandomizerEnabled": True,
+                                                 "builds": [{"id": "lings", "name": "Ling flood", "race": "Zerg"}],
+                                                 "units": {"units": [{"id": "zergling"}]}}}}
+    assert opening_units(config, DrawKey("g|Me|1", "ZvZ")) == (), "the widget's own build decides"
+    lings = DrawKey("g|Me|1", "ZvZ", "lings")
+    assert opening_units(config, lings) == ("zergling",), "a build without units uses the matchup's"
+    assert opening_units(config, DrawKey("g|Me|1", "ZvZ", "gone")) == (), "a pick outside the pool draws none"
+    wrong_race = {"version": 3, "matchups": {"ZvZ": {**config["matchups"]["ZvZ"], "builds": [
+        {"id": "lings", "name": "Ling flood", "race": "Protoss", "openingUnits": {"units": [{"id": "roach"}]}}]}}}
+    assert opening_units(wrong_race, DrawKey("g|Me|1", "ZvZ", "lings")) == ("zergling",)
 
 
 class Starts:
@@ -178,19 +213,37 @@ def test_the_source_reads_once_per_saved_pick_and_delivers_the_still() -> None:
     starts.run()
     source.request(card(), delivered.append)
     starts.run()
-    assert reads == [{"action": "randomizer_draw", "matchup": "PvP", "customSlug": None}]
+    assert reads == [{"action": "randomizer_draw", "matchup": "PvP", "buildKey": KEY.build_key, "customSlug": None}]
     assert [draw.units for draw in delivered] == [("Zealot", "Adept")]
     source.request(card("pvp-1-gate"), delivered.append)
     assert len(starts.pending) == 1, "a reroll is a new pick"
 
 
-def test_nothing_is_read_when_the_card_shows_no_pick_or_nothing_more_exists() -> None:
+def test_nothing_is_read_without_a_matchup_or_while_the_randomizer_row_waits_for_its_pick() -> None:
     starts = Starts()
     source = RandomizerDrawSource(lambda _request: pytest.fail("no read expected"), start=starts)
-    source.request(SimpleNamespace(game_key="g", matchup="PvP", randomizer=None), lambda _draw: None)
     source.request(card(matchup=None), lambda _draw: None)
-    source.request(card("tvz-reaper", matchup="TvZ"), lambda _draw: None)
+    waiting = RandomizerStripModel(label="", can_roll_now=True)
+    source.request(SimpleNamespace(game_key="g", matchup="PvP", randomizer=waiting), lambda _draw: None)
     assert starts.pending == []
+
+
+def test_a_card_without_a_randomizer_row_reads_units_drawn_alone_once() -> None:
+    reads: List[Dict[str, Any]] = []
+    delivered: List[RandomizerDraw] = []
+    starts = Starts()
+    config = {"version": 3, "matchups": {"TvT": {"enabled": False, "unitRandomizerEnabled": True,
+                                                 "units": {"units": [{"id": "reaper"}]}}}}
+    source = RandomizerDrawSource(lambda request: reads.append(request) or {"config": config}, start=starts)
+    plain = SimpleNamespace(game_key="Tee|Me|1790000000777", matchup="TvT", randomizer=None)
+    source.request(plain, delivered.append)
+    starts.run()
+    source.request(plain, delivered.append)
+    assert reads == [{"action": "randomizer_draw", "matchup": "TvT", "buildKey": None, "customSlug": None}]
+    assert [(draw.build_key, draw.units) for draw in delivered] == [(None, ("Reaper",))]
+    assert starts.pending == []
+    source.request(card("tvz-reaper", matchup="TvZ"), delivered.append)
+    assert len(starts.pending) == 1, "a Terran pick reads its units too"
 
 
 def test_a_failed_read_is_tried_once_more_and_an_empty_draw_is_not_shown() -> None:

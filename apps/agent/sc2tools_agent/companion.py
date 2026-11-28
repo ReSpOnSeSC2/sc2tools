@@ -294,9 +294,7 @@ class CompanionClient:
             config["matchups"] = {}
         current = config["matchups"].get(matchup)
         current = deepcopy(current) if isinstance(current, dict) else {
-            "enabled": False, "useCustomWeights": False,
-            "unitRandomizerEnabled": matchup.startswith("P"), "builds": [],
-        }
+            "enabled": False, "useCustomWeights": False, "unitRandomizerEnabled": False, "builds": []}
         if "buildKeys" in request:
             keys = request["buildKeys"]
             if (not isinstance(keys, list) or len(keys) > 500
@@ -321,22 +319,22 @@ class CompanionClient:
         return {"config": saved}
 
     def _randomizer_draw(self, request):
-        """What the loading card's still needs for a saved pick: in a Protoss
-        matchup the pool's unit settings and the builds the account offers
-        (the overlay serves the widget each pool entry under its current
-        name), and a custom build's own steps. Each is null when the pick
-        cannot use it."""
-        matchup, slug = request.get("matchup"), request.get("customSlug")
+        """What the loading card's still needs: the saved Randomizer settings,
+        under a saved pick (``buildKey``) the builds the account offers (the
+        overlay serves the widget each pool entry under its current name),
+        and a custom build's own steps. Units drawn without a pick need the
+        settings alone; the rest is null when unused."""
+        matchup, slug, pick = request.get("matchup"), request.get("customSlug"), request.get("buildKey")
         if not isinstance(matchup, str) or not re.fullmatch(r"[PTZ]v[PTZ]", matchup):
             raise CompanionError("Choose a concrete matchup for the randomizer.")
         if slug is not None and (not isinstance(slug, str) or not slug or len(slug) > 200):
             raise CompanionError("Choose a saved custom build.")
+        if pick is not None and (not isinstance(pick, str) or not pick or len(pick) > 200):
+            raise CompanionError("Choose a saved randomizer pick.")
         connection = tuple(self._connection_provider())
-        config = options = None
-        if matchup.startswith("P"):
-            config = self._request("GET", "/v1/me/preferences/randomizer", expected_connection=connection)
-            options = self._request("GET", "/v1/build-intents/options", params={"matchup": matchup},
-                                    expected_connection=connection)
+        config = self._request("GET", "/v1/me/preferences/randomizer", expected_connection=connection)
+        options = (self._request("GET", "/v1/build-intents/options", params={"matchup": matchup},
+                                 expected_connection=connection) if pick else None)
         build = (self._request("GET", "/v1/custom-builds/" + quote(slug, safe=""), missing_ok=True,
                                expected_connection=connection) if slug else None)
         return {"config": config, "options": options, "build": build}

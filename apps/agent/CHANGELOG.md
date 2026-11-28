@@ -7,6 +7,9 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 ### Changed
 - The Streams page groups its automatic switches by when they run:
   **At each game start**, **After each synced game**, then **Channels**.
+- Companion's Randomizer switch is now **Draw a build order**: it turns the
+  build draw alone, since opening units have their own switch on the web. A
+  matchup the Companion adds starts with both draws off.
 
 ### Added
 - Optional **Set channel tags** and **Set category to StarCraft II**
@@ -33,6 +36,11 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   for a 1 Gate build or **Opening pair** for a 2 Gate build. It repeats the OBS
   widget's draw for that game instead of rolling again, and has no animation,
   sound or timer of its own. Catalog builds store no steps.
+- The loading card's draw covers Terran and Zerg opening units too (**Opening
+  pair** for a two-building opener), and with only **Draw opening units** on
+  it shows the units alone under **Randomizer: opening units**, kept in the
+  **Locked in** bar whatever build you play. Settings saved before keep their
+  meaning: units still follow a drawn Protoss build only.
 
 ### Fixed
 - The end card's "Checking your replay" bar no longer animates; it repainted

@@ -5,32 +5,56 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
-import { gatewayUnitMeta } from "@/lib/randomizer/gatewayUnits";
+import { openingUnitMeta } from "@/lib/randomizer/openingUnits";
 import type {
-  GatewayUnitId,
+  OpeningUnitId,
   OpeningUnitsOutcome,
+  PlayedRace,
+  UnitRevealStyle,
 } from "@/lib/randomizer/types";
 import { useReducedMotion } from "@/components/randomizer/reveals/revealShared";
+import { UNIT_STAGE_HEIGHT } from "./unitStageSize";
 
 export interface UnitRevealProps {
   outcome: OpeningUnitsOutcome;
   spinId: number;
   matchupLabel: string;
-  buildName: string;
+  /** Null when the units are drawn without a build. */
+  buildName: string | null;
   onComplete?: () => void;
 }
 
+/** What a draw with no build says in place of the build's name. */
+export const ANY_BUILD_LABEL = "Opening units for any build";
+
+/** A pick's slot while it draws: "Gate 1" for Protoss, "Pick 1" otherwise. */
+export function slotLabel(outcome: OpeningUnitsOutcome, index: number): string {
+  return outcome.race === "Protoss" ? `Gate ${index + 1}` : `Pick ${index + 1}`;
+}
+
+const MODE_LABELS: Readonly<Record<UnitRevealStyle, Readonly<Record<PlayedRace, string>>>> = {
+  "warp-gate": { Protoss: "Warp chambers", Terran: "Drop pods", Zerg: "Spawning pods" },
+  "psi-draft": { Protoss: "Holo draft", Terran: "Holo draft", Zerg: "Holo draft" },
+  "power-surge": { Protoss: "Pylon circuit", Terran: "Power grid", Zerg: "Creep pulse" },
+};
+
+/** Each reveal style's chip, in the race's own words. */
+export function unitModeLabel(style: UnitRevealStyle, race: PlayedRace): string {
+  return MODE_LABELS[style][race];
+}
+
 export interface AnimatedUnitPicks {
-  displayed: GatewayUnitId[];
+  displayed: OpeningUnitId[];
   locked: boolean[];
   allLocked: boolean;
   reducedMotion: boolean;
 }
 
 /**
- * Cycles honest candidates in each Gateway socket, then pins the pre-rolled
+ * Cycles honest candidates in each slot, then pins the pre-rolled
  * winners at the requested lock beats. Selection happens in the engine; this
  * hook only dramatizes it and cleans up every interval/timeout on re-spin.
  */
@@ -56,7 +80,7 @@ export function useAnimatedUnitPicks({
     { length: outcome.gateCount },
     (_, index) => poolIds[index % Math.max(1, poolIds.length)] ?? outcome.picks[index],
   );
-  const [displayed, setDisplayed] = useState<GatewayUnitId[]>(initial);
+  const [displayed, setDisplayed] = useState<OpeningUnitId[]>(initial);
   const [locked, setLocked] = useState<boolean[]>(
     Array(outcome.gateCount).fill(false),
   );
@@ -84,7 +108,7 @@ export function useAnimatedUnitPicks({
 
     let tick = 0;
     const interval = window.setInterval(() => {
-      // Once every Gateway shows its winner a tick changes nothing on screen,
+      // Once every slot shows its winner a tick changes nothing on screen,
       // but would still re-render the reveal through its hold in OBS.
       if (lockedRef.current.every(Boolean)) {
         window.clearInterval(interval);
@@ -150,7 +174,7 @@ export function UnitRevealFrame({
   children,
 }: {
   matchupLabel: string;
-  buildName: string;
+  buildName: string | null;
   modeLabel: string;
   resultText: string | null;
   children: ReactNode;
@@ -160,9 +184,9 @@ export function UnitRevealFrame({
       style={{
         position: "relative",
         width: "min(650px, 96vw)",
-        height: "min(370px, 72vw)",
-        minHeight: 320,
-        maxHeight: 370,
+        // A fixed height: the chambers, decks and sockets need all of it, so a
+        // narrow screen gets a taller-than-wide frame rather than overlaps.
+        height: UNIT_STAGE_HEIGHT,
         overflow: "hidden",
         borderRadius: 22,
         border: "1px solid rgba(124, 140, 255, 0.42)",
@@ -204,7 +228,7 @@ export function UnitRevealFrame({
             {matchupLabel} · Opening protocol
           </div>
           <div
-            title={buildName}
+            title={buildName ?? ANY_BUILD_LABEL}
             style={{
               marginTop: 5,
               maxWidth: 430,
@@ -216,7 +240,7 @@ export function UnitRevealFrame({
               fontWeight: 650,
             }}
           >
-            {buildName}
+            {buildName ?? ANY_BUILD_LABEL}
           </div>
         </div>
         <div
@@ -246,11 +270,11 @@ export function UnitPortrait({
   size = 64,
   dim = false,
 }: {
-  id: GatewayUnitId;
+  id: OpeningUnitId;
   size?: number;
   dim?: boolean;
 }) {
-  const unit = gatewayUnitMeta(id);
+  const unit = openingUnitMeta(id);
   return (
     // Plain local PNG keeps OBS rendering deterministic and bypasses the
     // optimization route/network hop used by next/image.
@@ -274,6 +298,40 @@ export function UnitPortrait({
   );
 }
 
+/** More units than this show as icon-and-odds chips so one row still fits. */
+const FULL_ODDS_CHIPS = 4;
+/** More units than this tighten a reveal's deck so its one row still fits. */
+const FULL_DECK = 5;
+
+/** Text clamped to two lines, so a two-word unit name wraps instead of losing its end. */
+export const TWO_LINES: CSSProperties = {
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical",
+  WebkitLineClamp: 2,
+  overflow: "hidden",
+  // Room for descenders such as the g in Charging.
+  lineHeight: 1.25,
+};
+
+/** A long deck's card names on a narrow screen: gone, or blank where the layout must keep its shape. */
+export const DECK_NAME_HIDDEN = "rdz-deck-name-hidden";
+export const DECK_NAME_BLANK = "rdz-deck-name-blank";
+
+export interface DeckSizes {
+  portrait: number;
+  gap: number;
+  /** Past four units a narrow screen shows each card's icon and odds, not its name. */
+  longDeck: boolean;
+}
+
+/** A deck card's portrait size and the gap between cards for this pool. */
+export function deckSizes(outcome: OpeningUnitsOutcome, portrait: number): DeckSizes {
+  const longDeck = outcome.pool.length > FULL_ODDS_CHIPS;
+  return outcome.pool.length > FULL_DECK
+    ? { portrait: Math.round(portrait * 0.78), gap: 5, longDeck }
+    : { portrait, gap: 8, longDeck };
+}
+
 export function UnitOddsStrip({
   outcome,
   hidden,
@@ -281,6 +339,7 @@ export function UnitOddsStrip({
   outcome: OpeningUnitsOutcome;
   hidden?: boolean;
 }) {
+  const compact = outcome.pool.length > FULL_ODDS_CHIPS;
   return (
     <div
       aria-hidden={hidden || undefined}
@@ -292,60 +351,77 @@ export function UnitOddsStrip({
         bottom: 13,
         display: "grid",
         gridTemplateColumns: `repeat(${outcome.pool.length}, minmax(0, 1fr))`,
-        gap: 6,
+        gap: compact ? 4 : 6,
         opacity: hidden ? 0 : 1,
         transform: hidden ? "translateY(8px)" : "none",
         transition: "opacity 240ms ease, transform 240ms ease",
       }}
     >
-      {outcome.pool.map((entry, index) => {
-        const unit = gatewayUnitMeta(entry.id);
-        const pct = Math.round((outcome.probabilities[index] ?? 0) * 100);
-        return (
-          <div
-            key={entry.id}
-            style={{
-              minWidth: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 5,
-              padding: "5px 6px",
-              borderRadius: 8,
-              border: "1px solid rgba(143,158,225,.2)",
-              background: "rgba(6,9,17,.62)",
-            }}
-          >
-            <UnitPortrait id={entry.id} size={21} />
-            <span
-              style={{
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                color: "#aeb8dc",
-                fontSize: 10,
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {unit.name}
-            </span>
-            <span
-              style={{
-                flexShrink: 0,
-                color: "#72dfff",
-                fontSize: 10,
-                fontWeight: 850,
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {pct}%
-            </span>
-          </div>
-        );
-      })}
+      {outcome.pool.map((entry, index) => (
+        <OddsChip
+          key={entry.id}
+          id={entry.id}
+          percent={((outcome.probabilities[index] ?? 0) * 100).toFixed(1)}
+          compact={compact}
+        />
+      ))}
     </div>
   );
+}
+
+function OddsChip({ id, percent, compact }: { id: OpeningUnitId; percent: string; compact: boolean }) {
+  const unit = openingUnitMeta(id);
+  return (
+    <div
+      title={compact ? unit.name : undefined}
+      style={{
+        minWidth: 0,
+        display: "flex",
+        flexDirection: compact ? "column" : "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: compact ? 1 : 5,
+        padding: compact ? "3px 2px" : "5px 6px",
+        borderRadius: 8,
+        border: "1px solid rgba(143,158,225,.2)",
+        background: "rgba(6,9,17,.62)",
+      }}
+    >
+      <UnitPortrait id={id} size={compact ? 18 : 21} />
+      {compact ? null : (
+        <span
+          className="rdz-small-hidden"
+          style={{
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            color: "#aeb8dc",
+            fontSize: 10,
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {unit.name}
+        </span>
+      )}
+      <span
+        style={{
+          flexShrink: 0,
+          color: "#72dfff",
+          fontSize: compact ? 9 : 10,
+          fontWeight: 850,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {percent}%
+      </span>
+    </div>
+  );
+}
+
+/** A locked pick's caption: its Gateway for Protoss, else its structure. */
+function lockedCaption(outcome: OpeningUnitsOutcome, id: OpeningUnitId, index: number): string {
+  return outcome.race === "Protoss" ? `Gate ${index + 1}` : openingUnitMeta(id).building;
 }
 
 export function UnitResultCard({
@@ -354,7 +430,7 @@ export function UnitResultCard({
   show,
 }: {
   outcome: OpeningUnitsOutcome;
-  buildName: string;
+  buildName: string | null;
   show: boolean;
 }) {
   return (
@@ -405,88 +481,96 @@ export function UnitResultCard({
           gap: outcome.gateCount === 2 ? 8 : 0,
         }}
       >
-        {outcome.picks.map((id, index) => {
-          const unit = gatewayUnitMeta(id);
-          const poolIndex = outcome.pool.findIndex((entry) => entry.id === id);
-          const probability = outcome.probabilities[poolIndex] ?? 0;
-          return (
-            <div
-              key={`${index}-${id}`}
-              style={{
-                minWidth: 0,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px clamp(5px, 1.5vw, 10px)",
-                borderRadius: 12,
-                border: "1px solid rgba(126,231,255,.28)",
-                background: "rgba(72,100,184,.13)",
-              }}
-            >
-              <UnitPortrait id={id} size={46} />
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    color: "#8193cb",
-                    fontSize: 9,
-                    fontWeight: 850,
-                    letterSpacing: ".13em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Gate {index + 1}
-                </div>
-                <div
-                  style={{
-                    marginTop: 2,
-                    color: "#f3f6ff",
-                    fontSize: "clamp(13px, 4vw, 18px)",
-                    fontWeight: 850,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {unit.name}
-                </div>
-                <div
-                  style={{
-                    marginTop: 1,
-                    color: "#76dff6",
-                    fontSize: 10,
-                    fontWeight: 750,
-                  }}
-                >
-                  {(probability * 100).toFixed(1)}% roll
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        {outcome.picks.map((id, index) => (
+          <LockedPick key={`${index}-${id}`} outcome={outcome} id={id} index={index} />
+        ))}
       </div>
-      <div
-        title={buildName}
-        style={{
-          marginTop: 9,
-          overflow: "hidden",
-          textAlign: "center",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          color: "#8f99bd",
-          fontSize: 10,
-        }}
-      >
-        Queued for {buildName}
+      {buildName ? (
+        <div
+          title={buildName}
+          style={{
+            marginTop: 9,
+            overflow: "hidden",
+            textAlign: "center",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            color: "#8f99bd",
+            fontSize: 10,
+          }}
+        >
+          Queued for {buildName}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LockedPick({ outcome, id, index }: { outcome: OpeningUnitsOutcome; id: OpeningUnitId; index: number }) {
+  const unit = openingUnitMeta(id);
+  const poolIndex = outcome.pool.findIndex((entry) => entry.id === id);
+  const probability = outcome.probabilities[poolIndex] ?? 0;
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "8px clamp(5px, 1.5vw, 10px)",
+        borderRadius: 12,
+        border: "1px solid rgba(126,231,255,.28)",
+        background: "rgba(72,100,184,.13)",
+      }}
+    >
+      <UnitPortrait id={id} size={46} />
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            color: "#8193cb",
+            fontSize: 9,
+            fontWeight: 850,
+            letterSpacing: ".13em",
+            textTransform: "uppercase",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {lockedCaption(outcome, id, index)}
+        </div>
+        <div
+          style={{
+            ...TWO_LINES,
+            marginTop: 2,
+            color: "#f3f6ff",
+            fontSize: "clamp(13px, 4vw, 18px)",
+            fontWeight: 850,
+          }}
+        >
+          {unit.name}
+        </div>
+        <div
+          style={{
+            marginTop: 1,
+            color: "#76dff6",
+            fontSize: 10,
+            fontWeight: 750,
+          }}
+        >
+          {(probability * 100).toFixed(1)}% roll
+        </div>
       </div>
     </div>
   );
 }
 
+/** What screen readers hear; the desktop card uses the same words. */
 export function resultAnnouncement(outcome: OpeningUnitsOutcome): string {
-  const names = outcome.picks.map((id) => gatewayUnitMeta(id).name);
-  return outcome.gateCount === 2
+  const names = outcome.picks.map((id) => openingUnitMeta(id).name);
+  if (outcome.gateCount !== 2) return `First unit selected: ${names[0]}.`;
+  return outcome.race === "Protoss"
     ? `Opening pair selected: Gate 1 ${names[0]}, Gate 2 ${names[1]}.`
-    : `First unit selected: ${names[0]}.`;
+    : `Opening pair selected: ${names[0]}, then ${names[1]}.`;
 }
 
 export function UnitRevealKeyframes() {
@@ -516,6 +600,13 @@ export function UnitRevealKeyframes() {
       @keyframes rdz-unit-float {
         0%, 100% { transform: translateY(0); }
         50% { transform: translateY(-6px); }
+      }
+      @media (max-width: 480px) {
+        .rdz-small-hidden { display: none; }
+      }
+      @media (max-width: 640px) {
+        .${DECK_NAME_HIDDEN} { display: none; }
+        .${DECK_NAME_BLANK} { visibility: hidden; }
       }
       @media (prefers-reduced-motion: reduce) {
         .rdz-unit-motion { animation: none !important; transition: none !important; }

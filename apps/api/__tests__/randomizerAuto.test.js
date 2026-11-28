@@ -105,6 +105,18 @@ test("requires a fresh explicit opt-in and proof of no authorized connected rand
   expect((await liveRow()).randomizer).toMatchObject({ key: BUILD, native: true });
 });
 
+test("never rolls for a streamer who queued Random: the agent hides their desktop card", async () => {
+  await deliver(envelope({
+    user: { name: "Example owner", race: "Random" },
+    players: [
+      { type: "user", name: "Example owner", race: "Prot" },
+      { type: "user", name: "Example opponent", race: "Zerg" },
+    ],
+  }));
+  expect((await liveRow())?.randomizer ?? null).toBeNull();
+  expect(io.events("build-intent:changed")).toHaveLength(0);
+});
+
 test("rechecks the accepted device envelope after resolving a build", async () => {
   const options = services.buildIntents.options;
   const original = options.resolveKey.bind(options);

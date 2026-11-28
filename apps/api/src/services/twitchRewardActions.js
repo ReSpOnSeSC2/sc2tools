@@ -1,7 +1,7 @@
 "use strict";
 
 const { eligibility } = require("./twitchAutomationPolicy");
-const { matchupFromRaces, normalizeRace } = require("./buildIntentCommon");
+const { envelopeMatchup } = require("./buildIntentCommon");
 const { readBuildIntentPrefs } = require("./buildIntentPrefs");
 const { sanitizeChatTts } = require("./multichatAppearance");
 const { overlayDescriptor, readOverlayPresence } = require("./overlayPresence");
@@ -106,7 +106,7 @@ class TwitchRewardActions {
   /** @param {string} userId @param {{enabledWidgets:string[]}} owner @param {any} row @param {Record<string,any>|null} envelope */
   async roll(userId, owner, row, envelope) {
     if (!owner.enabledWidgets.includes("randomizer") || !envelope || !this.isDeviceMatch(userId, envelope)) throw unavailable("next_game_unavailable");
-    const matchup = matchupFromRaces(normalizeRace(envelope.user?.race), normalizeRace(envelope.opponent?.race));
+    const matchup = envelopeMatchup(envelope);
     if (!matchup) throw unavailable("next_game_unavailable");
     row.assertDispatch?.();
     try { await this.deps.buildIntents.live.rewardReroll(userId, envelope.gameKey, matchup, row.redemptionId); }

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SpinOutcome } from "@/lib/randomizer/types";
+import type { GameDraw, OpeningUnitsOutcome } from "@/lib/randomizer/types";
 import {
   BETWEEN_ACTS_MS,
   BUILD_EXIT_MS,
@@ -8,7 +8,9 @@ import {
   RandomizerSequence,
   UNIT_EXIT_MS,
   UNIT_RESULT_HOLD_MS,
+  loadUnitStage,
 } from "../RandomizerSequence";
+import { UNIT_STAGE_HEIGHT } from "../unit-reveals/unitStageSize";
 
 const revealMock = vi.hoisted(() => ({
   autoCompleteBuild: false,
@@ -26,8 +28,8 @@ vi.mock("@/components/randomizer/RandomizerStage", () => ({
 }));
 
 vi.mock("@/components/randomizer/UnitRandomizerStage", () => ({
-  UnitRandomizerStage: ({ onComplete }: { onComplete?: () => void }) => (
-    <button type="button" onClick={onComplete}>complete units</button>
+  UnitRandomizerStage: ({ onComplete, buildName }: { onComplete?: () => void; buildName: string | null }) => (
+    <button type="button" onClick={onComplete}>complete units {buildName ?? "alone"}</button>
   ),
 }));
 
@@ -35,7 +37,19 @@ vi.mock("@/components/randomizer/reveals/revealShared", () => ({
   useReducedMotion: () => revealMock.reducedMotion,
 }));
 
-function outcome(withUnits = true): SpinOutcome {
+const UNITS: OpeningUnitsOutcome = {
+  race: "Protoss",
+  gateCount: 2,
+  picks: ["stalker", "sentry"],
+  style: "warp-gate",
+  pool: [
+    { id: "stalker", weight: 1 },
+    { id: "sentry", weight: 1 },
+  ],
+  probabilities: [0.5, 0.5],
+};
+
+function draw(withUnits = true, withBuild = true): GameDraw {
   const winner = {
     id: "blink",
     name: "PvP - 2 Gate Blink",
@@ -45,23 +59,16 @@ function outcome(withUnits = true): SpinOutcome {
   };
   return {
     matchup: "PvP",
-    winner,
-    style: "wheel",
-    pool: [winner],
-    probabilities: [1],
-    openingUnits: withUnits
-      ? {
-          gateCount: 2,
-          picks: ["stalker", "sentry"],
-          style: "warp-gate",
-          pool: [
-            { id: "stalker", weight: 1 },
-            { id: "sentry", weight: 1 },
-          ],
-          probabilities: [0.5, 0.5],
-        }
-      : null,
+    build: withBuild ? { matchup: "PvP", winner, style: "wheel", pool: [winner], probabilities: [1] } : null,
+    units: withUnits ? UNITS : null,
   };
+}
+
+/** The unit reveal loads on demand; let its module resolve. */
+async function unitStageLoaded() {
+  await act(async () => {
+    await loadUnitStage();
+  });
 }
 
 describe("RandomizerSequence", () => {
@@ -76,29 +83,30 @@ describe("RandomizerSequence", () => {
     vi.useRealTimers();
   });
 
-  it("fully exits the build act before mounting the opening-unit act", () => {
-    render(<RandomizerSequence outcome={outcome()} spinId={1} />);
+  it("fully exits the build act before mounting the opening-unit act", async () => {
+    render(<RandomizerSequence draw={draw()} spinId={1} />);
     fireEvent.click(screen.getByRole("button", { name: "complete build" }));
 
     act(() => vi.advanceTimersByTime(BUILD_RESULT_HOLD_MS - 1));
-    expect(screen.queryByText("complete units")).toBeNull();
+    expect(screen.queryByText(/complete units/)).toBeNull();
     expect(screen.getByText("complete build")).toBeTruthy();
 
     act(() => vi.advanceTimersByTime(1));
     expect(
       document.querySelector('[data-randomizer-phase="build-exit"]'),
     ).toBeTruthy();
-    expect(screen.queryByText("complete units")).toBeNull();
+    expect(screen.queryByText(/complete units/)).toBeNull();
 
     act(() => vi.advanceTimersByTime(BUILD_EXIT_MS + BETWEEN_ACTS_MS));
+    await unitStageLoaded();
     expect(screen.queryByText("complete build")).toBeNull();
-    expect(screen.getByText("complete units")).toBeTruthy();
+    expect(screen.getByText("complete units PvP - 2 Gate Blink")).toBeTruthy();
   });
 
-  it("holds the unit result, exits, then clears the sequence", () => {
+  it("holds the unit result, exits, then clears the sequence", async () => {
     const onComplete = vi.fn();
     render(
-      <RandomizerSequence outcome={outcome()} spinId={1} onComplete={onComplete} />,
+      <RandomizerSequence draw={draw()} spinId={1} onComplete={onComplete} />,
     );
     fireEvent.click(screen.getByText("complete build"));
     act(() =>
@@ -106,7 +114,8 @@ describe("RandomizerSequence", () => {
         BUILD_RESULT_HOLD_MS + BUILD_EXIT_MS + BETWEEN_ACTS_MS,
       ),
     );
-    fireEvent.click(screen.getByText("complete units"));
+    await unitStageLoaded();
+    fireEvent.click(screen.getByText(/complete units/));
 
     act(() => vi.advanceTimersByTime(UNIT_RESULT_HOLD_MS));
     expect(
@@ -120,33 +129,58 @@ describe("RandomizerSequence", () => {
   });
 
   it("keeps the established single-act result when no unit roll is eligible", () => {
-    render(<RandomizerSequence outcome={outcome(false)} spinId={1} />);
+    render(<RandomizerSequence draw={draw(false)} spinId={1} />);
     fireEvent.click(screen.getByText("complete build"));
     act(() => vi.advanceTimersByTime(60_000));
     expect(screen.getByText("complete build")).toBeTruthy();
-    expect(screen.queryByText("complete units")).toBeNull();
+    expect(screen.queryByText(/complete units/)).toBeNull();
   });
 
-  it("does not clear a synchronous reduced-motion completion on mount", () => {
+  it("opens on the unit act, with no build, when units are drawn alone", async () => {
+    const onComplete = vi.fn();
+    render(<RandomizerSequence draw={draw(true, false)} spinId={1} onComplete={onComplete} />);
+    expect(document.querySelector('[data-randomizer-phase="units"]')).toBeTruthy();
+    expect(screen.queryByText("complete build")).toBeNull();
+    await unitStageLoaded();
+    fireEvent.click(screen.getByText("complete units alone"));
+    act(() => vi.advanceTimersByTime(UNIT_RESULT_HOLD_MS + UNIT_EXIT_MS));
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("holds the unit frame's full height from the first act, so nothing jumps when it loads", () => {
+    render(<RandomizerSequence draw={draw()} spinId={1} />);
+    const stage = () => document.querySelector<HTMLElement>("[data-randomizer-phase]");
+    expect(stage()?.style.minHeight).toBe(`${UNIT_STAGE_HEIGHT}px`);
+    fireEvent.click(screen.getByText("complete build"));
+    act(() => vi.advanceTimersByTime(BUILD_RESULT_HOLD_MS + BUILD_EXIT_MS + BETWEEN_ACTS_MS));
+    expect(stage()?.dataset.randomizerPhase).toBe("units");
+    expect(stage()?.style.minHeight).toBe(`${UNIT_STAGE_HEIGHT}px`);
+    cleanup();
+    render(<RandomizerSequence draw={draw(false)} spinId={2} />);
+    expect(stage()?.style.minHeight).toBe("320px");
+  });
+
+  it("does not clear a synchronous reduced-motion completion on mount", async () => {
     revealMock.reducedMotion = true;
     revealMock.autoCompleteBuild = true;
-    render(<RandomizerSequence outcome={outcome()} spinId={1} />);
+    render(<RandomizerSequence draw={draw()} spinId={1} />);
 
     act(() => vi.advanceTimersByTime(700));
+    await unitStageLoaded();
     expect(screen.queryByText("complete build")).toBeNull();
-    expect(screen.getByText("complete units")).toBeTruthy();
+    expect(screen.getByText(/complete units/)).toBeTruthy();
   });
 
   it("cleans up the previous run when spinId changes", () => {
     const { rerender } = render(
-      <RandomizerSequence outcome={outcome()} spinId={1} />,
+      <RandomizerSequence draw={draw()} spinId={1} />,
     );
     fireEvent.click(screen.getByText("complete build"));
 
-    rerender(<RandomizerSequence outcome={outcome()} spinId={2} />);
+    rerender(<RandomizerSequence draw={draw()} spinId={2} />);
     act(() => vi.advanceTimersByTime(60_000));
 
     expect(screen.getByText("complete build")).toBeTruthy();
-    expect(screen.queryByText("complete units")).toBeNull();
+    expect(screen.queryByText(/complete units/)).toBeNull();
   });
 });

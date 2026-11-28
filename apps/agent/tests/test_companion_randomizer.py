@@ -85,6 +85,7 @@ def test_loads_real_pool_off_thread_and_honors_loading_hold(panel):
     assert all(worker != threading.get_ident() for worker in state["threads"])
     assert widget.matchup_select.currentText() == "PvZ"
     assert widget.enabled_check.isChecked()
+    assert widget.enabled_check.text() == "Draw a build order", "the switch is the build draw alone"
     assert widget.pool.topLevelItemCount() == 2
     assert widget.pool.topLevelItem(0).text(0) == "Blink opener"
     assert widget.pool.topLevelItem(0).checkState(0) == QtCore.Qt.Checked

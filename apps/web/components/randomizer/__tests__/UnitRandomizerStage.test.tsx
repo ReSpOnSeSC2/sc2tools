@@ -5,6 +5,7 @@ import type {
   UnitRevealStyle,
 } from "@/lib/randomizer/types";
 import { UnitRandomizerStage } from "../UnitRandomizerStage";
+import { UNIT_STAGE_HEIGHT } from "../unit-reveals/unitStageSize";
 
 vi.mock("@/components/randomizer/reveals/revealShared", async () => {
   const actual = await vi.importActual<
@@ -15,6 +16,7 @@ vi.mock("@/components/randomizer/reveals/revealShared", async () => {
 
 function outcome(style: UnitRevealStyle): OpeningUnitsOutcome {
   return {
+    race: "Protoss",
     gateCount: 2,
     picks: ["stalker", "stalker"],
     style,
@@ -61,6 +63,8 @@ describe("UnitRandomizerStage", () => {
       container.querySelector('img[src="/icons/sc2/units/stalker.png"]'),
     ).toBeTruthy();
     expect(onComplete).toHaveBeenCalledTimes(1);
+    // The height RandomizerSequence holds while this code loads.
+    expect(container.querySelector<HTMLElement>("div")?.style.height).toBe(`${UNIT_STAGE_HEIGHT}px`);
   });
 
   it("renders duplicate two-Gate picks as two ordered result sockets", () => {
@@ -76,5 +80,37 @@ describe("UnitRandomizerStage", () => {
     expect(screen.getAllByText("Gate 1").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Gate 2").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Stalker").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("speaks a Terran pair in its own words, with each unit's structure and no build", () => {
+    const terran: OpeningUnitsOutcome = {
+      race: "Terran", gateCount: 2, picks: ["reaper", "hellion"], style: "warp-gate",
+      pool: [{ id: "reaper", weight: 1 }, { id: "hellion", weight: 1 }], probabilities: [0.5, 0.5],
+    };
+    render(<UnitRandomizerStage outcome={terran} spinId={3} matchupLabel="TvZ" buildName={null} />);
+    act(() => vi.runOnlyPendingTimers());
+    expect(screen.getByText("Drop pods")).toBeTruthy();
+    expect(screen.getAllByText("Opening units for any build")).toHaveLength(1);
+    expect(screen.queryByText(/Queued for/)).toBeNull();
+    expect(screen.getByText("Barracks")).toBeTruthy();
+    expect(screen.getByText("Factory")).toBeTruthy();
+    expect(screen.queryByText(/Gate 1/)).toBeNull();
+    expect(screen.getAllByText("Opening pair selected: Reaper, then Hellion.").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("fits a long Zerg list in one row of icon-and-odds chips, around a Zerg hub", () => {
+    const ids = ["zergling", "queen", "baneling", "roach", "ravager", "hydralisk", "lurker", "mutalisk"] as const;
+    const zerg = (style: UnitRevealStyle): OpeningUnitsOutcome => ({
+      race: "Zerg", gateCount: 1, picks: ["queen"], style,
+      pool: ids.map((id) => ({ id, weight: 1 })), probabilities: ids.map(() => 1 / 8),
+    });
+    const chips = render(<UnitRandomizerStage outcome={zerg("warp-gate")} spinId={4} matchupLabel="ZvT" buildName="ZvT - Mass Queen Defensive" />);
+    expect(chips.container.querySelectorAll('[title="Hydralisk"]').length).toBe(1);
+    expect(screen.getByText("Spawning pods")).toBeTruthy();
+    chips.unmount();
+    const surge = render(<UnitRandomizerStage outcome={zerg("power-surge")} spinId={5} matchupLabel="ZvT" buildName={null} />);
+    act(() => vi.runOnlyPendingTimers());
+    expect(screen.getByText("Creep pulse")).toBeTruthy();
+    expect(surge.container.querySelector('img[src="/icons/sc2/buildings/hatchery.png"]')).toBeTruthy();
   });
 });

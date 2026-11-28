@@ -6,17 +6,21 @@
 import {
   REVEAL_STYLES,
   UNIT_REVEAL_STYLES,
-  type GatewayUnitId,
+  isOpeningUnitId,
+  playedRace,
+  type GameDraw,
   type MatchupConfig,
   type MatchupKey,
+  type OpeningUnitId,
+  type OpeningUnitsConfig,
   type OpeningUnitsOutcome,
+  type PlayedRace,
   type RandomizerBuild,
   type RevealStyle,
   type SpinOutcome,
   type UnitRevealStyle,
-  type WeightedGatewayUnit,
+  type WeightedOpeningUnit,
 } from "./types";
-import { isGatewayUnitId } from "./gatewayUnits";
 
 /** Stable unsigned 32-bit FNV-1a hash for game-key-derived PRNG seeds. */
 export function seedFromString(value: string): number {
@@ -94,9 +98,9 @@ export function pickUnitRevealStyle(
   ];
 }
 
-/** Effective weight for one selected Gateway unit. */
+/** Effective weight for one selected opening unit. */
 export function effectiveOpeningUnitWeight(
-  unit: WeightedGatewayUnit,
+  unit: WeightedOpeningUnit,
   useCustomWeights: boolean,
 ): number {
   if (!useCustomWeights) return 1;
@@ -105,36 +109,33 @@ export function effectiveOpeningUnitWeight(
 }
 
 /**
- * Roll one unit per configured Gateway. Each draw uses the same normalized
- * pool and is independent, so a two-Gate result may intentionally repeat.
+ * Roll one unit per Gateway or building. Each draw uses the same normalized
+ * pool and is independent, so a two-unit result may intentionally repeat.
  */
-export function spinOpeningUnits(
-  build: RandomizerBuild,
-  enabled: boolean,
+export function drawOpeningUnits(
+  race: PlayedRace,
+  opening: OpeningUnitsConfig,
   rng: () => number = Math.random,
 ): OpeningUnitsOutcome | null {
-  if (!enabled || build.race !== "Protoss" || !build.openingUnits) return null;
-
-  const seen = new Set<GatewayUnitId>();
-  const pool = build.openingUnits.units.filter((unit) => {
-    if (!isGatewayUnitId(unit?.id) || seen.has(unit.id)) return false;
+  const seen = new Set<OpeningUnitId>();
+  const pool = opening.units.filter((unit) => {
+    if (!isOpeningUnitId(unit?.id, race) || seen.has(unit.id)) return false;
     seen.add(unit.id);
     return true;
   });
   if (pool.length === 0) return null;
 
   const probabilities = normalizeProbabilities(
-    pool.map((unit) =>
-      effectiveOpeningUnitWeight(unit, build.openingUnits!.useCustomWeights),
-    ),
+    pool.map((unit) => effectiveOpeningUnitWeight(unit, opening.useCustomWeights)),
   );
-  const gateCount = build.openingUnits.gateCount === 2 ? 2 : 1;
-  const picks: GatewayUnitId[] = [];
+  const gateCount = opening.gateCount === 2 ? 2 : 1;
+  const picks: OpeningUnitId[] = [];
   for (let gate = 0; gate < gateCount; gate += 1) {
     picks.push(pool[pickIndex(probabilities, rng)].id);
   }
 
   return {
+    race,
     gateCount,
     picks,
     style: pickUnitRevealStyle(rng),
@@ -144,8 +145,43 @@ export function spinOpeningUnits(
 }
 
 /**
- * Resolve a full spin for a matchup. Returns null when the matchup is
- * disabled or has no builds — callers render nothing in that case.
+ * The unit settings that follow a drawn build: its pool entry's own, else
+ * (a Terran or Zerg entry saved without any) the matchup's. A saved pick no
+ * longer in the pool draws no units.
+ */
+function unitSettingsAfterBuild(
+  cfg: MatchupConfig,
+  winner: RandomizerBuild,
+): OpeningUnitsConfig | undefined {
+  const inPool = cfg.builds.some((build) => build?.id === winner.id && typeof build.name === "string");
+  return inPool ? winner.openingUnits ?? cfg.units : undefined;
+}
+
+/**
+ * One game's complete draw for a matchup: its build, then its opening
+ * units, each behind its own switch. The units take the generator's next
+ * values after the build's two (winner, then reveal style), or its first
+ * values when no build is drawn. Null when nothing is drawn.
+ */
+export function drawGame(
+  matchup: MatchupKey,
+  cfg: MatchupConfig | undefined,
+  rng: () => number = Math.random,
+  avoidStyle?: RevealStyle | null,
+  winnerOverride?: RandomizerBuild,
+): GameDraw | null {
+  if (!cfg) return null;
+  const build = spinResult(matchup, cfg, rng, avoidStyle, winnerOverride);
+  const opening = build ? unitSettingsAfterBuild(cfg, build.winner) : cfg.enabled ? undefined : cfg.units;
+  const units = cfg.unitRandomizerEnabled && opening
+    ? drawOpeningUnits(playedRace(matchup), opening, rng)
+    : null;
+  return build || units ? { matchup, build, units } : null;
+}
+
+/**
+ * Resolve the build spin for a matchup. Returns null when its build draw
+ * is off or it has no builds — callers render nothing in that case.
  */
 export function spinResult(
   matchup: MatchupKey,
@@ -171,16 +207,5 @@ export function spinResult(
   const style = pickRevealStyle(rng, avoidStyle);
   const winner = winnerOverride ? pool.find((build) => build.id === winnerOverride.id)! : pool[winnerIndex];
 
-  return {
-    matchup,
-    winner,
-    style,
-    pool,
-    probabilities,
-    openingUnits: spinOpeningUnits(
-      winner,
-      cfg.unitRandomizerEnabled === true,
-      rng,
-    ),
-  };
+  return { matchup, winner, style, pool, probabilities };
 }

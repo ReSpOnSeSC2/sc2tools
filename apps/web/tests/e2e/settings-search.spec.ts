@@ -24,7 +24,7 @@ const backupsIds = ["replay-archive", "snapshots", "repair-data", "reanalyze", "
 // Client-only (ssr: false) Backups modules wait for the synthetic client boundary.
 const backupsClientIds = ["reanalyze", "hidden-games"];
 const preferencesIds = ["app-preferences", "appearance", "setup-privacy", "reports", "notifications", "push"];
-const randomizerIds = ["build-randomizer", "catalog-builds", "custom-builds", "gateway-draw", "sound-effects", "randomizer-preview", "randomizer-challenge"];
+const randomizerIds = ["build-randomizer", "catalog-builds", "custom-builds", "unit-draw", "sound-effects", "randomizer-preview", "randomizer-challenge"];
 
 async function choose(page: Page, query: string) {
   await search(page).fill(query); await search(page).press("ArrowDown"); await search(page).press("Enter");
@@ -180,10 +180,11 @@ for (const theme of ["light", "dark"] as const) {
       await checkAccessibility(page, info, `/settings-search-chat-${width}`, theme); await capture(page, info, theme, width, "chat");
       await choose(page, "Build randomizer pool"); await confirm(page).getByRole("button", { name: "Discard & switch" }).click();
       await targets(page, randomizerIds); await choices(page, randomizerIds);
-      await chooseSection(page, width, "gateway-draw", "Opening Gateway draw"); const gatewayHref = page.url();
-      await page.getByRole("tablist", { name: "Matchups" }).getByRole("tab", { name: /\bTvP\b/ }).click();
-      await expect(page.locator('[id="gateway-draw"]')).toHaveCount(0); await choices(page, randomizerIds.filter(id => id !== "gateway-draw"));
-      expect(page.url()).toBe(gatewayHref);
+      await chooseSection(page, width, "unit-draw", "Opening units"); const unitsHref = page.url();
+      await page.getByRole("radiogroup", { name: "Your race" }).getByRole("radio", { name: /Terran/ }).click();
+      await expect(page.getByRole("tablist", { name: "Matchups" }).getByRole("tab", { name: /\bTvP\b/ })).toHaveAttribute("aria-selected", "true");
+      await expect(page.locator('[id="unit-draw"]')).toHaveCount(1); await choices(page, randomizerIds);
+      expect(page.url()).toBe(unitsHref);
       await checkAccessibility(page, info, `/settings-search-randomizer-${width}`, theme); await overflow(page);
       await capture(page, info, theme, width, "randomizer");
       await choose(page, "Replay import"); await targets(page, ["desktop-import", "import-jobs"]);
