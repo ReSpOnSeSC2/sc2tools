@@ -300,6 +300,15 @@ describe("clip moments", () => {
       gameKey: "g9",
     });
   });
+
+  test("recordMoment keeps the time the caller gives for when it happened", async () => {
+    const at = nowMs - 600_000;
+    await svc.recordMoment(TOKEN, { kind: "clip-saved", reason: "a clip", atMs: at });
+    await svc.recordMoment(TOKEN, { kind: "clip-saved", reason: "b clip", atMs: "soon" });
+    const found = (await svc.summary(TOKEN)).clipMoments;
+    expect(found.find((m) => m.reason === "a clip").atMs).toBe(at);
+    expect(found.find((m) => m.reason === "b clip").atMs).toBeGreaterThan(at + 500_000);
+  });
 });
 
 describe("viewerStats (!rank)", () => {

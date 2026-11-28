@@ -39,6 +39,30 @@ page.close()
 ''')
 
 
+def test_clip_switch_and_its_hint_fit_the_smallest_display(tmp_path, monkeypatch):
+    monkeypatch.setenv("QT_SCALE_FACTOR", "1.5")
+    run_gui_check(tmp_path, THEMED_SETUP.replace("FONT_SIZE", "9") + '''
+from sc2tools_agent.ui.streams_page import build_streams_page
+
+state = {"account_mode": "sc2tools", "title_automation": {"save_clips": True, "clip_message": "OBS's replay buffer is not running, so no clip was saved. " * 2}}
+page = build_streams_page(None, provider=lambda: state, handler=lambda _: state, QtCore=QtCore, QtWidgets=QtWidgets)
+page.timer.stop()
+page.show()
+page.render(state)
+controls = page.title_controls
+for width in (425, 1024):
+    page.resize(width, 235)
+    for _ in range(5):
+        app.processEvents()
+    assert page.horizontalScrollBar().maximum() == 0, width
+    for control in (controls.save_clips, controls.clip_status):
+        assert control.isVisible() and control.width() >= control.minimumSizeHint().width()
+        page.ensureWidgetVisible(control)
+        assert page.viewport().rect().contains(control.mapTo(page.viewport(), control.rect().bottomRight()))
+page.close()
+''')
+
+
 def test_obs_dialog_keeps_cancel_focused_and_uses_shared_type(tmp_path):
     run_gui_check(tmp_path, THEMED_SETUP.replace("FONT_SIZE", "9") + '''
 from threading import Event

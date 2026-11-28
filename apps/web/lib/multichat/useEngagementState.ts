@@ -66,7 +66,7 @@ export interface OracleRecap {
 
 export interface ClipMoment {
   atMs: number;
-  kind: "chat-spike" | "game-event" | "manual";
+  kind: "chat-spike" | "game-event" | "manual" | "clip-saved";
   reason: string;
   sampleLines: string[];
   gameKey?: string;
@@ -116,7 +116,7 @@ export function sanitizeClipMoments(raw: unknown, limit = 100): ClipMoment[] {
     if (!value || typeof value !== "object") return [];
     const { atMs, kind, reason, sampleLines, gameKey } = value;
     if (!Number.isSafeInteger(atMs) || atMs <= 0 || atMs > 8.64e15 || !str(reason, 160)) return [];
-    return [{ atMs, kind: kind === "game-event" || kind === "manual" ? kind : "chat-spike", reason: str(reason, 160),
+    return [{ atMs, kind: kind === "game-event" || kind === "manual" || kind === "clip-saved" ? kind : "chat-spike", reason: str(reason, 160),
       sampleLines: (Array.isArray(sampleLines) ? sampleLines.slice(0, 5) : []).map((line) => str(line, 200)).filter(Boolean),
       ...(str(gameKey) ? { gameKey: str(gameKey) } : {}) }];
   });

@@ -3,6 +3,7 @@ const express = require("express");
 const { LIMITS } = require("../config/constants");
 const { PlatformIntegrationError } = require("../services/platformIntegrations");
 const { parsePlatform } = require("./platformIntegrations");
+const { savedClipName, savedClipRecorder } = require("../services/streamSavedClip");
 
 /** Narrow user-owned control API. Accepts paired agents or signed-in users.
  * Provider credentials stay in services; no route accepts a user/channel ID.
@@ -11,10 +12,13 @@ const { parsePlatform } = require("./platformIntegrations");
  * titleSession?:(userId:string, gameId?:string)=>Promise<unknown>,
  * streamingTitles:import('../services/streamingTitles').StreamingTitlesService,
  * streamingChannel?:import('../services/streamingChannel').StreamingChannelService,
- * streamGuardian?:import('../services/streamGuardian').StreamGuardianService}} deps
+ * streamGuardian?:import('../services/streamGuardian').StreamGuardianService,
+ * engagement?:import('../services/multichatEngagement').MultichatEngagementService,
+ * overlayTokens?:import('../services/overlayTokens').OverlayTokensService}} deps
  */
-function buildAgentStreamingRouter({ auth, integrations, streamingTitles, streamingChannel, titleSession, streamGuardian }) {
+function buildAgentStreamingRouter({ auth, integrations, streamingTitles, streamingChannel, titleSession, streamGuardian, engagement, overlayTokens }) {
   const router = express.Router();
+  const recordSavedClip = engagement && overlayTokens ? savedClipRecorder({ engagement, overlayTokens }) : null;
   router.get("/agent/streaming/session", auth, async (req, res, next) => {
     try {
       const userId = requireAccount(req);
@@ -63,6 +67,20 @@ function buildAgentStreamingRouter({ auth, integrations, streamingTitles, stream
       }
       res.set("Cache-Control", "no-store");
       res.json({ warnings: streamGuardian.publish(userId, body.warnings).warnings });
+    } catch (error) { next(safeFailure(error)); }
+  });
+  router.post("/agent/streaming/clip", auth, async (req, res, next) => {
+    try {
+      const userId = requireAccount(req);
+      const body = req.body;
+      const name = body && typeof body === "object" && !Array.isArray(body) && Object.keys(body).every((key) => key === "name" || key === "endedAtMs")
+        ? savedClipName(body.name) : null;
+      if (name === null) {
+        throw new PlatformIntegrationError(400, "stream_clip_request_invalid", "Send only the name of the saved clip, one line of text, and when its game ended.");
+      }
+      if (!recordSavedClip) throw new Error("clips unavailable");
+      res.set("Cache-Control", "no-store");
+      res.json({ listed: await recordSavedClip(userId, name, body.endedAtMs) });
     } catch (error) { next(safeFailure(error)); }
   });
   router.post("/agent/streaming/:platform/connect", auth, async (req, res, next) => {

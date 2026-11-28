@@ -73,6 +73,7 @@ def test_live_title_template_preview_and_explicit_default_off_platform_selection
     controls.configure()
     assert payloads == [{"action": "configure_title_automation", "template": "SC2 | {mmr} MMR | {record}",
         "enabled": True, "on_game_start": False, "channel_tags": False, "category_guard": False, "record_chapters": False,
+            "save_clips": False,
         "platforms": {"twitch": True, "kick": True, "youtube": False}}]
     widget._completed({"action": "configure_title_automation", "error": "Storage unavailable"})
     assert controls.dirty is True
@@ -103,6 +104,7 @@ def test_automatic_switches_sit_under_the_heading_of_when_they_run(page):
     headings = {label.text(): label for label in widget.findChildren(QtWidgets.QLabel) if label.objectName() == "studioEyebrow"}
     groups = [
         ("At each game start", [controls.on_game_start, controls.channel_tags, controls.category_guard, controls.record_chapters]),
+        ("After each game", [controls.save_clips]),
         ("After each synced game", [controls.enabled]),
         ("Channels", list(controls.platforms.values())),
     ]
@@ -114,6 +116,34 @@ def test_automatic_switches_sit_under_the_heading_of_when_they_run(page):
     # The heading carries the trigger, so the two title switches need it in their accessible names.
     assert controls.on_game_start.accessibleName() == "Refresh the title at each game start"
     assert controls.enabled.accessibleName() == "Refresh the title after each synced game"
+
+
+def test_the_clip_switch_starts_off_is_saved_with_the_titles_and_shows_the_hint(page, monkeypatch):
+    widget, state, _app = page
+    state["account_mode"] = "sc2tools"
+    state["title_automation"] = {"enabled": False, "on_game_start": False, "clip_message": "OBS's replay buffer is not running."}
+    widget.render(state)
+    controls = widget.title_controls
+    assert not controls.save_clips.isChecked()
+    assert controls.save_clips.accessibleName() == "Save an OBS replay-buffer clip after each game"
+    assert controls.clip_status.text() == "OBS's replay buffer is not running." and not controls.clip_status.isHidden()
+    assert controls.clip_status.property("tone") is None or controls.clip_status.property("tone") == ""
+    state["title_automation"]["clip_problem"] = True
+    widget.render(state)
+    assert controls.clip_status.property("tone") == "warning"
+    state["title_automation"]["clip_problem"] = False
+    state["title_automation"]["clip_message"] = ""
+    widget.render(state)
+    assert controls.clip_status.isHidden() and controls.clip_status.property("tone") == ""
+    controls.save_clips.setChecked(True)
+    assert controls.activation.text().endswith("Click Save automatic title settings to apply your changes.")
+    payloads = []
+    monkeypatch.setattr(widget, "job", payloads.append)
+    controls.configure()
+    assert payloads[0]["save_clips"] is True
+    state["title_automation"].update(save_clips=True)
+    widget._completed({"action": "configure_title_automation", "state": state})
+    assert "A replay-buffer clip is saved when each game ends." in controls.activation.text()
 
 
 def test_current_match_template_preserves_prefix_and_only_edits_locally(page, monkeypatch):

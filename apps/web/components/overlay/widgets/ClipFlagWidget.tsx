@@ -37,7 +37,8 @@ export function ClipFlagWidget({
   useEffect(() => {
     if (!lastEvent || lastEvent.type !== "clip-moment") return;
     const moment = (lastEvent.moment ?? {}) as Record<string, unknown>;
-    if (moment.kind === "manual") return;
+    // Dock-only records (manual notes, saved OBS clips) never go on stream.
+    if (moment.kind === "manual" || moment.kind === "clip-saved") return;
     setReason(String(moment.reason ?? "Chat is going off"));
     clearTimeout(hide.current);
     hide.current = setTimeout(() => setReason(null), SHOW_MS);

@@ -37,6 +37,7 @@ class GuardianServiceMixin:
     def on_game_event(self, event):
         self.guardian.on_game_event(event)
         self.titles.worker.on_event(event)
+        self.titles.clips.on_event(event)
 
     def _persist_guardian(self, settings):
         config = copy.deepcopy(self.backend.config)

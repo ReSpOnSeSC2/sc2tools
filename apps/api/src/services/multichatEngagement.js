@@ -64,7 +64,7 @@ const CLIP_SPIKE_FACTOR = 3;
 const CLIP_COOLDOWN_MS = 90_000;
 const CLIP_SAMPLE_MAX = 5;
 /** Stored clip-moment kinds. Anything else is coerced to a chat spike. */
-const CLIP_MOMENT_KINDS = Object.freeze(["chat-spike", "game-event", "manual"]);
+const CLIP_MOMENT_KINDS = Object.freeze(["chat-spike", "game-event", "manual", "clip-saved"]);
 /** One Dock "Flag moment" per token per this window. */
 const MANUAL_MOMENT_COOLDOWN_MS = 5_000;
 const MANUAL_MOMENT_NOTE_MAX = 80;
@@ -376,17 +376,17 @@ class MultichatEngagementService {
    * Dock flag). Returns the moment as the Dock lists it.
    *
    * @param {string} token
-   * @param {{kind: string, reason: string, sampleLines?: string[], gameKey?: string}} m
+   * @param {{kind: string, reason: string, sampleLines?: string[], gameKey?: string, atMs?: number}} m
    */
   async recordMoment(token, m) {
     return this._withWrite(token, () => this._recordMomentAdmitted(token, m));
   }
 
-  /** @param {string} token @param {{kind:string,reason:string,sampleLines?:string[],gameKey?:string}} m */
+  /** @param {string} token @param {{kind:string,reason:string,sampleLines?:string[],gameKey?:string,atMs?:number}} m */
   async _recordMomentAdmitted(token, m) {
     const doc = {
       token,
-      atMs: this.now(),
+      atMs: Number.isFinite(m.atMs) ? m.atMs : this.now(),
       atDate: new Date(),
       kind: CLIP_MOMENT_KINDS.includes(m.kind) ? m.kind : "chat-spike",
       reason: String(m.reason).slice(0, 160),

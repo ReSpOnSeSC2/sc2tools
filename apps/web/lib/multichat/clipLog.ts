@@ -3,7 +3,7 @@ import { csvCell } from "@/lib/csvExport";
 import { formatOffset } from "@/lib/vodLinks";
 import type { ClipMoment } from "./useEngagementState";
 
-export const MOMENT_KIND_LABELS: Record<ClipMoment["kind"], string> = { "chat-spike": "Chat", "game-event": "Game", manual: "Manual" };
+export const MOMENT_KIND_LABELS: Record<ClipMoment["kind"], string> = { "chat-spike": "Chat", "game-event": "Game", manual: "Manual", "clip-saved": "Clip" };
 
 export function mergeClipMoments(...pages: ReadonlyArray<ClipMoment>[]): ClipMoment[] {
   const unique = new Map<string, ClipMoment>();

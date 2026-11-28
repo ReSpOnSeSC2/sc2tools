@@ -14,6 +14,7 @@ class StreamTitleControls:
         layout.addWidget(page._label("Tokens: " + TOKEN_REFERENCE + ". Separate optional parts with |. Rendered titles must fit 70 characters.", True))
         self._add_template_presets(layout, QtWidgets)
         self._add_game_start_switches(layout, QtWidgets)
+        self._add_game_end_switch(layout, QtWidgets)
         self._add_post_sync_switch(layout, QtWidgets)
         self._add_channels(layout, QtWidgets)
         self.save = page._button("Save automatic title settings", self.configure, quiet=True)
@@ -54,6 +55,17 @@ class StreamTitleControls:
             "Optional and off by default. Changes the category only at a game start, only when it is not StarCraft II, and never back.")
         self.record_chapters = self._switch(layout, QtWidgets, "Add a chapter to the OBS recording", "Add a chapter to the OBS recording at each game start",
             "Optional and off by default. Needs OBS 30.2 or newer recording hybrid MP4; with anything else it quietly does nothing.")
+
+    def _add_game_end_switch(self, layout, QtWidgets):
+        self._heading(layout, "After each game")
+        self.save_clips = self._switch(layout, QtWidgets, "Save an OBS replay-buffer clip", "Save an OBS replay-buffer clip after each game",
+            "Optional and off by default. Saves the end of the game from OBS's replay buffer, which must already be running, "
+            "and files it in a Highlights folder named from the game.")
+        # The hint sits under its switch, lined up with the switch text like the tag preview above.
+        self.clip_status = self.page._label("", True)
+        self.clip_status.setContentsMargins(theme.SPACE_L + theme.SPACE_S, 0, 0, 0)
+        self.clip_status.hide()
+        layout.addWidget(self.clip_status)
 
     def _add_post_sync_switch(self, layout, QtWidgets):
         self._heading(layout, "After each synced game")
@@ -102,7 +114,7 @@ class StreamTitleControls:
         self.page.job({"action": "configure_title_automation", "template": self.page.title_input.text(),
             "enabled": self.enabled.isChecked(), "on_game_start": self.on_game_start.isChecked(),
             "channel_tags": self.channel_tags.isChecked(), "category_guard": self.category_guard.isChecked(),
-            "record_chapters": self.record_chapters.isChecked(),
+            "record_chapters": self.record_chapters.isChecked(), "save_clips": self.save_clips.isChecked(),
             "platforms": {name: control.isChecked() for name, control in self.platforms.items()}})
 
     def update_preview(self, *_args):
@@ -124,6 +136,7 @@ class StreamTitleControls:
             (self.channel_tags, settings.get("channel_tags") is True),
             (self.category_guard, settings.get("category_guard") is True),
             (self.record_chapters, settings.get("record_chapters") is True),
+            (self.save_clips, settings.get("save_clips") is True),
             *((control, platforms.get(name, name != "youtube")) for name, control in self.platforms.items()),
         ]
 
@@ -141,6 +154,8 @@ class StreamTitleControls:
             status += " Channel " + " and ".join(channel) + " update at game start."
         if settings.get("record_chapters") is True:
             status += " The OBS recording gets a chapter marker at game start."
+        if settings.get("save_clips") is True:
+            status += " A replay-buffer clip is saved when each game ends."
         options_changed = any(control.isChecked() != checked for control, checked in self._saved_controls(settings))
         template_changed = self.page.title_dirty and (self.enabled.isChecked() or self.on_game_start.isChecked())
         if options_changed or template_changed:
@@ -157,6 +172,13 @@ class StreamTitleControls:
                 control.blockSignals(blocked)
         self._update_activation(settings)
         self.tag_preview.setText(self._tag_text(settings.get("tag_preview")))
+        self.clip_status.setText(settings.get("clip_message") or "")
+        tone = "warning" if settings.get("clip_problem") is True else ""
+        if self.clip_status.property("tone") != tone:
+            self.clip_status.setProperty("tone", tone)
+            self.clip_status.style().unpolish(self.clip_status)
+            self.clip_status.style().polish(self.clip_status)
+        self.clip_status.setVisible(bool(settings.get("clip_message")))
         self.note.setText(settings.get("message", "Saving automatic title settings applies them to future games.")
             + (" " + settings["channel_message"] if settings.get("channel_message") else "")
             + " Game-start refresh runs once per live game. Post-sync refresh runs at most once every 10 minutes. Only changed titles are sent. Session uses your synced wins and losses across the session. H2H uses your confirmed record against the opponent. Matchup rates and peak use at most 512 recorded ladder games from 90 days.")
@@ -171,7 +193,7 @@ class StreamTitleControls:
 
     def buttons(self):
         usable = not self.page.busy and self.page.state.get("account_mode") == "sc2tools"
-        for control in (self.enabled, self.on_game_start, self.channel_tags, self.category_guard, self.record_chapters, self.record_style, self.match_template, self.save, self.refresh, *self.platforms.values()):
+        for control in (self.enabled, self.on_game_start, self.channel_tags, self.category_guard, self.record_chapters, self.save_clips, self.record_style, self.match_template, self.save, self.refresh, *self.platforms.values()):
             control.setEnabled(usable)
 
 

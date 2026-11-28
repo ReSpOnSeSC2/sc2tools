@@ -499,6 +499,14 @@ corresponding GitHub Release.
   term still reach Google until those two options are switched off in the Google
   Analytics stream settings.
 
+### Agent 0.26.1
+
+- Optional **Save an OBS replay-buffer clip** under **After each game** on the
+  Streams page: when a game ends with its result known, the agent asks OBS to
+  save its replay buffer, files the clip in a `Highlights` folder under a name
+  built from the game, and lists it in the Stream Dock's Clips. It never
+  starts a stopped buffer; a hint says so instead.
+
 ### Agent 0.26.0
 
 - Optional **Set channel tags** and **Set category to StarCraft II** switches
@@ -5237,6 +5245,18 @@ release preparation, not a signed or published 0.24.9 installer.
   `SC2TOOLS_PROS_ON_LADDER_NAMES` is set. One timer refreshes it every five
   minutes; visitors never reach SC2Pulse. The ladder VOD finder and the board
   now share one paced SC2Pulse client. See ADR 0112.
+
+### Clips without Twitch
+
+- An optional **Save an OBS replay-buffer clip** switch on the desktop app's
+  Streams page, under a new **After each game** heading, saves OBS's replay
+  buffer when a game ends and its result is known. The clip moves into a
+  `Highlights` folder inside the folder OBS saved it in, named from the game once its replay
+  syncs, and appears as a **Clip** entry in the Stream Dock's Clips panel. It
+  is for Kick, YouTube and offline recording, which have no clip call. The
+  switch starts off, the buffer must already be running in OBS (a stopped one
+  shows a hint and is never started for you), and no video leaves the PC.
+  Agent 0.26.1. See ADR 0114.
 
 ## [agent-v0.5.13] - 2026-05-09
 
