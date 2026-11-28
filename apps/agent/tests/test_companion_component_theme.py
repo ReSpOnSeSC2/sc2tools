@@ -5,7 +5,7 @@ from tests._gui_offscreen import run_gui_check
 
 def test_native_components_use_the_shared_companion_styles(tmp_path):
     run_gui_check(tmp_path, '''
-from sc2tools_agent.ui import theme
+from sc2tools_agent.ui import checkin_theme, theme
 from sc2tools_agent.ui.companion_build_chain import build_build_chain
 from sc2tools_agent.ui.companion_builds import build_companion_builds
 from sc2tools_agent.ui.companion_console import build_companion_console
@@ -32,7 +32,7 @@ assert ghost.history_toggle.objectName() == "ghostHistory"
 assert ghost.panel.title.objectName() == "ghostHeading"
 assert theme.TEXT in chain.styleSheet() and theme.TEXT_MUTED in chain.styleSheet()
 assert theme.SUBTLE in chain.styleSheet()
-style = theme.card_stylesheet()
+style = checkin_theme.card_stylesheet()
 assert theme.SURFACE in style and theme.BUTTON in style and theme.ON_ACCENT in style
 assert theme.SUCCESS in style and theme.DANGER in style and theme.WARNING in style
 assert "background-color: transparent" in style

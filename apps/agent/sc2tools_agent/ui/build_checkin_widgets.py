@@ -19,7 +19,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from . import theme
+from . import checkin_theme, theme
 
 ROW_HEIGHT = theme.CHECKIN_ROW_HEIGHT
 ROW_SPACING = theme.SPACE_2XS
@@ -327,7 +327,7 @@ class BuildRow(QtWidgets.QAbstractButton):
 
         painter.setFont(chip_font)
         for chip_rect, text, tone in chips:
-            background, foreground = theme.checkin_chip_colours(skin, tone)
+            background, foreground = checkin_theme.checkin_chip_colours(skin, tone)
             painter.setPen(QtCore.Qt.NoPen)
             painter.setBrush(QtGui.QColor(background))
             painter.drawRoundedRect(QtCore.QRectF(chip_rect), theme.RADIUS_L, theme.RADIUS_L)

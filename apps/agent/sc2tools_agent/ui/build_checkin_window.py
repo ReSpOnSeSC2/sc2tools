@@ -49,6 +49,7 @@ _VIEW_METHODS = frozenset({
     "hide_postgame",
     "update_prefs",
     "bind_controller",
+    "show_randomizer_draw",
 })
 
 
@@ -63,16 +64,27 @@ class CheckinViewProxy:
     def __init__(self, emit: Callable[[str, tuple], None]) -> None:
         self._emit = emit
         self.controller: Optional[Any] = None
+        self._draws: Optional[Any] = None
 
     def bind_controller(self, controller: Any) -> None:
         self.controller = controller
         self._forward("bind_controller")
 
+    def bind_randomizer_draws(self, source: Any) -> None:
+        """``source`` reads a saved pick's draw off this thread
+        (``build_checkin.randomizer_draw.RandomizerDrawSource``)."""
+        self._draws = source
+
     def show_loading(self, model: Any) -> None:
         self._forward("show_loading", model)
+        self._request_draw(model)
 
     def update_loading(self, model: Any) -> None:
         self._forward("update_loading", model)
+        self._request_draw(model)
+
+    def show_randomizer_draw(self, draw: Any) -> None:
+        self._forward("show_randomizer_draw", draw)
 
     def hide_loading(self, game_key: str, reason: str) -> None:
         self._forward("hide_loading", game_key, reason)
@@ -94,6 +106,14 @@ class CheckinViewProxy:
             self._emit(method, args)
         except Exception:  # noqa: BLE001
             log.exception("build_checkin_view_forward_failed method=%s", method)
+
+    def _request_draw(self, model: Any) -> None:
+        if self._draws is None:
+            return
+        try:
+            self._draws.request(model, self.show_randomizer_draw)
+        except Exception:  # noqa: BLE001
+            log.exception("build_checkin_randomizer_draw_request_failed")
 
 
 class BuildCheckinHost:
@@ -131,6 +151,7 @@ class BuildCheckinHost:
         self._windows: Dict[str, Any] = {}
         self._skin = "default"
         self._models: Dict[str, Any] = {}
+        self._randomizer_draw: Optional[Any] = None
         self._panels_enabled = True
         self._feature_gates = {LOADING: True, POSTGAME: True}
         self._randomizer_enabled = True
@@ -193,6 +214,24 @@ class BuildCheckinHost:
         window = self._windows.get(POSTGAME)
         if window is not None and window.owns(card_id):
             window.dismiss(reason)
+
+    def _show_randomizer_draw(self, draw: Any) -> None:
+        self._randomizer_draw = draw
+        window = self._windows.get(LOADING)
+        if window is not None and window.owns(draw.game_key):
+            window.refresh_randomizer_draw()
+
+    def randomizer_draw(self, game_key: Optional[str], build_key: Optional[str]) -> Optional[Any]:
+        """The still for this game's saved pick, once it has been read.
+
+        Nothing while the Randomizer is turned off, in the strip or the
+        Locked in bar alike.
+        """
+        draw = self._randomizer_draw
+        if (not self._randomizer_enabled or draw is None
+                or draw.game_key != game_key or draw.build_key != build_key):
+            return None
+        return draw
 
     def _update_prefs(self, prefs: Any) -> None:
         if self._settings is not None:
@@ -335,6 +374,7 @@ class BuildCheckinHost:
         """App shutdown: hide both cards and stop their timers."""
         self._closed = True
         self._models.clear()
+        self._randomizer_draw = None
         for window in self._windows.values():
             try:
                 window.shutdown()
@@ -343,10 +383,13 @@ class BuildCheckinHost:
 
 
 def _qt_card_window(kind: str, host: BuildCheckinHost) -> Any:
-    from .build_checkin_cards import LoadingCardWindow, PostgameCardWindow
+    if kind == LOADING:
+        from .build_checkin_cards import LoadingCardWindow
 
-    cls = LoadingCardWindow if kind == LOADING else PostgameCardWindow
-    return cls(host=host)
+        return LoadingCardWindow(host=host)
+    from .build_checkin_postgame import PostgameCardWindow
+
+    return PostgameCardWindow(host=host)
 
 
 # ------------------------------------------------------------- placement

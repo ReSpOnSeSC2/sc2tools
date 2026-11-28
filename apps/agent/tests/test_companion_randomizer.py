@@ -272,3 +272,44 @@ def test_randomizer_context_rejects_stale_replay_and_unresolved_sources(patch):
     source = snapshot()
     source["liveGame"].update(patch)
     assert randomizer_context(source, now=1800000000) is None
+
+
+def test_a_periodic_read_with_nothing_new_repaints_nothing(panel):
+    widget, state, app = panel
+    first = widget.pool.topLevelItem(0)
+    shown = []
+    widget.status.setText = lambda text, original=widget.status.setText: (shown.append(text), original(text))
+    for _ in range(3):
+        widget._refresh_visible()
+        wait_until(app, lambda: not widget._busy)
+    assert widget.pool.topLevelItem(0) is first
+    assert "Loading widget pool…" not in shown
+    state["options"]["builds"].append({"key": "third", "name": "Gateway expand"})
+    widget._refresh_visible()
+    wait_until(app, lambda: widget.pool.topLevelItemCount() == 3)
+    assert widget.pool.topLevelItem(2).text(0) == "Gateway expand"
+
+
+def checked(widget):
+    return [widget.pool.topLevelItem(index).checkState(0) == QtCore.Qt.Checked
+            for index in range(widget.pool.topLevelItemCount())]
+
+
+def test_pairing_again_with_the_same_pool_lists_it_again(panel):
+    widget, _state, app = panel
+    widget.update_snapshot({"paired": False})
+    assert widget.pool.topLevelItemCount() == 0
+    widget.update_snapshot(snapshot())
+    wait_until(app, lambda: widget._loaded and not widget._busy)
+    assert [widget.pool.topLevelItem(index).text(0) for index in range(2)] == ["Blink opener", "Robo opener"]
+    assert checked(widget) == [True, False]
+
+
+def test_an_unsaved_edit_given_up_for_a_new_game_shows_the_saved_pool_again(panel):
+    widget, _state, app = panel
+    widget.pool.topLevelItem(1).setCheckState(0, QtCore.Qt.Checked)
+    assert widget._pool_dirty and checked(widget) == [True, True]
+    widget.update_snapshot(snapshot(key="Opp|Streamer|1790000005000"))
+    wait_until(app, lambda: not widget._busy and not widget._needs_refresh)
+    assert not widget._pool_dirty
+    assert checked(widget) == [True, False]

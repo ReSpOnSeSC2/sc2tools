@@ -131,6 +131,8 @@ class CompanionClient:
                     "preferences": preferences, **modes}
         if action in {"randomizer_state", "randomizer_settings", "randomizer_roll"}:
             return self._randomizer_action(request)
+        if action == "randomizer_draw":
+            return self._randomizer_draw(request)
         if action == "claim_scouting_voice":
             connection = tuple(self._connection_provider())
             expected_owner = request.get("accountKey")
@@ -317,6 +319,27 @@ class CompanionClient:
         config.setdefault("version", 2)
         saved = self._request("PUT", "/v1/me/preferences/randomizer", body=config, expected_connection=connection)
         return {"config": saved}
+
+    def _randomizer_draw(self, request):
+        """What the loading card's still needs for a saved pick: in a Protoss
+        matchup the pool's unit settings and the builds the account offers
+        (the overlay serves the widget each pool entry under its current
+        name), and a custom build's own steps. Each is null when the pick
+        cannot use it."""
+        matchup, slug = request.get("matchup"), request.get("customSlug")
+        if not isinstance(matchup, str) or not re.fullmatch(r"[PTZ]v[PTZ]", matchup):
+            raise CompanionError("Choose a concrete matchup for the randomizer.")
+        if slug is not None and (not isinstance(slug, str) or not slug or len(slug) > 200):
+            raise CompanionError("Choose a saved custom build.")
+        connection = tuple(self._connection_provider())
+        config = options = None
+        if matchup.startswith("P"):
+            config = self._request("GET", "/v1/me/preferences/randomizer", expected_connection=connection)
+            options = self._request("GET", "/v1/build-intents/options", params={"matchup": matchup},
+                                    expected_connection=connection)
+        build = (self._request("GET", "/v1/custom-builds/" + quote(slug, safe=""), missing_ok=True,
+                               expected_connection=connection) if slug else None)
+        return {"config": config, "options": options, "build": build}
 
     def _request(self, method, path, *, params=None, body=None, missing_ok=False, expected_connection=None):
         base, token = self._connection_provider()

@@ -23,7 +23,7 @@ def _event_time(value):
     return f"{seconds // 60}:{seconds % 60:02d}"
 
 
-def _entity_name(name):
+def entity_name(name):
     token = re.sub(r"[^a-z0-9]", "", name.lower())
     aliases = {
         "blinktech": "Blink", "zerglingmovementspeed": "Metabolic Boost",
@@ -109,7 +109,7 @@ def build_build_chain(parent, *, QtCore, QtGui, QtWidgets, icon_provider):
             layout.setSpacing(3)
             body = QtWidgets.QVBoxLayout()
             body.setSpacing(3)
-            title = _entity_name(event["name"])
+            title = entity_name(event["name"])
             timing = event["timing"].title()
             stamp = _event_time(event["timeSec"]) if event["timeSec"] is not None else "Time unknown"
             description = f"{title} · {stamp} · {timing}"

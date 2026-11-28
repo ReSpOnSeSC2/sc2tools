@@ -11,7 +11,7 @@ from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
 from sc2tools_agent.build_checkin.models import CheckinPrefs
 from sc2tools_agent.build_checkin.preview import sample_loading_model, sample_postgame_model
-from sc2tools_agent.ui import theme, win32_window
+from sc2tools_agent.ui import checkin_theme, theme, win32_window
 from sc2tools_agent.ui.build_checkin_window import BuildCheckinHost, LOADING, POSTGAME, default_card_position, rect_of
 from sc2tools_agent.ui.build_checkin_settings import (
     PREVIEW_ASSISTANCE_OFF, PREVIEW_CARD_OPEN, PREVIEW_CONNECTING, PREVIEW_UNAVAILABLE, PREVIEW_UNPAIRED,
@@ -75,7 +75,7 @@ def test_preview_skin_updates_open_and_lazy_cards_without_changing_flags_or_sele
         host.set_skin(name)
         app.processEvents()
         skin = theme.SKINS[name]
-        assert card.styleSheet() == theme.card_stylesheet(skin)
+        assert card.styleSheet() == checkin_theme.card_stylesheet(skin)
         assert card.findChild(QtWidgets.QWidget, "agentBrandMark").skin == name
         row = card.builds.row(selected)
         painted = row.grab().toImage()
@@ -86,7 +86,7 @@ def test_preview_skin_updates_open_and_lazy_cards_without_changing_flags_or_sele
     host.set_skin("protoss")
     assert host.show_preview(LOADING) is None
     loading = host.window(LOADING)
-    assert loading.styleSheet() == theme.card_stylesheet(theme.SKINS["protoss"])
+    assert loading.styleSheet() == checkin_theme.card_stylesheet(theme.SKINS["protoss"])
     assert loading.findChild(QtWidgets.QWidget, "agentBrandMark").skin == "protoss"
     assert loading.windowFlags() & QtCore.Qt.WindowDoesNotAcceptFocus
 

@@ -63,6 +63,29 @@ def test_start_helper_binds_attaches_and_starts(tmp_path: Path) -> None:
     assert bus.subscriber_count == 0
 
 
+class _DrawingView(_BindingView):
+    def __init__(self) -> None:
+        super().__init__()
+        self.draw_sources = []
+
+    def bind_randomizer_draws(self, source) -> None:
+        self.draw_sources.append(source)
+
+
+@pytest.mark.parametrize("paired", [True, False])
+def test_the_view_gets_a_draw_reader_only_with_an_account_connection(tmp_path: Path, paired: bool) -> None:
+    view = _DrawingView()
+    controller = start_build_checkin(
+        api=FakeCheckinApi(), bus=EventBus(), state=AgentState(), state_dir=tmp_path,
+        dashboard_url="https://sc2tools.com/", view=view,
+        connection_provider=(lambda: ("https://api.example.test", "token")) if paired else None,
+    )
+    try:
+        assert [type(source).__name__ for source in view.draw_sources] == (["RandomizerDrawSource"] if paired else [])
+    finally:
+        controller.stop()
+
+
 def test_dismissed_intro_is_saved_to_agent_state(tmp_path: Path) -> None:
     state = AgentState(device_token="t")
     controller = start_build_checkin(

@@ -1,7 +1,18 @@
 "use strict";
 
 /**
- * @param {import('./buildIntentOptions').BuildIntentOptions} options
+ * @typedef {{ key: string, name: string, source: string }} OfferedBuild
+ * @typedef {{ forMatchup(userId: string, matchup: string): Promise<{ builds: OfferedBuild[] }> }} OfferedBuilds
+ *   The account's builds per matchup: `BuildIntentOptions` in production.
+ */
+
+/**
+ * The randomizer config as the overlay widget receives it: in each enabled
+ * matchup, every stored pool entry the account still offers takes the
+ * build's current name and source and the matchup's race; the rest drop.
+ * The desktop card repeats this step (apps/agent build_checkin/randomizer_draw.py),
+ * and apps/web/lib/randomizer/__tests__/unitDrawParity.json pins both.
+ * @param {OfferedBuilds} options
  * @param {string} userId
  * @param {Record<string, any>} raw
  */

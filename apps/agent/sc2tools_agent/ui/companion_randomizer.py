@@ -81,6 +81,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._loaded = False
             self._pool_dirty = False
             self._pool_revision = 0
+            self._pool_rows = None
             self._rendering = False
             self._status_error = False
             self._build_ui()
@@ -168,6 +169,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self._status_error = False
                 self.save_pool_button.setEnabled(False)
                 self.pool.clear()
+                self._pool_rows = None
                 self.status.setText("Open Randomizer settings to load this account's pool." if self._snapshot.get("paired") is True else
                                     "Pair your agent to load your randomizer settings.")
             context = randomizer_context(self._snapshot)
@@ -190,7 +192,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             if self.isVisible() and self._snapshot.get("paired") is True and (not self._loaded or self._needs_refresh):
                 self.refresh()
 
-        def refresh(self):
+        def refresh(self, *, background=False):
             if self._closed or not callable(handler) or self._snapshot.get("paired") is not True:
                 return
             if not self.isVisible():
@@ -201,11 +203,13 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 return
             self._needs_refresh = False
             self._request("state", {"action": "randomizer_state", "matchup": self.matchup_select.currentText(),
-                                    "gameKey": self._context[0] if self._context else None})
+                                    "gameKey": self._context[0] if self._context else None}, background=background)
 
         def _refresh_visible(self):
+            # The periodic read keeps the saved pick current without flashing
+            # the loading line or rebuilding an unchanged pool.
             if self.isVisible():
-                self.refresh()
+                self.refresh(background=True)
 
         def showEvent(self, event):
             super().showEvent(event)
@@ -229,7 +233,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._closed = True
             self.timer.stop()
 
-        def _request(self, kind, payload):
+        def _request(self, kind, payload, *, background=False):
             if self._closed or kind not in {"state", "settings"}:
                 return
             if kind == "state" and not self.isVisible():
@@ -239,7 +243,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._status_error = False
             if kind == "settings":
                 self._inflight_settings = payload
-            else:
+            elif not background:
                 self.status.setText("Loading widget pool…")
             self._render_result()
             context = self._context
@@ -337,25 +341,35 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             del blocked
             self.desktop_roll.setEnabled(can_edit)
 
-        def _render_pool(self, options):
-            if self._pool_dirty:
-                return
+        def _pool_rows_for(self, options):
+            """``(key, name, weight, selected)`` per eligible build, as the pool lists them."""
             config = self._matchup_config(self.matchup_select.currentText())
-            builds = config.get("builds") or []
-            by_key = {build.get("id"): build for build in builds if isinstance(build, dict)}
-            self._rendering = True
-            self.pool.clear()
+            selected = {build.get("id"): build for build in config.get("builds") or [] if isinstance(build, dict)}
+            custom = config.get("useCustomWeights") is True
+            rows = []
             for build in options.get("builds") or []:
                 if not isinstance(build, dict) or not build.get("key"):
                     continue
                 key = build["key"]
-                weight = by_key.get(key, {}).get("weight", 1) if config.get("useCustomWeights") is True else 1
-                item = QtWidgets.QTreeWidgetItem([str(build.get("name") or key), str(weight)])
-                item.setData(0, QtCore.Qt.UserRole, key)
-                item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
-                item.setCheckState(0, QtCore.Qt.Checked if key in by_key else QtCore.Qt.Unchecked)
-                self.pool.addTopLevelItem(item)
-            self._rendering = False
+                weight = selected.get(key, {}).get("weight", 1) if custom else 1
+                rows.append((key, str(build.get("name") or key), str(weight), key in selected))
+            return tuple(rows)
+
+        def _render_pool(self, options):
+            if self._pool_dirty:
+                return
+            rows = self._pool_rows_for(options)
+            if rows != self._pool_rows:
+                self._pool_rows = rows
+                self._rendering = True
+                self.pool.clear()
+                for key, name, weight, selected in rows:
+                    item = QtWidgets.QTreeWidgetItem([name, weight])
+                    item.setData(0, QtCore.Qt.UserRole, key)
+                    item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+                    item.setCheckState(0, QtCore.Qt.Checked if selected else QtCore.Qt.Unchecked)
+                    self.pool.addTopLevelItem(item)
+                self._rendering = False
             self.save_pool_button.setEnabled(False)
             if not self.pool.topLevelItemCount():
                 self.status.setText("No eligible builds for this matchup. Refresh after adding a build to your account.")
@@ -364,6 +378,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
 
         def _pool_changed(self, _item, _column):
             if not self._rendering and self._loaded and self._snapshot.get("paired") is True:
+                self._pool_rows = None
                 self._pool_dirty = True
                 self._pool_revision += 1
                 self.save_pool_button.setEnabled(True)

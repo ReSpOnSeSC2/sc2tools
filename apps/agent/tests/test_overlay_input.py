@@ -485,6 +485,30 @@ def test_stable_input_polling_skips_native_calls_but_revalidates_unannounced_sty
     ''')
 
 
+def test_focus_is_polled_only_while_a_display_only_surface_is_up(tmp_path):
+    run_gui_check(tmp_path, '''
+        from sc2tools_agent.ui.overlay_input import POLL_MS, install_overlay_input
+        class Native:
+            def set_click_through(self, hwnd, enabled): return True
+            def restore_all(self): pass
+        asked = []
+        window, panel = QtWidgets.QWidget(), QtWidgets.QWidget()
+        controller = install_overlay_input(window, panels_provider=lambda: [panel], compact_provider=lambda: False,
+            QtCore=QtCore, native=Native(), foreground_provider=lambda: asked.append(True) or True)
+        assert not controller.timer.isActive() and asked == []
+        panel.show()
+        app.processEvents()
+        assert controller.timer.isActive() and asked
+        panel.hide()
+        app.processEvents()
+        assert not controller.timer.isActive()
+        asked.clear()
+        QtTest.QTest.qWait(POLL_MS * 3)
+        assert asked == [], "a hidden overlay must not wake the agent to ask Windows for focus"
+        controller.shutdown()
+    ''')
+
+
 def test_input_sync_reacts_to_show_hide_focus_style_and_recreated_handle_events(tmp_path):
     run_gui_check(tmp_path, '''
         from sc2tools_agent.ui.overlay_input import install_overlay_input
@@ -691,13 +715,22 @@ def test_main_gui_wires_all_pin_kinds_and_shuts_down_native_controller_without_c
         window.show()
         app.processEvents()
         controller = window._overlay_input
-        assert controller.parent() is window and controller.timer.isActive()
+        # Focus is polled only while a display-only surface is up.
+        assert controller.parent() is window and not controller.timer.isActive()
+        panel = window._companion_page.session_panel
+        panel.show()
+        app.processEvents()
+        assert controller.timer.isActive()
+        panel.hide()
+        app.processEvents()
+        assert not controller.timer.isActive()
         window.close()
         app.processEvents()
         assert not window.isVisible()
-        assert controller.timer.isActive()
         window._on_show_requested()
         assert window.isVisible()
+        panel.show()
+        app.processEvents()
         controller.shutdown()
         assert not controller.timer.isActive()
         window._companion_page.shutdown()

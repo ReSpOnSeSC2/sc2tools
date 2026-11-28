@@ -7,7 +7,7 @@ import time
 
 from ..build_checkin.models import CheckinPrefs, LoadingCardModel, PostgameCardModel
 from ..build_checkin.scouting import plain_text
-from . import theme
+from . import checkin_theme, theme
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
 
         def set_skin(self, name):
             self.setProperty("checkinSkin", name)
-            self.setStyleSheet(theme.companion_builds_stylesheet(theme.SKINS[name]))
+            self.setStyleSheet(checkin_theme.companion_builds_stylesheet(theme.SKINS[name]))
 
         def _build_ui(self):
             outer = QtWidgets.QVBoxLayout(self)

@@ -202,6 +202,9 @@ The **Randomizer settings** screen silently manages the matchup's eligible pool
 and shows the saved pick. In the loading check-in, **Randomize** selects and saves
 one build even when the separate widget is closed. Every display uses that same
 result; animation, sounds and Randomizer speech stay in the separate widget.
+Under the saved pick the loading card shows the draw as a still: the build's
+first steps and its opening Gateway unit, or both units of a 2 Gate build, the
+same units the widget reveals for that game.
 Selection failures show a message and allow retry. Hidden settings do not poll
 the account; opening them refreshes the saved pool. Failed saves retain the draft
 and allow retry. The settings page displays the saved result without drawing again.
