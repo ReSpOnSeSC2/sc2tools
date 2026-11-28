@@ -104,6 +104,7 @@ import gettingStarted_installAndPair from "./getting-started/install-and-pair";
 import gettingStarted_installApp from "./getting-started/install-app";
 import gettingStarted_instantAnalysis from "./getting-started/instant-analysis";
 import gettingStarted_keyboardShortcuts from "./getting-started/keyboard-shortcuts";
+import gettingStarted_ladderVods from "./getting-started/ladder-vods";
 import gettingStarted_liveStreams from "./getting-started/live-streams";
 import gettingStarted_matchRooms from "./getting-started/match-rooms";
 import gettingStarted_practiceLinks from "./getting-started/practice-links";
@@ -241,6 +242,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_installApp,
   gettingStarted_instantAnalysis,
   gettingStarted_keyboardShortcuts,
+  gettingStarted_ladderVods,
   gettingStarted_liveStreams,
   gettingStarted_matchRooms,
   gettingStarted_practiceLinks,

@@ -5205,6 +5205,16 @@ release preparation, not a signed or published 0.24.9 installer.
   for the desktop app say Desktop app 0.26.0, and the Live streams page and
   YouTube game chapters are marked coming soon until they are switched on.
 
+### Ladder VODs
+
+- A public Ladder VODs page at `/ladder-vods` finds recent ladder games with a
+  Twitch VOD by matchup, rating, game length and map, and opens the VOD at the
+  start of the game. Results show the streamer's channel, both races, a rating
+  rounded to 100, the map, the length and the age, and never name the other
+  player. The finder ships closed: until `SC2TOOLS_LADDER_VODS_ENABLED` is set
+  the page says it is not available yet and nothing calls SC2Pulse. Searches
+  are cached for five minutes and leave at most once a second. See ADR 0110.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:
