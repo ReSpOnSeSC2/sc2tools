@@ -52,7 +52,7 @@ test("searches, shows games and opens a VOD with no SC2Pulse call from the brows
 
   await showAllFilters(page);
   await page.getByLabel("Map").selectOption("55373");
-  await page.getByRole("button", { name: "Search" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Search" }).click();
   await expect(page.getByText("4 recent games with a VOD")).toBeVisible();
   expect(searches.at(-1)).toContain("map=55373");
 
@@ -75,7 +75,7 @@ test("says the finder is not available yet while its gate is off", async ({ page
   await page.goto("/ladder-vods");
   await expect(page.getByText("The ladder VOD finder is not available yet.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Live streams" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Search" })).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("button", { name: "Search" })).toHaveCount(0);
   await expect(page.getByRole("listitem").filter({ hasText: "MMR" })).toHaveCount(0);
   expect(await noSidewaysScroll(page)).toBe(true);
   for (const theme of ["light", "dark"] as const) {
@@ -96,7 +96,7 @@ test("searches with the keyboard", async ({ page }) => {
   await page.getByLabel("Length").focus();
   await page.keyboard.press("ArrowDown");
   await expect(page.getByLabel("Length")).toHaveValue("0");
-  const search = page.getByRole("button", { name: "Search" });
+  const search = page.getByRole("main").getByRole("button", { name: "Search" });
   await search.focus();
   await expect(search).toBeFocused();
   await page.keyboard.press("Enter");
