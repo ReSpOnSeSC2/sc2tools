@@ -25,6 +25,7 @@
     "/balance/league/[tier]": 140,
     "/balance/verdict": 140,
     "/permit": 140,
+    "/live": 140,
     "/match": 215,
     "/match/room": 215,
     "/p/[handle]/live": 200,

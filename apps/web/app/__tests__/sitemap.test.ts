@@ -51,7 +51,7 @@ describe("sitemap", () => {
     const rows = await sitemap();
     expect(rows.find(row => row.url === `${SITE}/balance`)?.changeFrequency).toBe("daily");
     const list = rows.map(row => row.url);
-    for (const path of ["/balance/claim", "/permit", "/balance/pvz", "/balance/league/diamond"]) expect(list).toContain(`${SITE}${path}`);
+    for (const path of ["/balance/claim", "/permit", "/live", "/balance/pvz", "/balance/league/diamond"]) expect(list).toContain(`${SITE}${path}`);
     expect(list).not.toContain(`${SITE}/balance/verdict`);
   });
 

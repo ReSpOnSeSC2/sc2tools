@@ -48,6 +48,7 @@ const CATALOG: readonly ToolSection[] = [
     tools: [
       { href: "/app", title: "Open your dashboard", description: "Sign in for synced games, opponent reports, practice, and notifications." },
       { href: "/download", title: "Download the Windows Agent", description: "Install automatic replay sync and the in-game Companion." },
+      { href: "/live", title: "Live streams", description: "See every StarCraft II channel live now on Twitch and Kick, with small channels first if you want them." },
       { href: "/stream-studio", title: "Stream Studio", description: "Explore the OBS overlay, Stream Dock, and chat tools." },
       { href: "/help", title: "Help", description: "Find setup instructions and help with individual tools." },
       { href: "/changelog", title: "Release notes", description: "See what changed in SC2 Tools and the Windows Agent." },
