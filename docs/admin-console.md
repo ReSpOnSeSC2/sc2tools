@@ -315,7 +315,7 @@ account. The totals and the By day table come from anonymous daily counts that
 go further back: a player is counted there through a hash of the day and their
 account that is deleted after 35 days. See ADRs 0102 and 0103.
 
-### Humdingers replays
+## Humdingers replays
 
 From November 28, 2026 every visit also records a run tape: the player's button
 presses and the few values the game read in their browser, enough to replay the
