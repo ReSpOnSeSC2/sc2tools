@@ -1,8 +1,11 @@
 "use client";
 
 import { openingUnitMeta } from "@/lib/randomizer/openingUnits";
+import type { OpeningUnitId, OpeningUnitsOutcome } from "@/lib/randomizer/types";
 import { useRevealSound } from "@/components/randomizer/reveals/revealSound";
 import {
+  DECK_NAME_HIDDEN,
+  TWO_LINES,
   deckSizes,
   resultAnnouncement,
   slotLabel,
@@ -10,6 +13,7 @@ import {
   UnitPortrait,
   UnitResultCard,
   UnitRevealFrame,
+  type DeckSizes,
   type UnitRevealProps,
   useAnimatedUnitPicks,
 } from "./unitRevealShared";
@@ -131,68 +135,17 @@ export function HoloDraftReveal(props: UnitRevealProps) {
               }}
             />
           ) : null}
-          {props.outcome.pool.map((entry, index) => {
-            const unit = openingUnitMeta(entry.id);
-            const active = entry.id === scanningId && !animation.allLocked;
-            const selected = props.outcome.picks.includes(entry.id);
-            const pct = (props.outcome.probabilities[index] ?? 0) * 100;
-            return (
-              <div
-                key={entry.id}
-                style={{
-                  position: "relative",
-                  zIndex: 3,
-                  minWidth: 0,
-                  padding: "8px 5px 7px",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  borderRadius: 11,
-                  border: active
-                    ? "1px solid rgba(112,234,255,.9)"
-                    : selected && animation.locked.some(Boolean)
-                      ? "1px solid rgba(244,204,92,.5)"
-                      : "1px solid rgba(115,139,202,.2)",
-                  background: active
-                    ? "linear-gradient(180deg, rgba(58,174,220,.22), rgba(23,35,71,.36))"
-                    : "linear-gradient(180deg, rgba(29,40,74,.46), rgba(8,12,23,.58))",
-                  boxShadow: active
-                    ? "0 0 22px rgba(72,218,255,.25), inset 0 0 18px rgba(86,197,255,.1)"
-                    : "none",
-                  transform: active ? "translateY(-3px)" : "none",
-                  transition:
-                    "transform 90ms linear, border-color 90ms linear, background 90ms linear",
-                }}
-              >
-                <UnitPortrait id={entry.id} size={deck.portrait} dim={!active && !selected} />
-                <span
-                  style={{
-                    marginTop: 3,
-                    maxWidth: "100%",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    color: active ? "#effdff" : "#b6bfdc",
-                    fontSize: 11,
-                    fontWeight: 800,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {unit.name}
-                </span>
-                <span
-                  style={{
-                    marginTop: 1,
-                    color: active ? "#78eaff" : "#7e8caf",
-                    fontSize: 9,
-                    fontWeight: 850,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {pct.toFixed(1)}%
-                </span>
-              </div>
-            );
-          })}
+          {props.outcome.pool.map((entry, index) => (
+            <DraftCard
+              key={entry.id}
+              id={entry.id}
+              percent={(props.outcome.probabilities[index] ?? 0) * 100}
+              active={entry.id === scanningId && !animation.allLocked}
+              selected={props.outcome.picks.includes(entry.id)}
+              anyLocked={animation.locked.some(Boolean)}
+              deck={deck}
+            />
+          ))}
         </div>
 
         <div
@@ -203,84 +156,9 @@ export function HoloDraftReveal(props: UnitRevealProps) {
             gap: 10,
           }}
         >
-          {animation.displayed.map((id, index) => {
-            const locked = animation.locked[index];
-            return (
-              <div
-                key={index}
-                style={{
-                  position: "relative",
-                  width:
-                    props.outcome.gateCount === 2
-                      ? "min(210px, calc(50% - 5px))"
-                      : "min(230px, 100%)",
-                  boxSizing: "border-box",
-                  height: 70,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "7px 12px",
-                  borderRadius: 12,
-                  border: locked
-                    ? "1px solid rgba(246,207,93,.74)"
-                    : "1px dashed rgba(105,150,230,.5)",
-                  background: locked
-                    ? "rgba(126,99,27,.14)"
-                    : "rgba(14,21,42,.72)",
-                  boxShadow: locked
-                    ? "0 0 24px rgba(245,201,79,.18)"
-                    : "inset 0 0 18px rgba(61,95,178,.1)",
-                  overflow: "hidden",
-                }}
-              >
-                <UnitPortrait id={id} size={52} dim={!locked} />
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      color: locked ? "#f6d677" : "#7183b7",
-                      fontSize: 9,
-                      fontWeight: 900,
-                      letterSpacing: ".14em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {slotLabel(props.outcome, index)} {locked ? "· Locked" : "· Scanning"}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 3,
-                      color: locked ? "#f4f6ff" : "#9ba8ce",
-                      fontSize: 15,
-                      fontWeight: 850,
-                    }}
-                  >
-                    {locked ? openingUnitMeta(id).name : "Awaiting pick"}
-                  </div>
-                </div>
-                {locked ? (
-                  <div
-                    className="rdz-unit-motion"
-                    style={{
-                      position: "absolute",
-                      right: 7,
-                      top: 7,
-                      padding: "2px 5px",
-                      borderRadius: 4,
-                      border: "1px solid rgba(247,214,109,.55)",
-                      color: "#f8d970",
-                      fontSize: 8,
-                      fontWeight: 950,
-                      letterSpacing: ".12em",
-                      transform: "rotate(3deg)",
-                      animation: "rdz-unit-pop 300ms ease both",
-                    }}
-                  >
-                    LOCKED
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+          {animation.displayed.map((id, index) => (
+            <DraftSlot key={index} outcome={props.outcome} id={id} index={index} locked={animation.locked[index]} />
+          ))}
         </div>
       </div>
       <UnitResultCard
@@ -289,5 +167,150 @@ export function HoloDraftReveal(props: UnitRevealProps) {
         show={animation.allLocked}
       />
     </UnitRevealFrame>
+  );
+}
+
+/** One candidate in the deck, lit while the scan passes over it. */
+function DraftCard({ id, percent, active, selected, anyLocked, deck }: {
+  id: OpeningUnitId;
+  percent: number;
+  active: boolean;
+  selected: boolean;
+  anyLocked: boolean;
+  deck: DeckSizes;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        zIndex: 3,
+        minWidth: 0,
+        padding: "8px 5px 7px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        borderRadius: 11,
+        border: active
+          ? "1px solid rgba(112,234,255,.9)"
+          : selected && anyLocked
+            ? "1px solid rgba(244,204,92,.5)"
+            : "1px solid rgba(115,139,202,.2)",
+        background: active
+          ? "linear-gradient(180deg, rgba(58,174,220,.22), rgba(23,35,71,.36))"
+          : "linear-gradient(180deg, rgba(29,40,74,.46), rgba(8,12,23,.58))",
+        boxShadow: active
+          ? "0 0 22px rgba(72,218,255,.25), inset 0 0 18px rgba(86,197,255,.1)"
+          : "none",
+        transform: active ? "translateY(-3px)" : "none",
+        transition: "transform 90ms linear, border-color 90ms linear, background 90ms linear",
+      }}
+    >
+      <UnitPortrait id={id} size={deck.portrait} dim={!active && !selected} />
+      <span
+        className={deck.longDeck ? DECK_NAME_HIDDEN : undefined}
+        style={{
+          marginTop: 3,
+          maxWidth: "100%",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          color: active ? "#effdff" : "#b6bfdc",
+          fontSize: 11,
+          fontWeight: 800,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {openingUnitMeta(id).name}
+      </span>
+      <span
+        style={{
+          marginTop: 1,
+          color: active ? "#78eaff" : "#7e8caf",
+          fontSize: 9,
+          fontWeight: 850,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {percent.toFixed(1)}%
+      </span>
+    </div>
+  );
+}
+
+/** One pick's slot: scanning, then stamped with its unit. */
+function DraftSlot({ outcome, id, index, locked }: {
+  outcome: OpeningUnitsOutcome;
+  id: OpeningUnitId;
+  index: number;
+  locked: boolean;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: outcome.gateCount === 2 ? "min(210px, calc(50% - 5px))" : "min(230px, 100%)",
+        boxSizing: "border-box",
+        height: 70,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "7px 12px",
+        borderRadius: 12,
+        border: locked ? "1px solid rgba(246,207,93,.74)" : "1px dashed rgba(105,150,230,.5)",
+        background: locked ? "rgba(126,99,27,.14)" : "rgba(14,21,42,.72)",
+        boxShadow: locked ? "0 0 24px rgba(245,201,79,.18)" : "inset 0 0 18px rgba(61,95,178,.1)",
+        overflow: "hidden",
+      }}
+    >
+      <UnitPortrait id={id} size={52} dim={!locked} />
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            color: locked ? "#f6d677" : "#7183b7",
+            fontSize: 9,
+            fontWeight: 900,
+            letterSpacing: ".14em",
+            textTransform: "uppercase",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {slotLabel(outcome, index)}
+          <span className="rdz-small-hidden">{locked ? " · Locked" : " · Scanning"}</span>
+        </div>
+        <div
+          style={{
+            ...TWO_LINES,
+            marginTop: 3,
+            color: locked ? "#f4f6ff" : "#9ba8ce",
+            fontSize: "clamp(12px, 3.8vw, 15px)",
+            fontWeight: 850,
+          }}
+        >
+          {locked ? openingUnitMeta(id).name : "Awaiting pick"}
+        </div>
+      </div>
+      {locked ? (
+        <div
+          className="rdz-unit-motion"
+          style={{
+            position: "absolute",
+            right: 7,
+            top: 7,
+            padding: "2px 5px",
+            borderRadius: 4,
+            border: "1px solid rgba(247,214,109,.55)",
+            color: "#f8d970",
+            fontSize: 8,
+            fontWeight: 950,
+            letterSpacing: ".12em",
+            transform: "rotate(3deg)",
+            animation: "rdz-unit-pop 300ms ease both",
+          }}
+        >
+          LOCKED
+        </div>
+      ) : null}
+    </div>
   );
 }

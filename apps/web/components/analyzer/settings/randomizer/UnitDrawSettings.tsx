@@ -2,11 +2,12 @@
 
 /**
  * Settings → Randomizer → Opening units, for one matchup: the matchup's own
- * unit draw (used when no build is drawn, and by builds without their own),
- * then, while a build is drawn, each selected build's. Only one build is
- * expanded at a time so a large pool stays easy to scan.
+ * unit draw, shown while a draw uses it (no build drawn, or a build saved
+ * without units of its own), then, while a build is drawn, each selected
+ * build's. Only one build is expanded at a time so a large pool stays easy
+ * to scan.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, Dices, Info } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -42,6 +43,8 @@ export function UnitDrawSettings({ matchup, config, onChange }: UnitDrawSettings
   useEffect(() => {
     setExpandedBuildId((current) => (current && builds.some((build) => build.id === current) ? current : null));
   }, [builds, matchup]);
+  // Every Protoss pool entry, and every build added here, has units of its own.
+  const matchupUnitsUsed = !config.enabled || builds.some((build) => !build.openingUnits);
 
   return (
     <Section
@@ -52,13 +55,20 @@ export function UnitDrawSettings({ matchup, config, onChange }: UnitDrawSettings
         : `The units ${matchup}'s pre-made builds are named for.`}
     >
       <div className="space-y-3">
-        {config.unitRandomizerEnabled ? null : <OffNote matchup={matchup} />}
-        <MatchupUnitsCard
-          matchup={matchup}
-          caption={config.enabled ? "Used by builds that have no units of their own." : "The draw when no build is drawn."}
-          value={matchupUnits}
-          onChange={(units) => onChange({ ...config, units })}
-        />
+        {config.unitRandomizerEnabled ? null : (
+          <Note>Draw opening units is off for {matchup}. These settings apply once it is on.</Note>
+        )}
+        {matchupUnitsUsed ? (
+          <MatchupUnitsCard
+            matchup={matchup}
+            caption={config.enabled ? "Used by builds that have no units of their own." : "The draw when no build is drawn."}
+            value={matchupUnits}
+            onChange={(units) => onChange({ ...config, units })}
+          />
+        ) : null}
+        {config.enabled && builds.length === 0 ? (
+          <Note>Add a build to the {matchup} pool, then set the units it draws here.</Note>
+        ) : null}
         {builds.length > 0 ? (
           <div className="space-y-2">
             <h3 className="pt-2 text-body font-semibold text-text">Each build&apos;s units</h3>
@@ -107,13 +117,11 @@ function MatchupUnitsCard({ matchup, caption, value, onChange }: {
   );
 }
 
-function OffNote({ matchup }: { matchup: MatchupKey }) {
+function Note({ children }: { children: ReactNode }) {
   return (
     <p className="flex items-start gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-2.5 text-caption text-text-muted">
       <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-text-dim" aria-hidden />
-      <span>
-        Draw opening units is off for {matchup}. These settings apply once it is on.
-      </span>
+      <span>{children}</span>
     </p>
   );
 }

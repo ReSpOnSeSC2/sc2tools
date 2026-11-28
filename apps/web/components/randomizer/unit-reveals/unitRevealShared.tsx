@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import { openingUnitMeta } from "@/lib/randomizer/openingUnits";
@@ -15,6 +16,7 @@ import type {
   UnitRevealStyle,
 } from "@/lib/randomizer/types";
 import { useReducedMotion } from "@/components/randomizer/reveals/revealShared";
+import { UNIT_STAGE_HEIGHT } from "./unitStageSize";
 
 export interface UnitRevealProps {
   outcome: OpeningUnitsOutcome;
@@ -184,7 +186,7 @@ export function UnitRevealFrame({
         width: "min(650px, 96vw)",
         // A fixed height: the chambers, decks and sockets need all of it, so a
         // narrow screen gets a taller-than-wide frame rather than overlaps.
-        height: 370,
+        height: UNIT_STAGE_HEIGHT,
         overflow: "hidden",
         borderRadius: 22,
         border: "1px solid rgba(124, 140, 255, 0.42)",
@@ -301,9 +303,33 @@ const FULL_ODDS_CHIPS = 4;
 /** More units than this tighten a reveal's deck so its one row still fits. */
 const FULL_DECK = 5;
 
+/** Text clamped to two lines, so a two-word unit name wraps instead of losing its end. */
+export const TWO_LINES: CSSProperties = {
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical",
+  WebkitLineClamp: 2,
+  overflow: "hidden",
+  // Room for descenders such as the g in Charging.
+  lineHeight: 1.25,
+};
+
+/** A long deck's card names on a narrow screen: gone, or blank where the layout must keep its shape. */
+export const DECK_NAME_HIDDEN = "rdz-deck-name-hidden";
+export const DECK_NAME_BLANK = "rdz-deck-name-blank";
+
+export interface DeckSizes {
+  portrait: number;
+  gap: number;
+  /** Past four units a narrow screen shows each card's icon and odds, not its name. */
+  longDeck: boolean;
+}
+
 /** A deck card's portrait size and the gap between cards for this pool. */
-export function deckSizes(outcome: OpeningUnitsOutcome, portrait: number): { portrait: number; gap: number } {
-  return outcome.pool.length > FULL_DECK ? { portrait: Math.round(portrait * 0.78), gap: 5 } : { portrait, gap: 8 };
+export function deckSizes(outcome: OpeningUnitsOutcome, portrait: number): DeckSizes {
+  const longDeck = outcome.pool.length > FULL_ODDS_CHIPS;
+  return outcome.pool.length > FULL_DECK
+    ? { portrait: Math.round(portrait * 0.78), gap: 5, longDeck }
+    : { portrait, gap: 8, longDeck };
 }
 
 export function UnitOddsStrip({
@@ -364,7 +390,7 @@ function OddsChip({ id, percent, compact }: { id: OpeningUnitId; percent: string
       <UnitPortrait id={id} size={compact ? 18 : 21} />
       {compact ? null : (
         <span
-          className="rdz-odds-name"
+          className="rdz-small-hidden"
           style={{
             minWidth: 0,
             overflow: "hidden",
@@ -514,13 +540,11 @@ function LockedPick({ outcome, id, index }: { outcome: OpeningUnitsOutcome; id: 
         </div>
         <div
           style={{
+            ...TWO_LINES,
             marginTop: 2,
             color: "#f3f6ff",
             fontSize: "clamp(13px, 4vw, 18px)",
             fontWeight: 850,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
           }}
         >
           {unit.name}
@@ -578,7 +602,11 @@ export function UnitRevealKeyframes() {
         50% { transform: translateY(-6px); }
       }
       @media (max-width: 480px) {
-        .rdz-odds-name { display: none; }
+        .rdz-small-hidden { display: none; }
+      }
+      @media (max-width: 640px) {
+        .${DECK_NAME_HIDDEN} { display: none; }
+        .${DECK_NAME_BLANK} { visibility: hidden; }
       }
       @media (prefers-reduced-motion: reduce) {
         .rdz-unit-motion { animation: none !important; transition: none !important; }

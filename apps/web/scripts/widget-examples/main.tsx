@@ -35,7 +35,7 @@ const shared = { token: "public-fixture", live: LIVE, studioEvent: STUDIO };
 const randomizer = defaultRandomizerConfig();
 randomizer.sound = { enabled: false, volume: 0 };
 randomizer.matchups.PvZ = { enabled: true, useCustomWeights: false, unitRandomizerEnabled: false, builds: catalogCandidates("PvZ").slice(0, 4).map(({ openingUnits: _, ...build }) => ({ ...build, weight: 1 })) };
-const outcome = { ...spinResult("PvZ", randomizer.matchups.PvZ, mulberry32(42))!, style: "wheel" as const, openingUnits: null };
+const outcome = { ...spinResult("PvZ", randomizer.matchups.PvZ, mulberry32(42))!, style: "wheel" as const };
 
 const registry: Record<string, () => React.ReactNode> = {
   opponent: () => <Widgets.OpponentWidget live={LIVE} />,

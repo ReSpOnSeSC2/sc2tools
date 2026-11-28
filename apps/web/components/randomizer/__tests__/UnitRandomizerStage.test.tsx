@@ -5,6 +5,7 @@ import type {
   UnitRevealStyle,
 } from "@/lib/randomizer/types";
 import { UnitRandomizerStage } from "../UnitRandomizerStage";
+import { UNIT_STAGE_HEIGHT } from "../unit-reveals/unitStageSize";
 
 vi.mock("@/components/randomizer/reveals/revealShared", async () => {
   const actual = await vi.importActual<
@@ -62,6 +63,8 @@ describe("UnitRandomizerStage", () => {
       container.querySelector('img[src="/icons/sc2/units/stalker.png"]'),
     ).toBeTruthy();
     expect(onComplete).toHaveBeenCalledTimes(1);
+    // The height RandomizerSequence holds while this code loads.
+    expect(container.querySelector<HTMLElement>("div")?.style.height).toBe(`${UNIT_STAGE_HEIGHT}px`);
   });
 
   it("renders duplicate two-Gate picks as two ordered result sockets", () => {

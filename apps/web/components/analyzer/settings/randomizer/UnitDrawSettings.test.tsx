@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defaultRandomizerConfig, emptyMatchupConfig } from "@/lib/randomizer/config";
-import { MATCHUP_UNIT_POOLS } from "@/lib/randomizer/openingUnitPools";
+import { defaultRandomizerConfig, emptyMatchupConfig, sanitizeRandomizerConfig } from "@/lib/randomizer/config";
+import { drawGame, mulberry32 } from "@/lib/randomizer/engine";
+import { MATCHUP_UNIT_POOLS, defaultMatchupUnits } from "@/lib/randomizer/openingUnitPools";
 import type { MatchupConfig, MatchupKey } from "@/lib/randomizer/types";
 import { DrawSwitches, drawSummary } from "./DrawSwitches";
 import { MatchupBuildPicker } from "./MatchupBuildPicker";
@@ -75,10 +76,27 @@ describe("the two draw switches", () => {
     expect(current().units?.units.map((unit) => unit.id)).toEqual([...MATCHUP_UNIT_POOLS.ZvT]);
   });
 
-  it("names every mode in a sentence", () => {
+  it("names every mode in a sentence, and what a switch still needs", () => {
     const off = emptyMatchupConfig();
-    expect(drawSummary("PvP", { ...off, enabled: true, unitRandomizerEnabled: true })).toBe("Each PvP game draws a build, then its opening units.");
-    expect(drawSummary("PvP", { ...off, enabled: true })).toBe("Each PvP game draws a build.");
+    const builds = buildConfig().builds;
+    expect(drawSummary("PvP", { ...off, enabled: true, unitRandomizerEnabled: true, builds })).toBe("Each PvP game draws a build, then its opening units.");
+    expect(drawSummary("PvP", { ...off, enabled: true, builds })).toBe("Each PvP game draws a build.");
+    expect(drawSummary("PvP", { ...off, enabled: true, unitRandomizerEnabled: true })).toBe("Nothing is drawn yet: add a build to the PvP pool.");
+    expect(drawSummary("PvP", { ...off, unitRandomizerEnabled: true, units: { gateCount: 1, useCustomWeights: false, units: [] } }))
+      .toBe("Nothing is drawn yet: select at least one opening unit.");
+  });
+
+  it("turns an older Protoss config's build draw off and keeps drawing the units it shows", () => {
+    const stored = { version: 2, matchups: { PvZ: { enabled: true, unitRandomizerEnabled: true,
+      builds: [{ id: "pvz-2-gate-expand", name: "PvZ - 2 Gate Expand", race: "Protoss", source: "catalog", weight: 1 }] } } };
+    render(<Harness initial={sanitizeRandomizerConfig(stored).matchups.PvZ} matchup="PvZ" />);
+    fireEvent.click(screen.getByRole("switch", { name: "Draw a build order in PvZ" }));
+    const next = current();
+    expect(next.units).toEqual(defaultMatchupUnits("PvZ"));
+    expect(drawsLabel(next)).toBe("Units");
+    expect(screen.getByText("Each PvZ game draws opening units, for whatever build you play.")).toBeTruthy();
+    expect(screen.getAllByRole("checkbox", { name: /in the opening draw for PvZ$/, checked: true })).toHaveLength(4);
+    expect(drawGame("PvZ", next, mulberry32(7))?.units?.picks).toHaveLength(1);
   });
 });
 
@@ -101,7 +119,8 @@ describe("race, then matchup", () => {
 
 describe("opening units", () => {
   it("edits the matchup's own units for a units-only draw", () => {
-    render(<Harness initial={{ ...emptyMatchupConfig(), unitRandomizerEnabled: true }} matchup="TvZ" />);
+    render(<Harness initial={emptyMatchupConfig()} matchup="TvZ" />);
+    fireEvent.click(screen.getByRole("switch", { name: "Draw opening units in TvZ" }));
     expect(screen.getByText("The draw when no build is drawn.")).toBeTruthy();
     expect(screen.getAllByRole("checkbox", { name: /in the opening draw for TvZ$/ })).toHaveLength(MATCHUP_UNIT_POOLS.TvZ.length);
     fireEvent.click(screen.getByRole("checkbox", { name: "Include Banshee in the opening draw for TvZ" }));
@@ -163,7 +182,25 @@ describe("opening units", () => {
   it("says when the unit draw is off, and keeps the settings editable", () => {
     render(<Harness initial={{ ...buildConfig(), unitRandomizerEnabled: false }} />);
     expect(screen.getByText(/Draw opening units is off for PvT/)).toBeTruthy();
-    expect(screen.getByRole("checkbox", { name: "Include Adept in the opening draw for PvT" })).toBeTruthy();
+    expand();
+    expect(screen.getByRole("checkbox", { name: "Include Adept in the opening draw for PvT - Build Alpha" })).toBeTruthy();
+  });
+
+  it("shows the matchup's own units only while a draw uses them", () => {
+    render(<Harness />);
+    // Every Protoss pool entry draws its own units.
+    expect(screen.queryByText("PvT units")).toBeNull();
+    expect(screen.getByText("Each build's units")).toBeTruthy();
+    cleanup();
+    render(<Harness matchup="TvZ" initial={buildConfig({ builds: [{ id: "t", name: "TvZ - Old", race: "Terran", source: "catalog", weight: 1 }],
+      units: defaultMatchupUnits("TvZ") })} />);
+    expect(screen.getByText("Used by builds that have no units of their own.")).toBeTruthy();
+    cleanup();
+    render(<Harness matchup="TvZ" initial={buildConfig({ builds: [], units: defaultMatchupUnits("TvZ") })} />);
+    expect(screen.queryByText("TvZ units")).toBeNull();
+    expect(screen.getByText("Add a build to the TvZ pool, then set the units it draws here.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("switch", { name: "Draw a build order in TvZ" }));
+    expect(screen.getByText("TvZ units")).toBeTruthy();
   });
 });
 

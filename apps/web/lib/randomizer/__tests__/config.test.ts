@@ -89,10 +89,19 @@ describe("the two switches keep a stored config's meaning", () => {
   });
 
   it("reads version 3's switches independently, each off unless saved on", () => {
-    expect(switchesOf({ version: 3, matchups: { TvZ: { enabled: false, unitRandomizerEnabled: true } } }, "TvZ"))
+    const units = { gateCount: 1, units: [{ id: "marine", weight: 1 }] };
+    expect(switchesOf({ version: 3, matchups: { TvZ: { enabled: false, unitRandomizerEnabled: true, units } } }, "TvZ"))
       .toEqual({ build: false, units: true });
     expect(switchesOf({ version: 3, matchups: { PvZ: { enabled: true } } }, "PvZ"))
       .toEqual({ build: true, units: false });
+  });
+
+  it("reads a version-3 unit switch with nothing it could draw as off", () => {
+    // How an agent older than 0.26 adds a Protoss matchup to a newer config.
+    expect(switchesOf({ version: 3, matchups: { PvZ: { enabled: false, unitRandomizerEnabled: true } } }, "PvZ"))
+      .toEqual({ build: false, units: false });
+    expect(switchesOf({ version: 3, matchups: { PvZ: { enabled: true, unitRandomizerEnabled: true } } }, "PvZ"))
+      .toEqual({ build: true, units: true });
   });
 
   it("saves as version 3, so a saved draft reads back the same", () => {

@@ -5172,7 +5172,8 @@ release preparation, not a signed or published 0.24.9 installer.
   The native randomizer and the channel-point reroll redraw builds, so they
   need the build draw.
 - A streamer who queued Random gets the draw for the race the game reports,
-  once it reports it, still once per game.
+  once it reports it, still once per game, on the OBS widget. The desktop card
+  stays hidden in Random games, so it never rolls there.
 - The widget's unit reveal loads on demand, so the overlay page loads less up
   front. Agent 0.26.0. See ADR 0109.
 

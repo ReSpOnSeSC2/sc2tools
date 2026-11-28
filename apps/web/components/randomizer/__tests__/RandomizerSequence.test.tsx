@@ -10,6 +10,7 @@ import {
   UNIT_RESULT_HOLD_MS,
   loadUnitStage,
 } from "../RandomizerSequence";
+import { UNIT_STAGE_HEIGHT } from "../unit-reveals/unitStageSize";
 
 const revealMock = vi.hoisted(() => ({
   autoCompleteBuild: false,
@@ -146,10 +147,17 @@ describe("RandomizerSequence", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
-  it("holds the unit act's height while its code loads, so nothing jumps", () => {
-    render(<RandomizerSequence draw={draw(true, false)} spinId={1} />);
-    const stage = document.querySelector<HTMLElement>('[data-randomizer-phase="units"]');
-    expect(stage?.style.minHeight).toBe("320px");
+  it("holds the unit frame's full height from the first act, so nothing jumps when it loads", () => {
+    render(<RandomizerSequence draw={draw()} spinId={1} />);
+    const stage = () => document.querySelector<HTMLElement>("[data-randomizer-phase]");
+    expect(stage()?.style.minHeight).toBe(`${UNIT_STAGE_HEIGHT}px`);
+    fireEvent.click(screen.getByText("complete build"));
+    act(() => vi.advanceTimersByTime(BUILD_RESULT_HOLD_MS + BUILD_EXIT_MS + BETWEEN_ACTS_MS));
+    expect(stage()?.dataset.randomizerPhase).toBe("units");
+    expect(stage()?.style.minHeight).toBe(`${UNIT_STAGE_HEIGHT}px`);
+    cleanup();
+    render(<RandomizerSequence draw={draw(false)} spinId={2} />);
+    expect(stage()?.style.minHeight).toBe("320px");
   });
 
   it("does not clear a synchronous reduced-motion completion on mount", async () => {

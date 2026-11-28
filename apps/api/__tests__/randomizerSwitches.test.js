@@ -2,6 +2,7 @@
 "use strict";
 
 const { envelopeMatchup, streamerRace } = require("../src/services/buildIntentCommon");
+const { earlyRandomizerEnvelope } = require("../src/services/buildIntentAutoRandomizer");
 const { TwitchRewardActions } = require("../src/services/twitchRewardActions");
 
 const USER = "streamer-1";
@@ -34,6 +35,13 @@ describe("the streamer's race in a live envelope", () => {
     ] };
     expect(streamerRace(twins)).toBe("Random");
     expect(streamerRace({ ...queuedRandom("Zerg"), user: { race: "Random" } })).toBe("Random");
+  });
+
+  test("the desktop card never rolls for a Random queue, whose card the agent hides", () => {
+    const loading = { ...queuedRandom("Zerg"), phase: "match_loading" };
+    expect(earlyRandomizerEnvelope(loading)).toBeNull();
+    expect(earlyRandomizerEnvelope({ ...loading, user: { name: "Streamer", race: "Zerg" } }))
+      .toEqual({ gameKey: GAME, matchup: "ZvP" });
   });
 });
 

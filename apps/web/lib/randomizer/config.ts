@@ -158,6 +158,16 @@ function legacyUnitSwitch(r: Record<string, unknown>, matchup: MatchupKey, enabl
   return typeof r.unitRandomizerEnabled === "boolean" ? r.unitRandomizerEnabled : true;
 }
 
+/**
+ * From version 3 the unit switch reads on only when a draw can use it:
+ * after a drawn build, or alone from the matchup's own units. An agent older
+ * than 0.26 adds a Protoss matchup with the switch on, its build draw off
+ * and no units; that draws nothing, here and in the agent, and reads off.
+ */
+function unitSwitch(r: Record<string, unknown>, enabled: boolean, units: OpeningUnitsConfig | undefined): boolean {
+  return r.unitRandomizerEnabled === true && (enabled || units !== undefined);
+}
+
 function sanitizeMatchup(raw: unknown, matchup: MatchupKey, independent: boolean): MatchupConfig {
   if (!raw || typeof raw !== "object") return emptyMatchupConfig();
   const r = raw as Record<string, unknown>;
@@ -175,7 +185,7 @@ function sanitizeMatchup(raw: unknown, matchup: MatchupKey, independent: boolean
     enabled,
     useCustomWeights: r.useCustomWeights === true,
     unitRandomizerEnabled: independent
-      ? r.unitRandomizerEnabled === true
+      ? unitSwitch(r, enabled, units)
       : legacyUnitSwitch(r, matchup, enabled),
     builds: [...byId.values()],
     ...(units ? { units } : {}),

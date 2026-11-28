@@ -1,9 +1,14 @@
 "use strict";
 
-const { BuildIntentError, envelopeMatchup, isValidGameKey } = require("./buildIntentCommon");
+const { BuildIntentError, envelopeMatchup, isValidGameKey, normalizeRace } = require("./buildIntentCommon");
 const DESKTOP_ROLL_CUTOFF_SEC = 30;
 
-/** @param {unknown} raw @returns {{gameKey:string,matchup:string}|null} */
+/**
+ * The current game, when the desktop card can roll for it. The agent never
+ * shows that card to a streamer who queued Random (its check-in hides
+ * Random games), so a roll there would be saved and never seen.
+ * @param {unknown} raw @returns {{gameKey:string,matchup:string}|null}
+ */
 function earlyRandomizerEnvelope(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const envelope = /** @type {Record<string, any>} */ (raw);
@@ -11,6 +16,7 @@ function earlyRandomizerEnvelope(raw) {
   if (envelope.phase !== "match_loading" && !earlyPlayingPhase(envelope)) return null;
   if (!Array.isArray(envelope.players) || envelope.players.length !== 2
       || envelope.players.some((/** @type {any} */ player) => player?.type !== "user")) return null;
+  if (normalizeRace(envelope.user?.race) === "Random") return null;
   const matchup = envelopeMatchup(envelope);
   return matchup ? { gameKey: envelope.gameKey, matchup } : null;
 }

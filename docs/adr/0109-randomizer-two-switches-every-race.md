@@ -27,6 +27,11 @@ native randomizer and channel-point reroll, and the desktop card's draw
   build draw is on in a Protoss matchup: every stored config keeps its
   meaning, and the first save writes version 3. A matchup's own unit draw
   lives in a new `units` block, absent until set up (absent draws nothing).
+  The settings never leave the unit draw on without one: turning it on, or
+  turning the build draw off under it, stores the matchup's defaults. A
+  version-3 unit switch with nothing to draw (on, with no `units` and the
+  build draw off, as an agent older than 0.26.0 adds a Protoss matchup)
+  draws nothing in the widget and the agent alike, and the web reads it off.
 - **Units after a build, or alone.** With both switches on, units follow the
   drawn build: its pool entry's own settings; a Terran or Zerg entry saved
   without any uses the matchup's; a saved pick no longer in the pool draws
@@ -57,7 +62,8 @@ native randomizer and channel-point reroll, and the desktop card's draw
   entries of that name, or a Random opponent, leave the matchup unknown, so
   nothing is drawn before the race is known and the game key still draws
   once. The desktop loading card is never shown for a Random game (the
-  check-in contract, `HIDE_RANDOM`), so it draws nothing there.
+  check-in contract, `HIDE_RANDOM`), so it draws nothing there, and the
+  API's automatic desktop roll never starts for a Random queue.
 - **The server follows the switches.** The native randomizer and the reward
   reroll pick builds, so they need the build draw: with it off they refuse
   (`randomizer_disabled`) and the reroll reward is not offered. Units drawn
@@ -68,9 +74,10 @@ native randomizer and channel-point reroll, and the desktop card's draw
 
 ## Consequences
 
-- One fixture, `unitDrawParity.json`, now covers every race and mode and runs
-  on the web (through the overlay's config step and `gameSpin`) and in the
-  agent; `nativeParity.test.ts` checks the API's pick in every mode.
+- The parity fixture, `unitDrawParity.json` (the Gateway cases) with
+  `unitDrawParity.races.json` (every race and both switches), runs on the web
+  (through the overlay's config step and `gameSpin`) and in the agent;
+  `nativeParity.test.ts` checks the API's pick in every mode.
 - An agent older than 0.26.0 shows "Enable for this matchup", which in a
   version-3 config turns the build draw alone; 0.26.0 names it **Draw a build
   order**.

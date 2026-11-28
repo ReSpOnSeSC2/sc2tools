@@ -26,10 +26,11 @@ from sc2tools_agent.build_checkin.randomizer_draw import (
     seed_from_string,
 )
 
-FIXTURE = json.loads(
-    (Path(__file__).resolve().parents[2] / "web" / "lib" / "randomizer" / "__tests__" / "unitDrawParity.json")
-    .read_text(encoding="utf-8")
-)
+FIXTURES = Path(__file__).resolve().parents[2] / "web" / "lib" / "randomizer" / "__tests__"
+FIXTURE = json.loads((FIXTURES / "unitDrawParity.json").read_text(encoding="utf-8"))
+RACES = json.loads((FIXTURES / "unitDrawParity.races.json").read_text(encoding="utf-8"))
+CASES = FIXTURE["cases"] + RACES["cases"]
+"""The Gateway cases, then every race and the two switches, as the web test reads them."""
 KEY = DrawKey(game_key="Foo|Me|1790000000000", matchup="PvP", build_key="pvp-2-gate-expand")
 POOL = {"matchups": {"PvP": {"enabled": True, "builds": [
     {"id": "pvp-2-gate-expand", "name": "PvP - 2 Gate Expand", "race": "Protoss"},
@@ -45,7 +46,7 @@ def test_the_generator_matches_the_widget_value_for_value(seed: Dict[str, Any]) 
     assert [rng() for _ in seed["values"]] == seed["values"]
 
 
-@pytest.mark.parametrize("case", FIXTURE["cases"], ids=lambda case: case["name"])
+@pytest.mark.parametrize("case", CASES, ids=lambda case: case["name"])
 def test_the_units_match_the_widget_for_every_fixture_case(case: Dict[str, Any]) -> None:
     key = DrawKey(game_key=case["gameKey"], matchup=case["matchup"], build_key=case["buildKey"])
     served = overlay_config(case["config"], case["matchup"], case["options"])

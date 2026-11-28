@@ -17,14 +17,15 @@ import dynamic from "next/dynamic";
 import type { GameDraw } from "@/lib/randomizer/types";
 import { RandomizerStage } from "@/components/randomizer/RandomizerStage";
 import { useReducedMotion } from "@/components/randomizer/reveals/revealShared";
+import { UNIT_STAGE_HEIGHT } from "@/components/randomizer/unit-reveals/unitStageSize";
 
 export const BUILD_RESULT_HOLD_MS = 1_100;
 export const BUILD_EXIT_MS = 320;
 export const BETWEEN_ACTS_MS = 160;
 export const UNIT_RESULT_HOLD_MS = 1_400;
 export const UNIT_EXIT_MS = 300;
-/** The unit reveal's frame height, held while its code loads so nothing jumps. */
-const UNIT_STAGE_MIN_HEIGHT = 320;
+/** The height a build reveal alone keeps. */
+const BUILD_STAGE_MIN_HEIGHT = 320;
 
 type SequencePhase =
   | "build"
@@ -40,7 +41,8 @@ export function loadUnitStage() {
 
 const UnitRandomizerStage = dynamic(
   () => loadUnitStage().then((module) => module.UnitRandomizerStage),
-  { ssr: false, loading: () => <div aria-hidden style={{ minHeight: UNIT_STAGE_MIN_HEIGHT }} /> },
+  // The frame's own height, held while its code loads so nothing jumps.
+  { ssr: false, loading: () => <div aria-hidden data-unit-stage-placeholder style={{ minHeight: UNIT_STAGE_HEIGHT }} /> },
 );
 
 export interface RandomizerSequenceProps {
@@ -132,7 +134,8 @@ function RandomizerSequenceRun({
       style={{
         position: "relative",
         width: "100%",
-        minHeight: UNIT_STAGE_MIN_HEIGHT,
+        // A draw with units keeps the unit frame's height from its first act.
+        minHeight: draw.units ? UNIT_STAGE_HEIGHT : BUILD_STAGE_MIN_HEIGHT,
         display: "grid",
         placeItems: "center",
         pointerEvents: "none",

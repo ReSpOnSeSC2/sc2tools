@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
-import { RandomizerSequence } from "@/components/randomizer/RandomizerSequence";
+import { RandomizerSequence, loadUnitStage } from "@/components/randomizer/RandomizerSequence";
 import { matchupDraws } from "@/lib/randomizer/config";
 import { drawGame } from "@/lib/randomizer/engine";
 import type {
@@ -41,6 +41,12 @@ export function previewBlocker(config: MatchupConfig): string | null {
 export function RandomizerPreview({ matchup, config }: RandomizerPreviewProps) {
   const [spin, setSpin] = useState<{ draw: GameDraw; id: number } | null>(null);
   const blocker = previewBlocker(config);
+  const drawsUnits = matchupDraws(config).units;
+
+  // Load the unit reveal before the first spin, as the widget does.
+  useEffect(() => {
+    if (drawsUnits) void loadUnitStage();
+  }, [drawsUnits]);
 
   function onSpin() {
     const draw = drawGame(matchup, config);

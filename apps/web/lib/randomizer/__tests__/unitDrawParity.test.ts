@@ -5,6 +5,7 @@ import { sanitizeRandomizerConfig } from "../config";
 import { mulberry32, seedFromString } from "../engine";
 import { isMatchupKey, type MatchupKey } from "../types";
 import fixture from "./unitDrawParity.json";
+import races from "./unitDrawParity.races.json";
 
 /**
  * The desktop loading card repeats the widget's seeded opening-unit draw in
@@ -13,8 +14,21 @@ import fixture from "./unitDrawParity.json";
  * show the same units for a game: under a saved pick, or drawn alone with
  * the build draw off. Each case starts from the stored config and the
  * builds the account offers, and goes through the overlay's own config
- * step first, as the widget's config does.
+ * step first, as the widget's config does. unitDrawParity.races.json adds
+ * every race and the two switches.
  */
+interface ParityCase {
+  name: string;
+  matchup: string;
+  gameKey: string;
+  buildKey: string | null;
+  config: Record<string, unknown>;
+  options?: { builds: Array<{ key: string; name: string; source: string }> } | null;
+  units: string[];
+}
+
+const CASES: ParityCase[] = [...fixture.cases, ...races.cases];
+
 function matchupOf(value: string): MatchupKey {
   if (!isMatchupKey(value)) throw new Error(`Not a matchup: ${value}`);
   return value;
@@ -27,7 +41,7 @@ describe("the widget's seeded opening-unit draw", () => {
     expect(values.map(() => next())).toEqual(values);
   });
 
-  it.each(fixture.cases)("$name", async (entry) => {
+  it.each(CASES)("$name", async (entry) => {
     const matchup = matchupOf(entry.matchup);
     const offered = { forMatchup: async () => entry.options ?? { builds: [] } };
     const served = await overlayRandomizerConfig(offered, "streamer", entry.config);

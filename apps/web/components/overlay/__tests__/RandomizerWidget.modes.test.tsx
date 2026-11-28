@@ -79,6 +79,24 @@ describe("RandomizerWidget switches and Random", () => {
     expect(spins.map((spin) => spin.roll)).toEqual([null]);
   });
 
+  it("ignores a saved pick while the build draw is off, so units drawn alone play once", () => {
+    const config = unitsOnly();
+    const gate = (holdDeadlineMs: number): RandomizerIntentGate => ({
+      gameKey: GAME, seen: true, suppressRandomizer: false, holdDeadlineMs,
+      randomizer: { key: "custom:earlier", name: "Earlier pick", source: "custom" },
+    });
+    const element = (intent: RandomizerIntentGate, game: LiveGameEnvelope) => (
+      <RandomizerWidget live={null} liveGame={game} config={config} intent={intent} onSpin={(spin) => spins.push(spin)} />
+    );
+    const view = render(element(gate(0), envelope()));
+    act(() => vi.advanceTimersByTime(60_000));
+    view.rerender(element(gate(1), envelope({ displayTime: 12 })));
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(draws).toHaveLength(1);
+    expect(draws[0]).toMatchObject({ build: null, units: { picks: ["marine"] } });
+    expect(spins).toHaveLength(1);
+  });
+
   it("keeps units drawn alone for a game whose build was declared", () => {
     show(envelope(), unitsOnly(), { gameKey: GAME, seen: true, suppressRandomizer: true, holdDeadlineMs: 0 });
     expect(draws.map((draw) => draw.units?.picks)).toEqual([["marine"]]);
