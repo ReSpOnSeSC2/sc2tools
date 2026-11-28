@@ -5,8 +5,8 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 
 /**
- * Humdingers account saves, daily play totals (ADR 0102) and play sessions
- * (ADR 0103).
+ * Humdingers account saves, daily play totals (ADR 0102), play sessions
+ * (ADR 0103) and run tapes (ADR 0113).
  *
  * The /play/humdingers host page copies the game's localStorage saves
  * ("humdingers.save.<slot>", JSON with fmt "humdingers-save") to the
@@ -14,20 +14,36 @@ const { stampVersion } = require("../db/schemaVersioning");
  * user IDs; unique players are counted through a peppered per-day hash
  * that expires after 35 days. Each visit to the game page is also kept as a
  * play session with the account for 90 days, so admins can see who played,
- * when and for how long.
+ * when and for how long. The host page also uploads the visit's run tape
+ * (button presses and a few storage reads: a deterministic replay log) in
+ * numbered chunks under the same session id. Each chunk is kept with the
+ * account for 90 days, the visit's tape totals live on its session row, and
+ * admins replay the tape from the admin page.
  *
  * @typedef {{userId: string, slot: string, data: string, when: number, playtime: number, chapter: number,
  *   world: string|null, updatedAt: Date}} HumdingersSaveDoc
  * @typedef {{_id: string, loads: number, activeSeconds: number, longPlays: number, uniquePlayers: number,
  *   savers: number, maxChapter: number, updatedAt: Date}} HumdingersPlayDayDoc
  * @typedef {{_id: string, day: string, saved: boolean, expiresAt: Date}} HumdingersPlayPlayerDoc
+ * @typedef {{ticks?: number, maps?: number, fights?: number, won?: number, lost?: number, ran?: number, overs?: number,
+ *   levelups?: number, saves?: number, hints?: number, goal?: string}} HumdingersTapeSummary
+ * @typedef {{build: string, chunks: number, bytes: number, ticks: number, final?: boolean, summary?: HumdingersTapeSummary,
+ *   updatedAt: Date}} HumdingersTapeTotalsDoc
  * @typedef {{userId: string, session: string, startedAt: Date, lastAt: Date, loads: number, activeSeconds: number,
- *   maxChapter: number, saved: boolean, expiresAt: Date}} HumdingersPlaySessionDoc
- * @typedef {{startedAt: Date, lastAt: Date, activeSeconds: number, maxChapter: number, saved: boolean}} HumdingersSessionRow
+ *   maxChapter: number, saved: boolean, expiresAt: Date, tape?: HumdingersTapeTotalsDoc}} HumdingersPlaySessionDoc
+ * @typedef {{userId: string, session: string, seq: number, enc: "gzip-b64"|"json", data: string, bytes: number,
+ *   build: string, from: number, to: number, createdAt: Date, expiresAt: Date}} HumdingersTapeChunkDoc
+ * @typedef {{build: string, chunks: number, bytes: number, ticks: number, final: boolean,
+ *   summary: HumdingersTapeSummary|null}} HumdingersTapeTotals
+ * @typedef {{session: string, startedAt: Date, lastAt: Date, activeSeconds: number, maxChapter: number, saved: boolean,
+ *   tape: HumdingersTapeTotals|null}} HumdingersSessionRow
  * @typedef {{userId: string, displayName: string|null, battleTag: string|null, email: string|null,
  *   sessions: number, activeSeconds: number, lastAt: Date|null, maxChapter: number,
  *   save: {slots: number, playtime: number, chapter: number, savedAt: Date|null}|null,
  *   recent: HumdingersSessionRow[]}} HumdingersPlayerRow
+ * @typedef {{seq: number, enc: "gzip-b64"|"json", data: string, from: number, to: number}} HumdingersTapeChunk
+ * @typedef {{userId: string, session: string, build: string, ticks: number, bytes: number, final: boolean,
+ *   summary: HumdingersTapeSummary|null, startedAt: Date|null, lastAt: Date|null, chunks: HumdingersTapeChunk[]}} HumdingersTape
  */
 
 const SAVE_FORMAT = "humdingers-save";
@@ -50,6 +66,30 @@ const MAX_PLAYERS = 200;
 const MAX_PLAYER_SESSIONS = 50;
 const STATS_DAYS = [7, 30, 90];
 const DEFAULT_STATS_DAYS = 30;
+/** A tape chunk is gzipped JSON in base64, or plain JSON. */
+const TAPE_ENCODINGS = ["gzip-b64", "json"];
+/** Standard or URL-safe base64: all a gzip-b64 chunk may hold. */
+const TAPE_BASE64_RE = /^[A-Za-z0-9+/=_-]*$/;
+/** The game build that recorded the tape. */
+const TAPE_BUILD_RE = /^[A-Za-z0-9_-]{1,40}$/;
+/** Chunks are numbered from 0 within one visit. */
+const MAX_TAPE_SEQ = 9999;
+/** As base64, a full chunk and its fields fit the API's 256 kB body limit. */
+const MAX_TAPE_CHUNK_CHARS = 200_000;
+/** The furthest game tick a chunk may reach. */
+const MAX_TAPE_TICK = 50_000_000;
+/** One visit's tape keeps at most this many chunks. */
+const MAX_TAPE_CHUNKS = 2000;
+/** One visit's tape keeps at most this many characters of chunk data. */
+const MAX_TAPE_BYTES = 8_000_000;
+/** The summary counters kept; other summary fields, except the goal, are dropped. */
+const TAPE_SUMMARY_COUNTS = /** @type {const} */ (["ticks", "maps", "fights", "won", "lost", "ran", "overs", "levelups", "saves", "hints"]);
+/** Summary counters are clamped to 0..this. */
+const MAX_TAPE_COUNT = 10_000_000;
+/** The summary's goal text is clipped to this many characters. */
+const MAX_TAPE_GOAL_CHARS = 120;
+/** Account ids are UUIDs; the admin tape read refuses anything longer. */
+const MAX_USER_ID_CHARS = 64;
 
 class HumdingersService {
   /** @param {import('../db/connect').DbContext} db @param {{secret: Buffer|string, now?: () => Date}} opts */
@@ -149,6 +189,98 @@ class HumdingersService {
   }
 
   /**
+   * Stores one chunk of a visit's run tape (ADR 0113) and adds it to the
+   * tape totals on the visit's session row. A retried chunk hits the unique
+   * {userId, session, seq} index and is not counted again. The caps are
+   * checked before the insert, so uploads sent at the same time could each
+   * pass them by one chunk; the host page sends one chunk at a time.
+   * @param {string} userId @param {unknown} session @param {any} body
+   */
+  async putTapeChunk(userId, session, body) {
+    const chunk = parseTapeChunk(session, body);
+    const key = { userId, session: chunk.session };
+    const row = await this.db.humdingersPlaySessions.findOne(key, { projection: { _id: 0, tape: 1 } });
+    const bytes = chunk.data.length;
+    if ((row?.tape?.chunks || 0) >= MAX_TAPE_CHUNKS || (row?.tape?.bytes || 0) + bytes > MAX_TAPE_BYTES) {
+      throw problem(413, "tape_full", "This visit's tape is full.");
+    }
+    const now = this.now();
+    const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
+    const { seq, enc, data, build, from, to } = chunk;
+    try {
+      await this.db.humdingersTapeChunks.insertOne(stampVersion(
+        { ...key, seq, enc, data, bytes, build, from, to, createdAt: now, expiresAt },
+        COLLECTIONS.HUMDINGERS_TAPE_CHUNKS,
+      ));
+    } catch (error) {
+      if (/** @type {any} */ (error)?.code !== 11000) throw error;
+      // A retry of a chunk already stored and counted counts nothing again, but a page-exit retry may be the one that says the
+      // tape is final, and its summary is the newest.
+      /** @type {Record<string, any>} */
+      const late = {};
+      if (chunk.summary) late["tape.summary"] = chunk.summary;
+      if (chunk.final) late["tape.final"] = true;
+      if (Object.keys(late).length) await this.db.humdingersPlaySessions.updateOne(key, { $set: late });
+      return;
+    }
+    /** @type {Record<string, any>} */
+    const set = { "tape.build": build, "tape.updatedAt": now };
+    if (chunk.summary) set["tape.summary"] = chunk.summary;
+    if (chunk.final) set["tape.final"] = true;
+    // A tape that arrives before the visit's first play report starts the
+    // row with the same defaults recordPlay gives a new session.
+    await this.db.humdingersPlaySessions.updateOne(
+      key,
+      {
+        $inc: { "tape.chunks": 1, "tape.bytes": bytes },
+        $max: { "tape.ticks": to },
+        $set: set,
+        $setOnInsert: stampVersion(
+          { startedAt: now, lastAt: now, loads: 0, activeSeconds: 0, maxChapter: 0, saved: false, expiresAt },
+          COLLECTIONS.HUMDINGERS_PLAY_SESSIONS,
+        ),
+      },
+      { upsert: true },
+    );
+  }
+
+  /**
+   * One visit's run tape for the admin replay (ADR 0113): its chunks in
+   * sequence order. Build, ticks and bytes come from those chunks, so they
+   * match what is returned; the final flag, summary and times come from the
+   * visit's session row.
+   * @param {unknown} userId @param {unknown} session
+   * @returns {Promise<HumdingersTape>}
+   */
+  async tape(userId, session) {
+    if (typeof userId !== "string" || !userId || userId.length > MAX_USER_ID_CHARS) {
+      throw problem(400, "bad_user", "Unknown account.");
+    }
+    const key = { userId, session: parseSession(session) };
+    const [chunks, row] = await Promise.all([
+      this.db.humdingersTapeChunks
+        .find(key, { projection: { _id: 0, seq: 1, enc: 1, data: 1, build: 1, from: 1, to: 1 } })
+        .sort({ seq: 1 })
+        .limit(MAX_TAPE_SEQ + 1)
+        .toArray(),
+      this.db.humdingersPlaySessions.findOne(key, { projection: { _id: 0, startedAt: 1, lastAt: 1, tape: 1 } }),
+    ]);
+    if (chunks.length === 0) throw problem(404, "not_found", "This visit has no tape.");
+    return {
+      userId: key.userId,
+      session: key.session,
+      build: chunks[chunks.length - 1].build,
+      ticks: chunks.reduce((max, chunk) => Math.max(max, chunk.to), 0),
+      bytes: chunks.reduce((total, chunk) => total + chunk.data.length, 0),
+      final: row?.tape?.final === true,
+      summary: row?.tape?.summary || null,
+      startedAt: dateOrNull(row?.startedAt),
+      lastAt: dateOrNull(row?.lastAt),
+      chunks: chunks.map((chunk) => ({ seq: chunk.seq, enc: chunk.enc, data: chunk.data, from: chunk.from, to: chunk.to })),
+    };
+  }
+
+  /**
    * Admin totals for the trailing 7, 30 or 90 UTC days, newest first, and
    * the accounts that played in them.
    * @param {unknown} rawDays
@@ -194,9 +326,10 @@ class HumdingersService {
 
   /**
    * The accounts that played since `since`, most recent first, with their
-   * sessions in the range (newest first) and a summary of the saves they
-   * hold now. Accounts whose saves changed in the range are listed too,
-   * which covers play from before sessions were recorded.
+   * sessions in the range (newest first, each with its tape totals) and a
+   * summary of the saves they hold now. Accounts whose saves changed in the
+   * range are listed too, which covers play from before sessions were
+   * recorded.
    * @param {Date} since
    * @returns {Promise<{items: HumdingersPlayerRow[], truncated: boolean}>}
    */
@@ -214,7 +347,10 @@ class HumdingersService {
             $topN: {
               n: MAX_PLAYER_SESSIONS,
               sortBy: { startedAt: -1 },
-              output: { startedAt: "$startedAt", lastAt: "$lastAt", activeSeconds: "$activeSeconds", maxChapter: "$maxChapter", saved: "$saved" },
+              output: {
+                session: "$session", startedAt: "$startedAt", lastAt: "$lastAt", activeSeconds: "$activeSeconds",
+                maxChapter: "$maxChapter", saved: "$saved", tape: "$tape",
+              },
             },
           },
         },
@@ -261,12 +397,27 @@ function playerRow(userId, user, played, save) {
     maxChapter: played?.maxChapter || 0,
     save: save ? { slots: save.slots || 0, playtime: save.playtime || 0, chapter: save.chapter || 0, savedAt: dateOrNull(save.savedAt) } : null,
     recent: (played?.recent || []).map((/** @type {any} */ row) => ({
+      session: String(row.session),
       startedAt: row.startedAt,
       lastAt: row.lastAt,
       activeSeconds: row.activeSeconds || 0,
       maxChapter: row.maxChapter || 0,
       saved: row.saved === true,
+      tape: tapeTotals(row.tape),
     })),
+  };
+}
+
+/** A session's tape totals, or null when the visit has no tape. @param {any} tape @returns {HumdingersTapeTotals|null} */
+function tapeTotals(tape) {
+  if (!tape || typeof tape !== "object") return null;
+  return {
+    build: typeof tape.build === "string" ? tape.build : "",
+    chunks: tape.chunks || 0,
+    bytes: tape.bytes || 0,
+    ticks: tape.ticks || 0,
+    final: tape.final === true,
+    summary: tape.summary || null,
   };
 }
 
@@ -334,6 +485,57 @@ function parsePlay(body) {
   return { type, seconds, chapter: body.chapter || 0, saved: body.saved === true, longPlay: body.longPlay === true, session };
 }
 
+/** The host page's id for one visit. @param {unknown} session @returns {string} */
+function parseSession(session) {
+  if (typeof session !== "string" || !SESSION_RE.test(session)) throw problem(400, "bad_session", "Unknown play session.");
+  return session;
+}
+
+/** @param {unknown} session @param {any} body */
+function parseTapeChunk(session, body) {
+  const id = parseSession(session);
+  const bad = (/** @type {string} */ message) => problem(400, "bad_tape_chunk", message);
+  if (!isObject(body)) throw bad("Send the tape chunk as JSON.");
+  const { seq, enc, data, build, from, to, final, summary } = /** @type {Record<string, any>} */ (body);
+  if (!Number.isInteger(seq) || seq < 0 || seq > MAX_TAPE_SEQ) throw bad(`Number the chunk 0 to ${MAX_TAPE_SEQ}.`);
+  if (!TAPE_ENCODINGS.includes(enc)) throw bad("Unknown tape encoding.");
+  if (typeof data !== "string" || !data || data.length > MAX_TAPE_CHUNK_CHARS) {
+    throw bad(`Send 1 to ${MAX_TAPE_CHUNK_CHARS} characters of tape.`);
+  }
+  if (enc === "gzip-b64" && !TAPE_BASE64_RE.test(data)) throw bad("The tape chunk is not base64.");
+  if (typeof build !== "string" || !TAPE_BUILD_RE.test(build)) throw bad("Unknown game build.");
+  if (!isTick(from) || !isTick(to) || to < from) throw bad("Unknown tick range.");
+  // The optional fields may also be sent as null.
+  if (final != null && typeof final !== "boolean") throw bad("Mark the last chunk with final: true.");
+  if (summary != null && !isObject(summary)) throw bad("Send the summary as an object.");
+  return {
+    session: id, seq, enc, data, build, from, to,
+    final: final === true,
+    summary: summary == null ? null : parseTapeSummary(summary),
+  };
+}
+
+/** @param {unknown} value @returns {value is number} */
+function isTick(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= MAX_TAPE_TICK;
+}
+
+/**
+ * Keeps the known counters, clamped, and the goal text, clipped; drops
+ * every other field.
+ * @param {Record<string, unknown>} raw @returns {HumdingersTapeSummary}
+ */
+function parseTapeSummary(raw) {
+  /** @type {HumdingersTapeSummary} */
+  const summary = {};
+  for (const field of TAPE_SUMMARY_COUNTS) {
+    const value = raw[field];
+    if (typeof value === "number" && Number.isInteger(value)) summary[field] = Math.min(MAX_TAPE_COUNT, Math.max(0, value));
+  }
+  if (typeof raw.goal === "string") summary.goal = raw.goal.slice(0, MAX_TAPE_GOAL_CHARS);
+  return summary;
+}
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -350,4 +552,6 @@ function problem(status, code, message) {
   return Object.assign(new Error(message), { status, code });
 }
 
-module.exports = { HumdingersService, MAX_SAVE_BYTES, MAX_SLOTS, MAX_ACTIVE_SECONDS };
+module.exports = {
+  HumdingersService, MAX_SAVE_BYTES, MAX_SLOTS, MAX_ACTIVE_SECONDS, MAX_TAPE_CHUNK_CHARS, MAX_TAPE_CHUNKS, MAX_TAPE_BYTES,
+};

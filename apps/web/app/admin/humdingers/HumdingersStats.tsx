@@ -8,6 +8,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { RequestError } from "@/components/ui/RequestError";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/SegmentedControl";
 import { useApi } from "@/lib/clientApi";
+import { clock } from "@/lib/humdingers/tapeTimeline";
 import { formatDate, formatDateTime, formatNumber } from "@/lib/i18n/format";
 import { AdminDate } from "../components/AdminDate";
 import { AdminPageHeader } from "../components/AdminPageHeader";
@@ -15,7 +16,13 @@ import { ForbiddenCard, LoadingRows, MetricStat } from "../components/AdminFragm
 
 type Range = "7" | "30" | "90";
 type DayRow = { day: string; loads: number; players: number; activeSeconds: number; longPlays: number; savers: number; maxChapter: number };
-type SessionRow = { startedAt: string; lastAt: string; activeSeconds: number; maxChapter: number; saved: boolean };
+/** A visit's run tape, when the visit recorded one (ADR 0113). */
+type SessionTape = { build: string; chunks: number; bytes: number; ticks: number; final: boolean; summary: Record<string, unknown> | null };
+type SessionRow = {
+  startedAt: string; lastAt: string; activeSeconds: number; maxChapter: number; saved: boolean;
+  /** Missing only from an API older than ADR 0113. */
+  session?: string; tape?: SessionTape | null;
+};
 export type HumdingersPlayer = {
   userId: string;
   displayName: string | null;
@@ -106,6 +113,7 @@ function PlayersCard({ players, truncated, days }: { players: HumdingersPlayer[]
       <p className="text-caption text-text-muted">
         Accounts that played in the last {days} days, most recent first. Open a player&apos;s sessions to see each visit.
         Sessions are recorded from {since} and kept for 90 days; the game clock is the play time in the account&apos;s saves.
+        A session with a tape can be watched: Watch replays that visit in the game from the player&apos;s button presses.
         {truncated ? " Only the 200 most recent players are listed." : ""}
       </p>
       {players.length === 0 ? (
@@ -165,7 +173,7 @@ function PlayerRows({ player, detailsId, open, onToggle }: { player: HumdingersP
       {open ? (
         <tr id={detailsId}>
           <td colSpan={6} className="pb-3">
-            <SessionsTable name={name} sessions={player.recent} total={player.sessions} />
+            <SessionsTable name={name} userId={player.userId} sessions={player.recent} total={player.sessions} />
           </td>
         </tr>
       ) : null}
@@ -173,7 +181,7 @@ function PlayerRows({ player, detailsId, open, onToggle }: { player: HumdingersP
   );
 }
 
-function SessionsTable({ name, sessions, total }: { name: string; sessions: SessionRow[]; total: number }) {
+function SessionsTable({ name, userId, sessions, total }: { name: string; userId: string; sessions: SessionRow[]; total: number }) {
   return (
     <div className="rounded-lg border border-line bg-bg-elevated/40 px-3 py-2">
       <table className="w-full text-left text-caption">
@@ -183,7 +191,8 @@ function SessionsTable({ name, sessions, total }: { name: string; sessions: Sess
             <th scope="col" className={`${CELL} font-semibold`}>Started</th>
             <th scope="col" className={`${NUMBER_CELL} font-semibold`}>Play time</th>
             <th scope="col" className={`${NUMBER_CELL} font-semibold`}>Chapter</th>
-            <th scope="col" className="py-2 text-right font-semibold">Saved</th>
+            <th scope="col" className={`${CELL} text-right font-semibold`}>Saved</th>
+            <th scope="col" className="py-2 text-right font-semibold">Replay</th>
           </tr>
         </thead>
         <tbody>
@@ -192,7 +201,16 @@ function SessionsTable({ name, sessions, total }: { name: string; sessions: Sess
               <td className={CELL}>{formatDateTime(session.startedAt)}</td>
               <td className={NUMBER_CELL}>{duration(session.activeSeconds)}</td>
               <td className={NUMBER_CELL}>{session.maxChapter ? formatNumber(session.maxChapter) : "–"}</td>
-              <td className="py-2 text-right">{session.saved ? "Yes" : "No"}</td>
+              <td className={`${CELL} text-right`}>{session.saved ? "Yes" : "No"}</td>
+              <td className="py-2 text-right">
+                {session.session && session.tape ? (
+                  <Link href={`/admin/humdingers/watch/${encodeURIComponent(userId)}/${encodeURIComponent(session.session)}`}
+                    className="font-semibold text-accent underline"
+                    aria-label={`Watch the session of ${formatDateTime(session.startedAt)} for ${name}`}>
+                    Watch {clock(session.tape.ticks)}
+                  </Link>
+                ) : "–"}
+              </td>
             </tr>
           ))}
         </tbody>

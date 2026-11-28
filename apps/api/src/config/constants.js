@@ -114,6 +114,9 @@ const COLLECTIONS = Object.freeze({
   // One row per visit to the game page, kept with the account for 90 days
   // so admins can see who played and for how long (ADR 0103).
   HUMDINGERS_PLAY_SESSIONS: "humdingers_play_sessions",
+  // Numbered chunks of a visit's run tape, keyed by its play session and
+  // kept with the account for 90 days so admins can replay it (ADR 0113).
+  HUMDINGERS_TAPE_CHUNKS: "humdingers_tape_chunks",
   GHOST_EXAMPLES: "ghost_examples",
   COACHING: "coaching_locker",
   // Global, cross-user SC2Pulse cache. One row per real SC2 account

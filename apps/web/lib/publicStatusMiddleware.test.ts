@@ -141,7 +141,7 @@ describe("local replay middleware auth independence", () => {
 });
 
 describe("Humdingers game page", () => {
-  it.each(["/play/humdingers", "/play/humdingers.html"])("keeps %s behind sign-in", async pathname => {
+  it.each(["/play/humdingers", "/play/humdingers.html", "/play/builds/19bbccd577ad.html"])("keeps %s behind sign-in", async pathname => {
     const response = await request(pathname, undefined, { "sec-fetch-dest": "iframe" });
     expect(response.headers.get("x-fixture-auth-wrapper")).toBe("visited");
     expect(authBoundary.protect).toHaveBeenCalledTimes(1);
@@ -154,6 +154,14 @@ describe("Humdingers game page", () => {
     const location = new URL(response.headers.get("location")!);
     expect(location.pathname).toBe("/play/humdingers");
     expect(location.search).toBe("?touch=1");
+    expect(authBoundary.wrapped).not.toHaveBeenCalled();
+  });
+
+  it("sends a direct visit to a kept build to the host page before auth (ADR 0113)", async () => {
+    authBoundary.unavailable = true;
+    const response = await request("/play/builds/19bbccd577ad.html", undefined, { "sec-fetch-dest": "document" });
+    expect(response.status).toBe(307);
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/play/humdingers");
     expect(authBoundary.wrapped).not.toHaveBeenCalled();
   });
 

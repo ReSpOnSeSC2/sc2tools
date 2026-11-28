@@ -35,7 +35,7 @@ export function HumdingersShowcase() {
             <span>Play Humdingers <span className="whitespace-nowrap">({HUMDINGERS_SIZE})</span></span>
           </a>
           <p className="mt-3 text-caption text-text-dim">
-            Sign in with a free SC2 Tools account to play. Your saves and play time are kept with your account. Not affiliated with Nintendo.
+            Sign in with a free SC2 Tools account to play. Your saves, play time and a replay of each visit are kept with your account. Not affiliated with Nintendo.
           </p>
         </div>
         <div className="grid min-w-0 gap-3">
