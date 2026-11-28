@@ -1576,7 +1576,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   // Live StarCraft II streams (Twitch and Kick), public and server-cached.
   app.use(SERVICE.ROUTE_PREFIX, buildLiveStreamsRouter({ liveStreams: services.liveStreams }));
   // Ladder VOD finder (SC2Pulse matches with a Twitch VOD); off until its gate is set.
-  app.use(SERVICE.ROUTE_PREFIX, buildLadderVodsRouter({ ladderVods: ladderVodsFromDeps(deps) }));
+  app.use(SERVICE.ROUTE_PREFIX, buildLadderVodsRouter({ ladderVods: ladderVodsFromDeps(deps, services.seasons?.ladderMapPool) }));
   // SC2 Tools Guides — public, SEO-facing build guides over the nightly
   // guide_stats aggregate. No router-level auth (only /guides/me/* applies
   // it per route); every /guides path 404s while GUIDES_ENABLED is off.

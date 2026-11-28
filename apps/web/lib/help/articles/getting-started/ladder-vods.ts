@@ -13,7 +13,7 @@ const article: HelpArticle = {
   related: ["live-streams", "getting-started"],
   body: [
     { type: "heading", text: "Search", anchor: "search" },
-    { type: "paragraph", text: "Open [Ladder VODs](/ladder-vods). You don't need an account. The page starts with Terran vs Zerg at 5,000 rating and up. Change any menu and select **Search**; **Clear filters** sets every menu to any." },
+    { type: "paragraph", text: "Open [Ladder VODs](/ladder-vods). You don't need an account. The page starts with Terran vs Zerg at 5,000 to 5,999 rating (on a phone, length and map are under **More filters**). Change any menu and select **Search**; **Clear filters** sets every menu to any." },
     { type: "steps", items: [
       "Choose a **Matchup**. The streamer's race is shown first on each result.",
       "Choose a **Rating** band. The rating on a result is the streamer's, rounded to the nearest 100.",

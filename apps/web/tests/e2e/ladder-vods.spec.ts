@@ -5,7 +5,6 @@ const API = "**/v1/ladder-vods*";
 const headers = { "access-control-allow-origin": "*" };
 
 const vod = (n: number) => ({
-  id: String(n),
   vodUrl: `https://www.twitch.tv/videos/${2942000000 + n}?t=${n * 60}s`,
   channel: `streamer${n}`,
   subscribersOnly: n === 2,
@@ -16,8 +15,15 @@ const vod = (n: number) => ({
   durationSec: 600 + n * 37,
   playedAt: new Date(Date.now() - n * 3_600_000).toISOString(),
 });
-const page1 = { available: true, results: [vod(1), vod(2), vod(3), vod(4)], next: "cursor-1", fetchedAt: new Date().toISOString() };
-const page2 = { available: true, results: [vod(5)], next: null, fetchedAt: new Date().toISOString() };
+const maps = [{ id: "55373", name: "Blackrock" }, { id: "55370", name: "Lockdown" }];
+const page1 = { available: true, maps, results: [vod(1), vod(2), vod(3), vod(4)], next: "cursor-1", fetchedAt: new Date().toISOString() };
+const page2 = { available: true, maps, results: [vod(5)], next: null, fetchedAt: new Date().toISOString() };
+
+/** On a phone length and map sit behind "More filters"; wider screens show them already. */
+async function showAllFilters(page: Page) {
+  const more = page.getByRole("button", { name: "More filters" });
+  if (await more.isVisible()) await more.click();
+}
 
 const noSidewaysScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
@@ -44,6 +50,7 @@ test("searches, shows games and opens a VOD with no SC2Pulse call from the brows
   await expect(first).toHaveAttribute("target", "_blank");
   await expect(page.getByText("Subscribers only")).toBeVisible();
 
+  await showAllFilters(page);
   await page.getByLabel("Map").selectOption("55373");
   await page.getByRole("button", { name: "Search" }).click();
   await expect(page.getByText("4 recent games with a VOD")).toBeVisible();
@@ -67,8 +74,8 @@ test("says the finder is not available yet while its gate is off", async ({ page
   await page.route(API, route => route.fulfill({ json: { available: false }, headers }));
   await page.goto("/ladder-vods");
   await expect(page.getByText("The ladder VOD finder is not available yet.")).toBeVisible();
-  await expect(page.getByLabel("Matchup")).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Search" })).toBeDisabled();
+  await expect(page.getByRole("link", { name: "Live streams" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Search" })).toHaveCount(0);
   await expect(page.getByRole("listitem").filter({ hasText: "MMR" })).toHaveCount(0);
   expect(await noSidewaysScroll(page)).toBe(true);
   for (const theme of ["light", "dark"] as const) {
@@ -85,6 +92,7 @@ test("searches with the keyboard", async ({ page }) => {
   });
   await page.goto("/ladder-vods");
   await expect(page.getByText("4 recent games with a VOD")).toBeVisible();
+  await showAllFilters(page);
   await page.getByLabel("Length").focus();
   await page.keyboard.press("ArrowDown");
   await expect(page.getByLabel("Length")).toHaveValue("0");
@@ -99,7 +107,7 @@ test("shows an empty state and an error that can be retried", async ({ page }, i
   let mode: "fail" | "empty" = "fail";
   await page.route(API, route => (mode === "fail"
     ? route.fulfill({ status: 503, json: { error: { code: "ladder_vods_unavailable" } }, headers })
-    : route.fulfill({ json: { available: true, results: [], next: null, fetchedAt: new Date().toISOString() }, headers })));
+    : route.fulfill({ json: { available: true, maps, results: [], next: null, fetchedAt: new Date().toISOString() }, headers })));
   await page.goto("/ladder-vods");
   await expect(page.getByText(/search is unavailable right now/)).toBeVisible();
   await checkAccessibility(page, info, "/ladder-vods-error", "light");

@@ -77,7 +77,6 @@ describe("shapeMatch", () => {
   test("keeps the streamer's channel link, both races, a rating rounded to 100, map, length and age", () => {
     const shaped = shapeMatch(match(642164396), tvz);
     expect(shaped).toEqual({
-      id: "642164396",
       vodUrl: vodUrl(2942397497, 1543),
       videoId: "2942397497",
       subscribersOnly: false,
@@ -90,9 +89,10 @@ describe("shapeMatch", () => {
     });
   });
 
-  test("never carries the other player's name, tag or ids", () => {
-    const text = JSON.stringify(shapeMatch(match(1), tvz));
-    expect(text).not.toMatch(/OtherPlayer|StreamerName|SecretName|battleTag|5897|5124994/);
+  test("never carries the other player's name, tag or ids, nor the game's own id", () => {
+    const shaped = shapeMatch(match(642164396), tvz);
+    expect(JSON.stringify(shaped)).not.toMatch(/OtherPlayer|StreamerName|SecretName|battleTag|5897|5124994|642164396/);
+    expect(shaped).not.toHaveProperty("id");
   });
 
   test("with two VODs the higher-rated player is the streamer", () => {
@@ -189,21 +189,21 @@ describe("LadderVodsService", () => {
     expect(calls[0].init.headers["user-agent"]).toBe("sc2tools.com ladder-vods (+https://sc2tools.com)");
     expect(answer.available).toBe(true);
     expect(answer.next).toBe("next-cursor");
-    expect(answer.results).toEqual([expect.objectContaining({ id: "1", channel: "chan2942397497", rating: 6700 })]);
+    expect(answer.results).toEqual([expect.objectContaining({ vodUrl: vodUrl(2942397497, 1543), channel: "chan2942397497", rating: 6700 })]);
     expect(answer.results[0]).not.toHaveProperty("videoId");
   });
 
   test("the same search inside the cache time costs no call; after it, one", async () => {
-    const { service, clock, calls } = makeService([page([match(1)]), page([match(2)])]);
+    const { service, clock, calls } = makeService([page([match(1)]), page([match(2, { map: { id: 55374, name: "Old Sun Temple LE" } })])]);
     await service.search({ matchup: "tvz" });
     clock.at += CACHE_TTL_MS - 1;
     const again = await service.search({ matchup: "tvz" });
     expect(calls).toHaveLength(1);
-    expect(again.results[0].id).toBe("1");
+    expect(again.results[0].map).toBe("Blackrock LE");
     clock.at += 2;
     const later = await service.search({ matchup: "tvz" });
     expect(calls).toHaveLength(2);
-    expect(later.results[0].id).toBe("2");
+    expect(later.results[0].map).toBe("Old Sun Temple LE");
   });
 
   test("simultaneous identical searches share one call", async () => {
@@ -232,7 +232,7 @@ describe("LadderVodsService", () => {
     await service.search({ matchup: "tvz" });
     clock.at += CACHE_TTL_MS + 1;
     const stale = await service.search({ matchup: "tvz" });
-    expect(stale.results[0].id).toBe("1");
+    expect(stale.results[0].map).toBe("Blackrock LE");
     clock.at += STALE_LIMIT_MS;
     await expect(service.search({ matchup: "tvz" })).rejects.toMatchObject({ code: "unavailable" });
   });
@@ -248,7 +248,7 @@ describe("LadderVodsService", () => {
     const resolveChannels = async () => { throw new Error("twitch down"); };
     const { service } = makeService([page([match(1)])], { resolveChannels });
     const answer = await service.search({});
-    expect(answer.results).toEqual([expect.objectContaining({ id: "1", channel: null })]);
+    expect(answer.results).toEqual([expect.objectContaining({ vodUrl: vodUrl(2942397497, 1543), channel: null })]);
   });
 
   test("an invalid search is refused before any call, and an empty page has no next cursor", async () => {
@@ -292,12 +292,12 @@ describe("buildTwitchVideoChannelResolver", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  test("a rejected token is dropped so the next lookup gets a new one", async () => {
+  test("a rejected token is dropped: each lookup gets a new one and one repeat", async () => {
     const { fetchImpl, calls } = twitchFetch(401);
     const resolve = buildTwitchVideoChannelResolver({ credentials, fetchImpl });
     await expect(resolve(["1"])).rejects.toThrow();
     await expect(resolve(["1"])).rejects.toThrow();
-    expect(calls.filter(call => call.host === "id.twitch.tv")).toHaveLength(2);
+    expect(calls.filter(call => call.host === "id.twitch.tv")).toHaveLength(4);
   });
 });
 

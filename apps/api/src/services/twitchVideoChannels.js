@@ -35,16 +35,22 @@ function buildTwitchVideoChannelResolver({ credentials, fetchImpl = fetch, now =
     return token.token;
   }
 
-  /** @param {string[]} ids */
-  async function lookUp(ids) {
+  /** @param {string[]} ids @param {boolean} [canRetry] */
+  async function lookUp(ids, canRetry = true) {
     const query = new URLSearchParams();
     ids.forEach(id => query.append("id", id));
     const headers = { "Client-Id": /** @type {ProviderCredentials} */ (credentials).clientId, Authorization: `Bearer ${await appToken()}` };
-    const json = await fetchJson(fetchImpl, `${VIDEOS_URL}?${query}`, { headers }, "twitch_videos").catch(err => {
-      // A revoked or rotated token is dropped so the next search gets a fresh one.
-      if (err instanceof PlatformOauthError && err.status === 401) token = null;
+    /** @type {{ data?: unknown }} */
+    let json;
+    try {
+      json = await fetchJson(fetchImpl, `${VIDEOS_URL}?${query}`, { headers }, "twitch_videos");
+    } catch (err) {
+      if (!(err instanceof PlatformOauthError) || err.status !== 401) throw err;
+      // A revoked or rotated token is dropped and the call repeated once with a fresh one.
+      token = null;
+      if (canRetry) return lookUp(ids, false);
       throw err;
-    });
+    }
     for (const video of Array.isArray(json.data) ? json.data : []) {
       if (typeof video?.id === "string" && typeof video.user_login === "string" && video.user_login) {
         known.set(video.id, video.user_login);

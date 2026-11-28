@@ -3,7 +3,6 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { LadderVods } from "../LadderVods";
 
 const vod = (n: number, extra: Record<string, unknown> = {}) => ({
-  id: String(n),
   vodUrl: `https://www.twitch.tv/videos/${n}?t=${n}s`,
   channel: `streamer${n}`,
   subscribersOnly: false,
@@ -15,8 +14,9 @@ const vod = (n: number, extra: Record<string, unknown> = {}) => ({
   playedAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
   ...extra,
 });
+const MAPS = [{ id: "55373", name: "Blackrock" }, { id: "55370", name: "Lockdown" }];
 const page = (results: unknown[], next: string | null = null) =>
-  ({ ok: true, json: async () => ({ available: true, results, next, fetchedAt: "2026-11-28T08:00:00.000Z" }) });
+  ({ ok: true, json: async () => ({ available: true, maps: MAPS, results, next, fetchedAt: "2026-11-28T08:00:00.000Z" }) });
 const closed = { ok: true, json: async () => ({ available: false }) };
 
 const fetchMock = vi.fn();
@@ -28,7 +28,7 @@ beforeEach(() => { vi.stubGlobal("fetch", fetchMock); });
 afterEach(() => { cleanup(); fetchMock.mockReset(); vi.unstubAllGlobals(); });
 
 describe("LadderVods", () => {
-  it("starts with Terran vs Zerg at 5,000 and up, drawing the same form while it loads", async () => {
+  it("starts with Terran vs Zerg at 5,000 to 5,999, drawing the same form while it loads", async () => {
     fetchMock.mockResolvedValue(page([vod(1)]));
     render(<LadderVods />);
     expect(screen.getByText("Searching ladder games")).toBeTruthy();
@@ -45,7 +45,7 @@ describe("LadderVods", () => {
     render(<LadderVods />);
     await settle();
     expect(screen.getByText("6,700 MMR")).toBeTruthy();
-    expect(screen.getByText(/Blackrock LE · 13 min · /)).toBeTruthy();
+    expect(screen.getByText(/Blackrock LE · 13 min game · /)).toBeTruthy();
     expect(screen.getByText("Zerg")).toBeTruthy();
     expect(screen.getByText("Terran")).toBeTruthy();
     const link = screen.getByRole("link", { name: /Watch streamer7 on Twitch/ });
@@ -115,15 +115,71 @@ describe("LadderVods", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 
-  it("says the finder is not available yet, switches the form off and lists nothing", async () => {
+  it("says the finder is not available yet, with no form, when the server answers closed", async () => {
     fetchMock.mockResolvedValue(closed);
     render(<LadderVods />);
     await settle();
     expect(screen.getByText("The ladder VOD finder is not available yet.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Live streams" }).getAttribute("href")).toBe("/live");
-    expect((screen.getByLabelText("Map") as HTMLSelectElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Search" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+  });
+
+  it("starts closed, and asks for nothing, when the page was built with the gate off", async () => {
+    render(<LadderVods closed />);
+    await settle();
+    expect(screen.getByText("The ladder VOD finder is not available yet.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("closes when a later page finds the finder switched off, instead of staying on Loading", async () => {
+    fetchMock.mockResolvedValueOnce(page([vod(1)], "cursor-1")).mockResolvedValueOnce(closed);
+    render(<LadderVods />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Show more games" }));
+    await settle();
+    expect(screen.getByText("The ladder VOD finder is not available yet.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Loading/ })).toBeNull();
+  });
+
+  it("offers the maps the server named, and keeps them while the next search runs", async () => {
+    fetchMock.mockResolvedValue(page([vod(1)]));
+    render(<LadderVods />);
+    expect(Array.from((screen.getByLabelText("Map") as HTMLSelectElement).options)).toHaveLength(1);
+    await settle();
+    const names = () => Array.from((screen.getByLabelText("Map") as HTMLSelectElement).options).map(option => option.text);
+    expect(names()).toEqual(["Any map", "Blackrock", "Lockdown"]);
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(screen.getByText("Searching ladder games")).toBeTruthy();
+    expect(names()).toEqual(["Any map", "Blackrock", "Lockdown"]);
+  });
+
+  it("keeps Clear filters in place, switched off until a menu is set, and keeps focus on the form", async () => {
+    fetchMock.mockResolvedValue(page([vod(1)]));
+    render(<LadderVods />);
+    await settle();
+    const clear = screen.getByRole("button", { name: "Clear filters" }) as HTMLButtonElement;
+    expect(clear.disabled).toBe(false);
+    clear.focus();
+    fireEvent.click(clear);
+    expect(screen.getByRole("button", { name: "Clear filters" })).toBe(clear);
+    expect(clear.disabled).toBe(true);
+    expect(document.activeElement).toBe(screen.getByLabelText("Matchup"));
+  });
+
+  it("folds length and map behind More filters on a phone and says how many are set", async () => {
+    fetchMock.mockResolvedValue(page([vod(1)]));
+    render(<LadderVods />);
+    await settle();
+    const toggle = screen.getByRole("button", { name: "More filters" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Fewer filters" }).getAttribute("aria-expanded")).toBe("true");
+    pick("Length", "10");
+    pick("Map", "55373");
+    fireEvent.click(screen.getByRole("button", { name: "Fewer filters" }));
+    expect(screen.getByRole("button", { name: "More filters (2 set)" })).toBeTruthy();
   });
 
   it("explains an empty search and widens it on request", async () => {

@@ -20,23 +20,28 @@ Status: Accepted, November 28, 2026. Adds `apps/api/src/services/ladderVods.js`,
    off `GET /v1/ladder-vods` answers `{ "available": false }`, the page says
    the finder is not available yet, and nothing reaches SC2Pulse or Twitch.
 2. Visitors choose from fixed lists (six matchups, five rating bands, five
-   length bands, the nine ladder maps by SC2Pulse id) plus an opaque page
-   cursor. No free text reaches SC2Pulse, so the cache holds a small set of
+   length bands, the maps of the live 1v1 pool by SC2Pulse id, which the
+   server sends with each answer) plus an opaque page cursor. No free text reaches SC2Pulse, so the cache holds a small set of
    searches.
 3. A search is one SC2Pulse call. Calls leave at least 1.1 seconds apart, use a
    generic client name, and a search that would wait more than about four
-   seconds for its turn is refused with 503. The same search is served from the
+   seconds for its turn is refused with 503; a later page (a visitor-chosen
+   cursor) may only take the next free slot, later pages are evicted first,
+   and one visitor gets 20 searches a minute. The same search is served from the
    server's copy for five minutes; a failed refresh serves the last copy for an
    hour.
 4. A result carries the streamer's Twitch VOD (opening at the game), the
    streamer's channel, both races, one rating rounded to 100, the map, the
-   length and the time played. The streamer is the VOD owner (the higher rated
+   length and the time played, never an id of SC2Pulse's record of the game.
+   A rating inside the band searched is kept inside it. The streamer is the VOD owner (the higher rated
    one when both have a VOD). The other player's name, ids and VOD are dropped
    on the server.
 5. SC2Pulse names the video, not the channel. The channel login comes from
    Twitch (`helix/videos`, one call per page, app token) and is kept per video;
    when Twitch cannot name it the result says "Watch the VOD on Twitch".
-6. The page is static and reads the endpoint; the tool is not listed in the
+6. The page is rebuilt every five minutes and asks `GET /v1/ladder-vods/status`
+   (no upstream call), so a closed finder shows its notice at once, without a
+   form and without a layout jump; the tool is not listed in the
    tools catalog until the gate is opened.
 
 ## Consequences

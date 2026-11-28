@@ -34,12 +34,13 @@ function LoadingResults() {
   );
 }
 
+/** The gate-off page: the explanation first and no form, since a search that cannot run is only noise. */
 function ClosedNotice() {
   return (
-    <div className={PANEL}>
-      <p role="status" className="text-body font-semibold text-text">The ladder VOD finder is not available yet.</p>
+    <div className="space-y-3 rounded-xl border border-line bg-bg-surface p-5 sm:p-6">
+      <p role="status" className="font-display text-body-lg font-semibold text-text">The ladder VOD finder is not available yet.</p>
       <p className="max-w-prose text-body text-text-muted">It opens once SC2Pulse, the source of these games, has agreed to this use. Until then, see who is live right now.</p>
-      <Link href="/live" className={buttonClassName({ variant: "secondary" })}>Live streams</Link>
+      <Link href="/live" className={buttonClassName({ variant: "primary", size: "lg" })}>Live streams</Link>
     </div>
   );
 }
@@ -82,7 +83,7 @@ function ReadyResults({ state, filtered, onAny, onMore }: ReadyProps) {
         {formatNumber(count)} recent {count === 1 ? "game" : "games"} with a VOD{state.next ? "" : " · that is all for this search"}
       </p>
       <ul className={GRID}>
-        {state.results.map(vod => <LadderVodCard key={vod.id} vod={vod} now={state.now} />)}
+        {state.results.map(vod => <LadderVodCard key={vod.vodUrl} vod={vod} now={state.now} />)}
       </ul>
       {state.more === "error" && <p role="status" className="text-caption text-danger">More games could not be loaded.</p>}
       {state.next && (
@@ -94,26 +95,22 @@ function ReadyResults({ state, filtered, onAny, onMore }: ReadyProps) {
   );
 }
 
-export function LadderVods() {
+/** `closed`: the server said, when it built the page, that the finder is not open yet. */
+export function LadderVods({ closed = false }: { closed?: boolean }) {
   const [draft, setDraft] = useState<LadderFilters>(DEFAULT_FILTERS);
   const [applied, setApplied] = useState<Applied>({ filters: DEFAULT_FILTERS, run: 0 });
-  const { state, retry, loadMore } = useLadderVods(applied);
+  const { state, maps, retry, loadMore } = useLadderVods(applied, closed);
   const region = useRef<HTMLDivElement>(null);
   const searchFor = (filters: LadderFilters) => setApplied(previous => ({ filters, run: previous.run + 1 }));
   const searchAny = () => { setDraft(ANY_FILTERS); searchFor(ANY_FILTERS); };
   /** The retry button is replaced by the skeleton, so focus waits on the region that stays. */
   const onRetry = () => { retry(); region.current?.focus(); };
+  if (state.kind === "closed") return <ClosedNotice />;
   return (
     <div className="space-y-4">
-      <LadderVodFilters
-        filters={draft}
-        onChange={setDraft}
-        onSearch={() => searchFor(draft)}
-        disabled={state.kind === "closed"}
-      />
+      <LadderVodFilters filters={draft} maps={maps} onChange={setDraft} onSearch={() => searchFor(draft)} />
       <div ref={region} tabIndex={-1} className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         {state.kind === "loading" && <LoadingResults />}
-        {state.kind === "closed" && <ClosedNotice />}
         {state.kind === "error" && <ErrorNotice onRetry={onRetry} />}
         {state.kind === "ready" && (
           <ReadyResults state={state} filtered={!sameFilters(applied.filters, ANY_FILTERS)} onAny={searchAny} onMore={loadMore} />

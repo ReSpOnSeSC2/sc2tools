@@ -4,14 +4,13 @@ import {
   DEFAULT_FILTERS,
   lengthLabel,
   ladderVodsUrl,
-  MAP_OPTIONS,
+  mapOptions,
   ratingLabel,
   readLadderVods,
   sameFilters,
 } from "../vods";
 
 const row = (extra: Record<string, unknown> = {}) => ({
-  id: "1",
   vodUrl: "https://www.twitch.tv/videos/2942397497?t=1543s",
   channel: "serral",
   subscribersOnly: false,
@@ -24,12 +23,21 @@ const row = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 const answer = (results: unknown[], extra: Record<string, unknown> = {}) =>
-  ({ available: true, results, next: null, fetchedAt: "2026-11-28T08:00:00.000Z", ...extra });
+  ({ available: true, maps: [{ id: "55373", name: "Blackrock" }], results, next: null, fetchedAt: "2026-11-28T08:00:00.000Z", ...extra });
 
 describe("readLadderVods", () => {
   it("reads a page and the gate-off answer", () => {
     expect(readLadderVods({ available: false })).toEqual({ available: false });
-    expect(readLadderVods(answer([row()], { next: "abc" }))).toMatchObject({ available: true, next: "abc", results: [{ id: "1", channel: "serral" }] });
+    expect(readLadderVods(answer([row()], { next: "abc" }))).toMatchObject({ available: true, next: "abc", maps: [{ id: "55373", name: "Blackrock" }], results: [{ channel: "serral" }] });
+  });
+
+  it("accepts a VOD link on twitch.tv without www and skips a map without a name", () => {
+    const read = readLadderVods(answer([row({ vodUrl: "https://twitch.tv/videos/5?t=60s" })], { maps: [{ id: "1", name: "" }, { id: "2", name: "Two" }, "x"] }));
+    expect(read).toMatchObject({ maps: [{ id: "2", name: "Two" }], results: [{ vodUrl: "https://twitch.tv/videos/5?t=60s" }] });
+  });
+
+  it("reads an answer without a map list as an empty menu", () => {
+    expect(readLadderVods({ available: true, results: [], fetchedAt: "x" })).toMatchObject({ maps: [] });
   });
 
   it.each([
@@ -47,13 +55,12 @@ describe("readLadderVods", () => {
     ["a negative rating", { rating: -1 }],
     ["no map", { map: "" }],
     ["a bad date", { playedAt: "yesterday" }],
-    ["no id", { id: "" }],
   ])("drops a result with %s", (_label, extra) => {
-    expect(readLadderVods(answer([row(extra), row({ id: "2" })]))).toMatchObject({ results: [{ id: "2" }] });
+    expect(readLadderVods(answer([row(extra), row({ channel: "second" })]))).toMatchObject({ results: [{ channel: "second" }] });
   });
 
   it("keeps a result whose channel is missing or not a Twitch login", () => {
-    const read = readLadderVods(answer([row({ channel: null }), row({ id: "2", channel: "a b/../c" })]));
+    const read = readLadderVods(answer([row({ channel: null }), row({ channel: "a b/../c" })]));
     expect(read).toMatchObject({ results: [{ channel: null }, { channel: null }] });
   });
 });
@@ -80,7 +87,11 @@ describe("labels", () => {
     expect(sameFilters(ANY_FILTERS, DEFAULT_FILTERS)).toBe(false);
   });
 
-  it("offers the nine ladder maps and any", () => {
-    expect(MAP_OPTIONS).toHaveLength(10);
+  it("offers any map, then the maps the server named", () => {
+    expect(mapOptions([])).toEqual([{ value: "", label: "Any map" }]);
+    expect(mapOptions([{ id: "55373", name: "Blackrock" }])).toEqual([
+      { value: "", label: "Any map" },
+      { value: "55373", label: "Blackrock" },
+    ]);
   });
 });

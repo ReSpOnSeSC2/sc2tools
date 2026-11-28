@@ -11,19 +11,9 @@
  */
 
 const { parseTwitchVod } = require("./pulseMatchVods");
+const { SEED_MAPS } = require("./ladderVodMaps");
 
-/** Pulse's ids for the current ladder map pool (read from its match feed). */
-const LADDER_MAPS = /** @type {const} */ ([
-  { id: 55370, name: "Lockdown LE" },
-  { id: 55371, name: "Sanctuary III LE" },
-  { id: 55372, name: "Rainfall LE" },
-  { id: 55373, name: "Blackrock LE" },
-  { id: 55374, name: "Old Sun Temple LE" },
-  { id: 55375, name: "Fear and Faith LE" },
-  { id: 55376, name: "At Eternity's Edge LE" },
-  { id: 55377, name: "Washout LE" },
-  { id: 55378, name: "Rorschach LE" },
-]);
+/** @typedef {import("./ladderVodMaps").MapChoice} MapChoice */
 
 /** Matchup key to Pulse's `race` and `raceVersus` (the first race named first). */
 const MATCHUPS = /** @type {Record<string, [Race, Race]>} */ ({
@@ -36,7 +26,7 @@ const MATCHUPS = /** @type {Record<string, [Race, Race]>} */ ({
 });
 
 /** Rating bands by lower bound; a band without a top is open. Pulse treats both ends as inclusive. */
-const RATING_BANDS = /** @type {Record<string, [number, number | null]>} */ ({
+const RATING_BANDS = /** @type {Record<string, Band>} */ ({
   0: [0, 2999],
   3000: [3000, 3999],
   4000: [4000, 4999],
@@ -45,7 +35,7 @@ const RATING_BANDS = /** @type {Record<string, [number, number | null]>} */ ({
 });
 
 /** Game-length bands by lower bound in minutes, as seconds. */
-const LENGTH_BANDS = /** @type {Record<string, [number, number | null]>} */ ({
+const LENGTH_BANDS = /** @type {Record<string, Band>} */ ({
   0: [0, 299],
   5: [300, 599],
   10: [600, 899],
@@ -57,17 +47,19 @@ const SEARCH_FIELDS = ["matchup", "rating", "length", "map", "after"];
 const CURSOR_PATTERN = /^[A-Za-z0-9_-]{1,512}$/;
 
 /** @typedef {"TERRAN" | "ZERG" | "PROTOSS" | "RANDOM"} Race */
+/** @typedef {[number, number | null]} Band */
 /**
- * One validated search: the cache key, the SC2Pulse query string and the
- * matchup asked for (null for any).
+ * One validated search: the cache key, the SC2Pulse query string, the matchup
+ * and rating band asked for (null for any), and whether it asks for a later
+ * page (`paged`).
  *
- * @typedef {{ key: string, query: URLSearchParams, matchup: [Race, Race] | null }} Search
+ * @typedef {{ key: string, query: URLSearchParams, matchup: [Race, Race] | null, ratingBand: Band | null, paged: boolean }} Search
  */
 /**
- * One shaped, public-safe result.
+ * One shaped, public-safe result. It carries no id of SC2Pulse's record of
+ * the game, which names both players.
  *
  * @typedef {{
- *   id: string,
  *   vodUrl: string,
  *   videoId: string,
  *   subscribersOnly: boolean,
@@ -119,25 +111,46 @@ function choice(raw, table) {
   return Object.hasOwn(table, text) ? { key: text, value: table[text] } : null;
 }
 
+/** @param {unknown} raw @returns {string | undefined | null} the page cursor, undefined when absent, null when malformed */
+function cursorOf(raw) {
+  const text = single(raw);
+  if (text === null) return undefined;
+  return CURSOR_PATTERN.test(text) ? text : null;
+}
+
 /**
  * Validate a visitor's query into a search, or null when any part is not one
  * of the fixed choices.
  *
  * @param {Record<string, unknown>} input
+ * @param {readonly MapChoice[]} [maps] the maps on offer
  * @returns {Search | null}
  */
-function parseSearch(input) {
+function parseSearch(input, maps = SEED_MAPS) {
   // A repeated or nested query value (`?matchup=a&matchup=b`) is not a choice.
   if (SEARCH_FIELDS.some(field => input[field] !== undefined && typeof input[field] !== "string")) return null;
-  const matchup = choice(input.matchup, MATCHUPS);
-  const rating = choice(input.rating, RATING_BANDS);
-  const length = choice(input.length, LENGTH_BANDS);
-  const mapText = single(input.map);
-  const map = mapText === null ? undefined : LADDER_MAPS.find(entry => String(entry.id) === mapText) ?? null;
-  const cursorText = single(input.after);
-  const cursor = cursorText !== null && CURSOR_PATTERN.test(cursorText) ? cursorText : null;
-  if ([matchup, rating, length, map].includes(null) || (cursorText !== null && cursor === null)) return null;
+  const mapTable = Object.fromEntries(maps.map(entry => [String(entry.id), entry]));
+  const choices = {
+    matchup: choice(input.matchup, MATCHUPS),
+    rating: choice(input.rating, RATING_BANDS),
+    length: choice(input.length, LENGTH_BANDS),
+    map: choice(input.map, mapTable),
+  };
+  const cursor = cursorOf(input.after);
+  if (cursor === null || Object.values(choices).includes(null)) return null;
+  return buildSearch(/** @type {Parameters<typeof buildSearch>[0]} */ (choices), cursor);
+}
 
+/**
+ * @param {{
+ *   matchup?: { value: [Race, Race] },
+ *   rating?: { value: Band },
+ *   length?: { value: Band },
+ *   map?: { value: MapChoice },
+ * }} choices @param {string | undefined} cursor
+ * @returns {Search}
+ */
+function buildSearch({ matchup, rating, length, map }, cursor) {
   const query = new URLSearchParams({ vod: "true" });
   if (matchup) {
     query.set("race", matchup.value[0]);
@@ -145,15 +158,15 @@ function parseSearch(input) {
   }
   setBand(query, "ratingMin", "ratingMax", rating?.value);
   setBand(query, "durationMin", "durationMax", length?.value);
-  if (map) query.set("mapId", String(map.id));
+  if (map) query.set("mapId", String(map.value.id));
   if (cursor) query.set("after", cursor);
   query.sort();
-  return { key: query.toString(), query, matchup: matchup?.value ?? null };
+  return { key: query.toString(), query, matchup: matchup?.value ?? null, ratingBand: rating?.value ?? null, paged: Boolean(cursor) };
 }
 
 /**
  * @param {URLSearchParams} query @param {string} minName @param {string} maxName
- * @param {[number, number | null] | undefined} band
+ * @param {Band | undefined} band
  */
 function setBand(query, minName, maxName, band) {
   if (!band) return;
@@ -194,37 +207,68 @@ function racesOf(pair, matchup) {
 }
 
 /**
- * One public result from a Pulse match, or null when it cannot be shown: not
- * a two-player game, no usable Twitch VOD, or a missing map, length or date.
- * When both players have a VOD the higher-rated one is the streamer.
+ * The rating as shown: nearest 100. A rating inside the band the visitor chose
+ * stays inside it ("5,000 to 5,999" never shows 6,000), since every band ends
+ * at x,999.
  *
- * @param {PulseMatch} row @param {[Race, Race] | null} matchup
- * @returns {LadderVod | null}
+ * @param {number} exact @param {Band | null} band
  */
-function shapeMatch(row, matchup) {
-  const { participants, match, map } = row;
-  if (!Array.isArray(participants) || participants.length !== 2 || !match?.id || !map?.name) return null;
-  if (!Number.isFinite(match.duration) || !match.date || Number.isNaN(Date.parse(match.date))) return null;
-  const pair = /** @type {[PulseParticipant, PulseParticipant]} */ (participants);
-  const streamers = pair
+function publicRating(exact, band) {
+  const rounded = Math.round(exact / 100) * 100;
+  if (!band || exact < band[0] || (band[1] !== null && exact > band[1])) return rounded;
+  const high = band[1] === null ? Infinity : Math.floor(band[1] / 100) * 100;
+  return Math.min(Math.max(rounded, Math.ceil(band[0] / 100) * 100), high);
+}
+
+/** @param {unknown} value */
+function isDate(value) {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+}
+
+/** @param {PulseMatch} row @returns {boolean} a two-player game with a map, a length and a date */
+function isShowable({ participants, match, map }) {
+  if (!Array.isArray(participants) || participants.length !== 2) return false;
+  const { id, date, duration } = match ?? {};
+  return Boolean(id) && Boolean(map?.name) && Number.isFinite(duration) && isDate(date);
+}
+
+/**
+ * The player whose VOD is shown: when both have one, the higher-rated.
+ *
+ * @param {[PulseParticipant, PulseParticipant]} pair
+ */
+function pickStreamer(pair) {
+  return pair
     .map((participant, index) => ({ index, vod: parseTwitchVod(participant.twitchVodUrl), participant }))
     .filter(candidate => candidate.vod !== null)
-    .sort((a, b) => ratingOf(b.participant) - ratingOf(a.participant));
-  const streamer = streamers[0];
+    .sort((a, b) => ratingOf(b.participant) - ratingOf(a.participant))[0];
+}
+
+/**
+ * One public result from a Pulse match, or null when it cannot be shown: not
+ * a two-player game, no usable Twitch VOD, or a missing map, length or date.
+ *
+ * @param {PulseMatch} row @param {[Race, Race] | null} matchup @param {Band | null} [ratingBand] the rating band searched
+ * @returns {LadderVod | null}
+ */
+function shapeMatch(row, matchup, ratingBand = null) {
+  if (!isShowable(row)) return null;
+  const { match, map } = /** @type {Required<Pick<PulseMatch, "match" | "map">>} */ (row);
+  const pair = /** @type {[PulseParticipant, PulseParticipant]} */ (row.participants);
+  const streamer = pickStreamer(pair);
   if (!streamer?.vod) return null;
   const races = racesOf(pair, matchup);
   return {
-    id: String(match.id),
-    vodUrl: streamer.vod.url,
+    vodUrl: `https://www.twitch.tv/videos/${streamer.vod.videoId}?t=${streamer.vod.offsetSec}s`,
     videoId: streamer.vod.videoId,
     subscribersOnly: streamer.participant.subOnlyTwitchVod === true,
     streamerRace: /** @type {Lowercase<Race>} */ (races[streamer.index].toLowerCase()),
     opponentRace: /** @type {Lowercase<Race>} */ (races[1 - streamer.index].toLowerCase()),
-    rating: Math.round(ratingOf(streamer.participant) / 100) * 100,
-    map: map.name,
+    rating: publicRating(ratingOf(streamer.participant), ratingBand),
+    map: String(map.name),
     durationSec: Math.round(Number(match.duration)),
-    playedAt: new Date(match.date).toISOString(),
+    playedAt: new Date(String(match.date)).toISOString(),
   };
 }
 
-module.exports = { LADDER_MAPS, MATCHUPS, RATING_BANDS, LENGTH_BANDS, parseSearch, shapeMatch };
+module.exports = { MATCHUPS, RATING_BANDS, LENGTH_BANDS, parseSearch, shapeMatch };

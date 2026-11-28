@@ -27,7 +27,7 @@ export function LadderVodCard({ vod, now }: { vod: LadderVod; now: number }) {
         <span className="shrink-0 text-caption font-semibold text-text">{ratingLabel(vod.rating)}</span>
       </div>
       <p className="text-caption text-text-muted">
-        {vod.map} · {lengthLabel(vod.durationSec)} · {formatRelative(vod.playedAt, now)}
+        {vod.map} · {lengthLabel(vod.durationSec)} game · {formatRelative(vod.playedAt, now)}
       </p>
       <p className="mt-auto flex items-center gap-2 text-body font-semibold text-text">
         <a

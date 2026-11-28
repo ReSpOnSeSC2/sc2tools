@@ -14,6 +14,7 @@
  */
 
 const { parseSearch, shapeMatch } = require("./ladderVodSearch");
+const { buildMapMenu, plainMapName } = require("./ladderVodMaps");
 
 const PULSE_MATCHES_URL = "https://sc2pulse.nephest.com/sc2/api/matches";
 const USER_AGENT = "sc2tools.com ladder-vods (+https://sc2tools.com)";
@@ -21,16 +22,22 @@ const REQUEST_TIMEOUT_MS = 8000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const STALE_LIMIT_MS = 60 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 200;
+const MAX_LEARNED_MAPS = 40;
+/** The Twitch channel names are a nicety: past this the games are listed without them. */
+const CHANNEL_DEADLINE_MS = 3000;
 /** At most one SC2Pulse call a second, however many visitors search. */
 const PACE_MS = 1100;
 /** A search that would wait longer than this for its turn is refused, so an outage cannot build a queue. */
 const MAX_WAIT_MS = 4 * PACE_MS;
+/** Later pages (visitor-chosen cursors) may only take the next free slot, so they cannot fill the queue. */
+const MAX_WAIT_PAGED_MS = PACE_MS;
 const ENABLE_FLAG = "SC2TOOLS_LADDER_VODS_ENABLED";
 
 /** @typedef {import("./ladderVodSearch").LadderVod} LadderVod */
 /** @typedef {import("./ladderVodSearch").Search} Search */
 /** @typedef {import("./ladderVodSearch").PulseMatch} PulseMatch */
 /** @typedef {import("./twitchVideoChannels").ChannelResolver} ChannelResolver */
+/** @typedef {import("./ladderVodMaps").MapChoice} MapChoice */
 /**
  * One page of results as the route serves it. `channel` is the streamer's
  * Twitch login, or null when Twitch did not name it.
@@ -41,8 +48,8 @@ const ENABLE_FLAG = "SC2TOOLS_LADDER_VODS_ENABLED";
  *   fetchedAt: string,
  * }} LadderVodsPage
  */
-/** @typedef {{ page: LadderVodsPage, at: number }} CacheEntry */
-/** @typedef {{ available: false } | ({ available: true } & LadderVodsPage)} LadderVodsAnswer */
+/** @typedef {{ page: LadderVodsPage, at: number, paged: boolean }} CacheEntry */
+/** @typedef {{ available: false } | ({ available: true, maps: Array<{ id: string, name: string }> } & LadderVodsPage)} LadderVodsAnswer */
 
 class LadderVodsError extends Error {
   /** @param {"invalid_search" | "busy" | "unavailable"} code */
@@ -58,6 +65,8 @@ class LadderVodsService {
    *   enabled?: boolean,
    *   fetchImpl?: typeof fetch,
    *   resolveChannels?: ChannelResolver,
+   *   mapPool?: { get: () => Promise<{ maps: string[] }> } | null,
+   *   channelDeadlineMs?: number,
    *   now?: () => number,
    *   sleep?: (ms: number) => Promise<void>,
    *   log?: { warn?: (fields: object, message: string) => void },
@@ -67,6 +76,8 @@ class LadderVodsService {
     enabled = process.env[ENABLE_FLAG] === "1",
     fetchImpl = fetch,
     resolveChannels = async () => new Map(),
+    mapPool = null,
+    channelDeadlineMs = CHANNEL_DEADLINE_MS,
     now = Date.now,
     sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
     log,
@@ -74,6 +85,10 @@ class LadderVodsService {
     this.enabled = enabled;
     this.fetchImpl = fetchImpl;
     this.resolveChannels = resolveChannels;
+    this.mapPool = mapPool;
+    this.channelDeadlineMs = channelDeadlineMs;
+    /** @type {Map<number, string>} maps the match feed showed, by SC2Pulse id */
+    this.learnedMaps = new Map();
     this.now = now;
     this.sleep = sleep;
     this.log = log;
@@ -91,11 +106,40 @@ class LadderVodsService {
    */
   async search(input) {
     if (!this.enabled) return { available: false };
-    const search = parseSearch(input);
+    const maps = await this.mapMenu();
+    const search = parseSearch(input, maps);
     if (!search) throw new LadderVodsError("invalid_search");
+    const menu = maps.map(({ id, name }) => ({ id: String(id), name }));
     const cached = this.cache.get(search.key);
-    if (cached && this.now() - cached.at < CACHE_TTL_MS) return { available: true, ...cached.page };
-    return { available: true, ...(await this.refresh(search, cached)) };
+    if (cached && this.now() - cached.at < CACHE_TTL_MS) return { available: true, maps: menu, ...cached.page };
+    return { available: true, maps: menu, ...(await this.refresh(search, cached)) };
+  }
+
+  /** Whether the gate is open; costs no call. */
+  isOpen() {
+    return this.enabled;
+  }
+
+  /** @returns {Promise<MapChoice[]>} the maps on offer: the live 1v1 pool among the maps SC2Pulse showed */
+  async mapMenu() {
+    /** @type {string[] | null} */
+    let poolNames = null;
+    try {
+      poolNames = (await this.mapPool?.get())?.maps ?? null;
+    } catch (err) {
+      this.log?.warn?.({ err: err instanceof Error ? err.message : String(err) }, "ladder vods map pool unavailable");
+    }
+    return buildMapMenu(this.learnedMaps, poolNames);
+  }
+
+  /** @param {PulseMatch[]} rows remembers the maps the feed shows, so a new ladder map can be chosen once seen */
+  learnMaps(rows) {
+    for (const row of rows) {
+      const { id, name } = /** @type {{ id?: unknown, name?: unknown }} */ (row?.map ?? {});
+      if (Number.isInteger(id) && typeof name === "string" && name && this.learnedMaps.size < MAX_LEARNED_MAPS) {
+        this.learnedMaps.set(/** @type {number} */ (id), plainMapName(name));
+      }
+    }
   }
 
   /**
@@ -109,7 +153,7 @@ class LadderVodsService {
     const running = this.inflight.get(search.key);
     if (running) return running;
     const work = this.fetchPage(search)
-      .then(page => { this.remember(search.key, page); return page; })
+      .then(page => { this.remember(search, page); return page; })
       .catch(err => {
         if (!(err instanceof LadderVodsError)) {
           this.log?.warn?.({ err: err instanceof Error ? err.message : String(err) }, "ladder vods fetch failed");
@@ -122,19 +166,31 @@ class LadderVodsService {
     return work;
   }
 
-  /** @param {string} key @param {LadderVodsPage} page */
-  remember(key, page) {
+  /** @param {Search} search @param {LadderVodsPage} page */
+  remember({ key, paged }, page) {
     this.cache.delete(key);
-    this.cache.set(key, { page, at: this.now() });
-    while (this.cache.size > MAX_CACHE_ENTRIES) this.cache.delete(/** @type {string} */ (this.cache.keys().next().value));
+    this.cache.set(key, { page, at: this.now(), paged });
+    while (this.cache.size > MAX_CACHE_ENTRIES) this.evictOne();
+  }
+
+  /** Later pages go first, so visitor-chosen cursors cannot push out the popular first pages. */
+  evictOne() {
+    for (const [key, entry] of this.cache) {
+      if (entry.paged) {
+        this.cache.delete(key);
+        return;
+      }
+    }
+    this.cache.delete(/** @type {string} */ (this.cache.keys().next().value));
   }
 
   /** @param {Search} search @returns {Promise<LadderVodsPage>} */
   async fetchPage(search) {
-    await this.waitForTurn();
+    await this.waitForTurn(search.paged ? MAX_WAIT_PAGED_MS : MAX_WAIT_MS);
     const json = await this.callPulse(search.query);
     const rows = Array.isArray(json.result) ? json.result : [];
-    const shaped = rows.flatMap(row => shapeMatch(row, search.matchup) ?? []);
+    this.learnMaps(rows);
+    const shaped = rows.flatMap(row => shapeMatch(row, search.matchup, search.ratingBand) ?? []);
     const channels = await this.channelsFor(shaped);
     const next = typeof json.navigation?.after === "string" && rows.length > 0 ? json.navigation.after : null;
     return {
@@ -144,11 +200,11 @@ class LadderVodsService {
     };
   }
 
-  /** Reserves the next call slot; refuses when the wait would be long. */
-  async waitForTurn() {
+  /** Reserves the next call slot; refuses when the wait would pass `maxWaitMs`. @param {number} maxWaitMs */
+  async waitForTurn(maxWaitMs) {
     const now = this.now();
     const slot = Math.max(now, this.nextCallAt);
-    if (slot - now > MAX_WAIT_MS) throw new LadderVodsError("busy");
+    if (slot - now > maxWaitMs) throw new LadderVodsError("busy");
     this.nextCallAt = slot + PACE_MS;
     if (slot > now) await this.sleep(slot - now);
   }
@@ -167,19 +223,27 @@ class LadderVodsService {
   }
 
   /**
-   * The channels are a nicety: when Twitch cannot name them the page still
-   * lists the games, with a plain "Twitch VOD" link.
+   * The channels are a nicety: when Twitch cannot name them in time the page
+   * still lists the games, with a plain "Watch the VOD" link.
    *
    * @param {LadderVod[]} shaped @returns {Promise<Map<string, string>>}
    */
   async channelsFor(shaped) {
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let timer;
+    /** @type {Promise<never>} */
+    const deadline = new Promise((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error("channel lookup deadline exceeded")), this.channelDeadlineMs);
+    });
     try {
-      return await this.resolveChannels(shaped.map(entry => entry.videoId));
+      return await Promise.race([this.resolveChannels(shaped.map(entry => entry.videoId)), deadline]);
     } catch (err) {
       this.log?.warn?.({ err: err instanceof Error ? err.message : String(err) }, "ladder vods channel lookup failed");
       return new Map();
+    } finally {
+      clearTimeout(timer);
     }
   }
 }
 
-module.exports = { LadderVodsService, LadderVodsError, CACHE_TTL_MS, STALE_LIMIT_MS, PACE_MS, ENABLE_FLAG };
+module.exports = { LadderVodsService, LadderVodsError, CACHE_TTL_MS, STALE_LIMIT_MS, PACE_MS, MAX_CACHE_ENTRIES, ENABLE_FLAG };
