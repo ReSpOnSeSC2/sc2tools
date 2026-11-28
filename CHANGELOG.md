@@ -5197,6 +5197,14 @@ release preparation, not a signed or published 0.24.9 installer.
 - The widget's unit reveal loads on demand, so the overlay page loads less up
   front. Agent 0.26.0. See ADR 0109.
 
+### Landing page: what's new
+
+- A What's new section sits directly above Humdingers on the home page. It
+  groups the latest additions (Randomizer, Stream tools, Live), each with a
+  short benefit, a picture of the real interface and a link to its guide. Cards
+  for the desktop app say Desktop app 0.26.0, and the Live streams page and
+  YouTube game chapters are marked coming soon until they are switched on.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:
