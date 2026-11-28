@@ -1,6 +1,6 @@
 "use strict";
 
-const { BuildIntentError, isValidGameKey, matchupFromRaces, normalizeRace } = require("./buildIntentCommon");
+const { BuildIntentError, envelopeMatchup, isValidGameKey } = require("./buildIntentCommon");
 const DESKTOP_ROLL_CUTOFF_SEC = 30;
 
 /** @param {unknown} raw @returns {{gameKey:string,matchup:string}|null} */
@@ -11,7 +11,7 @@ function earlyRandomizerEnvelope(raw) {
   if (envelope.phase !== "match_loading" && !earlyPlayingPhase(envelope)) return null;
   if (!Array.isArray(envelope.players) || envelope.players.length !== 2
       || envelope.players.some((/** @type {any} */ player) => player?.type !== "user")) return null;
-  const matchup = matchupFromRaces(normalizeRace(envelope.user?.race), normalizeRace(envelope.opponent?.race));
+  const matchup = envelopeMatchup(envelope);
   return matchup ? { gameKey: envelope.gameKey, matchup } : null;
 }
 

@@ -20,7 +20,7 @@ function outcome(style: SpinOutcome["style"]): SpinOutcome {
     id: `build-${index}`, name: `Build ${index}`, race: "Protoss" as const,
     source: "catalog" as const, weight: index + 1,
   }));
-  return { style, pool, winner: pool[71], matchup: "PvT", probabilities: pool.map((build) => build.weight / 3240), openingUnits: null };
+  return { style, pool, winner: pool[71], matchup: "PvT", probabilities: pool.map((build) => build.weight / 3240) };
 }
 
 afterEach(() => { cleanup(); capture.props.length = 0; });

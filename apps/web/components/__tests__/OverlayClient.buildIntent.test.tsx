@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { useEffect } from "react";
 import type { LiveGameEnvelope, LiveGamePayload } from "../overlay/types";
-import type { SpinOutcome } from "@/lib/randomizer/types";
+import type { GameDraw } from "@/lib/randomizer/types";
 import { defaultRandomizerConfig } from "@/lib/randomizer/config";
 import { RANDOMIZER_INTENT_WAIT_MS } from "../overlay/buildIntentGate";
 
@@ -34,10 +34,11 @@ vi.mock("@/components/randomizer/reveals/revealSound", () => ({
   useRevealAudioUnlock: vi.fn(),
 }));
 vi.mock("@/components/randomizer/RandomizerSequence", () => ({
-  RandomizerSequence: ({ outcome }: { outcome: SpinOutcome }) => {
-    useEffect(() => { reveals.push(outcome.winner.id); }, [outcome]);
-    return <span data-testid="reveal">{outcome.winner.name}</span>;
+  RandomizerSequence: ({ draw }: { draw: GameDraw }) => {
+    useEffect(() => { reveals.push(draw.build?.winner.id ?? "units"); }, [draw]);
+    return <span data-testid="reveal">{draw.build?.winner.name ?? "units"}</span>;
   },
+  loadUnitStage: () => Promise.resolve(),
 }));
 
 import { OverlayClient } from "../OverlayClient";

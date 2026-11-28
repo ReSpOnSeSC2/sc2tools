@@ -1,18 +1,21 @@
 "use client";
 
 /**
- * Coordinates the complete game-start randomizer as two clean acts:
+ * Coordinates one game's randomizer draw as up to two clean acts:
  * build reveal -> readable winner hold -> full exit -> opening-unit reveal.
+ * A draw without a build opens on the unit reveal; one without units keeps
+ * the build's winner card.
  *
- * The selected units already belong to the exact winning build in
- * `SpinOutcome`, so this component never re-rolls or guesses. Timer cleanup is
- * keyed to `spinId` so a new game cannot inherit a delayed transition from the
- * previous one.
+ * The selected units already belong to the draw in `GameDraw`, so this
+ * component never re-rolls or guesses. Timer cleanup is keyed to `spinId`
+ * so a new game cannot inherit a delayed transition from the previous one.
+ * The unit reveal loads on demand (`loadUnitStage`) to keep the overlay's
+ * first load small; the widget warms it while a game is pending.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { SpinOutcome } from "@/lib/randomizer/types";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import dynamic from "next/dynamic";
+import type { GameDraw } from "@/lib/randomizer/types";
 import { RandomizerStage } from "@/components/randomizer/RandomizerStage";
-import { UnitRandomizerStage } from "@/components/randomizer/UnitRandomizerStage";
 import { useReducedMotion } from "@/components/randomizer/reveals/revealShared";
 
 export const BUILD_RESULT_HOLD_MS = 1_100;
@@ -20,6 +23,8 @@ export const BUILD_EXIT_MS = 320;
 export const BETWEEN_ACTS_MS = 160;
 export const UNIT_RESULT_HOLD_MS = 1_400;
 export const UNIT_EXIT_MS = 300;
+/** The unit reveal's frame height, held while its code loads so nothing jumps. */
+const UNIT_STAGE_MIN_HEIGHT = 320;
 
 type SequencePhase =
   | "build"
@@ -28,14 +33,24 @@ type SequencePhase =
   | "unit-exit"
   | "done";
 
+/** The unit reveal's code. Starting it early makes the reveal instant. */
+export function loadUnitStage() {
+  return import("@/components/randomizer/UnitRandomizerStage");
+}
+
+const UnitRandomizerStage = dynamic(
+  () => loadUnitStage().then((module) => module.UnitRandomizerStage),
+  { ssr: false, loading: () => <div aria-hidden style={{ minHeight: UNIT_STAGE_MIN_HEIGHT }} /> },
+);
+
 export interface RandomizerSequenceProps {
-  outcome: SpinOutcome;
+  draw: GameDraw;
   spinId: number;
   onComplete?: () => void;
 }
 
 export function RandomizerSequence({
-  outcome,
+  draw,
   spinId,
   onComplete,
 }: RandomizerSequenceProps) {
@@ -45,7 +60,7 @@ export function RandomizerSequence({
   return (
     <RandomizerSequenceRun
       key={spinId}
-      outcome={outcome}
+      draw={draw}
       spinId={spinId}
       onComplete={onComplete}
     />
@@ -53,11 +68,11 @@ export function RandomizerSequence({
 }
 
 function RandomizerSequenceRun({
-  outcome,
+  draw,
   spinId,
   onComplete,
 }: RandomizerSequenceProps) {
-  const [phase, setPhase] = useState<SequencePhase>("build");
+  const [phase, setPhase] = useState<SequencePhase>(draw.build ? "build" : "units");
   const timersRef = useRef<Set<number>>(new Set());
   const buildCompleteRef = useRef(false);
   const unitsCompleteRef = useRef(false);
@@ -83,16 +98,16 @@ function RandomizerSequenceRun({
   const handleBuildComplete = useCallback(() => {
     if (buildCompleteRef.current) return;
     buildCompleteRef.current = true;
-    // A build without an eligible opening-unit config keeps the established
-    // one-act behaviour and winner card instead of fading to an empty panel.
-    if (!outcome.openingUnits) return;
+    // A draw without units keeps the established one-act behaviour and
+    // winner card instead of fading to an empty panel.
+    if (!draw.units) return;
 
     const hold = reducedMotion ? 700 : BUILD_RESULT_HOLD_MS;
     const exit = reducedMotion ? 0 : BUILD_EXIT_MS;
     const gap = reducedMotion ? 0 : BETWEEN_ACTS_MS;
     schedule(() => setPhase("build-exit"), hold);
     schedule(() => setPhase("units"), hold + exit + gap);
-  }, [outcome.openingUnits, reducedMotion, schedule]);
+  }, [draw.units, reducedMotion, schedule]);
 
   const handleUnitsComplete = useCallback(() => {
     if (unitsCompleteRef.current) return;
@@ -108,8 +123,8 @@ function RandomizerSequenceRun({
 
   if (phase === "done") return null;
 
-  const showBuild = phase === "build" || phase === "build-exit";
-  const showUnits = phase === "units" || phase === "unit-exit";
+  const build = phase === "build" || phase === "build-exit" ? draw.build : null;
+  const units = phase === "units" || phase === "unit-exit" ? draw.units : null;
 
   return (
     <div
@@ -117,60 +132,56 @@ function RandomizerSequenceRun({
       style={{
         position: "relative",
         width: "100%",
-        minHeight: 320,
+        minHeight: UNIT_STAGE_MIN_HEIGHT,
         display: "grid",
         placeItems: "center",
         pointerEvents: "none",
       }}
     >
-      {showBuild ? (
-        <div
-          style={{
-            position: "relative",
-            width: "100%",
-            display: "grid",
-            placeItems: "center",
-            opacity: phase === "build-exit" ? 0 : 1,
-            transform:
-              phase === "build-exit" ? "translateY(-10px) scale(0.97)" : "none",
-            filter: phase === "build-exit" ? "blur(3px)" : "none",
-            transition: reducedMotion
-              ? "none"
-              : `opacity ${BUILD_EXIT_MS}ms ease, transform ${BUILD_EXIT_MS}ms ease, filter ${BUILD_EXIT_MS}ms ease`,
-          }}
-        >
+      {build ? (
+        <div style={actStyle(phase === "build-exit", reducedMotion, BUILD_EXIT_MS, "translateY(-10px) scale(0.97)", true)}>
           <RandomizerStage
-            outcome={outcome}
+            outcome={build}
             spinId={spinId}
             onComplete={handleBuildComplete}
           />
         </div>
       ) : null}
 
-      {showUnits && outcome.openingUnits ? (
-        <div
-          style={{
-            position: "relative",
-            width: "100%",
-            display: "grid",
-            placeItems: "center",
-            opacity: phase === "unit-exit" ? 0 : 1,
-            transform:
-              phase === "unit-exit" ? "translateY(-8px) scale(0.98)" : "none",
-            transition: reducedMotion
-              ? "none"
-              : `opacity ${UNIT_EXIT_MS}ms ease, transform ${UNIT_EXIT_MS}ms ease`,
-          }}
-        >
+      {units ? (
+        <div style={actStyle(phase === "unit-exit", reducedMotion, UNIT_EXIT_MS, "translateY(-8px) scale(0.98)", false)}>
           <UnitRandomizerStage
-            outcome={outcome.openingUnits}
+            outcome={units}
             spinId={spinId}
-            matchupLabel={outcome.matchup}
-            buildName={outcome.winner.name}
+            matchupLabel={draw.matchup}
+            buildName={draw.build?.winner.name ?? null}
             onComplete={handleUnitsComplete}
           />
         </div>
       ) : null}
     </div>
   );
+}
+
+/** One act's wrapper: it fades, lifts and (for the build) blurs out. */
+function actStyle(
+  exiting: boolean,
+  reducedMotion: boolean,
+  exitMs: number,
+  exitTransform: string,
+  blur: boolean,
+): CSSProperties {
+  const blurTransition = blur ? `, filter ${exitMs}ms ease` : "";
+  return {
+    position: "relative",
+    width: "100%",
+    display: "grid",
+    placeItems: "center",
+    opacity: exiting ? 0 : 1,
+    transform: exiting ? exitTransform : "none",
+    ...(blur ? { filter: exiting ? "blur(3px)" : "none" } : {}),
+    transition: reducedMotion
+      ? "none"
+      : `opacity ${exitMs}ms ease, transform ${exitMs}ms ease${blurTransition}`,
+  };
 }

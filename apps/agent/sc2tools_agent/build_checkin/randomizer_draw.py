@@ -1,19 +1,23 @@
 """The loading card's still of a Randomizer draw.
 
 The saved build comes from the server, as everywhere else. The opening
-Gateway units are not saved: the OBS widget draws them in the browser
-from a seed made of the matchup and the game key (``RandomizerWidget.tsx``
-and ``lib/randomizer/engine.ts``). Rolling again here would show a
-different pair than the stream, so this module repeats the widget's
-seeded draw exactly, once per game and build. ``tests/test_randomizer_draw.py``
-and the web engine tests pin both sides to the same fixture,
+units are not saved: the OBS widget draws them in the browser from a seed
+made of the matchup and the game key (``RandomizerWidget.tsx`` and
+``lib/randomizer/engine.ts``). Rolling again here would show different
+units than the stream, so this module repeats the widget's seeded draw
+exactly, once per game. ``tests/test_randomizer_draw.py`` and the web
+engine tests pin both sides to the same fixture,
 ``apps/web/lib/randomizer/__tests__/unitDrawParity.json``.
 
-The widget draws from the pool as the overlay serves it, not as it is
-stored: ``overlay_config`` repeats that step (``overlayRandomizerConfig.js``).
-Only the parts of the widget's spin that decide the units are repeated:
-the build pick and the reveal style each take one value from the seeded
-generator before the units, whatever they pick, so they are skipped.
+Each matchup has two switches, "Draw a build order" and "Draw opening
+units" (``lib/randomizer/config.ts``). With both on, the units follow the
+saved pick; with only the unit draw on, they come from the matchup's own
+settings and no pick is needed. The widget draws from the pool as the
+overlay serves it, not as it is stored: ``overlay_config`` repeats that step
+(``overlayRandomizerConfig.js``). Only the parts of the widget's draw that
+decide the units are repeated: a drawn build's pick and reveal style each
+take one value from the seeded generator before the units, whatever they
+pick, so they are skipped.
 """
 
 from __future__ import annotations
@@ -28,12 +32,28 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 _log = logging.getLogger(__name__)
 
 GATEWAY_UNITS = ("zealot", "stalker", "sentry", "adept")
-UNIT_NAMES = {"zealot": "Zealot", "stalker": "Stalker", "sentry": "Sentry", "adept": "Adept"}
+RACE_UNITS: Dict[str, Tuple[str, ...]] = {
+    "Protoss": GATEWAY_UNITS,
+    "Terran": ("marine", "reaper", "marauder", "hellion", "widowmine", "siegetank", "cyclone",
+               "viking", "liberator", "banshee", "raven"),
+    "Zerg": ("zergling", "queen", "baneling", "roach", "ravager", "hydralisk", "lurker", "mutalisk"),
+}
+"""Each race's units in canonical order (``OPENING_UNIT_IDS`` in ``lib/randomizer/types.ts``)."""
+UNIT_NAMES = {
+    "zealot": "Zealot", "stalker": "Stalker", "sentry": "Sentry", "adept": "Adept",
+    "marine": "Marine", "reaper": "Reaper", "marauder": "Marauder", "hellion": "Hellion",
+    "widowmine": "Widow Mine", "siegetank": "Siege Tank", "cyclone": "Cyclone", "viking": "Viking",
+    "liberator": "Liberator", "banshee": "Banshee", "raven": "Raven",
+    "zergling": "Zergling", "queen": "Queen", "baneling": "Baneling", "roach": "Roach",
+    "ravager": "Ravager", "hydralisk": "Hydralisk", "lurker": "Lurker", "mutalisk": "Mutalisk",
+}
 FIRST_STEPS = 4
 """How many of the build's steps the card lists."""
 CUSTOM_PREFIX = "custom:"
 VALUES_BEFORE_UNITS = 2
-"""The widget's build pick and reveal style, in that order."""
+"""A drawn build's pick and reveal style, in that order."""
+INDEPENDENT_VERSION = 3
+"""The config version that made the build and unit draws independent switches."""
 READ_ATTEMPTS = 2
 """A failed read is tried again on the next card update, once."""
 
@@ -55,23 +75,18 @@ _GATE_COUNT = re.compile(
 
 @dataclass(frozen=True)
 class DrawKey:
-    """One game's saved pick."""
+    """One game's draw: under its saved pick, or with none (units alone)."""
 
     game_key: str
     matchup: str
-    build_key: str
+    build_key: Optional[str] = None
 
     @property
     def custom_slug(self) -> Optional[str]:
         """The custom build's slug; catalog builds have no steps to read."""
-        if self.build_key.startswith(CUSTOM_PREFIX):
+        if self.build_key and self.build_key.startswith(CUSTOM_PREFIX):
             return self.build_key[len(CUSTOM_PREFIX):] or None
         return None
-
-    @property
-    def can_show_more(self) -> bool:
-        """Units exist for Protoss only and steps for custom builds only."""
-        return self.matchup.startswith("P") or self.custom_slug is not None
 
 
 @dataclass(frozen=True)
@@ -85,17 +100,29 @@ class DrawStep:
 
 @dataclass(frozen=True)
 class RandomizerDraw:
-    """What the card shows under one game's saved pick."""
+    """What the card shows for one game's draw."""
 
     game_key: str
-    build_key: str
+    build_key: Optional[str]
+    """The saved pick it follows; ``None`` for units drawn without a build."""
     steps: Tuple[DrawStep, ...] = ()
     units: Tuple[str, ...] = ()
-    """Display names, one per Gateway, in Gateway order."""
+    """Display names, in draw order."""
+    race: Optional[str] = None
+    """Whose units: only a Protoss pair names its Gateways."""
 
     @property
     def empty(self) -> bool:
         return not self.steps and not self.units
+
+
+@dataclass(frozen=True)
+class _Opening:
+    """One unit draw's settings (``OpeningUnitsConfig``), sanitized."""
+
+    count: int
+    custom_weights: bool
+    units: Tuple[Tuple[str, float], ...]
 
 
 # ---------------------------------------------------------------- seeded draw
@@ -164,10 +191,11 @@ def _number(raw: Dict[str, Any], key: str) -> float:
     return float(value) if isinstance(value, (bool, int, float)) else math.nan
 
 
-def _is_protoss(race: Any) -> bool:
-    """``coerceRace(race) === "Protoss"``."""
+def _race_letter(race: Any) -> Optional[str]:
+    """The letter of ``coerceRace(race)`` when that is a played race."""
     text = race.strip(JS_SPACE) if isinstance(race, str) else ""
-    return bool(text) and text[0].upper() == "P"
+    letter = text[:1].upper()
+    return letter if letter in RACES else None
 
 
 def infer_gate_count(matchup: str, build_name: str) -> int:
@@ -177,19 +205,60 @@ def infer_gate_count(matchup: str, build_name: str) -> int:
     return 2 if matchup == "PvP" else 1
 
 
-def _selected_units(raw_units: Any) -> List[Tuple[str, float]]:
-    """Selected units in canonical order; a later duplicate wins."""
-    if not isinstance(raw_units, list):
-        return [(unit, 1.0) for unit in GATEWAY_UNITS]
+def _field(value: Any, key: str) -> Any:
+    """``value[key]`` when ``value`` is an object, else nothing."""
+    return value.get(key) if isinstance(value, dict) else None
+
+
+def _matchup_config(config: Any, matchup: str) -> Optional[Dict[str, Any]]:
+    pool = _field(_field(config, "matchups"), matchup)
+    return pool if isinstance(pool, dict) else None
+
+
+def _switches(config: Any, matchup: str) -> Tuple[bool, bool]:
+    """The matchup's build and unit switches. Before version 3 units only
+    followed a drawn Protoss build, so an older config keeps that meaning."""
+    pool = _matchup_config(config, matchup)
+    if pool is None:
+        return False, False
+    build = pool.get("enabled") is True
+    version = _field(config, "version")
+    if type(version) in (int, float) and version == INDEPENDENT_VERSION:
+        return build, pool.get("unitRandomizerEnabled") is True
+    legacy = pool.get("unitRandomizerEnabled")
+    return build, build and matchup.startswith("P") and (legacy if type(legacy) is bool else True)
+
+
+def _unit_weights(raw_units: List[Any], race: str) -> Dict[str, float]:
+    """Each valid unit of ``race`` with its weight; a later duplicate wins."""
     weights: Dict[str, float] = {}
     for unit in raw_units:
-        if not isinstance(unit, dict) or not isinstance(unit.get("id"), str):
+        if not isinstance(unit, dict):
             continue
-        unit_id = unit["id"].lower()
-        if unit_id in GATEWAY_UNITS:
+        raw_id = unit.get("id")
+        unit_id = raw_id.lower() if isinstance(raw_id, str) else None
+        if unit_id in RACE_UNITS[race]:
             weight = _number(unit, "weight")
             weights[unit_id] = weight if math.isfinite(weight) and weight >= 0 else 1.0
-    return [(unit, weights[unit]) for unit in GATEWAY_UNITS if unit in weights]
+    return weights
+
+
+def _opening(raw: Any, race: str, defaults: _Opening) -> _Opening:
+    """``sanitizeOpeningUnits``: count, odds and units in canonical order."""
+    if not isinstance(raw, dict):
+        return defaults
+    gates = raw.get("gateCount")
+    count = int(gates) if type(gates) in (int, float) and gates in (1, 2) else defaults.count
+    units = raw.get("units")
+    weights = _unit_weights(units, race) if isinstance(units, list) else dict(defaults.units)
+    ordered = tuple((unit, weights[unit]) for unit in RACE_UNITS[race] if unit in weights)
+    return _Opening(count, raw.get("useCustomWeights") is True, ordered)
+
+
+def _fallback(matchup: str, count: int) -> _Opening:
+    """Every Gateway unit for Protoss; nothing for the other races."""
+    units = tuple((unit, 1.0) for unit in GATEWAY_UNITS) if matchup.startswith("P") else ()
+    return _Opening(count, False, units)
 
 
 def _pool_entry(matchup_config: Dict[str, Any], build_key: str) -> Optional[Dict[str, Any]]:
@@ -203,16 +272,27 @@ def _pool_entry(matchup_config: Dict[str, Any], build_key: str) -> Optional[Dict
     return entry
 
 
-def _gate_count(opening: Dict[str, Any], matchup: str, build_name: str) -> int:
-    gates = opening.get("gateCount")
-    if type(gates) in (int, float) and gates in (1, 2):
-        return int(gates)
-    return infer_gate_count(matchup, build_name)
+def _entry_units(entry: Dict[str, Any], matchup: str) -> Optional[_Opening]:
+    """A pool entry's own unit draw. A Protoss entry always has one (an
+    older entry gets the Gateway count its name implies); another race's
+    entry without one, or with the wrong race, has none."""
+    if _race_letter(entry.get("race")) != matchup[0]:
+        return None
+    raw = entry.get("openingUnits")
+    if matchup.startswith("P"):
+        gates = infer_gate_count(matchup, entry["name"].strip(JS_SPACE))
+        return _opening(raw, "Protoss", _fallback(matchup, gates))
+    if not isinstance(raw, dict):
+        return None
+    return _opening(raw, RACES[matchup[0]], _fallback(matchup, infer_gate_count(matchup, "")))
 
 
-def _field(value: Any, key: str) -> Any:
-    """``value[key]`` when ``value`` is an object, else nothing."""
-    return value.get(key) if isinstance(value, dict) else None
+def _matchup_units(matchup_config: Dict[str, Any], matchup: str) -> Optional[_Opening]:
+    """The matchup's own unit draw; absent until set up."""
+    raw = matchup_config.get("units")
+    if not isinstance(raw, dict):
+        return None
+    return _opening(raw, RACES[matchup[0]], _fallback(matchup, infer_gate_count(matchup, "")))
 
 
 def _offered_builds(options: Any) -> Dict[str, Dict[str, Any]]:
@@ -246,32 +326,44 @@ def overlay_config(config: Any, matchup: str, options: Any) -> Any:
     return {**config, "matchups": {**matchups, matchup: {**pool, "builds": served}}}
 
 
-def _drawn_entry(config: Any, key: DrawKey) -> Optional[Dict[str, Any]]:
-    """The pool entry whose units the widget draws for ``key``, if it draws any."""
-    matchup_config = _field(_field(config, "matchups"), key.matchup)
-    if not key.matchup.startswith("P") or not isinstance(matchup_config, dict):
+def _units_after_build(matchup_config: Dict[str, Any], key: DrawKey) -> Optional[_Opening]:
+    """The settings that follow the saved pick: its entry's own, else the
+    matchup's; a pick no longer in the pool draws none."""
+    entry = _pool_entry(matchup_config, key.build_key) if key.build_key else None
+    if entry is None:
         return None
-    if matchup_config.get("enabled") is not True or matchup_config.get("unitRandomizerEnabled") is False:
-        return None
-    entry = _pool_entry(matchup_config, key.build_key)
-    return entry if entry is not None and _is_protoss(entry.get("race")) else None
+    own = _entry_units(entry, key.matchup)
+    return own if own is not None else _matchup_units(matchup_config, key.matchup)
+
+
+def _draw(opening: _Opening, rng: Callable[[], float]) -> Tuple[str, ...]:
+    if not opening.units:
+        return ()
+    probabilities = normalize([weight if opening.custom_weights else 1.0 for _unit, weight in opening.units])
+    return tuple(opening.units[pick_index(probabilities, rng)][0] for _ in range(opening.count))
 
 
 def opening_units(config: Any, key: DrawKey) -> Tuple[str, ...]:
-    """The unit ids the widget reveals for ``key``, one per Gateway."""
-    entry = _drawn_entry(config, key)
-    opening = entry.get("openingUnits") if entry is not None else None
-    opening = opening if isinstance(opening, dict) else {}
-    pool = _selected_units(opening.get("units")) if entry is not None else []
-    if not pool:
+    """The unit ids the widget reveals for ``key`` (``drawGame`` in engine.ts).
+
+    With the build draw on the units follow the saved pick, after its two
+    values; a key without one draws nothing, since the widget's own build
+    decides. With it off the matchup's settings draw from the first value.
+    """
+    build_on, units_on = _switches(config, key.matchup)
+    matchup_config = _matchup_config(config, key.matchup)
+    if not units_on or matchup_config is None:
         return ()
-    custom = opening.get("useCustomWeights") is True
-    probabilities = normalize([weight if custom else 1.0 for _unit, weight in pool])
+    if build_on:
+        opening, skipped = _units_after_build(matchup_config, key), VALUES_BEFORE_UNITS
+    else:
+        opening, skipped = _matchup_units(matchup_config, key.matchup), 0
+    if opening is None:
+        return ()
     rng = mulberry32(seed_from_string(f"{key.matchup}:{key.game_key}"))
-    for _ in range(VALUES_BEFORE_UNITS):
+    for _ in range(skipped):
         rng()
-    gates = _gate_count(opening, key.matchup, entry["name"].strip(JS_SPACE))
-    return tuple(pool[pick_index(probabilities, rng)][0] for _ in range(gates))
+    return _draw(opening, rng)
 
 
 # ----------------------------------------------------------------- build steps
@@ -328,18 +420,23 @@ def draw_for(key: DrawKey, answer: Dict[str, Any]) -> RandomizerDraw:
     return RandomizerDraw(
         game_key=key.game_key,
         build_key=key.build_key,
-        steps=first_steps(answer.get("build")),
+        steps=first_steps(answer.get("build")) if key.build_key else (),
         units=tuple(UNIT_NAMES[unit] for unit in opening_units(served, key)),
+        race=RACES[key.matchup[0]],
     )
 
 
 def draw_key(model: Any) -> Optional[DrawKey]:
-    """The saved pick a loading card model shows, if it shows one."""
+    """The draw a loading card model can show: under its saved pick, or,
+    with no Randomizer row (its build draw off), units alone."""
+    matchup = getattr(model, "matchup", None)
+    if not matchup or not getattr(model, "game_key", None):
+        return None
     strip = getattr(model, "randomizer", None)
     rolled = getattr(strip, "rolled_key", None)
-    if not rolled or not getattr(model, "matchup", None):
+    if strip is not None and not rolled:
         return None
-    return DrawKey(game_key=model.game_key, matchup=model.matchup, build_key=rolled)
+    return DrawKey(game_key=model.game_key, matchup=matchup, build_key=rolled or None)
 
 
 # ---------------------------------------------------------------------- reading
@@ -352,8 +449,8 @@ def _start_daemon(work: Callable[[], None]) -> None:
 class RandomizerDrawSource:
     """Reads what one game's draw needs, once, off the caller's thread.
 
-    ``fetch`` is ``CompanionClient.action``. Only the newest saved pick is
-    kept: a card shows one game at a time, and a reroll is a new pick.
+    ``fetch`` is ``CompanionClient.action``. Only the newest key is kept: a
+    card shows one game at a time, and a reroll is a new pick.
     """
 
     def __init__(self, fetch: Callable[[Dict[str, Any]], Any], *,
@@ -367,9 +464,9 @@ class RandomizerDrawSource:
         self._read = False
 
     def request(self, model: Any, deliver: Callable[[RandomizerDraw], None]) -> None:
-        """Start the read for ``model``'s saved pick unless it ran already."""
+        """Start the read for ``model``'s draw unless it ran already."""
         key = draw_key(model)
-        if key is None or not key.can_show_more:
+        if key is None:
             return
         with self._lock:
             if key != self._key:
@@ -382,7 +479,8 @@ class RandomizerDrawSource:
 
     def _resolve(self, key: DrawKey, deliver: Callable[[RandomizerDraw], None]) -> None:
         try:
-            answer = self._fetch({"action": "randomizer_draw", "matchup": key.matchup, "customSlug": key.custom_slug})
+            answer = self._fetch({"action": "randomizer_draw", "matchup": key.matchup,
+                                  "buildKey": key.build_key, "customSlug": key.custom_slug})
         except Exception as error:  # noqa: BLE001 - the card keeps its build name
             _log.info("randomizer_draw_read_failed matchup=%s reason=%s", key.matchup, error)
             answer = None

@@ -3,18 +3,19 @@
 /**
  * Settings · Build randomizer.
  *
- * Streamers curate, per matchup, a pool of build orders drawn from the
- * bundled BUILD_DEFINITIONS catalog AND their own custom builds. Pools
- * can be equal-chance (default) or weighted with sliders. The widget
- * picks one at random for each new game and reveals it on stream via a
- * randomly-chosen animation (case unboxing, slot machine, gacha
- * summon, battle royale, or wheel spin).
+ * Race, then matchup, then what each game draws: a build order, opening
+ * units, or both, each behind its own switch. Streamers curate, per
+ * matchup, a pool of build orders drawn from the bundled
+ * BUILD_DEFINITIONS catalog and their own custom builds, equal-chance or
+ * weighted, and the units a draw picks from. The widget reveals each
+ * game's draw on stream with a randomly chosen animation.
  */
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Volume2, VolumeX } from "lucide-react";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
-import { Card, Skeleton } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
+import { SkeletonBar, SkeletonCard, SkeletonRegion } from "@/components/ui/Skeleton";
 import { Section } from "@/components/ui/Section";
 import { Toggle } from "@/components/ui/Toggle";
 import { useToast } from "@/components/ui/Toast";
@@ -28,6 +29,7 @@ import {
 } from "@/lib/randomizer/config";
 import {
   MATCHUPS,
+  type MatchupConfig,
   type MatchupKey,
   type RandomizerConfig,
   type RandomizerSound,
@@ -36,9 +38,11 @@ import {
   setRevealSoundEnabled,
   setRevealSoundVolume,
 } from "@/components/randomizer/reveals/revealSound";
+import { DrawSwitches } from "./randomizer/DrawSwitches";
 import { MatchupSelector } from "./randomizer/MatchupSelector";
 import { MatchupBuildPicker } from "./randomizer/MatchupBuildPicker";
 import { RandomizerPreview } from "./randomizer/RandomizerPreview";
+import { UnitDrawSettings } from "./randomizer/UnitDrawSettings";
 import { useSaveSource } from "./SettingsContext";
 import { SettingsLoadError } from "./SettingsLoadError";
 import { RandomizerChallenge } from "@/components/practice/RandomizerChallenge";
@@ -116,45 +120,24 @@ export function SettingsRandomizer() {
   }
 
   if (isLoading) {
-    return <><SettingsSectionsReady revision="loading" /><Skeleton rows={3} /></>;
+    return <><SettingsSectionsReady revision="loading" /><RandomizerSkeleton /></>;
   }
   if (error && data === undefined) return <><SettingsSectionsReady revision="error" /><SettingsLoadError tab="Randomizer settings" error={error} retry={mutate} /></>;
 
   const customBuilds = customBuildsApi.data?.items ?? [];
-  const activeCount = activeMatchupCount(draft);
   const matchupConfig = draft.matchups[active];
+  const changeMatchup = (next: MatchupConfig) => setDraft((d) => withMatchup(d, active, next));
 
   return (
     <>
-      <SettingsSectionsReady revision={active.startsWith("P")} />
-      <Section
-        id="build-randomizer" className="scroll-mt-28"
-        title="Build randomizer"
-        description={
-          activeCount === 0
-            ? "Pick a matchup and choose which builds the randomizer can roll."
-            : `Active on ${activeCount} matchup${activeCount === 1 ? "" : "s"}. Draws use your enabled matchup pool.`
-        }
-      >
-        <Card>
-          <MatchupSelector
-            config={draft}
-            active={active}
-            onSelect={setActive}
-          />
-          <label className="mt-4 flex min-h-11 items-start gap-3 border-t border-border pt-4">
-            <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-accent"
-              checked={desktop.draft} disabled={!desktop.hydrated || saving}
-              onChange={(event) => desktop.setDraft(event.target.checked)} />
-            <span className="min-w-0 text-body font-medium text-text">
-              Roll on the desktop card when I&apos;m not streaming
-              <span className="mt-1 block text-caption font-normal text-text-muted">
-                The paired agent can show a build in an eligible 1v1 when no enabled randomizer source is connected.
-              </span>
-            </span>
-          </label>
-        </Card>
-      </Section>
+      <SettingsSectionsReady revision="ready" />
+      <MatchupSection
+        draft={draft}
+        active={active}
+        onSelect={setActive}
+        onChange={changeMatchup}
+        desktop={{ checked: desktop.draft, disabled: !desktop.hydrated || saving, onChange: desktop.setDraft }}
+      />
 
       <MatchupBuildPicker
         matchup={active}
@@ -163,8 +146,10 @@ export function SettingsRandomizer() {
         search={buildSearch}
         onSearchChange={setBuildSearch}
         customBuildPage={customBuildsApi}
-        onChange={(next) => setDraft((d) => withMatchup(d, active, next))}
+        onChange={changeMatchup}
       />
+
+      <UnitDrawSettings matchup={active} config={matchupConfig} onChange={changeMatchup} />
 
       <SoundSettings
         sound={draft.sound}
@@ -174,6 +159,66 @@ export function SettingsRandomizer() {
       <RandomizerPreview matchup={active} config={matchupConfig} />
       <RandomizerChallenge />
     </>
+  );
+}
+
+/** Race, matchup and what it draws, then the desktop roll that serves every matchup. */
+function MatchupSection({ draft, active, onSelect, onChange, desktop }: {
+  draft: RandomizerConfig;
+  active: MatchupKey;
+  onSelect: (matchup: MatchupKey) => void;
+  onChange: (next: MatchupConfig) => void;
+  desktop: { checked: boolean; disabled: boolean; onChange: (checked: boolean) => void };
+}) {
+  const activeCount = activeMatchupCount(draft);
+  return (
+    <Section
+      id="build-randomizer" className="scroll-mt-28"
+      title="Build randomizer"
+      description={
+        activeCount === 0
+          ? "Pick your race and matchup, then what each game draws: a build order, opening units or both."
+          : `Draws on ${activeCount} matchup${activeCount === 1 ? "" : "s"}. Pick one to change what it draws.`
+      }
+    >
+      <Card>
+        <MatchupSelector config={draft} active={active} onSelect={onSelect} />
+        <div className="mt-4 border-t border-border pt-4">
+          <DrawSwitches matchup={active} config={draft.matchups[active]} onChange={onChange} />
+        </div>
+        <label className="mt-4 flex min-h-11 items-start gap-3 border-t border-border pt-4">
+          <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-accent"
+            checked={desktop.checked} disabled={desktop.disabled}
+            onChange={(event) => desktop.onChange(event.target.checked)} />
+          <span className="min-w-0 text-body font-medium text-text">
+            Roll on the desktop card when I&apos;m not streaming
+            <span className="mt-1 block text-caption font-normal text-text-muted">
+              The paired agent can show a build in an eligible 1v1 when no enabled randomizer source is connected.
+            </span>
+          </span>
+        </label>
+      </Card>
+    </Section>
+  );
+}
+
+/** The loading state, shaped like the race, matchup and switch rows. */
+function RandomizerSkeleton() {
+  return (
+    <SkeletonRegion label="Loading randomizer settings">
+      <SkeletonCard className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SkeletonBar className="h-4 w-20" />
+          <SkeletonBar className="h-10 w-72 max-w-full rounded-full" />
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[0, 1, 2].map((index) => <SkeletonBar key={index} className="h-[72px]" />)}
+        </div>
+        <div className="grid gap-2 border-t border-border pt-4 sm:grid-cols-2">
+          {[0, 1].map((index) => <SkeletonBar key={index} className="h-20" />)}
+        </div>
+      </SkeletonCard>
+    </SkeletonRegion>
   );
 }
 

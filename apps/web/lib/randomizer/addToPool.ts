@@ -6,7 +6,7 @@
  */
 import { coerceRace, coerceVsRace } from "@/lib/race";
 import { sanitizeRandomizerConfig, toggleBuild, withMatchup } from "./config";
-import { defaultOpeningUnits, inferGatewayCount } from "./gatewayUnits";
+import { defaultBuildOpeningUnits } from "./openingUnitPools";
 import { MATCHUPS, matchupRaces, type MatchupKey, type RandomizerConfig } from "./types";
 
 export interface PoolBuild {
@@ -46,7 +46,7 @@ export function addBuildsToPool(
         race: my,
         source: "custom",
         weight: 1,
-        ...(my === "Protoss" ? { openingUnits: defaultOpeningUnits(inferGatewayCount(matchup, build.name)) } : {}),
+        openingUnits: defaultBuildOpeningUnits(matchup, build.name),
       }, true);
       added += 1;
     }

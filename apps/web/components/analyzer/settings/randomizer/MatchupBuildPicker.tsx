@@ -1,12 +1,14 @@
 "use client";
 
 /**
- * Per-matchup configuration card — enable toggle, custom-weights toggle,
- * checklist of catalog + custom builds, and (when custom weights are
- * on) a normalized-percent slider for every selected build. Protoss
- * matchups also expose a compact second-stage opening-unit editor.
+ * A matchup's build pool — the custom-weights toggle, then checklists of
+ * catalog and custom builds and (when custom weights are on) a
+ * normalized-percent slider for every selected build. A build joins the
+ * pool with the unit draw its name implies (`defaultBuildOpeningUnits`).
+ * The draw switches and the units have their own sections.
  */
 import { useMemo } from "react";
+import { Info } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Toggle } from "@/components/ui/Toggle";
 import { Badge } from "@/components/ui/Badge";
@@ -23,14 +25,10 @@ import {
   setBuildWeight,
   toggleBuild,
 } from "@/lib/randomizer/config";
-import { defaultOpeningUnits } from "@/lib/randomizer/gatewayUnits";
 import type { MatchupConfig, MatchupKey } from "@/lib/randomizer/types";
-import { matchupRaces } from "@/lib/randomizer/types";
 import type { CustomBuild } from "@/components/builds/types";
 import { BuildPagination } from "@/components/builds/BuildPagination";
 import type { useCustomBuildPage } from "@/components/builds/useCustomBuildPage";
-import { raceTint } from "@/lib/race";
-import { BuildUnitRollEditor } from "./BuildUnitRollEditor";
 
 export interface MatchupBuildPickerProps {
   matchup: MatchupKey;
@@ -81,9 +79,7 @@ export function MatchupBuildPicker({
           race: candidate.race,
           source: candidate.source,
           weight: 1,
-          ...(candidate.race === "Protoss"
-            ? { openingUnits: defaultOpeningUnits(candidate.suggestedGateCount) }
-            : {}),
+          openingUnits: candidate.openingUnits,
         },
         on,
       ),
@@ -92,30 +88,27 @@ export function MatchupBuildPicker({
 
   return (
     <div className="space-y-4">
-      <MatchupHeader matchup={matchup} />
+      {config.enabled ? null : (
+        <p className="flex items-start gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-2.5 text-caption text-text-muted">
+          <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-text-dim" aria-hidden />
+          <span>Draw a build order is off for {matchup}. The pool is kept for when it is on.</span>
+        </p>
+      )}
       <Card>
         <ToggleRow
-          title="Enable randomizer for this matchup"
-          description="When on, the OBS widget spins a random build for this matchup at the start of each new game."
-          checked={config.enabled}
-          onChange={(on) => onChange({ ...config, enabled: on })}
+          title="Use custom weights"
+          description="Off: every selected build has equal chance. On: the sliders below set how likely each build is to land."
+          checked={config.useCustomWeights}
+          onChange={(on) => onChange({ ...config, useCustomWeights: on })}
+          disabled={!config.enabled}
         />
-        <div className="mt-3">
-          <ToggleRow
-            title="Use custom weights"
-            description="Off: every selected build has equal chance. On: the sliders below set how likely each build is to land."
-            checked={config.useCustomWeights}
-            onChange={(on) => onChange({ ...config, useCustomWeights: on })}
-            disabled={!config.enabled}
-          />
-        </div>
       </Card>
 
       {pool.length === 0 && !customBuildPage ? (
         <Card>
           <EmptyStatePanel
             title="No builds eligible for this matchup"
-            description="The builds that come with SC2 Tools cover Protoss matchups for now. For Terran and Zerg, add builds with the right race and opponent race in Build library."
+            description="Add builds with this race and opponent race in Build library."
           />
         </Card>
       ) : (
@@ -179,28 +172,6 @@ export function MatchupBuildPicker({
         </>
       )}
 
-      <BuildUnitRollEditor
-        matchup={matchup}
-        config={config}
-        onChange={onChange}
-      />
-    </div>
-  );
-}
-
-function MatchupHeader({ matchup }: { matchup: MatchupKey }) {
-  const { my, vs } = matchupRaces(matchup);
-  const tint = raceTint(my);
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex items-center gap-1.5">
-        <RaceIcon race={my} size={22} />
-        <span className="text-caption font-bold text-text-muted">vs</span>
-        <RaceIcon race={vs} size={22} />
-      </div>
-      <h2 className={["text-display-sm font-bold", tint.text].join(" ")}>
-        {matchup}
-      </h2>
     </div>
   );
 }

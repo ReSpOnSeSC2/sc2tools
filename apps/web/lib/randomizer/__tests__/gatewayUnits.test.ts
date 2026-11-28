@@ -1,34 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  GATEWAY_UNITS,
-  defaultOpeningUnits,
-  gatewayUnitMeta,
+  defaultGatewayUnits,
   inferGatewayCount,
-  isGatewayUnitId,
 } from "@/lib/randomizer/gatewayUnits";
 
-describe("Gateway unit metadata", () => {
-  it("has the four fixed units in stable order with real SC2 icons", () => {
-    expect(GATEWAY_UNITS.map((unit) => unit.id)).toEqual([
-      "zealot",
-      "stalker",
-      "sentry",
-      "adept",
-    ]);
-    for (const unit of GATEWAY_UNITS) {
-      expect(unit.iconPath).toBe(`/icons/sc2/units/${unit.id}.png`);
-      expect(gatewayUnitMeta(unit.id)).toBe(unit);
-    }
-  });
-
-  it("strictly recognizes persisted unit ids", () => {
-    expect(isGatewayUnitId("stalker")).toBe(true);
-    expect(isGatewayUnitId("marine")).toBe(false);
-    expect(isGatewayUnitId(null)).toBe(false);
-  });
-
+describe("defaultGatewayUnits", () => {
   it("creates an equal-weight all-unit default", () => {
-    expect(defaultOpeningUnits(2)).toEqual({
+    expect(defaultGatewayUnits(2)).toEqual({
       gateCount: 2,
       useCustomWeights: false,
       units: [

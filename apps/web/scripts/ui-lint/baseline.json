@@ -963,13 +963,6 @@
       "example": "\"Name#1234\""
     },
     {
-      "file": "components/analyzer/settings/randomizer/RandomizerPreview.tsx",
-      "rule": "hex-outside-visualization",
-      "signature": "bdcba23b1aa9335c9b7533a746c82dc7b27d922d0006da2b451c4d6dafc67726",
-      "count": 1,
-      "example": "\"flex w-full items-center justify-center rounded-xl border border-border bg-[#0b0d12] p-6\""
-    },
-    {
       "file": "components/build-checkin/BuildCheckInQueue.tsx",
       "rule": "focus-without-ring",
       "signature": "6dd1285707bb113becc66fb891be73543941cb4a7da06ff3b97324c6c732e7a4",

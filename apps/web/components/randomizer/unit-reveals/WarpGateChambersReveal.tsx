@@ -1,9 +1,11 @@
 "use client";
 
-import { gatewayUnitMeta } from "@/lib/randomizer/gatewayUnits";
+import { openingUnitMeta } from "@/lib/randomizer/openingUnits";
 import { useRevealSound } from "@/components/randomizer/reveals/revealSound";
 import {
   resultAnnouncement,
+  slotLabel,
+  unitModeLabel,
   UnitOddsStrip,
   UnitPortrait,
   UnitResultCard,
@@ -15,7 +17,7 @@ import {
 export const WARP_GATE_DURATION_MS = 4_650;
 const LOCK_TIMES = [2_650, 3_300] as const;
 
-/** Dual Protoss chambers charge, decode candidates, then warp each pick in. */
+/** Dual chambers charge, decode candidates, then bring each pick in. */
 export function WarpGateChambersReveal(props: UnitRevealProps) {
   const animation = useAnimatedUnitPicks({
     outcome: props.outcome,
@@ -35,7 +37,7 @@ export function WarpGateChambersReveal(props: UnitRevealProps) {
     <UnitRevealFrame
       matchupLabel={props.matchupLabel}
       buildName={props.buildName}
-      modeLabel="Warp chambers"
+      modeLabel={unitModeLabel("warp-gate", props.outcome.race)}
       resultText={
         animation.allLocked ? resultAnnouncement(props.outcome) : null
       }
@@ -71,7 +73,7 @@ export function WarpGateChambersReveal(props: UnitRevealProps) {
       >
         {animation.displayed.map((id, index) => {
           const locked = animation.locked[index];
-          const meta = gatewayUnitMeta(id);
+          const meta = openingUnitMeta(id);
           return (
             <div
               key={index}
@@ -94,7 +96,7 @@ export function WarpGateChambersReveal(props: UnitRevealProps) {
                   textTransform: "uppercase",
                 }}
               >
-                {locked ? `Gate ${index + 1} locked` : `Gate ${index + 1} charging`}
+                {`${slotLabel(props.outcome, index)} ${locked ? "locked" : "charging"}`}
               </div>
               <div
                 style={{

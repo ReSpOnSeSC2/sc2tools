@@ -75,6 +75,45 @@ function gameMatchup(row) {
 }
 
 /**
+ * @typedef {{ name?: unknown, type?: unknown, race?: unknown }} LivePlayerRace One row of ``players[]``.
+ * @typedef {{
+ *   user?: { name?: unknown, race?: unknown } | null,
+ *   opponent?: { race?: unknown } | null,
+ *   players?: unknown,
+ * }} LiveRaces The parts of an agent's live envelope that name its races; ``players`` is
+ *   the client's own list of ``LivePlayerRace`` rows, unchecked off the wire.
+ */
+
+/**
+ * The streamer's race in a live envelope. One who queued Random keeps
+ * "Random" on ``user.race`` all game (the agent latches the choice for
+ * Ghost), while the client's own ``players[]`` reveals the race they got.
+ * Two players of the streamer's name are never guessed between.
+ * @param {LiveRaces} envelope
+ * @returns {string|null}
+ */
+function streamerRace(envelope) {
+  const selected = normalizeRace(envelope.user?.race);
+  if (selected !== "Random") return selected;
+  const name = envelope.user?.name;
+  const players = /** @type {LivePlayerRace[]} */ (Array.isArray(envelope.players) ? envelope.players : []);
+  const mine = typeof name === "string" && name
+    ? players.filter((player) => player?.type === "user" && player.name === name)
+    : [];
+  return mine.length === 1 ? normalizeRace(mine[0].race) : "Random";
+}
+
+/**
+ * A live envelope's matchup, the streamer's race first: a Random streamer
+ * counts once the client reveals their race; a Random opponent never does.
+ * @param {LiveRaces} envelope
+ * @returns {string|null}
+ */
+function envelopeMatchup(envelope) {
+  return matchupFromRaces(streamerRace(envelope), normalizeRace(envelope.opponent?.race));
+}
+
+/**
  * Live keys are "<sorted names>|<start ms>": the trailing segment must be
  * digits.
  * @param {unknown} gameKey
@@ -298,6 +337,8 @@ module.exports = {
   normalizeRace,
   matchupFromRaces,
   gameMatchup,
+  streamerRace,
+  envelopeMatchup,
   isValidGameKey,
   keyStartedAtMs,
   playerNamesFromKey,

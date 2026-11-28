@@ -222,7 +222,8 @@ class BuildCheckinHost:
             window.refresh_randomizer_draw()
 
     def randomizer_draw(self, game_key: Optional[str], build_key: Optional[str]) -> Optional[Any]:
-        """The still for this game's saved pick, once it has been read.
+        """The still for this game's saved pick, or with ``build_key``
+        ``None`` its units drawn without a build, once it has been read.
 
         Nothing while the Randomizer is turned off, in the strip or the
         Locked in bar alike.

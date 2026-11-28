@@ -1,10 +1,12 @@
 """A Randomizer draw as a still on the loading card.
 
 It sits under the saved pick, in the strip or in the slim "Locked in" bar:
-the build's first steps, then its opening Gateway unit, or both units of a
-two-Gateway build (``build_checkin.randomizer_draw``). Plain labels only:
-no timer, no animation and no sound, so the card repaints once, when the
-draw arrives, and never again for it.
+the build's first steps, then its opening unit, or both units of a
+two-Gateway or two-building opener (``build_checkin.randomizer_draw``).
+Units drawn without a build sit in the strip under their own label and
+stay in the bar whatever build is played. Plain labels only: no timer, no
+animation and no sound, so the card repaints once, when the draw arrives,
+and never again for it.
 """
 
 from __future__ import annotations
@@ -25,10 +27,17 @@ def step_line(step: DrawStep) -> str:
     return f"{step.time} \N{MIDDLE DOT} {what}" if step.time else what
 
 
-def units_line(units: Sequence[str]) -> str:
-    """The widget's wording: a pair names each Gateway."""
+UNITS_ALONE_LABEL = "\N{GAME DIE} Randomizer: opening units"
+"""The strip's label over units drawn without a build."""
+
+
+def units_line(units: Sequence[str], race: Optional[str]) -> str:
+    """The widget's wording: a Protoss pair names each Gateway, another
+    race's pair its order."""
     if len(units) == 2:
-        return f"Opening pair: Gate 1 {units[0]}, Gate 2 {units[1]}"
+        if race == "Protoss":
+            return f"Opening pair: Gate 1 {units[0]}, Gate 2 {units[1]}"
+        return f"Opening pair: {units[0]}, then {units[1]}"
     return f"First unit: {units[0]}"
 
 
@@ -63,9 +72,9 @@ class RandomizerDrawStill(QtWidgets.QWidget):
             return
         self.steps.setText("\n".join(step_line(step) for step in draw.steps))
         self.steps.setVisible(bool(draw.steps))
-        self.units.setText(units_line(draw.units) if draw.units else "")
+        self.units.setText(units_line(draw.units, draw.race) if draw.units else "")
         self.units.setVisible(bool(draw.units))
         self.show()
 
 
-__all__ = ["RandomizerDrawStill", "step_line", "units_line"]
+__all__ = ["RandomizerDrawStill", "UNITS_ALONE_LABEL", "step_line", "units_line"]

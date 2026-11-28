@@ -114,7 +114,8 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.matchup_select.addItems(MATCHUPS)
             self.matchup_select.currentTextChanged.connect(self._matchup_changed)
             row.addWidget(self.matchup_select)
-            self.enabled_check = QtWidgets.QCheckBox("Enable for this matchup")
+            self.enabled_check = QtWidgets.QCheckBox("Draw a build order")
+            self.enabled_check.setToolTip("Draw a build from this pool each game. Opening units have their own switch on the web.")
             self.enabled_check.setEnabled(False)
             self.enabled_check.toggled.connect(self._enabled_changed)
             row.addWidget(self.enabled_check)
@@ -432,7 +433,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 elif self._intent.get("randomizer"):
                     self.status.setText("Read-only saved result. Animation, sounds and speech stay in the overlay widget.")
                 elif self._loaded and self._context and self._matchup_config(self._context[1]).get("enabled") is not True:
-                    self.status.setText("The randomizer is off for this matchup. Your saved pool is kept.")
+                    self.status.setText("The build draw is off for this matchup. Your saved pool is kept.")
                 elif self._loaded:
                     self.status.setText("Use Randomize in build check-in to select a build. The overlay widget is optional for animation and audio.")
 

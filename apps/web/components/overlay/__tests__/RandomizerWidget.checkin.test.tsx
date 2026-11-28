@@ -7,7 +7,7 @@ import type {
   RandomizerIntentGate,
   RandomizerSpinEvent,
 } from "../types";
-import type { RandomizerConfig, SpinOutcome } from "@/lib/randomizer/types";
+import type { GameDraw, RandomizerConfig } from "@/lib/randomizer/types";
 import { defaultRandomizerConfig } from "@/lib/randomizer/config";
 import { RANDOMIZER_INTENT_WAIT_MS } from "../buildIntentGate";
 
@@ -18,10 +18,11 @@ vi.mock("@/components/randomizer/reveals/revealSound", () => ({
   setRevealSoundVolume: vi.fn(),
 }));
 vi.mock("@/components/randomizer/RandomizerSequence", () => ({
-  RandomizerSequence: ({ outcome }: { outcome: SpinOutcome }) => {
-    useEffect(() => { reveals.push(outcome.winner.id); }, [outcome]);
-    return <span data-testid="reveal">{outcome.winner.name}</span>;
+  RandomizerSequence: ({ draw }: { draw: GameDraw }) => {
+    useEffect(() => { reveals.push(draw.build?.winner.id ?? "units"); }, [draw]);
+    return <span data-testid="reveal">{draw.build?.winner.name ?? "units"}</span>;
   },
+  loadUnitStage: () => Promise.resolve(),
 }));
 
 import { RandomizerWidget } from "../widgets/RandomizerWidget";

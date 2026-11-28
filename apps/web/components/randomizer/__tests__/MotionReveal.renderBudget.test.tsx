@@ -31,7 +31,7 @@ describe("motion reveal DOM budget", () => {
       }));
       const winner = pool[71];
       const spin: SpinOutcome = {
-        style, pool, winner, matchup: "PvZ", openingUnits: null,
+        style, pool, winner, matchup: "PvZ",
         probabilities: pool.map((build) => build.weight / 3240),
       };
       const shown = buildMotionVisualField(pool, winner, 19);

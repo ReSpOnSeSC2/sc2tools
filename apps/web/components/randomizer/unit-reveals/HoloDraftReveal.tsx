@@ -1,9 +1,12 @@
 "use client";
 
-import { gatewayUnitMeta } from "@/lib/randomizer/gatewayUnits";
+import { openingUnitMeta } from "@/lib/randomizer/openingUnits";
 import { useRevealSound } from "@/components/randomizer/reveals/revealSound";
 import {
+  deckSizes,
   resultAnnouncement,
+  slotLabel,
+  unitModeLabel,
   UnitPortrait,
   UnitResultCard,
   UnitRevealFrame,
@@ -14,7 +17,7 @@ import {
 export const HOLO_DRAFT_DURATION_MS = 4_900;
 const LOCK_TIMES = [2_800, 3_550] as const;
 
-/** A compact command-console draft: scan the deck, then stamp Gate sockets. */
+/** A compact command-console draft: scan the deck, then stamp each slot. */
 export function HoloDraftReveal(props: UnitRevealProps) {
   const animation = useAnimatedUnitPicks({
     outcome: props.outcome,
@@ -33,12 +36,13 @@ export function HoloDraftReveal(props: UnitRevealProps) {
   const activeGate = animation.locked.findIndex((value) => !value);
   const scanGate = activeGate < 0 ? props.outcome.gateCount - 1 : activeGate;
   const scanningId = animation.displayed[scanGate];
+  const deck = deckSizes(props.outcome, 48);
 
   return (
     <UnitRevealFrame
       matchupLabel={props.matchupLabel}
       buildName={props.buildName}
-      modeLabel="Holo draft"
+      modeLabel={unitModeLabel("psi-draft", props.outcome.race)}
       resultText={
         animation.allLocked ? resultAnnouncement(props.outcome) : null
       }
@@ -93,7 +97,7 @@ export function HoloDraftReveal(props: UnitRevealProps) {
               textTransform: "uppercase",
             }}
           >
-            Drafting Gate {Math.max(0, scanGate) + 1}
+            Drafting {slotLabel(props.outcome, Math.max(0, scanGate))}
           </span>
         </div>
         <div
@@ -101,7 +105,7 @@ export function HoloDraftReveal(props: UnitRevealProps) {
             position: "relative",
             display: "grid",
             gridTemplateColumns: `repeat(${props.outcome.pool.length}, minmax(0, 1fr))`,
-            gap: 8,
+            gap: deck.gap,
             padding: 7,
             borderRadius: 15,
             border: "1px solid rgba(115,145,225,.25)",
@@ -128,7 +132,7 @@ export function HoloDraftReveal(props: UnitRevealProps) {
             />
           ) : null}
           {props.outcome.pool.map((entry, index) => {
-            const unit = gatewayUnitMeta(entry.id);
+            const unit = openingUnitMeta(entry.id);
             const active = entry.id === scanningId && !animation.allLocked;
             const selected = props.outcome.picks.includes(entry.id);
             const pct = (props.outcome.probabilities[index] ?? 0) * 100;
@@ -160,7 +164,7 @@ export function HoloDraftReveal(props: UnitRevealProps) {
                     "transform 90ms linear, border-color 90ms linear, background 90ms linear",
                 }}
               >
-                <UnitPortrait id={entry.id} size={48} dim={!active && !selected} />
+                <UnitPortrait id={entry.id} size={deck.portrait} dim={!active && !selected} />
                 <span
                   style={{
                     marginTop: 3,
@@ -240,7 +244,7 @@ export function HoloDraftReveal(props: UnitRevealProps) {
                       textTransform: "uppercase",
                     }}
                   >
-                    Gate {index + 1} {locked ? "· Locked" : "· Scanning"}
+                    {slotLabel(props.outcome, index)} {locked ? "· Locked" : "· Scanning"}
                   </div>
                   <div
                     style={{
@@ -250,7 +254,7 @@ export function HoloDraftReveal(props: UnitRevealProps) {
                       fontWeight: 850,
                     }}
                   >
-                    {locked ? gatewayUnitMeta(id).name : "Awaiting pick"}
+                    {locked ? openingUnitMeta(id).name : "Awaiting pick"}
                   </div>
                 </div>
                 {locked ? (

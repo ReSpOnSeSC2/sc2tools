@@ -142,4 +142,13 @@ describe("randomizer pool", () => {
     expect(first.config.matchups.PvZ.builds[0].openingUnits).toBeTruthy();
     expect(addBuildsToPool(first.config, builds)).toEqual(expect.objectContaining({ added: 0, matchups: [] }));
   });
+
+  it("gives a Terran or Zerg build the units its name names", () => {
+    const { config } = addBuildsToPool(defaultRandomizerConfig(), [
+      { slug: "lb", name: "Ling Bane Bust", race: "Zerg", vsRace: "Protoss" },
+    ]);
+    expect(config.matchups.ZvP.builds[0].openingUnits).toMatchObject({
+      gateCount: 2, units: [{ id: "zergling" }, { id: "baneling" }],
+    });
+  });
 });

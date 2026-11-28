@@ -1,10 +1,14 @@
 "use client";
 
 import { getIconPath } from "@/lib/sc2-icons";
-import { gatewayUnitMeta } from "@/lib/randomizer/gatewayUnits";
+import { openingUnitMeta } from "@/lib/randomizer/openingUnits";
+import type { PlayedRace } from "@/lib/randomizer/types";
 import { useRevealSound } from "@/components/randomizer/reveals/revealSound";
 import {
+  deckSizes,
   resultAnnouncement,
+  slotLabel,
+  unitModeLabel,
   UnitPortrait,
   UnitResultCard,
   UnitRevealFrame,
@@ -14,9 +18,14 @@ import {
 
 export const POWER_SURGE_DURATION_MS = 4_700;
 const LOCK_TIMES = [2_550, 3_250] as const;
-const PYLON_ICON = getIconPath("Pylon", "building") ?? "/icons/sc2/buildings/pylon.png";
+/** The structure that powers the circuit: each race's own supply or production hub. */
+const POWER_ICONS: Readonly<Record<PlayedRace, string>> = {
+  Protoss: getIconPath("Pylon", "building") ?? "/icons/sc2/buildings/pylon.png",
+  Terran: getIconPath("Supply Depot", "building") ?? "/icons/sc2/buildings/supplydepot.png",
+  Zerg: getIconPath("Hatchery", "building") ?? "/icons/sc2/buildings/hatchery.png",
+};
 
-/** Weighted circuit nodes route a psionic surge into one or two Gate sockets. */
+/** Weighted circuit nodes route a surge into one or two pick sockets. */
 export function PowerSurgeReveal(props: UnitRevealProps) {
   const animation = useAnimatedUnitPicks({
     outcome: props.outcome,
@@ -31,12 +40,13 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
     durationMs: POWER_SURGE_DURATION_MS,
     reducedMotion: animation.reducedMotion,
   });
+  const deck = deckSizes(props.outcome, 43);
 
   return (
     <UnitRevealFrame
       matchupLabel={props.matchupLabel}
       buildName={props.buildName}
-      modeLabel="Pylon circuit"
+      modeLabel={unitModeLabel("power-surge", props.outcome.race)}
       resultText={
         animation.allLocked ? resultAnnouncement(props.outcome) : null
       }
@@ -67,11 +77,11 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${props.outcome.pool.length}, minmax(0, 1fr))`,
-            gap: 8,
+            gap: deck.gap,
           }}
         >
           {props.outcome.pool.map((entry, index) => {
-            const unit = gatewayUnitMeta(entry.id);
+            const unit = openingUnitMeta(entry.id);
             const probability = props.outcome.probabilities[index] ?? 0;
             const active = animation.displayed.some(
               (id, slot) => id === entry.id && !animation.locked[slot],
@@ -108,7 +118,7 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
                   transition: "border-color 100ms linear, background 100ms linear",
                 }}
               >
-                <UnitPortrait id={entry.id} size={43} dim={!active && !locked} />
+                <UnitPortrait id={entry.id} size={deck.portrait} dim={!active && !locked} />
                 <span
                   style={{
                     marginTop: 2,
@@ -231,7 +241,7 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
           {/* A direct local PNG avoids an image-optimizer request inside OBS. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={PYLON_ICON}
+            src={POWER_ICONS[props.outcome.race]}
             alt=""
             aria-hidden="true"
             width={64}
@@ -248,11 +258,12 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
         <div
           style={{
             position: "absolute",
-            left: "50%",
+            left: 0,
+            right: 0,
             bottom: 0,
             display: "flex",
+            justifyContent: "center",
             gap: 10,
-            transform: "translateX(-50%)",
           }}
         >
           {animation.displayed.map((id, index) => {
@@ -310,9 +321,10 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
                       fontWeight: 900,
                       letterSpacing: ".13em",
                       textTransform: "uppercase",
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    Gate {index + 1} circuit
+                    {slotLabel(props.outcome, index)} circuit
                   </div>
                   <div
                     style={{
@@ -320,9 +332,12 @@ export function PowerSurgeReveal(props: UnitRevealProps) {
                       color: locked ? "#f2f6ff" : "#a0acca",
                       fontSize: 14,
                       fontWeight: 850,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    {locked ? gatewayUnitMeta(id).name : "Routing energy…"}
+                    {locked ? openingUnitMeta(id).name : "Charging…"}
                   </div>
                 </div>
               </div>

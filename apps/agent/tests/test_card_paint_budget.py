@@ -49,7 +49,9 @@ DRAW = RandomizerDraw(
     game_key=KEY, build_key=PICK,
     steps=(DrawStep("Pylon", "0:18", "14"), DrawStep("Gateway", "0:40", "16")),
     units=("Adept", "Stalker"),
+    race="Protoss",
 )
+UNITS_ALONE = RandomizerDraw(game_key=KEY, build_key=None, units=("Reaper", "Hellion"), race="Terran")
 
 
 class CardEvents(QtCore.QObject):
@@ -121,6 +123,12 @@ def desktop_roll_only(host: BuildCheckinHost) -> QtWidgets.QWidget:
     return host.window(LOADING)
 
 
+def units_alone(host: BuildCheckinHost) -> QtWidgets.QWidget:
+    host.dispatch("show_loading", (loading_model(matchup="TvZ", randomizer=None),))
+    host.dispatch("show_randomizer_draw", (UNITS_ALONE,))
+    return host.window(LOADING)
+
+
 def end_card(**changes: Any) -> Callable[[BuildCheckinHost], QtWidgets.QWidget]:
     def show(host: BuildCheckinHost) -> QtWidgets.QWidget:
         host.dispatch("show_postgame", (replace(postgame_model(), **changes),))
@@ -132,6 +140,7 @@ SCENARIOS: Dict[str, Callable[[BuildCheckinHost], QtWidgets.QWidget]] = {
     "loading card with the Randomizer draw": loading_with_draw,
     "locked-in bar with the Randomizer draw": locked_in_with_draw,
     "desktop roll without check-in": desktop_roll_only,
+    "units drawn without a build": units_alone,
     "end card": end_card(),
     "end card checking the replay": end_card(status=CHECKING_REPLAY, featured=(), more=(), options_loading=True,
                                              selection=None, reason=None, reason_label=None),
