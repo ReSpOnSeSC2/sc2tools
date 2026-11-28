@@ -222,6 +222,26 @@ test("phone landing headline holds its position without anonymous activity reque
   expect(activityRequests).toEqual([]);
 });
 
+test("landing What's new sits above Humdingers with sized pictures and no layout shift", async ({ page }) => {
+  await page.goto("/");
+  const section = page.locator("#whats-new");
+  await expect(section.getByRole("heading", { level: 2, name: /^What.s new$/ })).toBeVisible();
+  expect(await page.evaluate(() => document.querySelector("#whats-new")?.nextElementSibling?.id)).toBe("humdingers");
+  const cards = section.locator("article");
+  await expect(cards).toHaveCount(6);
+  for (const image of await section.locator("img").all()) {
+    await image.scrollIntoViewIfNeeded();
+    await expect.poll(() => image.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
+    expect(await image.getAttribute("alt")).toBeTruthy();
+    expect(await image.getAttribute("loading")).toBe("lazy");
+  }
+  for (const card of await cards.all()) {
+    const box = await card.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThan(0);
+    await expect(card.getByRole("link").first()).toHaveCSS("min-height", "44px");
+  }
+});
+
 test("phone privacy contents links reach the Cookies section", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 844 });
   await page.goto("/legal/privacy");
