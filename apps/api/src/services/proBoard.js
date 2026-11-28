@@ -28,7 +28,7 @@ const MAX_PROS = 12;
 /** Pro histories fetched in one refresh; the rest of the pros are listed without games. */
 const MAX_HISTORY_CALLS = 6;
 const MAX_REMEMBERED_PROS = 60;
-/** The timer's own refresh may wait this long for its turn behind a visitor's search. */
+/** The timer's own refresh may wait this long for a free slot behind visitors' searches. */
 const MAX_WAIT_MS = 4000;
 const TEAMS_QUERY = { queue: "LOTV_1V1", teamType: "ARRANGED", league: "GRANDMASTER", recent: "true" };
 
@@ -38,14 +38,29 @@ const TEAMS_QUERY = { queue: "LOTV_1V1", teamType: "ARRANGED", league: "GRANDMAS
 /** @typedef {import("./proBoardShape").PulseHistoryMatch} PulseHistoryMatch */
 /** @typedef {import("./proBoardShape").Race} Race */
 /** @typedef {{ platform: "twitch" | "kick", channel: string, url: string, viewers: number }} ProLive */
-/** @typedef {{ race: Race, league: string, rating: number, playedAt: string }} PlayerRow */
-/** @typedef {{ nickname: string, team: string | null, live: ProLive | null, games: ProGame[] } & PlayerRow} ProRow */
+/** @typedef {{ race: Race, league: string, rating: number }} PlayerRow */
+/** @typedef {{ nickname: string, team: string | null, playedAt: string, live: ProLive | null, games: ProGame[] } & PlayerRow} ProRow */
 /**
  * What the route serves. `pros` is empty while names are off, and the pros'
  * teams are then among `players` like everyone else.
  *
  * @typedef {{ available: true, showNames: boolean, pros: ProRow[], players: PlayerRow[], fetchedAt: string }} ProBoard
  */
+
+/**
+ * Rows for players who are not named. They carry no time of any kind, and
+ * come strongest first rather than newest first, because SC2Pulse's public
+ * `recent` list shows each account's exact last-played time and order, and
+ * either would let a row be matched to its account.
+ *
+ * @param {Seen[]} entries
+ * @returns {PlayerRow[]}
+ */
+function anonymousRows(entries) {
+  return entries
+    .map(entry => ({ race: entry.race, league: entry.league, rating: roundRating(entry.rating) }))
+    .sort((a, b) => b.rating - a.rating || a.race.localeCompare(b.race));
+}
 
 class ProBoardError extends Error {
   constructor() {
@@ -116,12 +131,7 @@ class ProBoardService {
     const proEntries = this.showNames ? seen.filter(entry => entry.pro).slice(0, MAX_PROS) : [];
     const pros = await this.proRows(proEntries);
     const listed = new Set(proEntries);
-    const players = seen.filter(entry => !listed.has(entry)).slice(0, MAX_PLAYERS).map(entry => ({
-      race: entry.race,
-      league: entry.league,
-      rating: roundRating(entry.rating),
-      playedAt: new Date(entry.playedAtMs).toISOString(),
-    }));
+    const players = anonymousRows(seen.filter(entry => !listed.has(entry)).slice(0, MAX_PLAYERS));
     this.stored = {
       board: { available: true, showNames: this.showNames, pros, players, fetchedAt: new Date(this.now()).toISOString() },
       at: this.now(),
@@ -130,7 +140,7 @@ class ProBoardService {
 
   /** @returns {Promise<PulseTeam[]>} */
   async fetchTeams() {
-    const json = await this.pulse.get("/teams", new URLSearchParams(TEAMS_QUERY), { maxWaitMs: MAX_WAIT_MS, userAgent: USER_AGENT });
+    const json = await this.pulse.get("/teams", new URLSearchParams(TEAMS_QUERY), { maxWaitMs: MAX_WAIT_MS, userAgent: USER_AGENT, background: true });
     return Array.isArray(json) ? json : [];
   }
 
@@ -159,7 +169,7 @@ class ProBoardService {
         league: entry.league,
         rating: entry.rating,
         playedAt: new Date(entry.playedAtMs).toISOString(),
-        live: liveOf(pro.logins, streams),
+        live: liveOf(pro.channels, streams),
         games,
       });
     }
@@ -183,7 +193,7 @@ class ProBoardService {
   async loadGames(proId, playedAtMs) {
     try {
       const query = new URLSearchParams({ proPlayerId: String(proId) });
-      const json = /** @type {{ result?: PulseHistoryMatch[] }} */ (await this.pulse.get("/character-matches", query, { maxWaitMs: MAX_WAIT_MS, userAgent: USER_AGENT }));
+      const json = /** @type {{ result?: PulseHistoryMatch[] }} */ (await this.pulse.get("/character-matches", query, { maxWaitMs: MAX_WAIT_MS, userAgent: USER_AGENT, background: true }));
       const games = gamesOf(Array.isArray(json?.result) ? json.result : [], proId);
       this.remember(proId, { playedAtMs, games });
       return games;

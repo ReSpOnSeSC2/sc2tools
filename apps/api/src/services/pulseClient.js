@@ -45,18 +45,35 @@ class PulseClient {
    *
    * @param {string} path the endpoint under `/sc2/api`, such as `/matches`
    * @param {URLSearchParams} query
-   * @param {{ maxWaitMs: number, userAgent?: string }} options how long this caller may wait for its turn, and the name it gives
+   * @param {{ maxWaitMs: number, userAgent?: string, background?: boolean }} options how long this caller may wait for its turn, the name it gives, and
+   *   whether it is a timer's call, which never holds a slot ahead of a visitor
    * @returns {Promise<unknown>} the parsed JSON body
    * @throws {PulseBusyError} the turn is further away than `maxWaitMs`
    */
-  async get(path, query, { maxWaitMs, userAgent = DEFAULT_USER_AGENT }) {
-    await this.waitForTurn(maxWaitMs);
+  async get(path, query, { maxWaitMs, userAgent = DEFAULT_USER_AGENT, background = false }) {
+    await (background ? this.waitForFreeSlot(maxWaitMs) : this.waitForTurn(maxWaitMs));
     const response = await this.fetchImpl(`${PULSE_API_ROOT}${path}?${query}`, {
       headers: { accept: "application/json", "user-agent": userAgent },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!response.ok) throw new Error(`pulse_http_${response.status}`);
     return response.json();
+  }
+
+  /**
+   * A timer's turn: it waits until a slot is free and only then takes it, so
+   * while it waits the next slot stays open to a visitor's search (a visitor
+   * reserves ahead and so goes first). Refuses when the wait would pass `maxWaitMs`.
+   *
+   * @param {number} maxWaitMs
+   */
+  async waitForFreeSlot(maxWaitMs) {
+    const deadline = this.now() + maxWaitMs;
+    for (let now = this.now(); this.nextCallAt > now; now = this.now()) {
+      if (this.nextCallAt > deadline) throw new PulseBusyError();
+      await this.sleep(this.nextCallAt - now);
+    }
+    this.nextCallAt = this.now() + PACE_MS;
   }
 
   /** Reserves the next call slot; refuses when the wait would pass `maxWaitMs`. @param {number} maxWaitMs */

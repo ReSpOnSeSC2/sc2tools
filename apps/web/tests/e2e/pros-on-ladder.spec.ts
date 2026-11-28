@@ -2,7 +2,6 @@ import { expect, test, type Page } from "@playwright/test";
 import { checkAccessibility } from "./accessibility-check";
 
 const BOARD = "**/v1/pros-on-ladder";
-const STATUS = "**/v1/pros-on-ladder/status";
 const headers = { "access-control-allow-origin": "*" };
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
@@ -31,8 +30,14 @@ const board = (showNames: boolean) => ({
 
 const noSidewaysScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
-async function serve(page: Page, answer: unknown, status: { available: boolean; showNames: boolean }) {
-  await page.route(STATUS, route => route.fulfill({ json: status, headers }));
+/**
+ * Answers the board in the browser. The page also asks `/status` for the two
+ * gates, but it does that on the Next server while the page is built, where
+ * `page.route` cannot reach, so every test here starts from the page built
+ * with the gates unread (`closed` false, names off) and the board decides.
+ * The server-side gate states are covered in app/pros-on-ladder/__tests__.
+ */
+async function serve(page: Page, answer: unknown) {
   await page.route(BOARD, route => route.fulfill({ json: answer, headers }));
 }
 
@@ -41,7 +46,7 @@ test("shows named pros with their games and a live link, and no provider call fr
   page.on("request", request => {
     if (/sc2pulse/.test(new URL(request.url()).host)) providerCalls.push(request.url());
   });
-  await serve(page, board(true), { available: true, showNames: true });
+  await serve(page, board(true));
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
   await page.goto("/pros-on-ladder");
   await expect(page.getByRole("heading", { level: 1, name: "Pros on Ladder" })).toBeVisible();
@@ -62,10 +67,10 @@ test("shows named pros with their games and a live link, and no provider call fr
 });
 
 test("with names off every row is anonymous", async ({ page }, info) => {
-  await serve(page, board(false), { available: true, showNames: false });
+  await serve(page, board(false));
   await page.goto("/pros-on-ladder");
   await expect(page.getByRole("heading", { level: 2, name: "Playing now" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 3 })).toHaveCount(0);
+  await expect(page.locator("main").getByRole("heading", { level: 3 })).toHaveCount(0);
   await expect(page.getByText(/ProName/)).toHaveCount(0);
   await expect(page.getByText("Grandmaster", { exact: true })).toHaveCount(18);
   expect(await noSidewaysScroll(page)).toBe(true);
@@ -76,11 +81,11 @@ test("with names off every row is anonymous", async ({ page }, info) => {
 });
 
 test("says the board is not available yet while its gate is off", async ({ page }, info) => {
-  await serve(page, { available: false }, { available: false, showNames: false });
+  await serve(page, { available: false });
   await page.goto("/pros-on-ladder");
   await expect(page.getByText("Pros on Ladder is not available yet.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Live streams" })).toBeVisible();
-  await expect(page.getByRole("listitem")).toHaveCount(0);
+  await expect(page.locator("main").getByRole("listitem")).toHaveCount(0);
   expect(await noSidewaysScroll(page)).toBe(true);
   for (const theme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
@@ -90,7 +95,6 @@ test("says the board is not available yet while its gate is off", async ({ page 
 
 test("shows an error that can be retried, then the board", async ({ page }, info) => {
   let failing = true;
-  await page.route(STATUS, route => route.fulfill({ json: { available: true, showNames: false }, headers }));
   await page.route(BOARD, route => (failing
     ? route.fulfill({ status: 503, json: { error: { code: "pros_on_ladder_unavailable" } }, headers })
     : route.fulfill({ json: board(false), headers })));
@@ -105,7 +109,6 @@ test("shows an error that can be retried, then the board", async ({ page }, info
 
 test("the retry button works from the keyboard", async ({ page }) => {
   let failing = true;
-  await page.route(STATUS, route => route.fulfill({ json: { available: true, showNames: false }, headers }));
   await page.route(BOARD, route => (failing
     ? route.fulfill({ status: 503, json: {}, headers })
     : route.fulfill({ json: board(false), headers })));

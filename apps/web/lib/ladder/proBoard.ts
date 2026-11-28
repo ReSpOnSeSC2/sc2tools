@@ -1,5 +1,5 @@
 import { API_BASE } from "@/lib/apiBase";
-import { isCount, isDate, isRace, isRow, isText, type Race } from "@/lib/ladder/vods";
+import { channelOf, isCount, isDate, isRace, isRow, isText, TWITCH_HOSTS, type Race } from "@/lib/ladder/vods";
 
 /** One game of a pro's. The other player is never part of it (ADR 0075). */
 export type ProGame = {
@@ -13,11 +13,11 @@ export type ProGame = {
 
 export type ProLive = { platform: "twitch" | "kick"; channel: string; url: string; viewers: number };
 
-/** A Grandmaster who played lately: race, league and rating only, no name. */
-export type PlayerRow = { race: Race; league: string; rating: number; playedAt: string };
+/** A Grandmaster who played lately: race, league and rating only, no name and no time. */
+export type PlayerRow = { race: Race; league: string; rating: number };
 
 /** A known pro; the server sends these only while its names gate is open (ADR 0065). */
-export type ProRow = PlayerRow & { nickname: string; team: string | null; live: ProLive | null; games: ProGame[] };
+export type ProRow = PlayerRow & { nickname: string; team: string | null; playedAt: string; live: ProLive | null; games: ProGame[] };
 
 export type ProBoard = { showNames: boolean; pros: ProRow[]; players: PlayerRow[]; fetchedAt: string };
 /** `available: false` is the server's gate: the board is not open yet. */
@@ -25,22 +25,18 @@ export type ProBoardAnswer = { available: false } | ({ available: true } & ProBo
 
 /** The server answers from memory, so this is generous only for a cold connection. */
 const REQUEST_TIMEOUT_MS = 10_000;
-const CHANNEL_HOSTS: Record<ProLive["platform"], string[]> = {
-  twitch: ["www.twitch.tv", "twitch.tv"],
-  kick: ["kick.com", "www.kick.com"],
-};
-const CHANNEL_PATTERN = /^[A-Za-z0-9_]{1,25}$/;
+const KICK_HOSTS: ReadonlySet<string> = new Set(["kick.com", "www.kick.com"]);
+const CHANNEL_HOSTS: Record<ProLive["platform"], ReadonlySet<string>> = { twitch: TWITCH_HOSTS, kick: KICK_HOSTS };
 
 /** The live link opens only on the platform it names, whatever the server sent. */
 function liveOf(value: unknown): ProLive | null {
   if (!isRow(value) || (value.platform !== "twitch" && value.platform !== "kick")) return null;
-  const { platform, channel, viewers } = value;
+  const { platform, viewers } = value;
+  const channel = channelOf(value.channel);
   try {
     const url = new URL(String(value.url));
-    const trusted = url.protocol === "https:" && CHANNEL_HOSTS[platform].includes(url.host);
-    return trusted && typeof channel === "string" && CHANNEL_PATTERN.test(channel) && isCount(viewers)
-      ? { platform, channel, url: url.href, viewers }
-      : null;
+    const trusted = url.protocol === "https:" && CHANNEL_HOSTS[platform].has(url.host);
+    return trusted && channel && isCount(viewers) ? { platform, channel, url: url.href, viewers } : null;
   } catch {
     return null;
   }
@@ -55,15 +51,15 @@ function gameOf(value: unknown): ProGame | null {
 
 function playerOf(value: unknown): PlayerRow | null {
   if (!isRow(value)) return null;
-  const { race, league, rating, playedAt } = value;
-  return isRace(race) && isText(league) && isCount(rating) && isDate(playedAt) ? { race, league, rating, playedAt } : null;
+  const { race, league, rating } = value;
+  return isRace(race) && isText(league) && isCount(rating) ? { race, league, rating } : null;
 }
 
 function proOf(value: unknown): ProRow | null {
   const player = playerOf(value);
-  if (!player || !isRow(value) || !isText(value.nickname)) return null;
+  if (!player || !isRow(value) || !isText(value.nickname) || !isDate(value.playedAt)) return null;
   const games = Array.isArray(value.games) ? value.games.flatMap(game => gameOf(game) ?? []) : [];
-  return { ...player, nickname: value.nickname, team: isText(value.team) ? value.team : null, live: liveOf(value.live), games };
+  return { ...player, nickname: value.nickname, team: isText(value.team) ? value.team : null, playedAt: value.playedAt, live: liveOf(value.live), games };
 }
 
 /** Validates the API answer; a shape it does not recognise is not shown. */

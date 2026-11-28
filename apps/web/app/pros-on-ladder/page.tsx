@@ -13,17 +13,21 @@ export const metadata = pageMetadata({
 
 const LINK = "inline-flex min-h-11 items-center rounded-sm text-accent underline focus-visible:ring-2 focus-visible:ring-accent";
 
+const INTRO = "Who is playing on the Grandmaster ladder right now.";
+const INTRO_NAMED = `${INTRO} Known pros show their last games and a link when they are live.`;
+
 export default async function ProsOnLadderPage() {
   const gate = await getJson<{ available?: boolean; showNames?: boolean }>("/v1/pros-on-ladder/status", { revalidateSec: 300 });
+  const names = gate?.showNames === true;
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-8">
       <header className="space-y-1">
         <Link href="/tools" className={LINK}>All tools</Link>
         <h1 className="font-display text-3xl font-bold leading-tight text-text sm:text-display-lg">Pros on Ladder</h1>
-        <p className="max-w-prose text-body text-text-muted">Who is playing on the Grandmaster ladder right now. Known pros show their last games and a link when they are live.</p>
+        <p className="max-w-prose text-body text-text-muted">{names ? INTRO_NAMED : INTRO}</p>
       </header>
-      <ProBoard closed={gate?.available === false} names={gate?.showNames === true} />
-      <p className="max-w-prose text-caption text-text-muted">Games come from SC2Pulse through SC2 Tools and are refreshed every few minutes. Players who are not pros are never named, and no game names the other player.</p>
+      <ProBoard closed={gate?.available === false} names={names} />
+      <p className="max-w-prose text-caption text-text-muted">Games come from SC2Pulse through SC2 Tools and are refreshed every few minutes. Players are never named unless they are known pros, and no game names the other player.</p>
     </div>
   );
 }

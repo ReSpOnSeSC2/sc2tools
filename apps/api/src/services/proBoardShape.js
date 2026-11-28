@@ -50,16 +50,17 @@ const { plainMapName } = require("./ladderVodMaps");
  *   league: string,
  *   rating: number,
  *   playedAtMs: number,
- *   pro: { id: number, nickname: string, team: string | null, logins: string[] } | null,
+ *   pro: { id: number, nickname: string, team: string | null, channels: ChannelRef[] } | null,
  * }} Seen
  */
+/** @typedef {{ platform: "twitch" | "kick", login: string }} ChannelRef */
 /** @typedef {{ map: string, opponentRace: Race | null, won: boolean, durationSec: number, playedAt: string }} ProGame */
 
 /** SC2Pulse league type to name; the board asks for Grandmaster only. */
 const LEAGUES = /** @type {Record<number, string>} */ ({ 6: "grandmaster" });
 const RACES = /** @type {const} */ (["terran", "zerg", "protoss", "random"]);
 const MAX_GAMES = 3;
-const CHANNEL_LINK = /(?:twitch\.tv|kick\.com)\/([A-Za-z0-9_]{2,25})(?:[/?#]|$)/i;
+const CHANNEL_LINK = /(twitch\.tv|kick\.com)\/([A-Za-z0-9_]{2,25})(?:[/?#]|$)/i;
 
 /** @param {number} rating @returns {number} the rating to the nearest 100, as the other public pages show it */
 function roundRating(rating) {
@@ -81,15 +82,32 @@ function mainRace(raceGames) {
   return race;
 }
 
-/** @param {PulseTeam["members"]} members @returns {string[]} channel logins the pro's SC2Pulse links name, then the nickname, lower case */
-function channelLogins(members) {
-  const member = members?.[0];
-  const logins = (member?.proPlayer?.links ?? []).flatMap(link => {
-    const login = CHANNEL_LINK.exec(link?.url ?? "")?.[1];
-    return login ? [login.toLowerCase()] : [];
+/**
+ * The channels the pro's own SC2Pulse links name. The nickname is never taken
+ * for a channel name: a stranger's channel can carry it, and a wrong "Live"
+ * link is worse than none.
+ *
+ * @param {NonNullable<PulseTeam["members"]>[number]} member
+ * @returns {ChannelRef[]}
+ */
+function channelsOf(member) {
+  const seen = new Set();
+  return (member.proPlayer?.links ?? []).flatMap(link => {
+    const found = CHANNEL_LINK.exec(link?.url ?? "");
+    if (!found) return [];
+    const platform = /** @type {ChannelRef["platform"]} */ (found[1].toLowerCase().startsWith("twitch") ? "twitch" : "kick");
+    const login = found[2].toLowerCase();
+    const key = `${platform}/${login}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ platform, login }];
   });
-  if (member?.proNickname) logins.push(member.proNickname.toLowerCase());
-  return [...new Set(logins)];
+}
+
+/** @param {NonNullable<PulseTeam["members"]>[number]} member @returns {Seen["pro"]} null unless SC2Pulse knows the account as a pro */
+function proOf(member) {
+  if (!Number.isInteger(member.proId) || !member.proNickname) return null;
+  return { id: /** @type {number} */ (member.proId), nickname: String(member.proNickname), team: member.proTeam || null, channels: channelsOf(member) };
 }
 
 /**
@@ -99,21 +117,12 @@ function channelLogins(members) {
  */
 function shapeSeen(team, withPros) {
   const members = team?.members;
-  const lastPlayed = Date.parse(team?.lastPlayed ?? "");
-  const race = members?.length === 1 ? mainRace(members[0].raceGames) : null;
+  const member = members?.length === 1 ? members[0] : null;
+  const race = member ? mainRace(member.raceGames) : null;
   const league = LEAGUES[team?.league?.type ?? 0];
-  if (!race || !league || !Number.isFinite(lastPlayed) || typeof team.rating !== "number") return null;
-  const member = members?.[0];
-  const named = withPros && Number.isInteger(member?.proId) && member?.proNickname;
-  return {
-    race,
-    league,
-    rating: team.rating,
-    playedAtMs: lastPlayed,
-    pro: named
-      ? { id: /** @type {number} */ (member?.proId), nickname: String(member?.proNickname), team: member?.proTeam || null, logins: channelLogins(members) }
-      : null,
-  };
+  const playedAtMs = Date.parse(team?.lastPlayed ?? "");
+  if (!member || !race || !league || !Number.isFinite(playedAtMs) || typeof team.rating !== "number") return null;
+  return { race, league, rating: team.rating, playedAtMs, pro: withPros ? proOf(member) : null };
 }
 
 /**
@@ -144,15 +153,16 @@ function gamesOf(rows, proId) {
 }
 
 /**
- * The channel a pro is live on, from the live list (most viewers first).
+ * The channel a pro is live on, from the live list: a channel the pro's own
+ * links name, on the platform the link names.
  *
- * @param {string[]} logins
+ * @param {ChannelRef[]} channels
  * @param {LiveStream[]} streams
  * @returns {{ platform: "twitch" | "kick", channel: string, url: string, viewers: number } | null}
  */
-function liveOf(logins, streams) {
-  for (const login of logins) {
-    const stream = streams.find(candidate => candidate.channel.toLowerCase() === login);
+function liveOf(channels, streams) {
+  for (const { platform, login } of channels) {
+    const stream = streams.find(candidate => candidate.platform === platform && candidate.channel.toLowerCase() === login);
     if (stream) return { platform: stream.platform, channel: stream.channel, url: stream.url, viewers: stream.viewers };
   }
   return null;

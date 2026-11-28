@@ -7,6 +7,16 @@ const { PulseClient } = require("../services/pulseClient");
 const { ProBoardService } = require("../services/proBoard");
 
 /**
+ * The services these routes read.
+ *
+ * @typedef {{
+ *   liveStreams: import("../services/liveStreams").LiveStreamsService,
+ *   seasons?: { ladderMapPool?: Parameters<typeof ladderVodsFromDeps>[1] },
+ *   proBoard: ProBoardService,
+ * }} LiveLadderServices
+ */
+
+/**
  * The pros board, with the one paced SC2Pulse client the ladder VOD finder
  * shares (`proBoard.pulse`), so the two never call SC2Pulse faster together
  * than the pace allows. Both gates are the service's.
@@ -24,7 +34,7 @@ function proBoardFromDeps({ logger }, liveStreams) {
  *
  * @param {import("express").Express} app
  * @param {string} prefix the API route prefix
- * @param {{ deps: Parameters<typeof ladderVodsFromDeps>[0], services: Record<string, any> }} context
+ * @param {{ deps: Parameters<typeof ladderVodsFromDeps>[0], services: LiveLadderServices }} context
  */
 function mountLiveLadderRoutes(app, prefix, { deps, services }) {
   app.use(prefix, buildLiveStreamsRouter({ liveStreams: services.liveStreams }));

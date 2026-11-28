@@ -40,11 +40,18 @@ Status: Accepted, November 28, 2026. Adds `apps/api/src/services/proBoard.js`,
 4. The board and the ladder VOD finder take their SC2Pulse turns from one
    shared client (`pulseClient.js`): calls at least 1.1 seconds apart, a generic
    client name, and a caller that would wait too long is refused instead of
-   queued. The finder's pacing code moved there unchanged.
+   queued. The finder's pacing code moved there. The board's timer calls wait
+   for a free slot and take it only then, so a visitor's search is never
+   refused behind a refresh.
 5. The live link comes from the live-streams list (ADR 0108) read at refresh
-   time, matching the channel named in the pro's SC2Pulse links, then the
-   nickname, so a visitor never reaches Twitch or Kick either. A pro who is not
-   in that list has no link.
+   time, matching only a channel the pro's own SC2Pulse links name, on the
+   platform the link names (a nickname is never taken for a channel: a
+   stranger's channel can carry it), so a visitor never reaches Twitch or Kick
+   either. A pro who is not in that list has no link.
+   Rows for players who are not named carry race, league and a rating rounded
+   to 100, with no time and strongest first: SC2Pulse's public recent list
+   shows each account's exact last-played time and order, and either would
+   identify the row.
 6. The page is rebuilt every five minutes and asks `GET
    /v1/pros-on-ladder/status` (no upstream call), so a closed board shows its
    notice at once and the loading state has the shape of the board the server
@@ -56,5 +63,5 @@ Status: Accepted, November 28, 2026. Adds `apps/api/src/services/proBoard.js`,
   names is a second setting the owner takes separately.
 - Upstream cost is about twelve calls an hour plus a history for each pro who
   played, however many people visit.
-- A pro whose SC2Pulse nickname differs from their channel and has no channel
-  link there shows no live link.
+- A pro whose SC2Pulse links name no channel shows no live link, even when
+  they are streaming.

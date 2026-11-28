@@ -12,11 +12,20 @@ export type ProBoardState =
 
 /** The server refreshes every five minutes; asking more often only finds the same board. */
 const POLL_MS = 2 * 60 * 1000;
+/** The server refuses a board this old, so the page does not keep showing one either. */
+const STALE_MS = 30 * 60 * 1000;
+
+/** After a failed quiet poll: the board stays, with its ages moved on, until it is too old to call "now". */
+export function afterQuietFailure(state: ProBoardState, now: number): ProBoardState {
+  if (state.kind !== "ready") return state;
+  return now - Date.parse(state.board.fetchedAt) > STALE_MS ? { kind: "error" } : { ...state, now };
+}
 
 /**
  * Loads the board, then quietly asks again every couple of minutes while the
  * tab is visible, so the ages stay true without the page flickering. A quiet
- * failure keeps the board on screen. `closed` starts the page in the closed
+ * failure keeps the board on screen and its ages moving, until the board is
+ * too old to be called current. `closed` starts the page in the closed
  * state (the server said so when it built the page), which asks for nothing.
  */
 export function useProBoard(closed = false) {
@@ -33,7 +42,10 @@ export function useProBoard(closed = false) {
           if (request.signal.aborted) return;
           setState(answer.available ? { kind: "ready", board: answer, now: Date.now() } : { kind: "closed" });
         },
-        () => { if (!request.signal.aborted && !quiet) setState({ kind: "error" }); },
+        () => {
+          if (request.signal.aborted) return;
+          setState(previous => (quiet ? afterQuietFailure(previous, Date.now()) : { kind: "error" }));
+        },
       );
     };
     load(false);

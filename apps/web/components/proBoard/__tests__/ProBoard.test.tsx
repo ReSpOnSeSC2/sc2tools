@@ -3,10 +3,11 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { ProBoard } from "../ProBoard";
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
-const player = (extra: Record<string, unknown> = {}) => ({ race: "protoss", league: "grandmaster", rating: 5100, playedAt: minutesAgo(12), ...extra });
+const player = (extra: Record<string, unknown> = {}) => ({ race: "protoss", league: "grandmaster", rating: 5100, ...extra });
 const game = (extra: Record<string, unknown> = {}) => ({ map: "Blackrock", opponentRace: "terran", won: true, durationSec: 640, playedAt: minutesAgo(20), ...extra });
 const pro = (extra: Record<string, unknown> = {}) => ({
-  ...player({ race: "zerg", rating: 5134, playedAt: minutesAgo(4) }),
+  ...player({ race: "zerg", rating: 5134 }),
+  playedAt: minutesAgo(4),
   nickname: "Reynor",
   team: "TeamX",
   live: { platform: "twitch", channel: "reynor", url: "https://www.twitch.tv/reynor", viewers: 120 },
@@ -14,7 +15,7 @@ const pro = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 const answer = (extra: Record<string, unknown> = {}) =>
-  ({ ok: true, json: async () => ({ available: true, showNames: false, pros: [], players: [player(), player({ race: "terran", rating: 4900, playedAt: minutesAgo(30) })], fetchedAt: minutesAgo(1), ...extra }) });
+  ({ ok: true, json: async () => ({ available: true, showNames: false, pros: [], players: [player(), player({ race: "terran", rating: 4900 })], fetchedAt: minutesAgo(1), ...extra }) });
 
 const fetchMock = vi.fn();
 const settle = () => act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
@@ -35,7 +36,9 @@ describe("ProBoard", () => {
     expect(screen.getByText("Protoss")).toBeTruthy();
     expect(screen.getByText("5,100 MMR")).toBeTruthy();
     expect(screen.getAllByText("Grandmaster")).toHaveLength(2);
-    expect(screen.getByText("12m ago")).toBeTruthy();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    for (const tile of screen.getAllByRole("listitem")) expect(tile.textContent).not.toMatch(/ago|:\d\d/);
+    expect(screen.getByText(/Updated 1m ago/)).toBeTruthy();
   });
 
   it("lists pros first with their team, last games and a live link, then the other players", async () => {
@@ -59,12 +62,23 @@ describe("ProBoard", () => {
     expect(within(other).queryByText("Last games")).toBeNull();
   });
 
-  it("says plainly when no pro or no player was found", async () => {
+  it("says it once, under one heading, when nobody was found", async () => {
     fetchMock.mockResolvedValue(answer({ showNames: true, pros: [], players: [] }));
     render(<ProBoard names />);
     await settle();
-    expect(screen.getByText("No known pro has played a ladder game in the last hour.")).toBeTruthy();
+    expect(screen.getAllByRole("status")).toHaveLength(1);
     expect(screen.getByText(/No Grandmaster ladder game in the last hour was found/)).toBeTruthy();
+    expect(screen.getAllByRole("heading").map(heading => heading.textContent)).toEqual(["Playing now"]);
+    expect(screen.getByText(/Updated 1m ago/)).toBeTruthy();
+  });
+
+  it("with names on but no pro playing, shows just the players under one heading", async () => {
+    fetchMock.mockResolvedValue(answer({ showNames: true, pros: [] }));
+    render(<ProBoard names />);
+    await settle();
+    expect(screen.getAllByRole("heading").map(heading => heading.textContent)).toEqual(["Playing now"]);
+    expect(screen.queryByText(/No known pro/)).toBeNull();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
   it("starts closed when the server says so, asks for nothing, and offers the live page", () => {
@@ -114,6 +128,20 @@ describe("ProBoard", () => {
     expect(screen.getByText("5,300 MMR")).toBeTruthy();
     expect(screen.queryByText(/could not be loaded/)).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops calling an old board current when the polls keep failing", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValueOnce(answer({ showNames: true, pros: [pro()], fetchedAt: new Date().toISOString() })).mockRejectedValue(new Error("down"));
+    render(<ProBoard names />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(screen.getByText(/Updated just now|Updated 0m ago|Updated \d+s ago/)).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000); });
+    expect(screen.getByText(/Updated 10m ago/)).toBeTruthy();
+    expect(screen.getByText("Reynor")).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(22 * 60_000); });
+    expect(screen.queryByText("Reynor")).toBeNull();
+    expect(screen.getByText(/could not be loaded right now/)).toBeTruthy();
   });
 
   it("does not ask while the tab is hidden", async () => {

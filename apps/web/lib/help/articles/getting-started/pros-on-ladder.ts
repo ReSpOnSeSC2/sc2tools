@@ -13,7 +13,7 @@ const article: HelpArticle = {
   related: ["ladder-vods", "live-streams"],
   body: [
     { type: "heading", text: "What the board shows", anchor: "board" },
-    { type: "paragraph", text: "Open [Pros on Ladder](/pros-on-ladder). You don't need an account. **Playing now** lists the Grandmasters who finished a 1v1 ladder game in the last hour, newest first. Each tile shows the player's race, rating rounded to the nearest 100, league and how long ago the game ended. These players are not named." },
+    { type: "paragraph", text: "Open [Pros on Ladder](/pros-on-ladder). You don't need an account. **Playing now** lists the Grandmasters who finished a 1v1 ladder game in the last hour, strongest first. Each tile shows the player's race, rating rounded to the nearest 100 and league. These players are not named, and no time is shown." },
     { type: "heading", text: "Pros", anchor: "pros" },
     { type: "paragraph", text: "When pro names are on, **Pros playing now** comes first. Each card shows the pro's nickname and team, race and rating, and their last games with the map, the other side's race, the result and how long ago. The other player is never named. A **Live** label and a **Watch live** link appear when the pro is streaming on Twitch or Kick." },
     { type: "heading", text: "How fresh it is", anchor: "freshness" },

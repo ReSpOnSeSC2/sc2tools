@@ -4,7 +4,8 @@ import type { ProBoard } from "@/lib/ladder/proBoard";
 import { PlayerTile } from "./PlayerTile";
 import { ProCard } from "./ProCard";
 
-export const CARD_GRID = "grid gap-3 sm:grid-cols-2 xl:grid-cols-3";
+/** `items-start`: a card is as tall as its own content, so a pro with no games has no empty space beside one with three. */
+export const CARD_GRID = "grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3";
 export const TILE_GRID = "grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6";
 
 function Section({ id, title, note, children }: { id: string; title: string; note: string; children: ReactNode }) {
@@ -19,31 +20,35 @@ function Section({ id, title, note, children }: { id: string; title: string; not
   );
 }
 
+const EMPTY = "rounded-xl border border-line bg-bg-surface p-4 text-body text-text-muted";
+
 /** The board as the last refresh left it. With names off there is one section and no pro is told apart. */
 export function ProBoardSections({ board, now }: { board: ProBoard; now: number }) {
   const { showNames, pros, players } = board;
+  const updated = `Updated ${formatRelative(board.fetchedAt, now)}.`;
+  if (pros.length === 0 && players.length === 0) {
+    return (
+      <Section id="players-now" title="Playing now" note={`Grandmaster games in the last hour. ${updated}`}>
+        <p role="status" className={EMPTY}>No Grandmaster ladder game in the last hour was found. Try again soon.</p>
+      </Section>
+    );
+  }
   return (
     <div className="space-y-8">
-      {showNames && (
+      {showNames && pros.length > 0 && (
         <Section id="pros-now" title="Pros playing now" note="Known pros with a ladder game in the last hour, newest first.">
-          {pros.length > 0 ? (
-            <ul className={CARD_GRID}>{pros.map(pro => <ProCard key={`${pro.nickname}-${pro.playedAt}`} pro={pro} now={now} />)}</ul>
-          ) : (
-            <p role="status" className="rounded-xl border border-line bg-bg-surface p-4 text-body text-text-muted">No known pro has played a ladder game in the last hour.</p>
-          )}
+          <ul className={CARD_GRID}>{pros.map(pro => <ProCard key={`${pro.nickname}-${pro.playedAt}`} pro={pro} now={now} />)}</ul>
         </Section>
       )}
-      <Section
-        id="players-now"
-        title={showNames ? "Also playing now" : "Playing now"}
-        note={`Grandmaster games in the last hour, newest first. Updated ${formatRelative(board.fetchedAt, now)}.`}
-      >
-        {players.length > 0 ? (
-          <ul className={TILE_GRID}>{players.map((player, index) => <PlayerTile key={`${player.playedAt}-${index}`} player={player} now={now} />)}</ul>
-        ) : (
-          <p role="status" className="rounded-xl border border-line bg-bg-surface p-4 text-body text-text-muted">No Grandmaster ladder game in the last hour was found. Try again soon.</p>
-        )}
-      </Section>
+      {players.length > 0 && (
+        <Section
+          id="players-now"
+          title={showNames && pros.length > 0 ? "Also playing now" : "Playing now"}
+          note={`Grandmaster games in the last hour, strongest first. ${updated}`}
+        >
+          <ul className={TILE_GRID}>{players.map((player, index) => <PlayerTile key={index} player={player} />)}</ul>
+        </Section>
+      )}
     </div>
   );
 }

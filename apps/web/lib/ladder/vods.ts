@@ -74,7 +74,7 @@ type Row = Record<string, unknown>;
 export const isRow = (value: unknown): value is Row => typeof value === "object" && value !== null;
 export const isRace = (value: unknown): value is Race => typeof value === "string" && value in RACE_NAMES;
 
-const TWITCH_HOSTS = new Set(["www.twitch.tv", "twitch.tv"]);
+export const TWITCH_HOSTS: ReadonlySet<string> = new Set(["www.twitch.tv", "twitch.tv"]);
 
 /** The VOD link opens only on Twitch, whatever the server sent. */
 function vodLinkOf(value: unknown): string | null {
@@ -89,7 +89,8 @@ function vodLinkOf(value: unknown): string | null {
 export const isCount = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
 export const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 export const isDate = (value: unknown): value is string => typeof value === "string" && !Number.isNaN(Date.parse(value));
-const channelOf = (value: unknown): string | null => (typeof value === "string" && CHANNEL_PATTERN.test(value) ? value : null);
+/** A channel login as Twitch and Kick spell one, or null. */
+export const channelOf = (value: unknown): string | null => (typeof value === "string" && CHANNEL_PATTERN.test(value) ? value : null);
 
 function readVod(value: unknown): LadderVod | null {
   if (!isRow(value)) return null;

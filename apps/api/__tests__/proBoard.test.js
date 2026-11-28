@@ -112,11 +112,23 @@ describe("with names off", () => {
     expect(view.showNames).toBe(false);
     expect(view.pros).toEqual([]);
     expect(view.players).toEqual([
-      { race: "zerg", league: "grandmaster", rating: 5000, playedAt: minutesAgo(5) },
-      { race: "protoss", league: "grandmaster", rating: 5000, playedAt: minutesAgo(5) },
+      { race: "protoss", league: "grandmaster", rating: 5000 },
+      { race: "zerg", league: "grandmaster", rating: 5000 },
     ]);
     const text = JSON.stringify(view);
     for (const secret of ["Reynor", "TeamX", "Secret101", "Account101", "reynor", "twitch.tv"]) expect(text).not.toContain(secret);
+  });
+
+  test("an anonymous row carries no time, and the rows come strongest first, so neither can pick out an account on SC2Pulse's recent list", async () => {
+    const teams = [anon(1, { rating: 4400, played: 1 }), anon(2, { rating: 5200, played: 30 }), anon(3, { rating: 4800, played: 10 })];
+    for (const showNames of [false, true]) {
+      const board = make(fakePulse({ teams }), { showNames });
+      await board.refresh();
+      const { players } = board.view();
+      expect(players.map(row => row.rating)).toEqual([5200, 4800, 4400]);
+      for (const row of players) expect(Object.keys(row).sort()).toEqual(["league", "race", "rating"]);
+      expect(JSON.stringify(players)).not.toMatch(/\d{4}-\d{2}-\d{2}T|playedAt/);
+    }
   });
 });
 
@@ -143,17 +155,24 @@ describe("with names on", () => {
         { map: "Blackrock", opponentRace: "protoss", won: false, durationSec: 300, playedAt: minutesAgo(90) },
       ],
     }]);
-    expect(view.players).toEqual([{ race: "protoss", league: "grandmaster", rating: 5000, playedAt: minutesAgo(5) }]);
+    expect(view.players).toEqual([{ race: "protoss", league: "grandmaster", rating: 5000 }]);
     expect(pulse.calls.map(call => call.path)).toEqual(["/teams", "/character-matches"]);
     expect(pulse.calls[1].query).toEqual({ proPlayerId: "101" });
     expect(JSON.stringify(view)).not.toMatch(/OpponentSecret|Secret101|Account101|Anon2|Ladder2/);
   });
 
-  test("a pro who is not live has no channel, and the nickname matches a channel when no link names one", async () => {
+  test("a nickname is never taken for a channel: a stranger's channel of that name gives no Live link", async () => {
     const pulse = fakePulse({ teams: [team(proMember(101, "Reynor")), team(proMember(102, "Serral"), { played: 8 })] });
-    const board = make(pulse, { liveStreams: streams(["serral"]) });
+    const board = make(pulse, { liveStreams: streams(["serral"], ["reynor"]) });
     await board.refresh();
-    expect(board.view().pros.map(row => [row.nickname, row.live?.channel ?? null])).toEqual([["Reynor", null], ["Serral", "serral"]]);
+    expect(board.view().pros.map(row => [row.nickname, row.live])).toEqual([["Reynor", null], ["Serral", null]]);
+  });
+
+  test("a link names the platform too: a Kick link does not match a Twitch channel of the same name", async () => {
+    const link = { proPlayer: { links: [{ url: "https://kick.com/serral" }] } };
+    const board = make(fakePulse({ teams: [team(proMember(102, "Serral", link))] }), { liveStreams: streams(["serral"]) });
+    await board.refresh();
+    expect(board.view().pros[0].live).toBeNull();
   });
 
   test("a live list that fails still gives the board", async () => {
@@ -262,12 +281,12 @@ describe("shaping", () => {
 
   test("a pro is read only when names are on", () => {
     expect(shapeSeen(team(proMember(101, "Reynor")), false).pro).toBeNull();
-    expect(shapeSeen(team(proMember(101, "Reynor")), true).pro).toMatchObject({ id: 101, nickname: "Reynor", team: "TeamX", logins: ["reynor"] });
+    expect(shapeSeen(team(proMember(101, "Reynor")), true).pro).toMatchObject({ id: 101, nickname: "Reynor", team: "TeamX", channels: [] });
   });
 
-  test("a channel link and the nickname both name logins, links first", () => {
-    const member = proMember(101, "Reynor", { proPlayer: { links: [{ url: "https://kick.com/RK_Reynor/about" }, { url: "https://x.com/reynor" }, { url: "https://twitch.tv/Reynor?x=1" }] } });
-    expect(shapeSeen(team(member), true).pro.logins).toEqual(["rk_reynor", "reynor"]);
+  test("only the pro's own channel links name channels, each on its platform, once", () => {
+    const member = proMember(101, "Reynor", { proPlayer: { links: [{ url: "https://kick.com/RK_Reynor/about" }, { url: "https://x.com/reynor" }, { url: "https://twitch.tv/Reynor?x=1" }, { url: "https://www.twitch.tv/reynor" }] } });
+    expect(shapeSeen(team(member), true).pro.channels).toEqual([{ platform: "kick", login: "rk_reynor" }, { platform: "twitch", login: "reynor" }]);
   });
 
   test("gamesOf keeps 1v1 wins and losses of the pro, newest first, at most three", () => {
@@ -284,10 +303,12 @@ describe("shaping", () => {
     expect(gamesOf([matchRow({ participants: [side("WIN", "ZERG", 101)] })], 101)[0].opponentRace).toBeNull();
   });
 
-  test("liveOf tries logins in order and ignores other channels", () => {
+  test("liveOf tries channels in order, on their own platform, and ignores other channels", () => {
     const list = [{ channel: "Other", platform: "kick", url: "k", viewers: 1 }, { channel: "Mine", platform: "twitch", url: "t", viewers: 4 }];
-    expect(liveOf(["mine", "other"], list)).toEqual({ platform: "twitch", channel: "Mine", url: "t", viewers: 4 });
-    expect(liveOf(["nobody"], list)).toBeNull();
+    const mine = { platform: "twitch", login: "mine" };
+    expect(liveOf([mine, { platform: "kick", login: "other" }], list)).toEqual({ platform: "twitch", channel: "Mine", url: "t", viewers: 4 });
+    expect(liveOf([{ platform: "kick", login: "mine" }, { platform: "twitch", login: "other" }], list)).toBeNull();
+    expect(liveOf([{ platform: "twitch", login: "nobody" }], list)).toBeNull();
   });
 });
 
@@ -316,6 +337,43 @@ describe("the shared paced client", () => {
   test("an HTTP error is an error, not an empty answer", async () => {
     const pulse = new PulseClient({ fetchImpl: async () => ({ ok: false, status: 503 }) });
     await expect(pulse.get("/teams", new URLSearchParams(), { maxWaitMs: 0 })).rejects.toThrow("pulse_http_503");
+  });
+
+  test("a timer's call waits for a free slot without holding the next one, so a visitor's search is not refused behind it", async () => {
+    let clock = NOW;
+    const sleeps = [];
+    const release = [];
+    const pulse = new PulseClient({
+      fetchImpl: async () => body,
+      now: () => clock,
+      sleep: ms => new Promise(resolve => { sleeps.push(ms); release.push(resolve); }),
+    });
+    await pulse.get("/teams", new URLSearchParams(), { maxWaitMs: 0 });
+    expect(pulse.nextCallAt).toBe(NOW + PACE_MS);
+    clock += 300;
+    const timer = pulse.get("/character-matches", new URLSearchParams(), { maxWaitMs: 4000, background: true });
+    await Promise.resolve();
+    expect(sleeps).toEqual([PACE_MS - 300]);
+    expect(pulse.nextCallAt).toBe(NOW + PACE_MS);
+    const visitor = pulse.get("/matches", new URLSearchParams(), { maxWaitMs: PACE_MS });
+    await Promise.resolve();
+    expect(pulse.nextCallAt).toBe(NOW + 2 * PACE_MS);
+    clock = NOW + PACE_MS;
+    release[0]();
+    release[1]();
+    await visitor;
+    await Promise.resolve();
+    expect(sleeps).toHaveLength(3);
+    clock = NOW + 2 * PACE_MS;
+    release[2]();
+    await timer;
+    expect(pulse.nextCallAt).toBe(NOW + 3 * PACE_MS);
+  });
+
+  test("a timer's call is refused rather than queued when no slot frees within its wait", async () => {
+    const pulse = new PulseClient({ fetchImpl: async () => body, now: () => NOW, sleep: async () => {} });
+    pulse.nextCallAt = NOW + 10 * PACE_MS;
+    await expect(pulse.get("/teams", new URLSearchParams(), { maxWaitMs: 4000, background: true })).rejects.toBeInstanceOf(PulseBusyError);
   });
 
   test("the board and the ladder VOD finder take their turns on one client", async () => {

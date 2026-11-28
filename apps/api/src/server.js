@@ -375,7 +375,7 @@ async function main() {
 
   // Pros board: one bounded SC2Pulse refresh every few minutes, only while its gate is on.
   const proBoardRefresh = buildProBoardRefreshJob({
-    jobLedger: /** @type {any} */ (services).jobLedger,
+    jobLedger: /** @type {import("./util/jobLedger").JobLedger} */ (services.jobLedger),
     proBoard: /** @type {import("./services/proBoard").ProBoardService} */ (services.proBoard),
     logger,
   });
@@ -521,7 +521,7 @@ async function main() {
     await pulseBackfill.stop();
     await opponentMmrEnrichment.stop();
     await sessionRefresher.stop();
-    await ladderMapPoolRefresh.stop(); await proBoardRefresh.stop();
+    await Promise.all([ladderMapPoolRefresh.stop(), proBoardRefresh.stop()]);
     await ladderMapBackfill.stop();
     await leaguePercentilesJob.stop();
     await mmrExpectationJob.stop();

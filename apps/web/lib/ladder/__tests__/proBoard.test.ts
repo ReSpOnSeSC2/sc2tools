@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { leagueName, loadProBoard, readProBoard } from "../proBoard";
 
-const player = (extra: Record<string, unknown> = {}) => ({ race: "zerg", league: "grandmaster", rating: 5000, playedAt: "2026-11-28T08:50:00.000Z", ...extra });
+const player = (extra: Record<string, unknown> = {}) => ({ race: "zerg", league: "grandmaster", rating: 5000, ...extra });
 const game = (extra: Record<string, unknown> = {}) => ({ map: "Blackrock", opponentRace: "terran", won: true, durationSec: 640, playedAt: "2026-11-28T08:30:00.000Z", ...extra });
 const pro = (extra: Record<string, unknown> = {}) => ({
   ...player({ rating: 5034 }),
+  playedAt: "2026-11-28T08:50:00.000Z",
   nickname: "Reynor",
   team: "TeamX",
   live: { platform: "twitch", channel: "reynor", url: "https://www.twitch.tv/reynor", viewers: 120 },
@@ -28,8 +29,8 @@ describe("readProBoard", () => {
 
   it("drops rows it cannot read and keeps the rest", () => {
     const read = readProBoard(board({
-      pros: [pro({ nickname: "" }), pro({ rating: "high" }), pro({ games: [game({ won: "yes" }), game({ opponentRace: "alien" }), 3] })],
-      players: [player({ race: "elf" }), player({ playedAt: "later" }), null, player()],
+      pros: [pro({ nickname: "" }), pro({ rating: "high" }), pro({ playedAt: "later" }), pro({ games: [game({ won: "yes" }), game({ opponentRace: "alien" }), 3] })],
+      players: [player({ race: "elf" }), player({ rating: -1 }), null, player()],
     }));
     expect(read).toMatchObject({ available: true });
     expect(read && read.available && read.players).toEqual([player()]);
@@ -40,6 +41,9 @@ describe("readProBoard", () => {
   it("shows no names unless the server says so, and rejects shapes it does not know", () => {
     expect(readProBoard(board({ showNames: undefined }))).toMatchObject({ showNames: false });
     expect(readProBoard(null)).toBeNull();
+    expect(readProBoard(board({ players: [player({ playedAt: "2026-11-28T08:50:00.000Z" })] }))).toMatchObject({ players: [{ race: "zerg", league: "grandmaster", rating: 5000 }] });
+    const read = readProBoard(board({ players: [player({ playedAt: "2026-11-28T08:50:00.000Z" })] }));
+    expect(JSON.stringify(read && read.available ? read.players : null)).not.toContain("playedAt");
     expect(readProBoard({ available: "maybe" })).toBeNull();
     expect(readProBoard(board({ players: "none" }))).toBeNull();
     expect(readProBoard(board({ fetchedAt: "soon" }))).toBeNull();
