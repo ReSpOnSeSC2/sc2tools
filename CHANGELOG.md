@@ -5238,6 +5238,18 @@ release preparation, not a signed or published 0.24.9 installer.
   minutes; visitors never reach SC2Pulse. The ladder VOD finder and the board
   now share one paced SC2Pulse client. See ADR 0112.
 
+### Clips without Twitch
+
+- An optional **Save an OBS replay-buffer clip** switch on the desktop app's
+  Streams page, under a new **After each game** heading, saves OBS's replay
+  buffer when a game ends and its result is known. The clip moves into a
+  `Highlights` folder beside OBS's own, named from the game once its replay
+  syncs, and appears as a **Clip** entry in the Stream Dock's Clips panel. It
+  is for Kick, YouTube and offline recording, which have no clip call. The
+  switch starts off, the buffer must already be running in OBS (a stopped one
+  shows a hint and is never started for you), and no video leaves the PC.
+  Agent 0.26.1. See ADR 0114.
+
 ## [agent-v0.5.13] - 2026-05-09
 
 Released as `agent-v0.5.13` on GitHub. Installer:

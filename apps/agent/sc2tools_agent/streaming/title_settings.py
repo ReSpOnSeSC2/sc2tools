@@ -70,6 +70,7 @@ def load_title_settings(value, owner):
             "channel_tags": same_owner and value.get("channel_tags") is True,
             "category_guard": same_owner and value.get("category_guard") is True,
             "record_chapters": same_owner and value.get("record_chapters") is True,
+            "save_clips": same_owner and value.get("save_clips") is True,
             "last_record_game": record_game,
             "last_channel_game": channel_game,
             "last_tags": {name: [tag for tag in written[name][:MAX_TAGS] if valid_tag(tag)]
@@ -97,13 +98,16 @@ def configure_title_settings(current, payload, owner):
     record_chapters = payload.get("record_chapters", current.get("record_chapters", False))
     if type(record_chapters) is not bool:
         raise ValueError("Choose whether game-start chapters are added to the OBS recording.")
+    save_clips = payload.get("save_clips", current.get("save_clips", False))
+    if type(save_clips) is not bool:
+        raise ValueError("Choose whether a replay-buffer clip is saved after each game.")
     selected = payload.get("platforms")
     if (not isinstance(selected, dict) or set(selected) != set(PLATFORMS)
             or any(type(selected[name]) is not bool for name in PLATFORMS)):
         raise ValueError("Choose the platforms that may receive automatic stream titles.")
     channel = channel_tags or category_guard
     titles = payload["enabled"] or on_game_start
-    automatic = titles or channel or record_chapters
+    automatic = titles or channel or record_chapters or save_clips
     if automatic and not owner:
         raise ValueError("Pair this agent with your SC2Tools account first.")
     try:
@@ -124,5 +128,5 @@ def configure_title_settings(current, payload, owner):
     result = copy.deepcopy(current)
     result.update(owner=owner, enabled=payload["enabled"], template=template,
                   on_game_start=on_game_start, channel_tags=channel_tags, category_guard=category_guard,
-                  record_chapters=record_chapters, platforms=copy.deepcopy(selected))
+                  record_chapters=record_chapters, save_clips=save_clips, platforms=copy.deepcopy(selected))
     return result

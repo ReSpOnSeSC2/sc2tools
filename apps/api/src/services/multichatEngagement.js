@@ -64,7 +64,7 @@ const CLIP_SPIKE_FACTOR = 3;
 const CLIP_COOLDOWN_MS = 90_000;
 const CLIP_SAMPLE_MAX = 5;
 /** Stored clip-moment kinds. Anything else is coerced to a chat spike. */
-const CLIP_MOMENT_KINDS = Object.freeze(["chat-spike", "game-event", "manual"]);
+const CLIP_MOMENT_KINDS = Object.freeze(["chat-spike", "game-event", "manual", "clip-saved"]);
 /** One Dock "Flag moment" per token per this window. */
 const MANUAL_MOMENT_COOLDOWN_MS = 5_000;
 const MANUAL_MOMENT_NOTE_MAX = 80;

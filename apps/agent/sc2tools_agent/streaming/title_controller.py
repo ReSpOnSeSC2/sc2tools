@@ -10,6 +10,7 @@ import copy
 
 from .title_automation import GameTitleAutomation
 from .title_channel_controller import ChannelUpdateMixin
+from .title_clips import ClipSaveMixin
 from .title_live_controller import LiveTitleControllerMixin, MATCH_VALUE_KEYS
 from .title_record_chapter import RecordChapterMixin
 from .title_settings import connection_key, configure_title_settings, load_title_settings
@@ -17,15 +18,17 @@ from .title_template import render_title, title_values
 from .youtube_pair_backend import atomic_json
 
 
-class StreamTitleController(ChannelUpdateMixin, RecordChapterMixin, LiveTitleControllerMixin):
+class StreamTitleController(ChannelUpdateMixin, RecordChapterMixin, ClipSaveMixin, LiveTitleControllerMixin):
     def __init__(self, service):
         self.service = service
         self.settings = load_title_settings(service.backend.config.get("title_automation"), self.owner())
         self.stats = {}
         self.message = "Waiting for synced game statistics."
         self.channel_message = ""
+        self.clip_message = ""
         self.worker = GameTitleAutomation(self.refresh, last_attempt=self.settings["last_attempt"],
                                           refresh_match=self.refresh_match)
+        self.clips = self.build_clip_saver()
         self.configure_game_start()
 
     def connection(self):
@@ -47,7 +50,7 @@ class StreamTitleController(ChannelUpdateMixin, RecordChapterMixin, LiveTitleCon
         if self.settings["owner"] != owner:
             self.settings = load_title_settings({}, owner)
             self.stats = {}
-            self.channel_message = ""
+            self.channel_message = self.clip_message = ""
             self.message = "Account changed. Automatic titles are off; review the template and platforms."
             self.worker.reset()
         return owner
@@ -55,10 +58,10 @@ class StreamTitleController(ChannelUpdateMixin, RecordChapterMixin, LiveTitleCon
     def snapshot(self):
         self._current()
         result = {key: copy.deepcopy(self.settings[key]) for key in (
-            "enabled", "on_game_start", "channel_tags", "category_guard", "record_chapters", "platforms", "template")}
+            "enabled", "on_game_start", "channel_tags", "category_guard", "record_chapters", "save_clips", "platforms", "template")}
         stats = self._title_stats()
         result.update(values=title_values(stats), message=self.message, tag_preview=self.tag_preview(),
-                      channel_message=self.channel_message,
+                      channel_message=self.channel_message, clip_message=self.clip_message,
                       match_game_key=stats.get("currentMatch", {}).get("gameKey"))
         return result
 
@@ -73,8 +76,11 @@ class StreamTitleController(ChannelUpdateMixin, RecordChapterMixin, LiveTitleCon
     def save(self, payload):
         self._current()
         configured = configure_title_settings(self.settings, payload, self.owner())
+        turned_on = configured["save_clips"] and not self.settings["save_clips"]
         self._persist(configured)
         self.settings = configured
+        if turned_on:
+            self.clips.check()
         self.configure_game_start()
         self.worker.preview_pending = True
         self.worker.wake.set()

@@ -126,6 +126,7 @@ import streamStudio_gameMomentAlerts from "./stream-studio/game-moment-alerts";
 import streamStudio_multiPlatformChat from "./stream-studio/multi-platform-chat";
 import streamStudio_obsAutoSceneSwitching from "./stream-studio/obs-auto-scene-switching";
 import streamStudio_obsOverlaySetup from "./stream-studio/obs-overlay-setup";
+import streamStudio_obsReplayClips from "./stream-studio/obs-replay-clips";
 import streamStudio_opponentScouting from "./stream-studio/opponent-scouting";
 import streamStudio_overlayHealth from "./stream-studio/overlay-health";
 import streamStudio_overlayUrlLeaked from "./stream-studio/overlay-url-leaked";
@@ -266,6 +267,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   streamStudio_multiPlatformChat,
   streamStudio_obsAutoSceneSwitching,
   streamStudio_obsOverlaySetup,
+  streamStudio_obsReplayClips,
   streamStudio_opponentScouting,
   streamStudio_overlayHealth,
   streamStudio_overlayUrlLeaked,

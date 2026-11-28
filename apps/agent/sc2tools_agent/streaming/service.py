@@ -15,6 +15,7 @@ import uuid
 from .discovery_messages import discovery_failure_message
 from .guardian_service import GUARDIAN_JOBS, GuardianServiceMixin
 from .obs_chapters import RecordChapterMarker
+from .obs_replay_buffer import ReplayBufferSaver
 from .obs_reader import OutputReader, DEFAULT_OUTPUTS
 from .youtube_pair_backend import PairBackend, atomic_json
 
@@ -57,7 +58,8 @@ def shared_title(value):
 
 class StreamService(GuardianServiceMixin):
     def __init__(self, state_dir, settings_provider, *, no_obs=False, backend=None,
-                 output_reader=None, adapters=None, cloud_client=None, chapter_marker=None, guardian_probe=None):
+                 output_reader=None, adapters=None, cloud_client=None, chapter_marker=None, guardian_probe=None,
+                 clip_buffer=None):
         self.directory = Path(state_dir) / "streaming"
         self.directory.mkdir(parents=True, exist_ok=True)
         self.config_path = self.directory / "youtube-button-helper.config.private.json"
@@ -74,6 +76,7 @@ class StreamService(GuardianServiceMixin):
         self.reader = output_reader or OutputReader(settings_provider, disabled=no_obs)
         self.backend.output_reader = self._outputs
         self.chapter_marker = chapter_marker or RecordChapterMarker(settings_provider, disabled=no_obs)
+        self.clip_buffer = clip_buffer or ReplayBufferSaver(settings_provider, disabled=no_obs)
         self.cloud_client = cloud_client
         self.account_mode = config.get("account_mode", "sc2tools" if cloud_client else "local")
         self.adapters = adapters or {}
@@ -99,7 +102,7 @@ class StreamService(GuardianServiceMixin):
         from .title_controller import StreamTitleController
         self.titles = StreamTitleController(self)
         self.guardian = self._build_guardian(guardian_probe, settings_provider, no_obs, config)
-        self.on_game_accepted = self.titles.worker.on_game_accepted
+        self.on_game_accepted = self.titles.on_game_accepted
         self._publish()
 
     def _connection_context(self):
@@ -158,7 +161,7 @@ class StreamService(GuardianServiceMixin):
         unavailable = changed or not context["connectionKey"]
         if unavailable:
             snapshot["title_automation"] = {"enabled": False, "on_game_start": False, "channel_tags": False, "category_guard": False,
-                "record_chapters": False, "template": "", "values": {}, "tag_preview": [], "platforms": {"twitch": True, "kick": True, "youtube": False},
+                "record_chapters": False, "save_clips": False, "template": "", "values": {}, "tag_preview": [], "platforms": {"twitch": True, "kick": True, "youtube": False},
                 "message": "SC2Tools pairing changed. Automatic titles are off; review settings again."}
             snapshot.update(catalog={"channels": [], "streams": []}, platform_results={},
                 platforms={}, auth_prompt="", metadata=copy.deepcopy(DEFAULT_CONFIG["metadata"]), metadata_saved=False,
@@ -786,6 +789,8 @@ class StreamService(GuardianServiceMixin):
             try:
                 self.reader.close()
                 self.chapter_marker.close()
+                self.titles.clips.close()
+                self.clip_buffer.close()
                 self.guardian.close()
                 self.backend.close()
             finally:

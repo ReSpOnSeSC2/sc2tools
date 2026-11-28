@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DockClips, formatOffset, vodLinkAt } from "../DockClips";
-import type { ClipMoment } from "@/lib/multichat/useEngagementState";
+import { sanitizeClipMoments, type ClipMoment } from "@/lib/multichat/useEngagementState";
 
 afterEach(() => {
   cleanup();
@@ -84,6 +84,21 @@ describe("DockClips", () => {
       />,
     );
     expect(screen.queryByText(/in$/)).toBeNull();
+  });
+
+  it("lists a clip saved from OBS's replay buffer under its own Clip filter", () => {
+    const saved: ClipMoment = { atMs: START + 300 * 1000, kind: "clip-saved", sampleLines: [],
+      reason: "2026-11-28 21-05 PvZ Victory vs Barcode on Alcyone LE" };
+    render(<DockClips moments={[...MOMENTS, saved]} streamStartMs={START} vodUrl={null} busy={false} onPost={async () => null} />);
+    expect(screen.getByText(saved.reason)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clip" }));
+    expect(screen.getByText(saved.reason)).toBeTruthy();
+    expect(screen.queryByText(MOMENTS[1].reason)).toBeNull();
+  });
+
+  it("keeps the saved-clip kind when moments arrive from the server", () => {
+    const [moment] = sanitizeClipMoments([{ atMs: START, kind: "clip-saved", reason: "Name", sampleLines: [] }]);
+    expect(moment.kind).toBe("clip-saved");
   });
 
   it("Copy timestamps writes chronological offset lines", async () => {

@@ -242,7 +242,7 @@ function MomentRow({
         ) : null}
         <span
           className={`text-micro font-bold uppercase tracking-wider ${
-            m.kind === "game-event" ? "text-accent-cyan" : "text-warning"
+            m.kind === "game-event" || m.kind === "clip-saved" ? "text-accent-cyan" : "text-warning"
           }`}
         >
           {m.kind === "chat-spike" ? <Flame aria-hidden className="mr-1 inline h-3 w-3" /> : null}{MOMENT_KIND_LABELS[m.kind]}

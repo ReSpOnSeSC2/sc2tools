@@ -1648,7 +1648,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     integrations: services.platformIntegrations,
     streamingTitles: new StreamingTitlesService({ integrations: services.platformIntegrations }),
     streamingChannel: new StreamingChannelService({ integrations: services.platformIntegrations }),
-    streamGuardian: services.streamGuardian,
+    streamGuardian: services.streamGuardian, engagement: services.multichatEngagement, overlayTokens: services.overlayTokens,
     titleSession: (userId, gameId) => require("./services/streamTitleSession").streamTitleSession(
       deps.db, services.games, userId, () => services.liveGameBroker.latest(userId), gameId, services.scoutingIdentities,
       {

@@ -48,6 +48,7 @@ Post-game updates use the opponent and results from that same match after
 its replay syncs and run at most once every ten minutes. Both skip unchanged
 titles. Twitch and Kick are selected initially. Two further switches, off by default,
 set Twitch and Kick channel tags and the StarCraft II category at game start.
+A further switch, off by default, saves an OBS replay-buffer clip after each game.
 See [Stream titles](https://sc2tools.com/help/desktop-stream-titles).
 
 If you unpair this PC on the website, the desktop window says **This PC was
