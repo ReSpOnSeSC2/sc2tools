@@ -15,8 +15,8 @@ const article: HelpArticle = {
     ] },
     { type: "heading", text: "Where the clip goes", anchor: "files" },
     { type: "list", items: [
-      "The file moves into a **Highlights** folder next to the one OBS saved it in, named from the game, for example `2026-11-28 21-05 PvZ Victory vs Barcode on Alcyone LE.mkv`. Your OBS folders are not otherwise touched, and nothing is deleted or overwritten.",
-      "The name uses the result, the matchup, the opponent and the map once the game's replay syncs. If it never syncs, the clip is filed ten minutes later with just the date and time.",
+      "The file moves into a **Highlights** folder inside the folder OBS saved it in, named from the game, for example `2026-11-28 21-05 PvZ Victory vs Barcode on Alcyone LE.mkv`. Your OBS folders are not otherwise touched, and nothing is deleted or overwritten.",
+      "The name uses the result, the matchup, the opponent and the map once the game's replay syncs. If it never syncs, the clip is filed ten minutes later with a name made of the date and time and the word Game.",
       "Only a video file OBS has just reported is moved. If it cannot be moved, it stays where OBS wrote it and the Streams page says so.",
     ] },
     { type: "heading", text: "In the Stream Dock", anchor: "dock" },

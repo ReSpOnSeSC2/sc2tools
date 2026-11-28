@@ -9,7 +9,7 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   heading on the Streams page, off by default. When a game ends and its result
   is known, the agent asks OBS to save its replay buffer, which must already be
   running (a stopped buffer shows a hint, and the agent never starts it). The
-  clip moves into a `Highlights` folder beside OBS's own folder, named from the
+  clip moves into a `Highlights` folder inside the folder OBS saved it in, named from the
   game once its replay syncs, for example
   `2026-11-28 21-05 PvZ Victory vs Barcode on Alcyone LE.mkv`, and is listed in
   the Stream Dock's Clips panel. Nothing is overwritten or deleted. It uses the

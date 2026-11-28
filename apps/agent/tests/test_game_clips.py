@@ -8,8 +8,9 @@ import pytest
 from sc2tools_agent.live.types import LiveGameState, LiveLifecycleEvent, LiveLifecyclePhase, LivePlayer
 from sc2tools_agent.streaming import game_clips
 from sc2tools_agent.streaming.cloud_client import CloudStreamingClient
-from sc2tools_agent.streaming.game_clips import FALLBACK_SECONDS, NOT_RUNNING, UNREACHABLE, GameClipSaver
-from sc2tools_agent.streaming.obs_replay_buffer import OFF, SAVED, UNAVAILABLE
+from sc2tools_agent.streaming.game_clips import (CHECK_NOT_RUNNING, CHECK_RUNNING, CHECK_UNREACHABLE, FALLBACK_SECONDS, NOT_RUNNING,
+                                                  PROBLEMS, SLOW_SAVE, UNREACHABLE, GameClipSaver)
+from sc2tools_agent.streaming.obs_replay_buffer import OFF, SAVED, SLOW, UNAVAILABLE
 from sc2tools_agent.streaming.service import StreamService
 from sc2tools_agent.streaming.title_settings import configure_title_settings, load_title_settings
 from tests.test_stream_title_controller import deny_network, live_event  # noqa: F401
@@ -33,6 +34,16 @@ class FakeBuffer:
         pass
 
 
+class Reports(list):
+    def __init__(self):
+        super().__init__()
+        self.ended = []
+
+    def record(self, name, ended_at):
+        self.append(name)
+        self.ended.append(ended_at)
+
+
 class Timers:
     def __init__(self):
         self.jobs = []
@@ -45,12 +56,12 @@ class Timers:
 
 
 def make(buffer=None, enabled=True, filer=None):
-    told, filed, reported, timers = [], [], [], Timers()
+    told, filed, reported, timers = [], [], Reports(), Timers()
 
     def file(path, name):
         filed.append((path, name))
         return filer(path, name) if filer else "moved"
-    saver = GameClipSaver(buffer or FakeBuffer(), enabled=lambda: enabled, announce=told.append, report=reported.append,
+    saver = GameClipSaver(buffer or FakeBuffer(), enabled=lambda: enabled, announce=told.append, report=reported.record,
                           spawn=lambda job, *args: job(*args), schedule=timers, file=file)
     return saver, told, filed, reported, timers
 
@@ -75,7 +86,7 @@ def test_a_finished_game_saves_the_buffer_once_and_waits_for_the_synced_game_to_
     assert saver.buffer.saves == 1 and filed == [] and timers.jobs[0].delay == FALLBACK_SECONDS
     saver.on_accepted(synced())
     assert filed == [("C:/obs/clip.mkv", STAMP + " PvZ Victory vs Barcode on Alcyone LE")]
-    assert reported == [filed[0][1]] and timers.jobs[0].cancelled
+    assert reported == [filed[0][1]] and reported.ended == [ENDED] and timers.jobs[0].cancelled
     assert told[-1] == "Clip filed in Highlights: " + filed[0][1]
 
 
@@ -130,7 +141,8 @@ def test_a_second_game_files_the_first_clip_it_was_still_waiting_on():
     assert [path for path, _name in filed] == ["C:/obs/clip.mkv"]
 
 
-@pytest.mark.parametrize("outcome,message", [((OFF, None), NOT_RUNNING), ((UNAVAILABLE, None), UNREACHABLE)])
+@pytest.mark.parametrize("outcome,message", [((OFF, None), NOT_RUNNING), ((UNAVAILABLE, None), UNREACHABLE),
+                                             ((SLOW, None), SLOW_SAVE)])
 def test_a_buffer_that_is_off_or_an_obs_that_is_unreachable_is_a_hint_not_a_silent_miss(outcome, message):
     saver, told, filed, _reported, timers = make(buffer=FakeBuffer(outcome))
     saver.on_event(ended())
@@ -146,18 +158,44 @@ def test_a_clip_that_cannot_be_moved_says_where_it_stayed_and_reports_nothing():
 
 def test_a_dock_that_cannot_be_reached_does_not_undo_the_filed_clip():
     saver, told, *_ = make()
-    saver.report = lambda name: (_ for _ in ()).throw(RuntimeError("offline"))
+    saver.report = lambda name, at: (_ for _ in ()).throw(RuntimeError("offline"))
     saver.on_event(ended())
     saver.on_accepted(synced())
     assert told[-1].startswith("Clip filed")
 
 
-@pytest.mark.parametrize("running,expected", [(False, NOT_RUNNING), (None, UNREACHABLE),
-                                               (True, "OBS's replay buffer is running. A clip is saved when each game ends.")])
+@pytest.mark.parametrize("running,expected", [(False, CHECK_NOT_RUNNING), (None, CHECK_UNREACHABLE), (True, CHECK_RUNNING)])
 def test_checking_the_buffer_tells_the_streamer_without_saving(running, expected):
     saver, told, *_ = make(buffer=FakeBuffer(running=running))
     saver.check()
     assert told == [expected] and saver.buffer.saves == 0
+
+
+def test_the_hint_after_saving_the_switch_does_not_claim_a_save_failed_or_repeat_the_status_line():
+    for message in (CHECK_NOT_RUNNING, CHECK_UNREACHABLE, CHECK_RUNNING):
+        assert "no clip was saved" not in message and "each game ends" not in message
+    assert {CHECK_NOT_RUNNING, CHECK_UNREACHABLE, NOT_RUNNING, UNREACHABLE, SLOW_SAVE} <= PROBLEMS
+    assert CHECK_RUNNING not in PROBLEMS
+
+
+def test_a_replay_that_synced_before_the_save_finished_still_names_its_clip():
+    saver, told, filed, reported, timers = make()
+    saver.on_accepted(synced())
+    assert filed == [] and reported == []
+    saver.on_event(ended())
+    assert filed == [("C:/obs/clip.mkv", STAMP + " PvZ Victory vs Barcode on Alcyone LE")]
+    assert reported.ended == [ENDED] and timers.jobs == [] and told == ["Clip filed in Highlights: " + filed[0][1]]
+
+
+def test_an_early_replay_of_another_game_does_not_name_the_clip_and_is_used_once():
+    saver, _told, filed, _reported, timers = make()
+    saver.on_accepted(synced(offset=3600))
+    saver.on_event(ended("game-one"))
+    assert filed == [] and len(timers.jobs) == 1
+    saver.on_accepted(synced())
+    saver.buffer.outcome = (SAVED, "C:/obs/clip2.mkv")
+    saver.on_event(ended("game-two"))
+    assert [path for path, _ in filed] == ["C:/obs/clip.mkv"]
 
 
 def test_the_background_work_runs_on_a_named_daemon_thread_and_timer():
@@ -218,7 +256,7 @@ def test_a_paired_streamer_with_the_switch_on_gets_a_filed_clip_and_a_dock_entry
     filed = list((folder / "Highlights").iterdir())
     assert [path.name for path in filed] == [STAMP + " PvZ Victory vs Barcode on Alcyone LE.mkv"]
     assert sent[-1][:2] == ("POST", "https://api.sc2tools.com/v1/agent/streaming/clip")
-    assert sent[-1][2] == {"name": filed[0].stem}
+    assert sent[-1][2] == {"name": filed[0].stem, "endedAtMs": int(ENDED * 1000)}
     assert service.status()["title_automation"]["clip_message"].startswith("Clip filed in Highlights")
 
 
@@ -234,4 +272,30 @@ def test_turning_the_switch_on_reports_a_stopped_buffer_at_once(stream):
     buffer.is_running = False
     service.action({"action": "configure_title_automation", "enabled": False, "save_clips": True,
                     "template": "", "platforms": {"twitch": True, "kick": True, "youtube": False}})
-    assert NOT_RUNNING in service.status()["title_automation"]["clip_message"]
+    assert CHECK_NOT_RUNNING in service.status()["title_automation"]["clip_message"]
+
+
+def _turn_switch(service, on):
+    service.action({"action": "configure_title_automation", "enabled": False, "save_clips": on,
+                    "template": "", "platforms": {"twitch": True, "kick": True, "youtube": False}})
+
+
+def test_turning_the_switch_off_clears_the_hint_and_a_problem_is_flagged(stream):
+    service, _sent, buffer, _folder = stream
+    service.titles.clips.spawn = lambda job, *args: job(*args)
+    buffer.is_running = False
+    _turn_switch(service, True)
+    shown = service.status()["title_automation"]
+    assert shown["clip_message"] == CHECK_NOT_RUNNING and shown["clip_problem"] is True
+    _turn_switch(service, False)
+    shown = service.status()["title_automation"]
+    assert shown["clip_message"] == "" and shown["clip_problem"] is False
+
+
+def test_an_account_change_does_not_show_the_old_accounts_clip_message(stream):
+    service, _sent, _buffer, _folder = stream
+    service.titles.announce_clip("Clip filed in Highlights: 2026-11-28 21-05 PvZ Victory vs Barcode on Alcyone LE")
+    assert service.titles.snapshot()["clip_message"].startswith("Clip filed")
+    service.titles.settings["owner"] = "someone-else"
+    shown = service.titles.snapshot()
+    assert shown["clip_message"] == "" and shown["clip_problem"] is False

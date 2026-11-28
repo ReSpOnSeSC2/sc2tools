@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from sc2tools_agent.streaming.obs_replay_buffer import OFF, SAVED, UNAVAILABLE, ReplayBufferSaver
+from sc2tools_agent.streaming.obs_replay_buffer import OFF, SAVED, SLOW, UNAVAILABLE, ReplayBufferSaver
 
 
 class FakeObs:
@@ -49,11 +49,11 @@ def test_a_stopped_buffer_is_off_and_nothing_is_saved():
     assert saver_for(FakeObs(running=False)).running() is False
 
 
-def test_a_save_obs_never_finishes_gives_up_after_a_bounded_wait():
+def test_a_save_obs_never_names_is_slow_not_unreachable_after_a_bounded_wait():
     naps = []
     fake = FakeObs(paths=(), last="clip-1.mkv")
-    assert saver_for(fake, naps)() == (UNAVAILABLE, None)
-    assert 0 < len(naps) <= 20
+    assert saver_for(fake, naps)() == (SLOW, None)
+    assert 0 < len(naps) <= 40
 
 
 def test_an_unreachable_obs_is_unavailable_and_reconnects_next_time():

@@ -5,14 +5,14 @@ a failed step only becomes a line under the switch.
 """
 from __future__ import annotations
 
-from .game_clips import GameClipSaver
+from .game_clips import GameClipSaver, PROBLEMS
 
 
 class ClipSaveMixin:
     def build_clip_saver(self):
         service = self.service
         return GameClipSaver(service.clip_buffer, enabled=self.clips_enabled, announce=self.announce_clip,
-                             report=lambda name: service.cloud_client.clip_saved(name))
+                             report=lambda name, ended_at: service.cloud_client.clip_saved(name, ended_at))
 
     def clips_enabled(self):
         owner = self.owner()
@@ -21,6 +21,7 @@ class ClipSaveMixin:
     def announce_clip(self, message):
         with self.service.operations:
             self.clip_message = message
+            self.clip_problem = message in PROBLEMS
             self.service._publish()
 
     def on_game_accepted(self, path, game, game_id=None, row=None):

@@ -2,7 +2,7 @@
 "use strict";
 const express = require("express");
 const request = require("supertest");
-const { savedClipRecorder, savedClipName, SAVED_CLIP_NAME_MAX } = require("../src/services/streamSavedClip");
+const { savedClipRecorder, savedClipName, savedClipEndedAt, SAVED_CLIP_NAME_MAX } = require("../src/services/streamSavedClip");
 const { buildAgentStreamingRouter } = require("../src/routes/agentStreaming");
 const { CLIP_MOMENT_KINDS } = require("../src/services/multichatEngagement");
 
@@ -20,7 +20,31 @@ describe("savedClipName", () => {
   ])("refuses %s", (_label, input) => expect(savedClipName(input)).toBeNull());
 });
 
+describe("savedClipEndedAt", () => {
+  const now = 1_800_000_000_000;
+  test.each([
+    ["a minute ago", now - 60_000, now - 60_000],
+    ["a fractional time", now - 1000.4, now - 1000],
+  ])("keeps %s", (_label, input, expected) => expect(savedClipEndedAt(input, now)).toBe(expected));
+
+  test.each([
+    ["nothing", undefined], ["a string", String(now)], ["not a number", NaN], ["a day ago", now - 24 * 3600_000],
+    ["an hour from now", now + 3600_000],
+  ])("ignores %s", (_label, input) => expect(savedClipEndedAt(input, now)).toBeNull());
+});
+
 describe("savedClipRecorder", () => {
+  test("stamps the clip with when its game ended, not when it was filed", async () => {
+    const recordMoment = jest.fn(async () => ({}));
+    const record = savedClipRecorder({ engagement: { recordMoment }, overlayTokens: { list: async () => [{ token: "a" }] }, now: () => 5_000_000 });
+    await record("u", NAME, 4_400_000);
+    await record("u", NAME, "junk");
+    expect(recordMoment.mock.calls).toEqual([
+      ["a", { kind: "clip-saved", reason: NAME, atMs: 4_400_000 }],
+      ["a", { kind: "clip-saved", reason: NAME }],
+    ]);
+  });
+
   const recorder = (tokens, recordMoment) => savedClipRecorder({
     engagement: { recordMoment }, overlayTokens: { list: async () => tokens },
   });
@@ -66,6 +90,13 @@ describe("POST /v1/agent/streaming/clip", () => {
     const response = await request(app(deps)).post("/v1/agent/streaming/clip").send({ name: NAME }).expect(200);
     expect(response.body).toEqual({ listed: 1 });
     expect(recordMoment).toHaveBeenCalledWith("t", { kind: "clip-saved", reason: NAME });
+  });
+
+  test("passes the game's end time to the Dock", async () => {
+    const { recordMoment, ...deps } = wired();
+    const endedAtMs = Date.now() - 30_000;
+    await request(app(deps)).post("/v1/agent/streaming/clip").send({ name: NAME, endedAtMs }).expect(200);
+    expect(recordMoment).toHaveBeenCalledWith("t", { kind: "clip-saved", reason: NAME, atMs: endedAtMs });
   });
 
   test.each([

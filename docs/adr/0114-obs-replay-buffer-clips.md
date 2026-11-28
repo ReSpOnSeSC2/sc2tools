@@ -32,7 +32,7 @@ API, and a `clip-saved` moment kind in the Dock's clip log.
 4. The file is saved at once and then waits for the synced replay of that game
    to name it. If no replay names it within ten minutes it is filed with the
    date and time only. Filing moves a video file OBS just reported into a
-   `Highlights` folder beside it, never over another file; a failed move leaves
+   `Highlights` folder inside its own folder, never over another file; a failed move leaves
    the file where OBS wrote it and says so.
 5. Each filed clip is reported to `POST /v1/agent/streaming/clip` (a name only,
    one line, 160 characters at most) and recorded as a `clip-saved` moment on

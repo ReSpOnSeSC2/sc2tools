@@ -73,14 +73,14 @@ function buildAgentStreamingRouter({ auth, integrations, streamingTitles, stream
     try {
       const userId = requireAccount(req);
       const body = req.body;
-      const name = body && typeof body === "object" && !Array.isArray(body) && Object.keys(body).every((key) => key === "name")
+      const name = body && typeof body === "object" && !Array.isArray(body) && Object.keys(body).every((key) => key === "name" || key === "endedAtMs")
         ? savedClipName(body.name) : null;
       if (name === null) {
-        throw new PlatformIntegrationError(400, "stream_clip_request_invalid", "Send only the name of the saved clip, one line of text.");
+        throw new PlatformIntegrationError(400, "stream_clip_request_invalid", "Send only the name of the saved clip, one line of text, and when its game ended.");
       }
       if (!recordSavedClip) throw new Error("clips unavailable");
       res.set("Cache-Control", "no-store");
-      res.json({ listed: await recordSavedClip(userId, name) });
+      res.json({ listed: await recordSavedClip(userId, name, body.endedAtMs) });
     } catch (error) { next(safeFailure(error)); }
   });
   router.post("/agent/streaming/:platform/connect", auth, async (req, res, next) => {

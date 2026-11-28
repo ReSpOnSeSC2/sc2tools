@@ -127,9 +127,14 @@ def test_the_clip_switch_starts_off_is_saved_with_the_titles_and_shows_the_hint(
     assert not controls.save_clips.isChecked()
     assert controls.save_clips.accessibleName() == "Save an OBS replay-buffer clip after each game"
     assert controls.clip_status.text() == "OBS's replay buffer is not running." and not controls.clip_status.isHidden()
+    assert controls.clip_status.property("tone") is None or controls.clip_status.property("tone") == ""
+    state["title_automation"]["clip_problem"] = True
+    widget.render(state)
+    assert controls.clip_status.property("tone") == "warning"
+    state["title_automation"]["clip_problem"] = False
     state["title_automation"]["clip_message"] = ""
     widget.render(state)
-    assert controls.clip_status.isHidden()
+    assert controls.clip_status.isHidden() and controls.clip_status.property("tone") == ""
     controls.save_clips.setChecked(True)
     assert controls.activation.text().endswith("Click Save automatic title settings to apply your changes.")
     payloads = []

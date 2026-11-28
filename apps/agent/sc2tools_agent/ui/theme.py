@@ -319,6 +319,7 @@ QLabel#h2 {{ font-size: {TYPE_SUBTITLE}px; font-weight: {WEIGHT_SEMIBOLD}; }}
 QLabel#pageDescription {{ color: {TEXT_MUTED}; font-size: {TYPE_BODY}px; }}
 QLabel#statusOrb {{ font-size: {TYPE_HEADLINE}px; }}
 QLabel#muted {{ color: {TEXT_MUTED}; }}
+QLabel#muted[tone="warning"] {{ color: {WARNING}; }}
 QLabel#dim {{ color: {TEXT_DIM}; }}
 QLabel#hint {{ color: {TEXT_DIM}; font-size: {TYPE_SMALL}px; }}
 QLabel#folderSummary[missing="true"] {{ color: {WARNING}; }}

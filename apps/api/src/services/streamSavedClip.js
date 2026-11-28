@@ -2,6 +2,9 @@
 
 /** Longest clip name the Dock shows; a file name the agent builds is shorter. */
 const SAVED_CLIP_NAME_MAX = 160;
+/** How far back, and how far ahead, a game's end may be stamped; anything else is stamped with the time it arrived. */
+const ENDED_AT_PAST_MS = 6 * 60 * 60 * 1000;
+const ENDED_AT_FUTURE_MS = 60 * 1000;
 /** Errors that mean a token cannot take a moment right now. The clip is still saved on the streamer's PC. */
 const SKIPPED_TOKEN_CODES = new Set(["overlay_rotation_pending", "overlay_token_resolve_busy", "invalid_overlay_token"]);
 
@@ -12,16 +15,18 @@ const SKIPPED_TOKEN_CODES = new Set(["overlay_rotation_pending", "overlay_token_
  * @param {{
  *   engagement: Pick<import('./multichatEngagement').MultichatEngagementService, 'recordMoment'>,
  *   overlayTokens: Pick<import('./overlayTokens').OverlayTokensService, 'list'>,
+ *   now?: () => number,
  * }} deps
- * @returns {(userId: string, name: string) => Promise<number>} how many Docks listed it
+ * @returns {(userId: string, name: string, endedAtMs?: unknown) => Promise<number>} how many Docks listed it
  */
-function savedClipRecorder({ engagement, overlayTokens }) {
-  return async (userId, name) => {
+function savedClipRecorder({ engagement, overlayTokens, now = Date.now }) {
+  return async (userId, name, endedAtMs) => {
+    const at = savedClipEndedAt(endedAtMs, now());
     let listed = 0;
     for (const { token, revokedAt } of await overlayTokens.list(userId)) {
       if (!token || revokedAt) continue;
       try {
-        await engagement.recordMoment(token, { kind: "clip-saved", reason: name });
+        await engagement.recordMoment(token, { kind: "clip-saved", reason: name, ...(at === null ? {} : { atMs: at }) });
         listed += 1;
       } catch (error) {
         const code = /** @type {{code?: string}} */ (error)?.code;
@@ -43,4 +48,16 @@ function savedClipName(value) {
   return name && Array.from(name).length <= SAVED_CLIP_NAME_MAX ? name : null;
 }
 
-module.exports = { savedClipRecorder, savedClipName, SAVED_CLIP_NAME_MAX };
+/**
+ * When the clip's game ended, as the agent reported it, so the Dock row and its
+ * VOD link point at the ending and not at the moment the file was filed.
+ * @param {unknown} value epoch milliseconds
+ * @param {number} now epoch milliseconds
+ * @returns {number|null} the time, or null when it is missing or not plausible
+ */
+function savedClipEndedAt(value, now) {
+  return typeof value === "number" && Number.isFinite(value) && value >= now - ENDED_AT_PAST_MS
+    && value <= now + ENDED_AT_FUTURE_MS ? Math.round(value) : null;
+}
+
+module.exports = { savedClipRecorder, savedClipName, savedClipEndedAt, SAVED_CLIP_NAME_MAX };

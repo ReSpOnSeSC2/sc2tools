@@ -26,6 +26,7 @@ class StreamTitleController(ChannelUpdateMixin, RecordChapterMixin, ClipSaveMixi
         self.message = "Waiting for synced game statistics."
         self.channel_message = ""
         self.clip_message = ""
+        self.clip_problem = False
         self.worker = GameTitleAutomation(self.refresh, last_attempt=self.settings["last_attempt"],
                                           refresh_match=self.refresh_match)
         self.clips = self.build_clip_saver()
@@ -51,6 +52,7 @@ class StreamTitleController(ChannelUpdateMixin, RecordChapterMixin, ClipSaveMixi
             self.settings = load_title_settings({}, owner)
             self.stats = {}
             self.channel_message = self.clip_message = ""
+            self.clip_problem = False
             self.message = "Account changed. Automatic titles are off; review the template and platforms."
             self.worker.reset()
         return owner
@@ -61,7 +63,7 @@ class StreamTitleController(ChannelUpdateMixin, RecordChapterMixin, ClipSaveMixi
             "enabled", "on_game_start", "channel_tags", "category_guard", "record_chapters", "save_clips", "platforms", "template")}
         stats = self._title_stats()
         result.update(values=title_values(stats), message=self.message, tag_preview=self.tag_preview(),
-                      channel_message=self.channel_message, clip_message=self.clip_message,
+                      channel_message=self.channel_message, clip_message=self.clip_message, clip_problem=self.clip_problem,
                       match_game_key=stats.get("currentMatch", {}).get("gameKey"))
         return result
 
@@ -79,6 +81,8 @@ class StreamTitleController(ChannelUpdateMixin, RecordChapterMixin, ClipSaveMixi
         turned_on = configured["save_clips"] and not self.settings["save_clips"]
         self._persist(configured)
         self.settings = configured
+        if not configured["save_clips"]:
+            self.clip_message, self.clip_problem = "", False
         if turned_on:
             self.clips.check()
         self.configure_game_start()

@@ -173,6 +173,11 @@ class StreamTitleControls:
         self._update_activation(settings)
         self.tag_preview.setText(self._tag_text(settings.get("tag_preview")))
         self.clip_status.setText(settings.get("clip_message") or "")
+        tone = "warning" if settings.get("clip_problem") is True else ""
+        if self.clip_status.property("tone") != tone:
+            self.clip_status.setProperty("tone", tone)
+            self.clip_status.style().unpolish(self.clip_status)
+            self.clip_status.style().polish(self.clip_status)
         self.clip_status.setVisible(bool(settings.get("clip_message")))
         self.note.setText(settings.get("message", "Saving automatic title settings applies them to future games.")
             + (" " + settings["channel_message"] if settings.get("channel_message") else "")

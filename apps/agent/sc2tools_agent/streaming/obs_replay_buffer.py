@@ -13,9 +13,9 @@ import time
 from .obs_reader import ObsConnection
 
 LOG = logging.getLogger(__name__)
-SAVED, OFF, UNAVAILABLE = "saved", "off", "unavailable"
+SAVED, OFF, UNAVAILABLE, SLOW = "saved", "off", "unavailable", "slow"
 POLL_SECONDS = 0.5
-POLL_ATTEMPTS = 14
+POLL_ATTEMPTS = 40
 
 
 class ReplayBufferSaver(ObsConnection):
@@ -37,15 +37,18 @@ class ReplayBufferSaver(ObsConnection):
                 return None
 
     def __call__(self):
-        """(state, path): SAVED with the file OBS wrote, OFF while the buffer is not running, else UNAVAILABLE."""
+        """(state, path): SAVED with the file OBS wrote, OFF while the buffer is not running, SLOW when OBS took the
+        save but has not named the file in time, else UNAVAILABLE."""
         running = self.running()
         if running is not True:
             return (OFF, None) if running is False else (UNAVAILABLE, None)
+        requested = False
         with self.lock:
             try:
                 raw = self._connection()
                 before = self._last_path(raw)
                 raw.send("SaveReplayBuffer")
+                requested = True
                 for _ in range(POLL_ATTEMPTS):
                     path = self._last_path(raw)
                     if path and path != before:
@@ -54,7 +57,7 @@ class ReplayBufferSaver(ObsConnection):
             except Exception as error:
                 LOG.debug("OBS replay buffer save skipped: %s", type(error).__name__)
                 self.close()
-            return UNAVAILABLE, None
+            return (SLOW if requested else UNAVAILABLE), None
 
     @staticmethod
     def _last_path(raw):

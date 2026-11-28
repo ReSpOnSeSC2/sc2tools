@@ -1,6 +1,6 @@
 """Naming a saved replay-buffer clip from the game and filing it in a Highlights folder.
 
-The folder sits beside the file OBS wrote, so it follows the streamer's own
+The folder is created inside the folder OBS wrote the file to, so it follows the streamer's own
 recording folder and needs no setting. Only a video file OBS just reported is
 ever moved, and never over another file.
 """
@@ -41,7 +41,7 @@ def clip_name(ended_at, facts):
 
 
 def file_clip(source, name):
-    """Move `source` into the Highlights folder beside it as `name`; the new path, or None when it could not be filed."""
+    """Move `source` into a Highlights folder inside its own folder as `name`; the new path, or None when it could not be filed."""
     try:
         source = Path(source)
         if not source.is_file() or source.suffix.lower() not in VIDEO_SUFFIXES or source.parent.name == HIGHLIGHTS:

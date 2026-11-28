@@ -18,6 +18,9 @@ it("keeps manual Dock notes off the stream and lets a visible auto clip expire",
   engagement.lastEvent = moment("chat-spike", "Chat is cheering");
   view.rerender(widget());
   expect(screen.getByText("Chat is cheering")).toBeTruthy();
+  engagement.lastEvent = moment("clip-saved", "2026-11-28 21-05 PvZ Victory vs Barcode");
+  view.rerender(widget());
+  expect(screen.queryByText("2026-11-28 21-05 PvZ Victory vs Barcode")).toBeNull();
   engagement.lastEvent = moment("manual", "Private follow-up");
   view.rerender(widget());
   expect(screen.queryByText("Private follow-up")).toBeNull();

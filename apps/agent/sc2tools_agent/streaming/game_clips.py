@@ -17,7 +17,7 @@ import threading
 import time
 
 from .clip_files import clip_name, file_clip
-from .obs_replay_buffer import OFF, SAVED
+from .obs_replay_buffer import OFF, SAVED, SLOW
 from .title_match import game_episode
 
 LOG = logging.getLogger(__name__)
@@ -27,6 +27,13 @@ MAX_SEEN = 16
 NOT_RUNNING = ("OBS's replay buffer is not running, so no clip was saved. In OBS, choose Start Replay Buffer "
                "(Settings > Output > Replay Buffer must be on).")
 UNREACHABLE = "OBS could not be reached, so no clip was saved. Open OBS and turn on its WebSocket server."
+SLOW_SAVE = "OBS took too long to report the saved clip, so it was not filed. Look for it in OBS's recording folder."
+CHECK_NOT_RUNNING = ("OBS's replay buffer is not running. In OBS, choose Start Replay Buffer "
+                     "(Settings > Output > Replay Buffer must be on) before a game ends.")
+CHECK_UNREACHABLE = "OBS could not be reached. Open OBS and turn on its WebSocket server."
+CHECK_RUNNING = "OBS's replay buffer is running."
+NOT_MOVED = "OBS saved the clip, but it could not be moved into Highlights. It is where OBS wrote it."
+PROBLEMS = frozenset((NOT_RUNNING, UNREACHABLE, SLOW_SAVE, CHECK_NOT_RUNNING, CHECK_UNREACHABLE, NOT_MOVED))
 
 
 def _start_thread(job, *args):
@@ -64,6 +71,7 @@ class GameClipSaver:
         self.lock = threading.Lock()
         self.seen = []
         self.waiting = None
+        self.early = None
         self.timer = None
 
     def check(self):
@@ -72,8 +80,7 @@ class GameClipSaver:
 
     def _check(self):
         running = self.buffer.running()
-        self.announce(UNREACHABLE if running is None else NOT_RUNNING if not running
-                      else "OBS's replay buffer is running. A clip is saved when each game ends.")
+        self.announce(CHECK_UNREACHABLE if running is None else CHECK_NOT_RUNNING if not running else CHECK_RUNNING)
 
     def on_event(self, event):
         key = getattr(event, "game_key", None)
@@ -91,19 +98,28 @@ class GameClipSaver:
     def _save(self, ended_at):
         state, path = self.buffer()
         if state == SAVED:
-            self._wait_for_facts(path, ended_at)
-            self.announce("Clip saved. It is filed in Highlights once the game syncs.")
+            if not self._wait_for_facts(path, ended_at):
+                self.announce("Clip saved. It is filed in Highlights once the game syncs.")
         else:
-            self.announce(NOT_RUNNING if state == OFF else UNREACHABLE)
+            self.announce(NOT_RUNNING if state == OFF else SLOW_SAVE if state == SLOW else UNREACHABLE)
 
     def _wait_for_facts(self, path, ended_at):
+        """Hold the saved file until its replay syncs; True when the replay had already synced and it was filed."""
         with self.lock:
-            earlier, self.waiting = self.waiting, {"path": path, "ended_at": ended_at}
+            earlier, self.waiting = self.waiting, None
+            early, self.early = self.early, None
             if self.timer is not None:
                 self.timer.cancel()
-            self.timer = self.schedule(FALLBACK_SECONDS, lambda: self._expire(path))
+                self.timer = None
+            matched = early is not None and abs(early["ended"] - ended_at) <= REPLAY_MATCH_SECONDS
+            if not matched:
+                self.waiting = {"path": path, "ended_at": ended_at}
+                self.timer = self.schedule(FALLBACK_SECONDS, lambda: self._expire(path))
         if earlier is not None:
             self._file(earlier["path"], earlier["ended_at"], None)
+        if matched:
+            self._file(path, ended_at, early["facts"])
+        return matched
 
     def on_accepted(self, game, row=None):
         """The synced replay of the game just saved names its clip."""
@@ -112,14 +128,18 @@ class GameClipSaver:
                 or row.get("isHistory") is True):
             return
         ended = _ended_at(game)
+        if ended is None:
+            return
+        facts = {field: getattr(game, field, None) for field in ("result", "my_race", "map_name", "opponent")}
         with self.lock:
             waiting = self.waiting
-            if waiting is None or ended is None or abs(ended - waiting["ended_at"]) > REPLAY_MATCH_SECONDS:
+            if waiting is None or abs(ended - waiting["ended_at"]) > REPLAY_MATCH_SECONDS:
+                # A fast live upload can beat the save; keep its facts for the clip that is about to be saved.
+                self.early = {"ended": ended, "facts": facts}
                 return
             self.waiting = None
             if self.timer is not None:
                 self.timer.cancel()
-        facts = {field: getattr(game, field, None) for field in ("result", "my_race", "map_name", "opponent")}
         self.spawn(self._file, waiting["path"], waiting["ended_at"], facts)
 
     def _expire(self, path):
@@ -134,11 +154,11 @@ class GameClipSaver:
     def _file(self, path, ended_at, facts):
         name = clip_name(ended_at, facts)
         if self.file(path, name) is None:
-            self.announce("OBS saved the clip, but it could not be moved into Highlights. It is where OBS wrote it.")
+            self.announce(NOT_MOVED)
             return
         self.announce(f"Clip filed in Highlights: {name}")
         try:
-            self.report(name)
+            self.report(name, ended_at)
         except Exception as error:
             LOG.debug("clip_report_skipped %s", type(error).__name__)
 

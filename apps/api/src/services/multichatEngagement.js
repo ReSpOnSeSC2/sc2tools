@@ -376,17 +376,17 @@ class MultichatEngagementService {
    * Dock flag). Returns the moment as the Dock lists it.
    *
    * @param {string} token
-   * @param {{kind: string, reason: string, sampleLines?: string[], gameKey?: string}} m
+   * @param {{kind: string, reason: string, sampleLines?: string[], gameKey?: string, atMs?: number}} m
    */
   async recordMoment(token, m) {
     return this._withWrite(token, () => this._recordMomentAdmitted(token, m));
   }
 
-  /** @param {string} token @param {{kind:string,reason:string,sampleLines?:string[],gameKey?:string}} m */
+  /** @param {string} token @param {{kind:string,reason:string,sampleLines?:string[],gameKey?:string,atMs?:number}} m */
   async _recordMomentAdmitted(token, m) {
     const doc = {
       token,
-      atMs: this.now(),
+      atMs: Number.isFinite(m.atMs) ? m.atMs : this.now(),
       atDate: new Date(),
       kind: CLIP_MOMENT_KINDS.includes(m.kind) ? m.kind : "chat-spike",
       reason: String(m.reason).slice(0, 160),
